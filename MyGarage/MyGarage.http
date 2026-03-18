@@ -1,0 +1,6 @@
+@MyGarage_HostAddress = http://localhost:5062
+
+GET {{MyGarage_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
