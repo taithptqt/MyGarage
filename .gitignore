@@ -18,11 +18,8 @@ fix_*.ps1
 generate_dtos.ps1
 optimize_controllers.ps1
 scaffold*.ps1
-<<<<<<< HEAD
 
 # Frontend
-node_modules/
-dist/
-.env
-=======
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
+frontend/node_modules/
+frontend/dist/
+frontend/.env

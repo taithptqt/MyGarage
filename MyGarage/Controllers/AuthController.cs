@@ -70,11 +70,7 @@ namespace MyGarage.Controllers
             }
             catch (Exception ex)
             {
-<<<<<<< HEAD
                 return BadRequest(new { message = ex.InnerException != null ? ex.InnerException.Message : ex.Message });
-=======
-                return BadRequest(new { message = ex.Message });
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
             }
         }
 

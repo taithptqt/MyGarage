@@ -4,25 +4,18 @@ using MyGarage.Interfaces;
 using MyGarage.Repositories;
 using MyGarage.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-<<<<<<< HEAD
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
-=======
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
-=======
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
 
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
 
-<<<<<<< HEAD
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
@@ -36,8 +29,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-=======
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
 // Add Dependency Injection
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped(typeof(IGenericService<>), typeof(GenericService<>));
@@ -309,12 +300,8 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-<<<<<<< HEAD
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -347,13 +334,7 @@ var app = builder.Build();
 var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
 var hasFrontendBuild = Directory.Exists(frontendDistPath);
 PhysicalFileProvider? frontendFileProvider = hasFrontendBuild ? new PhysicalFileProvider(frontendDistPath) : null;
-=======
-builder.Services.AddSwaggerGen();
 
-var app = builder.Build();
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
-
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -362,7 +343,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-<<<<<<< HEAD
 if (hasFrontendBuild && frontendFileProvider is not null)
 {
     app.UseDefaultFiles(new DefaultFilesOptions
@@ -377,14 +357,11 @@ if (hasFrontendBuild && frontendFileProvider is not null)
 }
 
 app.UseCors(FrontendCorsPolicy);
-=======
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
-<<<<<<< HEAD
 if (hasFrontendBuild)
 {
     app.MapFallback(async context =>
@@ -428,7 +405,3 @@ static string ResolveFrontendDistPath(string contentRootPath)
 
     return Path.Combine(contentRootPath, "frontend", "dist");
 }
-=======
-app.Run();
-
->>>>>>> 7a2ef8fc6b783a0c6fe30341339f36ac0c9edd08
