@@ -1,10 +1,20 @@
 function resolveApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    const isLocalhost =
+      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+    if (isLocalhost) {
+      if (window.location.protocol === "https:" && window.location.port === "7009") {
+        return "";
+      }
+      return "https://localhost:7009";
+    }
+  }
+
   const configured = (import.meta.env.VITE_API_BASE_URL || "").trim();
   if (configured) {
     return configured.replace(/\/$/, "");
   }
-  // When empty, use relative paths (same origin as the page).
-  // This is the correct default when the backend serves the frontend.
   return "";
 }
 

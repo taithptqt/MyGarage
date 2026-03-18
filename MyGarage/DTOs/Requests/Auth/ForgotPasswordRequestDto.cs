@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-
 namespace MyGarage.DTOs.Requests.Auth
 {
     public class ForgotPasswordRequestDto
