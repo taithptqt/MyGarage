@@ -1,0 +1,151 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #102a43;
+  background: #f0f4f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #d9f2ff, #f4f7fa 45%, #ffe9d6);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 16px 40px rgba(16, 42, 67, 0.12);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.subtitle {
+  margin: 0 0 18px;
+  color: #486581;
+  font-size: 14px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.tab {
+  margin-top: 0;
+  background: #dbe7f3;
+  color: #334e68;
+}
+
+.tab.active {
+  background: #2f80ed;
+  color: #fff;
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+}
+
+label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+input {
+  border: 1px solid #bcccdc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+input:focus {
+  outline: 2px solid #2f80ed33;
+  border-color: #2f80ed;
+}
+
+button {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  background: #2f80ed;
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #9fb3c8;
+  cursor: not-allowed;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid #2f80ed;
+  color: #2f80ed;
+  margin-top: 6px;
+}
+
+.error {
+  margin-top: 12px;
+  background: #ffe3e3;
+  color: #c92a2a;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.divider {
+  margin-top: 14px;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #627d98;
+  font-size: 13px;
+}
+
+.divider span {
+  background: #ffffff;
+  padding: 0 8px;
+}
+
+.google-button {
+  display: flex;
+  justify-content: center;
+}
+
+.success {
+  margin-top: 12px;
+  background: #e3fafc;
+  color: #0b7285;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.success p {
+  margin: 4px 0;
+}
+
+.api-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #627d98;
+}
