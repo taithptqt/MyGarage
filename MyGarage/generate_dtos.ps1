@@ -87,3 +87,4 @@ foreach ($file in $files) {
 
 Set-Content -Path $mappingsFile -Value $mappingContent
 Write-Host "Batch DTO generation complete."
+# testtest
