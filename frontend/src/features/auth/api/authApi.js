@@ -4,12 +4,9 @@ function resolveApiBaseUrl() {
       window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
     if (isLocalhost) {
-      // If frontend is already served by backend on https://localhost:7009, keep same-origin calls.
       if (window.location.protocol === "https:" && window.location.port === "7009") {
         return "";
       }
-
-      // Otherwise force local API calls to the backend running on https://localhost:7009.
       return "https://localhost:7009";
     }
   }
@@ -18,8 +15,6 @@ function resolveApiBaseUrl() {
   if (configured) {
     return configured.replace(/\/$/, "");
   }
-  // When empty, use relative paths (same origin as the page).
-  // This is the correct default when the backend serves the frontend.
   return "";
 }
 

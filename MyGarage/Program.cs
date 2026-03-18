@@ -15,14 +15,11 @@ const string FrontendCorsPolicy = "FrontendCorsPolicy";
 
 if (builder.Environment.IsDevelopment())
 {
-    // Keep local development stable on the requested ports.
     builder.WebHost.UseUrls("https://localhost:7009", "http://localhost:5062");
 }
 
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
-
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
@@ -36,6 +33,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Add Dependency Injection
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped(typeof(IGenericService<>), typeof(GenericService<>));
 
@@ -45,6 +43,7 @@ builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 
+// Add AutoMapper
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
@@ -305,10 +304,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -343,7 +339,6 @@ var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
 var hasFrontendBuild = Directory.Exists(frontendDistPath);
 PhysicalFileProvider? frontendFileProvider = hasFrontendBuild ? new PhysicalFileProvider(frontendDistPath) : null;
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
