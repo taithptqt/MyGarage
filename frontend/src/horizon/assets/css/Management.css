@@ -1,0 +1,285 @@
+/* ─── CSS Variables: Light + Dark Mode ─── */
+:root {
+  --mgmt-bg: #f0f4f8;
+  --mgmt-text: #1a202c;
+  --mgmt-text-muted: #718096;
+  --mgmt-text-td: #2d3748;
+  --mgmt-border: rgba(0, 0, 0, 0.08);
+  --mgmt-row-hover: rgba(0, 0, 0, 0.03);
+  --mgmt-table-bg: rgba(255, 255, 255, 0.7);
+  --mgmt-table-border: rgba(0, 0, 0, 0.07);
+  --mgmt-input-bg: rgba(0, 0, 0, 0.04);
+  --mgmt-input-color: #1a202c;
+  --mgmt-modal-bg: #ffffff;
+  --mgmt-btn-border: rgba(0, 0, 0, 0.12);
+  --mgmt-btn-hover: rgba(0, 0, 0, 0.06);
+  --mgmt-spinner-track: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode: theo hệ điều hành */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mgmt-bg: #1a202c;
+    --mgmt-text: #f7fafc;
+    --mgmt-text-muted: #a0aec0;
+    --mgmt-text-td: #e2e8f0;
+    --mgmt-border: rgba(255, 255, 255, 0.1);
+    --mgmt-row-hover: rgba(255, 255, 255, 0.05);
+    --mgmt-table-bg: rgba(255, 255, 255, 0.02);
+    --mgmt-table-border: rgba(255, 255, 255, 0.08);
+    --mgmt-input-bg: #2d3748;
+    --mgmt-input-color: #f7fafc;
+    --mgmt-modal-bg: #1a202c;
+    --mgmt-btn-border: rgba(255, 255, 255, 0.12);
+    --mgmt-btn-hover: rgba(255, 255, 255, 0.08);
+    --mgmt-spinner-track: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Dark mode: theo Chakra UI toggle (data-theme="dark" hoặc class="chakra-ui-dark") */
+[data-theme="dark"],
+.chakra-ui-dark {
+  --mgmt-bg: #1a202c;
+  --mgmt-text: #f7fafc;
+  --mgmt-text-muted: #cbd5e0;
+  --mgmt-text-td: #f7fafc;
+  --mgmt-border: rgba(255, 255, 255, 0.15);
+  --mgmt-row-hover: rgba(255, 255, 255, 0.07);
+  --mgmt-table-bg: rgba(255, 255, 255, 0.04);
+  --mgmt-table-border: rgba(255, 255, 255, 0.12);
+  --mgmt-input-bg: #2d3748;
+  --mgmt-input-color: #f7fafc;
+  --mgmt-modal-bg: #2d3748;
+  --mgmt-btn-border: rgba(255, 255, 255, 0.2);
+  --mgmt-btn-hover: rgba(255, 255, 255, 0.1);
+  --mgmt-spinner-track: rgba(255, 255, 255, 0.1);
+}
+
+/* Override Chakra Box background in dark mode for table area */
+.chakra-ui-dark .management-content,
+.chakra-ui-dark .admin-table td,
+.chakra-ui-dark .admin-table th,
+.chakra-ui-dark .admin-header h1,
+.chakra-ui-dark .result-count {
+  color: var(--mgmt-text-td) !important;
+}
+
+.chakra-ui-dark .admin-table th {
+  color: var(--mgmt-text-muted) !important;
+}
+
+.chakra-ui-dark .td-id {
+  color: var(--mgmt-text-muted) !important;
+}
+
+/* ─── Management Content Layout ─── */
+.management-content {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  gap: 20px;
+}
+
+/* ─── Header ─── */
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--mgmt-border);
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--mgmt-text);
+}
+
+.header-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--mgmt-text-muted);
+}
+
+/* ─── Toolbar ─── */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 380px;
+  background: var(--mgmt-input-bg);
+  border: 1px solid var(--mgmt-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--mgmt-input-color);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #4299e1;
+}
+
+.result-count {
+  font-size: 13px;
+  color: var(--mgmt-text-muted);
+  margin-left: auto;
+}
+
+/* ─── Table ─── */
+.table-wrapper {
+  overflow-x: auto;
+  background: var(--mgmt-table-bg);
+  border-radius: 14px;
+  border: 1px solid var(--mgmt-table-border);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  text-align: left !important;
+  padding: 14px 16px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--mgmt-text-muted);
+  border-bottom: 1px solid var(--mgmt-table-border);
+}
+
+.admin-table td {
+  text-align: left !important;
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--mgmt-text-td);
+  border-bottom: 1px solid var(--mgmt-border);
+}
+
+.admin-table tbody tr:hover { background: var(--mgmt-row-hover); }
+
+.td-id { color: var(--mgmt-text-muted); font-size: 12px; }
+
+/* ─── Helpers ─── */
+.th-center, .td-center { text-align: center !important; }
+.td-name { font-weight: 500; }
+
+/* ─── Badges ─── */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.badge-active, .badge-success { background: rgba(72, 187, 120, 0.2); color: #68d391; }
+.badge-inactive, .badge-danger { background: rgba(245, 101, 101, 0.2); color: #fc8181; }
+.badge-info { background: rgba(66, 153, 225, 0.2); color: #63b3ed; }
+.badge-warning { background: rgba(237, 137, 54, 0.2); color: #f6ad55; }
+
+/* ─── Actions ─── */
+.row-actions { display: flex; gap: 6px; }
+
+.btn-icon {
+  background: none;
+  border: 1px solid var(--mgmt-btn-border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--mgmt-text-muted);
+}
+
+.btn-icon:hover { background: var(--mgmt-btn-hover); }
+
+/* ─── Buttons ─── */
+.btn-primary {
+  background: #3182ce;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--mgmt-text-muted);
+  border: 1px solid var(--mgmt-btn-border);
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+/* ─── Modal ─── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-box {
+  background: var(--mgmt-modal-bg);
+  border: 1px solid var(--mgmt-border);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  color: var(--mgmt-text);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--mgmt-text-muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* ─── Forms ─── */
+.admin-form { display: flex; flex-direction: column; gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 13px; font-weight: 600; color: var(--mgmt-text-muted); }
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--mgmt-input-bg);
+  border: 1px solid var(--mgmt-border);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--mgmt-input-color);
+}
+.form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px; }
+
+/* Spinner */
+.loading-state { display: flex; flex-direction: column; align-items: center; padding: 40px; color: var(--mgmt-text); }
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--mgmt-spinner-track);
+  border-top-color: #3182ce;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
