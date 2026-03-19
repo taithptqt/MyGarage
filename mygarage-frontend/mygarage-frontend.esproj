@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1188969-preview-2">
+  <PropertyGroup>
+    <StartupCommand>npm run dev</StartupCommand>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
+    <JavaScriptTestFramework>Jest</JavaScriptTestFramework>
+    <!-- Allows the build to continue even if JS test errors are found. -->
+    <ShouldRunJavaScriptTests>false</ShouldRunJavaScriptTests>
+    <!-- Folder where production build objects will be placed -->
+    <BuildOutputFolder>dist</BuildOutputFolder>
+  </PropertyGroup>
+</Project>

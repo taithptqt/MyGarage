@@ -32,19 +32,39 @@ namespace MyGarage.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == request.Email);
-            
-            if (customer == null || string.IsNullOrEmpty(customer.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, customer.PasswordHash))
+            var normalizedEmail = NormalizeEmail(request.Email);
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
+
+            if (customer != null && VerifyPassword(request.Password, customer.PasswordHash, out var customerNeedsRehash))
             {
-                var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == request.Email);
-                if (staff == null || string.IsNullOrEmpty(staff.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, staff.PasswordHash))
+                ValidateCustomerAccountForLogin(customer);
+
+                if (customerNeedsRehash)
                 {
-                    throw new UnauthorizedAccessException("Invalid email or password.");
+                    customer.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                    _context.Customers.Update(customer);
+                    await _context.SaveChangesAsync();
                 }
-                return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", "Staff");
+
+                return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
             }
 
-            return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
+            var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
+            if (staff == null || !VerifyPassword(request.Password, staff.PasswordHash, out var staffNeedsRehash))
+            {
+                throw new UnauthorizedAccessException("Invalid email or password.");
+            }
+
+            ValidateStaffAccountForLogin(staff);
+
+            if (staffNeedsRehash)
+            {
+                staff.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                _context.Staffs.Update(staff);
+                await _context.SaveChangesAsync();
+            }
+
+            return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", "Staff");
         }
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginRequestDto request)
@@ -65,31 +85,46 @@ namespace MyGarage.Services
             }
 
             // Check if user exists
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == payload.Email);
+            var normalizedEmail = NormalizeEmail(payload.Email);
+            
+            // 1. Check Staffs first
+            var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
+            if (staff != null)
+            {
+                ValidateStaffAccountForLogin(staff);
+                return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", "Staff");
+            }
+
+            // 2. Check Customers
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
             if (customer == null)
             {
-                // Auto-register
+                // Auto-register as Customer if not found in either table
                 customer = new Customer
                 {
-                    Email = payload.Email,
-                    FullName = payload.Name,
+                    Email = normalizedEmail,
+                    FullName = payload.Name ?? "",
+                    Phone = "",
+                    PasswordHash = "",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                     IsActive = true,
-                // Empty password hash since it's SSO
-                PasswordHash = string.Empty
-            };
+                    IsDeleted = false
+                };
             
-            _context.Customers.Add(customer);
-            await _context.SaveChangesAsync();
+                _context.Customers.Add(customer);
+                await _context.SaveChangesAsync();
             }
 
+            ValidateCustomerAccountForLogin(customer);
             return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
         }
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
         {
-            if (await _context.Customers.AnyAsync(c => c.Email == request.Email))
+            var normalizedEmail = NormalizeEmail(request.Email);
+
+            if (await _context.Customers.AnyAsync(c => c.Email == normalizedEmail))
             {
                 throw new InvalidOperationException("Email already exists.");
             }
@@ -97,7 +132,7 @@ namespace MyGarage.Services
             var customer = new Customer
             {
                 FullName = request.FullName,
-                Email = request.Email,
+                Email = normalizedEmail,
                 Phone = request.Phone,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 CreatedAt = DateTime.UtcNow,
@@ -147,11 +182,12 @@ namespace MyGarage.Services
         public async Task ForgotPasswordAsync(ForgotPasswordRequestDto request)
         {
             // Verify if user exists
-            var isCustomer = await _context.Customers.AnyAsync(c => c.Email == request.Email);
+            var normalizedEmail = NormalizeEmail(request.Email);
+            var isCustomer = await _context.Customers.AnyAsync(c => c.Email == normalizedEmail);
             bool isStaff = false;
             if (!isCustomer)
             {
-                isStaff = await _context.Staffs.AnyAsync(s => s.Email == request.Email);
+                isStaff = await _context.Staffs.AnyAsync(s => s.Email == normalizedEmail);
             }
 
             if (!isCustomer && !isStaff)
@@ -188,7 +224,7 @@ namespace MyGarage.Services
             var resetLink = $"https://your-frontend-domain.com/reset-password?token={tokenString}";
             var emailBody = $"<h3>Password Reset Request</h3><p>Click the link below to reset your password. It will expire in 15 minutes.</p><a href='{resetLink}'>Reset Password</a><p>Or use this token directly: <br><code>{tokenString}</code></p>";
 
-            await _emailService.SendEmailAsync(request.Email, "MyGarage - Reset Password", emailBody);
+            await _emailService.SendEmailAsync(normalizedEmail, "MyGarage - Reset Password", emailBody);
         }
 
         public async Task ResetPasswordAsync(ResetPasswordRequestDto request)
@@ -219,7 +255,9 @@ namespace MyGarage.Services
                 var email = principal.FindFirst(ClaimTypes.Email)?.Value;
                 var role = principal.FindFirst(ClaimTypes.Role)?.Value;
 
-                if (email != request.Email)
+                var normalizedEmail = NormalizeEmail(request.Email);
+
+                if (email != normalizedEmail)
                 {
                     throw new UnauthorizedAccessException("Token does not belong to the provided email.");
                 }
@@ -256,7 +294,7 @@ namespace MyGarage.Services
                 var customer = await _context.Customers.FindAsync(userId);
                 if (customer == null) throw new UnauthorizedAccessException("User not found.");
 
-                if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, customer.PasswordHash))
+                if (!VerifyPassword(request.OldPassword, customer.PasswordHash, out _))
                 {
                     throw new UnauthorizedAccessException("Incorrect old password.");
                 }
@@ -270,7 +308,7 @@ namespace MyGarage.Services
                 var staff = await _context.Staffs.FindAsync(userId);
                 if (staff == null) throw new UnauthorizedAccessException("User not found.");
 
-                if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, staff.PasswordHash))
+                if (!VerifyPassword(request.OldPassword, staff.PasswordHash, out _))
                 {
                     throw new UnauthorizedAccessException("Incorrect old password.");
                 }
@@ -318,6 +356,70 @@ namespace MyGarage.Services
             }
 
             throw new UnauthorizedAccessException("Role not recognized.");
+        }
+
+        private static string NormalizeEmail(string email)
+        {
+            return email.Trim().ToLowerInvariant();
+        }
+
+        private static bool VerifyPassword(string inputPassword, string? storedPasswordHash, out bool needsRehash)
+        {
+            needsRehash = false;
+
+            if (string.IsNullOrWhiteSpace(inputPassword) || string.IsNullOrWhiteSpace(storedPasswordHash))
+            {
+                return false;
+            }
+
+            if (IsBcryptHash(storedPasswordHash))
+            {
+                try
+                {
+                    return BCrypt.Net.BCrypt.Verify(inputPassword, storedPasswordHash);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            var matchedLegacyPlainText = string.Equals(inputPassword, storedPasswordHash, StringComparison.Ordinal);
+            needsRehash = matchedLegacyPlainText;
+            return matchedLegacyPlainText;
+        }
+
+        private static bool IsBcryptHash(string value)
+        {
+            return value.StartsWith("$2a$", StringComparison.Ordinal) ||
+                   value.StartsWith("$2b$", StringComparison.Ordinal) ||
+                   value.StartsWith("$2y$", StringComparison.Ordinal);
+        }
+
+        private static void ValidateCustomerAccountForLogin(Customer customer)
+        {
+            if (customer.IsDeleted == true || customer.IsActive == false)
+            {
+                throw new UnauthorizedAccessException("Account is inactive.");
+            }
+
+            if (customer.IsLockedOut == true && customer.LockoutEnd.HasValue && customer.LockoutEnd > DateTime.UtcNow)
+            {
+                throw new UnauthorizedAccessException("Account is temporarily locked.");
+            }
+        }
+
+        private static void ValidateStaffAccountForLogin(Staff staff)
+        {
+            if (staff.IsDeleted == true || string.Equals(staff.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("Account is inactive.");
+            }
+
+            if (staff.IsLockedOut == true && staff.LockoutEnd.HasValue && staff.LockoutEnd > DateTime.UtcNow)
+            {
+                throw new UnauthorizedAccessException("Account is temporarily locked.");
+            }
         }
     }
 }

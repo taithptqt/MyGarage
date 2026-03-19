@@ -4779,11 +4779,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\DELL\\source\\repos\\MyGarage\\MyGarage\\MyGarage.csproj",
+      "projectUniqueName": "d:\\IT\\OJT\\repos\\MyGarage\\MyGarage\\MyGarage.csproj",
       "projectName": "MyGarage",
-      "projectPath": "C:\\Users\\DELL\\source\\repos\\MyGarage\\MyGarage\\MyGarage.csproj",
+      "projectPath": "d:\\IT\\OJT\\repos\\MyGarage\\MyGarage\\MyGarage.csproj",
       "packagesPath": "C:\\Users\\DELL\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\DELL\\source\\repos\\MyGarage\\MyGarage\\obj\\",
+      "outputPath": "d:\\IT\\OJT\\repos\\MyGarage\\MyGarage\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

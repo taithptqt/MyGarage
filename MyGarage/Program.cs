@@ -4,16 +4,38 @@ using MyGarage.Interfaces;
 using MyGarage.Repositories;
 using MyGarage.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+const string FrontendCorsPolicy = "FrontendCorsPolicy";
+
+if (builder.Environment.IsDevelopment())
+{
+    // Keep local development stable on the requested ports.
+    builder.WebHost.UseUrls("https://localhost:7009", "http://localhost:5062");
+}
 
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
 
-// Add Dependency Injection
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCorsPolicy, policy =>
+    {
+        policy.SetIsOriginAllowed(origin =>
+                origin.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase) ||
+                origin.StartsWith("https://localhost:", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(origin, "https://accounts.google.com", StringComparison.OrdinalIgnoreCase))
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped(typeof(IGenericService<>), typeof(GenericService<>));
 
@@ -23,7 +45,6 @@ builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 
-// Add AutoMapper
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
@@ -289,9 +310,38 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
+var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
+var hasFrontendBuild = Directory.Exists(frontendDistPath);
+PhysicalFileProvider? frontendFileProvider = hasFrontendBuild ? new PhysicalFileProvider(frontendDistPath) : null;
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -302,10 +352,65 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+if (hasFrontendBuild && frontendFileProvider is not null)
+{
+    app.UseDefaultFiles(new DefaultFilesOptions
+    {
+        FileProvider = frontendFileProvider
+    });
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = frontendFileProvider
+    });
+}
+
+app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
+if (hasFrontendBuild)
+{
+    app.MapFallback(async context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/swagger"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await context.Response.SendFileAsync(Path.Combine(frontendDistPath, "index.html"));
+    });
+}
+
 app.Run();
 
+static string ResolveFrontendDistPath(string contentRootPath)
+{
+    var rootsToCheck = new[]
+    {
+        contentRootPath,
+        Directory.GetCurrentDirectory(),
+        AppContext.BaseDirectory
+    };
+
+    foreach (var root in rootsToCheck)
+    {
+        var current = new DirectoryInfo(root);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(current.FullName, "frontend", "dist");
+            var indexFile = Path.Combine(candidate, "index.html");
+            if (File.Exists(indexFile))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+    }
+
+    return Path.Combine(contentRootPath, "frontend", "dist");
+}
