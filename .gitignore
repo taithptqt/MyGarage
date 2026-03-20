@@ -1,0 +1,24 @@
+# Visual Studio / .NET Core
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Logs and test outputs
+test_results.txt
+build_errors.txt
+build_output.txt
+out.txt
+debug.ps1
+test_auth.ps1
+check_oks.ps1
+fix_*.ps1
+generate_dtos.ps1
+optimize_controllers.ps1
+scaffold*.ps1
+
+# Frontend
+node_modules/
+dist/
