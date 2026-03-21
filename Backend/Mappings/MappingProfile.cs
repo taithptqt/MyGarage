@@ -49,6 +49,7 @@ namespace MyGarage.Mappings
             CreateMap<Appointment, AppointmentResponseDto>();
             CreateMap<AppointmentCreateDto, Appointment>();
             CreateMap<AppointmentUpdateDto, Appointment>();
+            CreateMap<BookAppointmentRequestDto, Appointment>();
             // ApprovalRequest Mappings
             CreateMap<ApprovalRequest, ApprovalRequestResponseDto>();
             CreateMap<ApprovalRequestCreateDto, ApprovalRequest>();

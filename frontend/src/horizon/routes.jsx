@@ -3,6 +3,7 @@ import React from 'react';
 import { Icon } from '@chakra-ui/react';
 import {
   MdBuild,
+  MdCalendarToday,
   MdCategory,
   MdDirectionsCar,
   MdHome,
@@ -21,6 +22,7 @@ import PartsPage from "../features/inventory/pages/PartsPage";
 import PartCategoriesPage from "../features/inventory/pages/PartCategoriesPage";
 import ServicesPage from "../features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
+import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 
 // Auth Imports
 import SignInCentered from 'views/auth/signIn';
@@ -32,6 +34,13 @@ const routes = [
     path: '/default',
     icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
     component: <MainDashboard />,
+  },
+  {
+    name: 'Lich hen',
+    layout: '/admin',
+    path: '/appointments',
+    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
+    component: <AppointmentManagementPage />,
   },
   {
     name: 'Branches',
