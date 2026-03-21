@@ -167,7 +167,7 @@ export default function MyAppointmentsPage() {
                 )}
               </div>
               <div className="appt-actions">
-                {a.status === "PENDING" && (
+                {(a.status === "PENDING" || a.status === "CONFIRMED") && (
                   <button
                     className="btn-cancel-appt"
                     onClick={() => openCancelPopup(a)}

@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { isAuthenticated, getUser } from "../../../app/authState";
+import { isAuthenticated } from "../../../app/authState";
 import SlotPicker from "../components/SlotPicker";
 import {
   getAllBranches,
   getAllStandardServices,
-  getCustomerVehicles,
-  getAllVehicles,
+  getVehicleBrands,
+  getVehicleModels,
   getAvailableSlots,
   bookAppointment,
 } from "../api/appointmentApi";
@@ -26,11 +26,11 @@ function dateToString(d) {
 
 export default function BookingPage() {
   const navigate = useNavigate();
-  const user = getUser();
 
   const [branches, setBranches] = useState([]);
   const [services, setServices] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [models, setModels] = useState([]);
 
   const [branchId, setBranchId] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
@@ -38,7 +38,10 @@ export default function BookingPage() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-  const [vehicleId, setVehicleId] = useState("");
+  const [selectedBrandId, setSelectedBrandId] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
+  const [vehicleColor, setVehicleColor] = useState("");
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -55,23 +58,16 @@ export default function BookingPage() {
 
   async function loadReferenceData() {
     try {
-      const [br, svc, cv, veh] = await Promise.all([
+      const [br, svc, vb, vm] = await Promise.all([
         getAllBranches(),
         getAllStandardServices(),
-        getCustomerVehicles(),
-        getAllVehicles(),
+        getVehicleBrands(),
+        getVehicleModels(),
       ]);
       setBranches(Array.isArray(br) ? br.filter((b) => b.status === "active") : []);
       setServices(Array.isArray(svc) ? svc.filter((s) => s.isActive !== false) : []);
-
-      const cvList = Array.isArray(cv) ? cv : [];
-      const vehList = Array.isArray(veh) ? veh : [];
-      const customerId = user?.id;
-      const myVehicleIds = cvList
-        .filter((x) => x.customerId == customerId && x.isCurrentOwner)
-        .map((x) => x.vehicleId);
-      const myVehicles = vehList.filter((v) => myVehicleIds.includes(v.id));
-      setVehicles(myVehicles);
+      setBrands(Array.isArray(vb) ? vb.filter((b) => b.isActive !== false) : []);
+      setModels(Array.isArray(vm) ? vm : []);
     } catch {
       /* ignore */
     }
@@ -123,7 +119,10 @@ export default function BookingPage() {
     try {
       await bookAppointment({
         branchId: Number(branchId),
-        vehicleId: vehicleId ? Number(vehicleId) : null,
+        vehicleId: null,
+        vehicleModelId: selectedModelId ? Number(selectedModelId) : null,
+        licensePlate: licensePlate.trim() || null,
+        color: vehicleColor.trim() || null,
         scheduledDate: dateToString(selectedDate),
         startTime: selectedSlot.startTime,
         endTime: selectedSlot.endTime,
@@ -142,6 +141,13 @@ export default function BookingPage() {
   }
 
   const selectedBranch = branches.find((b) => String(b.id) === String(branchId));
+  const selectedBrand = brands.find((b) => String(b.id) === String(selectedBrandId));
+  const selectedModel = models.find((m) => String(m.id) === String(selectedModelId));
+  const vehicleSummary = [
+    selectedBrand?.name,
+    selectedModel?.modelName,
+    licensePlate ? `(${licensePlate})` : null,
+  ].filter(Boolean).join(" ") || "Chua nhap";
   const totalPrice = services
     .filter((s) => selectedServiceIds.includes(s.id))
     .reduce((sum, s) => sum + (s.basePrice || 0), 0);
@@ -184,17 +190,69 @@ export default function BookingPage() {
             />
           </div>
 
-          {/* Vehicle */}
+          {/* Vehicle Info */}
           <div className="booking-card">
-            <h3>5. Chon xe (tuy chon)</h3>
-            <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-              <option value="">-- Khong chon xe --</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.licensePlate} {v.color ? `(${v.color})` : ""}
-                </option>
-              ))}
-            </select>
+            <h3>5. Thong tin xe (tuy chon)</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
+                  Hang xe
+                </label>
+                <select
+                  value={selectedBrandId}
+                  onChange={(e) => {
+                    setSelectedBrandId(e.target.value);
+                    setSelectedModelId("");
+                  }}
+                >
+                  <option value="">-- Chon hang xe --</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
+                  Dong xe
+                </label>
+                <select
+                  value={selectedModelId}
+                  onChange={(e) => setSelectedModelId(e.target.value)}
+                  disabled={!selectedBrandId}
+                >
+                  <option value="">-- Chon dong xe --</option>
+                  {models
+                    .filter((m) => String(m.brandId) === String(selectedBrandId))
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>{m.modelName}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
+                  Bien so xe
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: 43A-12345"
+                  value={licensePlate}
+                  onChange={(e) => setLicensePlate(e.target.value.toUpperCase())}
+                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
+                  Mau xe (tuy chon)
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Trang, Den, Do..."
+                  value={vehicleColor}
+                  onChange={(e) => setVehicleColor(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Notes */}
@@ -273,6 +331,8 @@ export default function BookingPage() {
                     ? `${selectedSlot.startTime?.substring(0, 5)} - ${selectedSlot.endTime?.substring(0, 5)}`
                     : "Chua chon"}
                 </dd>
+                <dt>Xe</dt>
+                <dd>{vehicleSummary}</dd>
                 <dt>Dich vu</dt>
                 <dd>
                   {selectedServiceIds.length > 0
