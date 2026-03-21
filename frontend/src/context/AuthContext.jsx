@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }) => {
     if (!ok) throw new Error(data?.message || "Login failed");
 
     const userData = {
+      id: data.id,
       fullName: data.fullName,
       email: data.email,
       role: data.role,
@@ -65,6 +66,7 @@ export const AuthProvider = ({ children }) => {
     if (!ok) throw new Error(data?.message || "Registration failed");
 
     const userData = {
+      id: data.id,
       fullName: data.fullName,
       email: data.email,
       role: data.role,
@@ -86,6 +88,7 @@ export const AuthProvider = ({ children }) => {
     if (!ok) throw new Error(data?.message || "Google login failed");
 
     const userData = {
+      id: data.id,
       fullName: data.fullName,
       email: data.email,
       role: data.role,

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
@@ -230,6 +230,7 @@ namespace MyGarage.Services
             
             return new AuthResponseDto
             {
+                Id = long.TryParse(userId, out var uid) ? uid : 0,
                 Token = tokenHandler.WriteToken(token),
                 FullName = name,
                 Email = email,

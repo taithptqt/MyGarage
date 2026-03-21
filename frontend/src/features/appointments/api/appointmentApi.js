@@ -60,10 +60,10 @@ export async function getAllStandardServices() {
   return request({ url: "/api/StandardService", method: "GET" });
 }
 
-export async function getCustomerVehicles() {
-  return request({ url: "/api/CustomerVehicle", method: "GET" });
+export async function getVehicleBrands() {
+  return request({ url: "/api/VehicleBrand", method: "GET" });
 }
 
-export async function getAllVehicles() {
-  return request({ url: "/api/Vehicle", method: "GET" });
+export async function getVehicleModels() {
+  return request({ url: "/api/VehicleModel", method: "GET" });
 }

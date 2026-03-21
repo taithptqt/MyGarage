@@ -2,6 +2,7 @@ namespace MyGarage.DTOs.Responses.Auth
 {
     public class AuthResponseDto
     {
+        public long Id { get; set; }
         public string Token { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;

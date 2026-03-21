@@ -97,11 +97,47 @@ namespace MyGarage.Services
             if (targetSlot == null || !targetSlot.IsAvailable)
                 throw new InvalidOperationException("Khung giờ này đã hết chỗ hoặc không hợp lệ.");
 
+            long? vehicleId = dto.VehicleId;
+
+            if (vehicleId == null && !string.IsNullOrWhiteSpace(dto.LicensePlate) && dto.VehicleModelId.HasValue)
+            {
+                var plate = dto.LicensePlate.Trim().ToUpper();
+                var existing = await _context.Vehicles
+                    .FirstOrDefaultAsync(v => v.LicensePlate == plate);
+
+                if (existing != null)
+                {
+                    vehicleId = existing.Id;
+                }
+                else
+                {
+                    var newVehicle = new Vehicle
+                    {
+                        LicensePlate = plate,
+                        ModelId = dto.VehicleModelId.Value,
+                        Color = dto.Color,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Vehicles.Add(newVehicle);
+                    await _context.SaveChangesAsync();
+                    vehicleId = newVehicle.Id;
+
+                    _context.CustomerVehicles.Add(new CustomerVehicle
+                    {
+                        CustomerId = customerId,
+                        VehicleId = newVehicle.Id,
+                        IsCurrentOwner = true,
+                        OwnershipStartDate = DateOnly.FromDateTime(DateTime.Today)
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             var appointment = new Appointment
             {
                 BranchId = dto.BranchId,
                 CustomerId = customerId,
-                VehicleId = dto.VehicleId,
+                VehicleId = vehicleId,
                 ScheduledDate = dto.ScheduledDate,
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,

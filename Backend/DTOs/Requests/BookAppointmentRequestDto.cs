@@ -10,6 +10,12 @@ namespace MyGarage.DTOs.Requests
 
         public long? VehicleId { get; set; }
 
+        public long? VehicleModelId { get; set; }
+
+        public string? LicensePlate { get; set; }
+
+        public string? Color { get; set; }
+
         [Required]
         public DateOnly ScheduledDate { get; set; }
 
