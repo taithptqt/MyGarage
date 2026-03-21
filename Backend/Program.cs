@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -606,6 +606,30 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
     var centralBranch = await FindBranchByNamesAsync("\u0110\u00E0 N\u1EB5ng", "Da Nang", "Chi nhánh Trung");
     var southBranch = await FindBranchByNamesAsync("HCM", "TP HCM", "Chi nhánh Nam");
     var branches = new[] { northBranch, centralBranch, southBranch };
+
+    // BranchOperatingHours (Mon-Sat 7:30-17:30, Sun off)
+    foreach (var branch in branches)
+    {
+        for (int dow = 0; dow <= 6; dow++)
+        {
+            var exists = await db.BranchOperatingHours.AnyAsync(
+                h => h.BranchId == branch.Id && h.DayOfWeek == dow);
+            if (exists) continue;
+
+            db.BranchOperatingHours.Add(new BranchOperatingHour
+            {
+                BranchId = branch.Id,
+                DayOfWeek = dow,
+                OpenTime = new TimeOnly(7, 30),
+                CloseTime = new TimeOnly(17, 30),
+                IsDayOff = dow == 0,
+                SlotDurationMinutes = 60,
+                MaxConcurrentBookings = 3,
+                UpdatedAt = now
+            });
+        }
+        await db.SaveChangesAsync();
+    }
 
     // Customer tiers
     async Task EnsureTierAsync(string name, decimal minSpending, decimal discountPercent)
