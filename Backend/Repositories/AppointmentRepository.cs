@@ -37,6 +37,25 @@ namespace MyGarage.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Appointment>> GetAllAsync(string? status = null)
+        {
+            var query = _dbSet
+                .Include(a => a.Branch)
+                .Include(a => a.Customer)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(a => a.Status == status);
+
+            return await query
+                .OrderByDescending(a => a.ScheduledDate)
+                    .ThenByDescending(a => a.StartTime)
+                .ToListAsync();
+        }
+
         public async Task<IEnumerable<Appointment>> GetByBranchIdAsync(long branchId, string? status = null)
         {
             var query = _dbSet

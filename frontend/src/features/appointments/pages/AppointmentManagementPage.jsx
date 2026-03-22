@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useBranch } from "@context/BranchContext";
 import { useSearch } from "@context/SearchContext";
 import { Modal } from "../../admin/components/AdminModals";
 import {
+  getAllAppointments,
   getBranchAppointments,
+  getAllBranches,
   confirmAppointment,
   cancelAppointment,
   checkInAppointment,
@@ -17,12 +18,15 @@ const STATUS_LABELS = {
   NO_SHOW: "Khong den",
 };
 
+const STATUS_ORDER = { PENDING: 0, CONFIRMED: 1, ARRIVED: 2, NO_SHOW: 3, CANCELED: 4 };
+
 const STATUS_FILTERS = [
   { key: "", label: "Tat ca" },
   { key: "PENDING", label: "Cho xac nhan" },
   { key: "CONFIRMED", label: "Da xac nhan" },
   { key: "ARRIVED", label: "Da den" },
   { key: "CANCELED", label: "Da huy" },
+  { key: "NO_SHOW", label: "Khong den" },
 ];
 
 function formatTime(t) {
@@ -42,9 +46,10 @@ function badgeClass(status) {
 }
 
 export default function AppointmentManagementPage() {
-  const { selectedBranchId } = useBranch();
   const { searchQuery } = useSearch();
 
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState("");
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
@@ -52,19 +57,29 @@ export default function AppointmentManagementPage() {
   const [error, setError] = useState("");
   const [detailModal, setDetailModal] = useState(null);
 
+  useEffect(() => {
+    getAllBranches().then((data) => {
+      setBranches(Array.isArray(data) ? data : []);
+    }).catch(() => {});
+  }, []);
+
   const fetchData = useCallback(async () => {
-    if (!selectedBranchId) return;
     setLoading(true);
     setError("");
     try {
-      const data = await getBranchAppointments(selectedBranchId, statusFilter || undefined);
+      let data;
+      if (selectedBranch) {
+        data = await getBranchAppointments(selectedBranch, statusFilter || undefined);
+      } else {
+        data = await getAllAppointments(statusFilter || undefined);
+      }
       setAppointments(Array.isArray(data) ? data : []);
     } catch {
       setError("Khong the tai danh sach lich hen.");
     } finally {
       setLoading(false);
     }
-  }, [selectedBranchId, statusFilter]);
+  }, [selectedBranch, statusFilter]);
 
   useEffect(() => {
     fetchData();
@@ -86,14 +101,17 @@ export default function AppointmentManagementPage() {
   }
 
   const query = String(searchQuery || "").trim().toLowerCase();
-  const filtered = appointments.filter((a) => {
-    if (!query) return true;
-    return (
-      (a.customerName || "").toLowerCase().includes(query) ||
-      (a.customerPhone || "").toLowerCase().includes(query) ||
-      (a.vehicleLicensePlate || "").toLowerCase().includes(query)
-    );
-  });
+  const filtered = appointments
+    .filter((a) => {
+      if (!query) return true;
+      return (
+        (a.customerName || "").toLowerCase().includes(query) ||
+        (a.customerPhone || "").toLowerCase().includes(query) ||
+        (a.vehicleLicensePlate || "").toLowerCase().includes(query)
+      );
+    })
+    .slice()
+    .sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
 
   return (
     <div className="management-content">
@@ -109,25 +127,45 @@ export default function AppointmentManagementPage() {
       {error && <div className="error" style={{ marginBottom: 12 }}>{error}</div>}
 
       <div className="table-toolbar">
-        <div style={{ display: "flex", gap: 6 }}>
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              className={`btn-sm ${statusFilter === f.key ? "btn-primary" : "btn-outline"}`}
-              onClick={() => setStatusFilter(f.key)}
-              style={{
-                padding: "4px 12px",
-                borderRadius: 16,
-                fontSize: 12,
-                border: statusFilter === f.key ? "none" : "1px solid var(--mgmt-btn-border)",
-                background: statusFilter === f.key ? "#422afb" : "transparent",
-                color: statusFilter === f.key ? "#fff" : "var(--mgmt-text-muted)",
-                cursor: "pointer",
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid var(--mgmt-btn-border, #e2e8f0)",
+              fontSize: 13,
+              background: "#fff",
+              cursor: "pointer",
+              minWidth: 160,
+            }}
+          >
+            <option value="">Tat ca chi nhanh</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+
+          <div style={{ display: "flex", gap: 6 }}>
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setStatusFilter(f.key)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 16,
+                  fontSize: 12,
+                  border: statusFilter === f.key ? "none" : "1px solid var(--mgmt-btn-border, #e2e8f0)",
+                  background: statusFilter === f.key ? "#422afb" : "transparent",
+                  color: statusFilter === f.key ? "#fff" : "var(--mgmt-text-muted, #718096)",
+                  cursor: "pointer",
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
         <span className="result-count">{filtered.length} lich hen</span>
       </div>
@@ -148,6 +186,7 @@ export default function AppointmentManagementPage() {
               <tr>
                 <th>Khach hang</th>
                 <th>SDT</th>
+                {!selectedBranch && <th>Chi nhanh</th>}
                 <th>Ngay</th>
                 <th>Gio</th>
                 <th>Xe</th>
@@ -160,6 +199,7 @@ export default function AppointmentManagementPage() {
                 <tr key={a.id}>
                   <td className="td-name">{a.customerName}</td>
                   <td>{a.customerPhone || "—"}</td>
+                  {!selectedBranch && <td>{a.branchName || "—"}</td>}
                   <td>{a.scheduledDate}</td>
                   <td>
                     {formatTime(a.startTime)} - {formatTime(a.endTime)}
@@ -249,6 +289,8 @@ export default function AppointmentManagementPage() {
             <span>{detailModal.customerName}</span>
             <strong>SDT</strong>
             <span>{detailModal.customerPhone || "—"}</span>
+            <strong>Chi nhanh</strong>
+            <span>{detailModal.branchName || "—"}</span>
             <strong>Ngay</strong>
             <span>{detailModal.scheduledDate}</span>
             <strong>Gio</strong>

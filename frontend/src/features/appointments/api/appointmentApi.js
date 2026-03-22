@@ -23,6 +23,14 @@ export async function bookAppointment(payload) {
 }
 
 // ── Staff / Admin Endpoints ─────────────────────────────────────────────────
+export async function getAllAppointments(status) {
+  return request({
+    url: "/api/Appointment/all",
+    method: "GET",
+    params: status ? { status } : undefined,
+  });
+}
+
 export async function getBranchAppointments(branchId, status) {
   return request({
     url: `/api/Appointment/branch/${branchId}`,
