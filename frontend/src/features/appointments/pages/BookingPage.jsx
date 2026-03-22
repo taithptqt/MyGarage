@@ -269,7 +269,7 @@ export default function BookingPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Slot picker */}
           <div className="booking-card">
-            <h3>3. Chon khung gio</h3>
+            <h3>3. Chon ca</h3>
             {!branchId || !selectedDate ? (
               <div className="empty-state">
                 <p>Vui long chon chi nhanh va ngay truoc.</p>
@@ -325,10 +325,10 @@ export default function BookingPage() {
                     ? selectedDate.toLocaleDateString("vi-VN")
                     : "Chua chon"}
                 </dd>
-                <dt>Gio</dt>
+                <dt>Ca</dt>
                 <dd>
                   {selectedSlot
-                    ? `${selectedSlot.startTime?.substring(0, 5)} - ${selectedSlot.endTime?.substring(0, 5)}`
+                    ? `${(() => { const h = parseInt(selectedSlot.startTime); if (h < 11) return "Sang"; if (h < 14) return "Trua"; if (h < 18) return "Chieu"; return "Toi"; })()} (${selectedSlot.startTime?.substring(0, 5)} - ${selectedSlot.endTime?.substring(0, 5)})`
                     : "Chua chon"}
                 </dd>
                 <dt>Xe</dt>

@@ -97,6 +97,15 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
+        [HttpGet("all")]
+        public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetAllAppointments(
+            [FromQuery] string? status = null)
+        {
+            var appointments = await _appointmentService.GetAllAppointmentsAsync(status);
+            return Ok(appointments);
+        }
+
+        [Authorize]
         [HttpGet("branch/{branchId}")]
         public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetBranchAppointments(
             long branchId, [FromQuery] string? status = null)

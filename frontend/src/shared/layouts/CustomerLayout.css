@@ -216,6 +216,73 @@
   color: #718096;
 }
 
+/* ── Shift Picker (2 ca) ─────────────────────────────────────────────────── */
+
+.shift-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.shift-card {
+  padding: 24px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.shift-card:hover:not(.shift-disabled) {
+  border-color: #422afb;
+  background: #f8f6ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 42, 251, 0.1);
+}
+
+.shift-card.shift-selected {
+  border-color: #422afb;
+  background: linear-gradient(135deg, #422afb, #7c3aed);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(66, 42, 251, 0.3);
+}
+
+.shift-card.shift-selected .shift-time,
+.shift-card.shift-selected .shift-remaining {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.shift-card.shift-disabled {
+  background: #f7f7f7;
+  border-color: #eee;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.shift-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.shift-label {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.shift-time {
+  font-size: 14px;
+  color: #718096;
+  margin-bottom: 8px;
+}
+
+.shift-remaining {
+  font-size: 13px;
+  color: #422afb;
+  font-weight: 600;
+}
+
 /* ── Service Checkboxes ──────────────────────────────────────────────────── */
 
 .service-list {
