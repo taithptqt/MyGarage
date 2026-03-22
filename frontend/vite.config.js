@@ -22,6 +22,7 @@ export default defineConfig({
     }
   },
   server: {
+    https: true,
     port: 5173,
     proxy: {
       "/api": {

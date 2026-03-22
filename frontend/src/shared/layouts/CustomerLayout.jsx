@@ -26,6 +26,9 @@ export default function CustomerLayout({ children }) {
             <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
               Lich cua toi
             </NavLink>
+            <NavLink to="/payment" className={({ isActive }) => isActive ? "active" : ""}>
+              Thanh toan
+            </NavLink>
           </nav>
 
           <div className="customer-nav-user">

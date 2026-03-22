@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Data;
 
 namespace MyGarage.Controllers
 {
@@ -15,11 +17,13 @@ namespace MyGarage.Controllers
     {
         private readonly IPaymentService _paymentService;
         private readonly IMapper _mapper;
+        private readonly GarageContext _db;
 
-        public PaymentController(IPaymentService paymentService, IMapper mapper)
+        public PaymentController(IPaymentService paymentService, IMapper mapper, GarageContext db)
         {
             _paymentService = paymentService;
             _mapper = mapper;
+            _db = db;
         }
 
         [HttpGet]
@@ -40,6 +44,28 @@ namespace MyGarage.Controllers
             }
             var dto = _mapper.Map<PaymentResponseDto>(item);
             return Ok(dto);
+        }
+
+        [HttpGet("{id}/status")]
+        public async Task<ActionResult> GetStatus(long id)
+        {
+            var payment = await _db.Payments.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+            if (payment == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(new
+            {
+                payment.Id,
+                payment.TransactionCode,
+                payment.Amount,
+                payment.Status,
+                payment.Type,
+                payment.CreatedAt,
+                payment.UpdatedAt,
+                IsCompleted = string.Equals(payment.Status, "COMPLETED", System.StringComparison.OrdinalIgnoreCase)
+            });
         }
 
         [HttpPost]
@@ -83,5 +109,4 @@ namespace MyGarage.Controllers
         }
     }
 }
-
 

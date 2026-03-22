@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
+using PayOS;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -281,6 +282,7 @@ builder.Services.AddScoped<IWorkSlotService, WorkSlotService>();
 // Authentication & JWT Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<PaymentConfirmationService>();
 builder.Services.AddHttpClient();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretKeyForMyGarageBackendThatIsLongEnoughToWork";
@@ -304,6 +306,30 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+});
+
+builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new PayOSClient(new PayOSOptions
+    {
+        ClientId = config["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"),
+        ApiKey = config["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY"),
+        ChecksumKey = config["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"),
+        LogLevel = LogLevel.Debug,
+    });
+});
+
+builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new PayOSClient(new PayOSOptions
+    {
+        ClientId = config["PayOS:PayoutClientId"],
+        ApiKey = config["PayOS:PayoutApiKey"],
+        ChecksumKey = config["PayOS:PayoutChecksumKey"],
+        LogLevel = LogLevel.Debug,
+    });
 });
 
 // Add services to the container.
