@@ -11,6 +11,9 @@ import PaymentSuccessPage from "../features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "../features/payment/pages/PaymentCancelPage";
 
 function CustomerRoute({ children }) {
+  const userStr = localStorage.getItem("mygarage_user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  if (user?.role === "Staff") return <Navigate to="/admin" replace />;
   return <CustomerLayout>{children}</CustomerLayout>;
 }
 

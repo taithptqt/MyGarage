@@ -97,6 +97,15 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
+        [HttpGet("all")]
+        public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetAllAppointments(
+            [FromQuery] string? status = null)
+        {
+            var appointments = await _appointmentService.GetAllAppointmentsAsync(status);
+            return Ok(appointments);
+        }
+
+        [Authorize]
         [HttpGet("branch/{branchId}")]
         public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetBranchAppointments(
             long branchId, [FromQuery] string? status = null)
@@ -124,6 +133,22 @@ namespace MyGarage.Controllers
             try
             {
                 var appointment = await _appointmentService.BookAsync(customerId.Value, dto);
+                var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
+                return CreatedAtAction(nameof(GetDetailed), new { id = appointment.Id }, detail);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpPost("book-guest")]
+        public async Task<ActionResult<AppointmentDetailResponseDto>> BookGuest([FromBody] BookAppointmentRequestDto dto)
+        {
+            try
+            {
+                var appointment = await _appointmentService.BookGuestAsync(dto);
                 var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
                 return CreatedAtAction(nameof(GetDetailed), new { id = appointment.Id }, detail);
             }

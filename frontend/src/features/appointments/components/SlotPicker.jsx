@@ -15,7 +15,7 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
         <p>
           {isSunday
             ? "Chu nhat la ngay nghi. Vui long chon ngay khac (Thu 2 - Thu 7)."
-            : "Khong co khung gio nao kha dung cho ngay nay."}
+            : "Khong co ca nao kha dung cho ngay nay."}
         </p>
       </div>
     );
@@ -27,19 +27,36 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     return `${parts[0]}:${parts[1]}`;
   }
 
+  function shiftLabel(startTime) {
+    if (!startTime) return "";
+    const hour = parseInt(startTime.split(":")[0], 10);
+    if (hour < 11) return "Ca sang";
+    if (hour < 14) return "Ca trua";
+    if (hour < 18) return "Ca chieu";
+    return "Ca toi";
+  }
+
+  function shiftIcon(startTime) {
+    if (!startTime) return "🕐";
+    const hour = parseInt(startTime.split(":")[0], 10);
+    if (hour < 11) return "🌅";
+    if (hour < 14) return "☀️";
+    if (hour < 18) return "🌇";
+    return "🌙";
+  }
+
   return (
-    <div className="slot-grid">
+    <div className="shift-grid">
       {slots.map((slot) => {
         const key = `${slot.startTime}-${slot.endTime}`;
         const isSelected =
           selectedSlot &&
-          selectedSlot.startTime === slot.startTime &&
-          selectedSlot.endTime === slot.endTime;
+          selectedSlot.startTime === slot.startTime;
 
         const classes = [
-          "slot-item",
-          isSelected ? "slot-selected" : "",
-          !slot.isAvailable ? "slot-disabled" : "",
+          "shift-card",
+          isSelected ? "shift-selected" : "",
+          !slot.isAvailable ? "shift-disabled" : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -50,10 +67,12 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
             className={classes}
             onClick={() => slot.isAvailable && onSelect(slot)}
           >
-            <div className="slot-time">
+            <div className="shift-icon">{shiftIcon(slot.startTime)}</div>
+            <div className="shift-label">{shiftLabel(slot.startTime)}</div>
+            <div className="shift-time">
               {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
             </div>
-            <div className="slot-remaining">
+            <div className="shift-remaining">
               {slot.isAvailable
                 ? `Con ${slot.remainingCapacity} cho`
                 : "Het cho"}

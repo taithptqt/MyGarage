@@ -22,7 +22,23 @@ export async function bookAppointment(payload) {
   });
 }
 
+export async function bookGuestAppointment(payload) {
+  return request({
+    url: "/api/Appointment/book-guest",
+    method: "POST",
+    data: payload,
+  });
+}
+
 // ── Staff / Admin Endpoints ─────────────────────────────────────────────────
+export async function getAllAppointments(status) {
+  return request({
+    url: "/api/Appointment/all",
+    method: "GET",
+    params: status ? { status } : undefined,
+  });
+}
+
 export async function getBranchAppointments(branchId, status) {
   return request({
     url: `/api/Appointment/branch/${branchId}`,
@@ -66,4 +82,13 @@ export async function getVehicleBrands() {
 
 export async function getVehicleModels() {
   return request({ url: "/api/VehicleModel", method: "GET" });
+}
+
+// ── Products & Categories ────────────────────────────────────────────────────
+export async function getAllProducts() {
+  return request({ url: "/api/Product", method: "GET" });
+}
+
+export async function getAllCategories() {
+  return request({ url: "/api/Category", method: "GET" });
 }

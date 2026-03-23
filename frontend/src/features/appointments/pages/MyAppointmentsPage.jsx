@@ -84,9 +84,12 @@ export default function MyAppointmentsPage() {
     }
   }
 
-  const filtered = filter
+  const STATUS_ORDER = { PENDING: 0, CONFIRMED: 1, ARRIVED: 2, NO_SHOW: 3, CANCELED: 4 };
+
+  const filtered = (filter
     ? appointments.filter((a) => a.status === filter)
-    : appointments;
+    : appointments
+  ).slice().sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
 
   if (loading) {
     return (

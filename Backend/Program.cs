@@ -59,6 +59,8 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddHostedService<AppointmentNoShowService>();
+builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
@@ -650,7 +652,7 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
                 CloseTime = new TimeOnly(17, 30),
                 IsDayOff = dow == 0,
                 SlotDurationMinutes = 60,
-                MaxConcurrentBookings = 3,
+                MaxConcurrentBookings = 10,
                 UpdatedAt = now
             });
         }

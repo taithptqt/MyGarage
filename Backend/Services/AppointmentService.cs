@@ -56,46 +56,41 @@ namespace MyGarage.Services
             var existingAppointments = await _appointmentRepository.GetByBranchAndDateAsync(branchId, date);
             var appointmentList = existingAppointments.ToList();
 
-            int slotMinutes = opHour.SlotDurationMinutes > 0 ? opHour.SlotDurationMinutes : 60;
-            int maxConcurrent = opHour.MaxConcurrentBookings > 0 ? opHour.MaxConcurrentBookings : 3;
+            int maxConcurrent = 10;
+
+            var allShifts = new (TimeOnly Start, TimeOnly End)[]
+            {
+                (new TimeOnly(7, 0),  new TimeOnly(11, 0)),
+                (new TimeOnly(11, 0), new TimeOnly(14, 0)),
+                (new TimeOnly(14, 0), new TimeOnly(18, 0)),
+                (new TimeOnly(18, 0), new TimeOnly(22, 0)),
+            };
 
             var slots = new List<AvailableSlotResponseDto>();
-            var current = openTime;
 
-            while (current.AddMinutes(slotMinutes) <= closeTime)
+            foreach (var shift in allShifts)
             {
-                var slotEnd = current.AddMinutes(slotMinutes);
-
                 int booked = appointmentList.Count(a =>
-                    a.StartTime < slotEnd && a.EndTime > current);
+                    a.StartTime >= shift.Start && a.StartTime < shift.End);
 
                 slots.Add(new AvailableSlotResponseDto
                 {
-                    StartTime = current,
-                    EndTime = slotEnd,
+                    StartTime = shift.Start,
+                    EndTime = shift.End,
                     MaxCapacity = maxConcurrent,
                     BookedCount = booked,
                     RemainingCapacity = Math.Max(0, maxConcurrent - booked),
                     IsAvailable = booked < maxConcurrent
                 });
-
-                current = slotEnd;
             }
 
             return slots;
         }
 
-        public async Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto)
+        public async Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto, long? createdByStaffId = null)
         {
             if (dto.ScheduledDate < DateOnly.FromDateTime(DateTime.Today))
-                throw new InvalidOperationException("Không thể đặt lịch cho ngày trong quá khứ.");
-
-            var slots = await GetAvailableSlotsAsync(dto.BranchId, dto.ScheduledDate);
-            var targetSlot = slots.FirstOrDefault(s =>
-                s.StartTime == dto.StartTime && s.EndTime == dto.EndTime);
-
-            if (targetSlot == null || !targetSlot.IsAvailable)
-                throw new InvalidOperationException("Khung giờ này đã hết chỗ hoặc không hợp lệ.");
+                throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
 
             long? vehicleId = dto.VehicleId;
 
@@ -133,14 +128,40 @@ namespace MyGarage.Services
                 }
             }
 
+            var endTime = dto.EndTime;
+
+            if (!string.IsNullOrEmpty(dto.RequestedServiceIds))
+            {
+                var serviceIds = dto.RequestedServiceIds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
+                    .Where(v => v > 0)
+                    .ToList();
+
+                if (serviceIds.Count > 0)
+                {
+                    var totalMinutes = await _context.StandardServices
+                        .Where(s => serviceIds.Contains(s.Id))
+                        .SumAsync(s => s.StandardMinutes);
+
+                    if (totalMinutes > 0)
+                    {
+                        var calculated = dto.StartTime.AddMinutes(totalMinutes);
+                        if (calculated > endTime)
+                            endTime = calculated;
+                    }
+                }
+            }
+
             var appointment = new Appointment
             {
                 BranchId = dto.BranchId,
                 CustomerId = customerId,
                 VehicleId = vehicleId,
+                CreatedBy = createdByStaffId,
                 ScheduledDate = dto.ScheduledDate,
                 StartTime = dto.StartTime,
-                EndTime = dto.EndTime,
+                EndTime = endTime,
                 RequestedServiceIds = dto.RequestedServiceIds,
                 CustomerNotes = dto.CustomerNotes,
                 Status = "PENDING",
@@ -148,6 +169,33 @@ namespace MyGarage.Services
             };
 
             return await _appointmentRepository.AddAsync(appointment);
+        }
+
+        public async Task<Appointment> BookGuestAsync(BookAppointmentRequestDto dto)
+        {
+            if (dto.ScheduledDate < DateOnly.FromDateTime(DateTime.Today))
+                throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
+
+            if (string.IsNullOrWhiteSpace(dto.GuestPhone))
+                throw new InvalidOperationException("Vui long nhap so dien thoai.");
+
+            var phone = dto.GuestPhone.Trim();
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Phone == phone);
+
+            if (customer == null)
+            {
+                customer = new Customer
+                {
+                    FullName = dto.GuestName?.Trim() ?? "Khach vang lai",
+                    Phone = phone,
+                    Email = dto.GuestEmail?.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Customers.Add(customer);
+                await _context.SaveChangesAsync();
+            }
+
+            return await BookAsync(customer.Id, dto);
         }
 
         public async Task<Appointment?> ConfirmAsync(long id)
@@ -193,6 +241,12 @@ namespace MyGarage.Services
         public async Task<IEnumerable<AppointmentDetailResponseDto>> GetCustomerAppointmentsAsync(long customerId)
         {
             var appointments = await _appointmentRepository.GetByCustomerIdAsync(customerId);
+            return await MapToDetailDtos(appointments);
+        }
+
+        public async Task<IEnumerable<AppointmentDetailResponseDto>> GetAllAppointmentsAsync(string? status = null)
+        {
+            var appointments = await _appointmentRepository.GetAllAsync(status);
             return await MapToDetailDtos(appointments);
         }
 
