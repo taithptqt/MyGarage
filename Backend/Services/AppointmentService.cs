@@ -56,7 +56,7 @@ namespace MyGarage.Services
             var existingAppointments = await _appointmentRepository.GetByBranchAndDateAsync(branchId, date);
             var appointmentList = existingAppointments.ToList();
 
-            int maxConcurrent = opHour.MaxConcurrentBookings > 0 ? opHour.MaxConcurrentBookings : 5;
+            int maxConcurrent = 10;
 
             var allShifts = new (TimeOnly Start, TimeOnly End)[]
             {
@@ -90,14 +90,7 @@ namespace MyGarage.Services
         public async Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto, long? createdByStaffId = null)
         {
             if (dto.ScheduledDate < DateOnly.FromDateTime(DateTime.Today))
-                throw new InvalidOperationException("Không thể đặt lịch cho ngày trong quá khứ.");
-
-            var slots = await GetAvailableSlotsAsync(dto.BranchId, dto.ScheduledDate);
-            var targetSlot = slots.FirstOrDefault(s =>
-                s.StartTime == dto.StartTime);
-
-            if (targetSlot == null || !targetSlot.IsAvailable)
-                throw new InvalidOperationException("Ca này đã hết chỗ hoặc không hợp lệ.");
+                throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
 
             long? vehicleId = dto.VehicleId;
 
@@ -135,7 +128,7 @@ namespace MyGarage.Services
                 }
             }
 
-            var endTime = targetSlot.EndTime;
+            var endTime = dto.EndTime;
 
             if (!string.IsNullOrEmpty(dto.RequestedServiceIds))
             {
@@ -154,7 +147,7 @@ namespace MyGarage.Services
                     if (totalMinutes > 0)
                     {
                         var calculated = dto.StartTime.AddMinutes(totalMinutes);
-                        if (calculated > targetSlot.EndTime)
+                        if (calculated > endTime)
                             endTime = calculated;
                     }
                 }
@@ -176,6 +169,33 @@ namespace MyGarage.Services
             };
 
             return await _appointmentRepository.AddAsync(appointment);
+        }
+
+        public async Task<Appointment> BookGuestAsync(BookAppointmentRequestDto dto)
+        {
+            if (dto.ScheduledDate < DateOnly.FromDateTime(DateTime.Today))
+                throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
+
+            if (string.IsNullOrWhiteSpace(dto.GuestPhone))
+                throw new InvalidOperationException("Vui long nhap so dien thoai.");
+
+            var phone = dto.GuestPhone.Trim();
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Phone == phone);
+
+            if (customer == null)
+            {
+                customer = new Customer
+                {
+                    FullName = dto.GuestName?.Trim() ?? "Khach vang lai",
+                    Phone = phone,
+                    Email = dto.GuestEmail?.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Customers.Add(customer);
+                await _context.SaveChangesAsync();
+            }
+
+            return await BookAsync(customer.Id, dto);
         }
 
         public async Task<Appointment?> ConfirmAsync(long id)

@@ -11,6 +11,7 @@ namespace MyGarage.Interfaces
     {
         Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date);
         Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto, long? createdByStaffId = null);
+        Task<Appointment> BookGuestAsync(BookAppointmentRequestDto dto);
         Task<Appointment?> ConfirmAsync(long id);
         Task<Appointment?> CancelAsync(long id, string? reason);
         Task<Appointment?> CheckInAsync(long id);
