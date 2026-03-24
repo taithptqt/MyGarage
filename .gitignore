@@ -22,3 +22,9 @@ scaffold*.ps1
 # Frontend
 node_modules/
 dist/
+
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*

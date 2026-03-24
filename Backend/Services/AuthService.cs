@@ -36,8 +36,19 @@ namespace MyGarage.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
-            var normalizedEmail = NormalizeEmail(request.Email);
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
+            var identifier = ResolveLoginIdentifier(request);
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                throw new UnauthorizedAccessException("Invalid email/phone or password.");
+            }
+
+            var isEmailLogin = IsEmailIdentifier(identifier);
+            var normalizedEmail = isEmailLogin ? NormalizeEmail(identifier) : string.Empty;
+            var normalizedPhone = isEmailLogin ? string.Empty : NormalizePhone(identifier);
+
+            var customer = isEmailLogin
+                ? await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail)
+                : await _context.Customers.FirstOrDefaultAsync(c => c.Phone == normalizedPhone);
 
             if (customer != null && VerifyPassword(request.Password, customer.PasswordHash, out var customerNeedsRehash))
             {
@@ -63,10 +74,12 @@ namespace MyGarage.Services
                     nearestBranchName);
             }
 
-            var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
+            var staff = isEmailLogin
+                ? await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail)
+                : await _context.Staffs.FirstOrDefaultAsync(s => s.Phone == normalizedPhone);
             if (staff == null || !VerifyPassword(request.Password, staff.PasswordHash, out var staffNeedsRehash))
             {
-                throw new UnauthorizedAccessException("Invalid email or password.");
+                throw new UnauthorizedAccessException("Invalid email/phone or password.");
             }
 
             ValidateStaffAccountForLogin(staff);
@@ -426,6 +439,41 @@ namespace MyGarage.Services
         private static string NormalizeEmail(string email)
         {
             return email.Trim().ToLowerInvariant();
+        }
+
+        private static bool IsEmailIdentifier(string identifier)
+        {
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                return false;
+            }
+
+            return identifier.Contains('@');
+        }
+
+        private static string NormalizePhone(string phone)
+        {
+            return phone.Trim();
+        }
+
+        private static string ResolveLoginIdentifier(LoginRequestDto request)
+        {
+            if (!string.IsNullOrWhiteSpace(request.Identifier))
+            {
+                return request.Identifier.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                return request.Email.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Phone))
+            {
+                return request.Phone.Trim();
+            }
+
+            return string.Empty;
         }
 
         private async Task<long?> ResolveNearestBranchIdAsync(decimal? lat, decimal? lng, string? city = null)
