@@ -1,6 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "node:fs";
 import path from "node:path";
+
+const certDir = path.resolve(__dirname, "certs");
+const certPath = path.resolve(certDir, "localhost.pem");
+const keyPath = path.resolve(certDir, "localhost.key");
+const hasDevCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
 export default defineConfig({
   plugins: [
@@ -22,8 +28,15 @@ export default defineConfig({
     }
   },
   server: {
-    https: true,
+    host: "localhost",
+    https: hasDevCert
+      ? {
+          cert: fs.readFileSync(certPath),
+          key: fs.readFileSync(keyPath)
+        }
+      : true,
     port: 5173,
+    strictPort: true,
     proxy: {
       "/api": {
         target: "https://localhost:7009",

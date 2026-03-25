@@ -18,7 +18,7 @@ const string FrontendCorsPolicy = "FrontendCorsPolicy";
 if (builder.Environment.IsDevelopment())
 {
     // Keep local development stable on the requested ports.
-    builder.WebHost.UseUrls("https://localhost:7009", "http://localhost:5062");
+    builder.WebHost.UseUrls("https://localhost:7009");
 }
 
 builder.Services.AddDbContext<GarageContext>(options =>
@@ -31,6 +31,8 @@ builder.Services.AddCors(options =>
         policy.SetIsOriginAllowed(origin =>
                 origin.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase) ||
                 origin.StartsWith("https://localhost:", StringComparison.OrdinalIgnoreCase) ||
+                origin.StartsWith("http://127.0.0.1:", StringComparison.OrdinalIgnoreCase) ||
+                origin.StartsWith("https://127.0.0.1:", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(origin, "https://accounts.google.com", StringComparison.OrdinalIgnoreCase))
               .AllowAnyHeader()
               .AllowAnyMethod();
@@ -420,7 +422,7 @@ if (hasFrontendBuild)
 else
 {
     app.MapGet("/", () => Results.Content(
-        "Frontend build not found. For local development run frontend with 'npm run dev' at http://localhost:5173, or run 'npm run build' in /frontend so backend can serve /frontend/dist.",
+        "Frontend build not found. For local development run frontend with 'npm run dev' at https://localhost:5173, or run 'npm run build' in /frontend so backend can serve /frontend/dist.",
         "text/plain"));
 }
 

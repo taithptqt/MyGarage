@@ -69,7 +69,7 @@ public partial class GarageContext
         var user = httpContext?.User;
 
         var userId = ParseLong(user?.FindFirstValue(ClaimTypes.NameIdentifier)) ?? 0;
-        var userType = user?.FindFirstValue(ClaimTypes.Role) ?? "SYSTEM";
+        var userType = NormalizeAuditUserType(user?.FindFirstValue(ClaimTypes.Role));
         var requestBranchId =
             ParseLong(user?.FindFirstValue("branchId")) ??
             ParseLong(user?.FindFirstValue("BranchId"));
@@ -165,6 +165,17 @@ public partial class GarageContext
     private static long? ParseLong(string? value)
     {
         return long.TryParse(value, out var result) ? result : null;
+    }
+
+    private static string NormalizeAuditUserType(string? roleClaim)
+    {
+        if (string.IsNullOrWhiteSpace(roleClaim))
+        {
+            return "STAFF";
+        }
+
+        var normalized = roleClaim.Trim().ToUpperInvariant();
+        return normalized.Contains("CUSTOMER", StringComparison.Ordinal) ? "CUSTOMER" : "STAFF";
     }
 
     private static long? TryGetBranchId(EntityEntry entry)

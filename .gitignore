@@ -22,6 +22,8 @@ scaffold*.ps1
 # Frontend
 node_modules/
 dist/
+frontend/certs/
+Frontend/certs/
 
 # Environment files
 .env
