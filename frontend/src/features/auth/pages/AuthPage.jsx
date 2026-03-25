@@ -21,7 +21,7 @@ function AuthPage() {
     document.title = mode === "login" ? "Dang nhap | MyGarage" : "Dang ky | MyGarage";
   }, [mode]);
 
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     fullName: "",
     phone: "",
@@ -78,7 +78,7 @@ function AuthPage() {
     try {
       const location = await getLocationPayload();
       const data = await contextLogin({
-        email: loginForm.email.trim(),
+        identifier: loginForm.identifier.trim(),
         password: loginForm.password,
         ...location
       });

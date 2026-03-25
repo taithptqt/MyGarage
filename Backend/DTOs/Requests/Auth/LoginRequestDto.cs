@@ -3,9 +3,9 @@ namespace MyGarage.DTOs.Requests.Auth
 {
     public class LoginRequestDto
     {
-        [Required]
-        [EmailAddress]
-        public string Email { get; set; } = string.Empty;
+        public string Identifier { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
 
         [Required]
         [MinLength(6)]

@@ -28,5 +28,10 @@ namespace MyGarage.DTOs.Requests
         public string? RequestedServiceIds { get; set; }
 
         public string? CustomerNotes { get; set; }
+
+        // Guest booking fields (used when not logged in)
+        public string? GuestName { get; set; }
+        public string? GuestPhone { get; set; }
+        public string? GuestEmail { get; set; }
     }
 }

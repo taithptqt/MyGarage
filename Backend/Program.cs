@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
+using PayOS;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -59,6 +60,7 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddHostedService<AppointmentNoShowService>();
+builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
@@ -282,7 +284,9 @@ builder.Services.AddScoped<IWorkSlotService, WorkSlotService>();
 // Authentication & JWT Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<PaymentConfirmationService>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpContextAccessor();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretKeyForMyGarageBackendThatIsLongEnoughToWork";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "MyGarageServer";
@@ -305,6 +309,30 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+});
+
+builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new PayOSClient(new PayOSOptions
+    {
+        ClientId = config["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"),
+        ApiKey = config["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY"),
+        ChecksumKey = config["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"),
+        LogLevel = LogLevel.Debug,
+    });
+});
+
+builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new PayOSClient(new PayOSOptions
+    {
+        ClientId = config["PayOS:PayoutClientId"],
+        ApiKey = config["PayOS:PayoutApiKey"],
+        ChecksumKey = config["PayOS:PayoutChecksumKey"],
+        LogLevel = LogLevel.Debug,
+    });
 });
 
 // Add services to the container.
@@ -462,19 +490,23 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
         }
     };
 
+    var existingBranches = await db.Branches
+        .Where(b => b.IsDeleted != true && b.Name != null)
+        .ToListAsync();
+
     foreach (var item in defaults)
     {
         var knownNames = item.LegacyNames
             .Append(item.Name)
             .Select(x => x.Trim().ToLowerInvariant())
-            .ToList();
+            .ToHashSet();
 
-        var existing = await db.Branches.FirstOrDefaultAsync(
-            b => b.IsDeleted != true && b.Name != null && knownNames.Contains(b.Name.ToLower()));
+        var existing = existingBranches.FirstOrDefault(
+            b => b.Name != null && knownNames.Contains(b.Name.Trim().ToLowerInvariant()));
 
         if (existing is null)
         {
-            db.Branches.Add(new Branch
+            var branch = new Branch
             {
                 Name = item.Name,
                 Address = item.Address,
@@ -486,7 +518,9 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
                 IsDeleted = false,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
-            });
+            };
+            db.Branches.Add(branch);
+            existingBranches.Add(branch);
             continue;
         }
 
@@ -564,58 +598,86 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
     var now = DateTime.UtcNow;
 
     // Roles
-    async Task<Role> EnsureRoleAsync(string roleCode, string roleName)
+    var roleSpecs = new[]
     {
-        var code = roleCode.Trim().ToUpperInvariant();
-        var role = await db.Roles.FirstOrDefaultAsync(r => r.RoleCode != null && r.RoleCode.ToUpper() == code);
-        if (role is not null) return role;
+        new { Code = "ADMIN", Name = "Admin" },
+        new { Code = "RECEPTIONIST", Name = "Service Advisor" },
+        new { Code = "TECH", Name = "Technician" }
+    };
+    var roles = await db.Roles.Where(r => r.RoleCode != null).ToListAsync();
+    var roleByCode = roles.ToDictionary(
+        r => r.RoleCode!.Trim().ToUpperInvariant(),
+        r => r,
+        StringComparer.OrdinalIgnoreCase);
 
-        role = new Role
+    foreach (var spec in roleSpecs)
+    {
+        if (roleByCode.ContainsKey(spec.Code))
         {
-            RoleCode = code,
-            RoleName = roleName,
-            Scope = code == "ADMIN" ? "COMPANY" : "BRANCH",
-            Description = $"Demo role {roleName}",
+            continue;
+        }
+
+        var role = new Role
+        {
+            RoleCode = spec.Code,
+            RoleName = spec.Name,
+            Scope = spec.Code == "ADMIN" ? "COMPANY" : "BRANCH",
+            Description = $"Demo role {spec.Name}",
             IsActive = true,
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         };
+
         db.Roles.Add(role);
-        await db.SaveChangesAsync();
-        return role;
+        roleByCode[spec.Code] = role;
     }
 
-    var adminRole = await EnsureRoleAsync("ADMIN", "Admin");
-    var advisorRole = await EnsureRoleAsync("RECEPTIONIST", "Service Advisor");
-    var techRole = await EnsureRoleAsync("TECH", "Technician");
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
+
+    var adminRole = roleByCode["ADMIN"];
+    var advisorRole = roleByCode["RECEPTIONIST"];
+    var techRole = roleByCode["TECH"];
 
     // Branch references
-    async Task<Branch> FindBranchByNamesAsync(params string[] names)
+    var branchCandidates = await db.Branches
+        .Where(b => b.IsDeleted != true && b.Name != null)
+        .ToListAsync();
+
+    Branch FindBranchByNames(params string[] names)
     {
-        var normalized = names.Select(x => x.Trim().ToLowerInvariant()).ToList();
-        var branch = await db.Branches.FirstOrDefaultAsync(
-            b => b.IsDeleted != true && b.Name != null && normalized.Contains(b.Name.ToLower()));
-        if (branch is null)
-        {
-            throw new InvalidOperationException($"Missing branch: {string.Join(", ", names)}");
-        }
-        return branch;
+        var normalized = names.Select(x => x.Trim().ToLowerInvariant()).ToHashSet();
+        var branch = branchCandidates.FirstOrDefault(
+            b => b.Name != null && normalized.Contains(b.Name.Trim().ToLowerInvariant()));
+        return branch ?? throw new InvalidOperationException($"Missing branch: {string.Join(", ", names)}");
     }
 
-    var northBranch = await FindBranchByNamesAsync("H\u00E0 N\u1ED9i", "Ha Noi", "Hanoi", "Chi nhánh Bắc");
-    var centralBranch = await FindBranchByNamesAsync("\u0110\u00E0 N\u1EB5ng", "Da Nang", "Chi nhánh Trung");
-    var southBranch = await FindBranchByNamesAsync("HCM", "TP HCM", "Chi nhánh Nam");
+    var northBranch = FindBranchByNames("H\u00E0 N\u1ED9i", "Ha Noi", "Hanoi", "Chi nhánh Bắc");
+    var centralBranch = FindBranchByNames("\u0110\u00E0 N\u1EB5ng", "Da Nang", "Chi nhánh Trung");
+    var southBranch = FindBranchByNames("HCM", "TP HCM", "Chi nhánh Nam");
     var branches = new[] { northBranch, centralBranch, southBranch };
+    var branchIds = branches.Select(b => b.Id).Distinct().ToList();
 
     // BranchOperatingHours (Mon-Sat 7:30-17:30, Sun off)
+    var existingHourKeys = await db.BranchOperatingHours
+        .Where(h => branchIds.Contains(h.BranchId))
+        .Select(h => new { h.BranchId, h.DayOfWeek })
+        .ToListAsync();
+    var branchHourSet = existingHourKeys
+        .Select(h => (h.BranchId, h.DayOfWeek))
+        .ToHashSet();
+
     foreach (var branch in branches)
     {
-        for (int dow = 0; dow <= 6; dow++)
+        for (var dow = 0; dow <= 6; dow++)
         {
-            var exists = await db.BranchOperatingHours.AnyAsync(
-                h => h.BranchId == branch.Id && h.DayOfWeek == dow);
-            if (exists) continue;
+            if (branchHourSet.Contains((branch.Id, dow)))
+            {
+                continue;
+            }
 
             db.BranchOperatingHours.Add(new BranchOperatingHour
             {
@@ -629,151 +691,260 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
                 UpdatedAt = now
             });
         }
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
         await db.SaveChangesAsync();
     }
 
     // Customer tiers
-    async Task EnsureTierAsync(string name, decimal minSpending, decimal discountPercent)
+    var tierSpecs = new[]
     {
-        var loweredName = name.Trim().ToLowerInvariant();
-        var existed = await db.CustomerTiers.AnyAsync(t => t.TierName != null && t.TierName.ToLower() == loweredName);
-        if (existed) return;
+        new { Name = "Bronze", MinSpending = 0m, DiscountPercent = 0m },
+        new { Name = "Silver", MinSpending = 5000000m, DiscountPercent = 3m },
+        new { Name = "Gold", MinSpending = 15000000m, DiscountPercent = 7m }
+    };
+    var tierNameSet = (await db.CustomerTiers
+        .Where(t => t.TierName != null)
+        .Select(t => t.TierName!.ToLower())
+        .ToListAsync())
+        .ToHashSet(StringComparer.Ordinal);
+
+    foreach (var spec in tierSpecs)
+    {
+        var loweredName = spec.Name.Trim().ToLowerInvariant();
+        if (tierNameSet.Contains(loweredName))
+        {
+            continue;
+        }
+
         db.CustomerTiers.Add(new CustomerTier
         {
-            TierName = name,
-            MinSpending = minSpending,
-            DiscountPercent = discountPercent,
-            Benefits = $"Demo tier {name}",
+            TierName = spec.Name,
+            MinSpending = spec.MinSpending,
+            DiscountPercent = spec.DiscountPercent,
+            Benefits = $"Demo tier {spec.Name}",
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         });
+        tierNameSet.Add(loweredName);
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
         await db.SaveChangesAsync();
     }
 
-    await EnsureTierAsync("Bronze", 0m, 0m);
-    await EnsureTierAsync("Silver", 5000000m, 3m);
-    await EnsureTierAsync("Gold", 15000000m, 7m);
-
     // Service categories
-    async Task<ServiceCategory> EnsureServiceCategoryAsync(string code, string name, string description)
+    var categorySpecs = new[]
     {
-        var category = await db.ServiceCategories.FirstOrDefaultAsync(c => c.Code == code);
-        if (category is not null) return category;
+        new { Code = "MAINT", Name = "BÃ¡ÂºÂ£o dÃ†Â°Ã¡Â»Â¡ng", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ bÃ¡ÂºÂ£o dÃ†Â°Ã¡Â»Â¡ng Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³" },
+        new { Code = "REPAIR", Name = "SÃ¡Â»Â­a chÃ¡Â»Â¯a", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ sÃ¡Â»Â­a chÃ¡Â»Â¯a" },
+        new { Code = "TIRES", Name = "LÃ¡Â»â€˜p & Phanh", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ lÃ¡Â»â€˜p vÃƒÂ  phanh" }
+    };
+    var categories = await db.ServiceCategories
+        .Where(c => c.Code != null)
+        .ToListAsync();
+    var categoryByCode = categories.ToDictionary(
+        c => c.Code!,
+        c => c,
+        StringComparer.OrdinalIgnoreCase);
 
-        category = new ServiceCategory
+    foreach (var spec in categorySpecs)
+    {
+        if (categoryByCode.ContainsKey(spec.Code))
         {
-            Code = code,
-            Name = name,
-            Description = description,
+            continue;
+        }
+
+        var category = new ServiceCategory
+        {
+            Code = spec.Code,
+            Name = spec.Name,
+            Description = spec.Description,
             IsActive = true,
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         };
         db.ServiceCategories.Add(category);
-        await db.SaveChangesAsync();
-        return category;
+        categoryByCode[spec.Code] = category;
     }
 
-    var catMaint = await EnsureServiceCategoryAsync("MAINT", "Báº£o dÆ°á»¡ng", "Dá»‹ch vá»¥ báº£o dÆ°á»¡ng Ä‘á»‹nh ká»³");
-    var catRepair = await EnsureServiceCategoryAsync("REPAIR", "Sá»­a chá»¯a", "Dá»‹ch vá»¥ sá»­a chá»¯a");
-    var catTire = await EnsureServiceCategoryAsync("TIRES", "Lá»‘p & Phanh", "Dá»‹ch vá»¥ lá»‘p vÃ  phanh");
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
+
+    var catMaint = categoryByCode["MAINT"];
+    var catRepair = categoryByCode["REPAIR"];
+    var catTire = categoryByCode["TIRES"];
 
     // Standard services
-    async Task EnsureStandardServiceAsync(string code, string name, long categoryId, decimal basePrice, int standardMinutes)
+    var standardServiceSpecs = new[]
     {
-        var existed = await db.StandardServices.AnyAsync(s => s.Code == code);
-        if (existed) return;
+        new { Code = "MAINT-OC", Name = "Thay nhÃ¡Â»â€ºt nhanh", CategoryId = catMaint.Id, BasePrice = 280000m, StandardMinutes = 40 },
+        new { Code = "REP-ENG", Name = "ChÃ¡ÂºÂ©n Ã„â€˜oÃƒÂ¡n Ã„â€˜Ã¡Â»â„¢ng cÃ†Â¡", CategoryId = catRepair.Id, BasePrice = 450000m, StandardMinutes = 60 },
+        new { Code = "TIRE-BAL", Name = "CÃƒÂ¢n bÃ¡ÂºÂ±ng Ã„â€˜Ã¡Â»â„¢ng bÃƒÂ¡nh xe", CategoryId = catTire.Id, BasePrice = 220000m, StandardMinutes = 30 }
+    };
+    var serviceCodeSet = (await db.StandardServices
+        .Where(s => s.Code != null)
+        .Select(s => s.Code!)
+        .ToListAsync())
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var spec in standardServiceSpecs)
+    {
+        if (serviceCodeSet.Contains(spec.Code))
+        {
+            continue;
+        }
+
         db.StandardServices.Add(new StandardService
         {
-            Code = code,
-            Name = name,
-            CategoryId = categoryId,
-            BasePrice = basePrice,
-            StandardMinutes = standardMinutes,
+            Code = spec.Code,
+            Name = spec.Name,
+            CategoryId = spec.CategoryId,
+            BasePrice = spec.BasePrice,
+            StandardMinutes = spec.StandardMinutes,
             IsActive = true,
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         });
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
         await db.SaveChangesAsync();
     }
 
-    await EnsureStandardServiceAsync("MAINT-OC", "Thay nhá»›t nhanh", catMaint.Id, 280000m, 40);
-    await EnsureStandardServiceAsync("REP-ENG", "Cháº©n Ä‘oÃ¡n Ä‘á»™ng cÆ¡", catRepair.Id, 450000m, 60);
-    await EnsureStandardServiceAsync("TIRE-BAL", "CÃ¢n báº±ng Ä‘á»™ng bÃ¡nh xe", catTire.Id, 220000m, 30);
-
     // Vehicle brands + models
-    async Task<VehicleBrand> EnsureBrandAsync(string code, string name, string country)
+    var brandSpecs = new[]
     {
-        var brand = await db.VehicleBrands.FirstOrDefaultAsync(b => b.Code == code);
-        if (brand is not null) return brand;
+        new { Code = "TOY", Name = "Toyota", Country = "Japan" },
+        new { Code = "HON", Name = "Honda", Country = "Japan" },
+        new { Code = "FOR", Name = "Ford", Country = "USA" }
+    };
+    var brands = await db.VehicleBrands
+        .Where(b => b.Code != null)
+        .ToListAsync();
+    var brandByCode = brands.ToDictionary(
+        b => b.Code!,
+        b => b,
+        StringComparer.OrdinalIgnoreCase);
 
-        brand = new VehicleBrand
+    foreach (var spec in brandSpecs)
+    {
+        if (brandByCode.ContainsKey(spec.Code))
         {
-            Code = code,
-            Name = name,
-            CountryOfOrigin = country,
+            continue;
+        }
+
+        var brand = new VehicleBrand
+        {
+            Code = spec.Code,
+            Name = spec.Name,
+            CountryOfOrigin = spec.Country,
             IsActive = true,
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         };
         db.VehicleBrands.Add(brand);
-        await db.SaveChangesAsync();
-        return brand;
+        brandByCode[spec.Code] = brand;
     }
 
-    async Task<VehicleModel> EnsureModelAsync(long brandId, string modelName, string segment, string fuelType)
+    if (db.ChangeTracker.HasChanges())
     {
-        var model = await db.VehicleModels.FirstOrDefaultAsync(m => m.BrandId == brandId && m.ModelName == modelName);
-        if (model is not null) return model;
+        await db.SaveChangesAsync();
+    }
 
-        model = new VehicleModel
+    var toyota = brandByCode["TOY"];
+    var honda = brandByCode["HON"];
+    var ford = brandByCode["FOR"];
+
+    var modelSpecs = new[]
+    {
+        new { BrandId = toyota.Id, ModelName = "Vios", Segment = "Sedan", FuelType = "Gasoline" },
+        new { BrandId = honda.Id, ModelName = "City", Segment = "Sedan", FuelType = "Gasoline" },
+        new { BrandId = ford.Id, ModelName = "Ranger", Segment = "Pickup", FuelType = "Diesel" }
+    };
+    var modelBrandIds = modelSpecs.Select(x => x.BrandId).Distinct().ToList();
+    var modelNameSet = modelSpecs.Select(x => x.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var models = await db.VehicleModels
+        .Where(m => modelBrandIds.Contains(m.BrandId) && m.ModelName != null && modelNameSet.Contains(m.ModelName))
+        .ToListAsync();
+    var modelKeys = models
+        .Select(m => $"{m.BrandId}:{m.ModelName}")
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var spec in modelSpecs)
+    {
+        var modelKey = $"{spec.BrandId}:{spec.ModelName}";
+        if (modelKeys.Contains(modelKey))
         {
-            BrandId = brandId,
-            ModelName = modelName,
-            Segment = segment,
-            FuelType = fuelType,
+            continue;
+        }
+
+        var model = new VehicleModel
+        {
+            BrandId = spec.BrandId,
+            ModelName = spec.ModelName,
+            Segment = spec.Segment,
+            FuelType = spec.FuelType,
             CylinderCapacity = "1.5L",
             IsDeleted = false,
             CreatedAt = now,
             UpdatedAt = now
         };
         db.VehicleModels.Add(model);
-        await db.SaveChangesAsync();
-        return model;
+        models.Add(model);
+        modelKeys.Add(modelKey);
     }
 
-    var toyota = await EnsureBrandAsync("TOY", "Toyota", "Japan");
-    var honda = await EnsureBrandAsync("HON", "Honda", "Japan");
-    var ford = await EnsureBrandAsync("FOR", "Ford", "USA");
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
 
-    var vios = await EnsureModelAsync(toyota.Id, "Vios", "Sedan", "Gasoline");
-    var city = await EnsureModelAsync(honda.Id, "City", "Sedan", "Gasoline");
-    var ranger = await EnsureModelAsync(ford.Id, "Ranger", "Pickup", "Diesel");
+    var vios = models.First(m => m.BrandId == toyota.Id && string.Equals(m.ModelName, "Vios", StringComparison.OrdinalIgnoreCase));
+    var city = models.First(m => m.BrandId == honda.Id && string.Equals(m.ModelName, "City", StringComparison.OrdinalIgnoreCase));
+    var ranger = models.First(m => m.BrandId == ford.Id && string.Equals(m.ModelName, "Ranger", StringComparison.OrdinalIgnoreCase));
     var demoModels = new[] { vios, city, ranger };
 
     // Staff demo data per branch
     var demoStaff = new[]
     {
-        new { FullName = "Admin Báº¯c", Phone = "0901000001", Email = "admin.bac@mygarage.local", BranchId = northBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cá»‘ váº¥n Báº¯c", Phone = "0901000002", Email = "advisor.bac@mygarage.local", BranchId = northBranch.Id, RoleId = advisorRole.Id },
-        new { FullName = "KTV Báº¯c", Phone = "0901000003", Email = "tech.bac@mygarage.local", BranchId = northBranch.Id, RoleId = techRole.Id },
+        new { FullName = "Admin BÃ¡ÂºÂ¯c", Phone = "0901000001", Email = "admin.bac@mygarage.local", BranchId = northBranch.Id, RoleId = adminRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n BÃ¡ÂºÂ¯c", Phone = "0901000002", Email = "advisor.bac@mygarage.local", BranchId = northBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "KTV BÃ¡ÂºÂ¯c", Phone = "0901000003", Email = "tech.bac@mygarage.local", BranchId = northBranch.Id, RoleId = techRole.Id },
         new { FullName = "Admin Trung", Phone = "0902000001", Email = "admin.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cá»‘ váº¥n Trung", Phone = "0902000002", Email = "advisor.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n Trung", Phone = "0902000002", Email = "advisor.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = advisorRole.Id },
         new { FullName = "KTV Trung", Phone = "0902000003", Email = "tech.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = techRole.Id },
         new { FullName = "Admin Nam", Phone = "0903000001", Email = "admin.nam@mygarage.local", BranchId = southBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cá»‘ váº¥n Nam", Phone = "0903000002", Email = "advisor.nam@mygarage.local", BranchId = southBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n Nam", Phone = "0903000002", Email = "advisor.nam@mygarage.local", BranchId = southBranch.Id, RoleId = advisorRole.Id },
         new { FullName = "KTV Nam", Phone = "0903000003", Email = "tech.nam@mygarage.local", BranchId = southBranch.Id, RoleId = techRole.Id }
     };
+
+    var demoStaffEmails = demoStaff
+        .Select(x => x.Email.Trim().ToLowerInvariant())
+        .ToList();
+    var existingStaffEmailSet = (await db.Staffs
+        .Where(s => s.Email != null && demoStaffEmails.Contains(s.Email.ToLower()))
+        .Select(s => s.Email!.ToLower())
+        .ToListAsync())
+        .ToHashSet(StringComparer.Ordinal);
 
     foreach (var item in demoStaff)
     {
         var loweredEmail = item.Email.Trim().ToLowerInvariant();
-        var exists = await db.Staffs.AnyAsync(s => s.Email != null && s.Email.ToLower() == loweredEmail);
-        if (exists) continue;
+        if (existingStaffEmailSet.Contains(loweredEmail))
+        {
+            continue;
+        }
 
         db.Staffs.Add(new Staff
         {
@@ -788,13 +959,18 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
             CreatedAt = now,
             UpdatedAt = now
         });
+        existingStaffEmailSet.Add(loweredEmail);
     }
-    await db.SaveChangesAsync();
+
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
 
     var defaultTier = await db.CustomerTiers.OrderBy(t => t.Id).FirstOrDefaultAsync();
     var tomorrow = DateOnly.FromDateTime(DateTime.Today.AddDays(1));
 
-    // Customers + vehicles + ownership + appointments to bind branch-level data
+    var demoEntries = new List<(Branch Branch, int J, string CustomerEmail, string CustomerPhone, string CustomerName, string Plate, VehicleModel Model)>();
     for (var i = 0; i < branches.Length; i++)
     {
         var branch = branches[i];
@@ -802,89 +978,156 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
         {
             var customerEmail = $"customer{j}.b{branch.Id}@mygarage.local";
             var customerPhone = $"091{branch.Id % 10}{j}000{j}";
-            var customerName = $"KhÃ¡ch {j} - {branch.Name}";
-
-            var loweredCustomerEmail = customerEmail.Trim().ToLowerInvariant();
-            var customer = await db.Customers.FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == loweredCustomerEmail);
-            if (customer is null)
-            {
-                customer = new Customer
-                {
-                    FullName = customerName,
-                    Phone = customerPhone,
-                    Email = customerEmail,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
-                    TierId = defaultTier?.Id,
-                    IsActive = true,
-                    IsDeleted = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-                db.Customers.Add(customer);
-                await db.SaveChangesAsync();
-            }
-
+            var customerName = $"KhÃƒÂ¡ch {j} - {branch.Name}";
             var model = demoModels[(i + j - 1) % demoModels.Length];
             var plate = $"{30 + i}{char.ConvertFromUtf32(65 + i)}-{12000 + i * 100 + j}";
-
-            var vehicle = await db.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == plate);
-            if (vehicle is null)
-            {
-                vehicle = new Vehicle
-                {
-                    LicensePlate = plate,
-                    ModelId = model.Id,
-                    Color = j % 2 == 0 ? "White" : "Black",
-                    ManufactureYear = 2020 + j,
-                    IsDeleted = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-                db.Vehicles.Add(vehicle);
-                await db.SaveChangesAsync();
-            }
-
-            var owned = await db.CustomerVehicles.AnyAsync(cv =>
-                cv.CustomerId == customer.Id && cv.VehicleId == vehicle.Id && cv.IsDeleted != true);
-            if (!owned)
-            {
-                db.CustomerVehicles.Add(new CustomerVehicle
-                {
-                    CustomerId = customer.Id,
-                    VehicleId = vehicle.Id,
-                    IsCurrentOwner = true,
-                    Note = $"Demo ownership for {branch.Name}",
-                    IsDeleted = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
-                await db.SaveChangesAsync();
-            }
-
-            var hasAppointment = await db.Appointments.AnyAsync(a =>
-                a.BranchId == branch.Id &&
-                a.CustomerId == customer.Id &&
-                a.VehicleId == vehicle.Id &&
-                a.ScheduledDate == tomorrow);
-            if (!hasAppointment)
-            {
-                db.Appointments.Add(new Appointment
-                {
-                    BranchId = branch.Id,
-                    CustomerId = customer.Id,
-                    VehicleId = vehicle.Id,
-                    ScheduledDate = tomorrow,
-                    StartTime = new TimeOnly(9 + j, 0),
-                    EndTime = new TimeOnly(10 + j, 0),
-                    Status = "PENDING",
-                    CustomerNotes = $"Lá»‹ch háº¹n demo {branch.Name}",
-                    IsReminderSent = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
-                await db.SaveChangesAsync();
-            }
+            demoEntries.Add((branch, j, customerEmail, customerPhone, customerName, plate, model));
         }
+    }
+
+    // Customers
+    var demoCustomerEmails = demoEntries
+        .Select(x => x.CustomerEmail.Trim().ToLowerInvariant())
+        .ToList();
+    var customers = await db.Customers
+        .Where(c => c.Email != null && demoCustomerEmails.Contains(c.Email.ToLower()))
+        .ToListAsync();
+    var customerByEmail = customers.ToDictionary(
+        c => c.Email!.Trim().ToLowerInvariant(),
+        c => c,
+        StringComparer.Ordinal);
+
+    foreach (var entry in demoEntries)
+    {
+        var loweredEmail = entry.CustomerEmail.Trim().ToLowerInvariant();
+        if (customerByEmail.ContainsKey(loweredEmail))
+        {
+            continue;
+        }
+
+        var customer = new Customer
+        {
+            FullName = entry.CustomerName,
+            Phone = entry.CustomerPhone,
+            Email = entry.CustomerEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
+            TierId = defaultTier?.Id,
+            IsActive = true,
+            IsDeleted = false,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        db.Customers.Add(customer);
+        customerByEmail[loweredEmail] = customer;
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
+
+    // Vehicles
+    var demoPlates = demoEntries.Select(x => x.Plate).ToList();
+    var vehicles = await db.Vehicles
+        .Where(v => demoPlates.Contains(v.LicensePlate))
+        .ToListAsync();
+    var vehicleByPlate = vehicles.ToDictionary(v => v.LicensePlate, v => v, StringComparer.OrdinalIgnoreCase);
+
+    foreach (var entry in demoEntries)
+    {
+        if (vehicleByPlate.ContainsKey(entry.Plate))
+        {
+            continue;
+        }
+
+        var vehicle = new Vehicle
+        {
+            LicensePlate = entry.Plate,
+            ModelId = entry.Model.Id,
+            Color = entry.J % 2 == 0 ? "White" : "Black",
+            ManufactureYear = 2020 + entry.J,
+            IsDeleted = false,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        db.Vehicles.Add(vehicle);
+        vehicleByPlate[entry.Plate] = vehicle;
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
+
+    // CustomerVehicles + Appointments
+    var demoCustomerIds = customerByEmail.Values.Select(c => c.Id).Distinct().ToList();
+    var demoVehicleIds = vehicleByPlate.Values.Select(v => v.Id).Distinct().ToList();
+
+    var existingOwnershipSet = (await db.CustomerVehicles
+        .Where(cv =>
+            demoCustomerIds.Contains(cv.CustomerId) &&
+            demoVehicleIds.Contains(cv.VehicleId) &&
+            cv.IsDeleted != true)
+        .Select(cv => $"{cv.CustomerId}:{cv.VehicleId}")
+        .ToListAsync())
+        .ToHashSet(StringComparer.Ordinal);
+
+    var existingAppointmentSet = (await db.Appointments
+        .Where(a =>
+            branchIds.Contains(a.BranchId) &&
+            demoCustomerIds.Contains(a.CustomerId) &&
+            a.VehicleId.HasValue &&
+            demoVehicleIds.Contains(a.VehicleId.Value) &&
+            a.ScheduledDate == tomorrow)
+        .Select(a => $"{a.BranchId}:{a.CustomerId}:{a.VehicleId!.Value}")
+        .ToListAsync())
+        .ToHashSet(StringComparer.Ordinal);
+
+    foreach (var entry in demoEntries)
+    {
+        var customer = customerByEmail[entry.CustomerEmail.Trim().ToLowerInvariant()];
+        var vehicle = vehicleByPlate[entry.Plate];
+
+        var ownershipKey = $"{customer.Id}:{vehicle.Id}";
+        if (!existingOwnershipSet.Contains(ownershipKey))
+        {
+            db.CustomerVehicles.Add(new CustomerVehicle
+            {
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                IsCurrentOwner = true,
+                Note = $"Demo ownership for {entry.Branch.Name}",
+                IsDeleted = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            existingOwnershipSet.Add(ownershipKey);
+        }
+
+        var appointmentKey = $"{entry.Branch.Id}:{customer.Id}:{vehicle.Id}";
+        if (!existingAppointmentSet.Contains(appointmentKey))
+        {
+            db.Appointments.Add(new Appointment
+            {
+                BranchId = entry.Branch.Id,
+                CustomerId = customer.Id,
+                VehicleId = vehicle.Id,
+                ScheduledDate = tomorrow,
+                StartTime = new TimeOnly(9 + entry.J, 0),
+                EndTime = new TimeOnly(10 + entry.J, 0),
+                Status = "PENDING",
+                CustomerNotes = $"LÃ¡Â»â€¹ch hÃ¡ÂºÂ¹n demo {entry.Branch.Name}",
+                IsReminderSent = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+            existingAppointmentSet.Add(appointmentKey);
+        }
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
     }
 }
 

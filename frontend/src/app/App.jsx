@@ -6,6 +6,9 @@ import HorizonMain from "../horizon/Main";
 import CustomerLayout from "../shared/layouts/CustomerLayout";
 import BookingPage from "../features/appointments/pages/BookingPage";
 import MyAppointmentsPage from "../features/appointments/pages/MyAppointmentsPage";
+import PayosCheckoutPage from "../features/payment/pages/PayosCheckoutPage";
+import PaymentSuccessPage from "../features/payment/pages/PaymentSuccessPage";
+import PaymentCancelPage from "../features/payment/pages/PaymentCancelPage";
 
 function CustomerRoute({ children }) {
   const userStr = localStorage.getItem("mygarage_user");
@@ -22,6 +25,9 @@ function App() {
       <Route path="/home" element={<HomePage />} />
       <Route path="/booking" element={<CustomerRoute><BookingPage /></CustomerRoute>} />
       <Route path="/my-appointments" element={<CustomerRoute><MyAppointmentsPage /></CustomerRoute>} />
+      <Route path="/payment" element={<CustomerRoute><PayosCheckoutPage /></CustomerRoute>} />
+      <Route path="/payment/success" element={<CustomerRoute><PaymentSuccessPage /></CustomerRoute>} />
+      <Route path="/payment/cancel" element={<CustomerRoute><PaymentCancelPage /></CustomerRoute>} />
       <Route path="/admin/*" element={<HorizonMain />} />
       <Route path="/admin-legacy" element={<AdminPage />} />
       <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />

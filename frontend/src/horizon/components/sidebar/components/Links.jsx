@@ -3,6 +3,7 @@ import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 // chakra imports
 import { Box, Flex, HStack, Text, useColorModeValue } from "@chakra-ui/react";
+import { MdExpandMore, MdChevronRight } from "react-icons/md";
 
 export function SidebarLinks(props) {
   //   Chakra color mode
@@ -17,14 +18,27 @@ export function SidebarLinks(props) {
   let brandColor = useColorModeValue("brand.500", "brand.400");
 
   const { routes } = props;
+  const [openGroups, setOpenGroups] = React.useState({});
 
   // verifies if routeName is the one active (in browser input)
   const activeRoute = (routeName) => {
     return location.pathname.includes(routeName);
   };
+  const isGroupActive = (route) => {
+    if (!route?.items?.length) return false;
+    return route.items.some((item) => {
+      if (item.collapse) return isGroupActive(item);
+      if (!item.path) return false;
+      return activeRoute(item.path.toLowerCase());
+    });
+  };
+
+  const toggleGroup = (groupKey) => {
+    setOpenGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
 
   // this function creates the links from the secondary accordions (for example auth -> sign-in -> default)
-  const createLinks = (routes) => {
+  const createLinks = (routes, level = 0) => {
     return routes.map((route, index) => {
       if (route.category) {
         return (
@@ -43,8 +57,48 @@ export function SidebarLinks(props) {
               key={index}>
               {route.name}
             </Text>
-            {createLinks(route.items)}
+            {createLinks(route.items, level + 1)}
           </>
+        );
+      } else if (route.collapse && route.items) {
+        const groupKey = `${route.name}-${index}-${level}`;
+        const groupIsActive = isGroupActive(route);
+        const isOpen = openGroups[groupKey] ?? groupIsActive;
+
+        return (
+          <Box key={groupKey}>
+            <Box
+              onClick={() => toggleGroup(groupKey)}
+              cursor='pointer'
+              borderRadius='10px'
+              _hover={{ bg: "gray.50" }}>
+              <HStack spacing='12px' py='7px' ps={`${10 + level * 14}px`}>
+                <Box color={groupIsActive ? activeIcon : textColor} me='6px'>
+                  {route.icon}
+                </Box>
+                <Text
+                  me='auto'
+                  color={groupIsActive ? activeColor : textColor}
+                  fontWeight={groupIsActive ? "bold" : "normal"}>
+                  {route.name}
+                </Text>
+                <Box color={groupIsActive ? activeIcon : textColor}>
+                  {isOpen ? <MdExpandMore /> : <MdChevronRight />}
+                </Box>
+                <Box
+                  h='30px'
+                  w='4px'
+                  bg={groupIsActive ? brandColor : "transparent"}
+                  borderRadius='5px'
+                />
+              </HStack>
+            </Box>
+            {isOpen ? (
+              <Box ps='8px'>
+                {createLinks(route.items, level + 1)}
+              </Box>
+            ) : null}
+          </Box>
         );
       } else if (
         route.layout === "/admin" ||
@@ -63,7 +117,7 @@ export function SidebarLinks(props) {
                     activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
                   }
                   py='5px'
-                  ps='10px'>
+                  ps={`${10 + level * 14}px`}>
                   <Flex w='100%' alignItems='center' justifyContent='center'>
                     <Box
                       color={
@@ -108,7 +162,7 @@ export function SidebarLinks(props) {
                     activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
                   }
                   py='5px'
-                  ps='10px'>
+                  ps={`${10 + level * 14}px`}>
                   <Text
                     me='auto'
                     color={
@@ -131,7 +185,7 @@ export function SidebarLinks(props) {
     });
   };
   //  BRAND
-  return createLinks(routes);
+  return createLinks(routes, 0);
 }
 
 export default SidebarLinks;

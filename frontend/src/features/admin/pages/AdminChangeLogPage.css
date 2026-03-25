@@ -1,0 +1,29 @@
+.admin-change-log-page .admin-log-filters {
+  display: grid;
+  grid-template-columns: 180px 1fr 1.2fr 190px 190px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-change-log-page .admin-log-json {
+  max-width: 320px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  color: #243763;
+}
+
+@media (max-width: 1200px) {
+  .admin-change-log-page .admin-log-filters {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-change-log-page .admin-log-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-change-log-page .admin-log-json {
+    max-width: 200px;
+  }
+}

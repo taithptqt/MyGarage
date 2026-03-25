@@ -142,6 +142,22 @@ namespace MyGarage.Controllers
             }
         }
 
+        [AllowAnonymous]
+        [HttpPost("book-guest")]
+        public async Task<ActionResult<AppointmentDetailResponseDto>> BookGuest([FromBody] BookAppointmentRequestDto dto)
+        {
+            try
+            {
+                var appointment = await _appointmentService.BookGuestAsync(dto);
+                var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
+                return CreatedAtAction(nameof(GetDetailed), new { id = appointment.Id }, detail);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [Authorize]
         [HttpPut("{id}/confirm")]
         public async Task<ActionResult<AppointmentDetailResponseDto>> Confirm(long id)
