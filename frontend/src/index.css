@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ép Tailwind có quyền ưu tiên cao nhất để đè lên Horizon UI */
+@layer base {
+  body {
+    background-color: #DED8CD;
+    color: #1A2C1C;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Dòng này dùng để kiểm tra: Nếu Tailwind chạy, 
+   thẻ h1 sẽ có gạch chân màu đỏ rực */
+h1 {
+  text-decoration: underline;
+  text-decoration-color: #dc2626; /* Tailwind's red-600 */
+  text-decoration-thickness: 4px;
+}
