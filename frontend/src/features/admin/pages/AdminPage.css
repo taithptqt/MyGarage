@@ -55,7 +55,7 @@
   font-family: "DM Sans", sans-serif;
 }
 
- ??? Dark Mode via Chakra UI toggle ??? 
+/* Dark mode via Chakra UI toggle */
 .chakra-ui-dark .admin-page,
 [data-theme="dark"] .admin-page {
   --primary: #7c5cff;
@@ -105,7 +105,7 @@
   --alert-error-border: rgba(245, 101, 101, 0.3);
 }
 
- ??? OS-level dark mode fallback ??? 
+/* OS-level dark mode fallback */
 @media (prefers-color-scheme: dark) {
   .admin-page {
     --primary: #7c5cff;

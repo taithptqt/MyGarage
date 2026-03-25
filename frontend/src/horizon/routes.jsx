@@ -31,8 +31,6 @@ import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesP
 import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
 
-import SignInCentered from 'views/auth/signIn';
-
 const inventoryItems = [
   {
     name: 'Cấu trúc kho',
@@ -42,11 +40,25 @@ const inventoryItems = [
     component: <InventoryAdminPage section="warehouseStructure" />,
   },
   {
-    name: 'Danh mục hàng',
+    name: 'Sản phẩm',
     layout: '/admin',
     icon: <Icon as={MdOutlineCategory} width="20px" height="20px" color="inherit" />,
     path: '/inventory/catalog',
-    component: <InventoryAdminPage section="catalog" />,
+    component: <InventoryAdminPage section="catalogProducts" />,
+  },
+  {
+    name: 'Danh mục',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/inventory/categories',
+    component: <InventoryAdminPage section="catalogCategories" />,
+  },
+  {
+    name: 'Nhà cung cấp',
+    layout: '/admin',
+    icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
+    path: '/inventory/suppliers',
+    component: <InventoryAdminPage section="catalogSuppliers" />,
   },
   {
     name: 'Chính sách tồn',
@@ -99,6 +111,40 @@ const inventoryItems = [
   },
 ];
 
+const vehicleItems = [
+  {
+    name: 'Hãng xe',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/brands',
+    component: <AdminPage embedded initialSection="brands" />,
+  },
+  {
+    name: 'Dòng xe',
+    layout: '/admin',
+    icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
+    path: '/models',
+    component: <AdminPage embedded initialSection="models" />,
+  },
+];
+
+const serviceItems = [
+  {
+    name: 'Dịch vụ',
+    layout: '/admin',
+    icon: <Icon as={MdBuild} width="20px" height="20px" color="inherit" />,
+    path: '/services',
+    component: <ServicesPage />,
+  },
+  {
+    name: 'Danh mục dịch vụ',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/service-categories',
+    component: <ServiceCategoriesPage />,
+  },
+];
+
 const routes = [
   {
     name: 'Bảng điều khiển',
@@ -136,32 +182,16 @@ const routes = [
     component: <AdminPage embedded initialSection="customers" />,
   },
   {
-    name: 'Hãng xe',
-    layout: '/admin',
+    name: 'Xe',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
-    path: '/brands',
-    component: <AdminPage embedded initialSection="brands" />,
-  },
-  {
-    name: 'Dòng xe',
-    layout: '/admin',
-    icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
-    path: '/models',
-    component: <AdminPage embedded initialSection="models" />,
+    collapse: true,
+    items: vehicleItems,
   },
   {
     name: 'Dịch vụ',
-    layout: '/admin',
     icon: <Icon as={MdBuild} width="20px" height="20px" color="inherit" />,
-    path: '/services',
-    component: <ServicesPage />,
-  },
-  {
-    name: 'Danh mục dịch vụ',
-    layout: '/admin',
-    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
-    path: '/service-categories',
-    component: <ServiceCategoriesPage />,
+    collapse: true,
+    items: serviceItems,
   },
   {
     name: 'Nhật ký chỉnh sửa',

@@ -1,6 +1,7 @@
 ﻿
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { inventoryApi } from "../api/inventoryApi";
+import { Modal } from "../../admin/components/AdminModals";
 import "../../admin/pages/AdminPage.css";
 import "./InventoryAdminPage.css";
 
@@ -10,10 +11,25 @@ const SECTION_META = {
     subtitle: "Tạo/sửa/khóa kho, cấu hình loại kho, bin/location và kho mặc định",
     hint: "Bắt đầu bằng việc tạo kho theo từng chi nhánh, sau đó gán kho mặc định cho từng loại hàng."
   },
+  catalogProducts: {
+    title: "Quản lý sản phẩm kho",
+    subtitle: "Tạo/sửa sản phẩm, quản lý SKU, đơn vị tính, hình ảnh và trạng thái kinh doanh",
+    hint: "Chuẩn hóa mã SKU và danh mục trước khi nhập kho để tránh trùng lặp dữ liệu."
+  },
+  catalogCategories: {
+    title: "Quản lý danh mục sản phẩm",
+    subtitle: "Tạo/sửa nhóm hàng để phân loại vật tư rõ ràng và đồng nhất toàn hệ thống",
+    hint: "Nên tạo cấu trúc danh mục ngắn gọn, dễ hiểu để người mới tìm hàng nhanh hơn."
+  },
+  catalogSuppliers: {
+    title: "Quản lý nhà cung cấp",
+    subtitle: "Lưu thông tin nhà cung cấp phục vụ truy xuất nguồn hàng và đối soát mua vào",
+    hint: "Chuẩn tên nhà cung cấp ngay từ đầu để tránh trùng và dễ truy vấn lịch sử giao dịch."
+  },
   catalog: {
-    title: "Quản lý danh mục hàng hóa",
-    subtitle: "Sản phẩm, danh mục, nhà cung cấp, đơn vị tính, phân loại hàng và import/export",
-    hint: "Mọi vật tư mới nên được chuẩn hóa mã SKU và danh mục trước khi đưa vào vận hành."
+    title: "Quản lý sản phẩm kho",
+    subtitle: "Tạo/sửa sản phẩm, quản lý SKU, đơn vị tính, hình ảnh và trạng thái kinh doanh",
+    hint: "Chuẩn hóa mã SKU và danh mục trước khi nhập kho để tránh trùng lặp dữ liệu."
   },
   policy: {
     title: "Cấu hình chính sách tồn kho",
@@ -59,13 +75,26 @@ const ITEM_TYPE_OPTIONS = [
   { value: "TRANSIT", label: "Trung chuyển" }
 ];
 
-const OPERATION_OPTIONS = [
-  { value: "PURCHASE_RECEIVE", label: "Nhập mua hàng" },
-  { value: "SERVICE_ISSUE", label: "Xuất cho lệnh sửa chữa" },
-  { value: "RETAIL_ISSUE", label: "Xuất bán lẻ" },
-  { value: "MATERIAL_RETURN", label: "Hoàn trả vật tư" },
-  { value: "TRANSFER", label: "Điều chuyển kho" }
-];
+const EMPTY_PRODUCT_FORM = {
+  sku: "",
+  name: "",
+  unit: "Cái",
+  categoryId: "",
+  costPrice: "",
+  retailPrice: "",
+  servicePrice: "",
+  taxRate: "",
+  warrantyMonths: "",
+  isStrictCapacityControl: false,
+  isActive: true
+};
+
+const EMPTY_CATEGORY_FORM = {
+  categoryName: "",
+  parentId: "",
+  description: "",
+  isDepositRequired: false
+};
 
 const RESERVE_RULE_OPTIONS = [
   { value: "STRICT", label: "Nghiêm ngặt (giữ đúng số lượng đã reserve)" },
@@ -147,8 +176,6 @@ const ALERT_TYPE_LABELS = {
 };
 
 const ITEM_TYPE_LABEL_MAP = Object.fromEntries(ITEM_TYPE_OPTIONS.map((opt) => [opt.value, opt.label]));
-const OPERATION_LABEL_MAP = Object.fromEntries(OPERATION_OPTIONS.map((opt) => [opt.value, opt.label]));
-
 function normalizeKey(value) {
   return String(value || "").trim().toUpperCase();
 }
@@ -156,6 +183,14 @@ function normalizeKey(value) {
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function toNullableNumber(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
 }
 
 function csvEscape(value) {
@@ -180,10 +215,6 @@ function normalizeBranchStatusClass(status) {
 
 function friendlyType(type) {
   return ITEM_TYPE_LABEL_MAP[normalizeKey(type)] || type || "-";
-}
-
-function friendlyOperation(operation) {
-  return OPERATION_LABEL_MAP[normalizeKey(operation)] || operation || "-";
 }
 
 function friendlyTransactionType(type) {
@@ -280,7 +311,6 @@ export default function InventoryAdminPage({ section }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [productImages, setProductImages] = useState([]);
 
   const [audits, setAudits] = useState([]);
   const [approvals, setApprovals] = useState([]);
@@ -303,13 +333,23 @@ export default function InventoryAdminPage({ section }) {
     newWarehouseName: "",
     newWarehouseType: "SELLABLE",
     newWarehouseBranchId: "",
-    productName: "",
-    productSku: "",
-    productUnit: "Cái",
-    productCategoryId: "",
-    supplierName: "",
-    categoryName: ""
+    supplierName: ""
   });
+  const [showCreateProductModal, setShowCreateProductModal] = useState(false);
+  const [productModalMode, setProductModalMode] = useState("create");
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryModalMode, setCategoryModalMode] = useState("create");
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryForm, setCategoryForm] = useState(EMPTY_CATEGORY_FORM);
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  const isCatalogProductsSection = section === "catalogProducts" || section === "catalog";
+  const isCatalogCategoriesSection = section === "catalogCategories";
+  const isCatalogSuppliersSection = section === "catalogSuppliers";
+  const isCatalogSection = isCatalogProductsSection || isCatalogCategoriesSection || isCatalogSuppliersSection;
 
   const runAction = async (work, fallbackMessage = "Không thể thực hiện thao tác.") => {
     setError("");
@@ -338,12 +378,11 @@ export default function InventoryAdminPage({ section }) {
         setSettings(cfg);
       }
 
-      if (section === "catalog") {
-        const [prods, cats, sups, imgs, cfg, structure, branchData] = await Promise.all([
+      if (isCatalogSection) {
+        const [prods, cats, sups, cfg, structure, branchData] = await Promise.all([
           inventoryApi.getProducts(),
           inventoryApi.getPartCategories(),
           inventoryApi.getSuppliers(),
-          inventoryApi.getProductImages(),
           inventoryApi.getSettings(),
           inventoryApi.getWarehouseStructure(),
           inventoryApi.getBranches()
@@ -351,7 +390,6 @@ export default function InventoryAdminPage({ section }) {
         setProducts(prods || []);
         setCategories(cats || []);
         setSuppliers(sups || []);
-        setProductImages(imgs || []);
         setSettings(cfg);
         setWarehouseStructure({
           warehouses: structure?.warehouses || [],
@@ -446,7 +484,7 @@ export default function InventoryAdminPage({ section }) {
     } finally {
       setLoading(false);
     }
-  }, [section, txParams]);
+  }, [section, txParams, isCatalogSection]);
 
   useEffect(() => {
     fetchData();
@@ -458,14 +496,16 @@ export default function InventoryAdminPage({ section }) {
     return map;
   }, [categories]);
 
-  const imagesByProduct = useMemo(() => {
-    const map = new Map();
-    (productImages || []).forEach((item) => {
-      if (!map.has(item.productId)) map.set(item.productId, []);
-      map.get(item.productId).push(item);
+  const productCountByCategory = useMemo(() => {
+    const counts = new Map();
+    (products || []).forEach((product) => {
+      const categoryId = product?.categoryId;
+      if (!categoryId) return;
+      const key = String(categoryId);
+      counts.set(key, (counts.get(key) || 0) + 1);
     });
-    return map;
-  }, [productImages]);
+    return counts;
+  }, [products]);
 
   const policyOverview = useMemo(() => {
     const branchCount = branchSummary.length;
@@ -497,6 +537,65 @@ export default function InventoryAdminPage({ section }) {
   }, [warehouseStructure.warehouses, txParams.branchId]);
 
   const updateForm = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
+  const updateProductForm = (name, value) => setProductForm((prev) => ({ ...prev, [name]: value }));
+  const updateCategoryForm = (name, value) => setCategoryForm((prev) => ({ ...prev, [name]: value }));
+
+  const openCreateProductModal = () => {
+    setProductModalMode("create");
+    setEditingProduct(null);
+    setProductForm({ ...EMPTY_PRODUCT_FORM });
+    setShowCreateProductModal(true);
+  };
+
+  const openEditProductModal = (product) => {
+    setProductModalMode("edit");
+    setEditingProduct(product);
+    setProductForm({
+      sku: product?.sku || "",
+      name: product?.name || "",
+      unit: product?.unit || "Cái",
+      categoryId: product?.categoryId == null ? "" : String(product.categoryId),
+      costPrice: product?.costPrice == null ? "" : String(product.costPrice),
+      retailPrice: product?.retailPrice == null ? "" : String(product.retailPrice),
+      servicePrice: product?.servicePrice == null ? "" : String(product.servicePrice),
+      taxRate: product?.taxRate == null ? "" : String(product.taxRate),
+      warrantyMonths: product?.warrantyMonths == null ? "" : String(product.warrantyMonths),
+      isStrictCapacityControl: !!product?.isStrictCapacityControl,
+      isActive: product?.isActive !== false
+    });
+    setShowCreateProductModal(true);
+  };
+
+  const closeCreateProductModal = () => {
+    if (savingProduct) return;
+    setEditingProduct(null);
+    setShowCreateProductModal(false);
+  };
+
+  const openCreateCategoryModal = () => {
+    setCategoryModalMode("create");
+    setEditingCategory(null);
+    setCategoryForm({ ...EMPTY_CATEGORY_FORM });
+    setShowCategoryModal(true);
+  };
+
+  const openEditCategoryModal = (category) => {
+    setCategoryModalMode("edit");
+    setEditingCategory(category);
+    setCategoryForm({
+      categoryName: category?.categoryName || "",
+      parentId: category?.parentId == null ? "" : String(category.parentId),
+      description: category?.description || "",
+      isDepositRequired: !!category?.isDepositRequired
+    });
+    setShowCategoryModal(true);
+  };
+
+  const closeCategoryModal = () => {
+    if (savingCategory) return;
+    setEditingCategory(null);
+    setShowCategoryModal(false);
+  };
 
   const saveSettings = async (nextSettings) => {
     const saved = await inventoryApi.saveSettings(nextSettings);
@@ -527,12 +626,65 @@ export default function InventoryAdminPage({ section }) {
     await fetchData();
   };
 
+  const buildCategoryPayloadFromForm = () => {
+    const categoryName = categoryForm.categoryName.trim();
+    if (!categoryName) throw new Error("Tên danh mục là bắt buộc.");
+
+    let parentId = null;
+    const rawParentId = String(categoryForm.parentId || "").trim();
+    if (rawParentId) {
+      const parsedParentId = Number(rawParentId);
+      if (!Number.isFinite(parsedParentId) || !Number.isInteger(parsedParentId)) {
+        throw new Error("Danh mục cha không hợp lệ.");
+      }
+      const exists = (categories || []).some((item) => Number(item.id) === parsedParentId);
+      if (!exists) throw new Error("Danh mục cha không tồn tại.");
+      if (editingCategory?.id && Number(editingCategory.id) === parsedParentId) {
+        throw new Error("Danh mục cha không thể là chính danh mục hiện tại.");
+      }
+      parentId = parsedParentId;
+    }
+
+    return {
+      categoryName,
+      parentId,
+      description: categoryForm.description.trim() || null,
+      isDepositRequired: !!categoryForm.isDepositRequired,
+      isDeleted: false
+    };
+  };
+
   const handleCreateCategory = async () => {
-    const categoryName = form.categoryName.trim();
-    if (!categoryName) return;
-    await inventoryApi.createPartCategory({ categoryName, description: "", isDepositRequired: false });
-    setForm((prev) => ({ ...prev, categoryName: "" }));
-    await fetchData();
+    setSavingCategory(true);
+    try {
+      const payload = buildCategoryPayloadFromForm();
+      await inventoryApi.createPartCategory(payload);
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+      setCategoryForm({ ...EMPTY_CATEGORY_FORM });
+      await fetchData();
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!editingCategory?.id) throw new Error("Không tìm thấy danh mục cần cập nhật.");
+
+    setSavingCategory(true);
+    try {
+      const payload = buildCategoryPayloadFromForm();
+      await inventoryApi.updatePartCategory(editingCategory.id, {
+        ...editingCategory,
+        ...payload
+      });
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+      setCategoryForm({ ...EMPTY_CATEGORY_FORM });
+      await fetchData();
+    } finally {
+      setSavingCategory(false);
+    }
   };
 
   const handleCreateSupplier = async () => {
@@ -543,28 +695,124 @@ export default function InventoryAdminPage({ section }) {
     await fetchData();
   };
 
+  const buildProductPayloadFromForm = () => {
+    const sku = productForm.sku.trim();
+    const name = productForm.name.trim();
+    const unit = productForm.unit.trim();
+    if (!sku || !name || !unit) {
+      throw new Error("SKU, tên sản phẩm và đơn vị tính là bắt buộc.");
+    }
+
+    const parseOptionalInt = (rawValue, label) => {
+      const parsed = toNullableNumber(rawValue);
+      if (parsed == null) return null;
+      if (!Number.isInteger(parsed)) {
+        throw new Error(`${label} phải là số nguyên.`);
+      }
+      return parsed;
+    };
+
+    const parseOptionalDecimal = (rawValue) => {
+      const parsed = toNullableNumber(rawValue);
+      if (parsed == null) return null;
+      return parsed;
+    };
+
+    const categoryId = productForm.categoryId ? Number(productForm.categoryId) : null;
+    if (categoryId != null && !(categories || []).some((item) => Number(item.id) === categoryId)) {
+      throw new Error("Danh mục không hợp lệ.");
+    }
+
+    return {
+      sku,
+      name,
+      unit,
+      categoryId,
+      costPrice: parseOptionalDecimal(productForm.costPrice),
+      retailPrice: parseOptionalDecimal(productForm.retailPrice),
+      servicePrice: parseOptionalDecimal(productForm.servicePrice),
+      taxRate: parseOptionalDecimal(productForm.taxRate),
+      warrantyMonths: parseOptionalInt(productForm.warrantyMonths, "Bảo hành"),
+      isStrictCapacityControl: !!productForm.isStrictCapacityControl,
+      requireEmptyReturn: false,
+      isActive: !!productForm.isActive,
+      isDeleted: false
+    };
+  };
+
   const handleCreateProduct = async () => {
-    const productName = form.productName.trim();
-    const productSku = form.productSku.trim();
-    if (!productName || !productSku) return;
-    await inventoryApi.createProduct({
-      name: productName,
-      sku: productSku,
-      unit: form.productUnit || "Cái",
-      categoryId: form.productCategoryId ? Number(form.productCategoryId) : null,
-      retailPrice: 0,
-      costPrice: 0,
-      servicePrice: 0,
-      taxRate: 0,
-      warrantyMonths: 0,
-      isActive: true
-    });
-    setForm((prev) => ({ ...prev, productName: "", productSku: "" }));
-    await fetchData();
+    setSavingProduct(true);
+    try {
+      const payload = buildProductPayloadFromForm();
+      await inventoryApi.createProduct(payload);
+      setShowCreateProductModal(false);
+      setEditingProduct(null);
+      setProductForm({ ...EMPTY_PRODUCT_FORM });
+      await fetchData();
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct?.id) throw new Error("Không tìm thấy sản phẩm cần cập nhật.");
+
+    setSavingProduct(true);
+    try {
+      const payload = buildProductPayloadFromForm();
+      await inventoryApi.updateProduct(editingProduct.id, {
+        ...editingProduct,
+        ...payload
+      });
+      setShowCreateProductModal(false);
+      setEditingProduct(null);
+      setProductForm({ ...EMPTY_PRODUCT_FORM });
+      await fetchData();
+    } finally {
+      setSavingProduct(false);
+    }
   };
 
   const markDiscontinued = async (product) => {
     await inventoryApi.updateProduct(product.id, { ...product, isActive: false });
+    await fetchData();
+  };
+
+  const handleDeleteProduct = async (product) => {
+    const ok = window.confirm(`Xóa sản phẩm "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`);
+    if (!ok) return;
+    await inventoryApi.deleteProduct(product.id);
+    await fetchData();
+  };
+
+  const handleDeleteCategory = async (category) => {
+    const ok = window.confirm(`Xóa danh mục "${category?.categoryName || "-"}"?`);
+    if (!ok) return;
+    await inventoryApi.deletePartCategory(category.id);
+    await fetchData();
+  };
+
+  const handleEditSupplier = async (supplier) => {
+    const currentName = supplier?.supplierName || supplier?.name || "";
+    const nextNameInput = window.prompt("Tên nhà cung cấp", currentName);
+    if (nextNameInput == null) return;
+    const nextName = nextNameInput.trim();
+    if (!nextName) {
+      setError("Tên nhà cung cấp không được để trống.");
+      return;
+    }
+    await inventoryApi.updateSupplier(supplier.id, {
+      ...supplier,
+      supplierName: nextName
+    });
+    await fetchData();
+  };
+
+  const handleDeleteSupplier = async (supplier) => {
+    const supplierName = supplier?.supplierName || supplier?.name || "-";
+    const ok = window.confirm(`Xóa nhà cung cấp "${supplierName}"?`);
+    if (!ok) return;
+    await inventoryApi.deleteSupplier(supplier.id);
     await fetchData();
   };
 
@@ -830,7 +1078,7 @@ export default function InventoryAdminPage({ section }) {
             </>
           ) : null}
 
-          {section === "catalog" ? (
+          {isCatalogProductsSection ? (
             <>
               <StatCards
                 items={[
@@ -841,52 +1089,12 @@ export default function InventoryAdminPage({ section }) {
               />
 
               <ActionPanel
-                title="Thêm sản phẩm mới"
-                description="Khai báo nhanh sản phẩm để đưa vào danh mục dùng chung toàn hệ thống."
+                title="Quản lý danh mục sản phẩm"
+                description="Thêm mới sản phẩm bằng popup chi tiết theo Product model, đồng thời hỗ trợ import/export CSV."
               >
-                <div className="table-toolbar inventory-form-grid">
-                  <label className="compact-field">
-                    <span>Tên sản phẩm</span>
-                    <input
-                      className="search-input"
-                      placeholder="Ví dụ: Lọc nhớt Honda"
-                      value={form.productName}
-                      onChange={(e) => updateForm("productName", e.target.value)}
-                    />
-                  </label>
-                  <label className="compact-field">
-                    <span>Mã SKU</span>
-                    <input
-                      className="search-input"
-                      placeholder="Ví dụ: SKU-0001"
-                      value={form.productSku}
-                      onChange={(e) => updateForm("productSku", e.target.value)}
-                    />
-                  </label>
-                  <label className="compact-field">
-                    <span>Đơn vị tính</span>
-                    <input
-                      className="search-input"
-                      placeholder="Ví dụ: Cái"
-                      value={form.productUnit}
-                      onChange={(e) => updateForm("productUnit", e.target.value)}
-                    />
-                  </label>
-                  <label className="compact-field">
-                    <span>Danh mục</span>
-                    <select
-                      className="search-input"
-                      value={form.productCategoryId}
-                      onChange={(e) => updateForm("productCategoryId", e.target.value)}
-                    >
-                      <option value="">Chọn danh mục</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.categoryName}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button className="btn-primary" onClick={() => runAction(handleCreateProduct)}>
-                    + Tạo sản phẩm
+                <div className="table-toolbar inventory-form-actions">
+                  <button className="btn-primary" onClick={openCreateProductModal}>
+                    + Thêm sản phẩm
                   </button>
                 </div>
                 <div className="table-toolbar inventory-form-actions">
@@ -906,70 +1114,150 @@ export default function InventoryAdminPage({ section }) {
                 </div>
               </ActionPanel>
 
-              <ActionPanel
-                title="Danh mục và nhà cung cấp"
-                description="Tạo nhanh nhóm danh mục và nhà cung cấp trước khi thêm sản phẩm hàng loạt."
-              >
-                <div className="table-toolbar inventory-form-grid inventory-form-grid--small">
-                  <label className="compact-field">
-                    <span>Tên danh mục</span>
-                    <input
-                      className="search-input"
-                      placeholder="Ví dụ: Dầu nhớt"
-                      value={form.categoryName}
-                      onChange={(e) => updateForm("categoryName", e.target.value)}
-                    />
-                  </label>
-                  <button className="btn-ghost" onClick={() => runAction(handleCreateCategory)}>
-                    + Tạo danh mục
-                  </button>
-                  <label className="compact-field">
-                    <span>Tên nhà cung cấp</span>
-                    <input
-                      className="search-input"
-                      placeholder="Ví dụ: Nhà cung cấp A"
-                      value={form.supplierName}
-                      onChange={(e) => updateForm("supplierName", e.target.value)}
-                    />
-                  </label>
-                  <button className="btn-ghost" onClick={() => runAction(handleCreateSupplier)}>
-                    + Tạo nhà cung cấp
-                  </button>
-                </div>
-              </ActionPanel>
+              {showCreateProductModal ? (
+                <Modal title={productModalMode === "edit" ? "Sửa sản phẩm" : "Thêm sản phẩm mới"} onClose={closeCreateProductModal}>
+                  <div className="inventory-product-modal">
+                    <p className="inventory-product-modal-desc">
+                      Điền các thông tin cần thiết để thêm sản phẩm vào danh mục kho.
+                    </p>
 
-              {settings ? (
-                <ActionPanel
-                  title="Kho mặc định theo nghiệp vụ"
-                  description="Dùng để tự động chọn kho nguồn khi phát sinh từng loại nghiệp vụ."
-                >
-                  <div className="table-toolbar inventory-form-grid">
-                    {OPERATION_OPTIONS.map((op) => (
-                      <label key={op.value} className="compact-field">
-                        <span>{friendlyOperation(op.value)}</span>
-                        <select
-                          className="search-input"
-                          value={settings.defaultWarehouseByOperation?.[op.value] ?? 0}
-                          onChange={(e) => setSettings((prev) => ({
-                            ...prev,
-                            defaultWarehouseByOperation: {
-                              ...(prev.defaultWarehouseByOperation || {}),
-                              [op.value]: Number(e.target.value)
-                            }
-                          }))}
-                        >
-                          <option value={0}>-- Chưa chọn --</option>
-                          {(warehouseStructure.warehouses || []).map((w) => (
-                            <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                          ))}
-                        </select>
+                    <div className="inventory-product-modal-section">
+                      <h4>Thông tin chung</h4>
+                      <div className="inventory-product-modal-grid inventory-product-modal-grid--basic">
+                        <label className="compact-field">
+                          <span>SKU *</span>
+                          <input
+                            className="search-input"
+                            value={productForm.sku}
+                            onChange={(e) => updateProductForm("sku", e.target.value)}
+                            placeholder="Ví dụ: SKU-0001"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Tên sản phẩm *</span>
+                          <input
+                            className="search-input"
+                            value={productForm.name}
+                            onChange={(e) => updateProductForm("name", e.target.value)}
+                            placeholder="Ví dụ: Lọc nhớt Honda"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Đơn vị tính *</span>
+                          <input
+                            className="search-input"
+                            value={productForm.unit}
+                            onChange={(e) => updateProductForm("unit", e.target.value)}
+                            placeholder="Cái"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Danh mục</span>
+                          <select
+                            className="search-input"
+                            value={productForm.categoryId}
+                            onChange={(e) => updateProductForm("categoryId", e.target.value)}
+                          >
+                            <option value="">-- Chưa gán --</option>
+                            {categories.map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.categoryName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="inventory-product-modal-section">
+                      <h4>Giá và chính sách</h4>
+                      <div className="inventory-product-modal-grid inventory-product-modal-grid--price">
+                        <label className="compact-field">
+                          <span>Giá vốn</span>
+                          <input
+                            className="search-input"
+                            type="number"
+                            value={productForm.costPrice}
+                            onChange={(e) => updateProductForm("costPrice", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Giá bán lẻ</span>
+                          <input
+                            className="search-input"
+                            type="number"
+                            value={productForm.retailPrice}
+                            onChange={(e) => updateProductForm("retailPrice", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Giá dịch vụ</span>
+                          <input
+                            className="search-input"
+                            type="number"
+                            value={productForm.servicePrice}
+                            onChange={(e) => updateProductForm("servicePrice", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Thuế (%)</span>
+                          <input
+                            className="search-input"
+                            type="number"
+                            value={productForm.taxRate}
+                            onChange={(e) => updateProductForm("taxRate", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Bảo hành (tháng)</span>
+                          <input
+                            className="search-input"
+                            type="number"
+                            value={productForm.warrantyMonths}
+                            onChange={(e) => updateProductForm("warrantyMonths", e.target.value)}
+                            placeholder="0"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="inventory-product-modal-toggles">
+                      <label className="inventory-product-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!productForm.isStrictCapacityControl}
+                          onChange={(e) => updateProductForm("isStrictCapacityControl", e.target.checked)}
+                        />
+                        <span>Kiểm soát sức chứa nghiêm ngặt</span>
                       </label>
-                    ))}
-                    <button className="btn-primary" onClick={() => runAction(() => saveSettings(settings))}>
-                      Lưu thiết lập nghiệp vụ
-                    </button>
+                      <label className="inventory-product-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!productForm.isActive}
+                          onChange={(e) => updateProductForm("isActive", e.target.checked)}
+                        />
+                        <span>Đang hoạt động</span>
+                      </label>
+                    </div>
+
+                    <div className="form-actions">
+                      <button className="btn-ghost" onClick={closeCreateProductModal} disabled={savingProduct}>
+                        Hủy
+                      </button>
+                      <button
+                        className="btn-primary"
+                        onClick={() => runAction(productModalMode === "edit" ? handleUpdateProduct : handleCreateProduct)}
+                        disabled={savingProduct}
+                      >
+                        {savingProduct ? "Đang lưu..." : (productModalMode === "edit" ? "Cập nhật sản phẩm" : "Lưu sản phẩm")}
+                      </button>
+                    </div>
                   </div>
-                </ActionPanel>
+                </Modal>
               ) : null}
 
               <div className="table-wrapper">
@@ -981,14 +1269,19 @@ export default function InventoryAdminPage({ section }) {
                       <th>Tên sản phẩm</th>
                       <th>Đơn vị</th>
                       <th>Danh mục</th>
-                      <th>Số ảnh</th>
+                      <th>Giá vốn</th>
+                      <th>Giá bán lẻ</th>
+                      <th>Giá dịch vụ</th>
+                      <th>Thuế (%)</th>
+                      <th>Bảo hành (tháng)</th>
+                      <th>K.S sức chứa</th>
                       <th>Trạng thái</th>
                       <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {products.length === 0 ? (
-                      <NoDataRow colSpan={8} message="Chưa có sản phẩm trong danh mục kho." />
+                      <NoDataRow colSpan={13} message="Chưa có sản phẩm trong danh mục kho." />
                     ) : (
                       products.map((p) => (
                         <tr key={p.id}>
@@ -997,20 +1290,241 @@ export default function InventoryAdminPage({ section }) {
                           <td>{p.name}</td>
                           <td>{p.unit}</td>
                           <td>{categoryMap.get(p.categoryId) || "-"}</td>
-                          <td>{(imagesByProduct.get(p.id) || []).length}</td>
+                          <td>{toNumber(p.costPrice, 0).toLocaleString()}</td>
+                          <td>{toNumber(p.retailPrice, 0).toLocaleString()}</td>
+                          <td>{toNumber(p.servicePrice, 0).toLocaleString()}</td>
+                          <td>{toNumber(p.taxRate, 0)}</td>
+                          <td>{toNumber(p.warrantyMonths, 0)}</td>
+                          <td>{p.isStrictCapacityControl ? "Có" : "Không"}</td>
                           <td>
                             <span className={`badge ${p.isActive ? "badge-active" : "badge-deleted"}`}>
                               {p.isActive ? "Đang kinh doanh" : "Ngừng kinh doanh"}
                             </span>
                           </td>
                           <td>
-                            {p.isActive ? (
-                              <button className="btn-icon" onClick={() => runAction(() => markDiscontinued(p))}>
-                                Ngừng kinh doanh
+                            <div className="row-actions">
+                              <button className="btn-icon" onClick={() => openEditProductModal(p)}>
+                                Sửa
                               </button>
-                            ) : (
-                              <span className="result-count">Đã ngừng</span>
-                            )}
+                              <button className="btn-icon" onClick={() => runAction(() => handleDeleteProduct(p))}>
+                                Xóa
+                              </button>
+                              {p.isActive ? (
+                                <button className="btn-icon" onClick={() => runAction(() => markDiscontinued(p))}>
+                                  Ngừng KD
+                                </button>
+                              ) : (
+                                <span className="result-count">Đã ngừng</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+
+          {isCatalogCategoriesSection ? (
+            <>
+              <StatCards
+                items={[
+                  { label: "Tổng danh mục", value: categories.length },
+                  { label: "Sản phẩm đã phân loại", value: products.filter((p) => !!p.categoryId).length },
+                  { label: "Sản phẩm chưa gán danh mục", value: products.filter((p) => !p.categoryId).length }
+                ]}
+              />
+
+              <ActionPanel
+                title="Quản lý danh mục"
+                description="Thêm và chỉnh sửa danh mục bằng popup để chuẩn hóa dữ liệu phân loại vật tư."
+              >
+                <div className="table-toolbar inventory-form-actions">
+                  <button className="btn-primary" onClick={openCreateCategoryModal}>
+                    + Tạo danh mục
+                  </button>
+                </div>
+              </ActionPanel>
+
+              {showCategoryModal ? (
+                <Modal title={categoryModalMode === "edit" ? "Sửa danh mục" : "Thêm danh mục mới"} onClose={closeCategoryModal}>
+                  <div className="inventory-product-modal">
+                    <p className="inventory-product-modal-desc">
+                      Quản lý nhóm danh mục để chuẩn hóa phân loại sản phẩm trong kho.
+                    </p>
+
+                    <div className="inventory-product-modal-section">
+                      <h4>Thông tin danh mục</h4>
+                      <div className="inventory-product-modal-grid inventory-product-modal-grid--basic">
+                        <label className="compact-field">
+                          <span>Tên danh mục *</span>
+                          <input
+                            className="search-input"
+                            value={categoryForm.categoryName}
+                            onChange={(e) => updateCategoryForm("categoryName", e.target.value)}
+                            placeholder="Ví dụ: Dầu nhớt"
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Danh mục cha</span>
+                          <select
+                            className="search-input"
+                            value={categoryForm.parentId}
+                            onChange={(e) => updateCategoryForm("parentId", e.target.value)}
+                          >
+                            <option value="">-- Không có --</option>
+                            {categories
+                              .filter((item) => !editingCategory || Number(item.id) !== Number(editingCategory.id))
+                              .map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.categoryName}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label className="compact-field inventory-span-2">
+                          <span>Mô tả</span>
+                          <input
+                            className="search-input"
+                            value={categoryForm.description}
+                            onChange={(e) => updateCategoryForm("description", e.target.value)}
+                            placeholder="Mô tả ngắn về nhóm danh mục"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="inventory-product-modal-toggles">
+                      <label className="inventory-product-toggle">
+                        <input
+                          type="checkbox"
+                          checked={!!categoryForm.isDepositRequired}
+                          onChange={(e) => updateCategoryForm("isDepositRequired", e.target.checked)}
+                        />
+                        <span>Yêu cầu đặt cọc</span>
+                      </label>
+                    </div>
+
+                    <div className="form-actions">
+                      <button className="btn-ghost" onClick={closeCategoryModal} disabled={savingCategory}>
+                        Hủy
+                      </button>
+                      <button
+                        className="btn-primary"
+                        onClick={() => runAction(categoryModalMode === "edit" ? handleUpdateCategory : handleCreateCategory)}
+                        disabled={savingCategory}
+                      >
+                        {savingCategory ? "Đang lưu..." : (categoryModalMode === "edit" ? "Cập nhật danh mục" : "Lưu danh mục")}
+                      </button>
+                    </div>
+                  </div>
+                </Modal>
+              ) : null}
+
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Tên danh mục</th>
+                      <th>Danh mục cha</th>
+                      <th>Mô tả</th>
+                      <th>Đặt cọc</th>
+                      <th>Số sản phẩm</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categories.length === 0 ? (
+                      <NoDataRow colSpan={7} message="Chưa có danh mục nào trong kho." />
+                    ) : (
+                      categories.map((category) => (
+                        <tr key={category.id}>
+                          <td className="td-id">#{category.id}</td>
+                          <td>{category.categoryName || "-"}</td>
+                          <td>{category.parentId ? (categoryMap.get(category.parentId) || `#${category.parentId}`) : "-"}</td>
+                          <td>{category.description || "-"}</td>
+                          <td>{category.isDepositRequired ? "Có" : "Không"}</td>
+                          <td>{toNumber(productCountByCategory.get(String(category.id)), 0)}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button className="btn-icon" onClick={() => openEditCategoryModal(category)}>
+                                Sửa
+                              </button>
+                              <button className="btn-icon" onClick={() => runAction(() => handleDeleteCategory(category))}>
+                                Xóa
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+
+          {isCatalogSuppliersSection ? (
+            <>
+              <StatCards
+                items={[
+                  { label: "Tổng nhà cung cấp", value: suppliers.length },
+                  { label: "Sản phẩm hiện có", value: products.length },
+                  { label: "Danh mục hiện có", value: categories.length }
+                ]}
+              />
+
+              <ActionPanel
+                title="Tạo nhà cung cấp mới"
+                description="Quản lý danh sách nhà cung cấp để phục vụ truy xuất nguồn gốc và mua hàng."
+              >
+                <div className="table-toolbar inventory-form-grid inventory-form-grid--small">
+                  <label className="compact-field">
+                    <span>Tên nhà cung cấp</span>
+                    <input
+                      className="search-input"
+                      placeholder="Ví dụ: Nhà cung cấp A"
+                      value={form.supplierName}
+                      onChange={(e) => updateForm("supplierName", e.target.value)}
+                    />
+                  </label>
+                  <button className="btn-primary" onClick={() => runAction(handleCreateSupplier)}>
+                    + Tạo nhà cung cấp
+                  </button>
+                </div>
+              </ActionPanel>
+
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Nhà cung cấp</th>
+                      <th>Công nợ hiện tại</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {suppliers.length === 0 ? (
+                      <NoDataRow colSpan={4} message="Chưa có nhà cung cấp nào trong hệ thống." />
+                    ) : (
+                      suppliers.map((supplier) => (
+                        <tr key={supplier.id}>
+                          <td className="td-id">#{supplier.id}</td>
+                          <td>{supplier.supplierName || supplier.name || "-"}</td>
+                          <td>{toNumber(supplier.currentDebt, 0).toLocaleString()}</td>
+                          <td>
+                            <div className="row-actions">
+                              <button className="btn-icon" onClick={() => runAction(() => handleEditSupplier(supplier))}>
+                                Sửa
+                              </button>
+                              <button className="btn-icon" onClick={() => runAction(() => handleDeleteSupplier(supplier))}>
+                                Xóa
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))

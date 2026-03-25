@@ -366,6 +366,78 @@
   color: #4b5f8d;
 }
 
+.inventory-admin-page .modal-box {
+  max-width: 920px;
+}
+
+.inventory-admin-page .inventory-product-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inventory-admin-page .inventory-product-modal-desc {
+  margin: 0;
+  color: #4f618d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inventory-admin-page .inventory-product-modal-section {
+  border: 1px solid #dbe4f8;
+  background: #f8fbff;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.inventory-admin-page .inventory-product-modal-section h4 {
+  margin: 0 0 10px;
+  color: #1a2b58;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.inventory-admin-page .inventory-product-modal-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.inventory-admin-page .inventory-product-modal-grid--basic {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.inventory-admin-page .inventory-product-modal-grid--price {
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+}
+
+.inventory-admin-page .inventory-product-modal-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.inventory-admin-page .inventory-product-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8e2f5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #1f315f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inventory-admin-page .inventory-product-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.inventory-admin-page .inventory-span-2 {
+  grid-column: span 2;
+}
+
 @media (max-width: 1280px) {
   .inventory-admin-page .inventory-form-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
@@ -377,6 +449,10 @@
 
   .inventory-admin-page .policy-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .inventory-admin-page .inventory-product-modal-grid--price {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 }
 
@@ -394,6 +470,16 @@
   .inventory-admin-page .inventory-form-grid--tx,
   .inventory-admin-page .policy-grid {
     grid-template-columns: 1fr;
+  }
+
+  .inventory-admin-page .inventory-product-modal-grid--basic,
+  .inventory-admin-page .inventory-product-modal-grid--price,
+  .inventory-admin-page .inventory-product-modal-toggles {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-admin-page .inventory-span-2 {
+    grid-column: auto;
   }
 
   .inventory-admin-page .policy-savebar {
