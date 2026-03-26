@@ -1,4 +1,5 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -23,9 +24,14 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DiagnoseRecommendationResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<DiagnoseRecommendationResponseDto>>> GetAll([FromQuery] long? diagnoseId)
         {
             var items = await _diagnoseRecommendationService.GetAllAsync();
+            if (diagnoseId.HasValue)
+            {
+                items = items.Where(x => x.DiagnoseId == diagnoseId.Value).ToList();
+            }
+
             var dtos = _mapper.Map<IEnumerable<DiagnoseRecommendationResponseDto>>(items);
             return Ok(dtos);
         }
@@ -62,7 +68,7 @@ namespace MyGarage.Controllers
 
             _mapper.Map(itemDto, existingItem);
             var updatedItem = await _diagnoseRecommendationService.UpdateAsync(id, existingItem);
-            
+
             if (updatedItem == null)
             {
                 return NotFound();
@@ -83,8 +89,3 @@ namespace MyGarage.Controllers
         }
     }
 }
-
-
-
-
-

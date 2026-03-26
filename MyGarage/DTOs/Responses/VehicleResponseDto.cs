@@ -12,6 +12,8 @@ namespace MyGarage.DTOs.Responses
         public int? Odo { get; set; }
         public DateTime? OdoLastUpdatedAt { get; set; }
         public int? ManufactureYear { get; set; }
+        public string? BrandName { get; set; }
+        public string? ModelName { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

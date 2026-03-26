@@ -28,6 +28,11 @@ export default defineConfig({
         target: "https://localhost:7009",
         changeOrigin: true,
         secure: false // accept self-signed dev certificate
+      },
+      "/uploads": {
+        target: "https://localhost:7009",
+        changeOrigin: true,
+        secure: false
       }
     }
   }

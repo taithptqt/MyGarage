@@ -1,9 +1,11 @@
-﻿using System;
+using MyGarage.Interfaces;
+
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class RetailOrder
+public partial class RetailOrder : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -12,10 +14,6 @@ public partial class RetailOrder
     public string OrderCode { get; set; } = null!;
 
     public long? CustomerId { get; set; }
-
-    public string? GuestName { get; set; }
-
-    public string? GuestPhone { get; set; }
 
     public decimal SubTotal { get; set; }
 

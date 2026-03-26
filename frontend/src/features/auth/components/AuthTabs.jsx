@@ -6,14 +6,14 @@ function AuthTabs({ mode, onModeChange }) {
         className={`tab ${mode === "login" ? "active" : ""}`}
         onClick={() => onModeChange("login")}
       >
-        Dang nhap
+        Đăng nhập
       </button>
       <button
         type="button"
         className={`tab ${mode === "register" ? "active" : ""}`}
         onClick={() => onModeChange("register")}
       >
-        Dang ky
+        Đăng ký
       </button>
     </div>
   );

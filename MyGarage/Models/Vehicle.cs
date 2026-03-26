@@ -1,9 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Vehicle
+public partial class Vehicle : IAuditEntity
 {
     public long Id { get; set; }
 

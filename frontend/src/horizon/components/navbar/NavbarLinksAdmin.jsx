@@ -28,14 +28,17 @@ import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
 import routes from 'routes';
+import { useAuth } from '../../../context/AuthContext';
+import { API_BASE_URL } from '../../../app/apiClient';
+
 export default function HeaderLinks(props) {
   const { secondary } = props;
   const { colorMode, toggleColorMode } = useColorMode();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    clearAuth();
-    navigate('/auth/sign-in');
+    logout();
   };
   // Chakra Color Mode
   const navbarIcon = useColorModeValue('gray.400', 'white');
@@ -151,16 +154,7 @@ export default function HeaderLinks(props) {
               borderRadius="8px"
               mb="10px"
             >
-              <ItemContent info="Horizon UI Dashboard PRO" />
-            </MenuItem>
-            <MenuItem
-              _hover={{ bg: 'none' }}
-              _focus={{ bg: 'none' }}
-              px="0"
-              borderRadius="8px"
-              mb="10px"
-            >
-              <ItemContent info="Horizon Design System Free" />
+              <ItemContent info="Chào mừng bạn đến với MyGarage!" />
             </MenuItem>
           </Flex>
         </MenuList>
@@ -190,40 +184,9 @@ export default function HeaderLinks(props) {
         >
           <Image src={navImage} borderRadius="16px" mb="28px" />
           <Flex flexDirection="column">
-            <Link w="100%" href="https://horizon-ui.com/pro">
-              <Button w="100%" h="44px" mb="10px" variant="brand">
-                Buy Horizon UI PRO
-              </Button>
-            </Link>
-            <Link
-              w="100%"
-              href="https://horizon-ui.com/documentation/docs/introduction"
-            >
-              <Button
-                w="100%"
-                h="44px"
-                mb="10px"
-                border="1px solid"
-                bg="transparent"
-                borderColor={borderButton}
-              >
-                See Documentation
-              </Button>
-            </Link>
-            <Link
-              w="100%"
-              href="https://github.com/horizon-ui/horizon-ui-chakra-ts"
-            >
-              <Button
-                w="100%"
-                h="44px"
-                variant="no-hover"
-                color={textColor}
-                bg="transparent"
-              >
-                Try Horizon Free
-              </Button>
-            </Link>
+            <Text fontSize="sm" color={textColor}>
+              Hệ thống Quản lý Garage Thông minh v2.0. Chúc bạn một ngày làm việc hiệu quả!
+            </Text>
           </Flex>
         </MenuList>
       </Menu>
@@ -251,11 +214,14 @@ export default function HeaderLinks(props) {
           <Avatar
             _hover={{ cursor: 'pointer' }}
             color="white"
-            name="Adela Parkson"
+            name={user?.fullName || "User"}
             bg="#11047A"
             size="sm"
             w="40px"
             h="40px"
+            src={user?.avatarUrl ? (user.avatarUrl.startsWith('http') || user.avatarUrl.startsWith('/') || user.avatarUrl.startsWith('blob:')
+                ? user.avatarUrl 
+                : `${API_BASE_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`) : null}
           />
         </MenuButton>
         <MenuList
@@ -278,7 +244,7 @@ export default function HeaderLinks(props) {
               fontWeight="700"
               color={textColor}
             >
-              👋&nbsp; Hey, Adela
+              👋&nbsp; Hey, {user?.fullName?.split(' ').pop() || "User"}
             </Text>
           </Flex>
           <Flex flexDirection="column" p="10px">

@@ -6,8 +6,6 @@ namespace MyGarage.DTOs.Requests
         public long BranchId { get; set; }
         public string? OrderCode { get; set; }
         public long? CustomerId { get; set; }
-        public string? GuestName { get; set; }
-        public string? GuestPhone { get; set; }
         public decimal? SubTotal { get; set; }
         public decimal? TierDiscountAmount { get; set; }
         public long? VoucherId { get; set; }

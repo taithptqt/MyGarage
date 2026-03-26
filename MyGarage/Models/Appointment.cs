@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Appointment
+public partial class Appointment : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -35,6 +37,8 @@ public partial class Appointment
 
     public DateTime? UpdatedAt { get; set; }
 
+    public long? UpdatedBy { get; set; }
+
     public virtual Branch Branch { get; set; } = null!;
 
     public virtual Staff? CreatedByNavigation { get; set; }
@@ -44,4 +48,6 @@ public partial class Appointment
     public virtual ICollection<ServiceOrder> ServiceOrders { get; set; } = new List<ServiceOrder>();
 
     public virtual Vehicle? Vehicle { get; set; }
+
+    public virtual Staff? UpdatedByNavigation { get; set; }
 }

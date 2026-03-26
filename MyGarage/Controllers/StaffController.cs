@@ -61,6 +61,13 @@ namespace MyGarage.Controllers
             }
 
             _mapper.Map(itemDto, existingItem);
+
+            var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (currentUserIdStr != id.ToString())
+            {
+                existingItem.SecurityStamp = Guid.NewGuid().ToString();
+            }
+
             var updatedItem = await _staffService.UpdateAsync(id, existingItem);
             
             if (updatedItem == null)
@@ -80,6 +87,37 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
             return NoContent();
+        }
+
+        [HttpPost("{id}/avatar")]
+        public async Task<IActionResult> UploadAvatar(long id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded.");
+
+            var staff = await _staffService.GetByIdAsync(id);
+            if (staff == null)
+                return NotFound("Staff not found.");
+
+            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
+            if (!Directory.Exists(uploadsPath))
+                Directory.CreateDirectory(uploadsPath);
+
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrEmpty(extension)) extension = ".jpg";
+            var fileName = $"{id}_{DateTime.Now.Ticks}{extension}";
+            var filePath = Path.Combine(uploadsPath, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Update staff avatar url
+            staff.AvatarUrl = $"/uploads/avatars/{fileName}";
+            await _staffService.UpdateAsync(id, staff);
+
+            return Ok(new { avatarUrl = staff.AvatarUrl });
         }
     }
 }

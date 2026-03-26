@@ -1,9 +1,11 @@
-﻿using System;
+using MyGarage.Interfaces;
+
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class PurchaseOrder
+public partial class PurchaseOrder : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -26,6 +28,10 @@ public partial class PurchaseOrder
     public long? CreatedBy { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public long? UpdatedBy { get; set; }
 
     public virtual Staff? ApprovedByStaff { get; set; }
 

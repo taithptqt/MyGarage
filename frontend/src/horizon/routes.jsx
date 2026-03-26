@@ -19,10 +19,10 @@ import {
 // Admin Imports
 import MainDashboard from "views/admin/default";
 import AdminPage from "../features/admin/pages/AdminPage";
-import PartsPage from "../features/inventory/pages/PartsPage";
-import PartCategoriesPage from "../features/inventory/pages/PartCategoriesPage";
-import ServicesPage from "../features/services/pages/ServicesPage";
-import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
+import InventoryPage from "../features/admin/pages/InventoryPage";
+import InventoryCategoryPage from "../features/admin/pages/InventoryCategoryPage";
+import ServicePage from "../features/admin/pages/ServicePage";
+import ServiceCategoryPage from "../features/admin/pages/ServiceCategoryPage";
 import RTL from 'views/admin/rtl';
 
 // Auth Imports
@@ -69,28 +69,28 @@ const routes = [
     layout: '/admin',
     icon: <Icon as={MdBuild} width="20px" height="20px" color="inherit" />,
     path: '/services',
-    component: <ServicesPage />,
+    component: <ServicePage />,
   },
   {
     name: 'Service Categories',
     layout: '/admin',
     icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
     path: '/service-categories',
-    component: <ServiceCategoriesPage />,
+    component: <ServiceCategoryPage />,
   },
   {
     name: 'Parts',
     layout: '/admin',
     icon: <Icon as={MdInventory} width="20px" height="20px" color="inherit" />,
     path: '/parts',
-    component: <PartsPage />,
+    component: <InventoryPage />,
   },
   {
     name: 'Part Categories',
     layout: '/admin',
     icon: <Icon as={MdOutlineCategory} width="20px" height="20px" color="inherit" />,
     path: '/part-categories',
-    component: <PartCategoriesPage />,
+    component: <InventoryCategoryPage />,
   },
 ];
 

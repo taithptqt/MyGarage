@@ -24,6 +24,19 @@ export async function updateStaff(id, payload) {
   });
 }
 
+export async function uploadStaffAvatar(id, file) {
+  const formData = new FormData();
+  formData.append("file", file, "avatar.jpg");
+  return request({
+    url: `/api/Staff/${id}/avatar`,
+    method: "POST",
+    data: formData,
+    headers: {
+      "Content-Type": "multipart/form-data"
+    }
+  });
+}
+
 export async function deleteStaff(id) {
   await request({
     url: `/api/Staff/${id}`,
@@ -34,4 +47,8 @@ export async function deleteStaff(id) {
 
 export async function getAllRoles() {
   return request({ url: "/api/Role", method: "GET" });
+}
+
+export async function getAllBranches() {
+  return request({ url: "/api/Branch", method: "GET" });
 }

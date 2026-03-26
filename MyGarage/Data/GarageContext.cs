@@ -2,18 +2,20 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using MyGarage.Interfaces;
 
 namespace MyGarage.Data;
 
 public partial class GarageContext : DbContext
 {
-    public GarageContext()
-    {
-    }
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GarageContext(DbContextOptions<GarageContext> options)
+    public GarageContext(DbContextOptions<GarageContext> options, IHttpContextAccessor httpContextAccessor)
         : base(options)
     {
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public virtual DbSet<AiContentStore> AiContentStores { get; set; }
@@ -727,6 +729,9 @@ public partial class GarageContext : DbContext
                 .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.FullName).HasMaxLength(255);
+            entity.Property(e => e.GoogleId)
+                .HasMaxLength(255)
+                .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.IsLockedOut).HasDefaultValue(false);
@@ -741,6 +746,10 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.SecurityStamp)
                 .HasMaxLength(255)
                 .IsUnicode(false);
+            entity.Property(e => e.Type)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("GUEST");
             entity.Property(e => e.TotalSpending)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -946,7 +955,7 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("DRAFT");
+                .HasDefaultValue("PENDING");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.ApprovedByForeman).WithMany(p => p.DiagnosisApprovedByForemen)
@@ -1721,10 +1730,6 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.CustomerNotes).HasMaxLength(500);
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.GuestName).HasMaxLength(100);
-            entity.Property(e => e.GuestPhone)
-                .HasMaxLength(20)
-                .IsUnicode(false);
             entity.Property(e => e.OrderCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -1995,11 +2000,6 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.FinalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.GuestName).HasMaxLength(100);
-            entity.Property(e => e.GuestPhone)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.GuestVehicleInfo).HasMaxLength(255);
             entity.Property(e => e.OldPartsReturnOption)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -2856,5 +2856,56 @@ public partial class GarageContext : DbContext
         OnModelCreatingPartial(modelBuilder);
     }
 
+    public override int SaveChanges()
+    {
+        UpdateAuditFields();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        UpdateAuditFields();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void UpdateAuditFields()
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        var userIdStr = user?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+                        ?? user?.FindFirst("sub")?.Value 
+                        ?? user?.FindFirst("id")?.Value 
+                        ?? user?.FindFirst("uid")?.Value;
+
+        long? userId = null;
+        if (long.TryParse(userIdStr, out long parsedId))
+        {
+            var userExistsInTrackedStaff = ChangeTracker.Entries<Staff>().Any(e => e.Entity.Id == parsedId);
+            var userExistsInDatabase = userExistsInTrackedStaff || Staffs.AsNoTracking().Any(s => s.Id == parsedId);
+            if (userExistsInDatabase)
+            {
+                userId = parsedId;
+            }
+        }
+
+        var entries = ChangeTracker.Entries<MyGarage.Interfaces.IAuditEntity>();
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in entries)
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt ??= now;
+                entry.Entity.CreatedBy ??= userId;
+            }
+
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+                entry.Entity.UpdatedBy = userId;
+            }
+        }
+    }
+
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+

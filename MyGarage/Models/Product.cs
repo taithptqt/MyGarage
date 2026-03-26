@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Product
+public partial class Product : IAuditEntity
 {
     public long Id { get; set; }
 

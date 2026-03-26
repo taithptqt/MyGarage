@@ -1,3 +1,3 @@
 export function isLoginFormValid(form) {
-  return form.email.trim().length > 0 && form.password.length >= 6;
+  return form.identifier.trim().length > 0 && form.password.length >= 6;
 }

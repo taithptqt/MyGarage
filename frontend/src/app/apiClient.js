@@ -8,10 +8,10 @@ function resolveApiBaseUrl() {
       window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
     if (isLocalhost) {
-      if (window.location.protocol === "https:" && window.location.port === "7009") {
+      // Use relative paths (proxy) for development unless we are already on the backend port
+      if (window.location.port !== "7009" && window.location.port !== "5062") {
         return "";
       }
-      return "https://localhost:7009";
     }
   }
 
@@ -28,8 +28,15 @@ export function getApiBaseUrl() {
 
 function extractErrorMessage(error) {
   const data = error?.response?.data;
+  if (!data) return error?.message || "Request failed.";
   if (typeof data === "string" && data.trim()) return data;
   if (data?.message) return data.message;
+  // Handle ASP.NET Core validation errors
+  if (data?.errors) {
+    const errorDetails = Object.values(data.errors).flat().join(" ");
+    return data.title ? `${data.title}: ${errorDetails}` : errorDetails;
+  }
+  if (data?.title) return data.title;
   if (error?.message) return error.message;
   return "Request failed.";
 }
@@ -48,6 +55,28 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("mygarage_token");
+      localStorage.removeItem("mygarage_user");
+      localStorage.removeItem("token");
+      
+      if (typeof window !== "undefined") {
+        const isLoginPage = window.location.pathname === "/login";
+        const isLoginRequest = error.config?.url?.includes("/api/Auth/login");
+        
+        // Only redirect if NOT on login page AND NOT a login request
+        if (!isLoginPage && !isLoginRequest) {
+          window.location.href = "/login";
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export async function request(config) {
   try {

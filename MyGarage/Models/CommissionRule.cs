@@ -1,9 +1,11 @@
-﻿using System;
+using MyGarage.Interfaces;
+
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class CommissionRule
+public partial class CommissionRule : IAuditEntity
 {
     public long Id { get; set; }
 

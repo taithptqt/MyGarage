@@ -32,30 +32,65 @@ namespace MyGarage.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
-            var normalizedEmail = NormalizeEmail(request.Email);
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
+            var identifier = string.IsNullOrWhiteSpace(request.Identifier) ? request.Email ?? string.Empty : request.Identifier;
+            identifier = identifier.Trim();
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                throw new InvalidOperationException("Phone or email is required.");
+            }
+            var normalizedEmail = NormalizeEmail(identifier);
+            var normalizedPhone = NormalizePhone(identifier);
+            var isEmailLogin = identifier.Contains("@");
+            if (!isEmailLogin && !IsValidVietnamPhone(normalizedPhone))
+            {
+                throw new InvalidOperationException("So dien thoai khong dung dinh dang.");
+            }
+
+            var customer = await _context.Customers.FirstOrDefaultAsync(c =>
+                isEmailLogin ? c.Email == normalizedEmail : c.Phone == normalizedPhone);
 
             if (customer != null && VerifyPassword(request.Password, customer.PasswordHash, out var customerNeedsRehash))
             {
                 ValidateCustomerAccountForLogin(customer);
+                var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
+                var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
+                AssignPreferredBranchToCustomer(customer, nearestBranchId);
 
                 if (customerNeedsRehash)
                 {
                     customer.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-                    _context.Customers.Update(customer);
-                    await _context.SaveChangesAsync();
                 }
 
-                return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
+                await _context.SaveChangesAsync();
+
+                return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", customer.Phone ?? "", "Customer", "CUSTOMER", "", null, nearestBranchId, nearestBranchName);
             }
 
-            var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
+            var staff = await _context.Staffs
+                .Include(s => s.Role)
+                .Include(s => s.Branch)
+                .FirstOrDefaultAsync(s => isEmailLogin ? s.Email == normalizedEmail : s.Phone == normalizedPhone);
+
             if (staff == null || !VerifyPassword(request.Password, staff.PasswordHash, out var staffNeedsRehash))
             {
-                throw new UnauthorizedAccessException("Invalid email or password.");
+                throw new UnauthorizedAccessException("Invalid phone/email or password.");
+            }
+
+            // Check if staff has a role. If not, they are NOT allowed unless they are also a customer 
+            // (But customer case is already handled above line 38, so if we reach here, they are ONLY staff)
+            if (staff.Role == null || string.IsNullOrEmpty(staff.Role.RoleCode))
+            {
+                throw new UnauthorizedAccessException("You do not have permission to access the system.");
             }
 
             ValidateStaffAccountForLogin(staff);
+
+            if (string.IsNullOrEmpty(staff.SecurityStamp))
+            {
+                staff.SecurityStamp = Guid.NewGuid().ToString();
+                _context.Staffs.Update(staff);
+                await _context.SaveChangesAsync();
+            }
 
             if (staffNeedsRehash)
             {
@@ -64,7 +99,7 @@ namespace MyGarage.Services
                 await _context.SaveChangesAsync();
             }
 
-            return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", "Staff");
+            return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", staff.Phone ?? "", staff.Role.RoleName, staff.Role.RoleCode, staff.AvatarUrl ?? "", staff.SecurityStamp, staff.BranchId, staff.Branch?.Name);
         }
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginRequestDto request)
@@ -84,28 +119,78 @@ namespace MyGarage.Services
                 throw new UnauthorizedAccessException("Invalid Google Token.", ex);
             }
 
-            // Check if user exists
             var normalizedEmail = NormalizeEmail(payload.Email);
+            var googleId = payload.Subject;
             
             // 1. Check Staffs first
-            var staff = await _context.Staffs.FirstOrDefaultAsync(s => s.Email == normalizedEmail);
+            var staff = await _context.Staffs
+                .Include(s => s.Role)
+                .Include(s => s.Branch)
+                .FirstOrDefaultAsync(s => s.Email == normalizedEmail);
             if (staff != null)
             {
                 ValidateStaffAccountForLogin(staff);
-                return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", "Staff");
+                
+                // If staff has no role, check if they are also a customer. 
+                // If not in customers, deny login.
+                if (staff.Role == null || string.IsNullOrEmpty(staff.Role.RoleCode))
+                {
+                    var isCustomer = await _context.Customers.AnyAsync(c => c.Email == normalizedEmail);
+                    if (!isCustomer)
+                    {
+                        throw new UnauthorizedAccessException("You do not have permission to access the system.");
+                    }
+                    // If they ARE a customer, they will fall through to the Customer check below
+                }
+                else 
+                {
+                    if (string.IsNullOrEmpty(staff.SecurityStamp))
+                    {
+                        staff.SecurityStamp = Guid.NewGuid().ToString();
+                        _context.Staffs.Update(staff);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    return GenerateToken(staff.Id.ToString(), staff.FullName ?? "", staff.Email ?? "", staff.Phone ?? "", staff.Role.RoleName, staff.Role.RoleCode, staff.AvatarUrl ?? "", staff.SecurityStamp, staff.BranchId, staff.Branch?.Name);
+                }
             }
 
-            // 2. Check Customers
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail);
+            // 2. Check customer by GoogleId first (new flow)
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.GoogleId == googleId);
+            if (customer != null)
+            {
+                ValidateCustomerAccountForLogin(customer);
+                var googleBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
+                var googleBranchName = await GetBranchNameAsync(googleBranchId);
+                AssignPreferredBranchToCustomer(customer, googleBranchId);
+                _context.Customers.Update(customer);
+                await _context.SaveChangesAsync();
+                return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", customer.Phone ?? "", "Customer", "CUSTOMER", "", null, googleBranchId, googleBranchName);
+            }
+
+            // 3. If not mapped by GoogleId, require phone to bind history
+            var normalizedPhone = NormalizePhone(request.Phone);
+            if (string.IsNullOrWhiteSpace(normalizedPhone))
+            {
+                throw new InvalidOperationException("PHONE_REQUIRED");
+            }
+            if (!IsValidVietnamPhone(normalizedPhone))
+            {
+                throw new InvalidOperationException("So dien thoai khong dung dinh dang.");
+            }
+
+            // 4. Bind existing guest by phone, or create new member
+            customer = await _context.Customers.FirstOrDefaultAsync(c => c.Phone == normalizedPhone);
             if (customer == null)
             {
-                // Auto-register as Customer if not found in either table
                 customer = new Customer
                 {
                     Email = normalizedEmail,
                     FullName = payload.Name ?? "",
-                    Phone = "",
+                    Phone = normalizedPhone,
                     PasswordHash = "",
+                    GoogleId = googleId,
+                    Type = "MEMBER",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
                     IsActive = true,
@@ -115,26 +200,63 @@ namespace MyGarage.Services
                 _context.Customers.Add(customer);
                 await _context.SaveChangesAsync();
             }
+            else
+            {
+                customer.GoogleId = googleId;
+                customer.Type = "MEMBER";
+                if (string.IsNullOrWhiteSpace(customer.Email) && !string.IsNullOrWhiteSpace(normalizedEmail))
+                {
+                    customer.Email = normalizedEmail;
+                }
+                if (string.IsNullOrWhiteSpace(customer.FullName) && !string.IsNullOrWhiteSpace(payload.Name))
+                {
+                    customer.FullName = payload.Name;
+                }
+                customer.UpdatedAt = DateTime.UtcNow;
+                _context.Customers.Update(customer);
+                await _context.SaveChangesAsync();
+            }
 
             ValidateCustomerAccountForLogin(customer);
-            return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
+            var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
+            var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
+            AssignPreferredBranchToCustomer(customer, nearestBranchId);
+            _context.Customers.Update(customer);
+            await _context.SaveChangesAsync();
+            return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", customer.Phone ?? "", "Customer", "CUSTOMER", "", null, nearestBranchId, nearestBranchName);
         }
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
         {
-            var normalizedEmail = NormalizeEmail(request.Email);
+            var normalizedEmail = string.IsNullOrWhiteSpace(request.Email) ? null : NormalizeEmail(request.Email);
+            var normalizedPhone = NormalizePhone(request.Phone);
 
-            if (await _context.Customers.AnyAsync(c => c.Email == normalizedEmail))
+            if (string.IsNullOrWhiteSpace(normalizedPhone))
+            {
+                throw new InvalidOperationException("Phone is required.");
+            }
+            if (!IsValidVietnamPhone(normalizedPhone))
+            {
+                throw new InvalidOperationException("Phone format is invalid.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedEmail) && await _context.Customers.AnyAsync(c => c.Email == normalizedEmail))
             {
                 throw new InvalidOperationException("Email already exists.");
+            }
+
+            if (await _context.Customers.AnyAsync(c => c.Phone == normalizedPhone))
+            {
+                throw new InvalidOperationException("Phone already exists.");
             }
 
             var customer = new Customer
             {
                 FullName = request.FullName,
                 Email = normalizedEmail,
-                Phone = request.Phone,
+                Phone = normalizedPhone,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                Type = "MEMBER",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 IsActive = true
@@ -143,10 +265,17 @@ namespace MyGarage.Services
             _context.Customers.Add(customer);
             await _context.SaveChangesAsync();
 
-            return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", "Customer");
+            var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng, request.City);
+            var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
+            AssignPreferredBranchToCustomer(customer, nearestBranchId);
+            AssignCityToCustomer(customer, request.City);
+            _context.Customers.Update(customer);
+            await _context.SaveChangesAsync();
+
+            return GenerateToken(customer.Id.ToString(), customer.FullName ?? "", customer.Email ?? "", customer.Phone ?? "", "Customer", "CUSTOMER", "", null, nearestBranchId, nearestBranchName);
         }
 
-        private AuthResponseDto GenerateToken(string userId, string name, string email, string role)
+        private AuthResponseDto GenerateToken(string userId, string name, string email, string phone, string role, string roleCode, string avatarUrl, string? securityStamp, long? branchId = null, string? branchName = null)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var keyStr = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt Key missing");
@@ -160,7 +289,8 @@ namespace MyGarage.Services
                     new Claim(ClaimTypes.NameIdentifier, userId),
                     new Claim(ClaimTypes.Name, name),
                     new Claim(ClaimTypes.Email, email),
-                    new Claim(ClaimTypes.Role, role)
+                    new Claim(ClaimTypes.Role, roleCode),
+                    new Claim("SecurityStamp", securityStamp ?? "")
                 }),
                 Expires = DateTime.UtcNow.AddDays(expireDays),
                 Issuer = _configuration["Jwt:Issuer"],
@@ -172,10 +302,16 @@ namespace MyGarage.Services
             
             return new AuthResponseDto
             {
+                Id = long.Parse(userId),
                 Token = tokenHandler.WriteToken(token),
                 FullName = name,
                 Email = email,
-                Role = role
+                Phone = phone,
+                Role = role,
+                RoleCode = roleCode,
+                AvatarUrl = avatarUrl,
+                BranchId = branchId,
+                BranchName = branchName
             };
         }
 
@@ -321,7 +457,7 @@ namespace MyGarage.Services
 
         public async Task<UserProfileResponseDto> GetProfileAsync(long userId, string role)
         {
-            if (role == "Customer")
+            if (role.Equals("Customer", StringComparison.OrdinalIgnoreCase))
             {
                 var customer = await _context.Customers.FindAsync(userId);
                 if (customer == null) throw new UnauthorizedAccessException("User not found.");
@@ -333,13 +469,18 @@ namespace MyGarage.Services
                     Email = customer.Email ?? "",
                     Phone = customer.Phone ?? "",
                     Role = "Customer",
+                    RoleCode = "CUSTOMER",
                     Status = customer.IsActive == true ? "Active" : "Inactive",
                     CreatedAt = customer.CreatedAt
                 };
             }
-            else if (role == "Staff")
+            else if (!role.Equals("Customer", StringComparison.OrdinalIgnoreCase))
             {
-                var staff = await _context.Staffs.FindAsync(userId);
+                var staff = await _context.Staffs
+                    .Include(s => s.Role)
+                    .Include(s => s.Branch)
+                    .FirstOrDefaultAsync(s => s.Id == userId);
+                
                 if (staff == null) throw new UnauthorizedAccessException("User not found.");
 
                 return new UserProfileResponseDto
@@ -348,9 +489,12 @@ namespace MyGarage.Services
                     FullName = staff.FullName ?? "",
                     Email = staff.Email ?? "",
                     Phone = staff.Phone ?? "",
-                    Role = "Staff",
+                    Role = staff.Role?.RoleName ?? "Customer",
+                    RoleCode = staff.Role?.RoleCode ?? "CUSTOMER",
                     AvatarUrl = staff.AvatarUrl ?? "",
                     Status = staff.Status ?? "Unknown",
+                    BranchId = staff.BranchId,
+                    BranchName = staff.Branch?.Name,
                     CreatedAt = staff.CreatedAt
                 };
             }
@@ -361,6 +505,269 @@ namespace MyGarage.Services
         private static string NormalizeEmail(string email)
         {
             return email.Trim().ToLowerInvariant();
+        }
+
+        private static string NormalizePhone(string? phone)
+        {
+            if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+            var digits = new string(phone.Trim().Where(char.IsDigit).ToArray());
+            if (digits.StartsWith("84", StringComparison.Ordinal) && (digits.Length == 11 || digits.Length == 12))
+            {
+                digits = "0" + digits.Substring(2);
+            }
+            return digits;
+        }
+
+        private static bool IsValidVietnamPhone(string phone)
+        {
+            if (string.IsNullOrWhiteSpace(phone)) return false;
+            if (!phone.All(char.IsDigit)) return false;
+            if (!phone.StartsWith("0", StringComparison.Ordinal)) return false;
+            return phone.Length == 10 || phone.Length == 11;
+        }
+
+        private async Task<long?> ResolveNearestBranchIdAsync(decimal? lat, decimal? lng, string? city = null)
+        {
+            var activeBranches = await _context.Branches
+                .Where(b => b.IsDeleted != true)
+                .Select(b => new { b.Id, b.Name, b.Lat, b.Lng })
+                .ToListAsync();
+
+            if (activeBranches.Count == 0)
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(city) && TryResolveRegionFromProvince(city, out var region))
+            {
+                var regionKeywords = region switch
+                {
+                    "north" => new[] { "ha noi", "hanoi", "bac" },
+                    "central" => new[] { "da nang", "danang", "trung" },
+                    "south" => new[] { "hcm", "ho chi minh", "sai gon", "nam" },
+                    _ => Array.Empty<string>()
+                };
+
+                var branchByRegion = activeBranches.FirstOrDefault(b =>
+                    !string.IsNullOrWhiteSpace(b.Name) &&
+                    regionKeywords.Any(k => NormalizeVietnamText(b.Name!).Contains(k, StringComparison.Ordinal)));
+
+                if (branchByRegion is not null)
+                {
+                    return branchByRegion.Id;
+                }
+            }
+
+            if (lat.HasValue && lng.HasValue)
+            {
+                var geoBranches = activeBranches
+                    .Where(b => b.Lat.HasValue && b.Lng.HasValue)
+                    .ToList();
+
+                if (geoBranches.Count > 0)
+                {
+                    var nearest = geoBranches
+                        .Select(b => new
+                        {
+                            b.Id,
+                            Distance = CalculateDistanceKm(
+                                (double)lat.Value,
+                                (double)lng.Value,
+                                (double)b.Lat!.Value,
+                                (double)b.Lng!.Value)
+                        })
+                        .OrderBy(x => x.Distance)
+                        .First();
+
+                    return nearest.Id;
+                }
+            }
+
+            return activeBranches.OrderBy(b => b.Id).Select(b => (long?)b.Id).FirstOrDefault();
+        }
+
+        private static bool TryResolveRegionFromProvince(string province, out string region)
+        {
+            var normalized = NormalizeVietnamText(province);
+            normalized = normalized
+                .Replace("tinh ", string.Empty, StringComparison.Ordinal)
+                .Replace("thanh pho ", string.Empty, StringComparison.Ordinal)
+                .Replace("tp ", string.Empty, StringComparison.Ordinal);
+
+            var north = new HashSet<string>
+            {
+                "ha noi", "hai phong", "quang ninh", "bac ninh", "bac giang", "lang son", "cao bang",
+                "bac kan", "thai nguyen", "tuyen quang", "ha giang", "lao cai", "yen bai", "dien bien",
+                "lai chau", "son la", "hoa binh", "phu tho", "vinh phuc", "thai binh", "nam dinh",
+                "ha nam", "ninh binh", "hung yen", "hai duong"
+            };
+
+            var central = new HashSet<string>
+            {
+                "thanh hoa", "nghe an", "ha tinh", "quang binh", "quang tri", "thua thien hue",
+                "hue", "da nang", "quang nam", "quang ngai", "binh dinh", "phu yen", "khanh hoa",
+                "ninh thuan", "binh thuan", "kon tum", "gia lai", "dak lak", "dak nong", "lam dong"
+            };
+
+            var south = new HashSet<string>
+            {
+                "ho chi minh", "tp hcm", "hcm", "sai gon", "ba ria vung tau", "vung tau",
+                "binh duong", "binh phuoc", "dong nai", "tay ninh", "long an", "tien giang",
+                "ben tre", "tra vinh", "vinh long", "dong thap", "an giang", "kien giang",
+                "can tho", "hau giang", "soc trang", "bac lieu", "ca mau"
+            };
+
+            if (north.Contains(normalized))
+            {
+                region = "north";
+                return true;
+            }
+
+            if (central.Contains(normalized))
+            {
+                region = "central";
+                return true;
+            }
+
+            if (south.Contains(normalized))
+            {
+                region = "south";
+                return true;
+            }
+
+            region = string.Empty;
+            return false;
+        }
+
+        private static string NormalizeVietnamText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+            var buffer = new StringBuilder(normalized.Length);
+            foreach (var ch in normalized)
+            {
+                var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (category == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                buffer.Append(ch == '\u0111' ? 'd' : ch);
+            }
+
+            var noAccent = buffer.ToString().Normalize(System.Text.NormalizationForm.FormC);
+            var cleaned = new StringBuilder(noAccent.Length);
+            var previousWasSpace = false;
+            foreach (var ch in noAccent)
+            {
+                var current = char.IsLetterOrDigit(ch) ? ch : ' ';
+                if (current == ' ')
+                {
+                    if (previousWasSpace) continue;
+                    previousWasSpace = true;
+                }
+                else
+                {
+                    previousWasSpace = false;
+                }
+                cleaned.Append(current);
+            }
+
+            return cleaned.ToString().Trim();
+        }
+
+        private async Task<string> GetBranchNameAsync(long? branchId)
+        {
+            if (!branchId.HasValue) return string.Empty;
+            return await _context.Branches
+                       .Where(b => b.Id == branchId.Value)
+                       .Select(b => b.Name ?? string.Empty)
+                       .FirstOrDefaultAsync()
+                   ?? string.Empty;
+        }
+
+        private static double CalculateDistanceKm(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double earthRadiusKm = 6371d;
+            static double ToRadians(double degree) => degree * Math.PI / 180d;
+
+            var dLat = ToRadians(lat2 - lat1);
+            var dLon = ToRadians(lon2 - lon1);
+            var a =
+                Math.Pow(Math.Sin(dLat / 2d), 2d) +
+                Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) * Math.Pow(Math.Sin(dLon / 2d), 2d);
+            var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
+            return earthRadiusKm * c;
+        }
+
+        private static long? ExtractPreferredBranchId(string? note)
+        {
+            if (string.IsNullOrWhiteSpace(note)) return null;
+            const string key = "[PreferredBranchId:";
+            var start = note.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+            if (start < 0) return null;
+            start += key.Length;
+            var end = note.IndexOf("]", start, StringComparison.OrdinalIgnoreCase);
+            if (end <= start) return null;
+
+            var raw = note.Substring(start, end - start);
+            return long.TryParse(raw, out var value) ? value : null;
+        }
+
+        private static void AssignPreferredBranchToCustomer(Customer customer, long? branchId)
+        {
+            if (!branchId.HasValue) return;
+
+            var existingBranchId = ExtractPreferredBranchId(customer.Note);
+            if (existingBranchId == branchId.Value) return;
+
+            var tag = $"[PreferredBranchId:{branchId.Value}]";
+            if (string.IsNullOrWhiteSpace(customer.Note))
+            {
+                customer.Note = tag;
+            }
+            else if (existingBranchId.HasValue)
+            {
+                var oldTag = $"[PreferredBranchId:{existingBranchId.Value}]";
+                customer.Note = customer.Note.Replace(oldTag, tag, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                customer.Note = $"{customer.Note} | {tag}";
+            }
+        }
+
+        private static void AssignCityToCustomer(Customer customer, string? city)
+        {
+            var cleanedCity = city?.Trim();
+            if (string.IsNullOrWhiteSpace(cleanedCity))
+            {
+                return;
+            }
+
+            var cityPrefix = "[City:";
+            var cityStart = customer.Note?.IndexOf(cityPrefix, StringComparison.OrdinalIgnoreCase) ?? -1;
+            var cityTag = $"[City:{cleanedCity}]";
+
+            if (cityStart >= 0)
+            {
+                var end = customer.Note!.IndexOf("]", cityStart, StringComparison.OrdinalIgnoreCase);
+                if (end > cityStart)
+                {
+                    var oldTag = customer.Note.Substring(cityStart, end - cityStart + 1);
+                    customer.Note = customer.Note.Replace(oldTag, cityTag, StringComparison.OrdinalIgnoreCase);
+                    return;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(customer.Note))
+            {
+                customer.Note = cityTag;
+            }
+            else
+            {
+                customer.Note = $"{customer.Note} | {cityTag}";
+            }
         }
 
         private static bool VerifyPassword(string inputPassword, string? storedPasswordHash, out bool needsRehash)
@@ -411,9 +818,11 @@ namespace MyGarage.Services
 
         private static void ValidateStaffAccountForLogin(Staff staff)
         {
-            if (staff.IsDeleted == true || string.Equals(staff.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+            if (staff.IsDeleted == true || 
+                string.Equals(staff.Status, "TERMINATED", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(staff.Status, "SUSPENDED", StringComparison.OrdinalIgnoreCase))
             {
-                throw new UnauthorizedAccessException("Account is inactive.");
+                throw new UnauthorizedAccessException("Account is inactive or suspended.");
             }
 
             if (staff.IsLockedOut == true && staff.LockoutEnd.HasValue && staff.LockoutEnd > DateTime.UtcNow)

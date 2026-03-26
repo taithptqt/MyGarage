@@ -208,3 +208,61 @@
   color: #a0aec0;
   opacity: 0.5;
 }
+
+.phone-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.phone-modal {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  border: 1px solid #e2e8f0;
+}
+
+.phone-modal h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.phone-modal p {
+  margin: 8px 0 16px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.phone-modal .form {
+  gap: 12px;
+}
+
+.phone-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.phone-modal-actions .btn-cancel {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 30px;
+  padding: 12px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.phone-modal-actions .btn-cancel:hover:not(:disabled) {
+  background: #f8fafc;
+}

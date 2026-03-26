@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Customer
+public partial class Customer : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -14,6 +16,10 @@ public partial class Customer
     public string? Email { get; set; }
 
     public string? PasswordHash { get; set; }
+
+    public string? GoogleId { get; set; }
+
+    public string? Type { get; set; }
 
     public long? TierId { get; set; }
 
@@ -48,6 +54,7 @@ public partial class Customer
     public DateTime? DeletedAt { get; set; }
 
     public long? DeletedBy { get; set; }
+
 
     public virtual ICollection<AiCustomerInsight> AiCustomerInsights { get; set; } = new List<AiCustomerInsight>();
 

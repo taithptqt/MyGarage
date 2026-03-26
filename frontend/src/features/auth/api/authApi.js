@@ -16,11 +16,11 @@ export async function register(payload) {
   });
 }
 
-export async function googleLogin(idToken) {
+export async function googleLogin(payload) {
   return requestSafe({
     url: "/api/Auth/google",
     method: "POST",
-    data: { idToken }
+    data: typeof payload === "string" ? { idToken: payload } : payload
   });
 }
 

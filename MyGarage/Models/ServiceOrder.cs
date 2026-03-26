@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class ServiceOrder
+public partial class ServiceOrder : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -12,12 +14,6 @@ public partial class ServiceOrder
     public long CustomerId { get; set; }
 
     public long VehicleId { get; set; }
-
-    public string? GuestName { get; set; }
-
-    public string? GuestPhone { get; set; }
-
-    public string? GuestVehicleInfo { get; set; }
 
     public long? AppointmentId { get; set; }
 

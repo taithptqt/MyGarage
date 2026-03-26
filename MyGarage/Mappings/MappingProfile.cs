@@ -98,7 +98,15 @@ namespace MyGarage.Mappings
             CreateMap<CustomerCreateDto, Customer>()
                 .ForMember(dest => dest.PasswordHash, opt => opt.MapFrom(src => src.Password));
             CreateMap<CustomerUpdateDto, Customer>()
-                .ForMember(dest => dest.PasswordHash, opt => opt.MapFrom(src => src.Password));
+                .ForMember(dest => dest.PasswordHash, opt => {
+                    opt.MapFrom(src => src.Password);
+                    opt.Condition(src => !string.IsNullOrEmpty(src.Password));
+                })
+                .ForMember(dest => dest.FullName, opt => opt.Condition(src => src.FullName != null))
+                .ForMember(dest => dest.Phone, opt => opt.Condition(src => src.Phone != null))
+                .ForMember(dest => dest.Email, opt => opt.Condition(src => src.Email != null))
+                .ForMember(dest => dest.GoogleId, opt => opt.Condition(src => src.GoogleId != null))
+                .ForMember(dest => dest.Type, opt => opt.Condition(src => src.Type != null));
             // CustomerFeedback Mappings
             CreateMap<CustomerFeedback, CustomerFeedbackResponseDto>();
             CreateMap<CustomerFeedbackCreateDto, CustomerFeedback>();
@@ -236,7 +244,11 @@ namespace MyGarage.Mappings
             CreateMap<ServiceCategoryCreateDto, ServiceCategory>();
             CreateMap<ServiceCategoryUpdateDto, ServiceCategory>();
             // ServiceOrder Mappings
-            CreateMap<ServiceOrder, ServiceOrderResponseDto>();
+            CreateMap<ServiceOrder, ServiceOrderResponseDto>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.FullName : null))
+                .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
+                .ForMember(dest => dest.VehicleLicensePlate, opt => opt.MapFrom(src => src.Vehicle != null ? src.Vehicle.LicensePlate : null))
+                .ForMember(dest => dest.VehicleModelName, opt => opt.MapFrom(src => src.Vehicle != null && src.Vehicle.Model != null ? src.Vehicle.Model.ModelName : null));
             CreateMap<ServiceOrderCreateDto, ServiceOrder>();
             CreateMap<ServiceOrderUpdateDto, ServiceOrder>();
             // ServiceOrderDetail Mappings
@@ -272,7 +284,18 @@ namespace MyGarage.Mappings
             CreateMap<StaffCreateDto, Staff>()
                 .ForMember(dest => dest.PasswordHash, opt => opt.MapFrom(src => src.Password));
             CreateMap<StaffUpdateDto, Staff>()
-                .ForMember(dest => dest.PasswordHash, opt => opt.MapFrom(src => src.Password));
+                .ForMember(dest => dest.PasswordHash, opt => {
+                    opt.MapFrom(src => src.Password);
+                    opt.Condition(src => !string.IsNullOrEmpty(src.Password));
+                })
+                .ForMember(dest => dest.FullName, opt => opt.Condition(src => src.FullName != null))
+                .ForMember(dest => dest.Phone, opt => opt.Condition(src => src.Phone != null))
+                .ForMember(dest => dest.Email, opt => opt.Condition(src => src.Email != null))
+                .ForMember(dest => dest.Status, opt => opt.Condition(src => src.Status != null))
+                .ForMember(dest => dest.RoleId, opt => opt.Condition(src => src.RoleId != null))
+                .ForMember(dest => dest.BranchId, opt => opt.Condition(src => src.BranchId != null))
+                .ForMember(dest => dest.CitizenId, opt => opt.Condition(src => src.CitizenId != null))
+                .ForMember(dest => dest.DateOfBirth, opt => opt.Condition(src => src.DateOfBirth != null));
             // StaffSchedule Mappings
             CreateMap<StaffSchedule, StaffScheduleResponseDto>();
             CreateMap<StaffScheduleCreateDto, StaffSchedule>();
@@ -294,7 +317,9 @@ namespace MyGarage.Mappings
             CreateMap<SupplierCreateDto, Supplier>();
             CreateMap<SupplierUpdateDto, Supplier>();
             // Vehicle Mappings
-            CreateMap<Vehicle, VehicleResponseDto>();
+            CreateMap<Vehicle, VehicleResponseDto>()
+                .ForMember(dest => dest.BrandName, opt => opt.MapFrom(src => src.Model != null && src.Model.Brand != null ? src.Model.Brand.Name : null))
+                .ForMember(dest => dest.ModelName, opt => opt.MapFrom(src => src.Model != null ? src.Model.ModelName : null));
             CreateMap<VehicleCreateDto, Vehicle>();
             CreateMap<VehicleUpdateDto, Vehicle>();
             // VehicleBrand Mappings

@@ -24,6 +24,7 @@ namespace MyGarage.Services
             {
                 entity.PasswordHash = BCrypt.Net.BCrypt.HashPassword(entity.PasswordHash);
             }
+            
             return await base.UpdateAsync(id, entity);
         }
     }

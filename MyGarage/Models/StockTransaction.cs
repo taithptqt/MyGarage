@@ -1,9 +1,11 @@
-﻿using System;
+using MyGarage.Interfaces;
+
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class StockTransaction
+public partial class StockTransaction : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -30,6 +32,10 @@ public partial class StockTransaction
     public long? PurchaseOrderId { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public long? UpdatedBy { get; set; }
 
     public long? CreatedBy { get; set; }
 

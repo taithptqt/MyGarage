@@ -1,9 +1,10 @@
-﻿using System;
+using MyGarage.Interfaces;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class VehicleConditionLog
+public partial class VehicleConditionLog : IAuditEntity
 {
     public long Id { get; set; }
 
@@ -28,6 +29,10 @@ public partial class VehicleConditionLog
     public DateTime? CreatedAt { get; set; }
 
     public long? CreatedBy { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public long? UpdatedBy { get; set; }
 
     public virtual Staff? CreatedByNavigation { get; set; }
 

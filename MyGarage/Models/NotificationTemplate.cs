@@ -1,9 +1,11 @@
-﻿using System;
+using MyGarage.Interfaces;
+
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class NotificationTemplate
+public partial class NotificationTemplate : IAuditEntity
 {
     public long Id { get; set; }
 
