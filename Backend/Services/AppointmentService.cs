@@ -23,65 +23,163 @@ namespace MyGarage.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date)
+        private const int FastCapacity = 8;
+        private const int RepairCapacity = 12;
+
+        private static readonly TimeOnly OpenTime = new TimeOnly(8, 0);
+        private static readonly TimeOnly CloseTime = new TimeOnly(20, 0);
+        private static readonly TimeOnly FastLatestStart = new TimeOnly(18, 0);
+        private static readonly TimeOnly RepairLatestStart = new TimeOnly(17, 0);
+
+        private enum AppointmentMode
+        {
+            Fast,
+            Repair
+        }
+
+        private static bool IsSunday(DateOnly date) => date.DayOfWeek == DayOfWeek.Sunday;
+
+        private async Task<(AppointmentMode Mode, int TotalMinutes)> ResolveModeAndDurationAsync(string? requestedServiceIds)
+        {
+            if (string.IsNullOrWhiteSpace(requestedServiceIds))
+                return (AppointmentMode.Fast, 0);
+
+            var ids = requestedServiceIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
+                .Where(v => v > 0)
+                .Distinct()
+                .ToList();
+
+            if (ids.Count == 0)
+                return (AppointmentMode.Fast, 0);
+
+            var services = await _context.StandardServices
+                .Include(s => s.Category)
+                .Where(s => ids.Contains(s.Id) && s.Category != null)
+                .ToListAsync();
+
+            var mode = services.Any(s =>
+                (s.Category.Code ?? "")
+                .Contains("REPAIR", StringComparison.OrdinalIgnoreCase))
+                ? AppointmentMode.Repair
+                : AppointmentMode.Fast;
+
+            var totalMinutes = services.Sum(s => s.StandardMinutes);
+            return (mode, totalMinutes);
+        }
+
+        private async Task<Dictionary<long, AppointmentMode>> BuildServiceModeMapAsync(IEnumerable<long> serviceIds)
+        {
+            var ids = serviceIds?.ToList() ?? new List<long>();
+            var result = new Dictionary<long, AppointmentMode>();
+            if (ids.Count == 0) return result;
+
+            var services = await _context.StandardServices
+                .Include(s => s.Category)
+                .Where(s => ids.Contains(s.Id) && s.Category != null)
+                .ToListAsync();
+
+            foreach (var s in services)
+            {
+                var mode = (s.Category.Code ?? "").Contains("REPAIR", StringComparison.OrdinalIgnoreCase)
+                    ? AppointmentMode.Repair
+                    : AppointmentMode.Fast;
+                result[s.Id] = mode;
+            }
+
+            return result;
+        }
+
+        private AppointmentMode InferModeFromRequestedServiceIds(string? requestedServiceIds, Dictionary<long, AppointmentMode> serviceModeMap)
+        {
+            if (string.IsNullOrWhiteSpace(requestedServiceIds))
+                return AppointmentMode.Fast;
+
+            var ids = requestedServiceIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
+                .Where(v => v > 0);
+
+            // If any requested service has category code containing "REPAIR" => Repair
+            return ids.Any(id => serviceModeMap.TryGetValue(id, out var m) && m == AppointmentMode.Repair)
+                ? AppointmentMode.Repair
+                : AppointmentMode.Fast;
+        }
+
+        public async Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date, string? requestedServiceIds)
         {
             if (date < DateOnly.FromDateTime(DateTime.Today))
                 return Enumerable.Empty<AvailableSlotResponseDto>();
 
-            int dayOfWeek = (int)date.DayOfWeek;
-
-            var opHour = await _context.BranchOperatingHours
-                .FirstOrDefaultAsync(h => h.BranchId == branchId && h.DayOfWeek == dayOfWeek);
-
-            if (opHour == null || opHour.IsDayOff == true)
+            if (IsSunday(date))
                 return Enumerable.Empty<AvailableSlotResponseDto>();
 
-            var openTime = opHour.OpenTime;
-            var closeTime = opHour.CloseTime;
+            var (mode, totalMinutes) = await ResolveModeAndDurationAsync(requestedServiceIds);
+            var latestStart = mode == AppointmentMode.Fast ? FastLatestStart : RepairLatestStart;
+            var capacity = mode == AppointmentMode.Fast ? FastCapacity : RepairCapacity;
 
-            var exception = await _context.BranchExceptions
-                .FirstOrDefaultAsync(e => e.BranchId == branchId && e.ExceptionDate == date);
+            var existingAppointments = (await _appointmentRepository.GetByBranchAndDateAsync(branchId, date)).ToList();
+            var activeAppointments = existingAppointments
+                .Where(a => a.Status != "CANCELED" && a.Status != "NO_SHOW")
+                .ToList();
 
-            if (exception != null)
+            // Preload mode map for existing service ids to classify appointments
+            var existingServiceIds = new HashSet<long>();
+            foreach (var a in activeAppointments)
             {
-                if (exception.IsClosed == true)
-                    return Enumerable.Empty<AvailableSlotResponseDto>();
-
-                if (exception.StartTime.HasValue)
-                    openTime = exception.StartTime.Value;
-                if (exception.EndTime.HasValue)
-                    closeTime = exception.EndTime.Value;
+                if (string.IsNullOrWhiteSpace(a.RequestedServiceIds)) continue;
+                foreach (var id in a.RequestedServiceIds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
+                    .Where(v => v > 0))
+                {
+                    existingServiceIds.Add(id);
+                }
             }
 
-            var existingAppointments = await _appointmentRepository.GetByBranchAndDateAsync(branchId, date);
-            var appointmentList = existingAppointments.ToList();
-
-            int maxConcurrent = 10;
-
-            var allShifts = new (TimeOnly Start, TimeOnly End)[]
-            {
-                (new TimeOnly(7, 0),  new TimeOnly(11, 0)),
-                (new TimeOnly(11, 0), new TimeOnly(14, 0)),
-                (new TimeOnly(14, 0), new TimeOnly(18, 0)),
-                (new TimeOnly(18, 0), new TimeOnly(22, 0)),
-            };
+            var serviceModeMap = await BuildServiceModeMapAsync(existingServiceIds);
 
             var slots = new List<AvailableSlotResponseDto>();
 
-            foreach (var shift in allShifts)
+            var candidateStart = OpenTime;
+            while (candidateStart <= latestStart)
             {
-                int booked = appointmentList.Count(a =>
-                    a.StartTime >= shift.Start && a.StartTime < shift.End);
+                var candidateEnd = totalMinutes > 0 ? candidateStart.AddMinutes(totalMinutes) : candidateStart;
+                if (candidateEnd > CloseTime)
+                {
+                    candidateStart = candidateStart.AddMinutes(15);
+                    continue;
+                }
+
+                int overlapCount = 0;
+
+                foreach (var a in activeAppointments)
+                {
+                    var apptMode = AppointmentMode.Fast;
+                    if (!string.IsNullOrWhiteSpace(a.RequestedServiceIds))
+                        apptMode = InferModeFromRequestedServiceIds(a.RequestedServiceIds, serviceModeMap);
+
+                    if (apptMode != mode) continue;
+
+                    // Overlap check: [candidateStart, candidateEnd) overlaps [a.StartTime, a.EndTime)
+                    if (a.EndTime > candidateStart && a.StartTime < candidateEnd)
+                        overlapCount++;
+                }
+
+                var remaining = Math.Max(0, capacity - overlapCount);
 
                 slots.Add(new AvailableSlotResponseDto
                 {
-                    StartTime = shift.Start,
-                    EndTime = shift.End,
-                    MaxCapacity = maxConcurrent,
-                    BookedCount = booked,
-                    RemainingCapacity = Math.Max(0, maxConcurrent - booked),
-                    IsAvailable = booked < maxConcurrent
+                    StartTime = candidateStart,
+                    EndTime = candidateEnd,
+                    MaxCapacity = capacity,
+                    BookedCount = overlapCount,
+                    RemainingCapacity = remaining,
+                    IsAvailable = remaining > 0
                 });
+
+                candidateStart = candidateStart.AddMinutes(15);
             }
 
             return slots;
@@ -91,6 +189,56 @@ namespace MyGarage.Services
         {
             if (dto.ScheduledDate < DateOnly.FromDateTime(DateTime.Today))
                 throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
+
+            if (IsSunday(dto.ScheduledDate))
+                throw new InvalidOperationException("Hom nay la chu nhat, khong the dat lich.");
+
+            var (mode, totalMinutes) = await ResolveModeAndDurationAsync(dto.RequestedServiceIds);
+            var latestStart = mode == AppointmentMode.Fast ? FastLatestStart : RepairLatestStart;
+            var capacity = mode == AppointmentMode.Fast ? FastCapacity : RepairCapacity;
+
+            if (dto.StartTime < OpenTime || dto.StartTime > latestStart)
+                throw new InvalidOperationException("Thoi gian dat khong hop le theo loai dich vu.");
+
+            var endTime = totalMinutes > 0 ? dto.StartTime.AddMinutes(totalMinutes) : dto.StartTime;
+            if (endTime > CloseTime)
+                throw new InvalidOperationException("Thoi gian ket thuc vuot qua gio hoat dong.");
+
+            // Validate capacity by overlap on the selected mode
+            var existingAppointments = (await _appointmentRepository.GetByBranchAndDateAsync(dto.BranchId, dto.ScheduledDate))
+                .Where(a => a.Status != "CANCELED" && a.Status != "NO_SHOW")
+                .ToList();
+
+            var existingServiceIds = new HashSet<long>();
+            foreach (var a in existingAppointments)
+            {
+                if (string.IsNullOrWhiteSpace(a.RequestedServiceIds)) continue;
+                foreach (var id in a.RequestedServiceIds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
+                    .Where(v => v > 0))
+                {
+                    existingServiceIds.Add(id);
+                }
+            }
+
+            var serviceModeMap = await BuildServiceModeMapAsync(existingServiceIds);
+
+            int overlapCount = 0;
+            foreach (var a in existingAppointments)
+            {
+                var apptMode = AppointmentMode.Fast;
+                if (!string.IsNullOrWhiteSpace(a.RequestedServiceIds))
+                    apptMode = InferModeFromRequestedServiceIds(a.RequestedServiceIds, serviceModeMap);
+
+                if (apptMode != mode) continue;
+
+                if (a.EndTime > dto.StartTime && a.StartTime < endTime)
+                    overlapCount++;
+            }
+
+            if (overlapCount >= capacity)
+                throw new InvalidOperationException("Ca nay da het cho hoac khong hop le.");
 
             long? vehicleId = dto.VehicleId;
 
@@ -128,30 +276,7 @@ namespace MyGarage.Services
                 }
             }
 
-            var endTime = dto.EndTime;
-
-            if (!string.IsNullOrEmpty(dto.RequestedServiceIds))
-            {
-                var serviceIds = dto.RequestedServiceIds
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
-                    .Where(v => v > 0)
-                    .ToList();
-
-                if (serviceIds.Count > 0)
-                {
-                    var totalMinutes = await _context.StandardServices
-                        .Where(s => serviceIds.Contains(s.Id))
-                        .SumAsync(s => s.StandardMinutes);
-
-                    if (totalMinutes > 0)
-                    {
-                        var calculated = dto.StartTime.AddMinutes(totalMinutes);
-                        if (calculated > endTime)
-                            endTime = calculated;
-                    }
-                }
-            }
+            // endTime is computed from requested services and validated above
 
             var appointment = new Appointment
             {

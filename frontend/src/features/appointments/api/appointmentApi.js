@@ -1,11 +1,11 @@
 import { request } from "../../../app/apiClient";
 
 // ── Available Slots ─────────────────────────────────────────────────────────
-export async function getAvailableSlots(branchId, date) {
+export async function getAvailableSlots(branchId, date, requestedServiceIds) {
   return request({
     url: "/api/Appointment/available-slots",
     method: "GET",
-    params: { branchId, date },
+    params: { branchId, date, requestedServiceIds },
   });
 }
 
@@ -91,4 +91,8 @@ export async function getAllProducts() {
 
 export async function getAllCategories() {
   return request({ url: "/api/Category", method: "GET" });
+}
+
+export async function getAllServiceCategories() {
+  return request({ url: "/api/ServiceCategory", method: "GET" });
 }
