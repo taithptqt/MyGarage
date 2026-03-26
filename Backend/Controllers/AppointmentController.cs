@@ -79,9 +79,11 @@ namespace MyGarage.Controllers
 
         [HttpGet("available-slots")]
         public async Task<ActionResult<IEnumerable<AvailableSlotResponseDto>>> GetAvailableSlots(
-            [FromQuery] long branchId, [FromQuery] DateOnly date)
+            [FromQuery] long branchId,
+            [FromQuery] DateOnly date,
+            [FromQuery] string? requestedServiceIds = null)
         {
-            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date);
+            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds);
             return Ok(slots);
         }
 

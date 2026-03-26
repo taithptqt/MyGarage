@@ -1,4 +1,11 @@
-export default function SlotPicker({ slots, selectedSlot, onSelect, loading, selectedDate }) {
+export default function SlotPicker({
+  slots,
+  selectedSlot,
+  onSelect,
+  loading,
+  selectedDate,
+  showEndTime = true,
+}) {
   if (loading) {
     return (
       <div className="spinner-container">
@@ -8,7 +15,13 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
   }
 
   if (!slots || slots.length === 0) {
-    const isSunday = selectedDate && selectedDate.getDay() === 0;
+    const dateObj =
+      selectedDate instanceof Date
+        ? selectedDate
+        : selectedDate
+        ? new Date(selectedDate)
+        : null;
+    const isSunday = dateObj && dateObj.getDay() === 0;
     return (
       <div className="empty-state">
         <div className="empty-icon">{isSunday ? "😴" : "📅"}</div>
@@ -45,6 +58,13 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     return "🌙";
   }
 
+  const dateObj =
+    selectedDate instanceof Date
+      ? selectedDate
+      : selectedDate
+      ? new Date(selectedDate)
+      : null;
+
   return (
     <div className="shift-grid">
       {slots.map((slot) => {
@@ -70,7 +90,8 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
             <div className="shift-icon">{shiftIcon(slot.startTime)}</div>
             <div className="shift-label">{shiftLabel(slot.startTime)}</div>
             <div className="shift-time">
-              {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
+              {formatTime(slot.startTime)}
+              {showEndTime ? ` - ${formatTime(slot.endTime)}` : ""}
             </div>
             <div className="shift-remaining">
               {slot.isAvailable

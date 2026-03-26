@@ -8,9 +8,12 @@ import {
   getVehicleModels,
   bookAppointment,
   bookGuestAppointment,
+  getAvailableSlots,
   getAllProducts,
   getAllCategories,
+  getAllServiceCategories,
 } from "../api/appointmentApi";
+import SlotPicker from "../components/SlotPicker";
 import "./BookingPage.css";
 
 function formatVND(n) {
@@ -42,17 +45,21 @@ export default function BookingPage() {
   const [models, setModels] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
 
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
 
   const [branchId, setBranchId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("09:00");
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [cart, setCart] = useState({});
   const [activeCatFilter, setActiveCatFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("");
+  const [activeServiceType, setActiveServiceType] = useState("ALL");
   const [licensePlate, setLicensePlate] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
@@ -73,13 +80,14 @@ export default function BookingPage() {
 
   async function loadReferenceData() {
     try {
-      const [br, svc, vb, vm, prods, cats] = await Promise.all([
+      const [br, svc, vb, vm, prods, cats, svcCats] = await Promise.all([
         getAllBranches(),
         getAllStandardServices(),
         getVehicleBrands(),
         getVehicleModels(),
         getAllProducts(),
         getAllCategories(),
+        getAllServiceCategories(),
       ]);
       setBranches(Array.isArray(br) ? br.filter((b) => b.status === "active") : []);
       setServices(Array.isArray(svc) ? svc.filter((s) => s.isActive !== false) : []);
@@ -87,10 +95,29 @@ export default function BookingPage() {
       setModels(Array.isArray(vm) ? vm : []);
       setProducts(Array.isArray(prods) ? prods.filter((p) => p.isActive !== false && !p.isDeleted) : []);
       setCategories(Array.isArray(cats) ? cats.filter((c) => !c.isDeleted) : []);
+      setServiceCategories(Array.isArray(svcCats) ? svcCats : []);
     } catch {
       /* ignore */
     }
   }
+
+  useEffect(() => {
+    if (step !== 4) return;
+    if (!branchId || !selectedDate) return;
+
+    const requestedServiceIds = selectedServiceIds.length
+      ? selectedServiceIds.join(",")
+      : null;
+
+    setSelectedSlot(null);
+    setSlots([]);
+    setSlotsLoading(true);
+
+    getAvailableSlots(Number(branchId), selectedDate, requestedServiceIds)
+      .then((data) => setSlots(Array.isArray(data) ? data : []))
+      .catch(() => setSlots([]))
+      .finally(() => setSlotsLoading(false));
+  }, [step, branchId, selectedDate, selectedServiceIds]);
 
   function toggleService(id) {
     setSelectedServiceIds((prev) =>
@@ -142,6 +169,25 @@ export default function BookingPage() {
   const serviceTotalPrice = selectedServices.reduce((sum, s) => sum + (s.basePrice || 0), 0);
   const totalMinutes = selectedServices.reduce((sum, s) => sum + (s.standardMinutes || 0), 0);
 
+  const serviceCategoryCodeById = useMemo(() => {
+    const map = new Map();
+    (serviceCategories || []).forEach((c) => {
+      if (c?.id != null) map.set(String(c.id), (c.code || "").toUpperCase());
+    });
+    return map;
+  }, [serviceCategories]);
+
+  const isRepairBooking = selectedServices.some((s) =>
+    (serviceCategoryCodeById.get(String(s.categoryId)) || "").includes("REPAIR")
+  );
+
+  const visibleServices = useMemo(() => {
+    if (!activeServiceType || activeServiceType === "ALL") return services;
+    return services.filter(
+      (s) => serviceCategoryCodeById.get(String(s.categoryId)) === activeServiceType
+    );
+  }, [activeServiceType, services, serviceCategoryCodeById]);
+
   const cartItems = useMemo(() => {
     return Object.entries(cart).map(([pid, qty]) => {
       const p = products.find((x) => String(x.id) === String(pid));
@@ -152,19 +198,91 @@ export default function BookingPage() {
   const productTotalPrice = cartItems.reduce((sum, item) => sum + (item.retailPrice || 0) * item.qty, 0);
   const totalPrice = serviceTotalPrice + productTotalPrice;
 
+  function norm(s) {
+    return (s || "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
+  const accessoryKeywords = useMemo(() => {
+    // Map selected services -> keywords. Used to filter by BOTH product name and category name.
+    if (!selectedServices.length) return [];
+
+    const kw = new Set();
+
+    for (const s of selectedServices) {
+      const catCode = (serviceCategoryCodeById.get(String(s.categoryId)) || "").toUpperCase();
+      const name = norm(s.name);
+      const svcCode = (s.code || "").toUpperCase();
+
+      const isOilService =
+        catCode.includes("MAINT") ||
+        svcCode.includes("MAINT") ||
+        name.includes("nhot") ||
+        name.includes("loc") ||
+        name.includes("oil") ||
+        name.includes("filter");
+
+      const isWheelService =
+        svcCode.includes("TIRE") ||
+        catCode.includes("TIRE") ||
+        name.includes("lop") ||
+        name.includes("banh") ||
+        name.includes("phanh") ||
+        name.includes("brake");
+
+      // QUICK_SERVICE in your DB can contain both oil and wheel services, so we disambiguate by name.
+      if (isOilService) {
+        ["dau", "nhot", "oil", "loc", "filter"].forEach((k) => kw.add(k));
+      } else if (isWheelService || catCode.includes("QUICK")) {
+        ["lop", "tire", "banh", "phanh", "brake"].forEach((k) => kw.add(k));
+      }
+
+      if (catCode.includes("REPAIR")) {
+        ["phu tung", "phutung", "part", "linh kien"].forEach((k) => kw.add(k));
+      }
+    }
+
+    return [...kw].map(norm).filter(Boolean);
+  }, [selectedServices, serviceCategoryCodeById]);
+
+  useEffect(() => {
+    // Avoid showing an empty list due to stale category filter after services change
+    setActiveCatFilter("all");
+  }, [selectedServiceIds]);
+
   const filteredProducts = useMemo(() => {
     let list = products;
+
+    // Only show products relevant to selected services
+    if (accessoryKeywords.length > 0) {
+      const catNameById = new Map(
+        (categories || []).map((c) => [String(c.id), norm(c.categoryName)])
+      );
+
+      list = list.filter((p) => {
+        const pName = norm(p.name);
+        const cName = p.categoryId ? (catNameById.get(String(p.categoryId)) || "") : "";
+        return accessoryKeywords.some((k) => pName.includes(k) || cName.includes(k));
+      });
+    } else {
+      // If we can't infer anything, don't block the user: show all.
+      list = products;
+    }
+
     if (activeCatFilter !== "all") {
       list = list.filter((p) => String(p.categoryId) === String(activeCatFilter));
     }
     return list;
-  }, [products, activeCatFilter]);
+  }, [products, categories, activeCatFilter, accessoryKeywords]);
 
   const usedCategoryIds = useMemo(() => {
     const ids = new Set();
-    products.forEach((p) => { if (p.categoryId) ids.add(p.categoryId); });
+    filteredProducts.forEach((p) => { if (p.categoryId) ids.add(p.categoryId); });
     return ids;
-  }, [products]);
+  }, [filteredProducts]);
 
   const visibleCategories = categories.filter((c) => usedCategoryIds.has(c.id));
 
@@ -205,15 +323,14 @@ export default function BookingPage() {
     setSuccess("");
     if (!branchId) return setError("Vui long chon chi nhanh.");
     if (!selectedDate) return setError("Vui long chon ngay hen.");
-    if (!selectedTime) return setError("Vui long chon gio hen.");
+    if (!selectedSlot) return setError("Vui long chon gio hen.");
     if (!loggedIn && !guestPhone.trim()) return setError("Vui long nhap so dien thoai.");
 
     setSubmitting(true);
     try {
       const realModelId = isOtherBrand ? null : (selectedModelId ? Number(selectedModelId) : null);
-      const startTime = selectedTime + ":00";
-      const endH = Math.min(parseInt(selectedTime.split(":")[0]) + Math.ceil(totalMinutes / 60) || 1, 22);
-      const endTime = String(endH).padStart(2, "0") + ":00:00";
+      const startTime = selectedSlot.startTime;
+      const endTime = selectedSlot.endTime;
 
       const payload = {
         branchId: Number(branchId),
@@ -376,7 +493,13 @@ export default function BookingPage() {
         </div>
 
         {step === 1 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(2)}>Tiep tuc</button>
+          <button
+            className="bp-sidebar-btn"
+            onClick={() => goToStep(2)}
+            disabled={selectedServiceIds.length === 0}
+          >
+            Tiep tuc
+          </button>
         )}
         {step === 2 && (
           <button className="bp-sidebar-btn" onClick={() => goToStep(3)}>Tiep tuc</button>
@@ -387,7 +510,7 @@ export default function BookingPage() {
           </button>
         )}
         {step === 4 && (
-          <button className="bp-sidebar-btn" onClick={handleSubmit} disabled={submitting || !branchId || !selectedDate || !selectedTime}>
+          <button className="bp-sidebar-btn" onClick={handleSubmit} disabled={submitting || !branchId || !selectedDate || !selectedSlot}>
             {submitting ? "Dang dat lich..." : "Xac nhan dat lich"}
           </button>
         )}
@@ -406,8 +529,45 @@ export default function BookingPage() {
           <div className="bp-wizard-main">
             <h2 className="bp-wizard-title">Chon dich vu</h2>
             <p className="bp-wizard-subtitle">Quy khach nhan chon vao dich vu quy khach can su dung</p>
+            <div className="bp-filter-row">
+              <span className="bp-filter-label">Loai dich vu:</span>
+              <div className="bp-filter-pills">
+                <button
+                  className={`bp-pill ${activeServiceType === "ALL" ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveServiceType("ALL");
+                  }}
+                >
+                  {activeServiceType === "ALL" && <span className="bp-pill-check">✓</span>} Tat ca
+                </button>
+                <button
+                  className={`bp-pill ${activeServiceType === "MAINTENANCE" ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveServiceType("MAINTENANCE");
+                  }}
+                >
+                  {activeServiceType === "MAINTENANCE" && <span className="bp-pill-check">✓</span>} Bao duong
+                </button>
+                <button
+                  className={`bp-pill ${activeServiceType === "GENERAL_REPAIR" ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveServiceType("GENERAL_REPAIR");
+                  }}
+                >
+                  {activeServiceType === "GENERAL_REPAIR" && <span className="bp-pill-check">✓</span>} Sua chua chung
+                </button>
+                <button
+                  className={`bp-pill ${activeServiceType === "QUICK_SERVICE" ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveServiceType("QUICK_SERVICE");
+                  }}
+                >
+                  {activeServiceType === "QUICK_SERVICE" && <span className="bp-pill-check">✓</span>} Dich vu nhanh
+                </button>
+              </div>
+            </div>
             <div className="bp-svc-list">
-              {services.map((s, idx) => {
+              {visibleServices.map((s, idx) => {
                 const isSelected = selectedServiceIds.includes(s.id);
                 return (
                   <div key={s.id} className={`bp-svc-card ${isSelected ? "selected" : ""}`} onClick={() => toggleService(s.id)}>
@@ -483,15 +643,20 @@ export default function BookingPage() {
                           <span className="bp-qty-value">{qty}</span>
                           <button className="bp-qty-btn" onClick={() => updateCart(p.id, 1)}>+</button>
                         </div>
-                        {qty === 0 ? (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <button className="bp-add-cart-btn" onClick={() => updateCart(p.id, 1)}>
                             🛒 Them vao gio hang
                           </button>
-                        ) : (
-                          <button className="bp-add-cart-btn added" onClick={() => removeFromCart(p.id)}>
-                            ✓ Da them ({qty})
-                          </button>
-                        )}
+                          {qty > 0 && (
+                            <button
+                              className="bp-add-cart-btn added"
+                              onClick={() => removeFromCart(p.id)}
+                              title="Xoa san pham khoi gio"
+                            >
+                              Xoa
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -620,31 +785,42 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* Date + Time picker */}
+            {/* Date picker */}
             <div className="booking-card" style={{ marginTop: 20 }}>
-              <h3>Thoi gian dat lich hen</h3>
+              <h3>Ngay va gio mang xe</h3>
               <div className="bp-datetime-row">
                 <div className="bp-datetime-field">
                   <label>Ngay</label>
                   <input
                     type="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value);
+                      setSelectedSlot(null);
+                    }}
                     min={getTodayStr()}
                     className="bp-date-input"
                   />
                 </div>
-                <div className="bp-datetime-field">
-                  <label>Gio</label>
-                  <input
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                    min="07:00"
-                    max="21:00"
-                    className="bp-time-input"
-                  />
-                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <h4 style={{ margin: "0 0 10px", fontSize: 14, color: "#4a5568" }}>
+                  Gio (slot 15 phut)
+                </h4>
+                <SlotPicker
+                  slots={slots}
+                  selectedSlot={selectedSlot}
+                  onSelect={(s) => setSelectedSlot(s)}
+                  loading={slotsLoading}
+                  selectedDate={selectedDate ? new Date(selectedDate + "T00:00:00") : null}
+                  showEndTime={!isRepairBooking}
+                />
+                {selectedSlot && !isRepairBooking && (
+                  <div style={{ marginTop: 10, fontSize: 13, color: "#422afb", fontWeight: 700 }}>
+                    Ước tính kết thúc: {String(selectedSlot.endTime).substring(0, 5)}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -678,7 +854,7 @@ export default function BookingPage() {
           <p>Chung toi se xac nhan lich hen cua ban trong thoi gian som nhat.</p>
           <div className="bp-done-actions">
             <button className="bp-done-btn primary" onClick={() => navigate("/my-appointments")}>Xem lich hen cua toi</button>
-            <button className="bp-done-btn secondary" onClick={() => { setStep(0); setSelectedServiceIds([]); setCart({}); setBranchId(""); setSelectedDate(""); setSelectedTime("09:00"); setLicensePlate(""); setNotes(""); }}>
+            <button className="bp-done-btn secondary" onClick={() => { setStep(0); setSelectedServiceIds([]); setCart({}); setBranchId(""); setSelectedDate(""); setSelectedSlot(null); setSlots([]); setLicensePlate(""); setNotes(""); }}>
               Dat lich moi
             </button>
           </div>

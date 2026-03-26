@@ -34,7 +34,7 @@ export default defineConfig({
           cert: fs.readFileSync(certPath),
           key: fs.readFileSync(keyPath)
         }
-      : true,
+      : false,
     port: 5173,
     strictPort: true,
     proxy: {
