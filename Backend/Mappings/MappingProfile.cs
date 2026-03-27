@@ -323,6 +323,15 @@ namespace MyGarage.Mappings
             CreateMap<Voucher, VoucherResponseDto>();
             CreateMap<VoucherCreateDto, Voucher>();
             CreateMap<VoucherUpdateDto, Voucher>();
+            // Voucher Campaign Mappings
+            CreateMap<VoucherCampaign, VoucherCampaignResponseDto>();
+            CreateMap<VoucherCampaignCreateDto, VoucherCampaign>();
+            CreateMap<VoucherCampaignUpdateDto, VoucherCampaign>();
+            // Voucher Approval Mappings
+            CreateMap<VoucherApprovalRequest, VoucherApprovalRequestResponseDto>();
+            CreateMap<VoucherApprovalRequestCreateDto, VoucherApprovalRequest>();
+            // Voucher Redemption Mappings
+            CreateMap<VoucherRedemption, VoucherRedemptionResponseDto>();
             // Warehouse Mappings
             CreateMap<Warehouse, WarehouseResponseDto>();
             CreateMap<WarehouseCreateDto, Warehouse>();

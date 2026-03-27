@@ -7,6 +7,8 @@ namespace MyGarage.DTOs.Responses.Auth
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public string RoleCode { get; set; } = string.Empty;
+        public string RoleName { get; set; } = string.Empty;
         public long? BranchId { get; set; }
         public string BranchName { get; set; } = string.Empty;
     }

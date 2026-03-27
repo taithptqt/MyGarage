@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Mục đích: Entity EF liên kết khách hàng với voucher và tham chiếu sử dụng liên quan.
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;

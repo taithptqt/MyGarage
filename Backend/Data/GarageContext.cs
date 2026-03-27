@@ -170,6 +170,22 @@ public partial class GarageContext : DbContext
 
     public virtual DbSet<Voucher> Vouchers { get; set; }
 
+    public virtual DbSet<VoucherApprovalRequest> VoucherApprovalRequests { get; set; }
+
+    public virtual DbSet<VoucherAssignment> VoucherAssignments { get; set; }
+
+    public virtual DbSet<VoucherAuditLog> VoucherAuditLogs { get; set; }
+
+    public virtual DbSet<VoucherCampaign> VoucherCampaigns { get; set; }
+
+    public virtual DbSet<VoucherCodeBatch> VoucherCodeBatches { get; set; }
+
+    public virtual DbSet<VoucherConflictRule> VoucherConflictRules { get; set; }
+
+    public virtual DbSet<VoucherRedemption> VoucherRedemptions { get; set; }
+
+    public virtual DbSet<VoucherUsageRule> VoucherUsageRules { get; set; }
+
     public virtual DbSet<Warehouse> Warehouses { get; set; }
 
     public virtual DbSet<WorkSlot> WorkSlots { get; set; }

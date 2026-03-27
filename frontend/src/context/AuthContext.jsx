@@ -4,6 +4,21 @@ import * as authApi from '../features/auth/api/authApi';
 
 const AuthContext = createContext();
 
+function mapAuthUser(data, tokenOverride = null) {
+  if (!data) return null;
+  return {
+    id: data.id,
+    fullName: data.fullName,
+    email: data.email,
+    role: data.role,
+    roleCode: data.roleCode || "",
+    roleName: data.roleName || "",
+    branchId: data.branchId || null,
+    branchName: data.branchName || "",
+    token: tokenOverride ?? data.token ?? ""
+  };
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +33,7 @@ export const AuthProvider = ({ children }) => {
         try {
           const { ok, data } = await authApi.getProfile();
           if (ok && data) {
-            const updatedUser = { ...data, token };
+            const updatedUser = mapAuthUser(data, token);
             setUser(updatedUser);
             localStorage.setItem('mygarage_user', JSON.stringify(updatedUser));
             if (data.branchId) {
@@ -43,15 +58,7 @@ export const AuthProvider = ({ children }) => {
     const { ok, data } = await authApi.login(credentials);
     if (!ok) throw new Error(data?.message || "Login failed");
 
-    const userData = {
-      id: data.id,
-      fullName: data.fullName,
-      email: data.email,
-      role: data.role,
-      branchId: data.branchId || null,
-      branchName: data.branchName || "",
-      token: data.token
-    };
+    const userData = mapAuthUser(data);
     localStorage.setItem('mygarage_token', data.token);
     localStorage.setItem('mygarage_user', JSON.stringify(userData));
     if (data.branchId) {
@@ -65,15 +72,7 @@ export const AuthProvider = ({ children }) => {
     const { ok, data } = await authApi.register(payload);
     if (!ok) throw new Error(data?.message || "Registration failed");
 
-    const userData = {
-      id: data.id,
-      fullName: data.fullName,
-      email: data.email,
-      role: data.role,
-      branchId: data.branchId || null,
-      branchName: data.branchName || "",
-      token: data.token
-    };
+    const userData = mapAuthUser(data);
     localStorage.setItem('mygarage_token', data.token);
     localStorage.setItem('mygarage_user', JSON.stringify(userData));
     if (data.branchId) {
@@ -87,15 +86,7 @@ export const AuthProvider = ({ children }) => {
     const { ok, data } = await authApi.googleLogin(payload);
     if (!ok) throw new Error(data?.message || "Google login failed");
 
-    const userData = {
-      id: data.id,
-      fullName: data.fullName,
-      email: data.email,
-      role: data.role,
-      branchId: data.branchId || null,
-      branchName: data.branchName || "",
-      token: data.token
-    };
+    const userData = mapAuthUser(data);
     localStorage.setItem('mygarage_token', data.token);
     localStorage.setItem('mygarage_user', JSON.stringify(userData));
     if (data.branchId) {

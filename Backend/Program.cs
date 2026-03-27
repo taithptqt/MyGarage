@@ -63,6 +63,7 @@ builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddHostedService<AppointmentNoShowService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
+builder.Services.AddHostedService<VoucherCampaignLifecycleService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
@@ -276,6 +277,12 @@ builder.Services.AddScoped<IVehicleModelService, VehicleModelService>();
 
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
+builder.Services.AddScoped<IVoucherCampaignRepository, VoucherCampaignRepository>();
+builder.Services.AddScoped<IVoucherCampaignService, VoucherCampaignService>();
+builder.Services.AddScoped<IVoucherApprovalRequestRepository, VoucherApprovalRequestRepository>();
+builder.Services.AddScoped<IVoucherApprovalRequestService, VoucherApprovalRequestService>();
+builder.Services.AddScoped<IVoucherRedemptionRepository, VoucherRedemptionRepository>();
+builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>();
 
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();

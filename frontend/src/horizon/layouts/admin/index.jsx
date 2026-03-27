@@ -6,7 +6,7 @@ import Navbar from 'components/navbar/NavbarAdmin';
 import Sidebar from 'components/sidebar/Sidebar';
 import { SidebarContext } from 'contexts/SidebarContext';
 import React, { useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import routes from 'routes';
 
 // Custom Chakra theme
@@ -15,9 +15,23 @@ export default function Dashboard(props) {
   // states and functions
   const [fixed] = useState(false);
   const [toggleSidebar, setToggleSidebar] = useState(false);
+  const location = useLocation();
+
+  const normalizePath = (value) => {
+    const path = String(value || '').trim();
+    if (!path) return '/';
+    return path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path;
+  };
+
+  const isRouteMatch = (route) => {
+    const fullPath = normalizePath(`${route.layout || ''}${route.path || ''}`);
+    const currentPath = normalizePath(location.pathname);
+    return currentPath === fullPath || currentPath.startsWith(`${fullPath}/`);
+  };
+
   // functions for changing the states from components
   const getRoute = () => {
-    return window.location.pathname !== '/admin/full-screen-maps';
+    return location.pathname !== '/admin/full-screen-maps';
   };
   const getActiveRoute = (routes) => {
     let activeRoute = 'Admin Dashboard';
@@ -33,9 +47,7 @@ export default function Dashboard(props) {
           return categoryActiveRoute;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].name;
         }
       }
@@ -56,9 +68,7 @@ export default function Dashboard(props) {
           return categoryActiveNavbar;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].secondary;
         }
       }
@@ -79,9 +89,7 @@ export default function Dashboard(props) {
           return categoryActiveNavbar;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].messageNavbar;
         }
       }

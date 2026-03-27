@@ -21,6 +21,7 @@ import {
   MdWarning,
   MdAssessment,
   MdHistory,
+  MdLocalOffer,
 } from 'react-icons/md';
 
 import MainDashboard from "views/admin/default";
@@ -30,6 +31,7 @@ import ServicesPage from "../features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
 import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
+import SafeVoucherManagementPage from "../features/voucher/pages/SafeVoucherManagementPage";
 
 const inventoryItems = [
   {
@@ -145,6 +147,65 @@ const serviceItems = [
   },
 ];
 
+const voucherItems = [
+  {
+    name: 'Tổng quan voucher',
+    layout: '/admin',
+    icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/dashboard',
+    component: <SafeVoucherManagementPage section="dashboard" />,
+  },
+  {
+    name: 'Danh sách voucher',
+    layout: '/admin',
+    icon: <Icon as={MdLocalOffer} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/list',
+    component: <SafeVoucherManagementPage section="list" />,
+  },
+  {
+    name: 'Chiến dịch',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/campaigns',
+    component: <SafeVoucherManagementPage section="campaigns" />,
+  },
+  {
+    name: 'Kiểm tra xung đột',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/conflicts',
+    component: <SafeVoucherManagementPage section="conflicts" />,
+  },
+  {
+    name: 'Lịch sử sử dụng',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/redemptions',
+    component: <SafeVoucherManagementPage section="redemptions" />,
+  },
+  {
+    name: 'Hàng chờ phê duyệt',
+    layout: '/admin',
+    icon: <Icon as={MdVerifiedUser} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/approvals',
+    component: <SafeVoucherManagementPage section="approvals" />,
+  },
+  {
+    name: 'Báo cáo hiệu quả',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/reports',
+    component: <SafeVoucherManagementPage section="reports" />,
+  },
+  {
+    name: 'Thiết lập voucher',
+    layout: '/admin',
+    icon: <Icon as={MdPolicy} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/settings',
+    component: <SafeVoucherManagementPage section="settings" />,
+  },
+];
+
 const routes = [
   {
     name: 'Bảng điều khiển',
@@ -194,11 +255,10 @@ const routes = [
     items: serviceItems,
   },
   {
-    name: 'Nhật ký chỉnh sửa',
-    layout: '/admin',
-    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
-    path: '/change-logs',
-    component: <AdminChangeLogPage />,
+    name: 'Quản lý voucher',
+    icon: <Icon as={MdLocalOffer} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: voucherItems,
   },
   {
     name: 'Kho',
@@ -206,7 +266,15 @@ const routes = [
     collapse: true,
     items: inventoryItems,
   },
+  {
+    name: 'Nhật ký chỉnh sửa',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/change-logs',
+    component: <AdminChangeLogPage />,
+  },
 ];
 
 export default routes;
+
 

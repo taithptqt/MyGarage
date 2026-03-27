@@ -60,7 +60,10 @@ function AuthPage() {
   };
 
   const redirectAfterAuth = (data) => {
-    const destination = data?.role === "Staff" ? "/admin" : "/home";
+    let destination = "/home";
+    if (data?.role === "Staff") {
+      destination = "/admin/default";
+    }
     navigate(destination, { replace: true });
   };
 
@@ -150,8 +153,16 @@ function AuthPage() {
   };
 
   if (token) {
-    const savedUser = JSON.parse(localStorage.getItem("mygarage_user") || "{}");
-    const dest = savedUser?.role === "Staff" ? "/admin" : "/home";
+    let savedUser = {};
+    try {
+      savedUser = JSON.parse(localStorage.getItem("mygarage_user") || "{}");
+    } catch {
+      savedUser = {};
+    }
+    let dest = "/home";
+    if (savedUser?.role === "Staff") {
+      dest = "/admin/default";
+    }
     return <Navigate to={dest} replace />;
   }
 

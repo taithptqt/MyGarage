@@ -70,6 +70,8 @@ namespace MyGarage.Services
                     customer.FullName ?? "",
                     customer.Email ?? "",
                     "Customer",
+                    "CUSTOMER",
+                    "Customer",
                     nearestBranchId,
                     nearestBranchName);
             }
@@ -91,12 +93,15 @@ namespace MyGarage.Services
                 await _context.SaveChangesAsync();
             }
 
+            var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
             var staffBranchName = await GetBranchNameAsync(staff.BranchId);
             return GenerateToken(
                 staff.Id.ToString(),
                 staff.FullName ?? "",
                 staff.Email ?? "",
                 "Staff",
+                roleCode,
+                roleName,
                 staff.BranchId,
                 staffBranchName);
         }
@@ -126,12 +131,15 @@ namespace MyGarage.Services
             if (staff != null)
             {
                 ValidateStaffAccountForLogin(staff);
+                var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
                 var staffBranchName = await GetBranchNameAsync(staff.BranchId);
                 return GenerateToken(
                     staff.Id.ToString(),
                     staff.FullName ?? "",
                     staff.Email ?? "",
                     "Staff",
+                    roleCode,
+                    roleName,
                     staff.BranchId,
                     staffBranchName);
             }
@@ -167,6 +175,8 @@ namespace MyGarage.Services
                 customer.Id.ToString(),
                 customer.FullName ?? "",
                 customer.Email ?? "",
+                "Customer",
+                "CUSTOMER",
                 "Customer",
                 nearestBranchId,
                 nearestBranchName);
@@ -207,11 +217,21 @@ namespace MyGarage.Services
                 customer.FullName ?? "",
                 customer.Email ?? "",
                 "Customer",
+                "CUSTOMER",
+                "Customer",
                 nearestBranchId,
                 nearestBranchName);
         }
 
-        private AuthResponseDto GenerateToken(string userId, string name, string email, string role, long? branchId = null, string branchName = "")
+        private AuthResponseDto GenerateToken(
+            string userId,
+            string name,
+            string email,
+            string role,
+            string roleCode,
+            string roleName,
+            long? branchId = null,
+            string branchName = "")
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var keyStr = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt Key missing");
@@ -223,7 +243,9 @@ namespace MyGarage.Services
                 new Claim(ClaimTypes.NameIdentifier, userId),
                 new Claim(ClaimTypes.Name, name),
                 new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.Role, role)
+                new Claim(ClaimTypes.Role, role),
+                new Claim("role_code", roleCode ?? string.Empty),
+                new Claim("role_name", roleName ?? string.Empty)
             };
             if (branchId.HasValue)
             {
@@ -248,6 +270,8 @@ namespace MyGarage.Services
                 FullName = name,
                 Email = email,
                 Role = role,
+                RoleCode = roleCode ?? string.Empty,
+                RoleName = roleName ?? string.Empty,
                 BranchId = branchId,
                 BranchName = branchName ?? string.Empty
             };
@@ -407,6 +431,8 @@ namespace MyGarage.Services
                     Email = customer.Email ?? "",
                     Phone = customer.Phone ?? "",
                     Role = "Customer",
+                    RoleCode = "CUSTOMER",
+                    RoleName = "Customer",
                     Status = customer.IsActive == true ? "Active" : "Inactive",
                     CreatedAt = customer.CreatedAt,
                     BranchId = ExtractPreferredBranchId(customer.Note),
@@ -417,6 +443,7 @@ namespace MyGarage.Services
             {
                 var staff = await _context.Staffs.FindAsync(userId);
                 if (staff == null) throw new UnauthorizedAccessException("User not found.");
+                var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
 
                 return new UserProfileResponseDto
                 {
@@ -425,6 +452,8 @@ namespace MyGarage.Services
                     Email = staff.Email ?? "",
                     Phone = staff.Phone ?? "",
                     Role = "Staff",
+                    RoleCode = roleCode,
+                    RoleName = roleName,
                     AvatarUrl = staff.AvatarUrl ?? "",
                     Status = staff.Status ?? "Unknown",
                     CreatedAt = staff.CreatedAt,
@@ -751,6 +780,28 @@ namespace MyGarage.Services
             return value.StartsWith("$2a$", StringComparison.Ordinal) ||
                    value.StartsWith("$2b$", StringComparison.Ordinal) ||
                    value.StartsWith("$2y$", StringComparison.Ordinal);
+        }
+
+        private async Task<(string RoleCode, string RoleName)> GetStaffRoleInfoAsync(long? roleId)
+        {
+            if (!roleId.HasValue)
+            {
+                return ("STAFF", "Staff");
+            }
+
+            var role = await _context.Roles
+                .Where(r => r.Id == roleId.Value)
+                .Select(r => new { r.RoleCode, r.RoleName })
+                .FirstOrDefaultAsync();
+
+            if (role == null)
+            {
+                return ("STAFF", "Staff");
+            }
+
+            return (
+                string.IsNullOrWhiteSpace(role.RoleCode) ? "STAFF" : role.RoleCode.Trim().ToUpperInvariant(),
+                string.IsNullOrWhiteSpace(role.RoleName) ? "Staff" : role.RoleName.Trim());
         }
 
         private static void ValidateCustomerAccountForLogin(Customer customer)

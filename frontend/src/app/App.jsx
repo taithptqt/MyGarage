@@ -10,10 +10,25 @@ import PayosCheckoutPage from "../features/payment/pages/PayosCheckoutPage";
 import PaymentSuccessPage from "../features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "../features/payment/pages/PaymentCancelPage";
 
-function CustomerRoute({ children }) {
+function parseSavedUser() {
   const userStr = localStorage.getItem("mygarage_user");
-  const user = userStr ? JSON.parse(userStr) : null;
-  if (user?.role === "Staff") return <Navigate to="/admin" replace />;
+  if (!userStr) return null;
+  try {
+    return JSON.parse(userStr);
+  } catch {
+    return null;
+  }
+}
+
+function resolveStaffHome(user) {
+  return "/admin/default";
+}
+
+function CustomerRoute({ children }) {
+  const user = parseSavedUser();
+  if (user?.role === "Staff") {
+    return <Navigate to={resolveStaffHome(user)} replace />;
+  }
   return <CustomerLayout>{children}</CustomerLayout>;
 }
 
