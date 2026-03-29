@@ -1,0 +1,19 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace MyGarage.Models;
+
+public partial class AiTechnicalAssistant
+{
+    public long Id { get; set; }
+
+    public long MechanicId { get; set; }
+
+    public string? Question { get; set; }
+
+    public string? Answer { get; set; }
+
+    public long? RelatedDiagnoseId { get; set; }
+
+    public DateTime? CreatedAt { get; set; }
+}

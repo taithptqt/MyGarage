@@ -1,0 +1,260 @@
+﻿import React, { useEffect, useState } from "react";
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
+import "./Workshop.css";
+import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
+import { IoMdMoon, IoMdSunny } from 'react-icons/io';
+import { AiOutlineSearch } from 'react-icons/ai';
+import { useSearch } from "../../../context/SearchContext";
+
+// Role Components are now imported in App.jsx for routing
+import WorkflowTimeline from "../components/WorkflowTimeline";
+import ProfileModal from "../components/ProfileModal";
+import { ChakraProvider } from "@chakra-ui/react";
+import initialTheme from "../../../horizon/theme/theme";
+
+const ROLES_META = {
+  RECEPTIONIST: { path: "reception", label: "L\u1ec5 t\u00e2n", icon: "📋", description: "Tiếp nhận, Báo giá & Thanh toán" },
+  MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
+  FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
+  QC: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
+};
+const RECEPTION_TABS = [
+  { key: "orders", label: "L\u1ec7nh s\u1eeda ch\u1eefa" },
+  { key: "appointments", label: "L\u1ecbch h\u1eb9n" }
+];
+
+const getReceptionTabFromSearch = (searchText) => {
+  const tab = new URLSearchParams(searchText).get("tab");
+  return tab === "appointments" ? "appointments" : "orders";
+};
+
+export default function WorkshopPage() {
+  const { searchQuery, setSearchQuery } = useSearch();
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const userRole = user?.roleCode?.toUpperCase();
+  const isReceptionRole = userRole === "RECEPTIONIST";
+  const isReceptionArea = location.pathname.startsWith("/workshop/reception");
+  const activeReceptionTab = getReceptionTabFromSearch(location.search);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  const handleReceptionTabChange = (tabKey) => {
+    if (!isReceptionRole) return;
+    const params = new URLSearchParams(location.search);
+
+    if (tabKey === "appointments") {
+      params.set("tab", "appointments");
+    } else {
+      params.delete("tab");
+    }
+
+    const nextSearch = params.toString();
+    navigate({
+      pathname: "/workshop/reception",
+      search: nextSearch ? `?${nextSearch}` : ""
+    });
+  };
+
+  // Auto-redirect to the correct sub-route if at /workshop root
+  useEffect(() => {
+    if (location.pathname === "/workshop" || location.pathname === "/workshop/") {
+      const target = ROLES_META[userRole]?.path;
+      if (target) {
+        navigate(`/workshop/${target}`, { replace: true });
+      }
+    }
+  }, [location, userRole, navigate]);
+
+  if (authLoading) return <div className="loading-state"><div className="spinner" /></div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Only show the role that the user belongs to, or all if Admin (optional)
+  const allowedRoles = Object.entries(ROLES_META).filter(([role]) => role === userRole);
+
+  // Determine current context for Timeline
+  const getTimelineStatus = () => {
+    const path = location.pathname;
+    if (path.includes("/diagnosis") || path.includes("/items")) return "DIAGNOSING";
+    if (path.includes("/quote") || path.includes("/manager")) return "WAITING_APPROVAL";
+    if (path.includes("/condition")) return "RECEPTION"; 
+    if (path.includes("/technician")) return "REPAIRING";
+    if (path.includes("/qc")) return "QC_PENDING";
+    if (path.includes("/foreman")) return "DIAGNOSING";
+    if (path.includes("/reception")) return "RECEPTION";
+    return "RECEPTION";
+  };
+  const timelineStatus = getTimelineStatus();
+
+  const currentRoleMeta = ROLES_META[userRole];
+
+  return (
+    <ChakraProvider theme={initialTheme}>
+      <div className={`workshop-page ${isDarkMode ? "dark" : ""}`}>
+        <aside className="workshop-sidebar">
+          <div className="sidebar-header">
+            <h2>Workshop</h2>
+            <p>GARAGE OPERATIONS</p>
+          </div>
+          <nav className="role-nav">
+            {allowedRoles.map(([role, meta]) => (
+              <div 
+                key={role} 
+                className="role-item active"
+                style={{ cursor: 'default' }}
+              >
+                <span className="role-icon">{meta.icon}</span>
+                <div className="role-info">
+                  <span className="role-label">{meta.label}</span>
+                  <span className="role-desc">{meta.description}</span>
+                </div>
+              </div>
+            ))}
+          </nav>
+          {isReceptionRole && (
+            <div className="sidebar-subnav">
+              {RECEPTION_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`sidebar-subnav-item ${isReceptionArea && activeReceptionTab === tab.key ? "active" : ""}`}
+                  onClick={() => handleReceptionTabChange(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+
+        <main className="workshop-main">
+          <header className="workshop-header">
+             <div className="header-left">
+               <div className="breadcrumb">
+                 <span className="bc-link">Pages</span>
+                 <span className="bc-separator">/</span>
+                 <span className="bc-current">{currentRoleMeta?.label} Dashboard</span>
+               </div>
+               <h1 className="header-title">{currentRoleMeta?.label} Dashboard</h1>
+             </div>
+             <div className="header-right">
+               <div className="header-actions-bar">
+                  <div className="search-bar-placeholder">
+                    <span className="search-icon"><AiOutlineSearch /></span>
+                    <input 
+                      type="text" 
+                      placeholder="Tìm kiếm..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="header-menu-container">
+                    <button className="header-icon-btn" title="Thông báo" onClick={() => { setShowNotifications(!showNotifications); setShowInfo(false); setShowProfileMenu(false); }}>
+                      <MdNotificationsNone />
+                    </button>
+                    {showNotifications && (
+                      <div className="header-dropdown notification-dropdown">
+                        <div className="dropdown-header">Notifications</div>
+                        <div className="dropdown-content">
+                          <div className="dropdown-item-info">
+                            <div className="item-title">Hệ thống MyGarage</div>
+                            <div className="item-desc">Chào mừng bạn trở lại làm việc hôm nay!</div>
+                          </div>
+                          <div className="dropdown-item-info">
+                            <div className="item-title">Lệnh sửa chữa mới</div>
+                            <div className="item-desc">Có 3 xe mới đang chờ tiếp nhận.</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="header-menu-container">
+                    <button className="header-icon-btn" title="Thông tin" onClick={() => { setShowInfo(!showInfo); setShowNotifications(false); setShowProfileMenu(false); }}>
+                      <MdInfoOutline />
+                    </button>
+                    {showInfo && (
+                      <div className="header-dropdown info-dropdown">
+                        <div className="dropdown-content info-content">
+                          <div className="info-image-placeholder"></div>
+                          <p className="info-text">Hệ thống Quản lý Garage Thông quản lý mới của công ty. Chúc bạn một ngày làm việc hiệu quả!</p>
+                          <button className="btn-primary-sm">Xem hướng dẫn</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    className="header-icon-btn" 
+                    title="Đổi giao diện"
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                  >
+                    {isDarkMode ? <IoMdSunny /> : <IoMdMoon />}
+                  </button>
+                  
+                  <div className="profile-container">
+                    <div 
+                      className="user-avatar" 
+                      title={user?.fullName}
+                      onClick={() => setShowProfileMenu(!showProfileMenu)}
+                      style={{ 
+                        cursor: 'pointer',
+                        backgroundImage: user?.avatarUrl ? `url(${user.avatarUrl})` : 'none',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }}
+                    >
+                      {!user?.avatarUrl && (user?.fullName?.split(' ').pop().substring(0,2).toUpperCase() || 'US')}
+                    </div>
+
+                    {showProfileMenu && (
+                      <div className="profile-dropdown">
+                        <div className="dropdown-header">
+                          👋 Hey, {user?.fullName?.split(' ').pop()}
+                        </div>
+                        <div className="dropdown-content">
+                          <button className="dropdown-item" onClick={() => { navigate("/home"); setShowProfileMenu(false); }}>
+                            <span className="item-icon">🏠</span> Home Page
+                          </button>
+                          <button className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowProfileMenu(false); }}>
+                            <span className="item-icon">👤</span> Profile Settings
+                          </button>
+                          <button className="dropdown-item logout" onClick={handleLogout}>
+                            <span className="item-icon">🚪</span> Log out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+               </div>
+             </div>
+          </header>
+
+          <section className="workshop-content">
+            <WorkflowTimeline currentStatus={timelineStatus} />
+            <Outlet />
+          </section>
+        </main>
+
+        {showProfileModal && (
+          <ProfileModal 
+            user={user} 
+            onClose={() => setShowProfileModal(false)} 
+          />
+        )}
+      </div>
+    </ChakraProvider>
+  );
+}

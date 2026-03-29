@@ -1,0 +1,16 @@
+﻿import { useLocation } from "react-router-dom";
+import HomeSharedBanner from "./HomeSharedBanner";
+import "./CustomerLayout.css";
+
+export default function CustomerLayout({ children }) {
+  const location = useLocation();
+  const isBookingPage = location.pathname.startsWith("/booking");
+
+  return (
+    <div className={`customer-layout ${isBookingPage ? "booking-mode" : ""}`}>
+      <HomeSharedBanner overlay />
+
+      <main className={`customer-main ${isBookingPage ? "booking-mode" : ""}`}>{children}</main>
+    </div>
+  );
+}

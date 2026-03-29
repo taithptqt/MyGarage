@@ -1,0 +1,12 @@
+﻿using MyGarage.Models;
+using MyGarage.Interfaces;
+
+namespace MyGarage.Services
+{
+    public class StaffService : GenericService<Staff>, IStaffService
+    {
+        public StaffService(IStaffRepository repository) : base(repository)
+        {
+        }
+    }
+}

@@ -1,0 +1,343 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  getAllServiceCategories,
+  getAllStandardServices,
+} from "../api/appointmentApi";
+import "./BookingPage.css";
+
+const STATS = [
+  { value: "4.9/5", label: "Đánh giá khách hàng" },
+  { value: "30+", label: "Kỹ thuật viên" },
+  { value: "15.000+", label: "Lượt xe mỗi năm" },
+  { value: "06", label: "Bước quy trình" },
+];
+
+const PROCESS_STEPS = [
+  {
+    step: "BƯỚC 1",
+    title: "Chọn dịch vụ",
+    desc: "Chọn nhóm dịch vụ phù hợp với nhu cầu của xe.",
+  },
+  {
+    step: "BƯỚC 2",
+    title: "Chọn chi nhánh",
+    desc: "Ưu tiên cơ sở gần bạn để di chuyển thuận tiện hơn.",
+  },
+  {
+    step: "BƯỚC 3",
+    title: "Chọn ngày giờ",
+    desc: "Xem khung giờ trống theo thời gian thực và đặt ngay.",
+  },
+  {
+    step: "BƯỚC 4",
+    title: "Xác nhận lịch",
+    desc: "Nhận thông báo xác nhận và chuẩn bị đến garage đúng giờ.",
+  },
+];
+
+const FALLBACK_SERVICES = [
+  {
+    id: "fallback-maintenance",
+    tone: "maintenance",
+    icon: "🛠️",
+    title: "Bảo dưỡng định kỳ",
+    highlight: "Khuyên dùng",
+    description: "Giữ xe vận hành ổn định với các gói bảo dưỡng theo mốc km rõ ràng.",
+    points: ["Thay dầu, lọc dầu, lọc gió", "Kiểm tra ắc quy và hệ thống điện", "Cân bằng lốp và kiểm tra phanh"],
+    meta: "Từ",
+    price: "350.000đ",
+  },
+  {
+    id: "fallback-repair",
+    tone: "repair",
+    icon: "🔧",
+    title: "Sửa chữa chuyên sâu",
+    highlight: "Chẩn đoán chuẩn",
+    description: "Đội ngũ kỹ thuật xử lý từ động cơ đến điện - điện tử theo quy trình chuẩn.",
+    points: ["Đọc lỗi bằng máy chuyên dụng", "Báo giá rõ hạng mục trước khi làm", "Bảo hành dịch vụ minh bạch"],
+    meta: "Từ",
+    price: "650.000đ",
+  },
+  {
+    id: "fallback-quick",
+    tone: "quick",
+    icon: "⚡",
+    title: "Dịch vụ nhanh",
+    highlight: "Hoàn thành sớm",
+    description: "Các hạng mục phổ biến có thể hoàn tất nhanh trong ngày, không chờ lâu.",
+    points: ["Thay nhớt nhanh", "Vệ sinh kim phun - họng ga", "Kiểm tra tổng quát 12 hạng mục"],
+    meta: "Từ",
+    price: "180.000đ",
+  },
+];
+
+const CARD_STYLES = [
+  { tone: "maintenance", icon: "🛠️", highlight: "Khuyên dùng" },
+  { tone: "repair", icon: "🔧", highlight: "Chẩn đoán chuẩn" },
+  { tone: "quick", icon: "⚡", highlight: "Hoàn thành sớm" },
+  { tone: "detailing", icon: "✨", highlight: "Đang được chọn" },
+];
+
+const HERO_IMAGE = "/images/booking/hero.jpg";
+const SHOWCASE_IMAGE_A = "/images/booking/showcase-1.jpg";
+const SHOWCASE_IMAGE_B = "/images/booking/showcase-2.jpg";
+
+function formatVnd(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function getCategoryName(category) {
+  return category?.name || category?.categoryName || "Dịch vụ";
+}
+
+export default function BookingPage() {
+  const navigate = useNavigate();
+  const [categories, setCategories] = useState([]);
+  const [services, setServices] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadServiceData() {
+      try {
+        const [categoryRes, serviceRes] = await Promise.all([
+          getAllServiceCategories(),
+          getAllStandardServices(),
+        ]);
+
+        if (!active) return;
+
+        setCategories(Array.isArray(categoryRes) ? categoryRes : []);
+        setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      } catch {
+        if (!active) return;
+        setCategories([]);
+        setServices([]);
+      }
+    }
+
+    loadServiceData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const serviceGroups = useMemo(() => {
+    const activeCategories = (categories || [])
+      .filter((cat) => cat?.isActive !== false)
+      .sort((a, b) => {
+        const orderA = Number.isFinite(a?.displayOrder) ? a.displayOrder : 9999;
+        const orderB = Number.isFinite(b?.displayOrder) ? b.displayOrder : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return getCategoryName(a).localeCompare(getCategoryName(b), "vi");
+      });
+
+    if (activeCategories.length === 0) {
+      return FALLBACK_SERVICES;
+    }
+
+    const activeServices = (services || []).filter((svc) => svc?.isActive !== false);
+
+    return activeCategories.map((cat, index) => {
+      const style = CARD_STYLES[index % CARD_STYLES.length];
+      const catServices = activeServices
+        .filter((svc) => String(svc?.categoryId) === String(cat?.id))
+        .sort((a, b) => (a?.basePrice || 0) - (b?.basePrice || 0));
+
+      const points = catServices.slice(0, 3).map((svc) => {
+        const minutes = svc?.standardMinutes ? ` (~${svc.standardMinutes} phút)` : "";
+        return `${svc?.name || "Dịch vụ"}${minutes}`;
+      });
+
+      const minPrice = catServices.length > 0 ? Math.min(...catServices.map((svc) => svc?.basePrice || 0)) : 0;
+
+      return {
+        id: cat?.id,
+        tone: style.tone,
+        icon: style.icon,
+        title: getCategoryName(cat),
+        highlight: style.highlight,
+        description:
+          cat?.description?.trim() ||
+          `Nhóm dịch vụ ${getCategoryName(cat).toLowerCase()} được MyGarage thực hiện theo quy trình chuẩn.`,
+        points: points.length > 0 ? points : ["Danh mục đang được cập nhật chi tiết dịch vụ"],
+        meta: "Từ",
+        price: minPrice > 0 ? formatVnd(minPrice) : "Liên hệ",
+      };
+    });
+  }, [categories, services]);
+
+  return (
+    <main className="bp-landing">
+      <section className="bp-mkt-hero">
+        <img
+          className="bp-mkt-hero-image"
+          src={HERO_IMAGE}
+          alt="MyGarage booking"
+        />
+        <div className="bp-mkt-hero-overlay" />
+
+        <div className="bp-mkt-hero-content">
+          <p className="bp-mkt-kicker">MYGARAGE PREMIUM WORKSHOP</p>
+          <h1>Đặt lịch bảo dưỡng xe nhanh trong 2 phút</h1>
+          <p>
+            Chọn dịch vụ, chọn chi nhánh và chọn khung giờ phù hợp. Hệ thống sẽ xác nhận lịch hẹn
+            ngay lập tức.
+          </p>
+          <div className="bp-mkt-hero-actions">
+            <button
+              type="button"
+              className="bp-mkt-btn bp-mkt-btn-old primary"
+              onClick={() => navigate("/booking/service")}
+            >
+              Đặt lịch ngay
+            </button>
+          </div>
+        </div>
+
+        <aside className="bp-mkt-hero-card">
+          <h3>Thông tin nhanh</h3>
+          <ul>
+            <li>Hỗ trợ đặt lịch 24/7 trên web</li>
+            <li>Xác nhận lịch tự động trong vài giây</li>
+            <li>Báo giá minh bạch trước khi thực hiện</li>
+            <li>Theo dõi tiến độ xe dễ dàng</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section className="bp-mkt-stats">
+        {STATS.map((item) => (
+          <article key={item.label} className="bp-mkt-stat-card">
+            <p className="bp-mkt-stat-value">{item.value}</p>
+            <p className="bp-mkt-stat-label">{item.label}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="bp-mkt-services">
+        <div className="bp-mkt-section-head">
+          <p>Dịch vụ nổi bật</p>
+          <h2>Lựa chọn gói chăm sóc phù hợp cho xe của bạn</h2>
+        </div>
+
+        <div className="bp-mkt-service-grid">
+          {serviceGroups.map((service) => (
+            <article key={service.id} className="bp-mkt-service-card" data-tone={service.tone}>
+              <div className="bp-mkt-service-head">
+                <span className="bp-mkt-service-icon" aria-hidden="true">
+                  {service.icon}
+                </span>
+                <span className="bp-mkt-service-highlight">{service.highlight}</span>
+              </div>
+              <h3>{service.title}</h3>
+              <p>{service.description}</p>
+              <ul className="bp-mkt-service-points">
+                {service.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+              <div className="bp-mkt-service-meta">
+                <span>{service.meta}</span>
+                <strong>{service.price}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="bp-mkt-showcase">
+        <article className="bp-mkt-showcase-block">
+          <div className="bp-mkt-showcase-copy">
+            <p>Quy trình chuẩn</p>
+            <h3>Minh bạch từng bước từ tiếp nhận đến bàn giao</h3>
+            <p>
+              Kỹ thuật viên ghi nhận tình trạng xe, tư vấn phương án xử lý và báo trước toàn bộ chi
+              phí để bạn chủ động quyết định.
+            </p>
+          </div>
+          <img src={SHOWCASE_IMAGE_A} alt="Quy trình tiếp nhận xe tại garage" />
+        </article>
+
+        <article className="bp-mkt-showcase-block reverse">
+          <div className="bp-mkt-showcase-copy">
+            <p>Đội ngũ kỹ thuật</p>
+            <h3>Kết hợp kinh nghiệm thực tế và thiết bị chẩn đoán hiện đại</h3>
+            <p>
+              MyGarage kiểm tra toàn diện các hệ thống quan trọng để đảm bảo xe vận hành an toàn và
+              ổn định sau mỗi lần bảo dưỡng.
+            </p>
+          </div>
+          <img src={SHOWCASE_IMAGE_B} alt="Kỹ thuật viên kiểm tra xe" />
+        </article>
+      </section>
+
+      <section className="bp-mkt-process">
+        <div className="bp-mkt-section-head left">
+          <p>4 bước đặt lịch</p>
+          <h2>Đặt nhanh, đến đúng giờ, phục vụ đúng nhu cầu</h2>
+        </div>
+
+        <div className="bp-mkt-process-grid">
+          {PROCESS_STEPS.map((item) => (
+            <article key={item.step}>
+              <span>{item.step}</span>
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="bp-mkt-final-booking" className="bp-mkt-final-cta">
+        <div className="bp-mkt-final-wrap">
+          <h2>Sẵn sàng đặt lịch cho xe của bạn?</h2>
+          <p>Chọn thời gian phù hợp và hoàn tất đặt lịch chỉ trong vài phút.</p>
+          <button
+            id="bp-mkt-book-now-btn"
+            type="button"
+            className="bp-mkt-btn primary large"
+            onClick={() => navigate("/booking/service")}
+          >
+            Đặt lịch ngay
+          </button>
+        </div>
+      </section>
+
+      <footer className="bp-mkt-footer">
+        <div className="bp-mkt-footer-columns">
+          <div>
+            <h3>MY GARAGE</h3>
+            <p>Trung tâm dịch vụ ô tô chất lượng cao</p>
+            <p>Hotline: 1900 6868</p>
+          </div>
+
+          <div>
+            <h4>Nhận tư vấn nhanh</h4>
+            <div className="bp-mkt-footer-input">
+              <input type="text" placeholder="NHẬP SỐ ĐIỆN THOẠI" aria-label="Số điện thoại" />
+              <button type="button" aria-label="Gửi">
+                →
+              </button>
+            </div>
+            <p className="bp-mkt-hours-title">Giờ hoạt động: 08:00 - 20:00 (T2 - T7)</p>
+          </div>
+        </div>
+
+        <div className="bp-mkt-footer-bottom">
+          <span>© 2026 MYGARAGE. ALL RIGHTS RESERVED.</span>
+          <div>
+            <a href="/home">Trang chủ</a>
+            <a href="/booking">Đặt lịch</a>
+            <a href="/my-appointments">Lịch hẹn của tôi</a>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+}

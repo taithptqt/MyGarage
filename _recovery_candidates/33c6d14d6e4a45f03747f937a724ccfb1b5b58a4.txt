@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace MyGarage.Models;
+
+public partial class VehicleInsurance
+{
+    public long Id { get; set; }
+
+    public long VehicleId { get; set; }
+
+    public long InsuranceCompanyId { get; set; }
+
+    public string? PolicyNumber { get; set; }
+
+    public DateOnly ExpiryDate { get; set; }
+}
