@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { getUser, isAuthenticated } from "../../../app/authState";
 import { createPayosOrder, getPayments } from "../api/payosApi";
 
@@ -7,6 +8,7 @@ function formatVnd(amount) {
 }
 
 export default function PayosCheckoutPage() {
+  const location = useLocation();
   const user = getUser();
   const [amount, setAmount] = useState(10000);
   const [description, setDescription] = useState("Thanh toan MyGarage");
@@ -15,10 +17,24 @@ export default function PayosCheckoutPage() {
   const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [autoPaid, setAutoPaid] = useState(false);
 
   useEffect(() => {
     loadHistory();
   }, []);
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const amountQ = Number(q.get("amount"));
+    const descriptionQ = q.get("description");
+
+    if (Number.isFinite(amountQ) && amountQ > 0) {
+      setAmount(Math.floor(amountQ));
+    }
+    if (descriptionQ) {
+      setDescription(descriptionQ.slice(0, 25));
+    }
+  }, [location.search]);
 
   const validAmount = useMemo(() => {
     const n = Number(amount);
@@ -61,17 +77,22 @@ export default function PayosCheckoutPage() {
 
     setLoading(true);
     try {
+      const q = new URLSearchParams(location.search);
+      const retailOrderIdRaw = q.get("retailOrderId");
+      const retailOrderId = retailOrderIdRaw ? Number(retailOrderIdRaw) : null;
+
       const payload = {
         totalAmount: validAmount,
         description: (description || "Thanh toan MyGarage").trim(),
         payerType: "CUSTOMER",
         payerId: user?.id || null,
+        retailOrderId: Number.isFinite(retailOrderId) ? retailOrderId : null,
         paymentType: "PAYMENT",
         returnUrl: "https://localhost:7009/payment/success",
         cancelUrl: "https://localhost:7009/payment/cancel",
         items: [
           {
-            name: "Dich vu MyGarage",
+            name: Number.isFinite(retailOrderId) ? "Don phu tung MyGarage" : "Dich vu MyGarage",
             quantity: 1,
             price: validAmount
           }
@@ -103,6 +124,15 @@ export default function PayosCheckoutPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const autoPay = q.get("autoPay");
+    if (autoPay === "1" && !autoPaid && validAmount >= 1000) {
+      setAutoPaid(true);
+      handlePay();
+    }
+  }, [location.search, autoPaid, validAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>

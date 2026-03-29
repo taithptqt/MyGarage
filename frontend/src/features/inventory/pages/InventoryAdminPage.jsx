@@ -1,4 +1,4 @@
-﻿
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { inventoryApi } from "../api/inventoryApi";
 import { Modal } from "../../admin/components/AdminModals";
@@ -1972,6 +1972,64 @@ export default function InventoryAdminPage({ section }) {
 
           {section === "reports" && reports ? (
             <>
+              <StatCards
+                items={[
+                  { label: "Doanh thu ban le", value: toNumber(reports.retailSummary?.totalRevenue).toLocaleString() },
+                  { label: "So don ban le", value: toNumber(reports.retailSummary?.orderCount).toLocaleString() },
+                  { label: "Gia tri don TB", value: toNumber(reports.retailSummary?.averageOrderValue).toLocaleString() }
+                ]}
+              />
+
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Chi nhánh</th>
+                      <th>Doanh thu bán lẻ</th>
+                      <th>Số đơn</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(reports.retailRevenueByBranch || []).length === 0 ? (
+                      <NoDataRow colSpan={3} message="Chưa có dữ liệu doanh thu bán lẻ theo chi nhánh." />
+                    ) : (
+                      (reports.retailRevenueByBranch || []).map((r) => (
+                        <tr key={r.branchId}>
+                          <td>{r.branchName}</td>
+                          <td>{toNumber(r.revenue).toLocaleString()}</td>
+                          <td>{toNumber(r.orderCount).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Top phụ tùng bán chạy</th>
+                      <th>Số lượng</th>
+                      <th>Doanh thu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(reports.retailTopProducts || []).length === 0 ? (
+                      <NoDataRow colSpan={3} message="Chưa có dữ liệu top phụ tùng bán chạy." />
+                    ) : (
+                      (reports.retailTopProducts || []).map((r) => (
+                        <tr key={r.productId}>
+                          <td>{r.sku} - {r.productName}</td>
+                          <td>{toNumber(r.totalQty).toLocaleString()}</td>
+                          <td>{toNumber(r.totalRevenue).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
               <div className="table-wrapper">
                 <table className="admin-table">
                   <thead>

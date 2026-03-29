@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { isAuthenticated } from "./authState";
 import AuthPage from "../features/auth/pages/AuthPage";
 import HomePage from "../features/home/pages/HomePage";
 import AdminPage from "../features/admin/pages/AdminPage";
@@ -9,6 +10,8 @@ import MyAppointmentsPage from "../features/appointments/pages/MyAppointmentsPag
 import PayosCheckoutPage from "../features/payment/pages/PayosCheckoutPage";
 import PaymentSuccessPage from "../features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "../features/payment/pages/PaymentCancelPage";
+import PartsSalesPage from "../features/retail/pages/PartsSalesPage";
+import MyRetailOrdersPage from "../features/retail/pages/MyRetailOrdersPage";
 
 function parseSavedUser() {
   const userStr = localStorage.getItem("mygarage_user");
@@ -25,6 +28,10 @@ function resolveStaffHome(user) {
 }
 
 function CustomerRoute({ children }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+
   const user = parseSavedUser();
   if (user?.role === "Staff") {
     return <Navigate to={resolveStaffHome(user)} replace />;
@@ -39,6 +46,8 @@ function App() {
       <Route path="/login" element={<AuthPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/booking" element={<CustomerRoute><BookingPage /></CustomerRoute>} />
+      <Route path="/parts-shop" element={<CustomerRoute><PartsSalesPage /></CustomerRoute>} />
+      <Route path="/my-retail-orders" element={<CustomerRoute><MyRetailOrdersPage /></CustomerRoute>} />
       <Route path="/my-appointments" element={<CustomerRoute><MyAppointmentsPage /></CustomerRoute>} />
       <Route path="/payment" element={<CustomerRoute><PayosCheckoutPage /></CustomerRoute>} />
       <Route path="/payment/success" element={<CustomerRoute><PaymentSuccessPage /></CustomerRoute>} />

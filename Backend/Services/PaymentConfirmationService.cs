@@ -79,6 +79,21 @@ public class PaymentConfirmationService
             }
         }
 
+        if (payment.RetailOrderId.HasValue)
+        {
+            var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == payment.RetailOrderId.Value);
+            if (retailOrder is not null)
+            {
+                var paidAmount = await _db.Payments
+                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == "COMPLETED")
+                    .SumAsync(x => (decimal?)x.Amount) ?? 0m;
+
+                // Retail order status follows existing DB check constraint.
+                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? "CONFIRMED" : "DRAFT";
+                retailOrder.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         await _db.SaveChangesAsync();
     }
 

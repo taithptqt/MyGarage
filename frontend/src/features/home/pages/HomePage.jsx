@@ -1,4 +1,4 @@
-﻿import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { clearAuth, isAuthenticated } from "../../../app/authState";
 import "./HomePage.css";
 
@@ -67,6 +67,12 @@ function HomePage() {
               <button type="button">ENGLISH</button>
             </div>
             <div className="utility-right">
+              <button type="button" className="utility-cta" onClick={() => navigate("/booking")}>
+                DAT LICH
+              </button>
+              <button type="button" className="utility-cta" onClick={() => navigate("/parts-shop")}>
+                MUA PHU TUNG
+              </button>
               <button type="button">FAQ</button>
               <button type="button">JOB</button>
               <button type="button" aria-label="Search">
@@ -76,9 +82,9 @@ function HomePage() {
           </div>
           <div className="main-nav">
             <div className="main-nav-side">
-              <a href="#">OM MY GARAGE</a>
-              <a href="#">STORAGE</a>
-              <a href="#">SALES</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); navigate("/booking"); }}>DAT LICH</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); navigate("/parts-shop"); }}>MUA PHU TUNG</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); navigate("/my-appointments"); }}>LICH CUA TOI</a>
             </div>
             <div className="logo-center" role="img" aria-label="MY GARAGE">
               <span>MY</span>
@@ -108,6 +114,9 @@ function HomePage() {
         </div>
 
         <div className="hero-scroll">
+          <button type="button" className="hero-quick-btn" onClick={() => navigate("/booking")}>
+            DAT LICH NGAY
+          </button>
           <span>SCROLL</span>
           <div className="scroll-line" />
           <div className="scroll-dot" />

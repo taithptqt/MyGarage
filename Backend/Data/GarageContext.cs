@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
@@ -1737,10 +1737,9 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.CustomerNotes).HasMaxLength(500);
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.GuestName).HasMaxLength(100);
-            entity.Property(e => e.GuestPhone)
-                .HasMaxLength(20)
-                .IsUnicode(false);
+            // Current DB schema does not have GuestName/GuestPhone on RetailOrders.
+            entity.Ignore(e => e.GuestName);
+            entity.Ignore(e => e.GuestPhone);
             entity.Property(e => e.OrderCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);

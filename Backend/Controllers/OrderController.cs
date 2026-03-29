@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Data.SqlClient;
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Services;
@@ -22,6 +24,34 @@ public class OrderController(
     private readonly PayOSClient _client = client;
     private readonly GarageContext _db = db;
     private readonly PaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
+
+    private static bool IsInflowRequiresInvoiceConstraintViolation(Exception ex)
+    {
+        var cursor = ex;
+        while (cursor is not null)
+        {
+            if (cursor is SqlException sql &&
+                sql.Message.Contains("CHK_Payments_InflowRequiresInvoice", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            cursor = cursor.InnerException!;
+        }
+        return false;
+    }
+
+    private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
+    {
+        var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == retailOrderId);
+        if (retailOrder is null)
+        {
+            return;
+        }
+
+        retailOrder.Status = isPaid ? "CONFIRMED" : "DRAFT";
+        retailOrder.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+    }
 
     private static string NormalizePaymentType(string? paymentType)
     {
@@ -98,6 +128,7 @@ public class OrderController(
         return null;
     }
 
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<ActionResult<Order>> Get(int id)
     {
@@ -157,6 +188,10 @@ public class OrderController(
                 var amountPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
                 await _paymentConfirmationService.ApplyOutcomeAsync(payment, amountPaid, targetStatus);
             }
+            else if (order.RetailOrderId.HasValue)
+            {
+                await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, order.AmountRemaining <= 0);
+            }
 
             return Ok(order);
         }
@@ -167,6 +202,7 @@ public class OrderController(
 
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<Order>> CreatePayment(OrderCreateRequest request)
     {
@@ -223,6 +259,7 @@ public class OrderController(
             {
                 Id = 0, // Will be set by service
                 OrderCode = orderCode,
+                RetailOrderId = request.RetailOrderId,
                 TotalAmount = request.TotalAmount,
                 Description = payOsDescription,
                 PaymentLinkId = paymentResponse.PaymentLinkId,
@@ -273,9 +310,18 @@ public class OrderController(
                 UpdatedAt = DateTime.UtcNow
             };
 
-            _db.Payments.Add(payment);
-            await _db.SaveChangesAsync();
-            order.PaymentRecordId = payment.Id;
+            try
+            {
+                _db.Payments.Add(payment);
+                await _db.SaveChangesAsync();
+                order.PaymentRecordId = payment.Id;
+            }
+            catch (DbUpdateException ex) when (request.RetailOrderId.HasValue && IsInflowRequiresInvoiceConstraintViolation(ex))
+            {
+                // DB currently enforces invoice-only inflow payments.
+                // Keep retail checkout/payment flow working by storing PayOS order without Payments row.
+                order.PaymentRecordId = null;
+            }
 
             OrderService.CreateOrder(order);
             return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
@@ -286,6 +332,7 @@ public class OrderController(
         }
     }
 
+    [Authorize]
     [HttpPost("{orderId}/cancel")]
     public async Task<ActionResult<PaymentLink>> CancelPayment(int orderId, string cancellationReason)
     {
@@ -339,6 +386,10 @@ public class OrderController(
             {
                 await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, "CANCELED");
             }
+            else if (order.RetailOrderId.HasValue)
+            {
+                await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, false);
+            }
 
             return Ok(paymentLink);
         }
@@ -348,6 +399,7 @@ public class OrderController(
         }
     }
 
+    [Authorize]
     [HttpGet("{orderId}/invoices")]
     public async Task<ActionResult<OrderInvoicesInfo>> GetInvoices(int orderId)
     {
@@ -391,6 +443,7 @@ public class OrderController(
         }
     }
 
+    [Authorize]
     [HttpGet("{orderId}/invoices/{invoiceId}/download")]
     public async Task<ActionResult> DownloadInvoice(int orderId, string invoiceId)
     {

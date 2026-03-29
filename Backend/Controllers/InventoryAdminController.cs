@@ -1,5 +1,6 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
@@ -8,6 +9,7 @@ namespace MyGarage.Controllers;
 
 [Route("api/inventory-admin")]
 [ApiController]
+[Authorize(Roles = "Staff")]
 public class InventoryAdminController : ControllerBase
 {
     private readonly GarageContext _context;
@@ -475,12 +477,62 @@ public class InventoryAdminController : ControllerBase
             .Take(20)
             .ToList();
 
+        var retailOrders = await _context.RetailOrders
+            .AsNoTracking()
+            .Include(r => r.Branch)
+            .ToListAsync();
+
+        var retailCompletedStatuses = new[] { "CONFIRMED", "SHIPPING", "DELIVERED", "COMPLETED" };
+        var retailOrdersForRevenue = retailOrders
+            .Where(r => r.Status != null && retailCompletedStatuses.Contains(r.Status.ToUpper()))
+            .ToList();
+
+        var retailRevenueTotal = retailOrdersForRevenue.Sum(r => r.FinalAmount);
+        var retailOrderCount = retailOrders.Count;
+        var retailAov = retailOrdersForRevenue.Count == 0 ? 0 : retailRevenueTotal / retailOrdersForRevenue.Count;
+
+        var retailRevenueByBranch = retailOrdersForRevenue
+            .GroupBy(r => new { r.BranchId, BranchName = r.Branch != null ? r.Branch.Name : "N/A" })
+            .Select(g => new
+            {
+                branchId = g.Key.BranchId,
+                branchName = g.Key.BranchName,
+                revenue = g.Sum(x => x.FinalAmount),
+                orderCount = g.Count()
+            })
+            .OrderByDescending(x => x.revenue)
+            .ToList();
+
+        var retailTopProducts = await _context.RetailOrderItems
+            .AsNoTracking()
+            .Include(x => x.Product)
+            .GroupBy(x => new { x.ProductId, Sku = x.Product.Sku, Name = x.Product.Name })
+            .Select(g => new
+            {
+                productId = g.Key.ProductId,
+                sku = g.Key.Sku,
+                productName = g.Key.Name,
+                totalQty = g.Sum(x => x.Quantity),
+                totalRevenue = g.Sum(x => x.FinalAmount)
+            })
+            .OrderByDescending(x => x.totalQty)
+            .Take(20)
+            .ToListAsync();
+
         return Ok(new
         {
             stockByBranch,
             nearOutOfStock = inventoryRows.Where(i => i.MinStockLevel.HasValue && i.Quantity <= i.MinStockLevel).Take(50),
             defectiveStocks = inventoryRows.Where(i => i.Warehouse.Type != null && i.Warehouse.Type.ToUpper().Contains("DEFECTIVE")),
-            topOutbound
+            topOutbound,
+            retailSummary = new
+            {
+                totalRevenue = retailRevenueTotal,
+                orderCount = retailOrderCount,
+                averageOrderValue = retailAov
+            },
+            retailRevenueByBranch,
+            retailTopProducts
         });
     }
 
