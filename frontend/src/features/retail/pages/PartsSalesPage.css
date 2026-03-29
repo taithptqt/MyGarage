@@ -1,0 +1,320 @@
+.parts-shop {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+/* Motion tokens nho cho trang phu tung */
+:root {
+  --parts-motion-dur-fast: 160ms;
+  --parts-motion-dur-base: 260ms;
+  --parts-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.parts-shop-header {
+  margin-bottom: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8);
+  color: #fff;
+  transform: translateY(8px);
+  opacity: 0;
+  animation: parts-fade-up var(--parts-motion-dur-base) var(--parts-motion-ease) forwards;
+}
+
+.parts-shop-header h1 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.parts-shop-header p {
+  margin: 6px 0 0;
+  color: #dbeafe;
+}
+
+.parts-shop-layout {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.parts-shop-card {
+  border: 1px solid #dbe5f2;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: parts-fade-up var(--parts-motion-dur-base) var(--parts-motion-ease) forwards;
+}
+
+.parts-shop-alert {
+  margin-bottom: 10px;
+}
+
+.parts-shop-alert-error {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.parts-shop-alert-success {
+  color: #166534;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.parts-shop-product-panel {
+  min-height: 650px;
+  animation-delay: 80ms;
+}
+
+.parts-shop-filter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.parts-shop-filter-right {
+  min-width: 220px;
+}
+
+.parts-shop-filter input,
+.parts-shop-filter select,
+.parts-shop-order-form select,
+.parts-shop-order-form input,
+.parts-shop-order-form textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 11px;
+  outline: none;
+}
+
+.parts-shop-filter input:focus,
+.parts-shop-filter select:focus,
+.parts-shop-order-form select:focus,
+.parts-shop-order-form input:focus,
+.parts-shop-order-form textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.parts-shop-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.parts-shop-pill {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #334155;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.parts-shop-pill.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.parts-shop-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.parts-shop-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px;
+  transition:
+    transform var(--parts-motion-dur-base) var(--parts-motion-ease),
+    box-shadow var(--parts-motion-dur-base) var(--parts-motion-ease),
+    border-color var(--parts-motion-dur-base) var(--parts-motion-ease),
+    opacity var(--parts-motion-dur-base) var(--parts-motion-ease);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: parts-fade-up var(--parts-motion-dur-base) var(--parts-motion-ease) forwards;
+}
+
+.parts-shop-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+  border-color: #bfdbfe;
+}
+
+.parts-shop-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.parts-shop-item-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.parts-shop-item h4 {
+  margin: 0 0 4px;
+}
+
+.parts-shop-meta {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.parts-shop-price {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.parts-shop-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.parts-shop-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.parts-shop-qty input {
+  width: 56px;
+  text-align: center;
+  border: none;
+  outline: none;
+}
+
+.parts-shop-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 11px;
+  cursor: pointer;
+  transition:
+    opacity var(--parts-motion-dur-fast) ease-out,
+    transform var(--parts-motion-dur-fast) ease-out,
+    box-shadow var(--parts-motion-dur-fast) ease-out;
+}
+
+.parts-shop-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.14);
+}
+
+.parts-shop-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.parts-shop-btn-ghost {
+  background: #f1f5f9;
+}
+
+.parts-shop-cart-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.parts-shop-cart-name {
+  font-weight: 600;
+}
+
+.parts-shop-cart-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.parts-shop-order-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.parts-shop-summary {
+  margin-top: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  transition: background-color var(--parts-motion-dur-fast) ease-out, border-color var(--parts-motion-dur-fast) ease-out;
+}
+
+.parts-shop-total {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.parts-shop-empty {
+  color: #64748b;
+  padding: 8px 0;
+}
+
+.parts-shop-sidebar {
+  position: sticky;
+  top: 88px;
+  align-self: start;
+}
+
+/* Keyframes cho fade-up chung */
+@keyframes parts-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 980px) {
+  .parts-shop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .parts-shop-list {
+    grid-template-columns: 1fr;
+  }
+
+  .parts-shop-sidebar {
+    position: static;
+  }
+
+  .parts-shop-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .parts-shop-filter-right {
+    min-width: 0;
+  }
+}
+

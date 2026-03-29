@@ -23,8 +23,14 @@ export default function CustomerLayout({ children }) {
             <NavLink to="/booking" className={({ isActive }) => isActive ? "active" : ""}>
               Dat lich
             </NavLink>
+            <NavLink to="/parts-shop" className={({ isActive }) => isActive ? "active" : ""}>
+              Mua phu tung
+            </NavLink>
             <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
               Lich cua toi
+            </NavLink>
+            <NavLink to="/my-retail-orders" className={({ isActive }) => isActive ? "active" : ""}>
+              Don phu tung
             </NavLink>
             <NavLink to="/payment" className={({ isActive }) => isActive ? "active" : ""}>
               Thanh toan

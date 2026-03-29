@@ -10,7 +10,7 @@ export async function createPayosOrder(payload) {
 
 export async function getPayments() {
   return requestSafe({
-    url: "/api/Payment",
+    url: "/api/Payment/mine",
     method: "GET"
   });
 }

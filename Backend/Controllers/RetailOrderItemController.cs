@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
 using AutoMapper;
@@ -9,6 +10,7 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
+    [Authorize(Roles = "Staff")]
     [Route("api/[controller]")]
     [ApiController]
     public class RetailOrderItemController : ControllerBase

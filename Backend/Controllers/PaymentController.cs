@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
@@ -13,6 +15,7 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
@@ -26,6 +29,7 @@ namespace MyGarage.Controllers
             _db = db;
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PaymentResponseDto>>> GetAll()
         {
@@ -42,8 +46,32 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
+            if (!IsCurrentUserStaff() && !IsOwnedByCurrentUser(item))
+            {
+                return Forbid();
+            }
             var dto = _mapper.Map<PaymentResponseDto>(item);
             return Ok(dto);
+        }
+
+        [Authorize(Roles = "Customer")]
+        [HttpGet("mine")]
+        public async Task<ActionResult<IEnumerable<PaymentResponseDto>>> GetMine()
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+            {
+                return Unauthorized();
+            }
+
+            var items = await _db.Payments
+                .AsNoTracking()
+                .Where(p => p.PayerType == "CUSTOMER" && p.PayerId == userId.Value)
+                .OrderByDescending(p => p.CreatedAt)
+                .ToListAsync();
+            var dtos = _mapper.Map<IEnumerable<PaymentResponseDto>>(items);
+            return Ok(dtos);
         }
 
         [HttpGet("{id}/status")]
@@ -53,6 +81,11 @@ namespace MyGarage.Controllers
             if (payment == null)
             {
                 return NotFound();
+            }
+
+            if (!IsCurrentUserStaff() && !IsOwnedByCurrentUser(payment))
+            {
+                return Forbid();
             }
 
             return Ok(new
@@ -68,6 +101,7 @@ namespace MyGarage.Controllers
             });
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpPost]
         public async Task<ActionResult<PaymentResponseDto>> Create([FromBody] PaymentCreateDto itemDto)
         {
@@ -77,6 +111,7 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpPut("{id}")]
         public async Task<ActionResult<PaymentResponseDto>> Update(long id, [FromBody] PaymentUpdateDto itemDto)
         {
@@ -97,6 +132,7 @@ namespace MyGarage.Controllers
             return Ok(responseDto);
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
@@ -106,6 +142,27 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
             return NoContent();
+        }
+
+        private long? GetCurrentUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (claim == null) return null;
+            return long.TryParse(claim.Value, out var id) ? id : null;
+        }
+
+        private bool IsCurrentUserStaff()
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value;
+            return string.Equals(role, "Staff", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsOwnedByCurrentUser(Payment payment)
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue) return false;
+            return string.Equals(payment.PayerType, "CUSTOMER", System.StringComparison.OrdinalIgnoreCase)
+                && payment.PayerId == userId.Value;
         }
     }
 }

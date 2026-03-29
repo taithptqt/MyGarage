@@ -8,6 +8,7 @@ public class Order
 {
     public int Id { get; set; }
     public long? PaymentRecordId { get; set; }
+    public long? RetailOrderId { get; set; }
 
     public long OrderCode { get; set; }
 

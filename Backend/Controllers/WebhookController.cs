@@ -20,6 +20,19 @@ public class WebhookController(
     private readonly GarageContext _db = db;
     private readonly PaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
 
+    private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
+    {
+        var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == retailOrderId);
+        if (retailOrder is null)
+        {
+            return;
+        }
+
+        retailOrder.Status = isPaid ? "CONFIRMED" : "DRAFT";
+        retailOrder.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+    }
+
     private static DateTimeOffset ParseWebhookDateTime(string dateTimeString)
     {
         // Try to parse the standard ISO format first (2025-10-10T11:13:30+07:00)
@@ -108,6 +121,10 @@ public class WebhookController(
                 {
                     var targetStatus = order.AmountRemaining > 0 ? "PENDING" : "COMPLETED";
                     await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, targetStatus);
+                }
+                else if (order.RetailOrderId.HasValue)
+                {
+                    await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, order.AmountRemaining <= 0);
                 }
             }
 
