@@ -202,6 +202,7 @@ builder.Services.AddScoped<IPaymentMethodService, PaymentMethodService>();
 
 builder.Services.AddScoped<IProductImageRepository, ProductImageRepository>();
 builder.Services.AddScoped<IProductImageService, ProductImageService>();
+builder.Services.AddScoped<ICloudStorageService, AzureBlobStorageService>();
 
 builder.Services.AddScoped<IPurchaseOrderRepository, PurchaseOrderRepository>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();

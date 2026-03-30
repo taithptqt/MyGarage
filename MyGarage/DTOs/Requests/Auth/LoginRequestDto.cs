@@ -3,10 +3,9 @@ namespace MyGarage.DTOs.Requests.Auth
 {
     public class LoginRequestDto
     {
-        public string? Identifier { get; set; }
-
-        // Backward compatibility for old clients still sending `email`
+        public string Identifier { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public string? Phone { get; set; }
 
         [Required]
         [MinLength(6)]

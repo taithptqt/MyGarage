@@ -1,4 +1,4 @@
-import { request } from "../../../app/apiClient";
+﻿import { request } from "../../../app/apiClient";
 
 export const inventoryApi = {
   getPartCategories: () => request({ url: "/api/Category", method: "GET" }),

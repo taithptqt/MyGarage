@@ -4,8 +4,6 @@ import {
   Button,
   Flex,
   Icon,
-  Image,
-  Link,
   Menu,
   MenuButton,
   MenuItem,
@@ -21,25 +19,44 @@ import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import PropTypes from 'prop-types';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { clearAuth } from '../../../app/authState';
-// Assets
-import navImage from 'assets/img/layout/Navbar.png';
-import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
+import { useAuth } from '../../../context/AuthContext';
+import { useBranch } from '../../../context/BranchContext';
+import { MdNotificationsNone } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
 import routes from 'routes';
-import { useAuth } from '../../../context/AuthContext';
-import { API_BASE_URL } from '../../../app/apiClient';
+
+function getDisplayName(user) {
+  if (!user) return 'User';
+  const fullName = user.fullName?.trim();
+  if (fullName) return fullName;
+  const email = user.email?.trim();
+  if (email) return email.split('@')[0];
+  return 'User';
+}
+
+function getAvatarInitials(displayName) {
+  const parts = String(displayName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return 'U';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
 
 export default function HeaderLinks(props) {
   const { secondary } = props;
   const { colorMode, toggleColorMode } = useColorMode();
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { branches, selectedBranch, selectBranch } = useBranch();
+  const displayName = getDisplayName(user);
+  const avatarInitials = getAvatarInitials(displayName);
+  const greetingName =
+    displayName.length > 24 ? `${displayName.slice(0, 24)}...` : displayName;
 
-  const handleLogout = () => {
-    logout();
-  };
   // Chakra Color Mode
   const navbarIcon = useColorModeValue('gray.400', 'white');
   let menuBg = useColorModeValue('white', 'navy.800');
@@ -53,7 +70,6 @@ export default function HeaderLinks(props) {
     '14px 17px 40px 4px rgba(112, 144, 176, 0.18)',
     '14px 17px 40px 4px rgba(112, 144, 176, 0.06)',
   );
-  const borderButton = useColorModeValue('secondaryGray.500', 'whiteAlpha.200');
   return (
     <Flex
       w={{ sm: '100%', md: 'auto' }}
@@ -111,6 +127,38 @@ export default function HeaderLinks(props) {
       </Flex>
       <SidebarResponsive routes={routes} />
       <Menu>
+        <MenuButton
+          as={Button}
+          size="sm"
+          variant="outline"
+          borderRadius="20px"
+          me="10px"
+          borderColor={borderColor}
+        >
+          {selectedBranch?.name || "Chọn chi nhánh"}
+        </MenuButton>
+        <MenuList
+          boxShadow={shadow}
+          border="none"
+          borderRadius="14px"
+          p="6px"
+          minW="220px"
+        >
+          {branches.map((branch) => (
+            <MenuItem
+              key={branch.id}
+              borderRadius="10px"
+              bg={selectedBranch?.id === branch.id ? "gray.100" : "transparent"}
+              onClick={() => selectBranch(branch.id)}
+            >
+              <Text fontSize="sm" fontWeight={selectedBranch?.id === branch.id ? "700" : "500"}>
+                {branch.name || `Branch #${branch.id}`}
+              </Text>
+            </MenuItem>
+          ))}
+        </MenuList>
+      </Menu>
+      <Menu>
         <MenuButton p="0px">
           <Icon
             mt="6px"
@@ -154,39 +202,17 @@ export default function HeaderLinks(props) {
               borderRadius="8px"
               mb="10px"
             >
-              <ItemContent info="Chào mừng bạn đến với MyGarage!" />
+              <ItemContent info="Horizon UI Dashboard PRO" />
             </MenuItem>
-          </Flex>
-        </MenuList>
-      </Menu>
-
-      <Menu>
-        <MenuButton p="0px">
-          <Icon
-            mt="6px"
-            as={MdInfoOutline}
-            color={navbarIcon}
-            w="18px"
-            h="18px"
-            me="10px"
-          />
-        </MenuButton>
-        <MenuList
-          boxShadow={shadow}
-          p="20px"
-          me={{ base: '30px', md: 'unset' }}
-          borderRadius="20px"
-          bg={menuBg}
-          border="none"
-          mt="22px"
-          minW={{ base: 'unset' }}
-          maxW={{ base: '360px', md: 'unset' }}
-        >
-          <Image src={navImage} borderRadius="16px" mb="28px" />
-          <Flex flexDirection="column">
-            <Text fontSize="sm" color={textColor}>
-              Hệ thống Quản lý Garage Thông minh v2.0. Chúc bạn một ngày làm việc hiệu quả!
-            </Text>
+            <MenuItem
+              _hover={{ bg: 'none' }}
+              _focus={{ bg: 'none' }}
+              px="0"
+              borderRadius="8px"
+              mb="10px"
+            >
+              <ItemContent info="Horizon Design System Free" />
+            </MenuItem>
           </Flex>
         </MenuList>
       </Menu>
@@ -214,15 +240,14 @@ export default function HeaderLinks(props) {
           <Avatar
             _hover={{ cursor: 'pointer' }}
             color="white"
-            name={user?.fullName || "User"}
+            name={displayName}
             bg="#11047A"
             size="sm"
             w="40px"
             h="40px"
-            src={user?.avatarUrl ? (user.avatarUrl.startsWith('http') || user.avatarUrl.startsWith('/') || user.avatarUrl.startsWith('blob:')
-                ? user.avatarUrl 
-                : `${API_BASE_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`) : null}
-          />
+          >
+            {avatarInitials}
+          </Avatar>
         </MenuButton>
         <MenuList
           boxShadow={shadow}
@@ -244,7 +269,7 @@ export default function HeaderLinks(props) {
               fontWeight="700"
               color={textColor}
             >
-              👋&nbsp; Hey, {user?.fullName?.split(' ').pop() || "User"}
+              Xin chào, {greetingName}
             </Text>
           </Flex>
           <Flex flexDirection="column" p="10px">
@@ -253,16 +278,18 @@ export default function HeaderLinks(props) {
               _focus={{ bg: 'none' }}
               borderRadius="8px"
               px="14px"
+              onClick={() => navigate('/admin/profile')}
             >
-              <Text fontSize="sm">Profile Settings</Text>
+              <Text fontSize="sm">Hồ sơ của tôi</Text>
             </MenuItem>
             <MenuItem
               _hover={{ bg: 'none' }}
               _focus={{ bg: 'none' }}
               borderRadius="8px"
               px="14px"
+              onClick={() => navigate('/home')}
             >
-              <Text fontSize="sm">Newsletter Settings</Text>
+              <Text fontSize="sm">Về trang chủ</Text>
             </MenuItem>
             <MenuItem
               _hover={{ bg: 'none' }}
@@ -270,9 +297,9 @@ export default function HeaderLinks(props) {
               color="red.400"
               borderRadius="8px"
               px="14px"
-              onClick={handleLogout}
+              onClick={logout}
             >
-              <Text fontSize="sm">Log out</Text>
+              <Text fontSize="sm">Đăng xuất</Text>
             </MenuItem>
           </Flex>
         </MenuList>

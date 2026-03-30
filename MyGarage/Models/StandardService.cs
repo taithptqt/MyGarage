@@ -1,11 +1,9 @@
-using MyGarage.Interfaces;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class StandardService : IAuditEntity
+public partial class StandardService
 {
     public long Id { get; set; }
 

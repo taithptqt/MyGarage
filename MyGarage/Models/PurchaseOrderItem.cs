@@ -20,4 +20,6 @@ public partial class PurchaseOrderItem
     public virtual Product Product { get; set; } = null!;
 
     public virtual PurchaseOrder PurchaseOrder { get; set; } = null!;
+
+    public virtual ICollection<SupplierInvoiceDetail> SupplierInvoiceDetails { get; set; } = new List<SupplierInvoiceDetail>();
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -7,24 +7,33 @@ import {
 } from "../api/appointmentApi";
 
 const STATUS_LABELS = {
-  PENDING: "Chờ xác nhận",
-  CONFIRMED: "Đã xác nhận",
-  ARRIVED: "Đã đến",
-  CANCELED: "Đã hủy",
-  NO_SHOW: "Không đến",
+  PENDING: "Chá» xÃ¡c nháº­n",
+  CONFIRMED: "ÄÃ£ xÃ¡c nháº­n",
+  ARRIVED: "ÄÃ£ Ä‘áº¿n",
+  CANCELED: "ÄÃ£ há»§y",
+  NO_SHOW: "KhÃ´ng Ä‘áº¿n",
 };
 
 const FILTERS = [
-  { key: "", label: "Tất cả" },
-  { key: "PENDING", label: "Chờ xác nhận" },
-  { key: "CONFIRMED", label: "Đã xác nhận" },
-  { key: "ARRIVED", label: "Đã đến" },
-  { key: "CANCELED", label: "Đã hủy" },
+  { key: "", label: "Táº¥t cáº£" },
+  { key: "PENDING", label: "Chá» xÃ¡c nháº­n" },
+  { key: "CONFIRMED", label: "ÄÃ£ xÃ¡c nháº­n" },
+  { key: "ARRIVED", label: "ÄÃ£ Ä‘áº¿n" },
+  { key: "CANCELED", label: "ÄÃ£ há»§y" },
 ];
 
 function formatTime(t) {
   if (!t) return "";
-  return t.substring(0, 5);
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDate(t) {
+  if (!t) return "";
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("vi-VN");
 }
 
 export default function MyAppointmentsPage() {
@@ -75,11 +84,11 @@ export default function MyAppointmentsPage() {
     setCancelling(cancelTarget.id);
     setError("");
     try {
-      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng tự hủy");
+      await cancelAppointment(cancelTarget.id, cancelReason || "KhÃ¡ch hÃ ng tá»± há»§y");
       closeCancelPopup();
       await loadAppointments();
     } catch (err) {
-      setError(err.message || "Hủy thất bại.");
+      setError(err.message || "Há»§y tháº¥t báº¡i.");
     } finally {
       setCancelling(null);
     }
@@ -92,7 +101,7 @@ export default function MyAppointmentsPage() {
   if (loading) {
     return (
       <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Lịch hẹn của tôi</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Lá»‹ch háº¹n cá»§a tÃ´i</h1>
         <div className="spinner-container"><div className="spinner" /></div>
       </div>
     );
@@ -101,7 +110,7 @@ export default function MyAppointmentsPage() {
   return (
     <div>
       <div className="appointments-header">
-        <h1>Lịch hẹn của tôi</h1>
+        <h1>Lá»‹ch háº¹n cá»§a tÃ´i</h1>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div className="filter-tabs">
             {FILTERS.map((f) => (
@@ -119,7 +128,7 @@ export default function MyAppointmentsPage() {
             className="btn-book"
             style={{ padding: "8px 20px", fontSize: 14, marginTop: 0, textDecoration: "none", display: "inline-block" }}
           >
-            + Đặt lịch mới
+            + Äáº·t lá»‹ch má»›i
           </Link>
         </div>
       </div>
@@ -128,11 +137,11 @@ export default function MyAppointmentsPage() {
 
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">📅</div>
+          <div className="empty-icon">ðŸ“…</div>
           <p>
             {filter
-              ? "Không có lịch hẹn nào ở trạng thái này."
-              : "Bạn chưa có lịch hẹn nào."}
+              ? "KhÃ´ng cÃ³ lá»‹ch háº¹n nÃ o á»Ÿ tráº¡ng thÃ¡i nÃ y."
+              : "Báº¡n chÆ°a cÃ³ lá»‹ch háº¹n nÃ o."}
           </p>
         </div>
       ) : (
@@ -148,22 +157,22 @@ export default function MyAppointmentsPage() {
                   {a.branchName}
                 </h4>
                 <div className="appt-details">
-                  <span>📅 {a.scheduledDate}</span>
-                  <span>🕐 {formatTime(a.startTime)} - {formatTime(a.endTime)}</span>
-                  {a.vehicleLicensePlate && <span>🚗 {a.vehicleLicensePlate}</span>}
+                  <span>ðŸ“… {formatDate(a.startTime)}</span>
+                  <span>ðŸ• {formatTime(a.startTime)} - {formatTime(a.endTime)}</span>
+                  {a.vehicleLicensePlate && <span>ðŸš— {a.vehicleLicensePlate}</span>}
                   {a.vehicleModelName && <span>{a.vehicleModelName}</span>}
                   {a.serviceNames && a.serviceNames.length > 0 && (
-                    <span>🔧 {a.serviceNames.join(", ")}</span>
+                    <span>ðŸ”§ {a.serviceNames.join(", ")}</span>
                   )}
                 </div>
                 {a.customerNotes && (
                   <p style={{ fontSize: 13, color: "#718096", marginTop: 6 }}>
-                    Ghi chú: {a.customerNotes}
+                    Ghi chÃº: {a.customerNotes}
                   </p>
                 )}
                 {a.cancelReason && (
                   <p style={{ fontSize: 13, color: "#e53e3e", marginTop: 4 }}>
-                    Lý do hủy: {a.cancelReason}
+                    LÃ½ do há»§y: {a.cancelReason}
                   </p>
                 )}
               </div>
@@ -174,7 +183,7 @@ export default function MyAppointmentsPage() {
                     onClick={() => openCancelPopup(a)}
                     disabled={cancelling === a.id}
                   >
-                    {cancelling === a.id ? "Đang hủy..." : "Hủy lịch"}
+                    {cancelling === a.id ? "Äang há»§y..." : "Há»§y lá»‹ch"}
                   </button>
                 )}
               </div>
@@ -187,20 +196,20 @@ export default function MyAppointmentsPage() {
       {cancelTarget && (
         <div className="cancel-overlay" onClick={closeCancelPopup}>
           <div className="cancel-popup" onClick={(e) => e.stopPropagation()}>
-            <h3>Xác nhận hủy lịch hẹn</h3>
+            <h3>XÃ¡c nháº­n há»§y lá»‹ch háº¹n</h3>
             <p style={{ color: "#718096", fontSize: 14, margin: "8px 0 16px" }}>
-              Bạn có chắc muốn hủy lịch hẹn tại{" "}
-              <strong>{cancelTarget.branchName}</strong> vào ngày{" "}
-              <strong>{cancelTarget.scheduledDate}</strong>,{" "}
+              Báº¡n cÃ³ cháº¯c muá»‘n há»§y lá»‹ch háº¹n táº¡i{" "}
+              <strong>{cancelTarget.branchName}</strong> vÃ o ngÃ y{" "}
+              <strong>{formatDate(cancelTarget.startTime)}</strong>,{" "}
               <strong>{formatTime(cancelTarget.startTime)} - {formatTime(cancelTarget.endTime)}</strong>?
             </p>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "#4a5568" }}>
-                Lý do hủy (tùy chọn)
+                LÃ½ do há»§y (tÃ¹y chá»n)
               </label>
               <textarea
                 className="cancel-reason-input"
-                placeholder="Nhập lý do hủy lịch..."
+                placeholder="Nháº­p lÃ½ do há»§y lá»‹ch..."
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}
@@ -209,14 +218,14 @@ export default function MyAppointmentsPage() {
             {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button className="btn-popup-secondary" onClick={closeCancelPopup} disabled={cancelling}>
-                Quay lại
+                Quay láº¡i
               </button>
               <button
                 className="btn-popup-danger"
                 onClick={handleConfirmCancel}
                 disabled={cancelling}
               >
-                {cancelling ? "Đang hủy..." : "Xác nhận hủy"}
+                {cancelling ? "Äang há»§y..." : "XÃ¡c nháº­n há»§y"}
               </button>
             </div>
           </div>
@@ -225,3 +234,5 @@ export default function MyAppointmentsPage() {
     </div>
   );
 }
+
+

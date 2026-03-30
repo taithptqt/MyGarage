@@ -23,8 +23,12 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
 
   function formatTime(t) {
     if (!t) return "";
-    const parts = t.split(":");
-    return `${parts[0]}:${parts[1]}`;
+    const d = new Date(t);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    }
+    const parts = String(t).split(":");
+    return `${parts[0] || ""}:${parts[1] || ""}`;
   }
 
   return (

@@ -210,6 +210,48 @@
   background: #fafbff;
 }
 
+/* Dark mode table display (applies to admin pages using .admin-table) */
+[data-theme="dark"] .table-wrapper,
+.chakra-ui-dark .table-wrapper {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+}
+
+[data-theme="dark"] .admin-table,
+.chakra-ui-dark .admin-table {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .admin-table th,
+[data-theme="dark"] .admin-table th *,
+.chakra-ui-dark .admin-table th,
+.chakra-ui-dark .admin-table th * {
+  background: #1b2559;
+  color: #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .admin-table td,
+.chakra-ui-dark .admin-table td {
+  color: #f7fafc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .admin-table tbody tr:hover,
+.chakra-ui-dark .admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="dark"] .td-id,
+[data-theme="dark"] .td-email,
+.chakra-ui-dark .td-id,
+.chakra-ui-dark .td-email {
+  color: #cbd5e0;
+}
+
 .td-id {
   color: var(--text-muted);
   font-size: 12px;

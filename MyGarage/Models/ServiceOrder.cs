@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class ServiceOrder : IAuditEntity
+public partial class ServiceOrder
 {
     public long Id { get; set; }
 
@@ -138,4 +136,8 @@ public partial class ServiceOrder : IAuditEntity
     public virtual Vehicle Vehicle { get; set; } = null!;
 
     public virtual ICollection<VehicleConditionLog> VehicleConditionLogs { get; set; } = new List<VehicleConditionLog>();
+
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequests { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 }

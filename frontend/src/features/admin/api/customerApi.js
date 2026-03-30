@@ -1,7 +1,11 @@
 import { request } from "../../../app/apiClient";
 
-export async function getAllCustomers() {
-  return request({ url: "/api/Customer", method: "GET" });
+export async function getAllCustomers(branchId) {
+  return request({
+    url: "/api/Customer",
+    method: "GET",
+    params: branchId ? { branchId } : undefined
+  });
 }
 
 export async function createCustomer(payload) {

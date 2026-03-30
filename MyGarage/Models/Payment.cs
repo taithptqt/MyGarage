@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
+/// <summary>
+/// Accounting rule after patch: customer collection should be posted via InvoiceId. ServiceOrderId and RetailOrderId are kept for backward compatibility, not as primary accounting anchor.
+/// </summary>
 public partial class Payment
 {
     public long Id { get; set; }
@@ -39,11 +42,19 @@ public partial class Payment
 
     public long? UpdatedBy { get; set; }
 
+    public string Direction { get; set; } = null!;
+
+    public virtual ICollection<BankTransaction> BankTransactions { get; set; } = new List<BankTransaction>();
+
     public virtual Staff? Cashier { get; set; }
+
+    public virtual ICollection<FinanceApprovalRequest> FinanceApprovalRequests { get; set; } = new List<FinanceApprovalRequest>();
 
     public virtual ICollection<Payment> InverseReversedPayment { get; set; } = new List<Payment>();
 
     public virtual Invoice? Invoice { get; set; }
+
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
 
     public virtual PaymentMethod Method { get; set; } = null!;
 

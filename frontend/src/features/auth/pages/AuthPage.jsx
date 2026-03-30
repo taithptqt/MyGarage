@@ -11,6 +11,21 @@ import { useAuth } from "../../../context/AuthContext";
 import MyGarageLogo from "../components/MyGarageLogo";
 import "./AuthPage.css";
 
+const AUTH_HIGHLIGHTS = [
+  {
+    title: "Đặt lịch nhanh chóng",
+    description: "Chủ động chọn dịch vụ, chi nhánh và khung giờ phù hợp chỉ trong vài phút.",
+  },
+  {
+    title: "Theo dõi minh bạch",
+    description: "Cập nhật tiến độ xử lý xe theo từng công đoạn ngay trên hệ thống.",
+  },
+  {
+    title: "Dữ liệu tập trung",
+    description: "Lưu trữ lịch sử sửa chữa và thông tin xe để tư vấn chính xác hơn mỗi lần quay lại.",
+  },
+];
+
 function AuthPage() {
   const phoneRegex = /^(0\d{9,10}|\+84\d{9,10})$/;
   const navigate = useNavigate();
@@ -234,66 +249,107 @@ function AuthPage() {
 
   return (
     <main className="page">
-      <section className="card">
-        <MyGarageLogo />
+      <div className="auth-scene" aria-hidden="true">
+        <div className="auth-floating-tag auth-floating-tag--left">
+          <span>15.000+</span>
+          <p>Lượt xe được phục vụ mỗi năm</p>
+        </div>
+        <div className="auth-floating-tag auth-floating-tag--right">
+          <span>4.9 / 5</span>
+          <p>Đánh giá trung bình từ khách hàng</p>
+        </div>
+        <div className="auth-floating-tag auth-floating-tag--bottom">
+          <span>30+</span>
+          <p>Kỹ thuật viên nhiều kinh nghiệm</p>
+        </div>
+      </div>
 
-        <h1>{mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</h1>
-        <p className="subtitle">Một tài khoản sử dụng tất cả dịch vụ của MyGarage</p>
+      <div className="auth-shell">
+        <section className="auth-showcase">
+          <div className="auth-showcase-content">
+            <p className="auth-showcase-kicker">MYGARAGE PREMIUM CARE</p>
+            <h2>
+              Nền tảng đặt lịch và theo dõi dịch vụ xe
+              theo chuẩn gara chuyên nghiệp
+            </h2>
+            <p>
+              Đăng nhập để quản lý lịch hẹn, lịch sử sửa chữa và nhận
+              gợi ý dịch vụ phù hợp theo tình trạng xe của bạn.
+            </p>
 
-        {mode === "login" ? (
-          <LoginForm
-            form={loginForm}
-            onChange={updateLogin}
-            onSubmit={handleLogin}
-            isValid={isLoginValid}
-            loading={loading}
-          />
-        ) : (
-          <RegisterForm
-            form={registerForm}
-            onChange={updateRegister}
-            onSubmit={handleRegister}
-            isValid={isRegisterValid}
-            loading={loading}
-          />
-        )}
-
-        {error && <div className="error">{error}</div>}
-
-        {locationDenied && !error && (
-          <div className="location-hint" style={{ fontSize: "0.85rem", color: "#666", marginTop: "10px", textAlign: "center", fontStyle: "italic" }}>
-            Mẹo: Bật vị trí để hệ thống ưu tiên gợi ý chi nhánh gần nhất.
+            <div className="auth-showcase-features">
+              {AUTH_HIGHLIGHTS.map((item, index) => (
+                <article key={item.title} className="auth-feature-card">
+                  <span className="auth-feature-index">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </article>
+              ))}
+            </div>
           </div>
-        )}
+        </section>
 
-        <div className="footer-switcher">
+        <section className="card">
+          <MyGarageLogo />
+
+          <h1>{mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</h1>
+          <p className="subtitle">Một tài khoản sử dụng tất cả dịch vụ của MyGarage</p>
+
           {mode === "login" ? (
-            <>
-              Bạn chưa có tài khoản,
-              <span className="switcher-link" onClick={() => { setMode("register"); setError(""); }}>
-                Đăng ký ngay
-              </span>
-            </>
+            <LoginForm
+              form={loginForm}
+              onChange={updateLogin}
+              onSubmit={handleLogin}
+              isValid={isLoginValid}
+              loading={loading}
+            />
           ) : (
-            <>
-              Bạn đã có tài khoản?
-              <span className="switcher-link" onClick={() => { setMode("login"); setError(""); }}>
-                Đăng nhập ngay
-              </span>
-            </>
+            <RegisterForm
+              form={registerForm}
+              onChange={updateRegister}
+              onSubmit={handleRegister}
+              isValid={isRegisterValid}
+              loading={loading}
+            />
           )}
-        </div>
 
-        <div className="divider">
-          <span>Hoặc đăng nhập với</span>
-        </div>
+          {error && <div className="error">{error}</div>}
 
-        <div className="google-login-btn-container">
-          <GoogleLoginButton onCredential={handleGoogleLogin} onError={(message) => setError(message)} />
-        </div>
+          {locationDenied && !error && (
+            <div className="location-hint">
+              Mẹo: Bật vị trí để hệ thống ưu tiên gợi ý chi nhánh gần nhất.
+            </div>
+          )}
 
-        <AuthResult result={result} onLogout={handleLogout} />
-      </section>
+          <div className="footer-switcher">
+            {mode === "login" ? (
+              <>
+                Bạn chưa có tài khoản,
+                <span className="switcher-link" onClick={() => { setMode("register"); setError(""); }}>
+                  Đăng ký ngay
+                </span>
+              </>
+            ) : (
+              <>
+                Bạn đã có tài khoản?
+                <span className="switcher-link" onClick={() => { setMode("login"); setError(""); }}>
+                  Đăng nhập ngay
+                </span>
+              </>
+            )}
+          </div>
+
+          <div className="divider">
+            <span>Hoặc đăng nhập với</span>
+          </div>
+
+          <div className="google-login-btn-container">
+            <GoogleLoginButton onCredential={handleGoogleLogin} onError={(message) => setError(message)} />
+          </div>
+
+          <AuthResult result={result} onLogout={handleLogout} />
+        </section>
+      </div>
 
       {needGooglePhone && (
         <div className="phone-modal-backdrop" onClick={closeGooglePhoneModal}>

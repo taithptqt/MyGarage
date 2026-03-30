@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Product : IAuditEntity
+public partial class Product
 {
     public long Id { get; set; }
 
@@ -74,6 +72,8 @@ public partial class Product : IAuditEntity
     public virtual ICollection<RetailOrderItem> RetailOrderItems { get; set; } = new List<RetailOrderItem>();
 
     public virtual ICollection<StockTransaction> StockTransactions { get; set; } = new List<StockTransaction>();
+
+    public virtual ICollection<SupplierInvoiceDetail> SupplierInvoiceDetails { get; set; } = new List<SupplierInvoiceDetail>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }

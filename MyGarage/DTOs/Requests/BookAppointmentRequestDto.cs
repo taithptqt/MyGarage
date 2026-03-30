@@ -19,13 +19,10 @@ namespace MyGarage.DTOs.Requests
         public string? Color { get; set; }
 
         [Required]
-        public DateOnly ScheduledDate { get; set; }
+        public DateTime StartTime { get; set; }
 
         [Required]
-        public TimeOnly StartTime { get; set; }
-
-        [Required]
-        public TimeOnly EndTime { get; set; }
+        public DateTime EndTime { get; set; }
 
         public long? CustomerId { get; set; }
 

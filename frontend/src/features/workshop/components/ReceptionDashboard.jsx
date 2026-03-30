@@ -32,7 +32,6 @@ export default function ReceptionDashboard() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null); // 'create', 'detail'
-  const [activeTab, setActiveTab] = useState("orders"); // 'orders', 'appointments'
   const [appointments, setAppointments] = useState([]);
   const [apptLoading, setApptLoading] = useState(false);
   const [actingAppt, setActingAppt] = useState(null);
@@ -54,6 +53,11 @@ export default function ReceptionDashboard() {
   const { searchQuery } = useSearch();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
+  const effectiveBranchId = Number(selectedBranchId || user?.branchId || 0);
+  const activeTab = useMemo(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    return tab === "appointments" ? "appointments" : "orders";
+  }, [location.search]);
 
   const getApptStatusBadge = (status) => {
     const s = String(status || "").toUpperCase();
@@ -92,6 +96,18 @@ export default function ReceptionDashboard() {
     return Number.isNaN(d.getTime()) ? null : d;
   }, []);
 
+  const formatApptDate = useCallback((value) => {
+    if (!value) return "--/--/----";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "--/--/----" : d.toLocaleDateString("vi-VN");
+  }, []);
+
+  const formatApptTime = useCallback((value) => {
+    if (!value) return "--:--";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "--:--" : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -115,7 +131,7 @@ export default function ReceptionDashboard() {
       const filteredStaff = sRes.filter(s => {
         const role = rRes.find(r => r.id === s.roleId);
         const isMatchedRole = role && role.roleCode === "RECEPTIONIST";
-        const isMatchedBranch = !selectedBranchId || s.branchId === Number(selectedBranchId);
+        const isMatchedBranch = !effectiveBranchId || s.branchId === effectiveBranchId;
         return isMatchedRole && isMatchedBranch;
       });
       setStaff(filteredStaff);
@@ -124,32 +140,34 @@ export default function ReceptionDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveBranchId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   const fetchAppointments = useCallback(async () => {
-    if (!selectedBranchId) return;
+    if (!effectiveBranchId) return;
     setApptLoading(true);
     try {
-      const data = await getBranchAppointments(selectedBranchId);
+      const data = await getBranchAppointments(effectiveBranchId);
       setAppointments(Array.isArray(data) ? data : []);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setError(err.message || "Không thể tải dữ liệu lịch hẹn.");
     } finally {
       setApptLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [effectiveBranchId]);
 
   const fetchAppointmentsSilent = useCallback(async () => {
-    if (!selectedBranchId) return;
+    if (!effectiveBranchId) return;
     try {
-      const data = await getBranchAppointments(selectedBranchId);
+      const data = await getBranchAppointments(effectiveBranchId);
       setAppointments(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ }
-  }, [selectedBranchId]);
+    } catch (err) {
+      setError(err.message || "Không thể tải dữ liệu lịch hẹn.");
+    }
+  }, [effectiveBranchId]);
 
   useEffect(() => {
     if (activeTab === "appointments") {
@@ -382,7 +400,7 @@ export default function ReceptionDashboard() {
     const endDate = toEndOfDay(dateTo);
     const list = (appointments || []).filter((a) => {
       const byStatus = apptStatusFilter === "ALL" || normalizeStatus(a.status) === apptStatusFilter;
-      const scheduledTime = new Date(`${a.scheduledDate || ""}T${(a.startTime || "00:00:00").substring(0, 8)}`).getTime();
+      const scheduledTime = new Date(a.startTime || 0).getTime();
       const byDate =
         (!startDate || scheduledTime >= startDate.getTime()) &&
         (!endDate || scheduledTime <= endDate.getTime());
@@ -395,8 +413,8 @@ export default function ReceptionDashboard() {
     });
 
     return list.sort((a, b) => {
-      const aTime = new Date(`${a.scheduledDate || ""}T${(a.startTime || "00:00:00").substring(0, 8)}`).getTime();
-      const bTime = new Date(`${b.scheduledDate || ""}T${(b.startTime || "00:00:00").substring(0, 8)}`).getTime();
+      const aTime = new Date(a.startTime || 0).getTime();
+      const bTime = new Date(b.startTime || 0).getTime();
       return bTime - aTime;
     });
   }, [appointments, searchQuery, apptStatusFilter, dateFrom, dateTo, toStartOfDay, toEndOfDay]);
@@ -507,46 +525,11 @@ export default function ReceptionDashboard() {
           <div className="stat-label">Sẵn sàng bàn giao</div>
         </div>
       </div>
-
-      <div className="workshop-tabs" style={{ display: 'flex', gap: '2px', marginBottom: '20px', borderBottom: '1px solid #e9edf7' }}>
-        <button 
-          className={`tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
-          onClick={() => setActiveTab('orders')}
-          style={{
-            padding: '12px 24px',
-            border: 'none',
-            background: activeTab === 'orders' ? '#fff' : 'transparent',
-            borderBottom: activeTab === 'orders' ? '3px solid #4318ff' : '3px solid transparent',
-            color: activeTab === 'orders' ? '#2b3674' : '#a3aed0',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '15px'
-          }}
-        >
-          Lệnh sửa chữa
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'appointments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('appointments')}
-          style={{
-            padding: '12px 24px',
-            border: 'none',
-            background: activeTab === 'appointments' ? '#fff' : 'transparent',
-            borderBottom: activeTab === 'appointments' ? '3px solid #4318ff' : '3px solid transparent',
-            color: activeTab === 'appointments' ? '#2b3674' : '#a3aed0',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '15px'
-          }}
-        >
-          Lịch đặt trước
-          {appointments.filter(a => a.status === 'PENDING').length > 0 && (
-            <span style={{ marginLeft: '8px', background: '#ee5d50', color: '#fff', fontSize: '11px', padding: '2px 6px', borderRadius: '10px' }}>
-              {appointments.filter(a => a.status === 'PENDING').length}
-            </span>
-          )}
-        </button>
-      </div>
+      {error && (
+        <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>
+          ❌ {error}
+        </div>
+      )}
 
       {activeTab === 'orders' ? (
         <>
@@ -699,8 +682,8 @@ export default function ReceptionDashboard() {
                     <tr key={appt.id}>
                       <td style={{ fontWeight: 600 }}>{appt.customerName}</td>
                       <td>{appt.customerPhone}</td>
-                      <td>{appt.scheduledDate}</td>
-                      <td>{appt.startTime?.substring(0, 5)} - {appt.endTime?.substring(0, 5)}</td>
+                      <td>{formatApptDate(appt.startTime)}</td>
+                      <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
                       <td>{appt.vehicleLicensePlate}</td>
                       <td className="th-center">
                         <span className={`badge ${getApptStatusBadge(appt.status)}`}>
@@ -762,7 +745,7 @@ export default function ReceptionDashboard() {
             <div style={{ background: '#f4f7fe', padding: '16px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', lineHeight: '1.8' }}>
               <p style={{margin: 0}}><strong>Khách hàng:</strong> {successAppt.customerName} - {successAppt.customerPhone}</p>
               <p style={{margin: 0}}><strong>Biển số xe:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>{successAppt.vehicleLicensePlate}</span></p>
-              <p style={{margin: 0}}><strong>Thời gian nhận xe:</strong> <span style={{ color: '#4318ff', fontWeight: 'bold' }}>{successAppt.startTime?.substring(0, 5)}</span> ngày {new Date(successAppt.scheduledDate).toLocaleDateString('vi-VN')}</p>
+              <p style={{margin: 0}}><strong>Thời gian nhận xe:</strong> <span style={{ color: '#4318ff', fontWeight: 'bold' }}>{formatApptTime(successAppt.startTime)}</span> ngày {formatApptDate(successAppt.startTime)}</p>
               <p style={{margin: 0}}><strong>Dịch vụ yêu cầu:</strong> {successAppt.services.length > 0 ? successAppt.services.map(s => s.Name || s.name).join(', ') : 'Chưa định trước'}</p>
             </div>
             <button className="btn-primary" style={{ marginTop: '24px', width: '100%', padding: '12px' }} onClick={() => { setModal(null); setSuccessAppt(null); }}>

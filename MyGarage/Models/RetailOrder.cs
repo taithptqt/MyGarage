@@ -1,11 +1,9 @@
-using MyGarage.Interfaces;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class RetailOrder : IAuditEntity
+public partial class RetailOrder
 {
     public long Id { get; set; }
 
@@ -66,4 +64,8 @@ public partial class RetailOrder : IAuditEntity
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual Voucher? Voucher { get; set; }
+
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequests { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 }

@@ -7,9 +7,8 @@ namespace MyGarage.DTOs.Requests
         public long CustomerId { get; set; }
         public long? VehicleId { get; set; }
         public long? CreatedBy { get; set; }
-        public DateOnly ScheduledDate { get; set; }
-        public TimeOnly StartTime { get; set; }
-        public TimeOnly EndTime { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
         public string? RequestedServiceIds { get; set; }
         public string? CustomerNotes { get; set; }
         public bool? IsReminderSent { get; set; }

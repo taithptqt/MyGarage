@@ -1,11 +1,9 @@
-using MyGarage.Interfaces;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class StaffTier : IAuditEntity
+public partial class StaffTier
 {
     public long Id { get; set; }
 

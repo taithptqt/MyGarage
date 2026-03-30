@@ -1,15 +1,17 @@
-﻿.workshop-page {
+.workshop-page {
   display: flex;
   min-height: 100vh;
   background: #f4f7fe;
   color: #1b2559;
   font-family: inherit;
   transition: all 0.3s ease;
+  position: relative;
 }
 
 /* Dark Components Mode Styles (Dark cards on Light BG) */
 .workshop-page.dark {
-  background: #f4f7fe; /* Keep light background */
+  background: #f4f7fe;
+  /* Keep light background */
 }
 
 .workshop-page.dark .workshop-sidebar {
@@ -26,11 +28,29 @@
 .workshop-page.dark .header-title,
 .workshop-page.dark .bc-current,
 .workshop-page.dark .bc-separator {
-  color: #1b2559; /* Stay dark because BG is light */
+  color: #1b2559;
+  /* Stay dark because BG is light */
 }
 
 .workshop-page.dark .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.workshop-page.dark .role-sub-item {
+  background: #0b1437;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.workshop-page.dark .role-sub-item:hover {
+  background: #111c44;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.workshop-page.dark .role-sub-item.active {
+  background: rgba(67, 24, 255, 0.24);
+  border-color: #4318ff;
+  color: #ffffff;
 }
 
 .workshop-page.dark .header-actions-bar {
@@ -87,15 +107,20 @@
 }
 
 /* Hide scrollbar but allow scrolling */
-.admin-form, .workshop-table-card, .modal-body-content {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+.admin-form,
+.workshop-table-card,
+.modal-body-content {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
-.admin-form::-webkit-scrollbar, 
+.admin-form::-webkit-scrollbar,
 .workshop-table-card::-webkit-scrollbar,
 .modal-body-content::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  display: none;
+  /* Chrome, Safari and Opera */
 }
 
 .workshop-page.dark .quick-toggle label {
@@ -109,7 +134,8 @@
   padding: 0 !important;
   overflow: hidden !important;
   max-width: 600px !important;
-  width: 95% !important; /* Increased slightly */
+  width: 95% !important;
+  /* Increased slightly */
   max-height: 92vh !important;
 }
 
@@ -142,7 +168,8 @@
   margin-top: 10px;
 }
 
-.error-msg, .success-msg {
+.error-msg,
+.success-msg {
   font-size: 14px;
   font-weight: 600;
   padding: 10px;
@@ -259,7 +286,8 @@
 
 .workshop-page.dark .admin-table th {
   color: #a3aed0;
-  background: #111c44; /* Match card background */
+  background: #111c44;
+  /* Match card background */
 }
 
 .workshop-page.dark .admin-table td {
@@ -267,14 +295,119 @@
   background: #111c44;
 }
 
+.workshop-page.dark .reception-dashboard .workshop-table-card {
+  background: #ffffff;
+  color: #1b2559;
+}
+
+.workshop-page.dark .reception-dashboard .admin-table thead th,
+.workshop-page.dark .reception-dashboard .admin-table thead th * {
+  color: #ffffff !important;
+  background: #1f3f8f;
+  border-bottom: 1px solid #2a4da8;
+}
+
+.workshop-page.dark .reception-dashboard .admin-table td {
+  color: #1b2559 !important;
+  background: #ffffff;
+  border-bottom: 1px solid #e9edf7;
+}
+
 
 .workshop-sidebar {
   width: 280px;
   background: #ffffff;
   border-right: 1px solid #e9edf7;
-  padding: 24px 16px;
+  padding: 0;
   display: flex;
   flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow-x: visible;
+  transition: width 0.2s linear;
+  z-index: 30;
+}
+
+.workshop-sidebar-viewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workshop-sidebar-body {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  height: 100%;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+.workshop-sidebar.is-collapsed {
+  padding: 0;
+}
+
+.workshop-sidebar.is-collapsed:not(.is-dragging)>*:not(.workshop-sidebar-resize-handle) {
+  display: none !important;
+}
+
+.workshop-sidebar.is-collapsed .sidebar-header {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.workshop-sidebar.is-collapsed .sidebar-header h2 {
+  text-align: center;
+}
+
+.workshop-sidebar.is-collapsed .sidebar-header p,
+.workshop-sidebar.is-collapsed .role-info,
+.workshop-sidebar.is-collapsed .role-sub-nav {
+  display: none;
+}
+
+.workshop-sidebar.is-collapsed .role-item {
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+.workshop-sidebar.is-collapsed .role-icon {
+  margin: 0;
+}
+
+.workshop-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -18px;
+  width: 28px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 20;
+  background: transparent;
+}
+
+.workshop-sidebar-resize-grip {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 84px;
+  background: rgba(236, 72, 153, 0.38);
+  clip-path: polygon(0 0, 74% 12%, 74% 88%, 0 100%);
+  transition: background-color 0.15s ease;
+  pointer-events: none;
+}
+
+.workshop-sidebar-resize-grip.dragging {
+  background: rgba(236, 72, 153, 0.58);
+}
+
+.workshop-sidebar.is-dragging .workshop-sidebar-viewport {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 20px), transparent 100%);
 }
 
 .sidebar-header {
@@ -302,6 +435,39 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.role-sub-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 6px;
+}
+
+.role-sub-item {
+  width: 100%;
+  border: 1px solid #e9edf7;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #2b3674;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-sub-item:hover {
+  border-color: #cfd8f6;
+  background: #f8faff;
+}
+
+.role-sub-item.active {
+  border-color: #4318ff;
+  background: #f4f1ff;
+  color: #4318ff;
 }
 
 .role-item {
@@ -335,7 +501,7 @@
   justify-content: center;
   background: #ffffff;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .role-item.active .role-icon {
@@ -365,6 +531,8 @@
 
 .workshop-main {
   flex: 1;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -591,13 +759,37 @@
   right: 0;
   margin-top: 12px;
   width: 220px;
-  background: #ffffff;
+  background: #ffffff !important;
   border-radius: 20px;
   box-shadow: 0 16px 40px rgba(112, 144, 176, 0.2);
   z-index: 1000;
   padding: 10px;
-  border: 1px solid #f4f7fe;
+  border: 1px solid #f4f7fe !important;
   animation: slideDown 0.2s ease-out;
+}
+
+.profile-dropdown .dropdown-header {
+  color: #1b2559 !important;
+  border-bottom: 1px solid #e9edf7 !important;
+}
+
+.profile-dropdown .dropdown-item {
+  color: #707eae !important;
+  background: transparent !important;
+}
+
+.profile-dropdown .dropdown-item:hover {
+  background: #f7f9ff !important;
+  color: #1b2559 !important;
+}
+
+.profile-dropdown .dropdown-item.logout {
+  color: #ee5d50 !important;
+}
+
+.profile-dropdown .dropdown-item.logout:hover {
+  background: #fff5f4 !important;
+  color: #ee5d50 !important;
 }
 
 .profile-form .user-avatar {
@@ -610,8 +802,15 @@
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dropdown-header {
@@ -669,7 +868,8 @@
 .workshop-table-card {
   background: #ffffff;
   border-radius: 20px;
-  overflow: hidden; /* Fix exposed corners */
+  overflow: hidden;
+  /* Fix exposed corners */
   box-shadow: 0 12px 28px rgba(17, 38, 146, 0.05);
   margin-top: 20px;
 }
@@ -691,6 +891,7 @@
   flex-direction: column;
   align-items: center;
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .stat-card.compact {
@@ -719,18 +920,62 @@
 }
 
 /* Badges */
-.badge-reception { background: #e2e8f0; color: #475569; }
-.badge-diagnosing { background: #fee2e2; color: #991b1b; }
-.badge-qc { background: #fef3c7; color: #92400e; }
-.badge-completed { background: #d1fae5; color: #065f46; }
+.badge-reception {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.badge-diagnosing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-qc {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-completed {
+  background: #d1fae5;
+  color: #065f46;
+}
 
 /* Appointment & Generic Badges */
-.badge-warning { background: #fff8e1; color: #ff8f00; border: 1px solid #ffe082; }
-.badge-active { background: #eef2ff; color: #4318ff; border: 1px solid #c7d2fe; }
-.badge-info { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
-.badge-danger { background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; }
-.badge-success { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.badge-inactive { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+.badge-warning {
+  background: #fff8e1;
+  color: #ff8f00;
+  border: 1px solid #ffe082;
+}
+
+.badge-active {
+  background: #eef2ff;
+  color: #4318ff;
+  border: 1px solid #c7d2fe;
+}
+
+.badge-info {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.badge-danger {
+  background: #fff1f2;
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+}
+
+.badge-success {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-inactive {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
 
 .badge {
   padding: 4px 10px;
@@ -999,12 +1244,14 @@
 }
 
 /* Table Helpers */
-.th-center, .td-center {
+.th-center,
+.td-center {
   text-align: center !important;
 }
 
 .col-actions {
-  width: 180px; /* (4 * 36px) + (3 * 8px) + some padding */
+  width: 180px;
+  /* (4 * 36px) + (3 * 8px) + some padding */
   min-width: 180px;
   text-align: center !important;
 }
@@ -1063,7 +1310,7 @@
   width: 100%;
 }
 
-.service-search-item + .service-search-item {
+.service-search-item+.service-search-item {
   border-top: 1px solid #edf1fa;
 }
 
@@ -1111,12 +1358,24 @@
   filter: grayscale(1);
   border-color: transparent;
   background: transparent;
-  pointer-events: none; /* Make it unclickable while blurred */
+  pointer-events: none;
+  /* Make it unclickable while blurred */
 }
 
-.btn-action-success:hover { background: #ecfdf5; border-color: #10b981; }
-.btn-action-danger:hover { background: #fff1f2; border-color: #ef4444; }
-.btn-action-info:hover { background: #eff6ff; border-color: #3b82f6; }
+.btn-action-success:hover {
+  background: #ecfdf5;
+  border-color: #10b981;
+}
+
+.btn-action-danger:hover {
+  background: #fff1f2;
+  border-color: #ef4444;
+}
+
+.btn-action-info:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
 
 .detail-btn {
   color: #a3aed0;
@@ -1131,7 +1390,8 @@
 
 /* Create Service Order Page Styles */
 .create-order-page {
-  max-width: 1200px;
+  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -1204,8 +1464,8 @@
   margin-bottom: 8px;
 }
 
-.form-group input, 
-.form-group select, 
+.form-group input,
+.form-group select,
 .form-group textarea {
   width: 100%;
   padding: 12px 16px;
@@ -1218,8 +1478,8 @@
   transition: border-color 0.2s;
 }
 
-.form-group input:focus, 
-.form-group select:focus, 
+.form-group input:focus,
+.form-group select:focus,
 .form-group textarea:focus {
   border-color: #4318ff;
 }
@@ -1367,6 +1627,7 @@
     border-right: none;
     border-bottom: 1px dashed #dbe2f2;
   }
+
 }
 
 .selected-info {
@@ -1498,8 +1759,8 @@
   background: #111c44;
 }
 
-.workshop-page.dark .form-group input, 
-.workshop-page.dark .form-group select, 
+.workshop-page.dark .form-group input,
+.workshop-page.dark .form-group select,
 .workshop-page.dark .form-group textarea {
   background: #0b1437;
   border-color: rgba(255, 255, 255, 0.1);
@@ -1550,7 +1811,7 @@
   color: #e0e8ff;
 }
 
-.workshop-page.dark .service-search-item + .service-search-item {
+.workshop-page.dark .service-search-item+.service-search-item {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -1599,4 +1860,22 @@
   }
 }
 
+@media (max-width: 900px) {
+  .workshop-page {
+    flex-direction: column;
+  }
 
+  .workshop-sidebar {
+    position: relative;
+    top: auto;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+  }
+
+  .workshop-sidebar-body {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}

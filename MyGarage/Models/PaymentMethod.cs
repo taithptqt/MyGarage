@@ -1,11 +1,9 @@
-using MyGarage.Interfaces;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class PaymentMethod : IAuditEntity
+public partial class PaymentMethod
 {
     public long Id { get; set; }
 
@@ -37,5 +35,9 @@ public partial class PaymentMethod : IAuditEntity
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
+    public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();
+
     public virtual Staff? UpdatedByNavigation { get; set; }
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 }

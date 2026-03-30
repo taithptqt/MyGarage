@@ -1,3 +1,4 @@
+﻿// Mục đích: Truy cập dữ liệu cho bản ghi voucher chính.
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;

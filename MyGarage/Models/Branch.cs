@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Branch : IAuditEntity
+public partial class Branch
 {
     public long Id { get; set; }
 
@@ -47,11 +45,17 @@ public partial class Branch : IAuditEntity
 
     public long? DeletedBy { get; set; }
 
+    public virtual ICollection<AccountingPeriod> AccountingPeriods { get; set; } = new List<AccountingPeriod>();
+
+    public virtual ICollection<AccountsPayable> AccountsPayables { get; set; } = new List<AccountsPayable>();
+
     public virtual ICollection<AiSmartDispatching> AiSmartDispatchings { get; set; } = new List<AiSmartDispatching>();
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
+    public virtual ICollection<BankAccount> BankAccounts { get; set; } = new List<BankAccount>();
 
     public virtual ICollection<Bay> Bays { get; set; } = new List<Bay>();
 
@@ -67,7 +71,11 @@ public partial class Branch : IAuditEntity
 
     public virtual ICollection<ExpenseLog> ExpenseLogs { get; set; } = new List<ExpenseLog>();
 
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
+
     public virtual Staff? Manager { get; set; }
+
+    public virtual ICollection<PayrollRun> PayrollRuns { get; set; } = new List<PayrollRun>();
 
     public virtual ICollection<PurchaseOrder> PurchaseOrders { get; set; } = new List<PurchaseOrder>();
 
@@ -85,7 +93,17 @@ public partial class Branch : IAuditEntity
 
     public virtual ICollection<Staff> Staff { get; set; } = new List<Staff>();
 
+    public virtual ICollection<StaffSalaryProfile> StaffSalaryProfiles { get; set; } = new List<StaffSalaryProfile>();
+
+    public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();
+
     public virtual Staff? UpdatedByNavigation { get; set; }
+
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequests { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherAuditLog> VoucherAuditLogs { get; set; } = new List<VoucherAuditLog>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 
     public virtual ICollection<Warehouse> Warehouses { get; set; } = new List<Warehouse>();
 

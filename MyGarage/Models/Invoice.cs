@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Invoice : IAuditEntity
+public partial class Invoice
 {
     public long Id { get; set; }
 
@@ -61,7 +59,11 @@ public partial class Invoice : IAuditEntity
 
     public virtual Staff? CreditApprovedByStaff { get; set; }
 
+    public virtual ICollection<FinanceApprovalRequest> FinanceApprovalRequests { get; set; } = new List<FinanceApprovalRequest>();
+
     public virtual ICollection<InvoiceDetail> InvoiceDetails { get; set; } = new List<InvoiceDetail>();
+
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
@@ -72,4 +74,8 @@ public partial class Invoice : IAuditEntity
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual Vehicle? Vehicle { get; set; }
+
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequests { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 }

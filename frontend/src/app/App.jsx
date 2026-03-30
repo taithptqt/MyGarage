@@ -22,6 +22,7 @@ import { BranchProvider } from "../context/BranchContext";
 import useIdleTimeout from "../hooks/useIdleTimeout";
 import CustomerLayout from "../shared/layouts/CustomerLayout";
 import BookingPage from "../features/appointments/pages/BookingPage";
+import BookingIntroPage from "../features/appointments/pages/BookingIntroPage";
 import MyAppointmentsPage from "../features/appointments/pages/MyAppointmentsPage";
 import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 
@@ -46,13 +47,21 @@ function App() {
   return (
     <BranchProvider>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/home" element={<HomePage />} />
         
         {/* Customer Appointment Routes */}
         <Route 
           path="/booking" 
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><BookingIntroPage /></CustomerRoute>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/booking/form" 
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><BookingPage /></CustomerRoute>
@@ -117,7 +126,7 @@ function App() {
         </Route>
 
         <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BranchProvider>
   );

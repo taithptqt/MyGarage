@@ -1,3 +1,4 @@
+﻿// Mục đích: Cung cấp API CRUD cho quan hệ gán voucher cho khách hàng và liên kết lịch sử sử dụng.
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;

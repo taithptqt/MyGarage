@@ -17,9 +17,12 @@ namespace MyGarage.Repositories
 
         public async Task<IEnumerable<Appointment>> GetByBranchAndDateAsync(long branchId, DateOnly date)
         {
+            var dayStart = date.ToDateTime(TimeOnly.MinValue);
+            var dayEnd = dayStart.AddDays(1);
             return await _dbSet
                 .Where(a => a.BranchId == branchId
-                         && a.ScheduledDate == date
+                         && a.StartTime >= dayStart
+                         && a.StartTime < dayEnd
                          && a.Status != "CANCELED")
                 .ToListAsync();
         }
@@ -32,8 +35,7 @@ namespace MyGarage.Repositories
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)
                 .Where(a => a.CustomerId == customerId)
-                .OrderByDescending(a => a.ScheduledDate)
-                    .ThenByDescending(a => a.StartTime)
+                .OrderByDescending(a => a.StartTime)
                 .ToListAsync();
         }
 
@@ -50,8 +52,7 @@ namespace MyGarage.Repositories
                 query = query.Where(a => a.Status == status);
 
             return await query
-                .OrderByDescending(a => a.ScheduledDate)
-                    .ThenByDescending(a => a.StartTime)
+                .OrderByDescending(a => a.StartTime)
                 .ToListAsync();
         }
 

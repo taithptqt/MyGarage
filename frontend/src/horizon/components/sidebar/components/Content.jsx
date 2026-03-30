@@ -11,7 +11,7 @@ import { clearAuth } from "../../../../app/authState";
 // FUNCTIONS
 
 function SidebarContent(props) {
-  const { routes } = props;
+  const { routes, collapsed = false } = props;
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -21,17 +21,22 @@ function SidebarContent(props) {
 
   // SIDEBAR
   return (
-    <Flex direction='column' height='100%' pt='25px' px="16px" borderRadius='30px'>
-      <Brand />
+    <Flex
+      direction='column'
+      height='100%'
+      pt='25px'
+      px={collapsed ? "10px" : "16px"}
+      borderRadius='0'>
+      <Brand collapsed={collapsed} />
       <Stack direction='column' mb='auto' mt='8px'>
-        <Box ps='20px' pe={{ md: "16px", "2xl": "1px" }}>
-          <Links routes={routes} />
+        <Box ps={collapsed ? '6px' : '20px'} pe={{ md: "16px", "2xl": "1px" }}>
+          <Links routes={routes} collapsed={collapsed} />
         </Box>
       </Stack>
-
-      <Box ps='20px' pe={{ md: "16px", "2xl": "1px" }} mt='auto' pb='20px'>
+      <Box ps={collapsed ? '6px' : '20px'} pe={{ md: "16px", "2xl": "1px" }} mt='auto' pb='20px'>
         <Flex
           align='center'
+          justify={collapsed ? 'center' : 'flex-start'}
           p='12px'
           borderRadius='10px'
           cursor='pointer'
@@ -39,10 +44,12 @@ function SidebarContent(props) {
           _hover={{ bg: "gray.100" }}
           transition='0.2s linear'
         >
-          <Icon as={MdOutlineLogout} width='20px' height='20px' color='inherit' me='12px' />
-          <Text color='inherit' fontWeight='500'>
-            Log out
-          </Text>
+          <Icon as={MdOutlineLogout} width='20px' height='20px' color='inherit' me={collapsed ? '0px' : '12px'} />
+          {!collapsed ? (
+            <Text color='inherit' fontWeight='500'>
+              Log out
+            </Text>
+          ) : null}
         </Flex>
       </Box>
     </Flex>

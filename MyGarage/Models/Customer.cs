@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Customer : IAuditEntity
+public partial class Customer
 {
     public long Id { get; set; }
 
@@ -16,10 +14,6 @@ public partial class Customer : IAuditEntity
     public string? Email { get; set; }
 
     public string? PasswordHash { get; set; }
-
-    public string? GoogleId { get; set; }
-
-    public string? Type { get; set; }
 
     public long? TierId { get; set; }
 
@@ -55,6 +49,9 @@ public partial class Customer : IAuditEntity
 
     public long? DeletedBy { get; set; }
 
+    public string? GoogleId { get; set; }
+
+    public string Type { get; set; } = null!;
 
     public virtual ICollection<AiCustomerInsight> AiCustomerInsights { get; set; } = new List<AiCustomerInsight>();
 
@@ -72,6 +69,8 @@ public partial class Customer : IAuditEntity
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
+
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
     public virtual ICollection<RetailOrder> RetailOrders { get; set; } = new List<RetailOrder>();
@@ -81,6 +80,8 @@ public partial class Customer : IAuditEntity
     public virtual CustomerTier? Tier { get; set; }
 
     public virtual Staff? UpdatedByNavigation { get; set; }
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 
     public virtual ICollection<WorkSlot> WorkSlots { get; set; } = new List<WorkSlot>();
 }

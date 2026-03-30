@@ -21,15 +21,18 @@ namespace MyGarage.Controllers
         private readonly IVehicleConditionLogService _vehicleConditionLogService;
         private readonly IMapper _mapper;
         private readonly GarageContext _context;
+        private readonly ICloudStorageService _cloudStorageService;
 
         public VehicleConditionLogController(
             IVehicleConditionLogService vehicleConditionLogService,
             IMapper mapper,
-            GarageContext context)
+            GarageContext context,
+            ICloudStorageService cloudStorageService)
         {
             _vehicleConditionLogService = vehicleConditionLogService;
             _mapper = mapper;
             _context = context;
+            _cloudStorageService = cloudStorageService;
         }
 
         [HttpGet]
@@ -376,35 +379,48 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("upload-image")]
-        public async Task<ActionResult<object>> UploadImage([FromBody] SignatureUploadRequest request)
+        public async Task<ActionResult<object>> UploadImage([FromForm] IFormFile file)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.Base64Image))
+            if (file == null || file.Length == 0)
             {
                 return BadRequest(new { message = "Dữ liệu ảnh không hợp lệ." });
             }
 
+            if (string.IsNullOrWhiteSpace(file.ContentType) ||
+                (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
+                 !file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh hoặc video." });
+            }
+
             try
             {
-                var url = await SaveBase64ImageAsync(request.Base64Image, "vehicle-condition");
+                var url = await SaveUploadedFileAsync(file, "vehicle-condition");
                 return Ok(new { url });
             }
             catch
             {
-                return BadRequest(new { message = "Không thể tải ảnh lên máy chủ." });
+                return BadRequest(new { message = "Không thể tải tệp lên máy chủ." });
             }
         }
 
         [HttpPost("upload-signature")]
-        public async Task<ActionResult<object>> UploadSignature([FromBody] SignatureUploadRequest request)
+        public async Task<ActionResult<object>> UploadSignature([FromForm] IFormFile file)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.Base64Image))
+            if (file == null || file.Length == 0)
             {
                 return BadRequest(new { message = "Dữ liệu chữ ký không hợp lệ." });
             }
 
+            if (string.IsNullOrWhiteSpace(file.ContentType) ||
+                !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho chữ ký." });
+            }
+
             try
             {
-                var url = await SaveBase64ImageAsync(request.Base64Image, "signatures");
+                var url = await SaveUploadedFileAsync(file, "signatures");
                 return Ok(new { url });
             }
             catch
@@ -423,30 +439,22 @@ namespace MyGarage.Controllers
                     x.CustomerSignatureUrl != "");
         }
 
-        private static async Task<string> SaveBase64ImageAsync(string base64Image, string folderName)
+        private async Task<string> SaveUploadedFileAsync(IFormFile file, string folderName)
         {
-            var data = base64Image.Trim();
-            var extension = ".png";
-            var commaIndex = data.IndexOf(',');
-            if (commaIndex > -1)
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(extension))
             {
-                var header = data[..commaIndex];
-                if (header.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase)) extension = ".jpg";
-                else if (header.Contains("image/webp", StringComparison.OrdinalIgnoreCase)) extension = ".webp";
-                data = data[(commaIndex + 1)..];
-            }
-
-            var bytes = Convert.FromBase64String(data);
-            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", folderName);
-            if (!Directory.Exists(uploadsPath))
-            {
-                Directory.CreateDirectory(uploadsPath);
+                extension = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? ".mp4" : ".png";
             }
 
             var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-            var filePath = Path.Combine(uploadsPath, fileName);
-            await System.IO.File.WriteAllBytesAsync(filePath, bytes);
-            return $"/uploads/{folderName}/{fileName}";
+            await using var stream = file.OpenReadStream();
+            return await _cloudStorageService.UploadAsync(
+                stream,
+                folderName,
+                fileName,
+                file.ContentType,
+                HttpContext.RequestAborted);
         }
     }
 }

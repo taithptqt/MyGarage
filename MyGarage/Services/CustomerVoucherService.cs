@@ -1,3 +1,4 @@
+﻿// Mục đích: Xử lý nghiệp vụ cho bản ghi gán voucher theo khách hàng.
 using MyGarage.Models;
 using MyGarage.Interfaces;
 

@@ -1,11 +1,9 @@
-using MyGarage.Interfaces;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class PurchaseOrder : IAuditEntity
+public partial class PurchaseOrder
 {
     public long Id { get; set; }
 
@@ -29,9 +27,7 @@ public partial class PurchaseOrder : IAuditEntity
 
     public DateTime? CreatedAt { get; set; }
 
-    public DateTime? UpdatedAt { get; set; }
-
-    public long? UpdatedBy { get; set; }
+    public virtual ICollection<AccountsPayable> AccountsPayables { get; set; } = new List<AccountsPayable>();
 
     public virtual Staff? ApprovedByStaff { get; set; }
 
@@ -46,4 +42,6 @@ public partial class PurchaseOrder : IAuditEntity
     public virtual ICollection<StockTransaction> StockTransactions { get; set; } = new List<StockTransaction>();
 
     public virtual Supplier Supplier { get; set; } = null!;
+
+    public virtual ICollection<SupplierInvoice> SupplierInvoices { get; set; } = new List<SupplierInvoice>();
 }

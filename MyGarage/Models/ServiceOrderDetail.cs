@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class ServiceOrderDetail : IAuditEntity
+public partial class ServiceOrderDetail
 {
     public long Id { get; set; }
 

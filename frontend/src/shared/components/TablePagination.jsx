@@ -1,4 +1,4 @@
-﻿import React from "react";
+﻿import React, { useState } from "react";
 
 export default function TablePagination({
   totalItems = 0,
@@ -8,6 +8,7 @@ export default function TablePagination({
   onPageSizeChange,
   pageSizeOptions = [10, 20, 50]
 }) {
+  const [isPageSizeFocused, setIsPageSizeFocused] = useState(false);
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
 
@@ -20,6 +21,8 @@ export default function TablePagination({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        flexWrap: "wrap",
+        overflow: "visible",
         gap: 10,
         marginTop: 12
       }}
@@ -29,6 +32,20 @@ export default function TablePagination({
         id="page-size-select"
         value={pageSize}
         onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+        onFocus={() => setIsPageSizeFocused(true)}
+        onBlur={() => setIsPageSizeFocused(false)}
+        style={{
+          minWidth: 74,
+          height: 32,
+          borderRadius: 8,
+          border: isPageSizeFocused ? "3px solid #1f2a63" : "1px solid #c9d4e5",
+          background: "#ffffff",
+          color: "#2b3674",
+          fontWeight: 600,
+          padding: "0 8px",
+          outline: "none",
+          boxShadow: isPageSizeFocused ? "0 0 0 2px rgba(43, 54, 116, 0.22)" : "none"
+        }}
       >
         {pageSizeOptions.map((size) => (
           <option key={size} value={size}>
@@ -42,7 +59,11 @@ export default function TablePagination({
           display: "inline-flex",
           alignItems: "center",
           gap: 10,
-          height: 30
+          height: 30,
+          visibility: "visible",
+          opacity: 1,
+          pointerEvents: "auto",
+          flexShrink: 0
         }}
       >
         <button

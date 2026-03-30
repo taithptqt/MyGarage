@@ -1,10 +1,12 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "./CustomerLayout.css";
 
 export default function CustomerLayout({ children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  const hideDefaultNavbar = location.pathname.startsWith("/booking");
 
   function handleLogout() {
     logout();
@@ -13,31 +15,33 @@ export default function CustomerLayout({ children }) {
 
   return (
     <div className="customer-layout">
-      <header className="customer-navbar">
-        <div className="customer-navbar-inner">
-          <NavLink to="/home" className="customer-logo">
-            MyGarage
-          </NavLink>
-
-          <nav className="customer-nav-links">
-            <NavLink to="/booking" className={({ isActive }) => isActive ? "active" : ""}>
-              Đặt lịch
+      {!hideDefaultNavbar && (
+        <header className="customer-navbar">
+          <div className="customer-navbar-inner">
+            <NavLink to="/home" className="customer-logo">
+              MyGarage
             </NavLink>
-            <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
-              Lịch của tôi
-            </NavLink>
-          </nav>
 
-          <div className="customer-nav-user">
-            <span className="customer-nav-name">{user?.fullName || "User"}</span>
-            <button onClick={handleLogout} className="customer-nav-logout">
-              Đăng xuất
-            </button>
+            <nav className="customer-nav-links">
+              <NavLink to="/booking" className={({ isActive }) => isActive ? "active" : ""}>
+                Dat lich
+              </NavLink>
+              <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
+                Lich cua toi
+              </NavLink>
+            </nav>
+
+            <div className="customer-nav-user">
+              <span className="customer-nav-name">{user?.fullName || "User"}</span>
+              <button onClick={handleLogout} className="customer-nav-logout">
+                Dang xuat
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <main className="customer-main">{children}</main>
+      <main className={`customer-main ${hideDefaultNavbar ? "customer-main--booking" : ""}`}>{children}</main>
     </div>
   );
 }

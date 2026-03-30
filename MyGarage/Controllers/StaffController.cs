@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -15,17 +17,23 @@ namespace MyGarage.Controllers
     {
         private readonly IStaffService _staffService;
         private readonly IMapper _mapper;
+        private readonly ICloudStorageService _cloudStorageService;
 
-        public StaffController(IStaffService staffService, IMapper mapper)
+        public StaffController(IStaffService staffService, IMapper mapper, ICloudStorageService cloudStorageService)
         {
             _staffService = staffService;
             _mapper = mapper;
+            _cloudStorageService = cloudStorageService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null)
         {
             var items = await _staffService.GetAllAsync();
+            if (branchId.HasValue)
+            {
+                items = items.Where(s => s.BranchId == branchId.Value).ToList();
+            }
             var dtos = _mapper.Map<IEnumerable<StaffResponseDto>>(items);
             return Ok(dtos);
         }
@@ -61,13 +69,6 @@ namespace MyGarage.Controllers
             }
 
             _mapper.Map(itemDto, existingItem);
-
-            var currentUserIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (currentUserIdStr != id.ToString())
-            {
-                existingItem.SecurityStamp = Guid.NewGuid().ToString();
-            }
-
             var updatedItem = await _staffService.UpdateAsync(id, existingItem);
             
             if (updatedItem == null)
@@ -90,38 +91,46 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("{id}/avatar")]
-        public async Task<IActionResult> UploadAvatar(long id, IFormFile file)
+        public async Task<ActionResult<object>> UploadAvatar(long id, [FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
+            {
+                return BadRequest(new { message = "Tệp ảnh không hợp lệ." });
+            }
+
+            if (string.IsNullOrWhiteSpace(file.ContentType) || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ chấp nhận tệp ảnh." });
+            }
 
             var staff = await _staffService.GetByIdAsync(id);
             if (staff == null)
-                return NotFound("Staff not found.");
-
-            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
-            if (!Directory.Exists(uploadsPath))
-                Directory.CreateDirectory(uploadsPath);
-
-            var extension = Path.GetExtension(file.FileName);
-            if (string.IsNullOrEmpty(extension)) extension = ".jpg";
-            var fileName = $"{id}_{DateTime.Now.Ticks}{extension}";
-            var filePath = Path.Combine(uploadsPath, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
             {
-                await file.CopyToAsync(stream);
+                return NotFound(new { message = "Không tìm thấy nhân viên." });
             }
 
-            // Update staff avatar url
-            staff.AvatarUrl = $"/uploads/avatars/{fileName}";
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                extension = ".jpg";
+            }
+
+            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            await using var stream = file.OpenReadStream();
+            var avatarUrl = await _cloudStorageService.UploadAsync(
+                stream,
+                "avatars/staff",
+                fileName,
+                file.ContentType,
+                HttpContext.RequestAborted);
+
+            staff.AvatarUrl = avatarUrl;
             await _staffService.UpdateAsync(id, staff);
 
-            return Ok(new { avatarUrl = staff.AvatarUrl });
+            return Ok(new { avatarUrl });
         }
     }
 }
-
 
 
 

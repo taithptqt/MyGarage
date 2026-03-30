@@ -1,8 +1,9 @@
-using MyGarage.Interfaces;
+﻿using System;
+using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class Vehicle : IAuditEntity
+public partial class Vehicle
 {
     public long Id { get; set; }
 
@@ -55,6 +56,8 @@ public partial class Vehicle : IAuditEntity
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual ICollection<VehicleInsurance> VehicleInsurances { get; set; } = new List<VehicleInsurance>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
 
     public virtual ICollection<WorkSlot> WorkSlots { get; set; } = new List<WorkSlot>();
 }

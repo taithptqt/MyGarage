@@ -1,10 +1,9 @@
-using MyGarage.Interfaces;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
 
-public partial class VehicleConditionLog : IAuditEntity
+public partial class VehicleConditionLog
 {
     public long Id { get; set; }
 
@@ -39,4 +38,6 @@ public partial class VehicleConditionLog : IAuditEntity
     public virtual Staff? Inspector { get; set; }
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
+
+    public virtual Staff? UpdatedByNavigation { get; set; }
 }

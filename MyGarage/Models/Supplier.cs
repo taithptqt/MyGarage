@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Supplier : IAuditEntity
+public partial class Supplier
 {
     public long Id { get; set; }
 
@@ -35,13 +33,23 @@ public partial class Supplier : IAuditEntity
 
     public long? DeletedBy { get; set; }
 
+    public virtual ICollection<AccountsPayable> AccountsPayables { get; set; } = new List<AccountsPayable>();
+
     public virtual Staff? CreatedByNavigation { get; set; }
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
+
     public virtual ICollection<PurchaseOrder> PurchaseOrders { get; set; } = new List<PurchaseOrder>();
 
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetails { get; set; } = new List<ServiceOrderDetail>();
+
+    public virtual SupplierAccountingProfile? SupplierAccountingProfile { get; set; }
+
+    public virtual ICollection<SupplierInvoice> SupplierInvoices { get; set; } = new List<SupplierInvoice>();
+
+    public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }

@@ -1,7 +1,11 @@
 import { request } from "../../../app/apiClient";
 
-export async function getAllStaff() {
-  return request({ url: "/api/Staff", method: "GET" });
+export async function getAllStaff(branchId) {
+  return request({
+    url: "/api/Staff",
+    method: "GET",
+    params: branchId ? { branchId } : undefined
+  });
 }
 
 export async function getStaffById(id) {
@@ -47,8 +51,4 @@ export async function deleteStaff(id) {
 
 export async function getAllRoles() {
   return request({ url: "/api/Role", method: "GET" });
-}
-
-export async function getAllBranches() {
-  return request({ url: "/api/Branch", method: "GET" });
 }

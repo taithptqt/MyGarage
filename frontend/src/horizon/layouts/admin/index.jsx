@@ -5,9 +5,13 @@ import Footer from 'components/footer/FooterAdmin';
 import Navbar from 'components/navbar/NavbarAdmin';
 import Sidebar from 'components/sidebar/Sidebar';
 import { SidebarContext } from 'contexts/SidebarContext';
-import React, { useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import routes from 'routes';
+
+const SIDEBAR_EXPANDED_WIDTH = 300;
+const SIDEBAR_COLLAPSED_WIDTH = 5;
+const SIDEBAR_COLLAPSE_STORAGE_KEY = 'mygarage.admin.sidebar.collapsed';
 
 // Custom Chakra theme
 export default function Dashboard(props) {
@@ -15,9 +19,40 @@ export default function Dashboard(props) {
   // states and functions
   const [fixed] = useState(false);
   const [toggleSidebar, setToggleSidebar] = useState(false);
+  const [isSidebarDragging, setIsSidebarDragging] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === '1';
+  });
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    typeof window !== 'undefined' &&
+    window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === '1'
+      ? SIDEBAR_COLLAPSED_WIDTH
+      : SIDEBAR_EXPANDED_WIDTH
+  );
+  const location = useLocation();
+  const sidebarWidthVar = `var(--admin-sidebar-width, ${SIDEBAR_EXPANDED_WIDTH}px)`;
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.setProperty('--admin-sidebar-width', `${sidebarWidth}px`);
+  }, [sidebarWidth]);
+
+  const normalizePath = (value) => {
+    const path = String(value || '').trim();
+    if (!path) return '/';
+    return path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path;
+  };
+
+  const isRouteMatch = (route) => {
+    const fullPath = normalizePath(`${route.layout || ''}${route.path || ''}`);
+    const currentPath = normalizePath(location.pathname);
+    return currentPath === fullPath || currentPath.startsWith(`${fullPath}/`);
+  };
+
   // functions for changing the states from components
   const getRoute = () => {
-    return window.location.pathname !== '/admin/full-screen-maps';
+    return location.pathname !== '/admin/full-screen-maps';
   };
   const getActiveRoute = (routes) => {
     let activeRoute = 'Admin Dashboard';
@@ -33,9 +68,7 @@ export default function Dashboard(props) {
           return categoryActiveRoute;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].name;
         }
       }
@@ -56,9 +89,7 @@ export default function Dashboard(props) {
           return categoryActiveNavbar;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].secondary;
         }
       }
@@ -79,9 +110,7 @@ export default function Dashboard(props) {
           return categoryActiveNavbar;
         }
       } else {
-        if (
-          window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-        ) {
+        if (isRouteMatch(routes[i])) {
           return routes[i].messageNavbar;
         }
       }
@@ -108,6 +137,17 @@ export default function Dashboard(props) {
   document.documentElement.dir = 'ltr';
   const { onOpen } = useDisclosure();
   document.documentElement.dir = 'ltr';
+  const handleSidebarCollapseChange = (nextCollapsed) => {
+    setIsSidebarCollapsed(nextCollapsed);
+    setSidebarWidth(nextCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        SIDEBAR_COLLAPSE_STORAGE_KEY,
+        nextCollapsed ? '1' : '0',
+      );
+    }
+  };
+
   return (
     <Box>
       <Box>
@@ -115,6 +155,14 @@ export default function Dashboard(props) {
           value={{
             toggleSidebar,
             setToggleSidebar,
+            isSidebarCollapsed,
+            setIsSidebarCollapsed: handleSidebarCollapseChange,
+            isSidebarDragging,
+            setIsSidebarDragging,
+            sidebarWidth,
+            setSidebarWidth,
+            sidebarMinWidth: SIDEBAR_COLLAPSED_WIDTH,
+            sidebarMaxWidth: SIDEBAR_EXPANDED_WIDTH,
           }}
         >
           <Sidebar routes={routes} display="none" {...rest} />
@@ -125,12 +173,9 @@ export default function Dashboard(props) {
             overflow="auto"
             position="relative"
             maxHeight="100%"
-            w={{ base: '100%', xl: 'calc( 100% - 290px )' }}
-            maxWidth={{ base: '100%', xl: 'calc( 100% - 290px )' }}
-            transition="all 0.33s cubic-bezier(0.685, 0.0473, 0.346, 1)"
-            transitionDuration=".2s, .2s, .35s"
-            transitionProperty="top, bottom, width"
-            transitionTimingFunction="linear, linear, ease"
+            w={{ base: '100%', xl: `calc(100% - ${sidebarWidthVar})` }}
+            maxWidth={{ base: '100%', xl: `calc(100% - ${sidebarWidthVar})` }}
+            transition={isSidebarDragging ? "none" : "width 0.14s ease-out"}
           >
             <Portal>
               <Box>
@@ -141,6 +186,7 @@ export default function Dashboard(props) {
                   secondary={getActiveNavbar(routes)}
                   message={getActiveNavbarText(routes)}
                   fixed={fixed}
+                  sidebarWidth={sidebarWidth}
                   {...rest}
                 />
               </Box>

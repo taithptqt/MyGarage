@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBranch } from "../../../context/BranchContext";
 import { useSearch } from "../../../context/SearchContext";
+import { useAuth } from "../../../context/AuthContext";
 import { Modal } from "../../admin/components/AdminModals";
 import {
   getBranchAppointments,
@@ -28,7 +29,16 @@ const STATUS_FILTERS = [
 
 function formatTime(t) {
   if (!t) return "";
-  return t.substring(0, 5);
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDate(t) {
+  if (!t) return "";
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("vi-VN");
 }
 
 function badgeClass(status) {
@@ -45,6 +55,8 @@ function badgeClass(status) {
 export default function AppointmentManagementPage() {
   const { selectedBranchId } = useBranch();
   const { searchQuery } = useSearch();
+  const { user } = useAuth();
+  const effectiveBranchId = Number(selectedBranchId || user?.branchId || 0);
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,18 +68,23 @@ export default function AppointmentManagementPage() {
   const [pageSize, setPageSize] = useState(10);
 
   const fetchData = useCallback(async () => {
-    if (!selectedBranchId) return;
+    if (!effectiveBranchId) {
+      setLoading(false);
+      setAppointments([]);
+      setError("Khong xac dinh duoc chi nhanh de tai lich hen.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const data = await getBranchAppointments(selectedBranchId, statusFilter || undefined);
+      const data = await getBranchAppointments(effectiveBranchId, statusFilter || undefined);
       setAppointments(Array.isArray(data) ? data : []);
-    } catch {
-      setError("Không thể tải danh sách lịch hẹn.");
+    } catch (err) {
+      setError(err.message || "Không thể tải danh sách lịch hẹn.");
     } finally {
       setLoading(false);
     }
-  }, [selectedBranchId, statusFilter]);
+  }, [effectiveBranchId, statusFilter]);
 
   useEffect(() => {
     fetchData();
@@ -168,7 +185,7 @@ export default function AppointmentManagementPage() {
                 <tr key={a.id}>
                   <td className="td-name">{a.customerName}</td>
                   <td>{a.customerPhone || "—"}</td>
-                  <td>{a.scheduledDate}</td>
+                  <td>{formatDate(a.startTime)}</td>
                   <td>
                     {formatTime(a.startTime)} - {formatTime(a.endTime)}
                   </td>
@@ -268,7 +285,7 @@ export default function AppointmentManagementPage() {
             <strong>SĐT</strong>
             <span>{detailModal.customerPhone || "—"}</span>
             <strong>Ngày</strong>
-            <span>{detailModal.scheduledDate}</span>
+            <span>{formatDate(detailModal.startTime)}</span>
             <strong>Giờ</strong>
             <span>
               {formatTime(detailModal.startTime)} -{" "}

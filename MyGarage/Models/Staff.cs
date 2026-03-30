@@ -1,11 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-
-using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class Staff : IAuditEntity
+public partial class Staff
 {
     public long Id { get; set; }
 
@@ -61,15 +59,26 @@ public partial class Staff : IAuditEntity
 
     public long? DeletedBy { get; set; }
 
+    public virtual ICollection<AccountingPeriod> AccountingPeriods { get; set; } = new List<AccountingPeriod>();
+
     public virtual ICollection<AiContentStore> AiContentStores { get; set; } = new List<AiContentStore>();
 
     public virtual ICollection<AiTechnicalAssistant> AiTechnicalAssistants { get; set; } = new List<AiTechnicalAssistant>();
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+    public virtual ICollection<Appointment> AppointmentUpdatedByNavigations { get; set; } = new List<Appointment>();
 
     public virtual ICollection<ApprovalRequest> ApprovalRequestApprovers { get; set; } = new List<ApprovalRequest>();
 
     public virtual ICollection<ApprovalRequest> ApprovalRequestRequestedByNavigations { get; set; } = new List<ApprovalRequest>();
+
+    public virtual ICollection<AttendanceAdjustment> AttendanceAdjustmentApprovedByNavigations { get; set; } = new List<AttendanceAdjustment>();
+
+    public virtual ICollection<AttendanceAdjustment> AttendanceAdjustmentStaffs { get; set; } = new List<AttendanceAdjustment>();
+
+    public virtual ICollection<BankReconciliation> BankReconciliationApprovedByNavigations { get; set; } = new List<BankReconciliation>();
+
+    public virtual ICollection<BankReconciliation> BankReconciliationPreparedByNavigations { get; set; } = new List<BankReconciliation>();
 
     public virtual ICollection<Bay> BayCreatedByNavigations { get; set; } = new List<Bay>();
 
@@ -151,9 +160,19 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<Diagnosis> DiagnosisUpdatedByNavigations { get; set; } = new List<Diagnosis>();
 
+    public virtual ICollection<DocumentAttachment> DocumentAttachments { get; set; } = new List<DocumentAttachment>();
+
+    public virtual ICollection<EmployeeDependent> EmployeeDependents { get; set; } = new List<EmployeeDependent>();
+
+    public virtual ICollection<EmployeeLoan> EmployeeLoans { get; set; } = new List<EmployeeLoan>();
+
     public virtual ICollection<ExpenseLog> ExpenseLogApprovedByNavigations { get; set; } = new List<ExpenseLog>();
 
     public virtual ICollection<ExpenseLog> ExpenseLogStaffs { get; set; } = new List<ExpenseLog>();
+
+    public virtual ICollection<FinanceApprovalRequest> FinanceApprovalRequestApprovers { get; set; } = new List<FinanceApprovalRequest>();
+
+    public virtual ICollection<FinanceApprovalRequest> FinanceApprovalRequestRequestedByNavigations { get; set; } = new List<FinanceApprovalRequest>();
 
     public virtual ICollection<GatePass> GatePassApprovedByNavigations { get; set; } = new List<GatePass>();
 
@@ -185,6 +204,12 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<Invoice> InvoiceUpdatedByNavigations { get; set; } = new List<Invoice>();
 
+    public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
+
+    public virtual ICollection<JournalEntryLine> JournalEntryLines { get; set; } = new List<JournalEntryLine>();
+
+    public virtual ICollection<LegalDocument> LegalDocuments { get; set; } = new List<LegalDocument>();
+
     public virtual ICollection<MaterialRequestDetail> MaterialRequestDetailCreatedByNavigations { get; set; } = new List<MaterialRequestDetail>();
 
     public virtual ICollection<MaterialRequestDetail> MaterialRequestDetailUpdatedByNavigations { get; set; } = new List<MaterialRequestDetail>();
@@ -207,6 +232,10 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<NotificationTemplate> NotificationTemplateUpdatedByNavigations { get; set; } = new List<NotificationTemplate>();
 
+    public virtual ICollection<OvertimeEntry> OvertimeEntryApprovedByNavigations { get; set; } = new List<OvertimeEntry>();
+
+    public virtual ICollection<OvertimeEntry> OvertimeEntryStaffs { get; set; } = new List<OvertimeEntry>();
+
     public virtual ICollection<Payment> PaymentCashiers { get; set; } = new List<Payment>();
 
     public virtual ICollection<PaymentMethod> PaymentMethodCreatedByNavigations { get; set; } = new List<PaymentMethod>();
@@ -216,6 +245,16 @@ public partial class Staff : IAuditEntity
     public virtual ICollection<PaymentMethod> PaymentMethodUpdatedByNavigations { get; set; } = new List<PaymentMethod>();
 
     public virtual ICollection<Payment> PaymentUpdatedByNavigations { get; set; } = new List<Payment>();
+
+    public virtual ICollection<PayrollItem> PayrollItems { get; set; } = new List<PayrollItem>();
+
+    public virtual ICollection<PayrollRun> PayrollRunApprovedByNavigations { get; set; } = new List<PayrollRun>();
+
+    public virtual ICollection<PayrollRun> PayrollRunCalculatedByNavigations { get; set; } = new List<PayrollRun>();
+
+    public virtual ICollection<Payslip> Payslips { get; set; } = new List<Payslip>();
+
+    public virtual ICollection<PitProfile> PitProfiles { get; set; } = new List<PitProfile>();
 
     public virtual ICollection<Product> ProductCreatedByNavigations { get; set; } = new List<Product>();
 
@@ -254,6 +293,10 @@ public partial class Staff : IAuditEntity
     public virtual ICollection<Role> RoleDeletedByNavigations { get; set; } = new List<Role>();
 
     public virtual ICollection<Role> RoleUpdatedByNavigations { get; set; } = new List<Role>();
+
+    public virtual ICollection<SalaryAdvance> SalaryAdvanceApprovedByNavigations { get; set; } = new List<SalaryAdvance>();
+
+    public virtual ICollection<SalaryAdvance> SalaryAdvanceStaffs { get; set; } = new List<SalaryAdvance>();
 
     public virtual ICollection<ServiceCategory> ServiceCategoryCreatedByNavigations { get; set; } = new List<ServiceCategory>();
 
@@ -299,6 +342,12 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<ShiftClosing> ShiftClosingManagers { get; set; } = new List<ShiftClosing>();
 
+    public virtual ICollection<StaffContract> StaffContracts { get; set; } = new List<StaffContract>();
+
+    public virtual ICollection<StaffSalaryProfile> StaffSalaryProfileStaffs { get; set; } = new List<StaffSalaryProfile>();
+
+    public virtual ICollection<StaffSalaryProfile> StaffSalaryProfileUpdatedByNavigations { get; set; } = new List<StaffSalaryProfile>();
+
     public virtual ICollection<StaffSchedule> StaffSchedules { get; set; } = new List<StaffSchedule>();
 
     public virtual StaffTier? StaffTier { get; set; }
@@ -321,7 +370,15 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<Supplier> SupplierDeletedByNavigations { get; set; } = new List<Supplier>();
 
+    public virtual ICollection<SupplierInvoice> SupplierInvoices { get; set; } = new List<SupplierInvoice>();
+
+    public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();
+
     public virtual ICollection<Supplier> SupplierUpdatedByNavigations { get; set; } = new List<Supplier>();
+
+    public virtual ICollection<TaxFiling> TaxFilingApprovedByNavigations { get; set; } = new List<TaxFiling>();
+
+    public virtual ICollection<TaxFiling> TaxFilingPreparedByNavigations { get; set; } = new List<TaxFiling>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 
@@ -335,6 +392,8 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<VehicleConditionLog> VehicleConditionLogInspectors { get; set; } = new List<VehicleConditionLog>();
 
+    public virtual ICollection<VehicleConditionLog> VehicleConditionLogUpdatedByNavigations { get; set; } = new List<VehicleConditionLog>();
+
     public virtual ICollection<Vehicle> VehicleCreatedByNavigations { get; set; } = new List<Vehicle>();
 
     public virtual ICollection<Vehicle> VehicleDeletedByNavigations { get; set; } = new List<Vehicle>();
@@ -347,11 +406,43 @@ public partial class Staff : IAuditEntity
 
     public virtual ICollection<Vehicle> VehicleUpdatedByNavigations { get; set; } = new List<Vehicle>();
 
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequestApprovers { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequestRequestedByNavigations { get; set; } = new List<VoucherApprovalRequest>();
+
+    public virtual ICollection<VoucherAssignment> VoucherAssignmentCreatedByNavigations { get; set; } = new List<VoucherAssignment>();
+
+    public virtual ICollection<VoucherAssignment> VoucherAssignmentUpdatedByNavigations { get; set; } = new List<VoucherAssignment>();
+
+    public virtual ICollection<VoucherAuditLog> VoucherAuditLogs { get; set; } = new List<VoucherAuditLog>();
+
+    public virtual ICollection<VoucherCampaign> VoucherCampaignCreatedByNavigations { get; set; } = new List<VoucherCampaign>();
+
+    public virtual ICollection<VoucherCampaign> VoucherCampaignDeletedByNavigations { get; set; } = new List<VoucherCampaign>();
+
+    public virtual ICollection<VoucherCampaign> VoucherCampaignOwnerStaffs { get; set; } = new List<VoucherCampaign>();
+
+    public virtual ICollection<VoucherCampaign> VoucherCampaignUpdatedByNavigations { get; set; } = new List<VoucherCampaign>();
+
+    public virtual ICollection<VoucherCodeBatch> VoucherCodeBatches { get; set; } = new List<VoucherCodeBatch>();
+
+    public virtual ICollection<VoucherConflictRule> VoucherConflictRuleCreatedByNavigations { get; set; } = new List<VoucherConflictRule>();
+
+    public virtual ICollection<VoucherConflictRule> VoucherConflictRuleUpdatedByNavigations { get; set; } = new List<VoucherConflictRule>();
+
     public virtual ICollection<Voucher> VoucherCreatedByNavigations { get; set; } = new List<Voucher>();
 
     public virtual ICollection<Voucher> VoucherDeletedByNavigations { get; set; } = new List<Voucher>();
 
+    public virtual ICollection<VoucherRedemption> VoucherRedemptionAppliedByNavigations { get; set; } = new List<VoucherRedemption>();
+
+    public virtual ICollection<VoucherRedemption> VoucherRedemptionApprovedByNavigations { get; set; } = new List<VoucherRedemption>();
+
     public virtual ICollection<Voucher> VoucherUpdatedByNavigations { get; set; } = new List<Voucher>();
+
+    public virtual ICollection<VoucherUsageRule> VoucherUsageRuleCreatedByNavigations { get; set; } = new List<VoucherUsageRule>();
+
+    public virtual ICollection<VoucherUsageRule> VoucherUsageRuleUpdatedByNavigations { get; set; } = new List<VoucherUsageRule>();
 
     public virtual ICollection<Warehouse> WarehouseCreatedByNavigations { get; set; } = new List<Warehouse>();
 
