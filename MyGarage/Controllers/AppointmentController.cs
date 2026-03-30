@@ -192,6 +192,48 @@ namespace MyGarage.Controllers
             }
         }
 
+        [Authorize]
+        [HttpPut("{id}/arrive")]
+        public async Task<ActionResult<AppointmentDetailResponseDto>> Arrive(long id, [FromBody] ArriveAppointmentRequestDto? dto)
+        {
+            try
+            {
+                var appointment = await _appointmentService.ArriveAsync(id, dto?.ArrivedAt);
+                if (appointment == null) return NotFound();
+
+                var detail = await _appointmentService.GetDetailedAsync(id);
+                return Ok(detail);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("branch/{branchId}/auto-no-show")]
+        public async Task<ActionResult<object>> AutoMarkNoShows(long branchId, [FromQuery] DateTime? now = null)
+        {
+            var affected = await _appointmentService.AutoMarkNoShowsAsync(branchId, now);
+            return Ok(new { updated = affected });
+        }
+
+        [Authorize]
+        [HttpGet("branch/{branchId}/booking-health")]
+        public async Task<ActionResult<BranchBookingHealthResponseDto>> GetBookingHealth(long branchId, [FromQuery] DateTime? at = null)
+        {
+            var health = await _appointmentService.GetBranchBookingHealthAsync(branchId, at);
+            return Ok(health);
+        }
+
+        [Authorize]
+        [HttpGet("branch/{branchId}/dispatch-dashboard")]
+        public async Task<ActionResult<DispatchDashboardResponseDto>> GetDispatchDashboard(long branchId, [FromQuery] DateTime? at = null)
+        {
+            var dashboard = await _appointmentService.GetDispatchDashboardAsync(branchId, at);
+            return Ok(dashboard);
+        }
+
         private long? GetUserIdFromToken()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier);

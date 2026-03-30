@@ -14,6 +14,10 @@ namespace MyGarage.Interfaces
         Task<Appointment?> ConfirmAsync(long id);
         Task<Appointment?> CancelAsync(long id, string? reason);
         Task<Appointment?> CheckInAsync(long id);
+        Task<Appointment?> ArriveAsync(long id, DateTime? arrivedAt = null);
+        Task<int> AutoMarkNoShowsAsync(long branchId, DateTime? now = null);
+        Task<BranchBookingHealthResponseDto> GetBranchBookingHealthAsync(long branchId, DateTime? at = null);
+        Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null);
         Task<IEnumerable<AppointmentDetailResponseDto>> GetCustomerAppointmentsAsync(long customerId);
         Task<IEnumerable<AppointmentDetailResponseDto>> GetBranchAppointmentsAsync(long branchId, string? status = null);
         Task<AppointmentDetailResponseDto?> GetDetailedAsync(long id);

@@ -184,9 +184,12 @@ namespace MyGarage.Services
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
         {
-            var normalizedEmail = NormalizeEmail(request.Email);
+            var normalizedEmail = string.IsNullOrWhiteSpace(request.Email)
+                ? null
+                : NormalizeEmail(request.Email);
 
-            if (await _context.Customers.AnyAsync(c => c.Email == normalizedEmail))
+            if (!string.IsNullOrWhiteSpace(normalizedEmail)
+                && await _context.Customers.AnyAsync(c => c.Email == normalizedEmail))
             {
                 throw new InvalidOperationException("Email already exists.");
             }
