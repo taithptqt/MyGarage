@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "../features/auth/pages/AuthPage";
 import HomePage from "../features/home/pages/HomePage";
 import AdminPage from "../features/admin/pages/AdminPage";
+import DispatchCenterPage from "../features/admin/pages/DispatchCenterPage";
 import WorkshopPage from "../features/workshop/pages/WorkshopPage";
 import ReceptionOrdersSection from "../features/workshop/components/ReceptionOrdersSection";
 import ManagerDashboard from "../features/workshop/components/ManagerDashboard";
@@ -94,6 +95,15 @@ function App() {
               <AdminPage />
             </ProtectedRoute>
           } 
+        />
+
+        <Route
+          path="/dispatch-center"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN", "MANAGER", "RECEPTIONIST", "FOREMAN"]}>
+              <DispatchCenterPage />
+            </ProtectedRoute>
+          }
         />
         
         <Route 

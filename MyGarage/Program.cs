@@ -61,6 +61,7 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();

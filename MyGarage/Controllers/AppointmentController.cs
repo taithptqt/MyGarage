@@ -234,6 +234,22 @@ namespace MyGarage.Controllers
             return Ok(dashboard);
         }
 
+        [Authorize]
+        [HttpPost("branch/{branchId}/dispatch-cycle")]
+        public async Task<ActionResult<DispatchCycleResponseDto>> RunDispatchCycle(long branchId, [FromQuery] DateTime? at = null)
+        {
+            var result = await _appointmentService.RunDispatchCycleAsync(branchId, at);
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPost("branch/{branchId}/overnight-lock")]
+        public async Task<ActionResult<OvernightLockResponseDto>> LockOvernightSlots(long branchId, [FromBody] OvernightLockRequestDto? dto)
+        {
+            var result = await _appointmentService.LockOvernightSlotsAsync(branchId, dto?.BusinessDate);
+            return Ok(result);
+        }
+
         private long? GetUserIdFromToken()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier);

@@ -1,11 +1,19 @@
 ﻿import { request } from "../../../app/apiClient";
 
 // ── Available Slots ─────────────────────────────────────────────────────────
-export async function getAvailableSlots(branchId, date) {
+export async function getAvailableSlots(branchId, date, options = {}) {
+  const params = { branchId, date };
+  if (options.requestedServiceIds) {
+    params.requestedServiceIds = options.requestedServiceIds;
+  }
+  if (options.bookingFlow) {
+    params.bookingFlow = options.bookingFlow;
+  }
+
   return request({
     url: "/api/Appointment/available-slots",
     method: "GET",
-    params: { branchId, date },
+    params,
   });
 }
 
@@ -65,6 +73,54 @@ export async function cancelAppointment(id, reason) {
 
 export async function checkInAppointment(id) {
   return request({ url: `/api/Appointment/${id}/check-in`, method: "PUT" });
+}
+
+export async function arriveAppointment(id, payload) {
+  return request({
+    url: `/api/Appointment/${id}/arrive`,
+    method: "PUT",
+    data: payload,
+  });
+}
+
+export async function autoMarkNoShows(branchId, now) {
+  return request({
+    url: `/api/Appointment/branch/${branchId}/auto-no-show`,
+    method: "POST",
+    params: now ? { now } : undefined,
+  });
+}
+
+export async function getBranchBookingHealth(branchId, at) {
+  return request({
+    url: `/api/Appointment/branch/${branchId}/booking-health`,
+    method: "GET",
+    params: at ? { at } : undefined,
+  });
+}
+
+export async function getDispatchDashboard(branchId, at) {
+  return request({
+    url: `/api/Appointment/branch/${branchId}/dispatch-dashboard`,
+    method: "GET",
+    params: at ? { at } : undefined,
+  });
+}
+
+export async function runDispatchCycle(branchId, at) {
+  return request({
+    url: `/api/Appointment/branch/${branchId}/dispatch-cycle`,
+    method: "POST",
+    params: at ? { at } : undefined,
+  });
+}
+
+export async function lockOvernightSlots(branchId, businessDate) {
+  return request({
+    url: `/api/Appointment/branch/${branchId}/overnight-lock`,
+    method: "POST",
+    data: businessDate ? { businessDate } : {},
+  });
 }
 
 // ── Reference Data (reuse existing endpoints) ───────────────────────────────

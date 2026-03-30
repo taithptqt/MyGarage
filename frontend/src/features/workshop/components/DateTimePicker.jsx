@@ -6,7 +6,6 @@ import {
   Button,
   Flex,
   Icon,
-  Input,
   Popover,
   PopoverBody,
   PopoverContent,
@@ -85,21 +84,31 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
     >
       <PopoverTrigger>
         <Box>
-          <Box position="relative" cursor="pointer" onClick={() => setIsOpen(true)} maxW="320px">
-            <Input
-              readOnly
-              placeholder={placeholder}
-              value={formatDisplay()}
-              cursor="pointer"
+          <Flex
+            cursor="pointer"
+            onClick={() => setIsOpen(true)}
+            maxW="360px"
+            w="100%"
+            minH="40px"
+            px="12px"
+            border="1px solid #2e4e70"
+            borderRadius="12px"
+            bg="#071d36"
+            align="center"
+            justify="space-between"
+            gap="8px"
+          >
+            <Text
+              flex="1"
               fontSize="sm"
               fontWeight="600"
-              color="#eaf4ff"
-              bg="#071d36"
-              border="1px solid #2e4e70"
-              borderRadius="12px"
-              pr="46px"
-              _focus={{ borderColor: "#24cde5", boxShadow: "0 0 0 1px #24cde5" }}
-            />
+              color={selectedDate ? "#eaf4ff" : "#aac0d8"}
+              whiteSpace="nowrap"
+              overflow="hidden"
+              textOverflow="ellipsis"
+            >
+              {formatDisplay() || placeholder}
+            </Text>
             <Flex
               w="28px"
               h="28px"
@@ -108,15 +117,11 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
               borderRadius="8px"
               color="#f5a623"
               fontSize="20px"
-              position="absolute"
-              right="10px"
-              top="50%"
-              transform="translateY(-50%)"
-              pointerEvents="none"
+              flexShrink={0}
             >
               <Icon as={MdEvent} />
             </Flex>
-          </Box>
+          </Flex>
         </Box>
       </PopoverTrigger>
 

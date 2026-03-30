@@ -35,5 +35,8 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 2000
   }
 });

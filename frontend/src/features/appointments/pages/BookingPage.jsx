@@ -27,6 +27,15 @@ const STEPS = [
   "Thông tin đặt hẹn",
   "Hoàn thành",
 ];
+const BOOKING_FLOW = {
+  FIXED: "FIXED",
+  FLEXIBLE: "FLEXIBLE",
+};
+const SESSION_TABS = [
+  { key: "MORNING", label: "Buổi sáng", hint: "08:00 - 12:00" },
+  { key: "AFTERNOON", label: "Buổi chiều", hint: "12:00 - 17:00" },
+  { key: "EVENING", label: "Buổi tối", hint: "17:00 - 20:00" },
+];
 
 function formatVnd(value) {
   if (!Number.isFinite(Number(value))) return "0đ";
@@ -35,6 +44,28 @@ function formatVnd(value) {
 
 function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
+}
+
+function resolveBookingFlow(category, selectedServiceCount) {
+  if (selectedServiceCount > 0) return BOOKING_FLOW.FIXED;
+
+  const raw = normalizeText(
+    `${extractField(category, ["name", "Name"], "")} ${extractField(category, ["description", "Description"], "")}`
+  );
+  if (
+    raw.includes("sua chua") ||
+    raw.includes("chuan doan") ||
+    raw.includes("kiem tra") ||
+    raw.includes("bao hiem") ||
+    raw.includes("bao hanh") ||
+    raw.includes("rework") ||
+    raw.includes("repair") ||
+    raw.includes("diagnostic")
+  ) {
+    return BOOKING_FLOW.FLEXIBLE;
+  }
+
+  return BOOKING_FLOW.FIXED;
 }
 
 function formatDateVi(dateString) {
@@ -148,6 +179,13 @@ export default function BookingPage() {
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [bookingFlow, setBookingFlow] = useState(BOOKING_FLOW.FIXED);
+  const [activeSession, setActiveSession] = useState("MORNING");
+  const [showOddSlots, setShowOddSlots] = useState({
+    MORNING: false,
+    AFTERNOON: false,
+    EVENING: false,
+  });
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -261,6 +299,59 @@ export default function BookingPage() {
     [selectedServices]
   );
 
+  const availableSlots = useMemo(
+    () => (slots || []).filter((slot) => extractField(slot, ["isAvailable", "IsAvailable"], false)),
+    [slots]
+  );
+
+  const slotsBySession = useMemo(() => {
+    const base = {
+      MORNING: [],
+      AFTERNOON: [],
+      EVENING: [],
+    };
+
+    for (const slot of availableSlots) {
+      const key = String(extractField(slot, ["session", "Session"], "")).toUpperCase();
+      if (base[key]) {
+        base[key].push(slot);
+      }
+    }
+
+    for (const key of Object.keys(base)) {
+      base[key].sort((a, b) => {
+        const at = new Date(extractField(a, ["startTime", "StartTime"])).getTime();
+        const bt = new Date(extractField(b, ["startTime", "StartTime"])).getTime();
+        return at - bt;
+      });
+    }
+
+    return base;
+  }, [availableSlots]);
+
+  const displayedSlots = useMemo(() => {
+    const sessionSlots = slotsBySession[activeSession] || [];
+    if (sessionSlots.length === 0) return [];
+
+    if (bookingFlow === BOOKING_FLOW.FLEXIBLE) {
+      if (showOddSlots[activeSession]) return sessionSlots;
+      return sessionSlots.filter((slot) => extractField(slot, ["isTopPick", "IsTopPick"], false)).slice(0, 5);
+    }
+
+    const roundedTopPicks = sessionSlots.filter(
+      (slot) =>
+        extractField(slot, ["isRoundedHour", "IsRoundedHour"], false) &&
+        extractField(slot, ["isTopPick", "IsTopPick"], false)
+    );
+    const roundedAll = sessionSlots.filter((slot) => extractField(slot, ["isRoundedHour", "IsRoundedHour"], false));
+    const shouldExpand = showOddSlots[activeSession] || roundedTopPicks.length === 0;
+
+    if (shouldExpand) return sessionSlots;
+
+    const preferred = roundedTopPicks.length > 0 ? roundedTopPicks : roundedAll;
+    return preferred.slice(0, 5);
+  }, [activeSession, bookingFlow, showOddSlots, slotsBySession]);
+
   const summaryItems = useMemo(() => {
     const items = [];
     const customerName = customerForm.fullName.trim();
@@ -283,7 +374,9 @@ export default function BookingPage() {
       : "";
 
     const step1Done = Boolean(selectedCategoryId);
-    const step2Done = step1Done && selectedServiceIds.length > 0;
+    const step2Done =
+      step1Done &&
+      (bookingFlow === BOOKING_FLOW.FLEXIBLE || selectedServiceIds.length > 0);
     const step3Done = step2Done && Boolean(selectedBranchId);
 
     const hasVehicle = linkedVehicles.length > 0;
@@ -296,11 +389,24 @@ export default function BookingPage() {
     if (step1Done && selectedCategory) {
       items.push({ key: "category", label: "Loại dịch vụ", value: extractField(selectedCategory, ["name", "Name"], "") });
     }
+    if (step2Done) {
+      items.push({
+        key: "flow",
+        label: "Luồng tiếp nhận",
+        value:
+          bookingFlow === BOOKING_FLOW.FLEXIBLE
+            ? "Check-in linh hoạt (gara tự xếp khoang)"
+            : "Giờ cố định theo slot",
+      });
+    }
     if (step2Done && selectedServiceNames.length > 0) {
       items.push({
         key: "services",
         label: "Dịch vụ cụ thể",
-        value: selectedServiceNames.length <= 2 ? selectedServiceNames.join(", ") : `${selectedServiceNames.length} mục đã chọn`,
+        value:
+          selectedServiceNames.length <= 2
+            ? selectedServiceNames.join(", ")
+            : `${selectedServiceNames.length} mục đã chọn`,
       });
     }
     if (step3Done && selectedBranch) {
@@ -332,6 +438,7 @@ export default function BookingPage() {
     selectedBranchId,
     selectedCategory,
     selectedCategoryId,
+    bookingFlow,
     selectedDate,
     selectedExistingVehicle,
     selectedModel?.modelName,
@@ -344,7 +451,7 @@ export default function BookingPage() {
 
   const progressPercent = useMemo(() => (currentStep / STEPS.length) * 100, [currentStep]);
 
-  const loadSlots = useCallback(async (branchId, date) => {
+  const loadSlots = useCallback(async (branchId, date, flow, serviceIds) => {
     if (!branchId || !date) {
       setSlots([]);
       setSelectedSlot(null);
@@ -354,9 +461,17 @@ export default function BookingPage() {
     setSlotsLoading(true);
     setSelectedSlot(null);
     setSlots([]);
+    setShowOddSlots({
+      MORNING: false,
+      AFTERNOON: false,
+      EVENING: false,
+    });
 
     try {
-      const data = await getAvailableSlots(Number(branchId), date);
+      const data = await getAvailableSlots(Number(branchId), date, {
+        requestedServiceIds: serviceIds?.length ? serviceIds.join(",") : null,
+        bookingFlow: flow,
+      });
       setSlots(Array.isArray(data) ? data : []);
     } catch {
       setSlots([]);
@@ -439,9 +554,45 @@ export default function BookingPage() {
 
   useEffect(() => {
     if (selectedBranchId && selectedDate) {
-      loadSlots(selectedBranchId, selectedDate);
+      loadSlots(selectedBranchId, selectedDate, bookingFlow, selectedServiceIds);
     }
-  }, [selectedBranchId, selectedDate, loadSlots]);
+  }, [selectedBranchId, selectedDate, bookingFlow, selectedServiceIds, loadSlots]);
+
+  useEffect(() => {
+    const nextFlow = resolveBookingFlow(selectedCategory, selectedServiceIds.length);
+    setBookingFlow((prev) =>
+      selectedServiceIds.length > 0 && prev === BOOKING_FLOW.FLEXIBLE
+        ? BOOKING_FLOW.FIXED
+        : selectedServiceIds.length === 0
+          ? nextFlow
+          : prev
+    );
+  }, [selectedCategory, selectedServiceIds.length]);
+
+  useEffect(() => {
+    const firstSessionWithSlots =
+      SESSION_TABS.find((tab) => (slotsBySession[tab.key] || []).length > 0)?.key || "MORNING";
+    setActiveSession(firstSessionWithSlots);
+  }, [slotsBySession]);
+
+  useEffect(() => {
+    if (bookingFlow !== BOOKING_FLOW.FIXED) return;
+    setShowOddSlots((prev) => {
+      const next = { ...prev };
+      for (const tab of SESSION_TABS) {
+        const sessionSlots = slotsBySession[tab.key] || [];
+        const roundedTop = sessionSlots.filter(
+          (slot) =>
+            extractField(slot, ["isRoundedHour", "IsRoundedHour"], false) &&
+            extractField(slot, ["isTopPick", "IsTopPick"], false)
+        );
+        if (sessionSlots.length > 0 && roundedTop.length === 0) {
+          next[tab.key] = true;
+        }
+      }
+      return next;
+    });
+  }, [bookingFlow, slotsBySession]);
 
   function updateNewVehicle(key, value) {
     setNewVehicle((prev) => ({ ...prev, [key]: value }));
@@ -453,13 +604,19 @@ export default function BookingPage() {
     );
   }
 
+  function toggleOddSlotsForSession(sessionKey) {
+    setShowOddSlots((prev) => ({ ...prev, [sessionKey]: !prev[sessionKey] }));
+  }
+
   function validateStep(stepNumber) {
     if (stepNumber === 1 && !selectedCategoryId) {
       return "Vui lòng chọn loại dịch vụ.";
     }
 
-    if (stepNumber === 2 && selectedServiceIds.length === 0) {
-      return "Vui lòng chọn ít nhất một dịch vụ cụ thể.";
+    if (stepNumber === 2) {
+      if (bookingFlow === BOOKING_FLOW.FIXED && selectedServiceIds.length === 0) {
+        return "Luồng giờ cố định yêu cầu chọn ít nhất một dịch vụ cụ thể.";
+      }
     }
 
     if (stepNumber === 3 && !selectedBranchId) {
@@ -471,6 +628,9 @@ export default function BookingPage() {
       if (!customerForm.phone.trim()) return "Vui lòng nhập số điện thoại khách hàng.";
       if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
       if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
+      if (bookingFlow === BOOKING_FLOW.FLEXIBLE && notes.trim().length < 8) {
+        return "Luồng linh hoạt yêu cầu mô tả tình trạng xe tối thiểu 8 ký tự.";
+      }
 
       const hasVehicle = linkedVehicles.length > 0;
       const usingNewVehicle = !hasVehicle || vehicleMode === "new";
@@ -584,6 +744,10 @@ export default function BookingPage() {
         color = newVehicle.color.trim() || null;
       }
 
+      const slotStart = extractField(selectedSlot, ["startTime", "StartTime"]);
+      const slotEnd = extractField(selectedSlot, ["endTime", "EndTime"]);
+      const isFlexibleFlow = bookingFlow === BOOKING_FLOW.FLEXIBLE;
+
       await bookAppointment({
         branchId: Number(selectedBranchId),
         vehicleId,
@@ -591,9 +755,12 @@ export default function BookingPage() {
         licensePlate,
         vin,
         color,
-        startTime: extractField(selectedSlot, ["startTime", "StartTime"]),
-        endTime: extractField(selectedSlot, ["endTime", "EndTime"]),
-        requestedServiceIds: selectedServiceIds.join(","),
+        bookingFlow,
+        startTime: isFlexibleFlow ? null : slotStart,
+        endTime: isFlexibleFlow ? null : slotEnd,
+        checkInWindowStart: isFlexibleFlow ? slotStart : null,
+        checkInWindowEnd: isFlexibleFlow ? slotEnd : null,
+        requestedServiceIds: selectedServiceIds.length > 0 ? selectedServiceIds.join(",") : null,
         customerNotes: notes.trim() || null,
       });
 
@@ -677,6 +844,8 @@ export default function BookingPage() {
                       onClick={() => {
                         setSelectedCategoryId(String(categoryId));
                         setSelectedServiceIds([]);
+                        setBookingFlow(resolveBookingFlow(category, 0));
+                        setSelectedSlot(null);
                         setError("");
                       }}
                     >
@@ -699,12 +868,49 @@ export default function BookingPage() {
                 </p>
               </header>
 
-              <div className="service-list">
-                {servicesByCategory.length === 0 && (
-                  <div className="booking-empty">Chưa có dịch vụ cụ thể cho loại này.</div>
-                )}
+              <div className="flow-mode-switch">
+                <button
+                  type="button"
+                  className={bookingFlow === BOOKING_FLOW.FIXED ? "active" : ""}
+                  onClick={() => {
+                    setBookingFlow(BOOKING_FLOW.FIXED);
+                    setError("");
+                  }}
+                >
+                  Giờ cố định
+                  <small>Khách chốt slot cụ thể</small>
+                </button>
+                <button
+                  type="button"
+                  className={bookingFlow === BOOKING_FLOW.FLEXIBLE ? "active" : ""}
+                  onClick={() => {
+                    setBookingFlow(BOOKING_FLOW.FLEXIBLE);
+                    setSelectedServiceIds([]);
+                    setSelectedSlot(null);
+                    setError("");
+                  }}
+                >
+                  Check-in linh hoạt
+                  <small>Mang xe trong khung giờ nhận xe</small>
+                </button>
+              </div>
 
-                {servicesByCategory.map((service) => {
+              {bookingFlow === BOOKING_FLOW.FLEXIBLE && (
+                <div className="booking-empty flow-note">
+                  Dành cho ca cần kiểm tra sâu hoặc chưa xác định hạng mục. Vui lòng mô tả rõ hiện tượng xe ở phần ghi chú.
+                </div>
+              )}
+
+              <div className="service-list">
+                {bookingFlow === BOOKING_FLOW.FLEXIBLE ? (
+                  <div className="booking-empty">
+                    Luồng linh hoạt không bắt buộc chọn dịch vụ cứng. Gara sẽ tiếp nhận xe vào hàng đợi và điều phối khoang sớm nhất.
+                  </div>
+                ) : servicesByCategory.length === 0 ? (
+                  <div className="booking-empty">Chưa có dịch vụ cụ thể cho loại này.</div>
+                ) : null}
+
+                {bookingFlow === BOOKING_FLOW.FIXED && servicesByCategory.map((service) => {
                   const serviceId = Number(extractField(service, ["id", "Id"]));
                   const serviceName = extractField(service, ["name", "Name"], "");
                   if (!serviceName) return null;
@@ -918,52 +1124,100 @@ export default function BookingPage() {
                 </div>
 
                 <div className="slot-section">
-                  <h4>Khung giờ khả dụng</h4>
+                  <h4>{bookingFlow === BOOKING_FLOW.FIXED ? "Khung giờ khả dụng" : "Khung giờ mang xe đến (Check-in Window)"}</h4>
                   {!selectedBranchId ? (
                     <div className="booking-empty">Vui lòng chọn chi nhánh trước khi chọn giờ.</div>
                   ) : slotsLoading ? (
                     <div className="booking-empty">Đang tải khung giờ...</div>
-                  ) : slots.length === 0 ? (
+                  ) : availableSlots.length === 0 ? (
                     <div className="booking-empty">Không có khung giờ khả dụng cho ngày đã chọn.</div>
                   ) : (
-                    <div className="slot-grid">
-                      {slots.map((slot) => {
-                        const startTime = extractField(slot, ["startTime", "StartTime"]);
-                        const endTime = extractField(slot, ["endTime", "EndTime"]);
-                        const isAvailable = extractField(slot, ["isAvailable", "IsAvailable"], false);
-                        const isSelected =
-                          selectedSlot &&
-                          extractField(selectedSlot, ["startTime", "StartTime"]) === startTime &&
-                          extractField(selectedSlot, ["endTime", "EndTime"]) === endTime;
-
-                        return (
+                    <>
+                      <div className="session-tabs">
+                        {SESSION_TABS.map((tab) => (
                           <button
-                            key={`${startTime}-${endTime}`}
+                            key={tab.key}
                             type="button"
-                            className={`slot-card ${isSelected ? "selected" : ""}`}
-                            disabled={!isAvailable}
-                            onClick={() => setSelectedSlot(slot)}
+                            className={`session-tab ${activeSession === tab.key ? "active" : ""}`}
+                            onClick={() => setActiveSession(tab.key)}
                           >
-                            <strong>{timeLabel(startTime)} - {timeLabel(endTime)}</strong>
-                            <small>
-                              {isAvailable
-                                ? `Còn ${extractField(slot, ["remainingCapacity", "RemainingCapacity"], 0)} chỗ`
-                                : "Hết chỗ"}
-                            </small>
+                            <strong>{tab.label}</strong>
+                            <small>{tab.hint}</small>
                           </button>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+
+                      {(slotsBySession[activeSession] || []).length > 0 && (
+                        <div className="slot-actions">
+                          <button
+                            type="button"
+                            className="slot-expand-toggle"
+                            onClick={() => toggleOddSlotsForSession(activeSession)}
+                          >
+                            {showOddSlots[activeSession] ? "Ẩn giờ lẻ" : "Xem thêm giờ lẻ"}
+                          </button>
+                        </div>
+                      )}
+
+                      {(slotsBySession[activeSession] || []).length === 0 ? (
+                        <div className="booking-empty">Buổi này không còn slot trống.</div>
+                      ) : (
+                        <div className="slot-grid">
+                          {displayedSlots.map((slot) => {
+                            const startTime = extractField(slot, ["startTime", "StartTime"]);
+                            const endTime = extractField(slot, ["endTime", "EndTime"]);
+                            const isAvailable = extractField(slot, ["isAvailable", "IsAvailable"], false);
+                            const remainingCapacity = Number(extractField(slot, ["remainingCapacity", "RemainingCapacity"], 0));
+                            const isSelected =
+                              selectedSlot &&
+                              extractField(selectedSlot, ["startTime", "StartTime"]) === startTime &&
+                              extractField(selectedSlot, ["endTime", "EndTime"]) === endTime;
+                            const isTopPick = extractField(slot, ["isTopPick", "IsTopPick"], false);
+                            const isRoundedHour = extractField(slot, ["isRoundedHour", "IsRoundedHour"], false);
+                            const slotBadge = isTopPick ? "Đề xuất" : isRoundedHour ? "Giờ tròn" : "Giờ lẻ";
+
+                            return (
+                              <button
+                                key={`${startTime}-${endTime}`}
+                                type="button"
+                                className={`slot-card ${isSelected ? "selected" : ""} ${isTopPick ? "top-pick" : ""}`}
+                                disabled={!isAvailable}
+                                onClick={() => setSelectedSlot(slot)}
+                              >
+                                <div className="slot-card-head">
+                                  <strong className="slot-time">{timeLabel(startTime)} - {timeLabel(endTime)}</strong>
+                                  <span className={`slot-pill ${isTopPick ? "top" : isRoundedHour ? "round" : "odd"}`}>
+                                    {slotBadge}
+                                  </span>
+                                </div>
+                                <div className="slot-meta">
+                                  <span className={`slot-state-dot ${isAvailable ? "ok" : "full"}`} />
+                                  <span className={`slot-state-text ${isAvailable ? "ok" : "full"}`}>
+                                    {bookingFlow === BOOKING_FLOW.FIXED
+                                      ? (isAvailable ? `Còn ${remainingCapacity} chỗ` : "Hết chỗ")
+                                      : "Khung nhận xe"}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
 
               <label className="notes-field">
-                Ghi chú thêm
+                Ghi chú thêm {bookingFlow === BOOKING_FLOW.FLEXIBLE ? <span>*</span> : null}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Mô tả tình trạng xe hoặc yêu cầu đặc biệt..."
+                  placeholder={
+                    bookingFlow === BOOKING_FLOW.FLEXIBLE
+                      ? "Mô tả triệu chứng: tiếng ồn, rung, đèn báo lỗi, thời điểm xảy ra..."
+                      : "Mô tả tình trạng xe hoặc yêu cầu đặc biệt..."
+                  }
                   rows={4}
                 />
               </label>
@@ -979,6 +1233,7 @@ export default function BookingPage() {
 
               <div className="confirm-grid">
                 <div><span>Loại dịch vụ</span><strong>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</strong></div>
+                <div><span>Luồng</span><strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Giờ cố định"}</strong></div>
                 <div><span>Số dịch vụ</span><strong>{selectedServiceIds.length} dịch vụ</strong></div>
                 <div><span>Chi nhánh</span><strong>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</strong></div>
                 <div><span>Khách hàng</span><strong>{customerForm.fullName || "Chưa nhập"} - {customerForm.phone || "Chưa nhập"}</strong></div>

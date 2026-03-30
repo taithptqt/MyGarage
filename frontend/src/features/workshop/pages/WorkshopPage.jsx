@@ -18,7 +18,7 @@ const ROLES_META = {
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
   FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
   TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
-  QC: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
+  QUALITY_CONTROL: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
 };
 
 const WORKSHOP_SIDEBAR_EXPANDED_WIDTH = 280;
@@ -194,6 +194,11 @@ export default function WorkshopPage() {
 
   const currentRoleMeta = ROLES_META[userRole];
   const roleDashboardPath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "/workshop";
+  const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
+  const currentNormalizedPath = normalizePath(location.pathname);
+  const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
+  const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
+  const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
   const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
   const receptionTab = new URLSearchParams(location.search).get("tab") === "appointments" ? "appointments" : "orders";
 
@@ -372,8 +377,14 @@ export default function WorkshopPage() {
                         <button className="dropdown-item" onClick={() => { setShowProfileModal(true); setShowProfileMenu(false); }}>
                           <span className="item-icon">👤</span> Hồ sơ của tôi
                         </button>
-                        <button className="dropdown-item" onClick={() => { navigate(roleDashboardPath); setShowProfileMenu(false); }}>
-                          <span className="item-icon">📊</span> Dashboard
+                        <button
+                          className="dropdown-item"
+                          onClick={() => {
+                            navigate(shouldShowHomeAction ? "/home" : roleDashboardPath);
+                            setShowProfileMenu(false);
+                          }}
+                        >
+                          <span className="item-icon">{shouldShowHomeAction ? "🏠" : "📊"}</span> {shouldShowHomeAction ? "Về trang chủ" : "Dashboard"}
                         </button>
                         <button className="dropdown-item logout" onClick={handleLogout}>
                           <span className="item-icon">🚪</span> Đăng xuất

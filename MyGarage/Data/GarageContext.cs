@@ -2698,6 +2698,9 @@ public partial class GarageContext : DbContext
                 .HasForeignKey(d => d.ServiceOrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__VehicleCo__Servi__03DB89B3");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.VehicleConditionLogUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy);
         });
 
         modelBuilder.Entity<VehicleInsurance>(entity =>
@@ -2877,40 +2880,102 @@ public partial class GarageContext : DbContext
 
     private void UpdateAuditFields()
     {
-        var user = _httpContextAccessor.HttpContext?.User;
-        var userIdStr = user?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
-                        ?? user?.FindFirst("sub")?.Value 
-                        ?? user?.FindFirst("id")?.Value 
-                        ?? user?.FindFirst("uid")?.Value;
-
-        long? userId = null;
-        if (long.TryParse(userIdStr, out long parsedId))
-        {
-            var userExistsInTrackedStaff = ChangeTracker.Entries<Staff>().Any(e => e.Entity.Id == parsedId);
-            var userExistsInDatabase = userExistsInTrackedStaff || Staffs.AsNoTracking().Any(s => s.Id == parsedId);
-            if (userExistsInDatabase)
-            {
-                userId = parsedId;
-            }
-        }
-
-        var entries = ChangeTracker.Entries<MyGarage.Interfaces.IAuditEntity>();
         var now = DateTime.UtcNow;
+        var userId = ResolveCurrentStaffId();
+
+        ChangeTracker.DetectChanges();
+        var entries = ChangeTracker.Entries()
+            .Where(e =>
+                !e.Metadata.IsOwned() &&
+                (e.State == EntityState.Added || e.State == EntityState.Modified));
 
         foreach (var entry in entries)
         {
-            if (entry.State == EntityState.Added)
+            var isAdded = entry.State == EntityState.Added;
+
+            if (isAdded)
             {
-                entry.Entity.CreatedAt ??= now;
-                entry.Entity.CreatedBy ??= userId;
+                SetDateTimeProperty(entry, "CreatedAt", now, setOnlyWhenNull: true);
+                SetLongProperty(entry, "CreatedBy", userId, setOnlyWhenNull: true);
+                SetLongProperty(entry, "CreatedByStaffId", userId, setOnlyWhenNull: true);
+                SetLongProperty(entry, "CreatedById", userId, setOnlyWhenNull: true);
             }
 
-            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedAt = now;
-                entry.Entity.UpdatedBy = userId;
-            }
+            SetDateTimeProperty(entry, "UpdatedAt", now, setOnlyWhenNull: false);
+            SetLongProperty(entry, "UpdatedBy", userId, setOnlyWhenNull: false);
+            SetLongProperty(entry, "UpdatedByStaffId", userId, setOnlyWhenNull: false);
+            SetLongProperty(entry, "UpdatedById", userId, setOnlyWhenNull: false);
         }
+    }
+
+    private long? ResolveCurrentStaffId()
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        var userIdStr = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? user?.FindFirst("sub")?.Value
+                        ?? user?.FindFirst("id")?.Value
+                        ?? user?.FindFirst("uid")?.Value;
+
+        if (!long.TryParse(userIdStr, out var parsedId))
+        {
+            return null;
+        }
+
+        var userExistsInTrackedStaff = ChangeTracker.Entries<Staff>().Any(e => e.Entity.Id == parsedId);
+        var userExistsInDatabase = userExistsInTrackedStaff || Staffs.AsNoTracking().Any(s => s.Id == parsedId);
+        return userExistsInDatabase ? parsedId : null;
+    }
+
+    private static void SetDateTimeProperty(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry, string propertyName, DateTime value, bool setOnlyWhenNull)
+    {
+        var property = entry.Properties.FirstOrDefault(p =>
+            string.Equals(p.Metadata.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+        if (property == null || property.Metadata.IsShadowProperty())
+        {
+            return;
+        }
+
+        var clrType = Nullable.GetUnderlyingType(property.Metadata.ClrType) ?? property.Metadata.ClrType;
+        if (clrType != typeof(DateTime))
+        {
+            return;
+        }
+
+        if (setOnlyWhenNull && property.CurrentValue != null)
+        {
+            return;
+        }
+
+        property.CurrentValue = value;
+    }
+
+    private static void SetLongProperty(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry, string propertyName, long? value, bool setOnlyWhenNull)
+    {
+        var property = entry.Properties.FirstOrDefault(p =>
+            string.Equals(p.Metadata.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+        if (property == null || property.Metadata.IsShadowProperty())
+        {
+            return;
+        }
+
+        var clrType = Nullable.GetUnderlyingType(property.Metadata.ClrType) ?? property.Metadata.ClrType;
+        if (clrType != typeof(long) && clrType != typeof(int))
+        {
+            return;
+        }
+
+        if (setOnlyWhenNull && property.CurrentValue != null)
+        {
+            return;
+        }
+
+        if (value == null)
+        {
+            property.CurrentValue = null;
+            return;
+        }
+
+        property.CurrentValue = clrType == typeof(int) ? Convert.ToInt32(value.Value) : value.Value;
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

@@ -10,6 +10,7 @@ using MyGarage.Models;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -50,6 +51,7 @@ namespace MyGarage.Services
 
             var openTime = opHour?.OpenTime ?? new TimeOnly(8, 0);
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
+            var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
             if (opHour?.IsDayOff == true)
             {
                 return Enumerable.Empty<AvailableSlotResponseDto>();
@@ -81,7 +83,7 @@ namespace MyGarage.Services
                         CompactionScore = windowCursor.Minute == 0 ? 100 : 80,
                         BookingFlow = "FLEXIBLE"
                     });
-                    windowCursor = windowCursor.AddMinutes(30);
+                    windowCursor = windowCursor.AddMinutes(slotStepMinutes);
                 }
                 return windows;
             }
@@ -93,13 +95,22 @@ namespace MyGarage.Services
             var capacity = ComputeCapacity(activeBays);
             var onlineLimit = Math.Max(1, (int)Math.Floor(capacity.Total * 0.85m));
             var requestedCluster = await ResolveServiceClusterAsync(requestedServiceIds, null);
-            var requiredDuration = await ResolveFixedDurationAsync(requestedServiceIds);
+            var requiredDuration = await ResolveFixedDurationAsync(requestedServiceIds, slotStepMinutes);
 
             var dayStart = date.ToDateTime(TimeOnly.MinValue);
             var dayEnd = dayStart.AddDays(1);
             var appointments = await _context.Appointments
                 .AsNoTracking()
                 .Where(a => a.BranchId == branchId && a.StartTime < dayEnd && a.EndTime > dayStart && !ClosedStatuses.Contains(a.Status))
+                .ToListAsync();
+            var overnightLocks = await _context.WorkSlots
+                .AsNoTracking()
+                .Where(s => s.BranchId == branchId
+                    && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
+                    && s.StartTime < dayEnd
+                    && s.EndTime > dayStart
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.Status != "CANCELLED")
                 .ToListAsync();
 
             var slots = new List<AvailableSlotResponseDto>();
@@ -109,22 +120,28 @@ namespace MyGarage.Services
             {
                 if (date == DateOnly.FromDateTime(DateTime.Today) && current < DateTime.Now.AddMinutes(30))
                 {
-                    current = current.AddMinutes(15);
+                    current = current.AddMinutes(slotStepMinutes);
                     continue;
                 }
 
                 var end = current.AddMinutes(requiredDuration);
                 var overlap = appointments.Where(a => a.StartTime < end && a.EndTime > current).ToList();
-                if (IsSlotAvailable(overlap, requestedCluster, capacity, onlineLimit).isAvailable)
+                var locked = CountLockedBays(activeBays, overnightLocks, current, end);
+                var effectiveCapacity = new CapacityProfile(
+                    Math.Max(0, capacity.Quick - locked.lockedQuick),
+                    Math.Max(0, capacity.Repair - locked.lockedRepair),
+                    Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
+                var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
+                if (effectiveCapacity.Total > 0 && IsSlotAvailable(overlap, requestedCluster, effectiveCapacity, effectiveOnlineLimit).isAvailable)
                 {
                     var score = CalculateCompactionScore(current, date.ToDateTime(openTime), overlap);
                     slots.Add(new AvailableSlotResponseDto
                     {
                         StartTime = current,
                         EndTime = end,
-                        MaxCapacity = onlineLimit,
+                        MaxCapacity = effectiveOnlineLimit,
                         BookedCount = overlap.Count,
-                        RemainingCapacity = Math.Max(0, onlineLimit - overlap.Count),
+                        RemainingCapacity = Math.Max(0, effectiveOnlineLimit - overlap.Count),
                         IsAvailable = true,
                         IsRoundedHour = current.Minute == 0,
                         Session = ResolveSession(current.TimeOfDay),
@@ -133,7 +150,7 @@ namespace MyGarage.Services
                     });
                 }
 
-                current = current.AddMinutes(15);
+                current = current.AddMinutes(slotStepMinutes);
             }
 
             MarkTopPicks(slots);
@@ -158,8 +175,7 @@ namespace MyGarage.Services
             {
                 requestedStartAt = dto.StartTime
                     ?? throw new InvalidOperationException("Can cung cap gio bat dau cho lich co gio.");
-                var fixedMinutes = await ResolveFixedDurationAsync(dto.RequestedServiceIds, dto.EndTime, requestedStartAt);
-                requestedEndAt = requestedStartAt.AddMinutes(fixedMinutes);
+                requestedEndAt = dto.EndTime ?? requestedStartAt;
             }
 
             if (requestedStartAt.Date < DateTime.Today)
@@ -167,9 +183,6 @@ namespace MyGarage.Services
 
             if (requestedStartAt.Date == DateTime.Today && requestedStartAt < DateTime.Now.AddMinutes(30))
                 throw new InvalidOperationException("Thoi gian hen phai cach hien tai it nhat 30 phut.");
-
-            if (requestedEndAt <= requestedStartAt)
-                throw new InvalidOperationException("Gio ket thuc phai sau gio bat dau.");
 
             var opHour = await _context.BranchOperatingHours
                 .AsNoTracking()
@@ -179,6 +192,21 @@ namespace MyGarage.Services
 
             var openTime = opHour?.OpenTime ?? new TimeOnly(8, 0);
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
+            var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+
+            if (flow == BookingFlowType.Fixed)
+            {
+                var fixedMinutes = await ResolveFixedDurationAsync(
+                    dto.RequestedServiceIds,
+                    slotStepMinutes,
+                    dto.EndTime,
+                    requestedStartAt);
+                requestedEndAt = requestedStartAt.AddMinutes(fixedMinutes);
+            }
+
+            if (requestedEndAt <= requestedStartAt)
+                throw new InvalidOperationException("Gio ket thuc phai sau gio bat dau.");
+
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
 
             var health = await GetBranchBookingHealthAsync(dto.BranchId, DateTime.Now);
@@ -192,7 +220,6 @@ namespace MyGarage.Services
                     .Where(b => b.BranchId == dto.BranchId && b.IsActive == true && b.IsDeleted != true)
                     .ToListAsync();
                 var capacity = ComputeCapacity(activeBays);
-                var onlineLimit = Math.Max(1, (int)Math.Floor(capacity.Total * 0.85m));
                 var requestedCluster = await ResolveServiceClusterAsync(dto.RequestedServiceIds, dto.CustomerNotes);
 
                 var overlapping = await _context.Appointments
@@ -202,8 +229,23 @@ namespace MyGarage.Services
                         && a.EndTime > requestedStartAt
                         && !ClosedStatuses.Contains(a.Status))
                     .ToListAsync();
+                var overnightLocks = await _context.WorkSlots
+                    .AsNoTracking()
+                    .Where(s => s.BranchId == dto.BranchId
+                        && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
+                        && s.StartTime < requestedEndAt
+                        && s.EndTime > requestedStartAt
+                        && s.Status != nameof(WorkSlotStatus.CANCELED)
+                        && s.Status != "CANCELLED")
+                    .ToListAsync();
+                var locked = CountLockedBays(activeBays, overnightLocks, requestedStartAt, requestedEndAt);
+                var effectiveCapacity = new CapacityProfile(
+                    Math.Max(0, capacity.Quick - locked.lockedQuick),
+                    Math.Max(0, capacity.Repair - locked.lockedRepair),
+                    Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
+                var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
 
-                if (!IsSlotAvailable(overlapping, requestedCluster, capacity, onlineLimit).isAvailable)
+                if (effectiveCapacity.Total <= 0 || !IsSlotAvailable(overlapping, requestedCluster, effectiveCapacity, effectiveOnlineLimit).isAvailable)
                     throw new InvalidOperationException("Khung gio nay da het cong suat theo loai khoang hoac vuot nguong 85% online.");
             }
             else
@@ -462,7 +504,11 @@ namespace MyGarage.Services
             var parkingThreshold = Math.Max(12, (int)Math.Ceiling(capacity.Total * 1.5));
 
             var delayedSlots = await _context.WorkSlots.AsNoTracking()
-                .Where(s => s.BranchId == branchId && s.EndTime < atTime && s.Status != "COMPLETED" && s.Status != "CANCELED" && s.Status != "CANCELLED")
+                .Where(s => s.BranchId == branchId
+                    && s.EndTime < atTime
+                    && s.Status != nameof(WorkSlotStatus.COMPLETED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.Status != "CANCELLED")
                 .ToListAsync();
 
             var totalDelay = delayedSlots.Sum(s => (int)Math.Max(0, Math.Ceiling(((s.ActualReleaseTime ?? atTime) - s.EndTime).TotalMinutes)));
@@ -491,7 +537,11 @@ namespace MyGarage.Services
             var snapshot = at ?? DateTime.Now;
             var bays = await _context.Bays.AsNoTracking().Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true).OrderBy(b => b.Code).ToListAsync();
             var slots = await _context.WorkSlots.AsNoTracking()
-                .Where(s => s.BranchId == branchId && s.StartTime <= snapshot && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot) && s.Status != "CANCELED" && s.Status != "CANCELLED")
+                .Where(s => s.BranchId == branchId
+                    && s.StartTime <= snapshot
+                    && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.Status != "CANCELLED")
                 .OrderByDescending(s => s.StartTime)
                 .ToListAsync();
 
@@ -533,6 +583,176 @@ namespace MyGarage.Services
                 WaitingQueueCount = queue,
                 Bays = bayDtos
             };
+        }
+
+        public async Task<DispatchCycleResponseDto> RunDispatchCycleAsync(long branchId, DateTime? at = null)
+        {
+            var executedAt = at ?? DateTime.Now;
+            var noShows = await AutoMarkNoShowsAsync(branchId, executedAt);
+            var health = await GetBranchBookingHealthAsync(branchId, executedAt);
+            var delayNotifications = 0;
+
+            if (health.IsBookingLocked)
+            {
+                delayNotifications = await SendDelayNotificationsAsync(branchId, executedAt, health);
+            }
+
+            return new DispatchCycleResponseDto
+            {
+                BranchId = branchId,
+                ExecutedAt = executedAt,
+                AutoNoShowCount = noShows,
+                DelayNotificationCount = delayNotifications,
+                BookingHealth = health
+            };
+        }
+
+        public async Task<OvernightLockResponseDto> LockOvernightSlotsAsync(long branchId, DateOnly? businessDate = null)
+        {
+            var date = businessDate ?? DateOnly.FromDateTime(DateTime.Today);
+            var closingTime = date.ToDateTime(new TimeOnly(18, 0));
+            var nextMorning = date.AddDays(1).ToDateTime(new TimeOnly(8, 0));
+            var opHour = await _context.BranchOperatingHours
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.BranchId == branchId && h.DayOfWeek == (int)date.DayOfWeek);
+            var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+
+            var unfinished = await _context.WorkSlots
+                .Where(s => s.BranchId == branchId
+                    && s.StartTime <= closingTime
+                    && s.SlotType != nameof(WorkSlotType.OVERNIGHT_LOCK)
+                    && s.Status != nameof(WorkSlotStatus.COMPLETED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.Status != "CANCELLED"
+                    && (s.ActualReleaseTime == null || s.ActualReleaseTime > closingTime))
+                .ToListAsync();
+
+            var result = new OvernightLockResponseDto
+            {
+                BranchId = branchId,
+                BusinessDate = date
+            };
+
+            foreach (var source in unfinished)
+            {
+                var marker = $"[OVERNIGHT_FROM:{source.Id}]";
+                var exists = await _context.WorkSlots.AnyAsync(s =>
+                    s.BranchId == branchId
+                    && s.BayId == source.BayId
+                    && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
+                    && s.StartTime >= nextMorning
+                    && s.StartTime < nextMorning.AddDays(1)
+                    && s.Notes != null
+                    && s.Notes.Contains(marker));
+
+                if (exists)
+                {
+                    continue;
+                }
+
+                var baseRemaining = source.ActualReleaseTime.HasValue && source.ActualReleaseTime.Value > closingTime
+                    ? (int)Math.Ceiling((source.ActualReleaseTime.Value - closingTime).TotalMinutes)
+                    : 90;
+                var lockMinutes = RoundUpToStep(Math.Clamp(baseRemaining, 60, 240), slotStepMinutes);
+
+                var lockSlot = new WorkSlot
+                {
+                    ParentSlotId = source.Id,
+                    BranchId = source.BranchId,
+                    BayId = source.BayId,
+                    TechnicianId = source.TechnicianId,
+                    StartTime = nextMorning,
+                    EndTime = nextMorning.AddMinutes(lockMinutes),
+                    SlotType = nameof(WorkSlotType.OVERNIGHT_LOCK),
+                    CustomerId = source.CustomerId,
+                    VehicleId = source.VehicleId,
+                    Status = nameof(WorkSlotStatus.LOCKED),
+                    Notes = marker
+                };
+
+                _context.WorkSlots.Add(lockSlot);
+                await _context.SaveChangesAsync();
+
+                result.LockedSlots.Add(new OvernightLockedSlotDto
+                {
+                    SourceWorkSlotId = source.Id,
+                    LockedWorkSlotId = lockSlot.Id,
+                    BayId = source.BayId,
+                    LockedFrom = lockSlot.StartTime,
+                    LockedTo = lockSlot.EndTime,
+                    VehicleId = source.VehicleId
+                });
+            }
+
+            result.LockedSlotCount = result.LockedSlots.Count;
+            return result;
+        }
+
+        private async Task<int> SendDelayNotificationsAsync(long branchId, DateTime now, BranchBookingHealthResponseDto health)
+        {
+            if (!health.IsBookingLocked || !health.LockUntil.HasValue)
+            {
+                return 0;
+            }
+
+            var affected = await _context.Appointments
+                .Where(a => a.BranchId == branchId
+                    && (a.Status == "CONFIRMED" || a.Status == "PENDING")
+                    && a.StartTime >= now.AddMinutes(90)
+                    && a.StartTime <= health.LockUntil.Value)
+                .ToListAsync();
+
+            var suggestion = health.SuggestedBranches.FirstOrDefault();
+            foreach (var appointment in affected)
+            {
+                var suffix = suggestion == null
+                    ? "Chi nhanh dang qua tai, vui long den som de duoc ho tro."
+                    : $"Ban co the tham khao {suggestion.BranchName} (~{suggestion.DistanceKm} km) dang trong cho.";
+
+                _context.Notifications.Add(new Notification
+                {
+                    CustomerId = appointment.CustomerId,
+                    Title = "Lich hen co nguy co tre",
+                    Content = $"Lich hen {appointment.StartTime:HH:mm dd/MM} co the bi tre do xuong qua tai. {suffix}",
+                    IsRead = false,
+                    SentAt = DateTime.UtcNow,
+                    LinkAction = $"/appointments/{appointment.Id}"
+                });
+            }
+
+            if (affected.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return affected.Count;
+        }
+
+        private static (int lockedQuick, int lockedRepair) CountLockedBays(List<Bay> activeBays, List<WorkSlot> locks, DateTime start, DateTime end)
+        {
+            var bayById = activeBays.ToDictionary(b => b.Id, b => b);
+            var overlapping = locks.Where(l => l.StartTime < end && l.EndTime > start).ToList();
+            var quick = 0;
+            var repair = 0;
+
+            foreach (var lockSlot in overlapping)
+            {
+                if (!bayById.TryGetValue(lockSlot.BayId, out var bay))
+                {
+                    continue;
+                }
+
+                if (IsQuickBay(bay.BayType))
+                {
+                    quick++;
+                }
+                else
+                {
+                    repair++;
+                }
+            }
+
+            return (quick, repair);
         }
 
 
@@ -586,17 +806,21 @@ namespace MyGarage.Services
             return score;
         }
 
-        private async Task<int> ResolveFixedDurationAsync(string? requestedServiceIds, DateTime? requestedEnd = null, DateTime? requestedStart = null)
+        private async Task<int> ResolveFixedDurationAsync(
+            string? requestedServiceIds,
+            int slotStepMinutes,
+            DateTime? requestedEnd = null,
+            DateTime? requestedStart = null)
         {
             if (requestedStart.HasValue && requestedEnd.HasValue && requestedEnd > requestedStart)
             {
-                return RoundToQuarter((int)Math.Ceiling((requestedEnd.Value - requestedStart.Value).TotalMinutes));
+                return RoundUpToStep((int)Math.Ceiling((requestedEnd.Value - requestedStart.Value).TotalMinutes), slotStepMinutes);
             }
 
             var serviceIds = ParseServiceIds(requestedServiceIds).ToList();
-            if (!serviceIds.Any()) return 75;
+            if (!serviceIds.Any()) return RoundUpToStep(60 + slotStepMinutes, slotStepMinutes);
             var minutes = await _context.StandardServices.AsNoTracking().Where(s => serviceIds.Contains(s.Id)).SumAsync(s => (int?)s.StandardMinutes) ?? 60;
-            return RoundToQuarter(minutes + 15);
+            return RoundUpToStep(minutes + slotStepMinutes, slotStepMinutes);
         }
 
         private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
@@ -673,11 +897,18 @@ namespace MyGarage.Services
             return key.Contains("quick") || key.Contains("maintenance") || key.Contains("bao duong") || key.Contains("dich vu nhanh");
         }
 
-        private static int RoundToQuarter(int minutes)
+        private static int RoundUpToStep(int minutes, int stepMinutes)
         {
-            if (minutes <= 0) return 15;
-            var mod = minutes % 15;
-            return mod == 0 ? minutes : minutes + (15 - mod);
+            var step = stepMinutes > 0 ? stepMinutes : 15;
+            if (minutes <= 0) return step;
+            var mod = minutes % step;
+            return mod == 0 ? minutes : minutes + (step - mod);
+        }
+
+        private static int ResolveSlotStepMinutes(int? slotDurationMinutes)
+        {
+            var step = slotDurationMinutes.GetValueOrDefault(15);
+            return step > 0 ? step : 15;
         }
 
         private static void ValidateTimeWindow(DateTime startAt, DateTime endAt, TimeOnly openTime, TimeOnly closeTime)

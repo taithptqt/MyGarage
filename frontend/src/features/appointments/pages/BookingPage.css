@@ -259,6 +259,10 @@
   gap: 14px;
 }
 
+.slot-grid {
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+}
+
 .category-grid,
 .confirm-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -282,6 +286,44 @@
   display: none;
 }
 
+.flow-mode-switch {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flow-mode-switch button {
+  border: 1px solid var(--booking-border);
+  border-radius: 12px;
+  background: rgba(8, 26, 48, 0.86);
+  color: #dbeaff;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.flow-mode-switch button small {
+  color: #9fb6ce;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.flow-mode-switch button.active {
+  border-color: var(--booking-primary);
+  box-shadow: inset 0 0 0 1px rgba(36, 205, 229, 0.35);
+  background: rgba(36, 205, 229, 0.1);
+}
+
+.flow-note {
+  margin-top: 10px;
+}
+
 .category-card,
 .branch-card,
 .service-card,
@@ -298,7 +340,7 @@
 .branch-card,
 .slot-card {
   padding: 16px;
-  min-height: 104px;
+  min-height: 110px;
 }
 
 .service-card {
@@ -549,6 +591,58 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin-bottom: 8px;
 }
 
+.session-tabs {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.session-tab {
+  border: 1px solid var(--booking-border);
+  border-radius: 12px;
+  background: rgba(6, 26, 49, 0.86);
+  color: #dcecff;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.session-tab strong {
+  font-size: 15px;
+}
+
+.session-tab small {
+  color: #9eb5cd;
+  font-size: 12px;
+}
+
+.session-tab.active {
+  border-color: var(--booking-accent);
+  background: rgba(245, 166, 35, 0.14);
+}
+
+.slot-actions {
+  margin-top: 10px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.slot-expand-toggle {
+  border: 1px solid #4e6d87;
+  background: rgba(8, 22, 40, 0.7);
+  color: #d9ecff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .vehicle-mode-switch {
   margin-top: 12px;
   display: inline-flex;
@@ -576,14 +670,97 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: not-allowed;
 }
 
-.slot-card strong {
-  font-size: 17px;
+.slot-card {
+  padding: 12px;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.slot-card small {
-  margin-top: 6px;
-  color: var(--booking-muted);
+.slot-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slot-time {
   font-size: 14px;
+  line-height: 1.35;
+  letter-spacing: 0;
+  color: #f3f9ff;
+}
+
+.slot-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.slot-state-dot.ok {
+  background: #2de7a9;
+  box-shadow: 0 0 0 3px rgba(45, 231, 169, 0.18);
+}
+
+.slot-state-dot.full {
+  background: #ff8f8f;
+  box-shadow: 0 0 0 3px rgba(255, 143, 143, 0.2);
+}
+
+.slot-state-text {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.slot-state-text.ok {
+  color: #c8ffe9;
+}
+
+.slot-state-text.full {
+  color: #ffd3d3;
+}
+
+.slot-card.top-pick {
+  border-color: rgba(36, 205, 229, 0.65);
+}
+
+.slot-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.slot-pill.top {
+  background: rgba(245, 166, 35, 0.2);
+  color: #ffe5b2;
+  border-color: rgba(245, 166, 35, 0.4);
+}
+
+.slot-pill.round {
+  background: rgba(36, 205, 229, 0.16);
+  color: #c7f8ff;
+  border-color: rgba(36, 205, 229, 0.36);
+}
+
+.slot-pill.odd {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d8ecff;
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .booking-empty {
@@ -826,6 +1003,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .category-grid,
   .confirm-grid,
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-mode-switch,
+  .session-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .slot-grid {
     grid-template-columns: 1fr;
   }
 

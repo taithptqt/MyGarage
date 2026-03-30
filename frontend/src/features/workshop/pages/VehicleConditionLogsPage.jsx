@@ -254,7 +254,12 @@ const ConditionCard = ({ log, onUpdateSignature, onImageClick }) => {
     defectsData.items = [];
   }
 
-  const finalSignature = log.customerSignatureUrl || defectsData.customerSignature;
+  const finalSignature = String(log.customerSignatureUrl || "").trim();
+  const [signatureLoadFailed, setSignatureLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setSignatureLoadFailed(false);
+  }, [log.id, finalSignature]);
 
   const handleSignConfirm = async () => {
     if (!signature) {
@@ -428,7 +433,7 @@ const ConditionCard = ({ log, onUpdateSignature, onImageClick }) => {
 
         <Divider />
 
-        {finalSignature ? (
+        {finalSignature && !signatureLoadFailed ? (
           <Box>
             <HStack justify="space-between" mb={2}>
                <Text fontSize="xs" fontWeight="bold" color="#2b3674" textTransform="uppercase">Chữ ký khách hàng</Text>
@@ -439,7 +444,7 @@ const ConditionCard = ({ log, onUpdateSignature, onImageClick }) => {
                 src={finalSignature}
                 maxH="100px"
                 mx="auto"
-                fallback={<Text fontSize="xs" color="gray.400">Không thể tải chữ ký</Text>}
+                onError={() => setSignatureLoadFailed(true)}
               />
             </Box>
           </Box>

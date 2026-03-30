@@ -127,6 +127,20 @@
   color: #ffffff !important;
 }
 
+/* Force clear select text in diagnosis page (selected value + readonly look) */
+.diagnosis-page-force-select select,
+.diagnosis-page-force-select .chakra-select__wrapper select,
+.diagnosis-page-force-select .chakra-select__wrapper > select {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  opacity: 1 !important;
+}
+
+.diagnosis-page-force-select select option {
+  color: #000000 !important;
+  background: #ffffff !important;
+}
+
 /* Fix sticky header and scroll behavior */
 .modal-box {
   display: flex;

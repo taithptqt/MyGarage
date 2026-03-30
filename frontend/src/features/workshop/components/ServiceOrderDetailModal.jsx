@@ -171,7 +171,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
         </HStack>
       }
       onClose={onClose}
-      className="modal-lg"
+      className="modal-lg always-dark"
     >
       <VStack align="stretch" spacing={6} px={8} pb={8} pt={2}>
         <HStack justify="space-between" bg="whiteAlpha.100" p={5} borderRadius="2xl" border="1px solid" borderColor="whiteAlpha.200">
@@ -393,7 +393,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
               align="center"
               flexWrap="wrap"
               sx={{
-                "& > button": {
+                "& button": {
                   h: "34px",
                   minH: "34px",
                   maxH: "34px",
@@ -420,7 +420,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                   Xem chuẩn đoán
                 </Button>
               ) : isDiagnosisRequested || order.status === "INSPECTING" ? (
-                <VStack align="start" spacing={0}>
+                <Box position="relative" display="inline-flex" alignItems="center">
                   <Button
                     size="sm"
                     colorScheme="orange"
@@ -431,9 +431,20 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                     Thu hồi yêu cầu
                   </Button>
                   {isDiagnosisAssigned ? (
-                    <Text fontSize="xs" color="orange.300" mt={1}>Đang chuẩn đoán</Text>
+                    <Text
+                      fontSize="xs"
+                      color="orange.300"
+                      textAlign="center"
+                      position="absolute"
+                      top="calc(100% + 2px)"
+                      left="50%"
+                      transform="translateX(-50%)"
+                      whiteSpace="nowrap"
+                    >
+                      Đang chuẩn đoán
+                    </Text>
                   ) : null}
-                </VStack>
+                </Box>
               ) : (
                 <Button
                   size="sm"

@@ -30,7 +30,7 @@ import {
   Wrench,
   AlertTriangle,
   Activity,
-  VolumeX,
+  MessageSquare,
   Droplets,
   Wind,
   Zap,
@@ -409,7 +409,7 @@ export default function ServiceOrderDiagnosisPage() {
   if (loading) return <Box textAlign="center" py={10}><Spinner size="lg" /></Box>;
 
   return (
-    <Box className="workshop-table-card" p={{ base: 4, md: 6 }}>
+    <Box className="workshop-table-card diagnosis-page-force-select" p={{ base: 4, md: 6 }}>
       <HStack justify="space-between" mb={5} flexWrap="wrap" gap={3}>
         <Box>
           <Heading size="md" color="#2b3674">Báo cáo Chuẩn đoán Chuyên sâu</Heading>
@@ -474,7 +474,7 @@ export default function ServiceOrderDiagnosisPage() {
               {/* KHU VỰC 1: Lời khách hàng */}
               <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                 <HStack color="#f56565" mb={3}>
-                  <Icon as={VolumeX} size={20} />
+                  <Icon as={MessageSquare} size={20} />
                   <Heading size="sm">Mô tả của Khách hàng</Heading>
                 </HStack>
                 <Textarea
@@ -581,6 +581,17 @@ export default function ServiceOrderDiagnosisPage() {
                         isDisabled={!canEdit}
                         rows={3}
                         placeholder="VD: Cảm biến oxy số 1 bị đứt dây ga..."
+                        bg="gray.50"
+                        borderColor="#e2e8f0"
+                        color="#1b2559"
+                        _placeholder={{ color: "#718096" }}
+                        _disabled={{
+                          color: "#1b2559",
+                          WebkitTextFillColor: "#1b2559",
+                          opacity: 1,
+                          cursor: "not-allowed",
+                          bg: "gray.50",
+                        }}
                       />
                     </FormControl>
                   </GridItem>
