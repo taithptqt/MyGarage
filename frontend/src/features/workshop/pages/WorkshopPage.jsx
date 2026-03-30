@@ -14,11 +14,11 @@ import { ChakraProvider } from "@chakra-ui/react";
 import initialTheme from "../../../horizon/theme/theme";
 
 const ROLES_META = {
-  RECEPTIONIST: { path: "reception", label: "Receptionist", icon: "ðŸ“‹", description: "Tiáº¿p nháº­n, BÃ¡o giÃ¡ & Thanh toÃ¡n" },
-  MANAGER: { path: "manager", label: "Workshop Manager", icon: "ðŸ‘¨â€ðŸ«", description: "Quáº£n lÃ½ chung" },
-  FOREMAN: { path: "foreman", label: "Foreman", icon: "ðŸ›¡ï¸", description: "Äiá»u phá»‘i & PhÃª duyá»‡t ká»¹ thuáº­t" },
-  TECH: { path: "technician", label: "Technician", icon: "ðŸ”§", description: "Thá»±c hiá»‡n & BÃ¡o cÃ¡o" },
-  QC: { path: "qc", label: "Quality Control", icon: "âœ…", description: "Kiá»ƒm tra cháº¥t lÆ°á»£ng" }
+  RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📋", description: "Tiếp nhận, Báo giá & Thanh toán" },
+  MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
+  FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
+  QC: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
 };
 
 const WORKSHOP_SIDEBAR_EXPANDED_WIDTH = 280;
@@ -246,14 +246,14 @@ export default function WorkshopPage() {
                   className={`role-sub-item ${receptionTab === "orders" ? "active" : ""}`}
                   onClick={() => goReceptionTab("orders")}
                 >
-                  Lá»‡nh sá»­a chá»¯a
+                  Lệnh sửa chữa
                 </button>
                 <button
                   type="button"
                   className={`role-sub-item ${receptionTab === "appointments" ? "active" : ""}`}
                   onClick={() => goReceptionTab("appointments")}
                 >
-                  Lá»‹ch Ä‘áº·t trÆ°á»›c
+                  Lịch đặt trước
                 </button>
               </div>
             )}
@@ -298,14 +298,14 @@ export default function WorkshopPage() {
                   <span className="search-icon"><AiOutlineSearch /></span>
                   <input
                     type="text"
-                    placeholder="TÃ¬m kiáº¿m..."
+                    placeholder="Tìm kiếm..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
 
                 <div className="header-menu-container">
-                  <button className="header-icon-btn" title="ThÃ´ng bÃ¡o" onClick={() => { setShowNotifications(!showNotifications); setShowInfo(false); setShowProfileMenu(false); }}>
+                  <button className="header-icon-btn" title="Thông báo" onClick={() => { setShowNotifications(!showNotifications); setShowInfo(false); setShowProfileMenu(false); }}>
                     <MdNotificationsNone />
                   </button>
                   {showNotifications && (
@@ -313,12 +313,12 @@ export default function WorkshopPage() {
                       <div className="dropdown-header">Notifications</div>
                       <div className="dropdown-content">
                         <div className="dropdown-item-info">
-                          <div className="item-title">Há»‡ thá»‘ng MyGarage</div>
-                          <div className="item-desc">ChÃ o má»«ng báº¡n trá»Ÿ láº¡i lÃ m viá»‡c hÃ´m nay!</div>
+                          <div className="item-title">Hệ thống MyGarage</div>
+                          <div className="item-desc">Chào mừng bạn trở lại làm việc hôm nay!</div>
                         </div>
                         <div className="dropdown-item-info">
-                          <div className="item-title">Lá»‡nh sá»­a chá»¯a má»›i</div>
-                          <div className="item-desc">CÃ³ 3 xe má»›i Ä‘ang chá» tiáº¿p nháº­n.</div>
+                          <div className="item-title">Lệnh sửa chữa mới</div>
+                          <div className="item-desc">Có 3 xe mới đang chờ tiếp nhận.</div>
                         </div>
                       </div>
                     </div>
@@ -326,15 +326,15 @@ export default function WorkshopPage() {
                 </div>
 
                 <div className="header-menu-container">
-                  <button className="header-icon-btn" title="ThÃ´ng tin" onClick={() => { setShowInfo(!showInfo); setShowNotifications(false); setShowProfileMenu(false); }}>
+                  <button className="header-icon-btn" title="Thông tin" onClick={() => { setShowInfo(!showInfo); setShowNotifications(false); setShowProfileMenu(false); }}>
                     <MdInfoOutline />
                   </button>
                   {showInfo && (
                     <div className="header-dropdown info-dropdown">
                       <div className="dropdown-content info-content">
                         <div className="info-image-placeholder"></div>
-                        <p className="info-text">Há»‡ thá»‘ng Quáº£n lÃ½ Garage ThÃ´ng quáº£n lÃ½ má»›i cá»§a cÃ´ng ty. ChÃºc báº¡n má»™t ngÃ y lÃ m viá»‡c hiá»‡u quáº£!</p>
-                        <button className="btn-primary-sm">Xem hÆ°á»›ng dáº«n</button>
+                        <p className="info-text">Hệ thống Quản lý Garage thông quản lý mới của công ty. Chúc bạn một ngày làm việc hiệu quả!</p>
+                        <button className="btn-primary-sm">Xem hướng dẫn</button>
                       </div>
                     </div>
                   )}
@@ -342,7 +342,7 @@ export default function WorkshopPage() {
 
                 <button
                   className="header-icon-btn"
-                  title="Äá»•i giao diá»‡n"
+                  title="Đổi giao diện"
                   onClick={() => setIsDarkMode(!isDarkMode)}
                 >
                   {isDarkMode ? <IoMdSunny /> : <IoMdMoon />}

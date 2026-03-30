@@ -96,3 +96,40 @@ export async function getAllCategories() {
 export async function getAllServiceCategories() {
   return request({ url: "/api/ServiceCategory", method: "GET" });
 }
+
+// ── Customer/Vehicle for booking flow ───────────────────────────────────────
+export async function getAllCustomers() {
+  return request({ url: "/api/Customer", method: "GET" });
+}
+
+export async function updateCustomer(id, payload) {
+  return request({
+    url: `/api/Customer/${id}`,
+    method: "PUT",
+    data: payload,
+  });
+}
+
+export async function getAllCustomerVehicles() {
+  return request({ url: "/api/CustomerVehicle", method: "GET" });
+}
+
+export async function getAllVehicles() {
+  return request({ url: "/api/Vehicle", method: "GET" });
+}
+
+export async function createVehicle(payload) {
+  return request({
+    url: "/api/Vehicle",
+    method: "POST",
+    data: payload,
+  });
+}
+
+export async function createCustomerVehicle(payload) {
+  return request({
+    url: "/api/CustomerVehicle",
+    method: "POST",
+    data: payload,
+  });
+}

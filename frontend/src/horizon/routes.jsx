@@ -3,7 +3,6 @@
 import { Icon } from '@chakra-ui/react';
 import {
   MdBuild,
-  MdCalendarToday,
   MdCategory,
   MdDirectionsCar,
   MdHome,
@@ -29,7 +28,6 @@ import AdminPage from "../features/admin/pages/AdminPage";
 import InventoryAdminPage from "../features/inventory/pages/InventoryAdminPage";
 import ServicesPage from "../features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
-import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
 import SafeVoucherManagementPage from "../features/voucher/pages/SafeVoucherManagementPage";
 
@@ -213,13 +211,6 @@ const routes = [
     path: '/default',
     icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
     component: <MainDashboard />,
-  },
-  {
-    name: 'Lịch hẹn',
-    layout: '/admin',
-    path: '/appointments',
-    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
-    component: <AppointmentManagementPage />,
   },
   {
     name: 'Chi nhánh',

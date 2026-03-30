@@ -1,0 +1,136 @@
+﻿@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..800&family=Manrope:wght@300..800&display=swap");.mg-footer {
+  --mg-footer-bg-1: #081512;
+  --mg-footer-bg-2: #1d2a26;
+  --mg-footer-gold: #c5a059;
+  --mg-footer-surface: #fef9ee;
+  background: linear-gradient(45deg, var(--mg-footer-bg-1), var(--mg-footer-bg-2));
+  color: var(--mg-footer-surface);
+  padding: 76px 34px 28px;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+}
+
+.mg-footer *,
+.mg-footer *::before,
+.mg-footer *::after {
+  box-sizing: border-box;
+}
+
+.mg-footer-columns {
+  max-width: 1320px;
+  margin: 0 auto 60px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+
+.mg-footer-columns h3 {
+  margin: 0 0 12px;
+  font-family: "Newsreader", serif;
+  color: var(--mg-footer-gold);
+  font-size: 40px;
+  letter-spacing: 0.16em;
+}
+
+.mg-footer-columns h4 {
+  margin: 0 0 14px;
+  color: var(--mg-footer-gold);
+  font-size: 10px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.mg-footer-columns p {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.74;
+}
+
+.mg-footer-icons {
+  display: flex;
+  gap: 14px;
+  color: var(--mg-footer-gold);
+}
+
+.mg-footer-input {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(254, 249, 238, 0.26);
+  margin-bottom: 24px;
+}
+
+.mg-footer-input input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--mg-footer-surface);
+  padding: 8px 0;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  font-family: inherit;
+}
+
+.mg-footer-input input:focus {
+  outline: none;
+}
+
+.mg-footer-input button {
+  border: 0;
+  background: transparent;
+  color: var(--mg-footer-gold);
+  font-size: 18px;
+  padding: 0;
+  line-height: 1;
+}
+
+.mg-footer-hours-title {
+  margin-top: 12px;
+}
+
+.mg-footer-bottom {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding-top: 20px;
+  border-top: 1px solid rgba(254, 249, 238, 0.1);
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+
+.mg-footer-bottom span,
+.mg-footer-bottom a {
+  color: rgba(254, 249, 238, 0.44);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.mg-footer-bottom div {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1180px) {
+  .mg-footer-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .mg-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .mg-footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+

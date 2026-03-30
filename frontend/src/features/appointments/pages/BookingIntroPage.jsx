@@ -1,9 +1,9 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
 import { getAllServiceCategories, getAllStandardServices } from "../api/appointmentApi";
-import HomeFooter from "../../home/pages/HomeFooter";
-import HomeHeroBanner from "../../home/pages/HomeHeroBanner";
-import "../../home/pages/HomePage.css";
+import Footer from "../../../shared/components/Footer";
+import Header from "../../../shared/components/Header";
 import "./BookingIntroPage.css";
 
 const showcaseServices = [
@@ -146,8 +146,19 @@ function pickCategoryPreset(name, index) {
 
 export default function BookingIntroPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
+
+  function handleStartBooking() {
+    if (isAuthenticated) {
+      navigate("/booking/form");
+      return;
+    }
+    navigate("/login", {
+      state: { from: { pathname: "/booking/form" } },
+    });
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -302,7 +313,7 @@ export default function BookingIntroPage() {
     <div className="booking-intro">
       <section className="booking-intro-hero">
         <div className="booking-intro-hero-overlay" />
-        <HomeHeroBanner />
+        <Header overlay />
         <img
           className="booking-intro-hero-image"
           src="/assets/booking/hero.jpg"
@@ -381,7 +392,7 @@ export default function BookingIntroPage() {
                 <button
                   type="button"
                   className="booking-intro-type-link"
-                  onClick={() => navigate("/booking/form")}
+                  onClick={handleStartBooking}
                 >
                   {group.ctaLabel}
                 </button>
@@ -425,13 +436,13 @@ export default function BookingIntroPage() {
         <button
           type="button"
           className="booking-intro-primary booking-intro-primary-large"
-          onClick={() => navigate("/booking/form")}
+          onClick={handleStartBooking}
         >
           Đặt lịch ngay
         </button>
       </section>
 
-      <HomeFooter />
+      <Footer />
     </div>
   );
 }

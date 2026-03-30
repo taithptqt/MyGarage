@@ -17,10 +17,12 @@ import { ItemContent } from 'components/menu/ItemContent';
 import { SearchBar } from 'components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import PropTypes from 'prop-types';
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
+import ProfileDialog from '../../../features/profile/components/ProfileDialog';
+import { getApiBaseUrl } from '../../../features/auth/api/authApi';
 import { MdNotificationsNone } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
@@ -46,14 +48,28 @@ function getAvatarInitials(displayName) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function resolveAvatarUrl(avatarUrl) {
+  if (!avatarUrl) return '';
+  const raw = String(avatarUrl).trim();
+  if (!raw) return '';
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
+    return raw;
+  }
+  const base = getApiBaseUrl();
+  if (!base) return raw;
+  return `${base}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
+
 export default function HeaderLinks(props) {
   const { secondary } = props;
   const { colorMode, toggleColorMode } = useColorMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { branches, selectedBranch, selectBranch } = useBranch();
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
   const displayName = getDisplayName(user);
   const avatarInitials = getAvatarInitials(displayName);
+  const avatarSrc = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl || '');
   const greetingName =
     displayName.length > 24 ? `${displayName.slice(0, 24)}...` : displayName;
 
@@ -71,7 +87,8 @@ export default function HeaderLinks(props) {
     '14px 17px 40px 4px rgba(112, 144, 176, 0.06)',
   );
   return (
-    <Flex
+    <>
+      <Flex
       w={{ sm: '100%', md: 'auto' }}
       alignItems="center"
       flexDirection="row"
@@ -241,13 +258,12 @@ export default function HeaderLinks(props) {
             _hover={{ cursor: 'pointer' }}
             color="white"
             name={displayName}
+            src={avatarSrc || undefined}
             bg="#11047A"
             size="sm"
             w="40px"
             h="40px"
-          >
-            {avatarInitials}
-          </Avatar>
+          />
         </MenuButton>
         <MenuList
           boxShadow={shadow}
@@ -278,7 +294,7 @@ export default function HeaderLinks(props) {
               _focus={{ bg: 'none' }}
               borderRadius="8px"
               px="14px"
-              onClick={() => navigate('/admin/profile')}
+              onClick={() => setShowProfileDialog(true)}
             >
               <Text fontSize="sm">Hồ sơ của tôi</Text>
             </MenuItem>
@@ -304,7 +320,9 @@ export default function HeaderLinks(props) {
           </Flex>
         </MenuList>
       </Menu>
-    </Flex>
+      </Flex>
+      {showProfileDialog ? <ProfileDialog onClose={() => setShowProfileDialog(false)} /> : null}
+    </>
   );
 }
 

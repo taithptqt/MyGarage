@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { getApiBaseUrl } from "../../auth/api/authApi";
 import { updateCustomer } from "../../admin/api/customerApi";
@@ -34,10 +35,10 @@ export default function ProfileDialog({ onClose }) {
 
   const [formData, setFormData] = useState({
     fullName: user?.fullName || user?.FullName || "",
-    phone: user?.phone || user?.Phone || "",
-    email: user?.email || user?.Email || "",
-    citizenId: user?.citizenId || user?.CitizenId || "",
-    dateOfBirth: toDateInput(user?.dateOfBirth || user?.DateOfBirth),
+    phone: user?.phone || user?.Phone || user?.phoneNumber || user?.PhoneNumber || user?.mobile || user?.Mobile || "",
+    email: user?.email || user?.Email || user?.emailAddress || user?.EmailAddress || "",
+    citizenId: user?.citizenId || user?.CitizenId || user?.cccd || user?.CCCD || "",
+    dateOfBirth: toDateInput(user?.dateOfBirth || user?.DateOfBirth || user?.dob || user?.DOB),
     avatarUrl: user?.avatarUrl || user?.AvatarUrl || ""
   });
   const [saving, setSaving] = useState(false);
@@ -163,6 +164,9 @@ export default function ProfileDialog({ onClose }) {
       const nextUser = { ...user, ...payload, ...updated };
       setUser(nextUser);
       localStorage.setItem("mygarage_user", JSON.stringify(nextUser));
+      setTimeout(() => {
+        onClose();
+      }, 2000);
       setSuccess("Lưu hồ sơ thành công.");
     } catch (e) {
       setError(e?.message || "Không thể lưu hồ sơ.");
@@ -171,7 +175,7 @@ export default function ProfileDialog({ onClose }) {
     }
   };
 
-  return (
+  const content = (
     <>
       <div className="profile-dialog-overlay" onClick={onClose}>
         <section className="profile-dialog-card" onClick={(e) => e.stopPropagation()}>
@@ -251,4 +255,7 @@ export default function ProfileDialog({ onClose }) {
       ) : null}
     </>
   );
+
+  if (typeof document === "undefined") return content;
+  return createPortal(content, document.body);
 }

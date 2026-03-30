@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { getApiBaseUrl } from "../api/authApi";
 import AuthResult from "../components/AuthResult";
 import GoogleLoginButton from "../components/GoogleLoginButton";
@@ -29,6 +29,7 @@ const AUTH_HIGHLIGHTS = [
 function AuthPage() {
   const phoneRegex = /^(0\d{9,10}|\+84\d{9,10})$/;
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     login: contextLogin,
     register: contextRegister,
@@ -52,6 +53,7 @@ function AuthPage() {
   const [needGooglePhone, setNeedGooglePhone] = useState(false);
   const [googlePhone, setGooglePhone] = useState("");
   const [locationDenied, setLocationDenied] = useState(false);
+  const requestedPath = location?.state?.from?.pathname || "";
 
   useEffect(() => {
     document.title = mode === "login" ? "Đăng nhập | MyGarage" : "Đăng ký | MyGarage";
@@ -97,7 +99,9 @@ function AuthPage() {
     const roleName = String(data?.role || "").toLowerCase();
     let destination = "/home";
 
-    if (code === "ADMIN" || roleName === "admin") {
+    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
+      destination = "/booking/form";
+    } else if (code === "ADMIN" || roleName === "admin") {
       destination = "/admin";
     } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
       destination = "/workshop";
@@ -238,7 +242,9 @@ function AuthPage() {
     const roleName = String(savedUser?.role || "").toLowerCase();
     let dest = "/home";
 
-    if (code === "ADMIN" || roleName === "admin") {
+    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
+      dest = "/booking/form";
+    } else if (code === "ADMIN" || roleName === "admin") {
       dest = "/admin";
     } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
       dest = "/workshop";

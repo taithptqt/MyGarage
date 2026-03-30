@@ -1,39 +1,88 @@
-﻿import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import {
-  getMyAppointments,
-  cancelAppointment,
-} from "../api/appointmentApi";
+import { cancelAppointment, getMyAppointments } from "../api/appointmentApi";
+import Footer from "../../../shared/components/Footer";
+import Header from "../../../shared/components/Header";
+import "./MyAppointmentsPage.css";
 
-const STATUS_LABELS = {
-  PENDING: "Chá» xÃ¡c nháº­n",
-  CONFIRMED: "ÄÃ£ xÃ¡c nháº­n",
-  ARRIVED: "ÄÃ£ Ä‘áº¿n",
-  CANCELED: "ÄÃ£ há»§y",
-  NO_SHOW: "KhÃ´ng Ä‘áº¿n",
+const STATUS_META = {
+  PENDING: { label: "Chờ xác nhận", tone: "pending" },
+  CONFIRMED: { label: "Đã xác nhận", tone: "confirmed" },
+  ARRIVED: { label: "Đã đến", tone: "arrived" },
+  CANCELED: { label: "Đã hủy", tone: "canceled" },
+  NO_SHOW: { label: "Không đến", tone: "no-show" },
 };
 
 const FILTERS = [
-  { key: "", label: "Táº¥t cáº£" },
-  { key: "PENDING", label: "Chá» xÃ¡c nháº­n" },
-  { key: "CONFIRMED", label: "ÄÃ£ xÃ¡c nháº­n" },
-  { key: "ARRIVED", label: "ÄÃ£ Ä‘áº¿n" },
-  { key: "CANCELED", label: "ÄÃ£ há»§y" },
+  { key: "", label: "Tất cả" },
+  { key: "PENDING", label: "Chờ xác nhận" },
+  { key: "CONFIRMED", label: "Đã xác nhận" },
+  { key: "ARRIVED", label: "Đã đến" },
+  { key: "CANCELED", label: "Đã hủy" },
+  { key: "NO_SHOW", label: "Không đến" },
 ];
 
-function formatTime(t) {
-  if (!t) return "";
-  const d = new Date(t);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+function toDateTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatDate(t) {
-  if (!t) return "";
-  const d = new Date(t);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("vi-VN");
+function formatDate(value) {
+  const date = toDateTime(value);
+  if (!date) return "--";
+  return date.toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatTime(value) {
+  const date = toDateTime(value);
+  if (!date) return "--";
+  return date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeAppointmentsResponse(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.result)) return payload.result;
+  if (Array.isArray(payload?.$values)) return payload.$values;
+  return [];
+}
+
+function normalizeAppointment(item) {
+  return {
+    id: item?.id ?? item?.Id,
+    status: String(item?.status ?? item?.Status ?? "").toUpperCase(),
+    branchName: item?.branchName ?? item?.BranchName ?? "",
+    startTime: item?.startTime ?? item?.StartTime,
+    endTime: item?.endTime ?? item?.EndTime,
+    vehicleLicensePlate: item?.vehicleLicensePlate ?? item?.VehicleLicensePlate ?? "",
+    vehicleModelName: item?.vehicleModelName ?? item?.VehicleModelName ?? "",
+    serviceNames: Array.isArray(item?.serviceNames)
+      ? item.serviceNames
+      : Array.isArray(item?.ServiceNames)
+        ? item.ServiceNames
+        : [],
+    customerNotes: item?.customerNotes ?? item?.CustomerNotes ?? "",
+    cancelReason: item?.cancelReason ?? item?.CancelReason ?? "",
+  };
+}
+
+function sortAppointments(items) {
+  return [...items].sort((a, b) => {
+    const timeA = toDateTime(a.startTime)?.getTime() || 0;
+    const timeB = toDateTime(b.startTime)?.getTime() || 0;
+    return timeB - timeA;
+  });
 }
 
 export default function MyAppointmentsPage() {
@@ -43,6 +92,7 @@ export default function MyAppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [cancelling, setCancelling] = useState(null);
   const [error, setError] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -58,11 +108,16 @@ export default function MyAppointmentsPage() {
 
   async function loadAppointments() {
     setLoading(true);
+    setError("");
     try {
-      const data = await getMyAppointments();
-      setAppointments(Array.isArray(data) ? data : []);
-    } catch {
+      const payload = await getMyAppointments();
+      const list = normalizeAppointmentsResponse(payload)
+        .map(normalizeAppointment)
+        .filter((item) => item.id !== undefined && item.id !== null);
+      setAppointments(sortAppointments(list));
+    } catch (err) {
       setAppointments([]);
+      setError(err?.message || "Không thể tải lịch hẹn. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -84,148 +139,231 @@ export default function MyAppointmentsPage() {
     setCancelling(cancelTarget.id);
     setError("");
     try {
-      await cancelAppointment(cancelTarget.id, cancelReason || "KhÃ¡ch hÃ ng tá»± há»§y");
+      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng tự hủy");
       closeCancelPopup();
       await loadAppointments();
     } catch (err) {
-      setError(err.message || "Há»§y tháº¥t báº¡i.");
+      setError(err?.message || "Hủy lịch thất bại.");
     } finally {
       setCancelling(null);
     }
   }
 
-  const filtered = filter
-    ? appointments.filter((a) => a.status === filter)
-    : appointments;
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const upcomingCount = appointments.filter((item) => {
+      const start = toDateTime(item.startTime)?.getTime() || 0;
+      return start >= now && item.status !== "CANCELED";
+    }).length;
 
-  if (loading) {
-    return (
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Lá»‹ch háº¹n cá»§a tÃ´i</h1>
-        <div className="spinner-container"><div className="spinner" /></div>
-      </div>
-    );
-  }
+    return {
+      total: appointments.length,
+      upcoming: upcomingCount,
+      confirmed: appointments.filter((item) => item.status === "CONFIRMED").length,
+      canceled: appointments.filter((item) => item.status === "CANCELED").length,
+    };
+  }, [appointments]);
+
+  const filtered = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return appointments.filter((item) => {
+      if (filter && item.status !== filter) return false;
+      if (!term) return true;
+
+      const combined = [
+        item.branchName,
+        item.vehicleLicensePlate,
+        item.vehicleModelName,
+        Array.isArray(item.serviceNames) ? item.serviceNames.join(" ") : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return combined.includes(term);
+    });
+  }, [appointments, filter, searchTerm]);
 
   return (
-    <div>
-      <div className="appointments-header">
-        <h1>Lá»‹ch háº¹n cá»§a tÃ´i</h1>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div className="filter-tabs">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                className={filter === f.key ? "active" : ""}
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <Link
-            to="/booking"
-            className="btn-book"
-            style={{ padding: "8px 20px", fontSize: 14, marginTop: 0, textDecoration: "none", display: "inline-block" }}
-          >
-            + Äáº·t lá»‹ch má»›i
-          </Link>
-        </div>
+    <div className="my-appt-page">
+      <div className="my-appt-shell">
+        <Header />
+
+        <section className="my-appt-content">
+          <header className="my-appt-head">
+            <div>
+              <p className="my-appt-eyebrow">Trung tâm lịch hẹn</p>
+              <h1>Lịch hẹn của tôi</h1>
+              <p className="my-appt-description">
+                Theo dõi trạng thái lịch hẹn, thông tin xe và khung giờ xử lý trong một màn hình.
+              </p>
+            </div>
+            <Link to="/booking/form" className="my-appt-primary-btn">
+              Đặt lịch mới
+            </Link>
+          </header>
+
+          <section className="my-appt-stats">
+            <article className="my-appt-stat-card">
+              <span>Tổng lịch hẹn</span>
+              <strong>{stats.total}</strong>
+            </article>
+            <article className="my-appt-stat-card">
+              <span>Sắp tới</span>
+              <strong>{stats.upcoming}</strong>
+            </article>
+            <article className="my-appt-stat-card">
+              <span>Đã xác nhận</span>
+              <strong>{stats.confirmed}</strong>
+            </article>
+            <article className="my-appt-stat-card">
+              <span>Đã hủy</span>
+              <strong>{stats.canceled}</strong>
+            </article>
+          </section>
+
+          <section className="my-appt-toolbar">
+            <div className="my-appt-filter-list">
+              {FILTERS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={filter === item.key ? "active" : ""}
+                  onClick={() => setFilter(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              className="my-appt-search"
+              placeholder="Tìm theo chi nhánh, biển số, dịch vụ..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </section>
+
+          {error && <div className="my-appt-alert my-appt-alert-error">{error}</div>}
+
+          {loading ? (
+            <div className="spinner-container">
+              <div className="spinner" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <section className="my-appt-empty">
+              <h3>Chưa có lịch hẹn phù hợp</h3>
+              <p>
+                {filter || searchTerm
+                  ? "Không tìm thấy lịch hẹn theo bộ lọc hiện tại."
+                  : "Bạn chưa có lịch hẹn nào. Hãy đặt lịch để gara chuẩn bị tiếp nhận xe."}
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <Link to="/booking/form" className="my-appt-secondary-btn">
+                  Đặt lịch ngay
+                </Link>
+                <button type="button" className="my-appt-secondary-btn" onClick={loadAppointments}>
+                  Tải lại
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="my-appt-list">
+              {filtered.map((item) => {
+                const status = STATUS_META[item.status] || { label: item.status || "Không rõ", tone: "default" };
+                const canCancel = item.status === "PENDING" || item.status === "CONFIRMED";
+                return (
+                  <article key={item.id} className="my-appt-card">
+                    <div className="my-appt-card-main">
+                      <div className="my-appt-card-head">
+                        <h3>{item.branchName || "Chi nhánh chưa xác định"}</h3>
+                        <span className={`my-appt-status ${status.tone}`}>{status.label}</span>
+                      </div>
+                      <div className="my-appt-card-grid">
+                        <div>
+                          <label>Ngày tiếp nhận</label>
+                          <p>{formatDate(item.startTime)}</p>
+                        </div>
+                        <div>
+                          <label>Khung giờ</label>
+                          <p>{`${formatTime(item.startTime)} - ${formatTime(item.endTime)}`}</p>
+                        </div>
+                        <div>
+                          <label>Biển số</label>
+                          <p>{item.vehicleLicensePlate || "--"}</p>
+                        </div>
+                        <div>
+                          <label>Dòng xe</label>
+                          <p>{item.vehicleModelName || "--"}</p>
+                        </div>
+                      </div>
+                      {Array.isArray(item.serviceNames) && item.serviceNames.length > 0 && (
+                        <div className="my-appt-service-list">
+                          {item.serviceNames.map((serviceName) => (
+                            <span key={`${item.id}-${serviceName}`}>{serviceName}</span>
+                          ))}
+                        </div>
+                      )}
+                      {item.customerNotes && (
+                        <p className="my-appt-note">
+                          <strong>Ghi chú:</strong> {item.customerNotes}
+                        </p>
+                      )}
+                      {item.cancelReason && (
+                        <p className="my-appt-note cancel">
+                          <strong>Lý do hủy:</strong> {item.cancelReason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="my-appt-card-actions">
+                      {canCancel && (
+                        <button
+                          type="button"
+                          className="my-appt-cancel-btn"
+                          onClick={() => openCancelPopup(item)}
+                          disabled={cancelling === item.id}
+                        >
+                          {cancelling === item.id ? "Đang hủy..." : "Hủy lịch"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          )}
+        </section>
+
+        <Footer />
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-
-      {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">ðŸ“…</div>
-          <p>
-            {filter
-              ? "KhÃ´ng cÃ³ lá»‹ch háº¹n nÃ o á»Ÿ tráº¡ng thÃ¡i nÃ y."
-              : "Báº¡n chÆ°a cÃ³ lá»‹ch háº¹n nÃ o."}
-          </p>
-        </div>
-      ) : (
-        <div className="appointment-cards">
-          {filtered.map((a) => (
-            <div key={a.id} className="appt-card">
-              <div className="appt-info">
-                <h4>
-                  <span className={`status-badge status-${a.status}`}>
-                    {STATUS_LABELS[a.status] || a.status}
-                  </span>
-                  {" "}
-                  {a.branchName}
-                </h4>
-                <div className="appt-details">
-                  <span>ðŸ“… {formatDate(a.startTime)}</span>
-                  <span>ðŸ• {formatTime(a.startTime)} - {formatTime(a.endTime)}</span>
-                  {a.vehicleLicensePlate && <span>ðŸš— {a.vehicleLicensePlate}</span>}
-                  {a.vehicleModelName && <span>{a.vehicleModelName}</span>}
-                  {a.serviceNames && a.serviceNames.length > 0 && (
-                    <span>ðŸ”§ {a.serviceNames.join(", ")}</span>
-                  )}
-                </div>
-                {a.customerNotes && (
-                  <p style={{ fontSize: 13, color: "#718096", marginTop: 6 }}>
-                    Ghi chÃº: {a.customerNotes}
-                  </p>
-                )}
-                {a.cancelReason && (
-                  <p style={{ fontSize: 13, color: "#e53e3e", marginTop: 4 }}>
-                    LÃ½ do há»§y: {a.cancelReason}
-                  </p>
-                )}
-              </div>
-              <div className="appt-actions">
-                {(a.status === "PENDING" || a.status === "CONFIRMED") && (
-                  <button
-                    className="btn-cancel-appt"
-                    onClick={() => openCancelPopup(a)}
-                    disabled={cancelling === a.id}
-                  >
-                    {cancelling === a.id ? "Äang há»§y..." : "Há»§y lá»‹ch"}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Cancel Confirmation Popup */}
       {cancelTarget && (
         <div className="cancel-overlay" onClick={closeCancelPopup}>
-          <div className="cancel-popup" onClick={(e) => e.stopPropagation()}>
-            <h3>XÃ¡c nháº­n há»§y lá»‹ch háº¹n</h3>
-            <p style={{ color: "#718096", fontSize: 14, margin: "8px 0 16px" }}>
-              Báº¡n cÃ³ cháº¯c muá»‘n há»§y lá»‹ch háº¹n táº¡i{" "}
-              <strong>{cancelTarget.branchName}</strong> vÃ o ngÃ y{" "}
+          <div className="cancel-popup" onClick={(event) => event.stopPropagation()}>
+            <h3>Xác nhận hủy lịch hẹn</h3>
+            <p className="my-appt-cancel-desc">
+              Bạn có chắc muốn hủy lịch tại <strong>{cancelTarget.branchName}</strong> vào{" "}
               <strong>{formatDate(cancelTarget.startTime)}</strong>,{" "}
               <strong>{formatTime(cancelTarget.startTime)} - {formatTime(cancelTarget.endTime)}</strong>?
             </p>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "#4a5568" }}>
-                LÃ½ do há»§y (tÃ¹y chá»n)
-              </label>
+            <div className="my-appt-cancel-form">
+              <label htmlFor="cancel-reason">Lý do hủy (tùy chọn)</label>
               <textarea
+                id="cancel-reason"
                 className="cancel-reason-input"
-                placeholder="Nháº­p lÃ½ do há»§y lá»‹ch..."
+                placeholder="Ví dụ: thay đổi kế hoạch cá nhân"
                 value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
+                onChange={(event) => setCancelReason(event.target.value)}
                 rows={3}
               />
             </div>
-            {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button className="btn-popup-secondary" onClick={closeCancelPopup} disabled={cancelling}>
-                Quay láº¡i
+            {error && <div className="my-appt-alert my-appt-alert-error">{error}</div>}
+            <div className="my-appt-popup-actions">
+              <button type="button" className="btn-popup-secondary" onClick={closeCancelPopup} disabled={cancelling}>
+                Quay lại
               </button>
-              <button
-                className="btn-popup-danger"
-                onClick={handleConfirmCancel}
-                disabled={cancelling}
-              >
-                {cancelling ? "Äang há»§y..." : "XÃ¡c nháº­n há»§y"}
+              <button type="button" className="btn-popup-danger" onClick={handleConfirmCancel} disabled={cancelling}>
+                {cancelling ? "Đang hủy..." : "Xác nhận hủy"}
               </button>
             </div>
           </div>
@@ -234,5 +372,3 @@ export default function MyAppointmentsPage() {
     </div>
   );
 }
-
-

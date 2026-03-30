@@ -1,7 +1,7 @@
 ﻿import { Navigate } from "react-router-dom";
 import { isAuthenticated } from "../../../app/authState";
-import HomeHeroBanner from "./HomeHeroBanner";
-import HomeFooter from "./HomeFooter";
+import Header from "../../../shared/components/Header";
+import Footer from "../../../shared/components/Footer";
 import "./HomePage.css";
 
 const brandLogos = [
@@ -61,7 +61,7 @@ function HomePage() {
     <main className="stitch-home">
       <header className="home-hero">
         <div className="hero-top-overlay" />
-        <HomeHeroBanner />
+        <Header overlay />
 
         <div className="hero-media" aria-hidden="true">
           <video
@@ -219,11 +219,13 @@ function HomePage() {
         </form>
       </section>
 
-      <HomeFooter />
+      <Footer />
     </main>
   );
 }
 
 export default HomePage;
+
+
 
 

@@ -1,15 +1,17 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
-import ProfileDialog from "../../profile/components/ProfileDialog";
+import { useAuth } from "../../context/AuthContext";
+import ProfileDialog from "../../features/profile/components/ProfileDialog";
+import "./Header.css";
 
-function HomeHeroBanner() {
+function Header({ overlay = false }) {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const menuRef = useRef(null);
+
   const displayName = String(user?.fullName || user?.name || "Bạn").trim();
   const avatarUrl = String(user?.avatarUrl || user?.AvatarUrl || "").trim();
   const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
@@ -52,7 +54,14 @@ function HomeHeroBanner() {
 
   const handleNavigate = (path) => {
     setMenuOpen(false);
+    if (location.pathname === path) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     navigate(path);
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
   };
 
   const handleLogout = () => {
@@ -62,42 +71,46 @@ function HomeHeroBanner() {
   };
 
   return (
-    <nav className="hero-nav-wrap hero-nav-banner">
-      <div className="main-nav">
-        <span className="utility-call banner-hotline">HOTLINE +45 69 133 911</span>
-        <div className="main-nav-side">
-          <a href="/home" onClick={(event) => { event.preventDefault(); navigate("/home"); }}>TRANG CHỦ</a>
-          <a href="/booking" onClick={(event) => { event.preventDefault(); navigate("/booking"); }}>ĐẶT LỊCH</a>
-          <a href="/my-appointments" onClick={(event) => { event.preventDefault(); navigate("/my-appointments"); }}>LỊCH HẸN CỦA TÔI</a>
+    <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"}`}>
+      <div className="mg-header-main">
+        <span className="mg-header-hotline">HOTLINE +45 69 133 911</span>
+
+        <div className="mg-header-side">
+          <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
+          <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
+          <a href="/my-appointments" onClick={(event) => { event.preventDefault(); handleNavigate("/my-appointments"); }}>LỊCH HẸN CỦA TÔI</a>
         </div>
-        <div className="logo-center" role="img" aria-label="MY GARAGE">
+
+        <div className="mg-header-logo" role="img" aria-label="MY GARAGE">
           <span>MY</span>
           <small>GARAGE</small>
         </div>
-        <div className="main-nav-side right">
+
+        <div className="mg-header-side right">
           <a href="#">HỘP & SỰ KIỆN</a>
           <a href="#">ĐỐI TÁC</a>
           <a href="#">TIN TỨC</a>
           <a href="#">LIÊN HỆ</a>
         </div>
+
         {isAuthenticated ? (
-          <div className="banner-user" ref={menuRef}>
+          <div className="mg-header-user" ref={menuRef}>
             <button
               type="button"
-              className="banner-user-trigger"
+              className="mg-header-user-trigger"
               onClick={() => setMenuOpen((prev) => !prev)}
             >
-              <span className="banner-user-name">Xin chào, {displayName}</span>
-              <span className="banner-user-avatar" aria-hidden="true">
+              <span className="mg-header-user-name">Xin chào, {displayName}</span>
+              <span className="mg-header-user-avatar" aria-hidden="true">
                 {avatarUrl ? <img src={avatarUrl} alt="" /> : avatarInitial}
               </span>
             </button>
             {menuOpen && (
-              <div className="banner-user-menu">
-                <div className="banner-user-menu-head">Xin chào, {displayName}</div>
+              <div className="mg-header-user-menu">
+                <div className="mg-header-user-menu-head">Xin chào, {displayName}</div>
                 <button
                   type="button"
-                  className="banner-user-menu-item"
+                  className="mg-header-user-menu-item"
                   onClick={() => {
                     setMenuOpen(false);
                     setShowProfileDialog(true);
@@ -108,7 +121,7 @@ function HomeHeroBanner() {
                 {isStaffOrAdmin && dashboardPath ? (
                   <button
                     type="button"
-                    className="banner-user-menu-item"
+                    className="mg-header-user-menu-item"
                     onClick={() => handleNavigate(dashboardPath)}
                   >
                     Dashboard
@@ -116,7 +129,7 @@ function HomeHeroBanner() {
                 ) : null}
                 <button
                   type="button"
-                  className="banner-user-menu-item logout"
+                  className="mg-header-user-menu-item logout"
                   onClick={handleLogout}
                 >
                   Đăng xuất
@@ -125,12 +138,13 @@ function HomeHeroBanner() {
             )}
           </div>
         ) : (
-          <a className="banner-login-btn" href="/login">ĐĂNG NHẬP</a>
+          <a className="mg-header-login-btn" href="/login">ĐĂNG NHẬP</a>
         )}
       </div>
+
       {showProfileDialog ? <ProfileDialog onClose={() => setShowProfileDialog(false)} /> : null}
     </nav>
   );
 }
 
-export default HomeHeroBanner;
+export default Header;

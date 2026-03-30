@@ -19,8 +19,9 @@ import {
 } from "../../appointments/api/appointmentApi";
 import AppointmentForm from "./AppointmentForm";
 import ServiceOrderDetailModal from "./ServiceOrderDetailModal";
+import ReceptionAppointmentsSection from "./ReceptionAppointmentsSection";
 
-export default function ReceptionDashboard() {
+export default function ReceptionOrdersSection() {
   const navigate = useNavigate();
   const location = useLocation();
   const [orders, setOrders] = useState([]);
@@ -45,6 +46,7 @@ export default function ReceptionDashboard() {
   const [draftDateFrom, setDraftDateFrom] = useState("");
   const [draftDateTo, setDraftDateTo] = useState("");
   const [apptStatusFilter, setApptStatusFilter] = useState("ALL");
+  const [apptSortBy, setApptSortBy] = useState("NEWEST");
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
   const [apptsPage, setApptsPage] = useState(1);
@@ -195,6 +197,7 @@ export default function ReceptionDashboard() {
 
   const filteredOrders = useMemo(() => {
     const query = String(searchQuery || "").trim().toLowerCase();
+    const queryCompact = query.replace(/[\s.-]/g, "");
     const startDate = toStartOfDay(dateFrom);
     const endDate = toEndOfDay(dateTo);
     const list = (orders || []).filter((o) => {
@@ -203,11 +206,15 @@ export default function ReceptionDashboard() {
       const byDate =
         (!startDate || createdAtTime >= startDate.getTime()) &&
         (!endDate || createdAtTime <= endDate.getTime());
+      const orderPlate = String(getOrderVehiclePlate(o) || "").toLowerCase();
+      const orderPlateCompact = orderPlate.replace(/[\s.-]/g, "");
       const byQuery =
         !query ||
         (o.code || "").toLowerCase().includes(query) ||
         getOrderCustomerName(o).toLowerCase().includes(query) ||
-        (o.status || "").toLowerCase().includes(query);
+        (o.status || "").toLowerCase().includes(query) ||
+        orderPlate.includes(query) ||
+        (queryCompact && orderPlateCompact.includes(queryCompact));
       return byStatus && byDate && byQuery;
     });
 
@@ -396,6 +403,7 @@ export default function ReceptionDashboard() {
 
   const filteredAppts = useMemo(() => {
     const query = String(searchQuery || "").trim().toLowerCase();
+    const queryCompact = query.replace(/[\s.-]/g, "");
     const startDate = toStartOfDay(dateFrom);
     const endDate = toEndOfDay(dateTo);
     const list = (appointments || []).filter((a) => {
@@ -404,20 +412,29 @@ export default function ReceptionDashboard() {
       const byDate =
         (!startDate || scheduledTime >= startDate.getTime()) &&
         (!endDate || scheduledTime <= endDate.getTime());
+      const apptPlate = String(a.vehicleLicensePlate || a.licensePlate || "").toLowerCase();
+      const apptPlateCompact = apptPlate.replace(/[\s.-]/g, "");
       const byQuery =
         !query ||
         (a.customerName || "").toLowerCase().includes(query) ||
         (a.customerPhone || "").toLowerCase().includes(query) ||
-        (a.vehicleLicensePlate || "").toLowerCase().includes(query);
+        apptPlate.includes(query) ||
+        (queryCompact && apptPlateCompact.includes(queryCompact));
       return byStatus && byDate && byQuery;
     });
 
     return list.sort((a, b) => {
       const aTime = new Date(a.startTime || 0).getTime();
       const bTime = new Date(b.startTime || 0).getTime();
+      const aName = String(a.customerName || "");
+      const bName = String(b.customerName || "");
+
+      if (apptSortBy === "OLDEST") return aTime - bTime;
+      if (apptSortBy === "NAME_ASC") return aName.localeCompare(bName, "vi");
+      if (apptSortBy === "NAME_DESC") return bName.localeCompare(aName, "vi");
       return bTime - aTime;
     });
-  }, [appointments, searchQuery, apptStatusFilter, dateFrom, dateTo, toStartOfDay, toEndOfDay]);
+  }, [appointments, searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo, toStartOfDay, toEndOfDay]);
   const pagedAppts = useMemo(() => {
     const start = (apptsPage - 1) * apptsPageSize;
     return filteredAppts.slice(start, start + apptsPageSize);
@@ -429,7 +446,7 @@ export default function ReceptionDashboard() {
 
   useEffect(() => {
     setApptsPage(1);
-  }, [searchQuery, apptStatusFilter, dateFrom, dateTo, appointments.length]);
+  }, [searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo, appointments.length]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -531,194 +548,59 @@ export default function ReceptionDashboard() {
         </div>
       )}
 
-      {activeTab === 'orders' ? (
-        <>
-          <div className="table-toolbar">
-            <button className="btn-primary" onClick={() => navigate("/workshop/reception/create")}>+ Tiếp nhận xe mới</button>
-            <div className="toolbar-controls">
-              <label htmlFor="order-status-filter" className="toolbar-label">Trạng thái:</label>
-              <select id="order-status-filter" className="toolbar-select" value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} style={{ minWidth: "160px" }}>
-                <option value="ALL">{"T\u1ea5t c\u1ea3"}</option>
-                {orderStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
-              </select>
-              <label htmlFor="order-sort" className="toolbar-label">Sắp xếp:</label>
-              <select id="order-sort" className="toolbar-select" value={orderSortBy} onChange={(e) => setOrderSortBy(e.target.value)} style={{ minWidth: "220px" }}>
-                <option value="CREATED_DESC">Mới nhất</option>
-                <option value="CREATED_ASC">Cũ nhất</option>
-                <option value="SCHEDULE_DESC">Lịch hẹn mới nhất</option>
-                <option value="CHECKIN_DESC">Check-in mới nhất</option>
-                <option value="CHECKIN_ASC">Check-in cũ nhất</option>
-              </select>
-              <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
-                Chọn khoảng ngày
-              </button>
-              {(dateFrom || dateTo) && (
-                <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={clearDateRange}>
-                  Xóa lọc
-                </button>
-              )}
-            </div>
-            <span className="result-count">{filteredOrders.length} lệnh sửa chữa</span>
-          </div>
-
-          <div className="workshop-table-card">
-            {loading ? (
-              <div className="loading-state"><div className="spinner" /><p>Đang tải danh sách lệnh...</p></div>
-            ) : (
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Mã lệnh</th>
-                    <th>Khách hàng</th>
-                    <th>Biển số</th>
-                    <th>Trạng thái</th>
-                    <th>Thời điểm vào</th>
-                    <th>Hẹn trả</th>
-                    <th className="th-center" style={{ width: '120px' }}>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.length === 0 ? (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#a3aed0' }}>Chưa có lệnh sửa chữa nào.</td></tr>
-                  ) : pagedOrders.map(order => (
-                    <tr 
-                      key={order.id} 
-                      onClick={() => { 
-                        setSelectedOrderForView(order); 
-                        setModal('order_detail'); 
-                      }}
-                      className="clickable-row"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td className="td-id">{order.code}</td>
-                      <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
-                      <td>{getOrderVehiclePlate(order)}</td>
-                      <td>
-                        <span className={`badge ${getStatusBadge(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td>{order.checkInTime ? new Date(order.checkInTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : "-"}</td>
-                      <td>{order.estimatedHandover ? new Date(order.estimatedHandover).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : "Chưa hẹn"}</td>
-                      <td className="td-center" onClick={(e) => e.stopPropagation()} style={{ width: '120px' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-                          {order.status === 'WAITING_APPROVAL' && (
-                            <button className="btn-primary btn-sm" onClick={() => navigate(`/workshop/reception/orders/${order.id}/quote`)}>💰 Báo giá</button>
-                          )}
-                          {order.status === 'READY' && (
-                            <button className="btn-success btn-sm" onClick={() => handleCompleteOrder(order)}>🤝 Bàn giao</button>
-                          )}
-                          {statusPermitUpdate(order.status) && (
-                            <button 
-                              className="btn-icon" 
-                              style={{ color: '#ee5d50' }} 
-                              title="Hủy lệnh" 
-                              onClick={() => handleCancelOrder(order)}
-                            >
-                              Hủy
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) }
-          </div>
-          <TablePagination
-            totalItems={filteredOrders.length}
-            currentPage={ordersPage}
-            pageSize={ordersPageSize}
-            onPageChange={setOrdersPage}
-            onPageSizeChange={(size) => {
-              setOrdersPageSize(size);
-              setOrdersPage(1);
-            }}
-          />
-        </>
+      {activeTab === "orders" ? (
+        <OrdersTableContent
+          navigate={navigate}
+          orderStatusFilter={orderStatusFilter}
+          setOrderStatusFilter={setOrderStatusFilter}
+          orderStatusOptions={orderStatusOptions}
+          orderSortBy={orderSortBy}
+          setOrderSortBy={setOrderSortBy}
+          openDateRangePicker={openDateRangePicker}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          clearDateRange={clearDateRange}
+          filteredOrders={filteredOrders}
+          loading={loading}
+          pagedOrders={pagedOrders}
+          setSelectedOrderForView={setSelectedOrderForView}
+          setModal={setModal}
+          getOrderCustomerName={getOrderCustomerName}
+          getOrderVehiclePlate={getOrderVehiclePlate}
+          statusPermitUpdate={statusPermitUpdate}
+          handleCompleteOrder={handleCompleteOrder}
+          handleCancelOrder={handleCancelOrder}
+          ordersPage={ordersPage}
+          ordersPageSize={ordersPageSize}
+          setOrdersPage={setOrdersPage}
+          setOrdersPageSize={setOrdersPageSize}
+          getStatusBadge={getStatusBadge}
+        />
       ) : (
-        <>
-          <div className="table-toolbar">
-            <button className="btn-primary" onClick={() => setModal("create_appt")}>+ Tạo lịch hẹn</button>
-            <div className="toolbar-controls">
-              <label htmlFor="appt-status-filter" className="toolbar-label">Trạng thái:</label>
-              <select id="appt-status-filter" className="toolbar-select" value={apptStatusFilter} onChange={(e) => setApptStatusFilter(e.target.value)} style={{ minWidth: "160px" }}>
-                <option value="ALL">{"T\u1ea5t c\u1ea3"}</option>
-                {apptStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
-              </select>
-              <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
-                Chọn khoảng ngày
-              </button>
-              {(dateFrom || dateTo) && (
-                <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={clearDateRange}>
-                  Xóa lọc
-                </button>
-              )}
-            </div>
-            <span className="result-count">{filteredAppts.length} lịch đặt trước</span>
-          </div>
-
-          <div className="workshop-table-card">
-            {apptLoading ? (
-              <div className="loading-state"><div className="spinner" /><p>Đang tải lịch hẹn...</p></div>
-            ) : (
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Khách hàng</th>
-                    <th>SĐT</th>
-                    <th>Ngày</th>
-                    <th>Giờ</th>
-                    <th>Xe</th>
-                    <th className="th-center">Trạng thái</th>
-                    <th className="col-actions">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAppts.length === 0 ? (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#a3aed0' }}>Không có lịch hẹn nào.</td></tr>
-                  ) : pagedAppts.map(appt => (
-                    <tr key={appt.id}>
-                      <td style={{ fontWeight: 600 }}>{appt.customerName}</td>
-                      <td>{appt.customerPhone}</td>
-                      <td>{formatApptDate(appt.startTime)}</td>
-                      <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
-                      <td>{appt.vehicleLicensePlate}</td>
-                      <td className="th-center">
-                        <span className={`badge ${getApptStatusBadge(appt.status)}`}>
-                          {appt.status}
-                        </span>
-                      </td>
-                      <td className="col-actions">
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
-                          <button 
-                            className={`btn-icon btn-action-danger ${(appt.status !== 'PENDING' && appt.status !== 'CONFIRMED') ? 'faded' : ''}`} 
-                            title="Hủy lịch hẹn" 
-                            onClick={() => handleApptAction(appt.id)} 
-                            disabled={(appt.status !== 'PENDING' && appt.status !== 'CONFIRMED') || actingAppt === appt.id}
-                          >
-                            Hủy
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          <TablePagination
-            totalItems={filteredAppts.length}
-            currentPage={apptsPage}
-            pageSize={apptsPageSize}
-            onPageChange={setApptsPage}
-            onPageSizeChange={(size) => {
-              setApptsPageSize(size);
-              setApptsPage(1);
-            }}
-          />
-        </>
+        <ReceptionAppointmentsSection
+          setModal={setModal}
+          apptStatusFilter={apptStatusFilter}
+          setApptStatusFilter={setApptStatusFilter}
+          apptStatusOptions={apptStatusOptions}
+          apptSortBy={apptSortBy}
+          setApptSortBy={setApptSortBy}
+          openDateRangePicker={openDateRangePicker}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          clearDateRange={clearDateRange}
+          filteredAppts={filteredAppts}
+          apptLoading={apptLoading}
+          pagedAppts={pagedAppts}
+          formatApptDate={formatApptDate}
+          formatApptTime={formatApptTime}
+          getApptStatusBadge={getApptStatusBadge}
+          handleApptAction={handleApptAction}
+          actingAppt={actingAppt}
+          apptsPage={apptsPage}
+          apptsPageSize={apptsPageSize}
+          setApptsPage={setApptsPage}
+          setApptsPageSize={setApptsPageSize}
+        />
       )}
 
       {modal === "create_appt" && (
@@ -726,10 +608,10 @@ export default function ReceptionDashboard() {
            {error && <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>❌ {error}</div>}
            <AppointmentForm 
              customers={customers} 
-             vehicles={vehicles}
-             customerVehicles={customerVehicles}
-             services={services}
-             branchId={selectedBranchId}
+            vehicles={vehicles}
+            customerVehicles={customerVehicles}
+            services={services}
+            branchId={selectedBranchId}
              onSubmit={handleSaveAppointment} 
              onCancel={() => setModal(null)} 
              loading={saving} 
@@ -837,6 +719,142 @@ export default function ReceptionDashboard() {
         />
       )}
     </div>
+  );
+}
+
+function OrdersTableContent({
+  navigate,
+  orderStatusFilter,
+  setOrderStatusFilter,
+  orderStatusOptions,
+  orderSortBy,
+  setOrderSortBy,
+  openDateRangePicker,
+  dateFrom,
+  dateTo,
+  clearDateRange,
+  filteredOrders,
+  loading,
+  pagedOrders,
+  setSelectedOrderForView,
+  setModal,
+  getOrderCustomerName,
+  getOrderVehiclePlate,
+  statusPermitUpdate,
+  handleCompleteOrder,
+  handleCancelOrder,
+  ordersPage,
+  ordersPageSize,
+  setOrdersPage,
+  setOrdersPageSize,
+  getStatusBadge,
+}) {
+  return (
+    <>
+      <div className="table-toolbar">
+        <button className="btn-primary" onClick={() => navigate("/workshop/reception/create")}>+ Tiếp nhận xe mới</button>
+        <div className="toolbar-controls">
+          <label htmlFor="order-status-filter" className="toolbar-label">Trạng thái:</label>
+          <select id="order-status-filter" className="toolbar-select" value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} style={{ minWidth: "160px" }}>
+            <option value="ALL">{"T\u1ea5t c\u1ea3"}</option>
+            {orderStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
+          </select>
+          <label htmlFor="order-sort" className="toolbar-label">Sắp xếp:</label>
+          <select id="order-sort" className="toolbar-select" value={orderSortBy} onChange={(e) => setOrderSortBy(e.target.value)} style={{ minWidth: "220px" }}>
+            <option value="CREATED_DESC">Mới nhất</option>
+            <option value="CREATED_ASC">Cũ nhất</option>
+            <option value="SCHEDULE_DESC">Lịch hẹn mới nhất</option>
+            <option value="CHECKIN_DESC">Check-in mới nhất</option>
+            <option value="CHECKIN_ASC">Check-in cũ nhất</option>
+          </select>
+          <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
+            Chọn khoảng ngày
+          </button>
+          {(dateFrom || dateTo) && (
+            <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={clearDateRange}>
+              Xóa lọc
+            </button>
+          )}
+        </div>
+        <span className="result-count">{filteredOrders.length} lệnh sửa chữa</span>
+      </div>
+
+      <div className="workshop-table-card">
+        {loading ? (
+          <div className="loading-state"><div className="spinner" /><p>Đang tải danh sách lệnh...</p></div>
+        ) : (
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Mã lệnh</th>
+                <th>Khách hàng</th>
+                <th>Biển số</th>
+                <th>Trạng thái</th>
+                <th>Thời điểm vào</th>
+                <th>Hẹn trả</th>
+                <th className="th-center" style={{ width: "120px" }}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr><td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>Chưa có lệnh sửa chữa nào.</td></tr>
+              ) : pagedOrders.map((order) => (
+                <tr
+                  key={order.id}
+                  onClick={() => {
+                    setSelectedOrderForView(order);
+                    setModal("order_detail");
+                  }}
+                  className="clickable-row"
+                  style={{ cursor: "pointer" }}
+                >
+                  <td className="td-id">{order.code}</td>
+                  <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
+                  <td>{getOrderVehiclePlate(order)}</td>
+                  <td>
+                    <span className={`badge ${getStatusBadge(order.status)}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td>{order.checkInTime ? new Date(order.checkInTime).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "-"}</td>
+                  <td>{order.estimatedHandover ? new Date(order.estimatedHandover).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Chưa hẹn"}</td>
+                  <td className="td-center" onClick={(e) => e.stopPropagation()} style={{ width: "120px" }}>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", width: "100%" }}>
+                      {order.status === "WAITING_APPROVAL" && (
+                        <button className="btn-primary btn-sm" onClick={() => navigate(`/workshop/reception/orders/${order.id}/quote`)}>💰 Báo giá</button>
+                      )}
+                      {order.status === "READY" && (
+                        <button className="btn-success btn-sm" onClick={() => handleCompleteOrder(order)}>🤝 Bàn giao</button>
+                      )}
+                      {statusPermitUpdate(order.status) && (
+                        <button
+                          className="btn-icon"
+                          style={{ color: "#ee5d50" }}
+                          title="Hủy lệnh"
+                          onClick={() => handleCancelOrder(order)}
+                        >
+                          Hủy
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <TablePagination
+        totalItems={filteredOrders.length}
+        currentPage={ordersPage}
+        pageSize={ordersPageSize}
+        onPageChange={setOrdersPage}
+        onPageSizeChange={(size) => {
+          setOrdersPageSize(size);
+          setOrdersPage(1);
+        }}
+      />
+    </>
   );
 }
 

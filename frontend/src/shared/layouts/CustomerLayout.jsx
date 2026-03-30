@@ -6,7 +6,9 @@ export default function CustomerLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const hideDefaultNavbar = location.pathname.startsWith("/booking");
+  const hideDefaultNavbar =
+    location.pathname.startsWith("/booking") ||
+    location.pathname.startsWith("/my-appointments");
 
   function handleLogout() {
     logout();

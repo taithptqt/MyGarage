@@ -3,7 +3,7 @@ import AuthPage from "../features/auth/pages/AuthPage";
 import HomePage from "../features/home/pages/HomePage";
 import AdminPage from "../features/admin/pages/AdminPage";
 import WorkshopPage from "../features/workshop/pages/WorkshopPage";
-import ReceptionDashboard from "../features/workshop/components/ReceptionDashboard";
+import ReceptionOrdersSection from "../features/workshop/components/ReceptionOrdersSection";
 import ManagerDashboard from "../features/workshop/components/ManagerDashboard";
 import ForemanDashboard from "../features/workshop/components/ForemanDashboard";
 import TechnicianDashboard from "../features/workshop/components/TechnicianDashboard";
@@ -24,7 +24,6 @@ import CustomerLayout from "../shared/layouts/CustomerLayout";
 import BookingPage from "../features/appointments/pages/BookingPage";
 import BookingIntroPage from "../features/appointments/pages/BookingIntroPage";
 import MyAppointmentsPage from "../features/appointments/pages/MyAppointmentsPage";
-import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -55,9 +54,7 @@ function App() {
         <Route 
           path="/booking" 
           element={
-            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-              <CustomerRoute><BookingIntroPage /></CustomerRoute>
-            </ProtectedRoute>
+            <CustomerRoute><BookingIntroPage /></CustomerRoute>
           } 
         />
         <Route 
@@ -107,7 +104,7 @@ function App() {
             </ProtectedRoute>
           } 
         >
-          <Route path="reception" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionDashboard /></ProtectedRoute>} />
+          <Route path="reception" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionOrdersSection /></ProtectedRoute>} />
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
@@ -121,8 +118,6 @@ function App() {
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />
           
-          {/* Appointment Management for Staff */}
-          <Route path="appointments" element={<ProtectedRoute allowedRoles={["RECEPTIONIST", "MANAGER"]}><AppointmentManagementPage /></ProtectedRoute>} />
         </Route>
 
         <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />

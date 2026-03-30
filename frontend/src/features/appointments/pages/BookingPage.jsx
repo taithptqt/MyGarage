@@ -1,88 +1,251 @@
-<<<<<<< ours
-<<<<<<< ours
-import { useState, useEffect, useCallback } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
 import { useAuth } from "../../../context/AuthContext";
-import SlotPicker from "../components/SlotPicker";
 import {
+  bookAppointment,
+  createCustomerVehicle,
+  createVehicle,
   getAllBranches,
+  getAllCustomerVehicles,
+  getAllCustomers,
+  getAllServiceCategories,
   getAllStandardServices,
+  getAllVehicles,
+  getAvailableSlots,
   getVehicleBrands,
   getVehicleModels,
-  getAvailableSlots,
-  bookAppointment,
+  updateCustomer,
 } from "../api/appointmentApi";
+import Header from "../../../shared/components/Header";
+import "./BookingPage.css";
 
-function formatVND(n) {
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
+const STEPS = [
+  "Loại dịch vụ",
+  "Dịch vụ cụ thể",
+  "Chi nhánh",
+  "Thông tin & thời gian",
+  "Xác nhận",
+];
+
+function formatVnd(value) {
+  if (!Number.isFinite(Number(value))) return "0đ";
+  return `${new Intl.NumberFormat("vi-VN").format(Math.round(Number(value)))}đ`;
 }
 
-function dateToString(d) {
+function normalizeText(value) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function formatDateVi(dateString) {
+  if (!dateString) return "Chưa chọn";
+  const parsed = new Date(dateString);
+  if (Number.isNaN(parsed.getTime())) return "Chưa chọn";
+  return parsed.toLocaleDateString("vi-VN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function extractField(obj, keys, fallback = null) {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
+  }
+  return fallback;
+}
+
+function toIsoDateInput(dateValue) {
+  const d = dateValue ? new Date(dateValue) : new Date();
+  if (Number.isNaN(d.getTime())) return "";
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
+function toSafeUpper(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function timeLabel(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  }
+  return String(value).slice(0, 5);
+}
+
 export default function BookingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  const [branches, setBranches] = useState([]);
-  const [services, setServices] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [models, setModels] = useState([]);
-
-  const [branchId, setBranchId] = useState("");
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [slots, setSlots] = useState([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-  const [selectedBrandId, setSelectedBrandId] = useState("");
-  const [selectedModelId, setSelectedModelId] = useState("");
-  const [licensePlate, setLicensePlate] = useState("");
-  const [vin, setVin] = useState("");
-  const [vehicleColor, setVehicleColor] = useState("");
-  const [notes, setNotes] = useState("");
-
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [categories, setCategories] = useState([]);
+  const [services, setServices] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [models, setModels] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [customerVehicles, setCustomerVehicles] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+
+  const [currentStep, setCurrentStep] = useState(1);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+
+  const [customerForm, setCustomerForm] = useState({ fullName: "", phone: "" });
+  const [notes, setNotes] = useState("");
+
+  const [vehicleMode, setVehicleMode] = useState("new");
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [newVehicle, setNewVehicle] = useState({
+    brandId: "",
+    modelId: "",
+    licensePlate: "",
+    vin: "",
+    color: "",
+  });
+
+  const [selectedDate, setSelectedDate] = useState(toIsoDateInput(new Date()));
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate("/login", { replace: true });
-      return;
+      navigate("/login", {
+        replace: true,
+        state: { from: { pathname: "/booking/form" } },
+      });
     }
-    loadReferenceData();
   }, [isAuthenticated, navigate]);
 
-  async function loadReferenceData() {
-    try {
-      const [br, svc, vb, vm] = await Promise.all([
-        getAllBranches(),
-        getAllStandardServices(),
-        getVehicleBrands(),
-        getVehicleModels(),
-      ]);
-      setBranches(Array.isArray(br) ? br.filter((b) => b.status === "active") : []);
-      setServices(Array.isArray(svc) ? svc.filter((s) => s.isActive !== false) : []);
-      setBrands(Array.isArray(vb) ? vb.filter((b) => b.isActive !== false) : []);
-      setModels(Array.isArray(vm) ? vm : []);
-    } catch {
-      /* ignore */
+  const customerRecord = useMemo(() => {
+    const userId = Number(user?.id);
+    if (Number.isFinite(userId)) {
+      const byId = customers.find((item) => Number(item?.id) === userId || Number(item?.Id) === userId);
+      if (byId) return byId;
     }
-  }
 
-  const loadSlots = useCallback(async (bid, date) => {
-    if (!bid || !date) return;
+    const userPhone = normalizeText(user?.phone);
+    if (userPhone) {
+      const byPhone = customers.find((item) => normalizeText(item?.phone || item?.Phone) === userPhone);
+      if (byPhone) return byPhone;
+    }
+
+    const userEmail = normalizeText(user?.email);
+    if (userEmail) {
+      const byEmail = customers.find((item) => normalizeText(item?.email || item?.Email) === userEmail);
+      if (byEmail) return byEmail;
+    }
+
+    return null;
+  }, [customers, user?.email, user?.id, user?.phone]);
+
+  const linkedVehicles = useMemo(() => {
+    const customerId = Number(extractField(customerRecord, ["id", "Id"], user?.id));
+    if (!Number.isFinite(customerId)) return [];
+
+    const links = (customerVehicles || []).filter(
+      (link) =>
+        Number(extractField(link, ["customerId", "CustomerId"])) === customerId &&
+        extractField(link, ["isDeleted", "IsDeleted"], false) !== true
+    );
+
+    return links
+      .map((link) => {
+        const vehicleId = Number(extractField(link, ["vehicleId", "VehicleId"]));
+        const vehicle = vehicles.find((item) => Number(extractField(item, ["id", "Id"])) === vehicleId);
+        if (!vehicle) return null;
+        return {
+          id: Number(extractField(vehicle, ["id", "Id"])),
+          modelId: Number(extractField(vehicle, ["modelId", "ModelId"])),
+          licensePlate: extractField(vehicle, ["licensePlate", "LicensePlate"], ""),
+          vin: extractField(vehicle, ["vin", "Vin"], ""),
+          color: extractField(vehicle, ["color", "Color"], ""),
+          brandName: extractField(vehicle, ["brandName", "BrandName"], ""),
+          modelName: extractField(vehicle, ["modelName", "ModelName"], ""),
+        };
+      })
+      .filter(Boolean);
+  }, [customerRecord, customerVehicles, user?.id, vehicles]);
+
+  const selectedCategory = useMemo(
+    () => categories.find((item) => String(item.id) === String(selectedCategoryId) || String(item.Id) === String(selectedCategoryId)),
+    [categories, selectedCategoryId]
+  );
+
+  const servicesByCategory = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    return (services || []).filter(
+      (item) =>
+        String(extractField(item, ["categoryId", "CategoryId"])) === String(selectedCategoryId) &&
+        extractField(item, ["isActive", "IsActive"], true) !== false
+    );
+  }, [selectedCategoryId, services]);
+
+  const selectedServices = useMemo(
+    () => services.filter((item) => selectedServiceIds.includes(Number(extractField(item, ["id", "Id"])))),
+    [selectedServiceIds, services]
+  );
+
+  const selectedBranch = useMemo(
+    () => branches.find((item) => String(item.id) === String(selectedBranchId) || String(item.Id) === String(selectedBranchId)),
+    [branches, selectedBranchId]
+  );
+
+  const selectedExistingVehicle = useMemo(
+    () => linkedVehicles.find((item) => String(item.id) === String(selectedVehicleId)),
+    [linkedVehicles, selectedVehicleId]
+  );
+
+  const modelOptions = useMemo(() => {
+    if (!newVehicle.brandId) return [];
+    return (models || []).filter(
+      (item) =>
+        String(extractField(item, ["brandId", "BrandId"])) === String(newVehicle.brandId) &&
+        extractField(item, ["isDeleted", "IsDeleted"], false) !== true
+    );
+  }, [models, newVehicle.brandId]);
+
+  const selectedModel = useMemo(
+    () => models.find((item) => String(extractField(item, ["id", "Id"])) === String(newVehicle.modelId)),
+    [models, newVehicle.modelId]
+  );
+
+  const totalPrice = useMemo(
+    () => selectedServices.reduce((sum, item) => sum + Number(extractField(item, ["basePrice", "BasePrice"], 0) || 0), 0),
+    [selectedServices]
+  );
+
+  const totalMinutes = useMemo(
+    () => selectedServices.reduce((sum, item) => sum + Number(extractField(item, ["standardMinutes", "StandardMinutes"], 0) || 0), 0),
+    [selectedServices]
+  );
+
+  const progressPercent = useMemo(() => (currentStep / STEPS.length) * 100, [currentStep]);
+
+  const loadSlots = useCallback(async (branchId, date) => {
+    if (!branchId || !date) {
+      setSlots([]);
+      setSelectedSlot(null);
+      return;
+    }
+
     setSlotsLoading(true);
     setSelectedSlot(null);
+    setSlots([]);
+
     try {
-      const data = await getAvailableSlots(bid, dateToString(date));
+      const data = await getAvailableSlots(Number(branchId), date);
       setSlots(Array.isArray(data) ? data : []);
     } catch {
       setSlots([]);
@@ -91,1708 +254,710 @@ export default function BookingPage() {
     }
   }, []);
 
-  function handleBranchChange(e) {
-    const val = e.target.value;
-    setBranchId(val);
-    setSelectedSlot(null);
-    setSlots([]);
-    if (val && selectedDate) loadSlots(val, selectedDate);
-  }
+  useEffect(() => {
+    let ignore = false;
 
-  function handleDateChange(date) {
-    setSelectedDate(date);
-    setSelectedSlot(null);
-    if (branchId) loadSlots(branchId, date);
-  }
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [
+          categoryData,
+          serviceData,
+          branchData,
+          brandData,
+          modelData,
+          customerData,
+          customerVehicleData,
+          vehicleData,
+        ] = await Promise.all([
+          getAllServiceCategories(),
+          getAllStandardServices(),
+          getAllBranches(),
+          getVehicleBrands(),
+          getVehicleModels(),
+          getAllCustomers(),
+          getAllCustomerVehicles(),
+          getAllVehicles(),
+        ]);
 
-  function toggleService(id) {
-    setSelectedServiceIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
+        if (ignore) return;
 
-  async function handleSubmit() {
-    setError("");
-    setSuccess("");
-
-    if (!branchId) return setError("Vui lòng chọn chi nhánh.");
-    if (!selectedDate) return setError("Vui lòng chọn ngày.");
-    if (!selectedSlot) return setError("Vui lòng chọn khung giờ.");
-
-    // Add 30-minute buffer check for today
-    const now = new Date();
-    const todayStr = dateToString(now);
-    if (dateToString(selectedDate) === todayStr) {
-      const [h, m] = selectedSlot.startTime.split(':').map(Number);
-      const slotMins = h * 60 + m;
-      const currentMins = now.getHours() * 60 + now.getMinutes();
-      if (slotMins < currentMins + 30) {
-        return setError("Khung giờ này hiện không còn khả dụng (phải cách hiện tại ít nhất 30 phút). Vui lòng chọn khung giờ khác.");
+        setCategories(Array.isArray(categoryData) ? categoryData.filter((item) => item?.isDeleted !== true) : []);
+        setServices(Array.isArray(serviceData) ? serviceData.filter((item) => item?.isDeleted !== true) : []);
+        setBranches(Array.isArray(branchData) ? branchData.filter((item) => normalizeText(item?.status) === "active") : []);
+        setBrands(Array.isArray(brandData) ? brandData.filter((item) => item?.isDeleted !== true) : []);
+        setModels(Array.isArray(modelData) ? modelData.filter((item) => item?.isDeleted !== true) : []);
+        setCustomers(Array.isArray(customerData) ? customerData : []);
+        setCustomerVehicles(Array.isArray(customerVehicleData) ? customerVehicleData : []);
+        setVehicles(Array.isArray(vehicleData) ? vehicleData : []);
+      } catch {
+        if (!ignore) {
+          setError("Không thể tải dữ liệu đặt lịch. Vui lòng thử lại.");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
+    loadData();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setCustomerForm({
+      fullName: String(extractField(customerRecord, ["fullName", "FullName"], user?.fullName || "")),
+      phone: String(extractField(customerRecord, ["phone", "Phone"], user?.phone || "")),
+    });
+  }, [customerRecord, user?.fullName, user?.phone]);
+
+  useEffect(() => {
+    if (linkedVehicles.length > 0) {
+      setVehicleMode("existing");
+      setSelectedVehicleId(String(linkedVehicles[0].id));
+      return;
+    }
+
+    setVehicleMode("new");
+    setSelectedVehicleId("");
+  }, [linkedVehicles]);
+
+  useEffect(() => {
+    if (selectedBranchId && selectedDate) {
+      loadSlots(selectedBranchId, selectedDate);
+    }
+  }, [selectedBranchId, selectedDate, loadSlots]);
+
+  function updateNewVehicle(key, value) {
+    setNewVehicle((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleService(serviceId) {
+    setSelectedServiceIds((prev) =>
+      prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
+    );
+  }
+
+  function validateStep(stepNumber) {
+    if (stepNumber === 1 && !selectedCategoryId) {
+      return "Vui lòng chọn loại dịch vụ.";
+    }
+
+    if (stepNumber === 2 && selectedServiceIds.length === 0) {
+      return "Vui lòng chọn ít nhất một dịch vụ cụ thể.";
+    }
+
+    if (stepNumber === 3 && !selectedBranchId) {
+      return "Vui lòng chọn chi nhánh tiếp nhận.";
+    }
+
+    if (stepNumber === 4) {
+      if (!customerForm.fullName.trim()) return "Vui lòng nhập họ tên khách hàng.";
+      if (!customerForm.phone.trim()) return "Vui lòng nhập số điện thoại khách hàng.";
+      if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
+      if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
+
+      const hasVehicle = linkedVehicles.length > 0;
+      const usingNewVehicle = !hasVehicle || vehicleMode === "new";
+
+      if (!usingNewVehicle && !selectedVehicleId) {
+        return "Vui lòng chọn xe hiện có hoặc chuyển sang thêm xe mới.";
+      }
+
+      if (usingNewVehicle) {
+        if (!newVehicle.brandId) return "Vui lòng chọn hãng xe.";
+        if (!newVehicle.modelId) return "Vui lòng chọn dòng xe.";
+        if (!newVehicle.licensePlate.trim()) return "Vui lòng nhập biển số xe.";
+        if (!newVehicle.vin.trim()) return "Vui lòng nhập số VIN.";
+      }
+    }
+
+    return "";
+  }
+
+  function goNext() {
+    const issue = validateStep(currentStep);
+    if (issue) {
+      setError(issue);
+      return;
+    }
+
+    setError("");
+    setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
+  }
+
+  function goPrevious() {
+    setError("");
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  }
+
+  async function handleConfirmBooking() {
+    setError("");
+    setSuccess("");
+
+    const issue = validateStep(4);
+    if (issue) {
+      setError(issue);
+      setCurrentStep(4);
+      return;
+    }
+
     setSubmitting(true);
+
     try {
+      const today = new Date();
+      const selectedStart = new Date(extractField(selectedSlot, ["startTime", "StartTime"]));
+      if (!Number.isNaN(selectedStart.getTime())) {
+        const isToday = selectedStart.toDateString() === today.toDateString();
+        if (isToday && selectedStart.getTime() < today.getTime() + 30 * 60 * 1000) {
+          throw new Error("Khung giờ này không còn khả dụng (cần cách hiện tại ít nhất 30 phút).");
+        }
+      }
+
+      const customerId = Number(extractField(customerRecord, ["id", "Id"], user?.id));
+
+      if (Number.isFinite(customerId)) {
+        await updateCustomer(customerId, {
+          fullName: customerForm.fullName.trim(),
+          phone: customerForm.phone.trim(),
+          email: extractField(customerRecord, ["email", "Email"], user?.email || null),
+          tierId: extractField(customerRecord, ["tierId", "TierId"], null),
+          note: extractField(customerRecord, ["note", "Note"], null),
+          isActive: extractField(customerRecord, ["isActive", "IsActive"], true),
+        });
+      }
+
+      let vehicleId = null;
+      let vehicleModelId = null;
+      let licensePlate = null;
+      let vin = null;
+      let color = null;
+
+      const hasVehicle = linkedVehicles.length > 0;
+      const usingNewVehicle = !hasVehicle || vehicleMode === "new";
+
+      if (!usingNewVehicle) {
+        vehicleId = Number(selectedExistingVehicle?.id);
+        vehicleModelId = Number(selectedExistingVehicle?.modelId) || null;
+        licensePlate = selectedExistingVehicle?.licensePlate || null;
+        vin = selectedExistingVehicle?.vin || null;
+        color = selectedExistingVehicle?.color || null;
+      } else {
+        const createdVehicle = await createVehicle({
+          modelId: Number(newVehicle.modelId),
+          licensePlate: toSafeUpper(newVehicle.licensePlate),
+          vin: toSafeUpper(newVehicle.vin),
+          color: newVehicle.color.trim() || null,
+        });
+
+        vehicleId = Number(extractField(createdVehicle, ["id", "Id"]));
+        if (!Number.isFinite(vehicleId)) {
+          throw new Error("Không thể tạo xe mới. Vui lòng thử lại.");
+        }
+
+        if (Number.isFinite(customerId)) {
+          await createCustomerVehicle({
+            customerId,
+            vehicleId,
+            isCurrentOwner: true,
+          });
+        }
+
+        vehicleModelId = Number(newVehicle.modelId);
+        licensePlate = toSafeUpper(newVehicle.licensePlate);
+        vin = toSafeUpper(newVehicle.vin);
+        color = newVehicle.color.trim() || null;
+      }
+
       await bookAppointment({
-        branchId: Number(branchId),
-        vehicleId: null,
-        vehicleModelId: selectedModelId ? Number(selectedModelId) : null,
-        licensePlate: licensePlate.trim() || null,
-        vin: vin.trim() || null,
-        color: vehicleColor.trim() || null,
-        scheduledDate: dateToString(selectedDate),
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime,
-        requestedServiceIds: selectedServiceIds.length
-          ? selectedServiceIds.join(",")
-          : null,
-        customerNotes: notes || null,
+        branchId: Number(selectedBranchId),
+        vehicleId,
+        vehicleModelId,
+        licensePlate,
+        vin,
+        color,
+        startTime: extractField(selectedSlot, ["startTime", "StartTime"]),
+        endTime: extractField(selectedSlot, ["endTime", "EndTime"]),
+        requestedServiceIds: selectedServiceIds.join(","),
+        customerNotes: notes.trim() || null,
       });
-      setSuccess("Đặt lịch thành công! Vui lòng chờ xác nhận từ Garage.");
-      setTimeout(() => navigate("/my-appointments"), 2000);
-    } catch (err) {
-      setError(err.message || "Đặt lịch thất bại.");
+
+      setSuccess("Đặt lịch thành công. Chúng tôi sẽ xác nhận lịch hẹn của bạn trong thời gian sớm nhất.");
+      setCurrentStep(5);
+    } catch (submitError) {
+      setError(submitError?.message || "Đặt lịch thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const selectedBranch = branches.find((b) => String(b.id) === String(branchId));
-  const selectedBrand = brands.find((b) => String(b.id) === String(selectedBrandId));
-  const selectedModel = models.find((m) => String(m.id) === String(selectedModelId));
-  const vehicleSummary = [
-    selectedBrand?.name,
-    selectedModel?.modelName,
-    licensePlate ? `(${licensePlate})` : null,
-  ].filter(Boolean).join(" ") || "Chưa nhập";
-  const totalPrice = services
-    .filter((s) => selectedServiceIds.includes(s.id))
-    .reduce((sum, s) => sum + (s.basePrice || 0), 0);
-  const totalMinutes = services
-    .filter((s) => selectedServiceIds.includes(s.id))
-    .reduce((sum, s) => sum + (s.standardMinutes || 0), 0);
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <div className="booking-loading">Đang tải dữ liệu đặt lịch...</div>
+      </>
+    );
+  }
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a202c", marginBottom: 24 }}>
-        Đặt lịch hẹn sửa chữa
-      </h1>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
-      <div className="booking-container">
-        <div className="booking-sidebar">
-          {/* Branch selector */}
-          <div className="booking-card">
-            <h3>1. Chọn chi nhánh</h3>
-            <select value={branchId} onChange={handleBranchChange}>
-              <option value="">-- Chọn chi nhánh --</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} {b.address ? `- ${b.address}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Calendar */}
-          <div className="booking-card booking-calendar">
-            <h3>2. Chọn ngày</h3>
-            <Calendar
-              onChange={handleDateChange}
-              value={selectedDate}
-              minDate={new Date()}
-              locale="vi-VN"
-            />
-          </div>
-
-          {/* Vehicle Info */}
-          <div className="booking-card">
-            <h3>5. Thông tin xe (tùy chọn)</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
-                  Hãng xe
-                </label>
-                <select
-                  value={selectedBrandId}
-                  onChange={(e) => {
-                    setSelectedBrandId(e.target.value);
-                    setSelectedModelId("");
-                  }}
-                >
-                  <option value="">-- Chọn hãng xe --</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
-                  Dòng xe
-                </label>
-                <select
-                  value={selectedModelId}
-                  onChange={(e) => setSelectedModelId(e.target.value)}
-                  disabled={!selectedBrandId}
-                >
-                  <option value="">-- Chọn dòng xe --</option>
-                  {models
-                    .filter((m) => String(m.brandId) === String(selectedBrandId))
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>{m.modelName}</option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
-                  Biển số xe
-                </label>
-                <input
-                  type="text"
-                  placeholder="VD: 43A-12345"
-                  value={licensePlate}
-                  onChange={(e) => setLicensePlate(e.target.value.toUpperCase())}
-                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
-                  Số VIN (tùy chọn)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nhập số khung (VIN)"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#4a5568" }}>
-                  Màu xe (tùy chọn)
-                </label>
-                <input
-                  type="text"
-                  placeholder="VD: Trắng, Đen, Đỏ..."
-                  value={vehicleColor}
-                  onChange={(e) => setVehicleColor(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="booking-card">
-            <h3>6. Ghi chú</h3>
-            <textarea
-              placeholder="Mô tả triệu chứng hoặc yêu cầu đặc biệt..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
+    <>
+      <Header />
+      <div className="booking-flow">
+        <section className="booking-progress-shell">
+        <div className="booking-progress-energy">
+          <span style={{ width: `${progressPercent}%` }} />
         </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Slot picker */}
-          <div className="booking-card">
-            <h3>3. Chọn khung giờ</h3>
-            {!branchId || !selectedDate ? (
-              <div className="empty-state">
-                <p>Vui lòng chọn chi nhánh và ngày trước.</p>
-              </div>
-            ) : (
-              <SlotPicker
-                slots={slots}
-                selectedSlot={selectedSlot}
-                onSelect={setSelectedSlot}
-                loading={slotsLoading}
-                selectedDate={selectedDate}
-              />
-            )}
-          </div>
-
-          {/* Service picker */}
-          <div className="booking-card">
-            <h3>4. Chọn dịch vụ (tùy chọn)</h3>
-            <div className="service-list">
-              {services.map((s) => (
-                <div
-                  key={s.id}
-                  className={`service-item ${selectedServiceIds.includes(s.id) ? "selected" : ""}`}
-                  onClick={() => toggleService(s.id)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedServiceIds.includes(s.id)}
-                    onChange={() => toggleService(s.id)}
-                  />
-                  <div className="service-info">
-                    <div className="service-name">{s.name}</div>
-                    <div className="service-meta">
-                      {s.standardMinutes} phút
-                    </div>
-                  </div>
-                  <div className="service-price">{formatVND(s.basePrice)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Summary & submit */}
-          <div className="booking-card">
-            <h3>Tóm tắt</h3>
-            <div className="booking-summary">
-              <dl>
-                <dt>Chi nhánh</dt>
-                <dd>{selectedBranch?.name || "Chưa chọn"}</dd>
-                <dt>Ngày</dt>
-                <dd>
-                  {selectedDate
-                    ? selectedDate.toLocaleDateString("vi-VN")
-                    : "Chưa chọn"}
-                </dd>
-                <dt>Giờ</dt>
-                <dd>
-                  {selectedSlot
-                    ? `${selectedSlot.startTime?.substring(0, 5)} - ${selectedSlot.endTime?.substring(0, 5)}`
-                    : "Chưa chọn"}
-                </dd>
-                <dt>Xe</dt>
-                <dd>{vehicleSummary}</dd>
-                <dt>Dịch vụ</dt>
-                <dd>
-                  {selectedServiceIds.length > 0
-                    ? `${selectedServiceIds.length} dịch vụ`
-                    : "Không"}
-                </dd>
-                {totalPrice > 0 && (
-                  <>
-                    <dt>Tạm tính</dt>
-                    <dd style={{ fontWeight: 600, color: "#422afb" }}>
-                      {formatVND(totalPrice)}
-                    </dd>
-                    <dt>Thời gian dự kiến</dt>
-                    <dd>{totalMinutes} phút</dd>
-                  </>
-                )}
-              </dl>
-            </div>
-            <button
-              className="btn-book"
-              onClick={handleSubmit}
-              disabled={submitting || !branchId || !selectedDate || !selectedSlot}
-            >
-              {submitting ? "Đang đặt lịch..." : "Xác nhận đặt lịch"}
-            </button>
-          </div>
+        <div className="booking-progress-steps">
+          {STEPS.map((label, idx) => {
+            const stepNo = idx + 1;
+            const isDone = stepNo < currentStep;
+            const isCurrent = stepNo === currentStep;
+            return (
+              <article
+                key={label}
+                className={`booking-progress-step ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
+              >
+                <strong>{String(stepNo).padStart(2, "0")}</strong>
+                <span>{label}</span>
+              </article>
+            );
+          })}
         </div>
-      </div>
-    </div>
-  );
-}
-=======
-﻿import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { isAuthenticated } from "../../../app/authState";
-import {
-  getAllBranches,
-  getAllStandardServices,
-  getVehicleBrands,
-  getVehicleModels,
-  bookAppointment,
-  bookGuestAppointment,
-  getAllProducts,
-  getAllCategories,
-} from "../api/appointmentApi";
-import "./BookingPage.css";
-
-function formatVND(n) {
-  return new Intl.NumberFormat("vi-VN").format(n) + " vnd";
-}
-
-const OTHER_MODELS = [
-  { id: "manual", modelName: "Xe so san" },
-  { id: "auto", modelName: "Xe tu dong" },
-];
-
-const STEPS = [
-  { num: 1, label: "Dich vu" },
-  { num: 2, label: "Chon phu kien" },
-  { num: 3, label: "Chi nhanh" },
-  { num: 4, label: "Thong tin dat hen" },
-  { num: 5, label: "Hoan thanh" },
-];
-
-const SERVICE_ICONS = ["🔍", "🛡️", "🔧", "🛞", "🔋", "💨", "⛓️", "🛑", "🔩", "⚙️"];
-
-export default function BookingPage() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-
-  const [branches, setBranches] = useState([]);
-  const [services, setServices] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [models, setModels] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-
-  const [selectedBrandId, setSelectedBrandId] = useState("");
-  const [selectedModelId, setSelectedModelId] = useState("");
-
-  const [branchId, setBranchId] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("09:00");
-  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-  const [cart, setCart] = useState({});
-  const [activeCatFilter, setActiveCatFilter] = useState("all");
-  const [cityFilter, setCityFilter] = useState("");
-  const [licensePlate, setLicensePlate] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const [guestName, setGuestName] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const loggedIn = isAuthenticated();
-
-  useEffect(() => {
-    loadReferenceData();
-  }, []);
-
-  async function loadReferenceData() {
-    try {
-      const [br, svc, vb, vm, prods, cats] = await Promise.all([
-        getAllBranches(),
-        getAllStandardServices(),
-        getVehicleBrands(),
-        getVehicleModels(),
-        getAllProducts(),
-        getAllCategories(),
-      ]);
-      setBranches(Array.isArray(br) ? br.filter((b) => b.status === "active") : []);
-      setServices(Array.isArray(svc) ? svc.filter((s) => s.isActive !== false) : []);
-      setBrands(Array.isArray(vb) ? vb.filter((b) => b.isActive !== false) : []);
-      setModels(Array.isArray(vm) ? vm : []);
-      setProducts(Array.isArray(prods) ? prods.filter((p) => p.isActive !== false && !p.isDeleted) : []);
-      setCategories(Array.isArray(cats) ? cats.filter((c) => !c.isDeleted) : []);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function toggleService(id) {
-    setSelectedServiceIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
-  function updateCart(productId, delta) {
-    setCart((prev) => {
-      const current = prev[productId] || 0;
-      const next = Math.max(0, current + delta);
-      if (next === 0) {
-        const copy = { ...prev };
-        delete copy[productId];
-        return copy;
-      }
-      return { ...prev, [productId]: next };
-    });
-  }
-
-  function removeFromCart(productId) {
-    setCart((prev) => {
-      const copy = { ...prev };
-      delete copy[productId];
-      return copy;
-    });
-  }
-
-  function goToStep(s) {
-    setStep(s);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  const isOtherBrand = selectedBrandId === "other";
-  const currentModels = isOtherBrand
-    ? OTHER_MODELS
-    : models.filter((m) => String(m.brandId) === String(selectedBrandId));
-
-  const selectedBranch = branches.find((b) => String(b.id) === String(branchId));
-  const selectedBrand = isOtherBrand
-    ? { name: "Khac" }
-    : brands.find((b) => String(b.id) === String(selectedBrandId));
-  const selectedModel = isOtherBrand
-    ? OTHER_MODELS.find((m) => m.id === selectedModelId)
-    : models.find((m) => String(m.id) === String(selectedModelId));
-
-  const vehicleName = [selectedBrand?.name, selectedModel?.modelName].filter(Boolean).join(" - ") || "";
-  const selectedServices = services.filter((s) => selectedServiceIds.includes(s.id));
-  const serviceTotalPrice = selectedServices.reduce((sum, s) => sum + (s.basePrice || 0), 0);
-  const totalMinutes = selectedServices.reduce((sum, s) => sum + (s.standardMinutes || 0), 0);
-
-  const cartItems = useMemo(() => {
-    return Object.entries(cart).map(([pid, qty]) => {
-      const p = products.find((x) => String(x.id) === String(pid));
-      return p ? { ...p, qty } : null;
-    }).filter(Boolean);
-  }, [cart, products]);
-
-  const productTotalPrice = cartItems.reduce((sum, item) => sum + (item.retailPrice || 0) * item.qty, 0);
-  const totalPrice = serviceTotalPrice + productTotalPrice;
-
-  const filteredProducts = useMemo(() => {
-    let list = products;
-    if (activeCatFilter !== "all") {
-      list = list.filter((p) => String(p.categoryId) === String(activeCatFilter));
-    }
-    return list;
-  }, [products, activeCatFilter]);
-
-  const usedCategoryIds = useMemo(() => {
-    const ids = new Set();
-    products.forEach((p) => { if (p.categoryId) ids.add(p.categoryId); });
-    return ids;
-  }, [products]);
-
-  const visibleCategories = categories.filter((c) => usedCategoryIds.has(c.id));
-
-  function extractCity(address) {
-    if (!address) return "";
-    const parts = address.split(",").map((s) => s.trim());
-    return parts[parts.length - 1] || "";
-  }
-
-  const branchCities = useMemo(() => {
-    const cities = new Set();
-    branches.forEach((b) => {
-      const city = extractCity(b.address);
-      if (city) cities.add(city);
-    });
-    return [...cities].sort();
-  }, [branches]);
-
-  const filteredBranches = useMemo(() => {
-    if (!cityFilter) return branches;
-    return branches.filter((b) => extractCity(b.address) === cityFilter);
-  }, [branches, cityFilter]);
-
-  function selectBranch(id) {
-    setBranchId(String(id));
-  }
-
-  function getTodayStr() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-
-  async function handleSubmit() {
-    setError("");
-    setSuccess("");
-    if (!branchId) return setError("Vui long chon chi nhanh.");
-    if (!selectedDate) return setError("Vui long chon ngay hen.");
-    if (!selectedTime) return setError("Vui long chon gio hen.");
-    if (!loggedIn && !guestPhone.trim()) return setError("Vui long nhap so dien thoai.");
-
-    setSubmitting(true);
-    try {
-      const realModelId = isOtherBrand ? null : (selectedModelId ? Number(selectedModelId) : null);
-=======
-﻿import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { isAuthenticated } from "../../../app/authState";
-import {
-  getAllBranches,
-  getAllStandardServices,
-  getVehicleBrands,
-  getVehicleModels,
-  bookAppointment,
-  bookGuestAppointment,
-  getAllProducts,
-  getAllCategories,
-} from "../api/appointmentApi";
-import "./BookingPage.css";
-
-function formatVND(n) {
-  return new Intl.NumberFormat("vi-VN").format(n) + " vnd";
-}
-
-const OTHER_MODELS = [
-  { id: "manual", modelName: "Xe so san" },
-  { id: "auto", modelName: "Xe tu dong" },
-];
-
-const STEPS = [
-  { num: 1, label: "Dich vu" },
-  { num: 2, label: "Chon phu kien" },
-  { num: 3, label: "Chi nhanh" },
-  { num: 4, label: "Thong tin dat hen" },
-  { num: 5, label: "Hoan thanh" },
-];
-
-const SERVICE_ICONS = ["🔍", "🛡️", "🔧", "🛞", "🔋", "💨", "⛓️", "🛑", "🔩", "⚙️"];
-
-export default function BookingPage() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-
-  const [branches, setBranches] = useState([]);
-  const [services, setServices] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [models, setModels] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-
-  const [selectedBrandId, setSelectedBrandId] = useState("");
-  const [selectedModelId, setSelectedModelId] = useState("");
-
-  const [branchId, setBranchId] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("09:00");
-  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
-  const [cart, setCart] = useState({});
-  const [activeCatFilter, setActiveCatFilter] = useState("all");
-  const [cityFilter, setCityFilter] = useState("");
-  const [licensePlate, setLicensePlate] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const [guestName, setGuestName] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const loggedIn = isAuthenticated();
-
-  useEffect(() => {
-    loadReferenceData();
-  }, []);
-
-  async function loadReferenceData() {
-    try {
-      const [br, svc, vb, vm, prods, cats] = await Promise.all([
-        getAllBranches(),
-        getAllStandardServices(),
-        getVehicleBrands(),
-        getVehicleModels(),
-        getAllProducts(),
-        getAllCategories(),
-      ]);
-      setBranches(Array.isArray(br) ? br.filter((b) => b.status === "active") : []);
-      setServices(Array.isArray(svc) ? svc.filter((s) => s.isActive !== false) : []);
-      setBrands(Array.isArray(vb) ? vb.filter((b) => b.isActive !== false) : []);
-      setModels(Array.isArray(vm) ? vm : []);
-      setProducts(Array.isArray(prods) ? prods.filter((p) => p.isActive !== false && !p.isDeleted) : []);
-      setCategories(Array.isArray(cats) ? cats.filter((c) => !c.isDeleted) : []);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function toggleService(id) {
-    setSelectedServiceIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
-  function updateCart(productId, delta) {
-    setCart((prev) => {
-      const current = prev[productId] || 0;
-      const next = Math.max(0, current + delta);
-      if (next === 0) {
-        const copy = { ...prev };
-        delete copy[productId];
-        return copy;
-      }
-      return { ...prev, [productId]: next };
-    });
-  }
-
-  function removeFromCart(productId) {
-    setCart((prev) => {
-      const copy = { ...prev };
-      delete copy[productId];
-      return copy;
-    });
-  }
-
-  function goToStep(s) {
-    setStep(s);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  const isOtherBrand = selectedBrandId === "other";
-  const currentModels = isOtherBrand
-    ? OTHER_MODELS
-    : models.filter((m) => String(m.brandId) === String(selectedBrandId));
-
-  const selectedBranch = branches.find((b) => String(b.id) === String(branchId));
-  const selectedBrand = isOtherBrand
-    ? { name: "Khac" }
-    : brands.find((b) => String(b.id) === String(selectedBrandId));
-  const selectedModel = isOtherBrand
-    ? OTHER_MODELS.find((m) => m.id === selectedModelId)
-    : models.find((m) => String(m.id) === String(selectedModelId));
-
-  const vehicleName = [selectedBrand?.name, selectedModel?.modelName].filter(Boolean).join(" - ") || "";
-  const selectedServices = services.filter((s) => selectedServiceIds.includes(s.id));
-  const serviceTotalPrice = selectedServices.reduce((sum, s) => sum + (s.basePrice || 0), 0);
-  const totalMinutes = selectedServices.reduce((sum, s) => sum + (s.standardMinutes || 0), 0);
-
-  const cartItems = useMemo(() => {
-    return Object.entries(cart).map(([pid, qty]) => {
-      const p = products.find((x) => String(x.id) === String(pid));
-      return p ? { ...p, qty } : null;
-    }).filter(Boolean);
-  }, [cart, products]);
-
-  const productTotalPrice = cartItems.reduce((sum, item) => sum + (item.retailPrice || 0) * item.qty, 0);
-  const totalPrice = serviceTotalPrice + productTotalPrice;
-
-  const filteredProducts = useMemo(() => {
-    let list = products;
-    if (activeCatFilter !== "all") {
-      list = list.filter((p) => String(p.categoryId) === String(activeCatFilter));
-    }
-    return list;
-  }, [products, activeCatFilter]);
-
-  const usedCategoryIds = useMemo(() => {
-    const ids = new Set();
-    products.forEach((p) => { if (p.categoryId) ids.add(p.categoryId); });
-    return ids;
-  }, [products]);
-
-  const visibleCategories = categories.filter((c) => usedCategoryIds.has(c.id));
-
-  function extractCity(address) {
-    if (!address) return "";
-    const parts = address.split(",").map((s) => s.trim());
-    return parts[parts.length - 1] || "";
-  }
-
-  const branchCities = useMemo(() => {
-    const cities = new Set();
-    branches.forEach((b) => {
-      const city = extractCity(b.address);
-      if (city) cities.add(city);
-    });
-    return [...cities].sort();
-  }, [branches]);
-
-  const filteredBranches = useMemo(() => {
-    if (!cityFilter) return branches;
-    return branches.filter((b) => extractCity(b.address) === cityFilter);
-  }, [branches, cityFilter]);
-
-  function selectBranch(id) {
-    setBranchId(String(id));
-  }
-
-  function getTodayStr() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-
-  async function handleSubmit() {
-    setError("");
-    setSuccess("");
-    if (!branchId) return setError("Vui long chon chi nhanh.");
-    if (!selectedDate) return setError("Vui long chon ngay hen.");
-    if (!selectedTime) return setError("Vui long chon gio hen.");
-    if (!loggedIn && !guestPhone.trim()) return setError("Vui long nhap so dien thoai.");
-
-    setSubmitting(true);
-    try {
-      const realModelId = isOtherBrand ? null : (selectedModelId ? Number(selectedModelId) : null);
->>>>>>> theirs
-      const [startHour, startMinute] = selectedTime.split(":").map(Number);
-      const startAt = new Date(selectedDate);
-      startAt.setHours(startHour || 0, startMinute || 0, 0, 0);
-      const durationMinutes = Math.max(60, totalMinutes || 0);
-      const endAt = new Date(startAt.getTime() + durationMinutes * 60 * 1000);
-<<<<<<< ours
-
-      const payload = {
-        branchId: Number(branchId),
-        vehicleId: null,
-        vehicleModelId: realModelId,
-        licensePlate: licensePlate.trim() || null,
-        color: null,
-        startTime: startAt.toISOString(),
-        endTime: endAt.toISOString(),
-        requestedServiceIds: selectedServiceIds.length
-          ? selectedServiceIds.join(",")
-          : null,
-        customerNotes: notes || null,
-      };
-
-      if (loggedIn) {
-        await bookAppointment(payload);
-      } else {
-        payload.guestName = guestName.trim() || null;
-        payload.guestPhone = guestPhone.trim();
-        payload.guestEmail = guestEmail.trim() || null;
-        await bookGuestAppointment(payload);
-      }
-
-      setSuccess("Dat lich thanh cong!");
-      goToStep(5);
-    } catch (err) {
-      setError(err.message || "Dat lich that bai.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 0: Landing
-     ═══════════════════════════════════════════════════════════════════════ */
-=======
-
-      const payload = {
-        branchId: Number(branchId),
-        vehicleId: null,
-        vehicleModelId: realModelId,
-        licensePlate: licensePlate.trim() || null,
-        color: null,
-        startTime: startAt.toISOString(),
-        endTime: endAt.toISOString(),
-        requestedServiceIds: selectedServiceIds.length
-          ? selectedServiceIds.join(",")
-          : null,
-        customerNotes: notes || null,
-      };
-
-      if (loggedIn) {
-        await bookAppointment(payload);
-      } else {
-        payload.guestName = guestName.trim() || null;
-        payload.guestPhone = guestPhone.trim();
-        payload.guestEmail = guestEmail.trim() || null;
-        await bookGuestAppointment(payload);
-      }
-
-      setSuccess("Dat lich thanh cong!");
-      goToStep(5);
-    } catch (err) {
-      setError(err.message || "Dat lich that bai.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 0: Landing
-     ═══════════════════════════════════════════════════════════════════════ */
->>>>>>> theirs
-  if (step === 0) {
-    return (
-      <div className="bp-landing">
-        <div className="bp-hero">
-          <div className="bp-hero-banner-shell">
-            <div className="bp-hero-banner">
-              <div className="bp-hero-hotline">HOTLINE: 1900 6868</div>
-              <div className="bp-hero-nav-sections">
-                <div className="bp-hero-menu left">
-                  <button type="button" onClick={() => navigate("/home")}>TRANG CHỦ</button>
-                  <button type="button" className="active" onClick={() => navigate("/booking")}>ĐẶT LỊCH</button>
-                  <button type="button" onClick={() => navigate("/my-appointments")}>LỊCH HẸN CỦA TÔI</button>
-                </div>
-                <button type="button" className="bp-hero-logo" onClick={() => navigate("/home")} aria-label="MY GARAGE">
-                  <span>MY</span>
-                  <small>GARAGE</small>
-                </button>
-                <div className="bp-hero-menu right">
-                  <button type="button" onClick={() => navigate("/workshop")}>XƯỞNG DỊCH VỤ</button>
-                  <a href="#doi-tac">ĐỐI TÁC</a>
-                  <a href="#dich-vu-noi-bat">DỊCH VỤ &amp; GIÁ</a>
-                  <a href="#lien-he">LIÊN HỆ</a>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bp-hero-content">
-            <h1>Dat Lich Sua Chua & Bao Duong</h1>
-            <p>He thong dat lich truc tuyen - Nhanh chong, tien loi, chuyen nghiep</p>
-          </div>
-<<<<<<< ours
-          <div className="bp-finder">
-            <div className="bp-finder-header">
-              <span className="bp-finder-icon">🔧</span>
-              Tim dich vu
-            </div>
-            <div className="bp-finder-body">
-              <div className="bp-finder-fields">
-                <div className="bp-finder-field">
-                  <label>Hang xe</label>
-                  <select
-                    value={selectedBrandId}
-                    onChange={(e) => { setSelectedBrandId(e.target.value); setSelectedModelId(""); }}
-                  >
-                    <option value="">Chon Hang Xe</option>
-                    {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    <option value="other">Khac</option>
-                  </select>
-                </div>
-                <div className="bp-finder-field">
-                  <label>Loai xe</label>
-                  <select
-                    value={selectedModelId}
-                    onChange={(e) => setSelectedModelId(e.target.value)}
-                    disabled={!selectedBrandId}
-                  >
-                    <option value="">Chon Loai Xe</option>
-                    {currentModels.map((m) => <option key={m.id} value={m.id}>{m.modelName}</option>)}
-                  </select>
-                </div>
-                <button className="bp-finder-btn" onClick={() => { if (selectedBrandId) goToStep(1); }} disabled={!selectedBrandId}>
-                  Tim dich vu
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bp-features">
-          <div className="bp-feature-card"><div className="bp-feature-icon">📅</div><h3>Dat lich de dang</h3><p>Chon ngay, gio va dich vu chi trong vai buoc don gian</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">🔧</div><h3>Dich vu chuyen nghiep</h3><p>Doi ngu ky thuat vien gioi, thiet bi hien dai</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">💰</div><h3>Gia ca minh bach</h3><p>Bao gia ro rang truoc khi thuc hien dich vu</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">⏱️</div><h3>Tiet kiem thoi gian</h3><p>Khong phai cho doi, xe duoc xu ly dung gio hen</p></div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Progress Bar
-     ═══════════════════════════════════════════════════════════════════════ */
-  const progressBar = (
-    <div className="bp-progress">
-      {STEPS.map((s) => (
-        <div key={s.num} className={`bp-progress-step ${step >= s.num ? "active" : ""} ${step === s.num ? "current" : ""}`}>
-          <div className="bp-progress-num">{s.num}</div>
-          <span>{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Sidebar — Order Summary
-     ═══════════════════════════════════════════════════════════════════════ */
-  const sidebar = (
-    <div className="bp-sidebar">
-      <div className="bp-sidebar-card">
-        <h3>Tom tat don dat lich</h3>
-
-        <div className="bp-sidebar-section">
-          <div className="bp-sidebar-label">THONG TIN XE</div>
-          <div className="bp-sidebar-vehicle">
-            <span className="bp-sidebar-vehicle-icon">🚗</span>
-            <span>{vehicleName || "Chua chon xe"}</span>
-          </div>
-        </div>
-
-        {selectedServices.length > 0 && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">DICH VU</div>
-            {selectedServices.map((s) => (
-              <div key={s.id} className="bp-sidebar-svc-row">
-                <span>{s.name}</span>
-                <span className="bp-sidebar-svc-price">{formatVND(s.basePrice)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {cartItems.length > 0 && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">SAN PHAM</div>
-            {cartItems.map((item) => (
-              <div key={item.id} className="bp-sidebar-product-row">
-                <button className="bp-sidebar-remove" onClick={() => removeFromCart(item.id)}>×</button>
-                <span className="bp-sidebar-product-name">{item.name} x {item.qty}</span>
-                <span className="bp-sidebar-svc-price">{formatVND((item.retailPrice || 0) * item.qty)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedBranch && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">CHI NHANH</div>
-            <div className="bp-sidebar-branch">
-              <strong>{selectedBranch.name}</strong>
-              {selectedBranch.address && <div className="bp-sidebar-addr">{selectedBranch.address}</div>}
-            </div>
-          </div>
-        )}
-
-        <div className="bp-sidebar-total">
-          <span>Tong cong</span>
-          <span className="bp-sidebar-total-price">{formatVND(totalPrice)}</span>
-        </div>
-
-        {step === 1 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(2)}>Tiep tuc</button>
-        )}
-        {step === 2 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(3)}>Tiep tuc</button>
-        )}
-        {step === 3 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(4)} disabled={!branchId}>
-            Tiep tuc
-          </button>
-        )}
-        {step === 4 && (
-          <button className="bp-sidebar-btn" onClick={handleSubmit} disabled={submitting || !branchId || !selectedDate || !selectedTime}>
-            {submitting ? "Dang dat lich..." : "Xac nhan dat lich"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 1: Chon dich vu
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 1) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Chon dich vu</h2>
-            <p className="bp-wizard-subtitle">Quy khach nhan chon vao dich vu quy khach can su dung</p>
-            <div className="bp-svc-list">
-              {services.map((s, idx) => {
-                const isSelected = selectedServiceIds.includes(s.id);
-                return (
-                  <div key={s.id} className={`bp-svc-card ${isSelected ? "selected" : ""}`} onClick={() => toggleService(s.id)}>
-                    <div className="bp-svc-icon">{SERVICE_ICONS[idx % SERVICE_ICONS.length]}</div>
-                    <div className="bp-svc-info">
-                      <div className="bp-svc-name">{s.name}</div>
-                      <div className="bp-svc-desc">{s.description || `Thoi gian: ~${s.standardMinutes} phut`}</div>
-                    </div>
-                    <div className="bp-svc-right">
-                      <div className="bp-svc-price">{formatVND(s.basePrice)}</div>
-                      <button className={`bp-svc-btn ${isSelected ? "selected" : ""}`} onClick={(e) => { e.stopPropagation(); toggleService(s.id); }}>
-                        {isSelected ? "✓ Da chon" : "+ Chon dich vu"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 2: Chon phu kien / san pham
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 2) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Chon san pham</h2>
-            <p className="bp-wizard-subtitle">Chon phu kien, phu tung can thiet cho xe cua ban</p>
-
-            {/* Category filter pills */}
-            <div className="bp-filter-row">
-              <span className="bp-filter-label">Danh muc:</span>
-              <div className="bp-filter-pills">
-                <button className={`bp-pill ${activeCatFilter === "all" ? "active" : ""}`} onClick={() => setActiveCatFilter("all")}>
-                  {activeCatFilter === "all" && <span className="bp-pill-check">✓</span>} Tat ca
-                </button>
-                {visibleCategories.map((c) => (
-                  <button key={c.id} className={`bp-pill ${activeCatFilter === c.id ? "active" : ""}`} onClick={() => setActiveCatFilter(c.id)}>
-                    {activeCatFilter === c.id && <span className="bp-pill-check">✓</span>} {c.categoryName}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Product list */}
-            <div className="bp-prod-list">
-              {filteredProducts.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📦</div>
-                  <p>Chua co san pham nao.</p>
-                </div>
-              ) : (
-                filteredProducts.map((p) => {
-                  const qty = cart[p.id] || 0;
+      </section>
+
+      {error && <div className="booking-alert booking-alert-error">{error}</div>}
+      {success && <div className="booking-alert booking-alert-success">{success}</div>}
+
+        <section className="booking-layout">
+        <div className="booking-main-panel">
+          {currentStep === 1 && (
+            <div className="booking-card">
+              <header className="booking-card-head">
+                <h2>Bước 1: Chọn loại dịch vụ</h2>
+                <p>Phân loại nhu cầu để hệ thống gợi ý hạng mục phù hợp.</p>
+              </header>
+              <div className="category-grid">
+                {categories.map((category) => {
+                  const categoryId = extractField(category, ["id", "Id"]);
+                  const name = extractField(category, ["name", "Name"], "Loại dịch vụ");
+                  const desc = extractField(category, ["description", "Description"], "");
+                  const selected = String(categoryId) === String(selectedCategoryId);
                   return (
-                    <div key={p.id} className="bp-prod-card">
-                      <div className="bp-prod-img">📦</div>
-                      <div className="bp-prod-info">
-                        <div className="bp-prod-name">{p.name}</div>
-                        <div className="bp-prod-price">{formatVND(p.retailPrice || 0)}</div>
-                      </div>
-                      <div className="bp-prod-actions">
-                        <div className="bp-qty-control">
-                          <button className="bp-qty-btn" onClick={() => updateCart(p.id, -1)} disabled={qty === 0}>−</button>
-                          <span className="bp-qty-value">{qty}</span>
-                          <button className="bp-qty-btn" onClick={() => updateCart(p.id, 1)}>+</button>
-                        </div>
-                        {qty === 0 ? (
-                          <button className="bp-add-cart-btn" onClick={() => updateCart(p.id, 1)}>
-                            🛒 Them vao gio hang
-                          </button>
-                        ) : (
-                          <button className="bp-add-cart-btn added" onClick={() => removeFromCart(p.id)}>
-                            ✓ Da them ({qty})
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <button
+                      key={categoryId}
+                      type="button"
+                      className={`category-card ${selected ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedCategoryId(String(categoryId));
+                        setSelectedServiceIds([]);
+                        setError("");
+                      }}
+                    >
+                      <h3>{name}</h3>
+                      <p>{desc || "Nhóm dịch vụ chuyên biệt cho tình trạng xe của bạn."}</p>
+                    </button>
                   );
-                })
+                })}
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="booking-card">
+              <header className="booking-card-head">
+                <h2>Bước 2: Chọn dịch vụ cụ thể</h2>
+                <p>
+                  Danh sách theo loại <strong>{extractField(selectedCategory, ["name", "Name"], "đã chọn")}</strong>.
+                </p>
+              </header>
+
+              <div className="service-list">
+                {servicesByCategory.length === 0 && (
+                  <div className="booking-empty">Chưa có dịch vụ cụ thể cho loại này.</div>
+                )}
+
+                {servicesByCategory.map((service) => {
+                  const serviceId = Number(extractField(service, ["id", "Id"]));
+                  const selected = selectedServiceIds.includes(serviceId);
+                  return (
+                    <button
+                      key={serviceId}
+                      type="button"
+                      className={`service-card ${selected ? "selected" : ""}`}
+                      onClick={() => toggleService(serviceId)}
+                    >
+                      <div>
+                        <h3>{extractField(service, ["name", "Name"], "Dịch vụ")}</h3>
+                        <p>{extractField(service, ["description", "Description"], "Dịch vụ tiêu chuẩn tại MyGarage")}</p>
+                      </div>
+                      <aside>
+                        <strong>{formatVnd(extractField(service, ["basePrice", "BasePrice"], 0))}</strong>
+                        <small>{extractField(service, ["standardMinutes", "StandardMinutes"], 0)} phút</small>
+                      </aside>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {currentStep === 3 && (
+            <div className="booking-card">
+              <header className="booking-card-head">
+                <h2>Bước 3: Chọn chi nhánh</h2>
+                <p>Chọn điểm tiếp nhận thuận tiện cho bạn.</p>
+              </header>
+
+              <div className="branch-list">
+                {branches.map((branch) => {
+                  const id = extractField(branch, ["id", "Id"]);
+                  const selected = String(id) === String(selectedBranchId);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`branch-card ${selected ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedBranchId(String(id));
+                        setError("");
+                      }}
+                    >
+                      <h3>{extractField(branch, ["name", "Name"], "Chi nhánh")}</h3>
+                      <p>{extractField(branch, ["address", "Address"], "")}</p>
+                      <small>
+                        Hotline: {extractField(branch, ["hotline", "Hotline"], "Đang cập nhật")}
+                      </small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {currentStep === 4 && (
+            <div className="booking-card">
+              <header className="booking-card-head">
+                <h2>Bước 4: Thông tin khách hàng, xe và thời gian</h2>
+                <p>Cập nhật dữ liệu chuẩn trước khi xác nhận lịch.</p>
+              </header>
+
+              <div className="form-grid">
+                <label>
+                  Họ và tên
+                  <input
+                    type="text"
+                    value={customerForm.fullName}
+                    onChange={(e) => setCustomerForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                    placeholder="Nhập họ tên khách hàng"
+                  />
+                </label>
+
+                <label>
+                  Số điện thoại
+                  <input
+                    type="tel"
+                    value={customerForm.phone}
+                    onChange={(e) => setCustomerForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="Nhập số điện thoại"
+                  />
+                </label>
+              </div>
+
+              <div className="vehicle-block">
+                <div className="vehicle-block-head">
+                  <h3>Thông tin xe</h3>
+                  <p>
+                    {linkedVehicles.length > 0
+                      ? "Bạn có thể chọn xe đã lưu hoặc thêm xe mới."
+                      : "Bạn chưa có xe lưu trong hệ thống, vui lòng nhập xe mới đầy đủ."}
+                  </p>
+                </div>
+
+                {linkedVehicles.length > 0 && (
+                  <div className="vehicle-mode-switch">
+                    <button
+                      type="button"
+                      className={vehicleMode === "existing" ? "active" : ""}
+                      onClick={() => setVehicleMode("existing")}
+                    >
+                      Chọn xe có sẵn
+                    </button>
+                    <button
+                      type="button"
+                      className={vehicleMode === "new" ? "active" : ""}
+                      onClick={() => setVehicleMode("new")}
+                    >
+                      Thêm xe mới
+                    </button>
+                  </div>
+                )}
+
+                {linkedVehicles.length > 0 && vehicleMode === "existing" && (
+                  <label>
+                    Xe đã lưu
+                    <select
+                      value={selectedVehicleId}
+                      onChange={(e) => setSelectedVehicleId(e.target.value)}
+                    >
+                      <option value="">-- Chọn xe --</option>
+                      {linkedVehicles.map((vehicle) => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.licensePlate || "Không biển số"} - {vehicle.brandName} {vehicle.modelName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {(linkedVehicles.length === 0 || vehicleMode === "new") && (
+                  <div className="form-grid">
+                    <label>
+                      Hãng xe
+                      <select
+                        value={newVehicle.brandId}
+                        onChange={(e) => {
+                          updateNewVehicle("brandId", e.target.value);
+                          updateNewVehicle("modelId", "");
+                        }}
+                      >
+                        <option value="">-- Chọn hãng xe --</option>
+                        {brands.map((brand) => (
+                          <option key={extractField(brand, ["id", "Id"])} value={extractField(brand, ["id", "Id"])}>
+                            {extractField(brand, ["name", "Name"], "")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Dòng xe
+                      <select
+                        value={newVehicle.modelId}
+                        onChange={(e) => updateNewVehicle("modelId", e.target.value)}
+                        disabled={!newVehicle.brandId}
+                      >
+                        <option value="">-- Chọn dòng xe --</option>
+                        {modelOptions.map((model) => (
+                          <option key={extractField(model, ["id", "Id"])} value={extractField(model, ["id", "Id"])}>
+                            {extractField(model, ["modelName", "ModelName"], "")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Biển số
+                      <input
+                        type="text"
+                        value={newVehicle.licensePlate}
+                        onChange={(e) => updateNewVehicle("licensePlate", e.target.value.toUpperCase())}
+                        placeholder="VD: 51H-123.45"
+                      />
+                    </label>
+
+                    <label>
+                      Số VIN
+                      <input
+                        type="text"
+                        value={newVehicle.vin}
+                        onChange={(e) => updateNewVehicle("vin", e.target.value.toUpperCase())}
+                        placeholder="Nhập số VIN"
+                      />
+                    </label>
+
+                    <label>
+                      Màu xe (tuỳ chọn)
+                      <input
+                        type="text"
+                        value={newVehicle.color}
+                        onChange={(e) => updateNewVehicle("color", e.target.value)}
+                        placeholder="VD: Trắng ngọc trai"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="schedule-block">
+                <h3>Thời gian đặt lịch</h3>
+                <div className="form-grid">
+                  <label>
+                    Ngày
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      min={toIsoDateInput(new Date())}
+                      onChange={(e) => {
+                        setSelectedDate(e.target.value);
+                        setSelectedSlot(null);
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <div className="slot-section">
+                  <h4>Khung giờ khả dụng</h4>
+                  {!selectedBranchId ? (
+                    <div className="booking-empty">Vui lòng chọn chi nhánh trước khi chọn giờ.</div>
+                  ) : slotsLoading ? (
+                    <div className="booking-empty">Đang tải khung giờ...</div>
+                  ) : slots.length === 0 ? (
+                    <div className="booking-empty">Không có khung giờ khả dụng cho ngày đã chọn.</div>
+                  ) : (
+                    <div className="slot-grid">
+                      {slots.map((slot) => {
+                        const startTime = extractField(slot, ["startTime", "StartTime"]);
+                        const endTime = extractField(slot, ["endTime", "EndTime"]);
+                        const isAvailable = extractField(slot, ["isAvailable", "IsAvailable"], false);
+                        const isSelected =
+                          selectedSlot &&
+                          extractField(selectedSlot, ["startTime", "StartTime"]) === startTime &&
+                          extractField(selectedSlot, ["endTime", "EndTime"]) === endTime;
+
+                        return (
+                          <button
+                            key={`${startTime}-${endTime}`}
+                            type="button"
+                            className={`slot-card ${isSelected ? "selected" : ""}`}
+                            disabled={!isAvailable}
+                            onClick={() => setSelectedSlot(slot)}
+                          >
+                            <strong>{timeLabel(startTime)} - {timeLabel(endTime)}</strong>
+                            <small>
+                              {isAvailable
+                                ? `Còn ${extractField(slot, ["remainingCapacity", "RemainingCapacity"], 0)} chỗ`
+                                : "Hết chỗ"}
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <label className="notes-field">
+                Ghi chú thêm
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Mô tả tình trạng xe hoặc yêu cầu đặc biệt..."
+                  rows={4}
+                />
+              </label>
+            </div>
+          )}
+
+          {currentStep === 5 && (
+            <div className="booking-card">
+              <header className="booking-card-head">
+                <h2>Bước 5: Xác nhận đặt lịch</h2>
+                <p>Kiểm tra lại toàn bộ thông tin trước khi gửi yêu cầu đến gara.</p>
+              </header>
+
+              <div className="confirm-grid">
+                <div><span>Loại dịch vụ</span><strong>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</strong></div>
+                <div><span>Số dịch vụ</span><strong>{selectedServiceIds.length} dịch vụ</strong></div>
+                <div><span>Chi nhánh</span><strong>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</strong></div>
+                <div><span>Khách hàng</span><strong>{customerForm.fullName || "Chưa nhập"} - {customerForm.phone || "Chưa nhập"}</strong></div>
+                <div>
+                  <span>Xe</span>
+                  <strong>
+                    {selectedExistingVehicle
+                      ? `${selectedExistingVehicle.licensePlate || "Không biển số"} - ${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName}`
+                      : `${toSafeUpper(newVehicle.licensePlate) || "Chưa nhập"} - ${selectedModel?.modelName || "Xe mới"}`}
+                  </strong>
+                </div>
+                <div>
+                  <span>Thời gian</span>
+                  <strong>
+                    {formatDateVi(selectedDate)}
+                    {selectedSlot
+                      ? `, ${timeLabel(extractField(selectedSlot, ["startTime", "StartTime"]))} - ${timeLabel(extractField(selectedSlot, ["endTime", "EndTime"]))}`
+                      : ""}
+                  </strong>
+                </div>
+              </div>
+
+              <button type="button" className="primary-submit" onClick={handleConfirmBooking} disabled={submitting}>
+                {submitting ? "Đang gửi lịch hẹn..." : "Xác nhận đặt lịch"}
+              </button>
+
+              {!!success && (
+                <div className="success-actions">
+                  <button type="button" onClick={() => navigate("/my-appointments")}>Xem lịch hẹn của tôi</button>
+                  <button type="button" onClick={() => navigate("/home")}>Về trang chủ</button>
+                </div>
               )}
             </div>
+          )}
 
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(1)}>← Quay lai chon dich vu</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 3: Cua hang (Branch cards) + Ngay + Ca
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 3) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Cua hang</h2>
-            <p className="bp-wizard-subtitle">Chon chi nhanh phu hop voi ban</p>
-
-            {error && <div className="alert alert-error">{error}</div>}
-
-            {/* City filter */}
-            {branchCities.length > 1 && (
-              <div className="bp-branch-filters">
-                <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="bp-city-select">
-                  <option value="">Tat ca thanh pho</option>
-                  {branchCities.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            )}
-
-            {/* Branch cards */}
-            <div className="bp-branch-list">
-              {filteredBranches.map((b) => {
-                const isSelected = String(b.id) === String(branchId);
-                return (
-                  <div key={b.id} className={`bp-branch-card ${isSelected ? "selected" : ""}`} onClick={() => selectBranch(b.id)}>
-                    <div className="bp-branch-avatar">
-                      {b.avatarUrl ? <img src={b.avatarUrl} alt={b.name} /> : <span>🏪</span>}
-                    </div>
-                    <div className="bp-branch-info">
-                      <div className="bp-branch-name">{b.name}</div>
-                      {b.address && <div className="bp-branch-detail">📍 {b.address}</div>}
-                      {b.hotline && <div className="bp-branch-detail">📞 {b.hotline}</div>}
-                    </div>
-                    <div className="bp-branch-radio">
-                      <div className={`bp-radio ${isSelected ? "checked" : ""}`}>
-                        {isSelected && <div className="bp-radio-dot" />}
-                      </div>
-                      <span className="bp-branch-radio-label">{isSelected ? "Da chon" : "Chon cua hang"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(2)}>← Quay lai chon phu kien</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 4: Thong tin dat hen
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 4) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Thong tin dat hen</h2>
-            <p className="bp-wizard-subtitle">Dien thong tin va chon thoi gian hen</p>
-
-            {error && <div className="alert alert-error">{error}</div>}
-
-            {/* Guest info — only when NOT logged in */}
-            {!loggedIn && (
-              <div className="booking-card">
-                <h3>Thong tin khach hang</h3>
-                <div className="bp-guest-fields">
-                  <div className="bp-guest-field">
-                    <label>Ho va ten</label>
-                    <input type="text" placeholder="Nguyen Van A" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="bp-plate-input" />
-                  </div>
-                  <div className="bp-guest-field">
-                    <label>So dien thoai <span className="bp-required">*</span></label>
-                    <input type="tel" placeholder="0901234567" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="bp-plate-input" />
-                  </div>
-                  <div className="bp-guest-field">
-                    <label>Email</label>
-                    <input type="email" placeholder="email@example.com" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="bp-plate-input" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* License plate + Phone */}
-            <div className="booking-card" style={{ marginTop: loggedIn ? 0 : 20 }}>
-              <h3>Thong tin xe</h3>
-              <div className="bp-guest-fields">
-                <div className="bp-guest-field">
-                  <label>Bien so xe (tuy chon)</label>
-                  <input type="text" placeholder="VD: 43A-12345" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value.toUpperCase())} className="bp-plate-input" />
-                </div>
-                {loggedIn && (
-                  <div className="bp-guest-field">
-                    <label>So dien thoai (tuy chon)</label>
-                    <input type="tel" placeholder="0901234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="bp-plate-input" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Date + Time picker */}
-            <div className="booking-card" style={{ marginTop: 20 }}>
-              <h3>Thoi gian dat lich hen</h3>
-              <div className="bp-datetime-row">
-                <div className="bp-datetime-field">
-                  <label>Ngay</label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    min={getTodayStr()}
-                    className="bp-date-input"
-                  />
-                </div>
-                <div className="bp-datetime-field">
-                  <label>Gio</label>
-                  <input
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                    min="07:00"
-                    max="21:00"
-                    className="bp-time-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="booking-card" style={{ marginTop: 20 }}>
-              <h3>Ghi chu</h3>
-              <textarea placeholder="Mo ta trieu chung hoac yeu cau dac biet..." value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(3)}>← Quay lai chon cua hang</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 5: Hoan thanh
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 5) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-done">
-          <div className="bp-done-icon">✅</div>
-          <h2>Dat lich thanh cong!</h2>
-          <p>Cam on ban da su dung dich vu cua MyGarage.</p>
-          <p>Chung toi se xac nhan lich hen cua ban trong thoi gian som nhat.</p>
-          <div className="bp-done-actions">
-            <button className="bp-done-btn primary" onClick={() => navigate("/my-appointments")}>Xem lich hen cua toi</button>
-            <button className="bp-done-btn secondary" onClick={() => { setStep(0); setSelectedServiceIds([]); setCart({}); setBranchId(""); setSelectedDate(""); setSelectedTime("09:00"); setLicensePlate(""); setNotes(""); }}>
-              Dat lich moi
+          <div className="wizard-actions">
+            <button type="button" className="ghost-btn" onClick={goPrevious} disabled={currentStep === 1 || submitting}>
+              Quay lại
             </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-}
->>>>>>> theirs
-=======
-          <div className="bp-finder">
-            <div className="bp-finder-header">
-              <span className="bp-finder-icon">🔧</span>
-              Tim dich vu
-            </div>
-            <div className="bp-finder-body">
-              <div className="bp-finder-fields">
-                <div className="bp-finder-field">
-                  <label>Hang xe</label>
-                  <select
-                    value={selectedBrandId}
-                    onChange={(e) => { setSelectedBrandId(e.target.value); setSelectedModelId(""); }}
-                  >
-                    <option value="">Chon Hang Xe</option>
-                    {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    <option value="other">Khac</option>
-                  </select>
-                </div>
-                <div className="bp-finder-field">
-                  <label>Loai xe</label>
-                  <select
-                    value={selectedModelId}
-                    onChange={(e) => setSelectedModelId(e.target.value)}
-                    disabled={!selectedBrandId}
-                  >
-                    <option value="">Chon Loai Xe</option>
-                    {currentModels.map((m) => <option key={m.id} value={m.id}>{m.modelName}</option>)}
-                  </select>
-                </div>
-                <button className="bp-finder-btn" onClick={() => { if (selectedBrandId) goToStep(1); }} disabled={!selectedBrandId}>
-                  Tim dich vu
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="bp-features">
-          <div className="bp-feature-card"><div className="bp-feature-icon">📅</div><h3>Dat lich de dang</h3><p>Chon ngay, gio va dich vu chi trong vai buoc don gian</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">🔧</div><h3>Dich vu chuyen nghiep</h3><p>Doi ngu ky thuat vien gioi, thiet bi hien dai</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">💰</div><h3>Gia ca minh bach</h3><p>Bao gia ro rang truoc khi thuc hien dich vu</p></div>
-          <div className="bp-feature-card"><div className="bp-feature-icon">⏱️</div><h3>Tiet kiem thoi gian</h3><p>Khong phai cho doi, xe duoc xu ly dung gio hen</p></div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Progress Bar
-     ═══════════════════════════════════════════════════════════════════════ */
-  const progressBar = (
-    <div className="bp-progress">
-      {STEPS.map((s) => (
-        <div key={s.num} className={`bp-progress-step ${step >= s.num ? "active" : ""} ${step === s.num ? "current" : ""}`}>
-          <div className="bp-progress-num">{s.num}</div>
-          <span>{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Sidebar — Order Summary
-     ═══════════════════════════════════════════════════════════════════════ */
-  const sidebar = (
-    <div className="bp-sidebar">
-      <div className="bp-sidebar-card">
-        <h3>Tom tat don dat lich</h3>
-
-        <div className="bp-sidebar-section">
-          <div className="bp-sidebar-label">THONG TIN XE</div>
-          <div className="bp-sidebar-vehicle">
-            <span className="bp-sidebar-vehicle-icon">🚗</span>
-            <span>{vehicleName || "Chua chon xe"}</span>
-          </div>
-        </div>
-
-        {selectedServices.length > 0 && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">DICH VU</div>
-            {selectedServices.map((s) => (
-              <div key={s.id} className="bp-sidebar-svc-row">
-                <span>{s.name}</span>
-                <span className="bp-sidebar-svc-price">{formatVND(s.basePrice)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {cartItems.length > 0 && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">SAN PHAM</div>
-            {cartItems.map((item) => (
-              <div key={item.id} className="bp-sidebar-product-row">
-                <button className="bp-sidebar-remove" onClick={() => removeFromCart(item.id)}>×</button>
-                <span className="bp-sidebar-product-name">{item.name} x {item.qty}</span>
-                <span className="bp-sidebar-svc-price">{formatVND((item.retailPrice || 0) * item.qty)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedBranch && (
-          <div className="bp-sidebar-section">
-            <div className="bp-sidebar-label">CHI NHANH</div>
-            <div className="bp-sidebar-branch">
-              <strong>{selectedBranch.name}</strong>
-              {selectedBranch.address && <div className="bp-sidebar-addr">{selectedBranch.address}</div>}
-            </div>
-          </div>
-        )}
-
-        <div className="bp-sidebar-total">
-          <span>Tong cong</span>
-          <span className="bp-sidebar-total-price">{formatVND(totalPrice)}</span>
-        </div>
-
-        {step === 1 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(2)}>Tiep tuc</button>
-        )}
-        {step === 2 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(3)}>Tiep tuc</button>
-        )}
-        {step === 3 && (
-          <button className="bp-sidebar-btn" onClick={() => goToStep(4)} disabled={!branchId}>
-            Tiep tuc
-          </button>
-        )}
-        {step === 4 && (
-          <button className="bp-sidebar-btn" onClick={handleSubmit} disabled={submitting || !branchId || !selectedDate || !selectedTime}>
-            {submitting ? "Dang dat lich..." : "Xac nhan dat lich"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 1: Chon dich vu
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 1) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Chon dich vu</h2>
-            <p className="bp-wizard-subtitle">Quy khach nhan chon vao dich vu quy khach can su dung</p>
-            <div className="bp-svc-list">
-              {services.map((s, idx) => {
-                const isSelected = selectedServiceIds.includes(s.id);
-                return (
-                  <div key={s.id} className={`bp-svc-card ${isSelected ? "selected" : ""}`} onClick={() => toggleService(s.id)}>
-                    <div className="bp-svc-icon">{SERVICE_ICONS[idx % SERVICE_ICONS.length]}</div>
-                    <div className="bp-svc-info">
-                      <div className="bp-svc-name">{s.name}</div>
-                      <div className="bp-svc-desc">{s.description || `Thoi gian: ~${s.standardMinutes} phut`}</div>
-                    </div>
-                    <div className="bp-svc-right">
-                      <div className="bp-svc-price">{formatVND(s.basePrice)}</div>
-                      <button className={`bp-svc-btn ${isSelected ? "selected" : ""}`} onClick={(e) => { e.stopPropagation(); toggleService(s.id); }}>
-                        {isSelected ? "✓ Da chon" : "+ Chon dich vu"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 2: Chon phu kien / san pham
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 2) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Chon san pham</h2>
-            <p className="bp-wizard-subtitle">Chon phu kien, phu tung can thiet cho xe cua ban</p>
-
-            {/* Category filter pills */}
-            <div className="bp-filter-row">
-              <span className="bp-filter-label">Danh muc:</span>
-              <div className="bp-filter-pills">
-                <button className={`bp-pill ${activeCatFilter === "all" ? "active" : ""}`} onClick={() => setActiveCatFilter("all")}>
-                  {activeCatFilter === "all" && <span className="bp-pill-check">✓</span>} Tat ca
-                </button>
-                {visibleCategories.map((c) => (
-                  <button key={c.id} className={`bp-pill ${activeCatFilter === c.id ? "active" : ""}`} onClick={() => setActiveCatFilter(c.id)}>
-                    {activeCatFilter === c.id && <span className="bp-pill-check">✓</span>} {c.categoryName}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Product list */}
-            <div className="bp-prod-list">
-              {filteredProducts.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📦</div>
-                  <p>Chua co san pham nao.</p>
-                </div>
-              ) : (
-                filteredProducts.map((p) => {
-                  const qty = cart[p.id] || 0;
-                  return (
-                    <div key={p.id} className="bp-prod-card">
-                      <div className="bp-prod-img">📦</div>
-                      <div className="bp-prod-info">
-                        <div className="bp-prod-name">{p.name}</div>
-                        <div className="bp-prod-price">{formatVND(p.retailPrice || 0)}</div>
-                      </div>
-                      <div className="bp-prod-actions">
-                        <div className="bp-qty-control">
-                          <button className="bp-qty-btn" onClick={() => updateCart(p.id, -1)} disabled={qty === 0}>−</button>
-                          <span className="bp-qty-value">{qty}</span>
-                          <button className="bp-qty-btn" onClick={() => updateCart(p.id, 1)}>+</button>
-                        </div>
-                        {qty === 0 ? (
-                          <button className="bp-add-cart-btn" onClick={() => updateCart(p.id, 1)}>
-                            🛒 Them vao gio hang
-                          </button>
-                        ) : (
-                          <button className="bp-add-cart-btn added" onClick={() => removeFromCart(p.id)}>
-                            ✓ Da them ({qty})
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(1)}>← Quay lai chon dich vu</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 3: Cua hang (Branch cards) + Ngay + Ca
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 3) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Cua hang</h2>
-            <p className="bp-wizard-subtitle">Chon chi nhanh phu hop voi ban</p>
-
-            {error && <div className="alert alert-error">{error}</div>}
-
-            {/* City filter */}
-            {branchCities.length > 1 && (
-              <div className="bp-branch-filters">
-                <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="bp-city-select">
-                  <option value="">Tat ca thanh pho</option>
-                  {branchCities.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+            {currentStep < STEPS.length && (
+              <button type="button" className="next-btn" onClick={goNext} disabled={submitting}>
+                Tiếp tục
+              </button>
             )}
-
-            {/* Branch cards */}
-            <div className="bp-branch-list">
-              {filteredBranches.map((b) => {
-                const isSelected = String(b.id) === String(branchId);
-                return (
-                  <div key={b.id} className={`bp-branch-card ${isSelected ? "selected" : ""}`} onClick={() => selectBranch(b.id)}>
-                    <div className="bp-branch-avatar">
-                      {b.avatarUrl ? <img src={b.avatarUrl} alt={b.name} /> : <span>🏪</span>}
-                    </div>
-                    <div className="bp-branch-info">
-                      <div className="bp-branch-name">{b.name}</div>
-                      {b.address && <div className="bp-branch-detail">📍 {b.address}</div>}
-                      {b.hotline && <div className="bp-branch-detail">📞 {b.hotline}</div>}
-                    </div>
-                    <div className="bp-branch-radio">
-                      <div className={`bp-radio ${isSelected ? "checked" : ""}`}>
-                        {isSelected && <div className="bp-radio-dot" />}
-                      </div>
-                      <span className="bp-branch-radio-label">{isSelected ? "Da chon" : "Chon cua hang"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(2)}>← Quay lai chon phu kien</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 4: Thong tin dat hen
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 4) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-wizard-layout">
-          <div className="bp-wizard-main">
-            <h2 className="bp-wizard-title">Thong tin dat hen</h2>
-            <p className="bp-wizard-subtitle">Dien thong tin va chon thoi gian hen</p>
-
-            {error && <div className="alert alert-error">{error}</div>}
-
-            {/* Guest info — only when NOT logged in */}
-            {!loggedIn && (
-              <div className="booking-card">
-                <h3>Thong tin khach hang</h3>
-                <div className="bp-guest-fields">
-                  <div className="bp-guest-field">
-                    <label>Ho va ten</label>
-                    <input type="text" placeholder="Nguyen Van A" value={guestName} onChange={(e) => setGuestName(e.target.value)} className="bp-plate-input" />
-                  </div>
-                  <div className="bp-guest-field">
-                    <label>So dien thoai <span className="bp-required">*</span></label>
-                    <input type="tel" placeholder="0901234567" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} className="bp-plate-input" />
-                  </div>
-                  <div className="bp-guest-field">
-                    <label>Email</label>
-                    <input type="email" placeholder="email@example.com" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="bp-plate-input" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* License plate + Phone */}
-            <div className="booking-card" style={{ marginTop: loggedIn ? 0 : 20 }}>
-              <h3>Thong tin xe</h3>
-              <div className="bp-guest-fields">
-                <div className="bp-guest-field">
-                  <label>Bien so xe (tuy chon)</label>
-                  <input type="text" placeholder="VD: 43A-12345" value={licensePlate} onChange={(e) => setLicensePlate(e.target.value.toUpperCase())} className="bp-plate-input" />
-                </div>
-                {loggedIn && (
-                  <div className="bp-guest-field">
-                    <label>So dien thoai (tuy chon)</label>
-                    <input type="tel" placeholder="0901234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="bp-plate-input" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Date + Time picker */}
-            <div className="booking-card" style={{ marginTop: 20 }}>
-              <h3>Thoi gian dat lich hen</h3>
-              <div className="bp-datetime-row">
-                <div className="bp-datetime-field">
-                  <label>Ngay</label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    min={getTodayStr()}
-                    className="bp-date-input"
-                  />
-                </div>
-                <div className="bp-datetime-field">
-                  <label>Gio</label>
-                  <input
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                    min="07:00"
-                    max="21:00"
-                    className="bp-time-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="booking-card" style={{ marginTop: 20 }}>
-              <h3>Ghi chu</h3>
-              <textarea placeholder="Mo ta trieu chung hoac yeu cau dac biet..." value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <button className="bp-back-link" onClick={() => goToStep(3)}>← Quay lai chon cua hang</button>
-            </div>
-          </div>
-          {sidebar}
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     STEP 5: Hoan thanh
-     ═══════════════════════════════════════════════════════════════════════ */
-  if (step === 5) {
-    return (
-      <div className="bp-wizard">
-        {progressBar}
-        <div className="bp-done">
-          <div className="bp-done-icon">✅</div>
-          <h2>Dat lich thanh cong!</h2>
-          <p>Cam on ban da su dung dich vu cua MyGarage.</p>
-          <p>Chung toi se xac nhan lich hen cua ban trong thoi gian som nhat.</p>
-          <div className="bp-done-actions">
-            <button className="bp-done-btn primary" onClick={() => navigate("/my-appointments")}>Xem lich hen cua toi</button>
-            <button className="bp-done-btn secondary" onClick={() => { setStep(0); setSelectedServiceIds([]); setCart({}); setBranchId(""); setSelectedDate(""); setSelectedTime("09:00"); setLicensePlate(""); setNotes(""); }}>
-              Dat lich moi
-            </button>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  return null;
+        <aside className="booking-summary-panel">
+          <div className="summary-card">
+            <h3>Tóm tắt lịch hẹn</h3>
+            <dl>
+              <dt>Loại dịch vụ</dt>
+              <dd>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</dd>
+
+              <dt>Dịch vụ cụ thể</dt>
+              <dd>{selectedServices.length > 0 ? `${selectedServices.length} mục đã chọn` : "Chưa chọn"}</dd>
+
+              <dt>Chi nhánh</dt>
+              <dd>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</dd>
+
+              <dt>Ngày giờ</dt>
+              <dd>
+                {formatDateVi(selectedDate)}
+                {selectedSlot
+                  ? ` - ${timeLabel(extractField(selectedSlot, ["startTime", "StartTime"]))} đến ${timeLabel(extractField(selectedSlot, ["endTime", "EndTime"]))}`
+                  : ""}
+              </dd>
+
+              <dt>Khách hàng</dt>
+              <dd>{customerForm.fullName || "Chưa nhập"}</dd>
+
+              <dt>SĐT</dt>
+              <dd>{customerForm.phone || "Chưa nhập"}</dd>
+
+              <dt>Xe</dt>
+              <dd>
+                {selectedExistingVehicle
+                  ? `${selectedExistingVehicle.licensePlate || "Không biển số"} (${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName})`
+                  : toSafeUpper(newVehicle.licensePlate) || "Chưa chọn"}
+              </dd>
+            </dl>
+
+            <div className="summary-total">
+              <div>
+                <span>Tổng dịch vụ</span>
+                <strong>{formatVnd(totalPrice)}</strong>
+              </div>
+              <div>
+                <span>Thời lượng dự kiến</span>
+                <strong>{totalMinutes} phút</strong>
+              </div>
+            </div>
+          </div>
+        </aside>
+        </section>
+      </div>
+    </>
+  );
 }
->>>>>>> theirs
