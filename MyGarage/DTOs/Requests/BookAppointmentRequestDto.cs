@@ -18,11 +18,15 @@ namespace MyGarage.DTOs.Requests
 
         public string? Color { get; set; }
 
-        [Required]
-        public DateTime StartTime { get; set; }
+        public DateTime? StartTime { get; set; }
 
-        [Required]
-        public DateTime EndTime { get; set; }
+        public DateTime? EndTime { get; set; }
+
+        public DateTime? CheckInWindowStart { get; set; }
+
+        public DateTime? CheckInWindowEnd { get; set; }
+
+        public string? BookingFlow { get; set; }
 
         public long? CustomerId { get; set; }
 

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "../api/serviceOrderApi";
 import { useAuth } from "../../../context/AuthContext";
@@ -60,30 +60,7 @@ export default function TechnicianDashboard() {
   const [rejectingAssignment, setRejectingAssignment] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const [diagnosisModal, setDiagnosisModal] = useState(null);
-  const [diagnosisItems, setDiagnosisItems] = useState([]);
-  const [activeDiagnosisTab, setActiveDiagnosisTab] = useState(0);
-  const [diagnosisEditing, setDiagnosisEditing] = useState(false);
-  const [submittingDiagnosis, setSubmittingDiagnosis] = useState(false);
 
-  const parseSymptomsFromNotes = (rawNotes) => {
-    try {
-      const parsed = JSON.parse(String(rawNotes || "").trim());
-      const values = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.symptoms)
-          ? parsed.symptoms
-          : [];
-      const cleaned = values
-        .map((x) => String(x || "").trim())
-        .filter(Boolean);
-      if (cleaned.length > 0) return cleaned;
-    } catch {
-      // fallback legacy format
-    }
-    const text = String(rawNotes || "").trim();
-    return text ? [text] : ["Không có ghi chú gì"];
-  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -272,69 +249,7 @@ export default function TechnicianDashboard() {
     }
   };
 
-  const openDiagnosisModal = (requestItem) => {
-    const canEdit = Boolean(requestItem?.isAssignedToMe && String(requestItem?.status || "").toUpperCase() === "ASSIGNED");
-    const fallbackSymptoms = parseSymptomsFromNotes(requestItem?.order?.customerNotes);
-    const sourceDiagnoses = Array.isArray(requestItem?.diagnoses) && requestItem.diagnoses.length > 0
-      ? requestItem.diagnoses
-      : fallbackSymptoms.map((symptom, idx) => ({
-        id: `tmp-${idx}`,
-        symptom,
-        rootCause: "",
-        severity: "MEDIUM",
-      }));
 
-    const mappedItems = sourceDiagnoses.map((d, idx) => ({
-      id: d.id,
-      symptom: String(d?.symptom || fallbackSymptoms[idx] || "Không có ghi chú gì").trim() || "Không có ghi chú gì",
-      rootCause: String(d?.rootCause || "").trim(),
-      severity: String(d?.severity || "MEDIUM").toUpperCase(),
-      status: String(d?.status || requestItem?.status || "PENDING").toUpperCase(),
-    }));
-
-    setDiagnosisModal({ ...requestItem, canEdit });
-    setDiagnosisItems(mappedItems);
-    setActiveDiagnosisTab(0);
-    setDiagnosisEditing(false);
-  };
-
-  const handleCompleteDiagnosis = async () => {
-    if (!diagnosisModal?.order?.id || !Array.isArray(diagnosisItems) || diagnosisItems.length === 0) return;
-
-    const missingRootCause = diagnosisItems.some((item) => !String(item.rootCause || "").trim());
-    if (missingRootCause) {
-      toast({
-        title: "Thiếu dữ liệu",
-        description: "Vui lòng nhập nguyên nhân gốc rễ cho tất cả triệu chứng trước khi lưu.",
-        status: "warning",
-      });
-      return;
-    }
-
-    setSubmittingDiagnosis(true);
-    try {
-      for (const item of diagnosisItems) {
-        if (String(item.id).startsWith("tmp-")) continue;
-        await serviceOrderApi.completeDiagnosis(item.id, {
-          serviceOrderId: diagnosisModal.order.id,
-          technicianId: staffId,
-          symptom: item.symptom,
-          rootCause: item.rootCause,
-          severity: item.severity || "MEDIUM",
-          status: "COMPLETED",
-          updatedBy: staffId,
-        });
-      }
-
-      toast({ title: "Đã lưu hoàn tất chẩn đoán", status: "success", duration: 3000 });
-      setDiagnosisModal(null);
-      await fetchData();
-    } catch (err) {
-      toast({ title: "Lưu chẩn đoán thất bại", description: err.message, status: "error" });
-    } finally {
-      setSubmittingDiagnosis(false);
-    }
-  };
 
   const filteredAssignments = useMemo(() => {
     const query = String(searchQuery || "").trim().toLowerCase();
@@ -580,8 +495,12 @@ export default function TechnicianDashboard() {
                           align="center"
                           flexWrap="wrap"
                           gap={3}
-                          cursor="pointer"
-                          onClick={() => openDiagnosisModal(item)}
+                          cursor={item.isAssignedToMe ? "pointer" : "default"}
+                          onClick={() => {
+                            if (item.isAssignedToMe) {
+                              navigate(`/workshop/technician/orders/${item.serviceOrderId}/diagnosis`);
+                            }
+                          }}
                         >
                           <HStack spacing={6} flex="1" minW={0} align="center" flexWrap="wrap">
                             <Box minW="170px">
@@ -693,224 +612,7 @@ export default function TechnicianDashboard() {
         </Modal>
       )}
 
-      {diagnosisModal && (
-        <Modal
-          title={`Phiếu chuẩn đoán - ${diagnosisModal.order?.code}`}
-          onClose={() => setDiagnosisModal(null)}
-          className="diagnosis-modal-light"
-        >
-          <VStack align="stretch" spacing={5} className="diagnosis-modal-form">
-            <HStack justify="space-between" align="center">
-              <Text fontSize="sm" color="gray.500">
-                Xem chi tiết và cập nhật thông tin chuẩn đoán.
-              </Text>
-              {diagnosisModal?.canEdit && (
-                <Button
-                  size="sm"
-                  variant={diagnosisEditing ? "outline" : "solid"}
-                  colorScheme="blue"
-                  h="38px"
-                  px={5}
-                  borderRadius="10px"
-                  onClick={() => setDiagnosisEditing((prev) => !prev)}
-                >
-                  {diagnosisEditing ? "Khóa chỉnh sửa" : "Chỉnh sửa"}
-                </Button>
-              )}
-            </HStack>
 
-            <Box bg="#f8faff" border="1px solid #e3ebff" borderRadius="14px" px={4} py={3}>
-              <HStack spacing={5} flexWrap="wrap">
-                <Box minW="140px">
-                  <Text fontSize="11px" fontWeight="700" color="gray.500" textTransform="uppercase" letterSpacing="0.08em">Mã lệnh</Text>
-                  <Text fontSize="md" fontWeight="800" color="#2b3674">{diagnosisModal.order?.code || "-"}</Text>
-                </Box>
-                <Box minW="140px">
-                  <Text fontSize="11px" fontWeight="700" color="gray.500" textTransform="uppercase" letterSpacing="0.08em">Biển số</Text>
-                  <Text fontSize="md" fontWeight="700" color="#1b2559">{diagnosisModal.order?.vehicleLicensePlate || "-"}</Text>
-                </Box>
-                <Box minW="220px" flex="1">
-                  <Text fontSize="11px" fontWeight="700" color="gray.500" textTransform="uppercase" letterSpacing="0.08em">Khách hàng</Text>
-                  <Text fontSize="md" fontWeight="700" color="#1b2559" noOfLines={1}>{diagnosisModal.order?.customerName || "-"}</Text>
-                </Box>
-              </HStack>
-            </Box>
-
-            <HStack
-              spacing={2}
-              overflowX="auto"
-              pb={1}
-              align="center"
-              sx={{
-                "& > button": {
-                  h: "38px",
-                  minH: "38px",
-                  maxH: "38px",
-                  px: 4,
-                  py: 0,
-                  borderRadius: "999px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: "1",
-                  mt: 0,
-                  mb: 0,
-                },
-              }}
-            >
-              {diagnosisItems.map((diag, idx) => (
-                <Button
-                  key={diag.id}
-                  type="button"
-                  size="sm"
-                  variant={activeDiagnosisTab === idx ? "solid" : "outline"}
-                  colorScheme={activeDiagnosisTab === idx ? "blue" : "gray"}
-                  onClick={() => setActiveDiagnosisTab(idx)}
-                >
-                  Triệu chứng {idx + 1}
-                </Button>
-              ))}
-            </HStack>
-
-            {diagnosisItems[activeDiagnosisTab] && (
-              <>
-                <Box>
-                  <HStack justify="space-between" align="center" mb={2}>
-                    <Text fontSize="12px" fontWeight="800" color="gray.600" textTransform="uppercase" letterSpacing="0.08em">
-                      Mô tả triệu chứng của khách
-                    </Text>
-                  </HStack>
-                  <Textarea
-                    rows={3}
-                    value={diagnosisItems[activeDiagnosisTab].symptom}
-                    isReadOnly
-                    minH="108px"
-                    bg="#f5f7fb"
-                    color="#1b2559"
-                    borderColor="#d6deeb"
-                    borderWidth="1.5px"
-                    borderRadius="12px"
-                  />
-                </Box>
-                <Box>
-                  <Text fontSize="12px" fontWeight="800" color="gray.600" textTransform="uppercase" letterSpacing="0.08em" mb={2}>
-                    Nguyên nhân gốc rễ (theo triệu chứng đang chọn)
-                  </Text>
-                  <Textarea
-                    rows={3}
-                    value={diagnosisItems[activeDiagnosisTab].rootCause}
-                    onChange={(e) =>
-                      setDiagnosisItems((prev) =>
-                        prev.map((item, index) =>
-                          index === activeDiagnosisTab ? { ...item, rootCause: e.target.value } : item
-                        )
-                      )
-                    }
-                    isReadOnly={!diagnosisEditing}
-                    minH="132px"
-                    bg="#fbfdff"
-                    color="#1b2559"
-                    borderColor="#d6deeb"
-                    borderWidth="1.5px"
-                    borderRadius="12px"
-                    _placeholder={{ color: "gray.400" }}
-                    _focus={{ borderColor: "#5a7bff", boxShadow: "0 0 0 3px rgba(90,123,255,0.14)" }}
-                  />
-                </Box>
-                <Box>
-                  <Text fontSize="12px" fontWeight="800" color="gray.600" textTransform="uppercase" letterSpacing="0.08em" mb={2}>
-                    Mức độ nghiêm trọng
-                  </Text>
-                  <Select
-                    value={diagnosisItems[activeDiagnosisTab].severity}
-                    onChange={(e) =>
-                      setDiagnosisItems((prev) =>
-                        prev.map((item, index) =>
-                          index === activeDiagnosisTab ? { ...item, severity: e.target.value } : item
-                        )
-                      )
-                    }
-                    isDisabled={!diagnosisEditing}
-                    maxW="280px"
-                    bg="#fbfdff"
-                    color="#1b2559"
-                    borderColor="#d6deeb"
-                    borderWidth="1.5px"
-                    borderRadius="12px"
-                    _focus={{ borderColor: "#5a7bff", boxShadow: "0 0 0 3px rgba(90,123,255,0.14)" }}
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="CRITICAL">CRITICAL</option>
-                  </Select>
-                </Box>
-              </>
-            )}
-            <HStack justify="flex-end" spacing={3} align="center" pt={4} borderTop="1px solid #e9edf7">
-              {diagnosisModal?.canEdit && (
-                <Button
-                  variant="solid"
-                  bg="#7c5cff"
-                  color="white"
-                  _hover={{ bg: "#6a4df0" }}
-                  _active={{ bg: "#5d43dc" }}
-                  h="46px"
-                  w="200px"
-                  minW="200px"
-                  maxW="200px"
-                  borderRadius="12px"
-                  fontWeight="700"
-                  whiteSpace="nowrap"
-                  flexShrink={0}
-                  onClick={() => {
-                    const currentDiagnosisId = diagnosisItems[activeDiagnosisTab]?.id;
-                    const suffix = currentDiagnosisId ? `?diagnosisId=${currentDiagnosisId}` : "";
-                    navigate(`/workshop/technician/orders/${diagnosisModal.order?.id}/diagnosis${suffix}`);
-                  }}
-                >
-                  Bắt đầu chuẩn đoán
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                h="46px"
-                w="120px"
-                minW="120px"
-                maxW="120px"
-                borderRadius="12px"
-                px={6}
-                fontWeight="700"
-                whiteSpace="nowrap"
-                flexShrink={0}
-                onClick={() => setDiagnosisModal(null)}
-              >
-                Đóng
-              </Button>
-              {diagnosisModal?.canEdit && (
-                <Button
-                  colorScheme="blue"
-                  h="46px"
-                  w="168px"
-                  minW="168px"
-                  maxW="168px"
-                  borderRadius="12px"
-                  px={7}
-                  fontWeight="700"
-                  onClick={handleCompleteDiagnosis}
-                  isLoading={submittingDiagnosis}
-                  loadingText="Đang lưu"
-                  isDisabled={!diagnosisEditing}
-                  whiteSpace="nowrap"
-                  flexShrink={0}
-                >
-                  Lưu hoàn tất
-                </Button>
-              )}
-            </HStack>
-          </VStack>
-        </Modal>
-      )}
     </Box>
   );
 }

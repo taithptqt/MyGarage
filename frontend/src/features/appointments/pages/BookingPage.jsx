@@ -1,6 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
+import Header from "../../../shared/components/Header";
+import DateTimePicker from "../../workshop/components/DateTimePicker";
 import {
   bookAppointment,
   createCustomerVehicle,
@@ -16,15 +18,14 @@ import {
   getVehicleModels,
   updateCustomer,
 } from "../api/appointmentApi";
-import Header from "../../../shared/components/Header";
 import "./BookingPage.css";
 
 const STEPS = [
   "Loại dịch vụ",
-  "Dịch vụ cụ thể",
+  "Chọn dịch vụ",
   "Chi nhánh",
-  "Thông tin & thời gian",
-  "Xác nhận",
+  "Thông tin đặt hẹn",
+  "Hoàn thành",
 ];
 
 function formatVnd(value) {
@@ -75,6 +76,35 @@ function timeLabel(value) {
     return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   }
   return String(value).slice(0, 5);
+}
+
+function formatLicensePlateInput(value) {
+  const raw = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+  if (!raw) return "";
+
+  let prefix = "";
+  let rest = "";
+
+  const startsWithProvince = /^\d{2}[A-Z]/.test(raw);
+  if (startsWithProvince) {
+    prefix = raw.slice(0, 3);
+    rest = raw.slice(3, 8);
+  } else {
+    prefix = raw.slice(0, Math.min(3, raw.length));
+    rest = raw.slice(prefix.length, prefix.length + 5);
+  }
+
+  if (!rest) return prefix;
+  if (rest.length <= 3) return `${prefix}-${rest}`;
+  return `${prefix}-${rest.slice(0, 3)}.${rest.slice(3)}`;
+}
+
+function iconByIndex(index) {
+  const icons = ["🔧", "🛞", "⚙️", "🛡️", "🧰", "🔩"];
+  return icons[index % icons.length];
 }
 
 export default function BookingPage() {
@@ -230,6 +260,87 @@ export default function BookingPage() {
     () => selectedServices.reduce((sum, item) => sum + Number(extractField(item, ["standardMinutes", "StandardMinutes"], 0) || 0), 0),
     [selectedServices]
   );
+
+  const summaryItems = useMemo(() => {
+    const items = [];
+    const customerName = customerForm.fullName.trim();
+    const customerPhone = customerForm.phone.trim();
+    const selectedServiceNames = selectedServices
+      .map((item) => extractField(item, ["name", "Name"], "").trim())
+      .filter(Boolean);
+    const dateLabel = selectedDate ? formatDateVi(selectedDate) : "";
+    const timeRange = selectedSlot
+      ? `${timeLabel(extractField(selectedSlot, ["startTime", "StartTime"]))} - ${timeLabel(extractField(selectedSlot, ["endTime", "EndTime"]))}`
+      : "";
+
+    const existingVehicleLabel = selectedExistingVehicle
+      ? `${selectedExistingVehicle.licensePlate || "Không biển số"} (${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName})`
+      : "";
+    const newVehiclePlate = toSafeUpper(newVehicle.licensePlate);
+    const newVehicleModel = selectedModel?.modelName || "";
+    const newVehicleLabel = newVehiclePlate
+      ? `${newVehiclePlate}${newVehicleModel ? ` (${newVehicleModel})` : ""}`
+      : "";
+
+    const step1Done = Boolean(selectedCategoryId);
+    const step2Done = step1Done && selectedServiceIds.length > 0;
+    const step3Done = step2Done && Boolean(selectedBranchId);
+
+    const hasVehicle = linkedVehicles.length > 0;
+    const usingNewVehicle = !hasVehicle || vehicleMode === "new";
+    const vehicleReady = usingNewVehicle
+      ? Boolean(newVehicle.brandId && newVehicle.modelId && newVehicle.licensePlate.trim() && newVehicle.vin.trim())
+      : Boolean(selectedVehicleId);
+    const step4Done = step3Done && Boolean(customerName && customerPhone && selectedDate && selectedSlot && vehicleReady);
+
+    if (step1Done && selectedCategory) {
+      items.push({ key: "category", label: "Loại dịch vụ", value: extractField(selectedCategory, ["name", "Name"], "") });
+    }
+    if (step2Done && selectedServiceNames.length > 0) {
+      items.push({
+        key: "services",
+        label: "Dịch vụ cụ thể",
+        value: selectedServiceNames.length <= 2 ? selectedServiceNames.join(", ") : `${selectedServiceNames.length} mục đã chọn`,
+      });
+    }
+    if (step3Done && selectedBranch) {
+      items.push({ key: "branch", label: "Chi nhánh", value: extractField(selectedBranch, ["name", "Name"], "") });
+    }
+    if (step4Done && dateLabel) {
+      items.push({ key: "datetime", label: "Ngày giờ", value: timeRange ? `${dateLabel} - ${timeRange}` : dateLabel });
+    }
+    if (step4Done && customerName) {
+      items.push({ key: "customer", label: "Khách hàng", value: customerName });
+    }
+    if (step4Done && customerPhone) {
+      items.push({ key: "phone", label: "SĐT", value: customerPhone });
+    }
+    if (step4Done && (existingVehicleLabel || newVehicleLabel)) {
+      items.push({ key: "vehicle", label: "Xe", value: existingVehicleLabel || newVehicleLabel });
+    }
+
+    return items;
+  }, [
+    customerForm.fullName,
+    customerForm.phone,
+    linkedVehicles.length,
+    newVehicle.brandId,
+    newVehicle.licensePlate,
+    newVehicle.modelId,
+    newVehicle.vin,
+    selectedBranch,
+    selectedBranchId,
+    selectedCategory,
+    selectedCategoryId,
+    selectedDate,
+    selectedExistingVehicle,
+    selectedModel?.modelName,
+    selectedServiceIds.length,
+    selectedVehicleId,
+    selectedServices,
+    selectedSlot,
+    vehicleMode,
+  ]);
 
   const progressPercent = useMemo(() => (currentStep / STEPS.length) * 100, [currentStep]);
 
@@ -497,17 +608,27 @@ export default function BookingPage() {
 
   if (loading) {
     return (
-      <>
-        <Header />
+      <div className="booking-page-shell">
+        <div className="booking-fixed-header">
+          <Header />
+        </div>
         <div className="booking-loading">Đang tải dữ liệu đặt lịch...</div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <Header />
+    <div className="booking-page-shell">
+      <div className="booking-fixed-header">
+        <Header />
+      </div>
       <div className="booking-flow">
+        <section className="booking-hero">
+          <p>HỆ THỐNG BOOKING MY GARAGE</p>
+          <h1>Đặt lịch dịch vụ chuyên nghiệp trong vài bước</h1>
+          <span>Chọn đúng nhóm dịch vụ, kỹ thuật và thời gian bạn mong muốn.</span>
+        </section>
+
         <section className="booking-progress-shell">
         <div className="booking-progress-energy">
           <span style={{ width: `${progressPercent}%` }} />
@@ -538,14 +659,15 @@ export default function BookingPage() {
           {currentStep === 1 && (
             <div className="booking-card">
               <header className="booking-card-head">
-                <h2>Bước 1: Chọn loại dịch vụ</h2>
-                <p>Phân loại nhu cầu để hệ thống gợi ý hạng mục phù hợp.</p>
+                <h2>Chọn loại dịch vụ</h2>
+                <p>Bắt đầu bằng cách chọn nhóm dịch vụ phù hợp với nhu cầu xe của bạn.</p>
               </header>
               <div className="category-grid">
                 {categories.map((category) => {
                   const categoryId = extractField(category, ["id", "Id"]);
-                  const name = extractField(category, ["name", "Name"], "Loại dịch vụ");
+                  const name = extractField(category, ["name", "Name"], "");
                   const desc = extractField(category, ["description", "Description"], "");
+                  if (!name) return null;
                   const selected = String(categoryId) === String(selectedCategoryId);
                   return (
                     <button
@@ -558,8 +680,9 @@ export default function BookingPage() {
                         setError("");
                       }}
                     >
+                      <span className="category-icon" aria-hidden="true">{iconByIndex(Number(categoryId) || 0)}</span>
                       <h3>{name}</h3>
-                      <p>{desc || "Nhóm dịch vụ chuyên biệt cho tình trạng xe của bạn."}</p>
+                      {desc ? <p>{desc}</p> : null}
                     </button>
                   );
                 })}
@@ -570,9 +693,9 @@ export default function BookingPage() {
           {currentStep === 2 && (
             <div className="booking-card">
               <header className="booking-card-head">
-                <h2>Bước 2: Chọn dịch vụ cụ thể</h2>
+                <h2>Chọn dịch vụ cụ thể</h2>
                 <p>
-                  Danh sách theo loại <strong>{extractField(selectedCategory, ["name", "Name"], "đã chọn")}</strong>.
+                  Nhóm đang chọn: <strong>{extractField(selectedCategory, ["name", "Name"], "")}</strong>
                 </p>
               </header>
 
@@ -583,7 +706,10 @@ export default function BookingPage() {
 
                 {servicesByCategory.map((service) => {
                   const serviceId = Number(extractField(service, ["id", "Id"]));
+                  const serviceName = extractField(service, ["name", "Name"], "");
+                  if (!serviceName) return null;
                   const selected = selectedServiceIds.includes(serviceId);
+                  const standardMinutes = extractField(service, ["standardMinutes", "StandardMinutes"], 0);
                   return (
                     <button
                       key={serviceId}
@@ -591,13 +717,17 @@ export default function BookingPage() {
                       className={`service-card ${selected ? "selected" : ""}`}
                       onClick={() => toggleService(serviceId)}
                     >
-                      <div>
-                        <h3>{extractField(service, ["name", "Name"], "Dịch vụ")}</h3>
-                        <p>{extractField(service, ["description", "Description"], "Dịch vụ tiêu chuẩn tại MyGarage")}</p>
+                      <span className="service-icon" aria-hidden="true">{iconByIndex(serviceId || 0)}</span>
+                      <div className="service-card-body">
+                        <h3>{serviceName}</h3>
+                        {extractField(service, ["description", "Description"], "")
+                          ? <p>{extractField(service, ["description", "Description"], "")}</p>
+                          : null}
+                        {Number(standardMinutes) > 0 ? <small>Thời gian dự kiến: {standardMinutes} phút</small> : null}
                       </div>
-                      <aside>
+                      <aside className="service-card-side">
                         <strong>{formatVnd(extractField(service, ["basePrice", "BasePrice"], 0))}</strong>
-                        <small>{extractField(service, ["standardMinutes", "StandardMinutes"], 0)} phút</small>
+                        <em>{selected ? "Đã chọn" : "+ Chọn dịch vụ"}</em>
                       </aside>
                     </button>
                   );
@@ -641,61 +771,57 @@ export default function BookingPage() {
 
           {currentStep === 4 && (
             <div className="booking-card">
-              <header className="booking-card-head">
-                <h2>Bước 4: Thông tin khách hàng, xe và thời gian</h2>
-                <p>Cập nhật dữ liệu chuẩn trước khi xác nhận lịch.</p>
-              </header>
+              <div className="step4-section">
+                <h3>Thông tin khách hàng</h3>
+                <div className="form-grid step4-form-grid">
+                  <label>
+                    Họ và tên <span>*</span>
+                    <input
+                      type="text"
+                      value={customerForm.fullName}
+                      onChange={(e) => setCustomerForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                      placeholder="Nhập họ tên khách hàng"
+                    />
+                  </label>
 
-              <div className="form-grid">
-                <label>
-                  Họ và tên
-                  <input
-                    type="text"
-                    value={customerForm.fullName}
-                    onChange={(e) => setCustomerForm((prev) => ({ ...prev, fullName: e.target.value }))}
-                    placeholder="Nhập họ tên khách hàng"
-                  />
-                </label>
-
-                <label>
-                  Số điện thoại
-                  <input
-                    type="tel"
-                    value={customerForm.phone}
-                    onChange={(e) => setCustomerForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    placeholder="Nhập số điện thoại"
-                  />
-                </label>
+                  <label>
+                    Số điện thoại <span>*</span>
+                    <input
+                      type="tel"
+                      value={customerForm.phone}
+                      onChange={(e) => setCustomerForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="Nhập số điện thoại"
+                    />
+                  </label>
+                </div>
               </div>
 
-              <div className="vehicle-block">
-                <div className="vehicle-block-head">
-                  <h3>Thông tin xe</h3>
-                  <p>
-                    {linkedVehicles.length > 0
-                      ? "Bạn có thể chọn xe đã lưu hoặc thêm xe mới."
-                      : "Bạn chưa có xe lưu trong hệ thống, vui lòng nhập xe mới đầy đủ."}
-                  </p>
-                </div>
+              <div className="step4-section vehicle-block">
+                <h3>Thông tin xe</h3>
 
-                {linkedVehicles.length > 0 && (
-                  <div className="vehicle-mode-switch">
-                    <button
-                      type="button"
-                      className={vehicleMode === "existing" ? "active" : ""}
-                      onClick={() => setVehicleMode("existing")}
-                    >
-                      Chọn xe có sẵn
-                    </button>
-                    <button
-                      type="button"
-                      className={vehicleMode === "new" ? "active" : ""}
-                      onClick={() => setVehicleMode("new")}
-                    >
-                      Thêm xe mới
-                    </button>
-                  </div>
-                )}
+                <div className="step4-mode-picker">
+                  <label className="step4-mode-item">
+                    <input
+                      type="radio"
+                      name="vehicleMode"
+                      value="existing"
+                      checked={vehicleMode === "existing"}
+                      disabled={linkedVehicles.length === 0}
+                      onChange={() => setVehicleMode("existing")}
+                    />
+                    Chọn xe có sẵn
+                  </label>
+                  <label className="step4-mode-item">
+                    <input
+                      type="radio"
+                      name="vehicleMode"
+                      value="new"
+                      checked={vehicleMode === "new"}
+                      onChange={() => setVehicleMode("new")}
+                    />
+                    Thêm xe mới
+                  </label>
+                </div>
 
                 {linkedVehicles.length > 0 && vehicleMode === "existing" && (
                   <label>
@@ -715,9 +841,19 @@ export default function BookingPage() {
                 )}
 
                 {(linkedVehicles.length === 0 || vehicleMode === "new") && (
-                  <div className="form-grid">
+                  <div className="form-grid step4-form-grid">
                     <label>
-                      Hãng xe
+                      Biển số xe <span>*</span>
+                      <input
+                        type="text"
+                        value={newVehicle.licensePlate}
+                        onChange={(e) => updateNewVehicle("licensePlate", formatLicensePlateInput(e.target.value))}
+                        placeholder="Nhập biển số xe"
+                      />
+                    </label>
+
+                    <label>
+                      Hãng xe <span>*</span>
                       <select
                         value={newVehicle.brandId}
                         onChange={(e) => {
@@ -725,7 +861,7 @@ export default function BookingPage() {
                           updateNewVehicle("modelId", "");
                         }}
                       >
-                        <option value="">-- Chọn hãng xe --</option>
+                        <option value="">Chọn hãng xe</option>
                         {brands.map((brand) => (
                           <option key={extractField(brand, ["id", "Id"])} value={extractField(brand, ["id", "Id"])}>
                             {extractField(brand, ["name", "Name"], "")}
@@ -735,13 +871,13 @@ export default function BookingPage() {
                     </label>
 
                     <label>
-                      Dòng xe
+                      Dòng xe <span>*</span>
                       <select
                         value={newVehicle.modelId}
                         onChange={(e) => updateNewVehicle("modelId", e.target.value)}
                         disabled={!newVehicle.brandId}
                       >
-                        <option value="">-- Chọn dòng xe --</option>
+                        <option value="">Chọn dòng xe</option>
                         {modelOptions.map((model) => (
                           <option key={extractField(model, ["id", "Id"])} value={extractField(model, ["id", "Id"])}>
                             {extractField(model, ["modelName", "ModelName"], "")}
@@ -751,32 +887,12 @@ export default function BookingPage() {
                     </label>
 
                     <label>
-                      Biển số
-                      <input
-                        type="text"
-                        value={newVehicle.licensePlate}
-                        onChange={(e) => updateNewVehicle("licensePlate", e.target.value.toUpperCase())}
-                        placeholder="VD: 51H-123.45"
-                      />
-                    </label>
-
-                    <label>
-                      Số VIN
+                      Số VIN <span>*</span>
                       <input
                         type="text"
                         value={newVehicle.vin}
                         onChange={(e) => updateNewVehicle("vin", e.target.value.toUpperCase())}
                         placeholder="Nhập số VIN"
-                      />
-                    </label>
-
-                    <label>
-                      Màu xe (tuỳ chọn)
-                      <input
-                        type="text"
-                        value={newVehicle.color}
-                        onChange={(e) => updateNewVehicle("color", e.target.value)}
-                        placeholder="VD: Trắng ngọc trai"
                       />
                     </label>
                   </div>
@@ -788,12 +904,13 @@ export default function BookingPage() {
                 <div className="form-grid">
                   <label>
                     Ngày
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      min={toIsoDateInput(new Date())}
-                      onChange={(e) => {
-                        setSelectedDate(e.target.value);
+                    <DateTimePicker
+                      value={selectedDate ? `${selectedDate}T08:00:00` : ""}
+                      minDate={new Date()}
+                      placeholder="Chọn ngày hẹn"
+                      onChange={(val) => {
+                        const pickedDate = String(val || "").slice(0, 10);
+                        setSelectedDate(pickedDate);
                         setSelectedSlot(null);
                       }}
                     />
@@ -912,37 +1029,18 @@ export default function BookingPage() {
         <aside className="booking-summary-panel">
           <div className="summary-card">
             <h3>Tóm tắt lịch hẹn</h3>
-            <dl>
-              <dt>Loại dịch vụ</dt>
-              <dd>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</dd>
-
-              <dt>Dịch vụ cụ thể</dt>
-              <dd>{selectedServices.length > 0 ? `${selectedServices.length} mục đã chọn` : "Chưa chọn"}</dd>
-
-              <dt>Chi nhánh</dt>
-              <dd>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</dd>
-
-              <dt>Ngày giờ</dt>
-              <dd>
-                {formatDateVi(selectedDate)}
-                {selectedSlot
-                  ? ` - ${timeLabel(extractField(selectedSlot, ["startTime", "StartTime"]))} đến ${timeLabel(extractField(selectedSlot, ["endTime", "EndTime"]))}`
-                  : ""}
-              </dd>
-
-              <dt>Khách hàng</dt>
-              <dd>{customerForm.fullName || "Chưa nhập"}</dd>
-
-              <dt>SĐT</dt>
-              <dd>{customerForm.phone || "Chưa nhập"}</dd>
-
-              <dt>Xe</dt>
-              <dd>
-                {selectedExistingVehicle
-                  ? `${selectedExistingVehicle.licensePlate || "Không biển số"} (${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName})`
-                  : toSafeUpper(newVehicle.licensePlate) || "Chưa chọn"}
-              </dd>
-            </dl>
+            {summaryItems.length === 0 ? (
+              <p className="summary-empty">Hoàn thành từng bước để thông tin xuất hiện tại đây.</p>
+            ) : (
+              <dl>
+                {summaryItems.map((item) => (
+                  <Fragment key={item.key}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+            )}
 
             <div className="summary-total">
               <div>
@@ -958,6 +1056,8 @@ export default function BookingPage() {
         </aside>
         </section>
       </div>
-    </>
+    </div>
   );
 }
+
+
