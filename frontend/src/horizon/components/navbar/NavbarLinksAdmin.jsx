@@ -23,7 +23,7 @@ import { useBranch } from '../../../context/BranchContext';
 import { MdNotificationsNone } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
-import routes from 'routes';
+import defaultRoutes from 'routes';
 
 function getDisplayName(user) {
   if (!user) return 'User';
@@ -46,10 +46,10 @@ function getAvatarInitials(displayName) {
 }
 
 export default function HeaderLinks(props) {
-  const { secondary } = props;
+  const { secondary, routes = defaultRoutes } = props;
   const { colorMode, toggleColorMode } = useColorMode();
   const { user, logout } = useAuth();
-  const { branches, selectedBranch, selectBranch } = useBranch();
+  const { branches, selectedBranch, selectBranch, isBranchLocked } = useBranch();
   const displayName = getDisplayName(user);
   const avatarInitials = getAvatarInitials(displayName);
   const greetingName =
@@ -124,38 +124,53 @@ export default function HeaderLinks(props) {
         </Text>
       </Flex>
       <SidebarResponsive routes={routes} />
-      <Menu>
-        <MenuButton
-          as={Button}
+      {isBranchLocked ? (
+        <Button
           size="sm"
           variant="outline"
           borderRadius="20px"
           me="10px"
           borderColor={borderColor}
+          cursor="default"
+          _hover={{}}
+          _active={{}}
         >
           {selectedBranch?.name || "Chọn chi nhánh"}
-        </MenuButton>
-        <MenuList
-          boxShadow={shadow}
-          border="none"
-          borderRadius="14px"
-          p="6px"
-          minW="220px"
-        >
-          {branches.map((branch) => (
-            <MenuItem
-              key={branch.id}
-              borderRadius="10px"
-              bg={selectedBranch?.id === branch.id ? "gray.100" : "transparent"}
-              onClick={() => selectBranch(branch.id)}
-            >
-              <Text fontSize="sm" fontWeight={selectedBranch?.id === branch.id ? "700" : "500"}>
-                {branch.name || `Branch #${branch.id}`}
-              </Text>
-            </MenuItem>
-          ))}
-        </MenuList>
-      </Menu>
+        </Button>
+      ) : (
+        <Menu>
+          <MenuButton
+            as={Button}
+            size="sm"
+            variant="outline"
+            borderRadius="20px"
+            me="10px"
+            borderColor={borderColor}
+          >
+            {selectedBranch?.name || "Chọn chi nhánh"}
+          </MenuButton>
+          <MenuList
+            boxShadow={shadow}
+            border="none"
+            borderRadius="14px"
+            p="6px"
+            minW="220px"
+          >
+            {branches.map((branch) => (
+              <MenuItem
+                key={branch.id}
+                borderRadius="10px"
+                bg={selectedBranch?.id === branch.id ? "gray.100" : "transparent"}
+                onClick={() => selectBranch(branch.id)}
+              >
+                <Text fontSize="sm" fontWeight={selectedBranch?.id === branch.id ? "700" : "500"}>
+                  {branch.name || `Branch #${branch.id}`}
+                </Text>
+              </MenuItem>
+            ))}
+          </MenuList>
+        </Menu>
+      )}
       <Menu>
         <MenuButton p="0px">
           <Icon
@@ -309,4 +324,5 @@ HeaderLinks.propTypes = {
   fixed: PropTypes.bool,
   secondary: PropTypes.bool,
   onOpen: PropTypes.func,
+  routes: PropTypes.arrayOf(PropTypes.object),
 };

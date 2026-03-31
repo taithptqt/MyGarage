@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MyGarage.Data;
 using MyGarage.Interfaces;
+using System.Data;
 
 namespace MyGarage.Services
 {
@@ -12,6 +13,7 @@ namespace MyGarage.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AppointmentReminderService> _logger;
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
+        private bool? _schemaCompatible;
 
         public AppointmentReminderService(IServiceScopeFactory scopeFactory, ILogger<AppointmentReminderService> logger)
         {
@@ -27,7 +29,7 @@ namespace MyGarage.Services
             {
                 try
                 {
-                    await SendRemindersAsync();
+                    await SendRemindersAsync(stoppingToken);
                 }
                 catch (Exception ex)
                 {
@@ -38,11 +40,16 @@ namespace MyGarage.Services
             }
         }
 
-        private async Task SendRemindersAsync()
+        private async Task SendRemindersAsync(CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<GarageContext>();
             var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+            if (!await IsSchemaCompatibleAsync(context, cancellationToken))
+            {
+                return;
+            }
 
             var now = DateTime.UtcNow;
             var tomorrow = DateOnly.FromDateTime(now.AddHours(24));
@@ -54,7 +61,7 @@ namespace MyGarage.Services
                 .Where(a => (a.Status == "PENDING" || a.Status == "CONFIRMED")
                     && a.IsReminderSent != true
                     && a.ScheduledDate <= tomorrow)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             if (upcomingAppointments.Count == 0) return;
 
@@ -103,6 +110,77 @@ namespace MyGarage.Services
             {
                 await context.SaveChangesAsync();
                 _logger.LogInformation("Sent {Count} appointment reminders", sent);
+            }
+        }
+
+        private async Task<bool> IsSchemaCompatibleAsync(GarageContext context, CancellationToken cancellationToken)
+        {
+            if (_schemaCompatible.HasValue)
+            {
+                return _schemaCompatible.Value;
+            }
+
+            var connection = context.Database.GetDbConnection();
+            var wasClosed = connection.State != ConnectionState.Open;
+            if (wasClosed)
+            {
+                await connection.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                async Task<string?> GetColumnDataTypeAsync(string columnName)
+                {
+                    await using var command = connection.CreateCommand();
+                    command.CommandText = @"
+SELECT DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = @tableName
+  AND COLUMN_NAME = @columnName";
+
+                    var tableNameParam = command.CreateParameter();
+                    tableNameParam.ParameterName = "@tableName";
+                    tableNameParam.Value = "Appointments";
+                    command.Parameters.Add(tableNameParam);
+
+                    var columnNameParam = command.CreateParameter();
+                    columnNameParam.ParameterName = "@columnName";
+                    columnNameParam.Value = columnName;
+                    command.Parameters.Add(columnNameParam);
+
+                    var result = await command.ExecuteScalarAsync(cancellationToken);
+                    return result?.ToString();
+                }
+
+                var scheduledDateType = await GetColumnDataTypeAsync("ScheduledDate");
+                var startTimeType = await GetColumnDataTypeAsync("StartTime");
+                var endTimeType = await GetColumnDataTypeAsync("EndTime");
+
+                var hasScheduledDate = !string.IsNullOrWhiteSpace(scheduledDateType);
+                var timeColumnsCompatible =
+                    string.Equals(startTimeType, "time", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(endTimeType, "time", StringComparison.OrdinalIgnoreCase);
+
+                var compatible = hasScheduledDate && timeColumnsCompatible;
+                _schemaCompatible = compatible;
+
+                if (!compatible)
+                {
+                    _logger.LogWarning(
+                        "AppointmentReminderService disabled because appointment schema is not compatible. ScheduledDateType={ScheduledDateType}, StartTimeType={StartTimeType}, EndTimeType={EndTimeType}. Expected StartTime/EndTime = time.",
+                        scheduledDateType ?? "(missing)",
+                        startTimeType ?? "(missing)",
+                        endTimeType ?? "(missing)");
+                }
+
+                return compatible;
+            }
+            finally
+            {
+                if (wasClosed)
+                {
+                    await connection.CloseAsync();
+                }
             }
         }
     }
