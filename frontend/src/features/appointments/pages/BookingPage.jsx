@@ -31,6 +31,7 @@ const BOOKING_FLOW = {
   FIXED: "FIXED",
   FLEXIBLE: "FLEXIBLE",
 };
+const DEFAULT_DIAGNOSTIC_SERVICE_CODE = "CDTC-001";
 const SESSION_TABS = [
   { key: "MORNING", label: "Buổi sáng", hint: "08:00 - 12:00" },
   { key: "AFTERNOON", label: "Buổi chiều", hint: "12:00 - 17:00" },
@@ -46,26 +47,39 @@ function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
 }
 
-function resolveBookingFlow(category, selectedServiceCount) {
-  if (selectedServiceCount > 0) return BOOKING_FLOW.FIXED;
-
+function isQuickCategory(category) {
   const raw = normalizeText(
     `${extractField(category, ["name", "Name"], "")} ${extractField(category, ["description", "Description"], "")}`
   );
-  if (
+  return (
+    raw.includes("dich vu nhanh") ||
+    raw.includes("dịch vụ nhanh") ||
+    raw.includes("bao duong") ||
+    raw.includes("bảo dưỡng") ||
+    raw.includes("maintenance") ||
+    raw.includes("quick")
+  );
+}
+
+function isHeavyCategory(category) {
+  const raw = normalizeText(
+    `${extractField(category, ["name", "Name"], "")} ${extractField(category, ["description", "Description"], "")}`
+  );
+  return (
     raw.includes("sua chua") ||
+    raw.includes("sửa chữa") ||
     raw.includes("chuan doan") ||
+    raw.includes("chuẩn đoán") ||
     raw.includes("kiem tra") ||
+    raw.includes("kiểm tra") ||
     raw.includes("bao hiem") ||
+    raw.includes("bảo hiểm") ||
     raw.includes("bao hanh") ||
+    raw.includes("bảo hành") ||
     raw.includes("rework") ||
     raw.includes("repair") ||
     raw.includes("diagnostic")
-  ) {
-    return BOOKING_FLOW.FLEXIBLE;
-  }
-
-  return BOOKING_FLOW.FIXED;
+  );
 }
 
 function formatDateVi(dateString) {
@@ -158,7 +172,8 @@ export default function BookingPage() {
 
   const [currentStep, setCurrentStep] = useState(1);
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [activeServiceCategoryId, setActiveServiceCategoryId] = useState("");
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
 
@@ -246,24 +261,75 @@ export default function BookingPage() {
       .filter(Boolean);
   }, [customerRecord, customerVehicles, user?.id, vehicles]);
 
+  const selectedCategories = useMemo(
+    () =>
+      categories.filter((item) => {
+        const categoryId = Number(extractField(item, ["id", "Id"]));
+        return selectedCategoryIds.includes(categoryId);
+      }),
+    [categories, selectedCategoryIds]
+  );
   const selectedCategory = useMemo(
-    () => categories.find((item) => String(item.id) === String(selectedCategoryId) || String(item.Id) === String(selectedCategoryId)),
-    [categories, selectedCategoryId]
+    () =>
+      categories.find(
+        (item) => String(extractField(item, ["id", "Id"])) === String(activeServiceCategoryId)
+      ) || selectedCategories[0] || null,
+    [activeServiceCategoryId, categories, selectedCategories]
+  );
+  const selectedCategorySummaryLabel = useMemo(() => {
+    const names = selectedCategories
+      .map((item) => extractField(item, ["name", "Name"], "").trim())
+      .filter(Boolean);
+    if (names.length === 0) return "Chưa chọn";
+    return names.length <= 2 ? names.join(", ") : `${names.length} loại dịch vụ`;
+  }, [selectedCategories]);
+  const hasQuickCategorySelected = useMemo(
+    () => selectedCategories.some((item) => isQuickCategory(item)),
+    [selectedCategories]
   );
 
   const servicesByCategory = useMemo(() => {
-    if (!selectedCategoryId) return [];
+    if (!activeServiceCategoryId) return [];
     return (services || []).filter(
       (item) =>
-        String(extractField(item, ["categoryId", "CategoryId"])) === String(selectedCategoryId) &&
+        String(extractField(item, ["categoryId", "CategoryId"])) === String(activeServiceCategoryId) &&
         extractField(item, ["isActive", "IsActive"], true) !== false
     );
-  }, [selectedCategoryId, services]);
+  }, [activeServiceCategoryId, services]);
 
   const selectedServices = useMemo(
     () => services.filter((item) => selectedServiceIds.includes(Number(extractField(item, ["id", "Id"])))),
     [selectedServiceIds, services]
   );
+  const serviceCategoryById = useMemo(() => {
+    const map = new Map();
+    for (const service of services) {
+      const serviceId = Number(extractField(service, ["id", "Id"]));
+      const categoryId = Number(extractField(service, ["categoryId", "CategoryId"]));
+      if (Number.isFinite(serviceId) && Number.isFinite(categoryId)) {
+        map.set(serviceId, categoryId);
+      }
+    }
+    return map;
+  }, [services]);
+  const autoDiagnosticService = useMemo(() => {
+    return (
+      services.find((item) => normalizeText(extractField(item, ["code", "Code"], "")) === normalizeText(DEFAULT_DIAGNOSTIC_SERVICE_CODE)) ||
+      services.find((item) => normalizeText(extractField(item, ["name", "Name"], "")).includes("chuan doan tieu chuan")) ||
+      services.find((item) => normalizeText(extractField(item, ["name", "Name"], "")).includes("chuẩn đoán tiêu chuẩn")) ||
+      services.find((item) => normalizeText(extractField(item, ["name", "Name"], "")).includes("chan doan tieu chuan"))
+    );
+  }, [services]);
+  const effectiveServices = useMemo(() => {
+    if (selectedServices.length > 0) return selectedServices;
+    if (bookingFlow === BOOKING_FLOW.FLEXIBLE && autoDiagnosticService) return [autoDiagnosticService];
+    return [];
+  }, [autoDiagnosticService, bookingFlow, selectedServices]);
+  const effectiveServiceIds = useMemo(
+    () => effectiveServices.map((item) => Number(extractField(item, ["id", "Id"]))).filter(Number.isFinite),
+    [effectiveServices]
+  );
+  const isUsingAutoDiagnostic = bookingFlow === BOOKING_FLOW.FLEXIBLE && selectedServiceIds.length === 0 && effectiveServices.length > 0;
 
   const selectedBranch = useMemo(
     () => branches.find((item) => String(item.id) === String(selectedBranchId) || String(item.Id) === String(selectedBranchId)),
@@ -290,13 +356,13 @@ export default function BookingPage() {
   );
 
   const totalPrice = useMemo(
-    () => selectedServices.reduce((sum, item) => sum + Number(extractField(item, ["basePrice", "BasePrice"], 0) || 0), 0),
-    [selectedServices]
+    () => effectiveServices.reduce((sum, item) => sum + Number(extractField(item, ["basePrice", "BasePrice"], 0) || 0), 0),
+    [effectiveServices]
   );
 
   const totalMinutes = useMemo(
-    () => selectedServices.reduce((sum, item) => sum + Number(extractField(item, ["standardMinutes", "StandardMinutes"], 0) || 0), 0),
-    [selectedServices]
+    () => effectiveServices.reduce((sum, item) => sum + Number(extractField(item, ["standardMinutes", "StandardMinutes"], 0) || 0), 0),
+    [effectiveServices]
   );
 
   const availableSlots = useMemo(
@@ -356,7 +422,7 @@ export default function BookingPage() {
     const items = [];
     const customerName = customerForm.fullName.trim();
     const customerPhone = customerForm.phone.trim();
-    const selectedServiceNames = selectedServices
+    const selectedServiceNames = effectiveServices
       .map((item) => extractField(item, ["name", "Name"], "").trim())
       .filter(Boolean);
     const dateLabel = selectedDate ? formatDateVi(selectedDate) : "";
@@ -373,7 +439,7 @@ export default function BookingPage() {
       ? `${newVehiclePlate}${newVehicleModel ? ` (${newVehicleModel})` : ""}`
       : "";
 
-    const step1Done = Boolean(selectedCategoryId);
+    const step1Done = selectedCategoryIds.length > 0;
     const step2Done =
       step1Done &&
       (bookingFlow === BOOKING_FLOW.FLEXIBLE || selectedServiceIds.length > 0);
@@ -386,8 +452,12 @@ export default function BookingPage() {
       : Boolean(selectedVehicleId);
     const step4Done = step3Done && Boolean(customerName && customerPhone && selectedDate && selectedSlot && vehicleReady);
 
-    if (step1Done && selectedCategory) {
-      items.push({ key: "category", label: "Loại dịch vụ", value: extractField(selectedCategory, ["name", "Name"], "") });
+    if (step1Done && selectedCategories.length > 0) {
+      const names = selectedCategories
+        .map((item) => extractField(item, ["name", "Name"], "").trim())
+        .filter(Boolean);
+      const categoryLabel = names.length <= 2 ? names.join(", ") : `${names.length} loại dịch vụ`;
+      items.push({ key: "category", label: "Loại dịch vụ", value: categoryLabel });
     }
     if (step2Done) {
       items.push({
@@ -405,7 +475,7 @@ export default function BookingPage() {
         label: "Dịch vụ cụ thể",
         value:
           selectedServiceNames.length <= 2
-            ? selectedServiceNames.join(", ")
+            ? `${selectedServiceNames.join(", ")}${isUsingAutoDiagnostic ? " (tự động)" : ""}`
             : `${selectedServiceNames.length} mục đã chọn`,
       });
     }
@@ -436,15 +506,17 @@ export default function BookingPage() {
     newVehicle.vin,
     selectedBranch,
     selectedBranchId,
+    selectedCategories,
     selectedCategory,
-    selectedCategoryId,
+    selectedCategoryIds.length,
     bookingFlow,
     selectedDate,
     selectedExistingVehicle,
     selectedModel?.modelName,
     selectedServiceIds.length,
     selectedVehicleId,
-    selectedServices,
+    effectiveServices,
+    isUsingAutoDiagnostic,
     selectedSlot,
     vehicleMode,
   ]);
@@ -559,15 +631,31 @@ export default function BookingPage() {
   }, [selectedBranchId, selectedDate, bookingFlow, selectedServiceIds, loadSlots]);
 
   useEffect(() => {
-    const nextFlow = resolveBookingFlow(selectedCategory, selectedServiceIds.length);
-    setBookingFlow((prev) =>
-      selectedServiceIds.length > 0 && prev === BOOKING_FLOW.FLEXIBLE
+    if (selectedCategoryIds.length === 0) {
+      setActiveServiceCategoryId("");
+      return;
+    }
+
+    if (!selectedCategoryIds.some((id) => String(id) === String(activeServiceCategoryId))) {
+      setActiveServiceCategoryId(String(selectedCategoryIds[0]));
+    }
+  }, [activeServiceCategoryId, selectedCategoryIds]);
+
+  useEffect(() => {
+    const hasHeavyCategory = selectedCategories.some((category) => isHeavyCategory(category));
+    const nextFlow =
+      selectedServiceIds.length > 0 || hasQuickCategorySelected
         ? BOOKING_FLOW.FIXED
-        : selectedServiceIds.length === 0
-          ? nextFlow
-          : prev
-    );
-  }, [selectedCategory, selectedServiceIds.length]);
+        : hasHeavyCategory
+          ? BOOKING_FLOW.FLEXIBLE
+          : BOOKING_FLOW.FIXED;
+    setBookingFlow((prev) => {
+      if (hasQuickCategorySelected) return BOOKING_FLOW.FIXED;
+      if (selectedServiceIds.length > 0 && prev === BOOKING_FLOW.FLEXIBLE) return BOOKING_FLOW.FIXED;
+      if (selectedServiceIds.length === 0) return nextFlow;
+      return prev;
+    });
+  }, [hasQuickCategorySelected, selectedCategories, selectedServiceIds.length]);
 
   useEffect(() => {
     const firstSessionWithSlots =
@@ -598,6 +686,33 @@ export default function BookingPage() {
     setNewVehicle((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleCategorySelection(categoryId) {
+    const normalizedId = Number(categoryId);
+    if (!Number.isFinite(normalizedId)) return;
+
+    const currentlySelected = selectedCategoryIds.includes(normalizedId);
+    const nextCategoryIds = currentlySelected
+      ? selectedCategoryIds.filter((id) => id !== normalizedId)
+      : [...selectedCategoryIds, normalizedId];
+
+    setSelectedCategoryIds(nextCategoryIds);
+
+    if (nextCategoryIds.length === 0) {
+      setActiveServiceCategoryId("");
+    } else if (!nextCategoryIds.some((id) => String(id) === String(activeServiceCategoryId))) {
+      setActiveServiceCategoryId(String(nextCategoryIds[0]));
+    }
+
+    setSelectedServiceIds((prev) =>
+      prev.filter((serviceId) => {
+        const categoryOfService = serviceCategoryById.get(serviceId);
+        return categoryOfService && nextCategoryIds.includes(categoryOfService);
+      })
+    );
+
+    setError("");
+  }
+
   function toggleService(serviceId) {
     setSelectedServiceIds((prev) =>
       prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
@@ -609,8 +724,8 @@ export default function BookingPage() {
   }
 
   function validateStep(stepNumber) {
-    if (stepNumber === 1 && !selectedCategoryId) {
-      return "Vui lòng chọn loại dịch vụ.";
+    if (stepNumber === 1 && selectedCategoryIds.length === 0) {
+      return "Vui lòng chọn ít nhất một loại dịch vụ.";
     }
 
     if (stepNumber === 2) {
@@ -760,7 +875,7 @@ export default function BookingPage() {
         endTime: isFlexibleFlow ? null : slotEnd,
         checkInWindowStart: isFlexibleFlow ? slotStart : null,
         checkInWindowEnd: isFlexibleFlow ? slotEnd : null,
-        requestedServiceIds: selectedServiceIds.length > 0 ? selectedServiceIds.join(",") : null,
+        requestedServiceIds: effectiveServiceIds.length > 0 ? effectiveServiceIds.join(",") : null,
         customerNotes: notes.trim() || null,
       });
 
@@ -831,23 +946,17 @@ export default function BookingPage() {
               </header>
               <div className="category-grid">
                 {categories.map((category) => {
-                  const categoryId = extractField(category, ["id", "Id"]);
+                  const categoryId = Number(extractField(category, ["id", "Id"]));
                   const name = extractField(category, ["name", "Name"], "");
                   const desc = extractField(category, ["description", "Description"], "");
                   if (!name) return null;
-                  const selected = String(categoryId) === String(selectedCategoryId);
+                  const selected = selectedCategoryIds.includes(categoryId);
                   return (
                     <button
                       key={categoryId}
                       type="button"
                       className={`category-card ${selected ? "selected" : ""}`}
-                      onClick={() => {
-                        setSelectedCategoryId(String(categoryId));
-                        setSelectedServiceIds([]);
-                        setBookingFlow(resolveBookingFlow(category, 0));
-                        setSelectedSlot(null);
-                        setError("");
-                      }}
+                      onClick={() => toggleCategorySelection(categoryId)}
                     >
                       <span className="category-icon" aria-hidden="true">{iconByIndex(Number(categoryId) || 0)}</span>
                       <h3>{name}</h3>
@@ -864,8 +973,20 @@ export default function BookingPage() {
               <header className="booking-card-head">
                 <h2>Chọn dịch vụ cụ thể</h2>
                 <p>
-                  Nhóm đang chọn: <strong>{extractField(selectedCategory, ["name", "Name"], "")}</strong>
+                  Nhóm đang xem: <strong>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</strong>
                 </p>
+                <div className="step2-category-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() => {
+                      setCurrentStep(1);
+                      setError("");
+                    }}
+                  >
+                    + Chọn thêm loại dịch vụ
+                  </button>
+                </div>
               </header>
 
               <div className="flow-mode-switch">
@@ -883,7 +1004,9 @@ export default function BookingPage() {
                 <button
                   type="button"
                   className={bookingFlow === BOOKING_FLOW.FLEXIBLE ? "active" : ""}
+                  disabled={hasQuickCategorySelected}
                   onClick={() => {
+                    if (hasQuickCategorySelected) return;
                     setBookingFlow(BOOKING_FLOW.FLEXIBLE);
                     setSelectedServiceIds([]);
                     setSelectedSlot(null);
@@ -891,23 +1014,51 @@ export default function BookingPage() {
                   }}
                 >
                   Check-in linh hoạt
-                  <small>Mang xe trong khung giờ nhận xe</small>
+                  <small>{hasQuickCategorySelected ? "Không áp dụng khi có dịch vụ nhanh" : "Mang xe trong khung giờ nhận xe"}</small>
                 </button>
               </div>
 
               {bookingFlow === BOOKING_FLOW.FLEXIBLE && (
                 <div className="booking-empty flow-note">
-                  Dành cho ca cần kiểm tra sâu hoặc chưa xác định hạng mục. Vui lòng mô tả rõ hiện tượng xe ở phần ghi chú.
+                  Dành cho ca cần kiểm tra sâu hoặc chưa xác định hạng mục. Hệ thống sẽ tự gán dịch vụ <strong>Chuẩn đoán tiêu chuẩn</strong> để giữ chỗ và gara sẽ tư vấn gói phù hợp khi tiếp nhận xe.
                 </div>
               )}
 
+              <div className="selected-category-tabs">
+                {selectedCategories.map((category) => {
+                  const categoryId = String(extractField(category, ["id", "Id"]));
+                  const isActiveTab = String(activeServiceCategoryId) === categoryId;
+                  return (
+                    <div
+                      key={categoryId}
+                      className={`selected-category-tab ${isActiveTab ? "active" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="selected-category-tab-main"
+                        onClick={() => {
+                          setActiveServiceCategoryId(categoryId);
+                          setError("");
+                        }}
+                      >
+                        {extractField(category, ["name", "Name"], `Nhóm ${categoryId}`)}
+                      </button>
+                      <button
+                        type="button"
+                        className="selected-category-tab-remove"
+                        aria-label={`Bo loai dich vu ${extractField(category, ["name", "Name"], "")}`}
+                        onClick={() => toggleCategorySelection(Number(categoryId))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="service-list">
-                {bookingFlow === BOOKING_FLOW.FLEXIBLE ? (
-                  <div className="booking-empty">
-                    Luồng linh hoạt không bắt buộc chọn dịch vụ cứng. Gara sẽ tiếp nhận xe vào hàng đợi và điều phối khoang sớm nhất.
-                  </div>
-                ) : servicesByCategory.length === 0 ? (
-                  <div className="booking-empty">Chưa có dịch vụ cụ thể cho loại này.</div>
+                {bookingFlow !== BOOKING_FLOW.FLEXIBLE && servicesByCategory.length === 0 ? (
+                  <div className="booking-empty">Chưa có dịch vụ cụ thể cho loại đang chọn.</div>
                 ) : null}
 
                 {bookingFlow === BOOKING_FLOW.FIXED && servicesByCategory.map((service) => {
@@ -1232,9 +1383,12 @@ export default function BookingPage() {
               </header>
 
               <div className="confirm-grid">
-                <div><span>Loại dịch vụ</span><strong>{extractField(selectedCategory, ["name", "Name"], "Chưa chọn")}</strong></div>
+                <div><span>Loại dịch vụ</span><strong>{selectedCategorySummaryLabel}</strong></div>
                 <div><span>Luồng</span><strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Giờ cố định"}</strong></div>
-                <div><span>Số dịch vụ</span><strong>{selectedServiceIds.length} dịch vụ</strong></div>
+                <div>
+                  <span>Số dịch vụ</span>
+                  <strong>{effectiveServiceIds.length} dịch vụ{isUsingAutoDiagnostic ? " (đã tự gán chuẩn đoán)" : ""}</strong>
+                </div>
                 <div><span>Chi nhánh</span><strong>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</strong></div>
                 <div><span>Khách hàng</span><strong>{customerForm.fullName || "Chưa nhập"} - {customerForm.phone || "Chưa nhập"}</strong></div>
                 <div>

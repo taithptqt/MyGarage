@@ -1,6 +1,4 @@
-﻿import { Navigate } from "react-router-dom";
-import { isAuthenticated } from "../../../app/authState";
-import Header from "../../../shared/components/Header";
+﻿import Header from "../../../shared/components/Header";
 import Footer from "../../../shared/components/Footer";
 import "./HomePage.css";
 
@@ -52,11 +50,6 @@ const partnerLogos = [
 ];
 
 function HomePage() {
-
-  if (!isAuthenticated()) {
-    return <Navigate to="/" replace />;
-  }
-
   return (
     <main className="stitch-home">
       <header className="home-hero">

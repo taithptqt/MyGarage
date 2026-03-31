@@ -22,6 +22,10 @@ namespace MyGarage.Services
         private const int NoShowMinutes = 30;
         private const int LateCancelMinutes = 60;
         private const int BookingLockHours = 4;
+        private const int QuickOnlineCapDefault = 7;
+        private const int RepairOnlineCapDefault = 10;
+        private const int ReservedRepairForQuickOverflow = 3;
+        private const string DefaultDiagnosticServiceCode = "CDTC-001";
 
         private static readonly HashSet<string> ClosedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -94,8 +98,14 @@ namespace MyGarage.Services
                 .ToListAsync();
             var capacity = ComputeCapacity(activeBays);
             var onlineLimit = Math.Max(1, (int)Math.Floor(capacity.Total * 0.85m));
-            var requestedCluster = await ResolveServiceClusterAsync(requestedServiceIds, null);
-            var requiredDuration = await ResolveFixedDurationAsync(requestedServiceIds, slotStepMinutes);
+            var effectiveRequestedServiceIds = requestedServiceIds;
+            if (flow == BookingFlowType.Fixed && string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
+            {
+                effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null);
+            }
+
+            var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, null);
+            var requiredDuration = await ResolveFixedDurationAsync(effectiveRequestedServiceIds, slotStepMinutes);
 
             var dayStart = date.ToDateTime(TimeOnly.MinValue);
             var dayEnd = dayStart.AddDays(1);
@@ -132,16 +142,17 @@ namespace MyGarage.Services
                     Math.Max(0, capacity.Repair - locked.lockedRepair),
                     Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
                 var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
-                if (effectiveCapacity.Total > 0 && IsSlotAvailable(overlap, requestedCluster, effectiveCapacity, effectiveOnlineLimit).isAvailable)
+                var slotEvaluation = EvaluateSlot(overlap, requestedCluster, effectiveCapacity, effectiveOnlineLimit);
+                if (effectiveCapacity.Total > 0 && slotEvaluation.IsAvailable)
                 {
                     var score = CalculateCompactionScore(current, date.ToDateTime(openTime), overlap);
                     slots.Add(new AvailableSlotResponseDto
                     {
                         StartTime = current,
                         EndTime = end,
-                        MaxCapacity = effectiveOnlineLimit,
+                        MaxCapacity = slotEvaluation.MaxCapacity,
                         BookedCount = overlap.Count,
-                        RemainingCapacity = Math.Max(0, effectiveOnlineLimit - overlap.Count),
+                        RemainingCapacity = slotEvaluation.RemainingCapacity,
                         IsAvailable = true,
                         IsRoundedHour = current.Minute == 0,
                         Session = ResolveSession(current.TimeOfDay),
@@ -160,6 +171,7 @@ namespace MyGarage.Services
         public async Task<Appointment> BookAsync(long authUserId, BookAppointmentRequestDto dto)
         {
             var flow = ResolveFlow(dto.BookingFlow, dto.RequestedServiceIds);
+            var effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds);
             long actualCustomerId = dto.CustomerId ?? authUserId;
             DateTime requestedStartAt;
             DateTime requestedEndAt;
@@ -220,7 +232,7 @@ namespace MyGarage.Services
                     .Where(b => b.BranchId == dto.BranchId && b.IsActive == true && b.IsDeleted != true)
                     .ToListAsync();
                 var capacity = ComputeCapacity(activeBays);
-                var requestedCluster = await ResolveServiceClusterAsync(dto.RequestedServiceIds, dto.CustomerNotes);
+                var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
 
                 var overlapping = await _context.Appointments
                     .AsNoTracking()
@@ -244,8 +256,9 @@ namespace MyGarage.Services
                     Math.Max(0, capacity.Repair - locked.lockedRepair),
                     Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
                 var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
+                var slotEvaluation = EvaluateSlot(overlapping, requestedCluster, effectiveCapacity, effectiveOnlineLimit);
 
-                if (effectiveCapacity.Total <= 0 || !IsSlotAvailable(overlapping, requestedCluster, effectiveCapacity, effectiveOnlineLimit).isAvailable)
+                if (effectiveCapacity.Total <= 0 || !slotEvaluation.IsAvailable)
                     throw new InvalidOperationException("Khung gio nay da het cong suat theo loai khoang hoac vuot nguong 85% online.");
             }
             else
@@ -329,10 +342,10 @@ namespace MyGarage.Services
                     CreatedBy = dto.CreatedBy,
                     StartTime = requestedStartAt,
                     EndTime = requestedEndAt,
-                    RequestedServiceIds = string.IsNullOrWhiteSpace(dto.RequestedServiceIds) && flow == BookingFlowType.Flexible
-                        ? "0"
-                        : dto.RequestedServiceIds,
-                    CustomerNotes = AppendClusterMarker(AppendFlowMarker(dto.CustomerNotes, flow), flow == BookingFlowType.Flexible ? ServiceCluster.Heavy : await ResolveServiceClusterAsync(dto.RequestedServiceIds, dto.CustomerNotes)),
+                    RequestedServiceIds = effectiveRequestedServiceIds,
+                    CustomerNotes = AppendClusterMarker(
+                        AppendFlowMarker(dto.CustomerNotes, flow),
+                        await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes)),
                     Status = flow == BookingFlowType.Flexible ? "QUEUED" : "PENDING",
                     CreatedAt = DateTime.UtcNow
                 };
@@ -762,6 +775,7 @@ namespace MyGarage.Services
             {
                 var key = bookingFlow.Trim().ToLowerInvariant();
                 if (key.Contains("flex") || key.Contains("window") || key.Contains("check")) return BookingFlowType.Flexible;
+                if (key.Contains("fixed") || key.Contains("slot")) return BookingFlowType.Fixed;
             }
 
             return string.IsNullOrWhiteSpace(requestedServiceIds) ? BookingFlowType.Flexible : BookingFlowType.Fixed;
@@ -823,6 +837,50 @@ namespace MyGarage.Services
             return RoundUpToStep(minutes + slotStepMinutes, slotStepMinutes);
         }
 
+        private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(string? requestedServiceIds)
+        {
+            var normalizedIds = ParseServiceIds(requestedServiceIds)
+                .Distinct()
+                .ToList();
+
+            if (normalizedIds.Count > 0)
+            {
+                return string.Join(",", normalizedIds);
+            }
+
+            var defaultDiagnosticServiceId = await ResolveDefaultDiagnosticServiceIdAsync();
+            return defaultDiagnosticServiceId.HasValue
+                ? defaultDiagnosticServiceId.Value.ToString(CultureInfo.InvariantCulture)
+                : null;
+        }
+
+        private async Task<long?> ResolveDefaultDiagnosticServiceIdAsync()
+        {
+            var candidates = await _context.StandardServices
+                .AsNoTracking()
+                .Where(s => s.IsDeleted != true && s.IsActive == true)
+                .Select(s => new { s.Id, s.Code, s.Name })
+                .ToListAsync();
+
+            var byCode = candidates.FirstOrDefault(s =>
+                string.Equals(s.Code?.Trim(), DefaultDiagnosticServiceCode, StringComparison.OrdinalIgnoreCase));
+            if (byCode != null)
+            {
+                return byCode.Id;
+            }
+
+            var byName = candidates.FirstOrDefault(s =>
+                NormalizeText(s.Name).Contains("chuan doan tieu chuan"));
+            if (byName != null)
+            {
+                return byName.Id;
+            }
+
+            var fallbackDiagnostic = candidates.FirstOrDefault(s =>
+                NormalizeText(s.Name).Contains("chuan doan"));
+            return fallbackDiagnostic?.Id;
+        }
+
         private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
         {
             var ids = ParseServiceIds(requestedServiceIds).ToList();
@@ -833,19 +891,66 @@ namespace MyGarage.Services
             return heavy ? ServiceCluster.Heavy : ServiceCluster.Quick;
         }
 
-        private static (bool isAvailable, int bookedQuick, int bookedHeavy) IsSlotAvailable(List<Appointment> overlap, ServiceCluster requestedCluster, CapacityProfile capacity, int onlineLimit)
+        private static SlotEvaluation EvaluateSlot(List<Appointment> overlap, ServiceCluster requestedCluster, CapacityProfile capacity, int onlineLimit)
         {
-            if (overlap.Count >= onlineLimit) return (false, 0, 0);
+            if (onlineLimit <= 0 || capacity.Total <= 0)
+            {
+                return new SlotEvaluation(false, 0, 0, 0, 0);
+            }
+
             int quickBooked = overlap.Count(a => ResolveFlowByRequestedServices(a.RequestedServiceIds, a.CustomerNotes) == ServiceCluster.Quick);
             int heavyBooked = overlap.Count - quickBooked;
+            int totalBooked = overlap.Count;
+            int remainingByOnlineCap = Math.Max(0, onlineLimit - totalBooked);
+            var clusterCaps = ComputeClusterOnlineCaps(capacity, onlineLimit);
+
+            int heavyMax = clusterCaps.repairCap;
+            int heavyRemaining = Math.Min(Math.Max(0, heavyMax - heavyBooked), remainingByOnlineCap);
+
+            int quickOverflow = Math.Max(0, clusterCaps.repairCap - heavyBooked - ReservedRepairForQuickOverflow);
+            int quickMax = clusterCaps.quickCap + quickOverflow;
+            int quickRemaining = Math.Min(Math.Max(0, quickMax - quickBooked), remainingByOnlineCap);
 
             if (requestedCluster == ServiceCluster.Heavy)
             {
-                return (heavyBooked < capacity.Repair, quickBooked, heavyBooked);
+                return new SlotEvaluation(heavyRemaining > 0, heavyRemaining, heavyMax, quickBooked, heavyBooked);
             }
 
-            int quickCapacityWithOverflow = capacity.Quick + Math.Max(0, capacity.Repair - heavyBooked);
-            return (quickBooked < quickCapacityWithOverflow, quickBooked, heavyBooked);
+            return new SlotEvaluation(quickRemaining > 0, quickRemaining, quickMax, quickBooked, heavyBooked);
+        }
+
+        private static (int quickCap, int repairCap) ComputeClusterOnlineCaps(CapacityProfile capacity, int onlineLimit)
+        {
+            var quickCap = Math.Min(capacity.Quick, QuickOnlineCapDefault);
+            var repairCap = Math.Min(capacity.Repair, RepairOnlineCapDefault);
+
+            if (quickCap + repairCap > onlineLimit)
+            {
+                var excess = (quickCap + repairCap) - onlineLimit;
+                var trimRepair = Math.Min(excess, repairCap);
+                repairCap -= trimRepair;
+                excess -= trimRepair;
+                if (excess > 0)
+                {
+                    quickCap = Math.Max(0, quickCap - excess);
+                }
+            }
+            else if (quickCap + repairCap < onlineLimit)
+            {
+                var missing = onlineLimit - (quickCap + repairCap);
+                var canAddRepair = Math.Max(0, capacity.Repair - repairCap);
+                var repairAdded = Math.Min(missing, canAddRepair);
+                repairCap += repairAdded;
+                missing -= repairAdded;
+
+                if (missing > 0)
+                {
+                    var canAddQuick = Math.Max(0, capacity.Quick - quickCap);
+                    quickCap += Math.Min(missing, canAddQuick);
+                }
+            }
+
+            return (quickCap, repairCap);
         }
 
         private static ServiceCluster ResolveFlowByRequestedServices(string? requestedServiceIds, string? notes)
@@ -855,14 +960,23 @@ namespace MyGarage.Services
             if (!string.IsNullOrWhiteSpace(notes) && notes.Contains("[CLUSTER:QUICK]", StringComparison.OrdinalIgnoreCase))
                 return ServiceCluster.Quick;
             if (IsHeavyHint(notes)) return ServiceCluster.Heavy;
-            return string.IsNullOrWhiteSpace(requestedServiceIds) ? ServiceCluster.Quick : ServiceCluster.Quick;
+            // Fallback for legacy rows without marker:
+            // no service ids => likely diagnostic/general repair (heavy lane)
+            return string.IsNullOrWhiteSpace(requestedServiceIds) ? ServiceCluster.Heavy : ServiceCluster.Quick;
         }
 
         private static bool IsHeavyHint(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return false;
             var text = NormalizeText(value);
-            return text.Contains("sua chua") || text.Contains("repair") || text.Contains("bao hanh") || text.Contains("bao hiem") || text.Contains("rework") || text.Contains("chan doan") || text.Contains("kiem tra");
+            return text.Contains("sua chua")
+                   || text.Contains("repair")
+                   || text.Contains("bao hanh")
+                   || text.Contains("bao hiem")
+                   || text.Contains("rework")
+                   || text.Contains("chan doan")
+                   || text.Contains("chuan doan")
+                   || text.Contains("kiem tra");
         }
 
         private static string NormalizeText(string value)
@@ -1000,6 +1114,7 @@ namespace MyGarage.Services
         private static double ToRadians(double v) => v * Math.PI / 180d;
 
         private sealed record CapacityProfile(int Quick, int Repair, int Total);
+        private sealed record SlotEvaluation(bool IsAvailable, int RemainingCapacity, int MaxCapacity, int QuickBooked, int HeavyBooked);
 
         private enum BookingFlowType
         {

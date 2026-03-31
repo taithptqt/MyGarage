@@ -1,8 +1,13 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..800&family=Manrope:wght@300..800&display=swap");.mg-header-wrap {
+﻿@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..800&family=Manrope:wght@300..800&display=swap");
+
+.mg-header-wrap {
   --mg-header-gold: #c5a059;
   --mg-header-white: #ffffff;
-  position: relative;
-  z-index: 30;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1200;
   font-family: "Manrope", "Segoe UI", sans-serif;
 }
 
@@ -11,10 +16,6 @@
 }
 
 .mg-header-wrap.overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   background: transparent;
 }
 
@@ -250,4 +251,6 @@
     text-overflow: ellipsis;
   }
 }
+
+
 

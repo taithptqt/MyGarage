@@ -320,8 +320,75 @@
   background: rgba(36, 205, 229, 0.1);
 }
 
+.flow-mode-switch button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .flow-note {
   margin-top: 10px;
+}
+
+.step2-category-actions {
+  margin-top: 12px;
+}
+
+.selected-category-tabs {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.selected-category-tab {
+  border: 1px solid #2f567c;
+  background: rgba(7, 28, 52, 0.9);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+}
+
+.selected-category-tab.active {
+  border-color: var(--booking-primary);
+  background: rgba(36, 205, 229, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(36, 205, 229, 0.35);
+}
+
+.selected-category-tab-main {
+  border: none;
+  background: transparent;
+  color: #cfe1f6;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.selected-category-tab.active .selected-category-tab-main {
+  color: #f2fcff;
+}
+
+.selected-category-tab-remove {
+  border: 1px solid #3e5e80;
+  background: rgba(12, 33, 58, 0.9);
+  color: #b7cde5;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+}
+
+.selected-category-tab-remove:hover {
+  border-color: #f97066;
+  color: #fca9a2;
 }
 
 .category-card,
