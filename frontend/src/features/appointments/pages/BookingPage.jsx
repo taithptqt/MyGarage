@@ -5,8 +5,7 @@ import Header from "../../../shared/components/Header";
 import DateTimePicker from "../../workshop/components/DateTimePicker";
 import {
   bookAppointment,
-  createCustomerVehicle,
-  createVehicle,
+  bookBatchAppointment,
   getAllBranches,
   getAllCustomerVehicles,
   getAllCustomers,
@@ -16,7 +15,6 @@ import {
   getAvailableSlots,
   getVehicleBrands,
   getVehicleModels,
-  updateCustomer,
 } from "../api/appointmentApi";
 import "./BookingPage.css";
 
@@ -58,27 +56,6 @@ function isQuickCategory(category) {
     raw.includes("bảo dưỡng") ||
     raw.includes("maintenance") ||
     raw.includes("quick")
-  );
-}
-
-function isHeavyCategory(category) {
-  const raw = normalizeText(
-    `${extractField(category, ["name", "Name"], "")} ${extractField(category, ["description", "Description"], "")}`
-  );
-  return (
-    raw.includes("sua chua") ||
-    raw.includes("sửa chữa") ||
-    raw.includes("chuan doan") ||
-    raw.includes("chuẩn đoán") ||
-    raw.includes("kiem tra") ||
-    raw.includes("kiểm tra") ||
-    raw.includes("bao hiem") ||
-    raw.includes("bảo hiểm") ||
-    raw.includes("bao hanh") ||
-    raw.includes("bảo hành") ||
-    raw.includes("rework") ||
-    raw.includes("repair") ||
-    raw.includes("diagnostic")
   );
 }
 
@@ -147,6 +124,18 @@ function formatLicensePlateInput(value) {
   return `${prefix}-${rest.slice(0, 3)}.${rest.slice(3)}`;
 }
 
+function formatVehicleDescriptor(brandName, modelName) {
+  const brand = String(brandName || "").trim();
+  const model = String(modelName || "").trim();
+  return `${brand} ${model}`.trim();
+}
+
+function formatStoredVehicleLabel(vehicle) {
+  const plate = String(vehicle?.licensePlate || "").trim() || "Không biển số";
+  const descriptor = formatVehicleDescriptor(vehicle?.brandName, vehicle?.modelName);
+  return descriptor ? `${plate} - ${descriptor}` : plate;
+}
+
 function iconByIndex(index) {
   const icons = ["🔧", "🛞", "⚙️", "🛡️", "🧰", "🔩"];
   return icons[index % icons.length];
@@ -178,7 +167,8 @@ export default function BookingPage() {
   const [selectedBranchId, setSelectedBranchId] = useState("");
 
   const [customerForm, setCustomerForm] = useState({ fullName: "", phone: "" });
-  const [notes, setNotes] = useState("");
+  const [symptomInputs, setSymptomInputs] = useState([""]);
+  const [focusedSymptomIndex, setFocusedSymptomIndex] = useState(-1);
 
   const [vehicleMode, setVehicleMode] = useState("new");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
@@ -189,6 +179,8 @@ export default function BookingPage() {
     vin: "",
     color: "",
   });
+  const [isBatchBooking, setIsBatchBooking] = useState(false);
+  const [batchVehicles, setBatchVehicles] = useState([]);
 
   const [selectedDate, setSelectedDate] = useState(toIsoDateInput(new Date()));
   const [slots, setSlots] = useState([]);
@@ -248,18 +240,30 @@ export default function BookingPage() {
         const vehicleId = Number(extractField(link, ["vehicleId", "VehicleId"]));
         const vehicle = vehicles.find((item) => Number(extractField(item, ["id", "Id"])) === vehicleId);
         if (!vehicle) return null;
+        const modelId = Number(extractField(vehicle, ["modelId", "ModelId"]));
+        const matchedModel = models.find((item) => Number(extractField(item, ["id", "Id"])) === modelId);
+        const matchedBrand = brands.find(
+          (item) =>
+            Number(extractField(item, ["id", "Id"])) === Number(extractField(matchedModel, ["brandId", "BrandId"]))
+        );
+        const resolvedModelName =
+          extractField(vehicle, ["modelName", "ModelName"], "") ||
+          extractField(matchedModel, ["modelName", "ModelName"], "");
+        const resolvedBrandName =
+          extractField(vehicle, ["brandName", "BrandName"], "") ||
+          extractField(matchedBrand, ["name", "Name"], "");
         return {
           id: Number(extractField(vehicle, ["id", "Id"])),
-          modelId: Number(extractField(vehicle, ["modelId", "ModelId"])),
+          modelId,
           licensePlate: extractField(vehicle, ["licensePlate", "LicensePlate"], ""),
           vin: extractField(vehicle, ["vin", "Vin"], ""),
           color: extractField(vehicle, ["color", "Color"], ""),
-          brandName: extractField(vehicle, ["brandName", "BrandName"], ""),
-          modelName: extractField(vehicle, ["modelName", "ModelName"], ""),
+          brandName: resolvedBrandName,
+          modelName: resolvedModelName,
         };
       })
       .filter(Boolean);
-  }, [customerRecord, customerVehicles, user?.id, vehicles]);
+  }, [brands, customerRecord, customerVehicles, models, user?.id, vehicles]);
 
   const selectedCategories = useMemo(
     () =>
@@ -281,7 +285,7 @@ export default function BookingPage() {
       .map((item) => extractField(item, ["name", "Name"], "").trim())
       .filter(Boolean);
     if (names.length === 0) return "Chưa chọn";
-    return names.length <= 2 ? names.join(", ") : `${names.length} loại dịch vụ`;
+    return names.join(", ");
   }, [selectedCategories]);
   const hasQuickCategorySelected = useMemo(
     () => selectedCategories.some((item) => isQuickCategory(item)),
@@ -322,9 +326,9 @@ export default function BookingPage() {
   }, [services]);
   const effectiveServices = useMemo(() => {
     if (selectedServices.length > 0) return selectedServices;
-    if (bookingFlow === BOOKING_FLOW.FLEXIBLE && autoDiagnosticService) return [autoDiagnosticService];
+    if (currentStep >= 2 && bookingFlow === BOOKING_FLOW.FLEXIBLE && autoDiagnosticService) return [autoDiagnosticService];
     return [];
-  }, [autoDiagnosticService, bookingFlow, selectedServices]);
+  }, [autoDiagnosticService, bookingFlow, currentStep, selectedServices]);
   const effectiveServiceIds = useMemo(
     () => effectiveServices.map((item) => Number(extractField(item, ["id", "Id"]))).filter(Number.isFinite),
     [effectiveServices]
@@ -353,6 +357,10 @@ export default function BookingPage() {
   const selectedModel = useMemo(
     () => models.find((item) => String(extractField(item, ["id", "Id"])) === String(newVehicle.modelId)),
     [models, newVehicle.modelId]
+  );
+  const selectedBrand = useMemo(
+    () => brands.find((item) => String(extractField(item, ["id", "Id"])) === String(newVehicle.brandId)),
+    [brands, newVehicle.brandId]
   );
 
   const totalPrice = useMemo(
@@ -431,12 +439,15 @@ export default function BookingPage() {
       : "";
 
     const existingVehicleLabel = selectedExistingVehicle
-      ? `${selectedExistingVehicle.licensePlate || "Không biển số"} (${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName})`
+      ? formatStoredVehicleLabel(selectedExistingVehicle)
       : "";
     const newVehiclePlate = toSafeUpper(newVehicle.licensePlate);
-    const newVehicleModel = selectedModel?.modelName || "";
+    const newVehicleDescriptor = formatVehicleDescriptor(
+      extractField(selectedBrand, ["name", "Name"], ""),
+      extractField(selectedModel, ["modelName", "ModelName"], "")
+    );
     const newVehicleLabel = newVehiclePlate
-      ? `${newVehiclePlate}${newVehicleModel ? ` (${newVehicleModel})` : ""}`
+      ? (newVehicleDescriptor ? `${newVehiclePlate} - ${newVehicleDescriptor}` : newVehiclePlate)
       : "";
 
     const step1Done = selectedCategoryIds.length > 0;
@@ -456,8 +467,7 @@ export default function BookingPage() {
       const names = selectedCategories
         .map((item) => extractField(item, ["name", "Name"], "").trim())
         .filter(Boolean);
-      const categoryLabel = names.length <= 2 ? names.join(", ") : `${names.length} loại dịch vụ`;
-      items.push({ key: "category", label: "Loại dịch vụ", value: categoryLabel });
+      items.push({ key: "category", label: "Loại dịch vụ", values: names });
     }
     if (step2Done) {
       items.push({
@@ -473,17 +483,12 @@ export default function BookingPage() {
       items.push({
         key: "services",
         label: "Dịch vụ cụ thể",
-        value:
-          selectedServiceNames.length <= 2
-            ? `${selectedServiceNames.join(", ")}${isUsingAutoDiagnostic ? " (tự động)" : ""}`
-            : `${selectedServiceNames.length} mục đã chọn`,
+        values: selectedServiceNames,
+        autoNote: isUsingAutoDiagnostic,
       });
     }
     if (step3Done && selectedBranch) {
       items.push({ key: "branch", label: "Chi nhánh", value: extractField(selectedBranch, ["name", "Name"], "") });
-    }
-    if (step4Done && dateLabel) {
-      items.push({ key: "datetime", label: "Ngày giờ", value: timeRange ? `${dateLabel} - ${timeRange}` : dateLabel });
     }
     if (step4Done && customerName) {
       items.push({ key: "customer", label: "Khách hàng", value: customerName });
@@ -491,8 +496,22 @@ export default function BookingPage() {
     if (step4Done && customerPhone) {
       items.push({ key: "phone", label: "SĐT", value: customerPhone });
     }
-    if (step4Done && (existingVehicleLabel || newVehicleLabel)) {
-      items.push({ key: "vehicle", label: "Xe", value: existingVehicleLabel || newVehicleLabel });
+    if (step3Done) {
+      if (isBatchBooking && batchVehicles.length > 0) {
+        items.push({
+          key: "vehicle",
+          label: "Danh sách xe",
+          values: batchVehicles.map((item) => item.displayLabel),
+        });
+      } else {
+        const vehicleLabel = usingNewVehicle ? newVehicleLabel : existingVehicleLabel;
+        if (vehicleLabel) {
+          items.push({ key: "vehicle", label: "Xe", value: vehicleLabel });
+        }
+      }
+    }
+    if (step4Done && dateLabel) {
+      items.push({ key: "datetime", label: "Ngày giờ", value: timeRange ? `${dateLabel} - ${timeRange}` : dateLabel });
     }
 
     return items;
@@ -504,6 +523,7 @@ export default function BookingPage() {
     newVehicle.licensePlate,
     newVehicle.modelId,
     newVehicle.vin,
+    selectedBrand,
     selectedBranch,
     selectedBranchId,
     selectedCategories,
@@ -519,6 +539,8 @@ export default function BookingPage() {
     isUsingAutoDiagnostic,
     selectedSlot,
     vehicleMode,
+    isBatchBooking,
+    batchVehicles,
   ]);
 
   const progressPercent = useMemo(() => (currentStep / STEPS.length) * 100, [currentStep]);
@@ -642,20 +664,12 @@ export default function BookingPage() {
   }, [activeServiceCategoryId, selectedCategoryIds]);
 
   useEffect(() => {
-    const hasHeavyCategory = selectedCategories.some((category) => isHeavyCategory(category));
-    const nextFlow =
-      selectedServiceIds.length > 0 || hasQuickCategorySelected
-        ? BOOKING_FLOW.FIXED
-        : hasHeavyCategory
-          ? BOOKING_FLOW.FLEXIBLE
-          : BOOKING_FLOW.FIXED;
     setBookingFlow((prev) => {
       if (hasQuickCategorySelected) return BOOKING_FLOW.FIXED;
       if (selectedServiceIds.length > 0 && prev === BOOKING_FLOW.FLEXIBLE) return BOOKING_FLOW.FIXED;
-      if (selectedServiceIds.length === 0) return nextFlow;
       return prev;
     });
-  }, [hasQuickCategorySelected, selectedCategories, selectedServiceIds.length]);
+  }, [hasQuickCategorySelected, selectedServiceIds.length]);
 
   useEffect(() => {
     const firstSessionWithSlots =
@@ -743,10 +757,12 @@ export default function BookingPage() {
       if (!customerForm.phone.trim()) return "Vui lòng nhập số điện thoại khách hàng.";
       if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
       if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
-      if (bookingFlow === BOOKING_FLOW.FLEXIBLE && notes.trim().length < 8) {
-        return "Luồng linh hoạt yêu cầu mô tả tình trạng xe tối thiểu 8 ký tự.";
+      if (isBatchBooking) {
+        if (batchVehicles.length === 0) {
+          return "Vui lòng thêm ít nhất một xe vào danh sách đặt nhiều xe.";
+        }
+        return "";
       }
-
       const hasVehicle = linkedVehicles.length > 0;
       const usingNewVehicle = !hasVehicle || vehicleMode === "new";
 
@@ -781,6 +797,93 @@ export default function BookingPage() {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   }
 
+  function handleSymptomChange(index, value) {
+    setSymptomInputs((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      const isLast = index === next.length - 1;
+      if (isLast && String(value || "").trim() && next.length < 12) {
+        next.push("");
+      }
+      return next;
+    });
+  }
+
+  function handleSymptomFocus(index) {
+    setFocusedSymptomIndex(index);
+  }
+
+  function buildCurrentVehiclePayload() {
+    const hasVehicle = linkedVehicles.length > 0;
+    const usingNewVehicle = !hasVehicle || vehicleMode === "new";
+
+    if (!usingNewVehicle) {
+      if (!selectedExistingVehicle?.id) {
+        return { error: "Vui lòng chọn xe có sẵn." };
+      }
+
+      const descriptor = formatStoredVehicleLabel(selectedExistingVehicle);
+      return {
+        payload: {
+          vehicleId: Number(selectedExistingVehicle.id),
+          vehicleModelId: Number(selectedExistingVehicle.modelId) || null,
+          licensePlate: selectedExistingVehicle.licensePlate || null,
+          vin: selectedExistingVehicle.vin || null,
+          color: selectedExistingVehicle.color || null,
+        },
+        dedupeKey: `existing-${Number(selectedExistingVehicle.id)}`,
+        displayLabel: descriptor,
+      };
+    }
+
+    if (!newVehicle.brandId) return { error: "Vui lòng chọn hãng xe." };
+    if (!newVehicle.modelId) return { error: "Vui lòng chọn dòng xe." };
+    if (!newVehicle.licensePlate.trim()) return { error: "Vui lòng nhập biển số xe." };
+    if (!newVehicle.vin.trim()) return { error: "Vui lòng nhập số VIN." };
+
+    const plate = toSafeUpper(newVehicle.licensePlate);
+    const vin = toSafeUpper(newVehicle.vin);
+    const descriptor = formatVehicleDescriptor(
+      extractField(selectedBrand, ["name", "Name"], ""),
+      extractField(selectedModel, ["modelName", "ModelName"], "")
+    );
+    const displayLabel = descriptor ? `${plate} - ${descriptor}` : plate;
+
+    return {
+      payload: {
+        vehicleId: null,
+        vehicleModelId: Number(newVehicle.modelId),
+        licensePlate: plate,
+        vin,
+        color: newVehicle.color.trim() || null,
+      },
+      dedupeKey: `new-${plate}-${vin}`,
+      displayLabel,
+    };
+  }
+
+  function handleAddBatchVehicle() {
+    const built = buildCurrentVehiclePayload();
+    if (built.error) {
+      setError(built.error);
+      return;
+    }
+
+    setBatchVehicles((prev) => {
+      if (prev.some((item) => item.dedupeKey === built.dedupeKey)) {
+        setError("Xe này đã có trong danh sách đặt lịch.");
+        return prev;
+      }
+
+      setError("");
+      return [...prev, built];
+    });
+  }
+
+  function handleRemoveBatchVehicle(indexToRemove) {
+    setBatchVehicles((prev) => prev.filter((_, index) => index !== indexToRemove));
+  }
+
   async function handleConfirmBooking() {
     setError("");
     setSuccess("");
@@ -795,91 +898,68 @@ export default function BookingPage() {
     setSubmitting(true);
 
     try {
-      const today = new Date();
-      const selectedStart = new Date(extractField(selectedSlot, ["startTime", "StartTime"]));
-      if (!Number.isNaN(selectedStart.getTime())) {
-        const isToday = selectedStart.toDateString() === today.toDateString();
-        if (isToday && selectedStart.getTime() < today.getTime() + 30 * 60 * 1000) {
-          throw new Error("Khung giờ này không còn khả dụng (cần cách hiện tại ít nhất 30 phút).");
-        }
-      }
-
-      const customerId = Number(extractField(customerRecord, ["id", "Id"], user?.id));
-
-      if (Number.isFinite(customerId)) {
-        await updateCustomer(customerId, {
-          fullName: customerForm.fullName.trim(),
-          phone: customerForm.phone.trim(),
-          email: extractField(customerRecord, ["email", "Email"], user?.email || null),
-          tierId: extractField(customerRecord, ["tierId", "TierId"], null),
-          note: extractField(customerRecord, ["note", "Note"], null),
-          isActive: extractField(customerRecord, ["isActive", "IsActive"], true),
-        });
-      }
-
-      let vehicleId = null;
-      let vehicleModelId = null;
-      let licensePlate = null;
-      let vin = null;
-      let color = null;
-
-      const hasVehicle = linkedVehicles.length > 0;
-      const usingNewVehicle = !hasVehicle || vehicleMode === "new";
-
-      if (!usingNewVehicle) {
-        vehicleId = Number(selectedExistingVehicle?.id);
-        vehicleModelId = Number(selectedExistingVehicle?.modelId) || null;
-        licensePlate = selectedExistingVehicle?.licensePlate || null;
-        vin = selectedExistingVehicle?.vin || null;
-        color = selectedExistingVehicle?.color || null;
-      } else {
-        const createdVehicle = await createVehicle({
-          modelId: Number(newVehicle.modelId),
-          licensePlate: toSafeUpper(newVehicle.licensePlate),
-          vin: toSafeUpper(newVehicle.vin),
-          color: newVehicle.color.trim() || null,
-        });
-
-        vehicleId = Number(extractField(createdVehicle, ["id", "Id"]));
-        if (!Number.isFinite(vehicleId)) {
-          throw new Error("Không thể tạo xe mới. Vui lòng thử lại.");
-        }
-
-        if (Number.isFinite(customerId)) {
-          await createCustomerVehicle({
-            customerId,
-            vehicleId,
-            isCurrentOwner: true,
-          });
-        }
-
-        vehicleModelId = Number(newVehicle.modelId);
-        licensePlate = toSafeUpper(newVehicle.licensePlate);
-        vin = toSafeUpper(newVehicle.vin);
-        color = newVehicle.color.trim() || null;
-      }
-
       const slotStart = extractField(selectedSlot, ["startTime", "StartTime"]);
       const slotEnd = extractField(selectedSlot, ["endTime", "EndTime"]);
       const isFlexibleFlow = bookingFlow === BOOKING_FLOW.FLEXIBLE;
+      const normalizedSymptoms = symptomInputs
+        .map((x) => String(x || "").trim())
+        .filter(Boolean);
+      const customerNotesPayload = normalizedSymptoms.length > 0
+        ? JSON.stringify({ symptoms: normalizedSymptoms })
+        : null;
 
-      await bookAppointment({
+      const commonPayload = {
         branchId: Number(selectedBranchId),
-        vehicleId,
-        vehicleModelId,
-        licensePlate,
-        vin,
-        color,
+        customerFullName: customerForm.fullName.trim(),
+        customerPhone: customerForm.phone.trim(),
         bookingFlow,
         startTime: isFlexibleFlow ? null : slotStart,
         endTime: isFlexibleFlow ? null : slotEnd,
         checkInWindowStart: isFlexibleFlow ? slotStart : null,
         checkInWindowEnd: isFlexibleFlow ? slotEnd : null,
         requestedServiceIds: effectiveServiceIds.length > 0 ? effectiveServiceIds.join(",") : null,
-        customerNotes: notes.trim() || null,
-      });
+        customerNotes: customerNotesPayload,
+      };
 
-      setSuccess("Đặt lịch thành công. Chúng tôi sẽ xác nhận lịch hẹn của bạn trong thời gian sớm nhất.");
+      if (isBatchBooking) {
+        const result = await bookBatchAppointment({
+          branchId: Number(selectedBranchId),
+          customerNote: customerNotesPayload,
+          items: batchVehicles.map((vehicle) => ({
+            ...commonPayload,
+            vehicleId: vehicle.payload.vehicleId,
+            vehicleModelId: vehicle.payload.vehicleModelId,
+            licensePlate: vehicle.payload.licensePlate,
+            vin: vehicle.payload.vin,
+            color: vehicle.payload.color,
+          })),
+        });
+
+        const groupCode = extractField(result, ["groupCode", "GroupCode"], "");
+        setSuccess(
+          groupCode
+            ? `Đặt lịch nhóm thành công (${groupCode}) cho ${batchVehicles.length} xe. Chúng tôi sẽ xác nhận sớm nhất.`
+            : `Đặt lịch nhóm thành công cho ${batchVehicles.length} xe. Chúng tôi sẽ xác nhận sớm nhất.`
+        );
+      } else {
+        const built = buildCurrentVehiclePayload();
+        if (built.error) {
+          setError(built.error);
+          setCurrentStep(4);
+          return;
+        }
+
+        await bookAppointment({
+          ...commonPayload,
+          vehicleId: built.payload.vehicleId,
+          vehicleModelId: built.payload.vehicleModelId,
+          licensePlate: built.payload.licensePlate,
+          vin: built.payload.vin,
+          color: built.payload.color,
+        });
+        setSuccess("Đặt lịch thành công. Chúng tôi sẽ xác nhận lịch hẹn của bạn trong thời gian sớm nhất.");
+      }
+
       setCurrentStep(5);
     } catch (submitError) {
       setError(submitError?.message || "Đặt lịch thất bại. Vui lòng kiểm tra lại thông tin.");
@@ -892,7 +972,7 @@ export default function BookingPage() {
     return (
       <div className="booking-page-shell">
         <div className="booking-fixed-header">
-          <Header />
+          <Header overlay />
         </div>
         <div className="booking-loading">Đang tải dữ liệu đặt lịch...</div>
       </div>
@@ -902,7 +982,7 @@ export default function BookingPage() {
   return (
     <div className="booking-page-shell">
       <div className="booking-fixed-header">
-        <Header />
+        <Header overlay />
       </div>
       <div className="booking-flow">
         <section className="booking-hero">
@@ -934,9 +1014,8 @@ export default function BookingPage() {
       </section>
 
       {error && <div className="booking-alert booking-alert-error">{error}</div>}
-      {success && <div className="booking-alert booking-alert-success">{success}</div>}
 
-        <section className="booking-layout">
+        <section className={`booking-layout ${currentStep === 5 ? "step5-layout" : ""}`}>
         <div className="booking-main-panel">
           {currentStep === 1 && (
             <div className="booking-card">
@@ -1155,6 +1234,33 @@ export default function BookingPage() {
 
               <div className="step4-section vehicle-block">
                 <h3>Thông tin xe</h3>
+                <div className="booking-scope-switch" role="group" aria-label="Phạm vi đặt lịch">
+                  <button
+                    type="button"
+                    className={!isBatchBooking ? "active" : ""}
+                    onClick={() => {
+                      setIsBatchBooking(false);
+                      setError("");
+                    }}
+                  >
+                    Một xe
+                  </button>
+                  <button
+                    type="button"
+                    className={isBatchBooking ? "active" : ""}
+                    onClick={() => {
+                      setIsBatchBooking(true);
+                      setError("");
+                    }}
+                  >
+                    Nhiều xe
+                  </button>
+                </div>
+                {isBatchBooking ? (
+                  <p className="vehicle-batch-note">
+                    Thêm từng xe vào danh sách bên dưới. Tất cả xe sẽ dùng chung dịch vụ, chi nhánh và khung giờ đã chọn.
+                  </p>
+                ) : null}
 
                 <div className="step4-mode-picker">
                   <label className="step4-mode-item">
@@ -1190,7 +1296,7 @@ export default function BookingPage() {
                       <option value="">-- Chọn xe --</option>
                       {linkedVehicles.map((vehicle) => (
                         <option key={vehicle.id} value={vehicle.id}>
-                          {vehicle.licensePlate || "Không biển số"} - {vehicle.brandName} {vehicle.modelName}
+                          {formatStoredVehicleLabel(vehicle)}
                         </option>
                       ))}
                     </select>
@@ -1254,6 +1360,38 @@ export default function BookingPage() {
                     </label>
                   </div>
                 )}
+
+                {isBatchBooking ? (
+                  <div className="vehicle-batch-actions">
+                    <button
+                      type="button"
+                      className="vehicle-add-btn"
+                      onClick={handleAddBatchVehicle}
+                    >
+                      Thêm xe vào danh sách
+                    </button>
+                    {batchVehicles.length > 0 ? (
+                      <span className="vehicle-batch-count">Đã thêm {batchVehicles.length} xe</span>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {isBatchBooking && batchVehicles.length > 0 ? (
+                  <div className="vehicle-batch-list">
+                    {batchVehicles.map((vehicle, index) => (
+                      <article key={vehicle.dedupeKey} className="vehicle-batch-item">
+                        <strong>{vehicle.displayLabel}</strong>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBatchVehicle(index)}
+                          aria-label="Xóa xe"
+                        >
+                          Xóa
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="schedule-block">
@@ -1264,6 +1402,7 @@ export default function BookingPage() {
                     <DateTimePicker
                       value={selectedDate ? `${selectedDate}T08:00:00` : ""}
                       minDate={new Date()}
+                      showTime={false}
                       placeholder="Chọn ngày hẹn"
                       onChange={(val) => {
                         const pickedDate = String(val || "").slice(0, 10);
@@ -1360,81 +1499,119 @@ export default function BookingPage() {
               </div>
 
               <label className="notes-field">
-                Ghi chú thêm {bookingFlow === BOOKING_FLOW.FLEXIBLE ? <span>*</span> : null}
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={
-                    bookingFlow === BOOKING_FLOW.FLEXIBLE
-                      ? "Mô tả triệu chứng: tiếng ồn, rung, đèn báo lỗi, thời điểm xảy ra..."
-                      : "Mô tả tình trạng xe hoặc yêu cầu đặc biệt..."
-                  }
-                  rows={4}
-                />
+                Mô tả triệu chứng
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {symptomInputs.map((symptom, index) => (
+                    <textarea
+                      key={`booking-symptom-${index}`}
+                      rows={1}
+                      value={symptom}
+                      placeholder={`Nhập mô tả triệu chứng ${index + 1}...`}
+                      onChange={(e) => handleSymptomChange(index, e.target.value)}
+                      onFocus={() => handleSymptomFocus(index)}
+                      onBlur={() => setFocusedSymptomIndex(-1)}
+                      disabled={index > 0 && !String(symptomInputs[index - 1] || "").trim()}
+                      style={{
+                        minHeight: "42px",
+                        maxHeight: "72px",
+                        resize: "vertical",
+                        opacity: String(symptom || "").trim() || focusedSymptomIndex === index ? 1 : 0.5,
+                        transition: "opacity 0.2s ease",
+                        cursor: index > 0 && !String(symptomInputs[index - 1] || "").trim() ? "not-allowed" : "text",
+                      }}
+                    />
+                  ))}
+                </div>
               </label>
             </div>
           )}
 
           {currentStep === 5 && (
-            <div className="booking-card">
-              <header className="booking-card-head">
-                <h2>Bước 5: Xác nhận đặt lịch</h2>
-                <p>Kiểm tra lại toàn bộ thông tin trước khi gửi yêu cầu đến gara.</p>
-              </header>
-
-              <div className="confirm-grid">
-                <div><span>Loại dịch vụ</span><strong>{selectedCategorySummaryLabel}</strong></div>
-                <div><span>Luồng</span><strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Giờ cố định"}</strong></div>
-                <div>
-                  <span>Số dịch vụ</span>
-                  <strong>{effectiveServiceIds.length} dịch vụ{isUsingAutoDiagnostic ? " (đã tự gán chuẩn đoán)" : ""}</strong>
+            success ? (
+              <div className="summary-card summary-card-large booking-success-screen">
+                <div className="booking-success-icon" aria-hidden="true">✓</div>
+                <h3>Đặt lịch thành công</h3>
+                <p>{success}</p>
+                <div className="summary-total">
+                  <div>
+                    <span>Tổng dịch vụ</span>
+                    <strong>{formatVnd(totalPrice)}</strong>
+                  </div>
+                  <div>
+                    <span>Thời lượng dự kiến</span>
+                    <strong>{totalMinutes} phút</strong>
+                  </div>
                 </div>
-                <div><span>Chi nhánh</span><strong>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</strong></div>
-                <div><span>Khách hàng</span><strong>{customerForm.fullName || "Chưa nhập"} - {customerForm.phone || "Chưa nhập"}</strong></div>
-                <div>
-                  <span>Xe</span>
-                  <strong>
-                    {selectedExistingVehicle
-                      ? `${selectedExistingVehicle.licensePlate || "Không biển số"} - ${selectedExistingVehicle.brandName} ${selectedExistingVehicle.modelName}`
-                      : `${toSafeUpper(newVehicle.licensePlate) || "Chưa nhập"} - ${selectedModel?.modelName || "Xe mới"}`}
-                  </strong>
-                </div>
-                <div>
-                  <span>Thời gian</span>
-                  <strong>
-                    {formatDateVi(selectedDate)}
-                    {selectedSlot
-                      ? `, ${timeLabel(extractField(selectedSlot, ["startTime", "StartTime"]))} - ${timeLabel(extractField(selectedSlot, ["endTime", "EndTime"]))}`
-                      : ""}
-                  </strong>
-                </div>
-              </div>
-
-              <button type="button" className="primary-submit" onClick={handleConfirmBooking} disabled={submitting}>
-                {submitting ? "Đang gửi lịch hẹn..." : "Xác nhận đặt lịch"}
-              </button>
-
-              {!!success && (
                 <div className="success-actions">
                   <button type="button" onClick={() => navigate("/my-appointments")}>Xem lịch hẹn của tôi</button>
                   <button type="button" onClick={() => navigate("/home")}>Về trang chủ</button>
                 </div>
+              </div>
+            ) : (
+              <div className="summary-card summary-card-large">
+                <h3>Xác nhận đặt lịch</h3>
+                <p className="summary-intro">
+                  Vui lòng kiểm tra lại toàn bộ thông tin trước khi gửi yêu cầu đến gara.
+                </p>
+                {summaryItems.length === 0 ? (
+                  <p className="summary-empty">Hoàn thành từng bước để thông tin xuất hiện tại đây.</p>
+                ) : (
+                  <div className="summary-review-grid">
+                    {summaryItems.map((item) => (
+                      <article key={`step5-${item.key}`} className="summary-review-item">
+                        <h4>{item.label}</h4>
+                        <div className="summary-review-value">
+                          {Array.isArray(item.values) ? (
+                            <>
+                              <ul className="summary-bullet-list">
+                                {item.values.map((entry, index) => (
+                                  <li key={`step5-${item.key}-${index}`}>{entry}</li>
+                                ))}
+                              </ul>
+                              {item.autoNote ? <span className="summary-auto-note">(tự động)</span> : null}
+                            </>
+                          ) : (
+                            item.value
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+
+                <div className="summary-total">
+                  <div>
+                    <span>Tổng dịch vụ</span>
+                    <strong>{formatVnd(totalPrice)}</strong>
+                  </div>
+                  <div>
+                    <span>Thời lượng dự kiến</span>
+                    <strong>{totalMinutes} phút</strong>
+                  </div>
+                </div>
+
+                <button type="button" className="primary-submit" onClick={handleConfirmBooking} disabled={submitting}>
+                  {submitting ? "Đang gửi lịch hẹn..." : "Xác nhận đặt lịch"}
+                </button>
+              </div>
+            )
+          )}
+
+          {!(currentStep === 5 && success) && (
+            <div className="wizard-actions">
+              <button type="button" className="ghost-btn" onClick={goPrevious} disabled={currentStep === 1 || submitting}>
+                Quay lại
+              </button>
+              {currentStep < STEPS.length && (
+                <button type="button" className="next-btn" onClick={goNext} disabled={submitting}>
+                  Tiếp tục
+                </button>
               )}
             </div>
           )}
-
-          <div className="wizard-actions">
-            <button type="button" className="ghost-btn" onClick={goPrevious} disabled={currentStep === 1 || submitting}>
-              Quay lại
-            </button>
-            {currentStep < STEPS.length && (
-              <button type="button" className="next-btn" onClick={goNext} disabled={submitting}>
-                Tiếp tục
-              </button>
-            )}
-          </div>
         </div>
 
+        {currentStep !== 5 ? (
         <aside className="booking-summary-panel">
           <div className="summary-card">
             <h3>Tóm tắt lịch hẹn</h3>
@@ -1445,7 +1622,20 @@ export default function BookingPage() {
                 {summaryItems.map((item) => (
                   <Fragment key={item.key}>
                     <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
+                    <dd>
+                      {Array.isArray(item.values) ? (
+                        <>
+                          <ul className="summary-bullet-list">
+                            {item.values.map((entry, index) => (
+                              <li key={`${item.key}-${index}`}>{entry}</li>
+                            ))}
+                          </ul>
+                          {item.autoNote ? <span className="summary-auto-note">(tự động)</span> : null}
+                        </>
+                      ) : (
+                        item.value
+                      )}
+                    </dd>
                   </Fragment>
                 ))}
               </dl>
@@ -1463,6 +1653,7 @@ export default function BookingPage() {
             </div>
           </div>
         </aside>
+        ) : null}
         </section>
       </div>
     </div>

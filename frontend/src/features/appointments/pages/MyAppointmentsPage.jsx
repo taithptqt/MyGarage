@@ -58,6 +58,35 @@ function normalizeAppointmentsResponse(payload) {
   return [];
 }
 
+function extractDisplayNotes(raw) {
+  const source = String(raw || "").trim();
+  if (!source) return "";
+
+  const withoutMeta = source
+    .replace(/\s*\[FLOW:[^\]]*\]/gi, "")
+    .replace(/\s*\[CLUSTER:[^\]]*\]/gi, "")
+    .trim();
+
+  if (!withoutMeta) return "";
+
+  try {
+    const parsed = JSON.parse(withoutMeta);
+    const symptoms = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.symptoms)
+        ? parsed.symptoms
+        : [];
+    const cleaned = symptoms
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean)
+      .filter((entry) => entry.toLowerCase() !== "không có ghi chú gì");
+    return cleaned.join(", ");
+  } catch {
+    if (withoutMeta.toLowerCase() === "không có ghi chú gì") return "";
+    return withoutMeta;
+  }
+}
+
 function normalizeAppointment(item) {
   return {
     id: item?.id ?? item?.Id,
@@ -72,7 +101,7 @@ function normalizeAppointment(item) {
       : Array.isArray(item?.ServiceNames)
         ? item.ServiceNames
         : [],
-    customerNotes: item?.customerNotes ?? item?.CustomerNotes ?? "",
+    customerNotes: extractDisplayNotes(item?.customerNotes ?? item?.CustomerNotes ?? ""),
     cancelReason: item?.cancelReason ?? item?.CancelReason ?? "",
   };
 }
@@ -304,11 +333,9 @@ export default function MyAppointmentsPage() {
                           ))}
                         </div>
                       )}
-                      {item.customerNotes && (
-                        <p className="my-appt-note">
-                          <strong>Ghi chú:</strong> {item.customerNotes}
-                        </p>
-                      )}
+                      <p className="my-appt-note">
+                        <strong>Ghi chú:</strong> {item.customerNotes || ""}
+                      </p>
                       {item.cancelReason && (
                         <p className="my-appt-note cancel">
                           <strong>Lý do hủy:</strong> {item.cancelReason}

@@ -30,6 +30,14 @@ export async function bookAppointment(payload) {
   });
 }
 
+export async function bookBatchAppointment(payload) {
+  return request({
+    url: "/api/Appointment/book-batch",
+    method: "POST",
+    data: payload,
+  });
+}
+
 export async function bookGuestAppointment(payload) {
   return request({
     url: "/api/Appointment/book-guest",

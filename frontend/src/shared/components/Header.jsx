@@ -68,6 +68,7 @@ function Header({ overlay = false }) {
     setMenuOpen(false);
     setShowProfileDialog(false);
     logout();
+    navigate("/home", { replace: true });
   };
 
   return (

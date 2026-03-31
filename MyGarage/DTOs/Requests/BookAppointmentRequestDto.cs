@@ -30,6 +30,10 @@ namespace MyGarage.DTOs.Requests
 
         public long? CustomerId { get; set; }
 
+        public string? CustomerFullName { get; set; }
+
+        public string? CustomerPhone { get; set; }
+
         public long? CreatedBy { get; set; }
 
         public string? RequestedServiceIds { get; set; }

@@ -15,7 +15,7 @@ import {
 } from "@chakra-ui/react";
 import { MdClose, MdEvent, MdToday } from "react-icons/md";
 
-const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ", minDate }) => {
+const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ", minDate, showTime = true }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState("08");
   const [selectedMinute, setSelectedMinute] = useState("00");
@@ -51,7 +51,11 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
-    updateValue(date, selectedHour, selectedMinute);
+    if (showTime) {
+      updateValue(date, selectedHour, selectedMinute);
+      return;
+    }
+    updateValue(date, "08", "00");
   };
 
   const handleHourSelect = (h) => {
@@ -69,6 +73,9 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
     const day = String(selectedDate.getDate()).padStart(2, "0");
     const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
     const year = selectedDate.getFullYear();
+    if (!showTime) {
+      return `${day}/${month}/${year}`;
+    }
     return `${day}/${month}/${year} ${selectedHour}:${selectedMinute}`;
   };
 
@@ -127,7 +134,7 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
 
       <PopoverContent
         w="auto"
-        maxW="640px"
+        maxW={showTime ? "640px" : "360px"}
         borderRadius="16px"
         border="1px solid #2e4e70"
         bg="#0a2342"
@@ -171,49 +178,51 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
               </Flex>
             </Box>
 
-            <Flex direction="row" bg="#071d36" p="14px" gap="14px">
-              <VStack align="center" spacing="2px">
-                <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">GIỜ</Text>
-                <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
-                  {hours.map((h) => (
-                    <Button
-                      key={h}
-                      size="sm"
-                      w="100%"
-                      bg={selectedHour === h ? "#24cde5" : "transparent"}
-                      color={selectedHour === h ? "#03203d" : "#d8e9fb"}
-                      _hover={{ bg: selectedHour === h ? "#24cde5" : "rgba(255,255,255,0.08)" }}
-                      onClick={() => handleHourSelect(h)}
-                      borderRadius="8px"
-                      mb="2px"
-                    >
-                      {h}
-                    </Button>
-                  ))}
-                </Box>
-              </VStack>
+            {showTime ? (
+              <Flex direction="row" bg="#071d36" p="14px" gap="14px">
+                <VStack align="center" spacing="2px">
+                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">GIỜ</Text>
+                  <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
+                    {hours.map((h) => (
+                      <Button
+                        key={h}
+                        size="sm"
+                        w="100%"
+                        bg={selectedHour === h ? "#24cde5" : "transparent"}
+                        color={selectedHour === h ? "#03203d" : "#d8e9fb"}
+                        _hover={{ bg: selectedHour === h ? "#24cde5" : "rgba(255,255,255,0.08)" }}
+                        onClick={() => handleHourSelect(h)}
+                        borderRadius="8px"
+                        mb="2px"
+                      >
+                        {h}
+                      </Button>
+                    ))}
+                  </Box>
+                </VStack>
 
-              <VStack align="center" spacing="2px">
-                <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">PHÚT</Text>
-                <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
-                  {minutes.map((m) => (
-                    <Button
-                      key={m}
-                      size="sm"
-                      w="100%"
-                      bg={selectedMinute === m ? "#24cde5" : "transparent"}
-                      color={selectedMinute === m ? "#03203d" : "#d8e9fb"}
-                      _hover={{ bg: selectedMinute === m ? "#24cde5" : "rgba(255,255,255,0.08)" }}
-                      onClick={() => handleMinuteSelect(m)}
-                      borderRadius="8px"
-                      mb="2px"
-                    >
-                      {m}
-                    </Button>
-                  ))}
-                </Box>
-              </VStack>
-            </Flex>
+                <VStack align="center" spacing="2px">
+                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">PHÚT</Text>
+                  <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
+                    {minutes.map((m) => (
+                      <Button
+                        key={m}
+                        size="sm"
+                        w="100%"
+                        bg={selectedMinute === m ? "#24cde5" : "transparent"}
+                        color={selectedMinute === m ? "#03203d" : "#d8e9fb"}
+                        _hover={{ bg: selectedMinute === m ? "#24cde5" : "rgba(255,255,255,0.08)" }}
+                        onClick={() => handleMinuteSelect(m)}
+                        borderRadius="8px"
+                        mb="2px"
+                      >
+                        {m}
+                      </Button>
+                    ))}
+                  </Box>
+                </VStack>
+              </Flex>
+            ) : null}
           </Flex>
         </PopoverBody>
       </PopoverContent>

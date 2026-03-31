@@ -23,7 +23,7 @@
         required
       />
 
-      <label htmlFor="register-email">Email (tùy chọn)</label>
+      <label htmlFor="register-email">Email *</label>
       <input
         id="register-email"
         type="email"
@@ -31,6 +31,7 @@
         onChange={(e) => onChange("email", e.target.value)}
         placeholder="user@example.com"
         autoComplete="email"
+        required
       />
 
       <label htmlFor="register-password">Mật khẩu</label>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { getApiBaseUrl } from "../api/authApi";
 import AuthResult from "../components/AuthResult";
@@ -8,7 +8,6 @@ import { isLoginFormValid } from "../login/loginValidation";
 import RegisterForm from "../register/RegisterForm";
 import { isRegisterFormValid } from "../register/registerValidation";
 import { useAuth } from "../../../context/AuthContext";
-import MyGarageLogo from "../components/MyGarageLogo";
 import "./AuthPage.css";
 
 const AUTH_HIGHLIGHTS = [
@@ -296,9 +295,7 @@ function AuthPage() {
         </section>
 
         <section className="card">
-          <MyGarageLogo />
-
-          <h1>{mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</h1>
+          <h1>{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
           <p className="subtitle">Một tài khoản sử dụng tất cả dịch vụ của MyGarage</p>
 
           {mode === "login" ? (

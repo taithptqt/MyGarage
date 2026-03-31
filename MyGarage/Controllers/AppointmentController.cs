@@ -144,7 +144,8 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var appointment = await _appointmentService.ConfirmAsync(id);
+                var actorUserId = GetUserIdFromToken();
+                var appointment = await _appointmentService.ConfirmAsync(id, actorUserId);
                 if (appointment == null) return NotFound();
 
                 var detail = await _appointmentService.GetDetailedAsync(id);
@@ -162,7 +163,8 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var appointment = await _appointmentService.CancelAsync(id, dto?.Reason);
+                var actorUserId = GetUserIdFromToken();
+                var appointment = await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId);
                 if (appointment == null) return NotFound();
 
                 var detail = await _appointmentService.GetDetailedAsync(id);
@@ -180,11 +182,30 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var appointment = await _appointmentService.CheckInAsync(id);
+                var actorUserId = GetUserIdFromToken();
+                var appointment = await _appointmentService.CheckInAsync(id, actorUserId);
                 if (appointment == null) return NotFound();
 
                 var detail = await _appointmentService.GetDetailedAsync(id);
                 return Ok(detail);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("book-batch")]
+        public async Task<ActionResult<BookingGroupResponseDto>> BookBatch([FromBody] BookAppointmentBatchRequestDto dto)
+        {
+            var authUserId = GetUserIdFromToken();
+            if (authUserId == null) return Unauthorized();
+
+            try
+            {
+                var result = await _appointmentService.BookBatchAsync(authUserId.Value, dto);
+                return Ok(result);
             }
             catch (InvalidOperationException ex)
             {
@@ -198,7 +219,8 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var appointment = await _appointmentService.ArriveAsync(id, dto?.ArrivedAt);
+                var actorUserId = GetUserIdFromToken();
+                var appointment = await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId);
                 if (appointment == null) return NotFound();
 
                 var detail = await _appointmentService.GetDetailedAsync(id);

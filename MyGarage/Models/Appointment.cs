@@ -15,6 +15,8 @@ public partial class Appointment : IAuditEntity
 
     public long? VehicleId { get; set; }
 
+    public long? BookingGroupId { get; set; }
+
     public long? CreatedBy { get; set; }
 
     public DateTime StartTime { get; set; }
@@ -38,6 +40,8 @@ public partial class Appointment : IAuditEntity
     public long? UpdatedBy { get; set; }
 
     public virtual Branch Branch { get; set; } = null!;
+
+    public virtual BookingGroup? BookingGroup { get; set; }
 
     public virtual Staff? CreatedByNavigation { get; set; }
 

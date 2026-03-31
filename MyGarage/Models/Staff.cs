@@ -67,6 +67,8 @@ public partial class Staff
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public virtual ICollection<Appointment> AppointmentUpdatedByNavigations { get; set; } = new List<Appointment>();
+    public virtual ICollection<BookingGroup> BookingGroupCreatedByNavigations { get; set; } = new List<BookingGroup>();
+    public virtual ICollection<BookingGroup> BookingGroupUpdatedByNavigations { get; set; } = new List<BookingGroup>();
 
     public virtual ICollection<ApprovalRequest> ApprovalRequestApprovers { get; set; } = new List<ApprovalRequest>();
 

@@ -53,6 +53,8 @@ public partial class Branch
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<BookingGroup> BookingGroups { get; set; } = new List<BookingGroup>();
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual ICollection<BankAccount> BankAccounts { get; set; } = new List<BankAccount>();

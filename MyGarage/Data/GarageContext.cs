@@ -38,6 +38,8 @@ public partial class GarageContext : DbContext
 
     public virtual DbSet<Appointment> Appointments { get; set; }
 
+    public virtual DbSet<BookingGroup> BookingGroups { get; set; }
+
     public virtual DbSet<ApprovalRequest> ApprovalRequests { get; set; }
 
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
@@ -353,6 +355,8 @@ public partial class GarageContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Appointm__3214EC0762F6D2AE");
 
+            entity.HasIndex(e => e.BookingGroupId, "IX_Appointments_BookingGroupId");
+
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.IsReminderSent).HasDefaultValue(false);
@@ -366,6 +370,10 @@ public partial class GarageContext : DbContext
                 .HasForeignKey(d => d.BranchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Appointme__Branc__1B29035F");
+
+            entity.HasOne(d => d.BookingGroup).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.BookingGroupId)
+                .HasConstraintName("FK_Appointments_BookingGroupId");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.CreatedBy)
@@ -382,6 +390,55 @@ public partial class GarageContext : DbContext
             entity.HasOne(d => d.Vehicle).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("FK__Appointme__Vehic__1D114BD1");
+        });
+
+        modelBuilder.Entity<BookingGroup>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__BookingG__3214EC077B6FE4D1");
+
+            entity.HasIndex(e => e.GroupCode, "UQ_BookingGroups_GroupCode").IsUnique();
+
+            entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "IX_BookingGroups_CustomerId_CreatedAt");
+
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_BookingGroups_Status_CreatedAt");
+
+            entity.Property(e => e.CancelReason).HasMaxLength(500);
+            entity.Property(e => e.ConfirmedAppointments).HasDefaultValue(0);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.GroupCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+            entity.Property(e => e.TotalAppointments).HasDefaultValue(0);
+            entity.Property(e => e.CanceledAppointments).HasDefaultValue(0);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.ToTable(tb =>
+            {
+                tb.HasCheckConstraint("CK_BookingGroups_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
+                tb.HasCheckConstraint("CK_BookingGroups_AppointmentCounters", "[TotalAppointments] >= 0 AND [ConfirmedAppointments] >= 0 AND [CanceledAppointments] >= 0 AND [ConfirmedAppointments] + [CanceledAppointments] <= [TotalAppointments]");
+            });
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.BookingGroups)
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BookingGroups_BranchId");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.BookingGroupCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("FK_BookingGroups_CreatedBy");
+
+            entity.HasOne(d => d.Customer).WithMany(p => p.BookingGroups)
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BookingGroups_CustomerId");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.BookingGroupUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_BookingGroups_UpdatedBy");
         });
 
         modelBuilder.Entity<ApprovalRequest>(entity =>

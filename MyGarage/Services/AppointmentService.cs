@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;
@@ -47,6 +48,7 @@ namespace MyGarage.Services
             }
 
             var flow = ResolveFlow(bookingFlow, requestedServiceIds);
+            var requestedServiceIdList = ParseServiceIds(requestedServiceIds).Distinct().ToList();
             var dayOfWeek = (int)date.DayOfWeek;
 
             var opHour = await _context.BranchOperatingHours
@@ -98,6 +100,11 @@ namespace MyGarage.Services
                 .ToListAsync();
             var capacity = ComputeCapacity(activeBays);
             var onlineLimit = Math.Max(1, (int)Math.Floor(capacity.Total * 0.85m));
+            if (flow == BookingFlowType.Fixed && requestedServiceIdList.Count == 0)
+            {
+                return Enumerable.Empty<AvailableSlotResponseDto>();
+            }
+
             var effectiveRequestedServiceIds = requestedServiceIds;
             if (flow == BookingFlowType.Fixed && string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
             {
@@ -126,9 +133,10 @@ namespace MyGarage.Services
             var slots = new List<AvailableSlotResponseDto>();
             var current = date.ToDateTime(openTime);
             var lastStart = date.ToDateTime(closeTime).AddMinutes(-requiredDuration);
+            var minLeadMinutes = Math.Max(15, slotStepMinutes);
             while (current <= lastStart)
             {
-                if (date == DateOnly.FromDateTime(DateTime.Today) && current < DateTime.Now.AddMinutes(30))
+                if (date == DateOnly.FromDateTime(DateTime.Today) && current < DateTime.Now.AddMinutes(minLeadMinutes))
                 {
                     current = current.AddMinutes(slotStepMinutes);
                     continue;
@@ -170,8 +178,91 @@ namespace MyGarage.Services
 
         public async Task<Appointment> BookAsync(long authUserId, BookAppointmentRequestDto dto)
         {
+            return await BookCoreAsync(authUserId, dto, null, null);
+        }
+
+        public async Task<BookingGroupResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
+        {
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("Danh sach lich hen khong duoc de trong.");
+
+            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var actorStaffId = await ResolveStaffActorIdAsync(authUserId);
+                var group = new BookingGroup
+                {
+                    GroupCode = GenerateBookingGroupCode(),
+                    CustomerId = authUserId,
+                    BranchId = dto.BranchId,
+                    Status = "PENDING",
+                    TotalAppointments = 0,
+                    ConfirmedAppointments = 0,
+                    CanceledAppointments = 0,
+                    CustomerNote = string.IsNullOrWhiteSpace(dto.CustomerNote) ? null : dto.CustomerNote.Trim(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    CreatedBy = actorStaffId,
+                    UpdatedBy = actorStaffId
+                };
+                _context.BookingGroups.Add(group);
+                await _context.SaveChangesAsync();
+
+                var createdAppointmentIds = new List<long>();
+                foreach (var item in dto.Items)
+                {
+                    item.BranchId = dto.BranchId;
+                    item.CreatedBy = actorStaffId;
+                    var created = await BookCoreAsync(authUserId, item, group.Id, tx);
+                    createdAppointmentIds.Add(created.Id);
+                }
+
+                await SyncBookingGroupCountersAsync(group.Id, actorStaffId);
+                await tx.CommitAsync();
+
+                var appointments = await _appointmentRepository.GetByCustomerIdAsync(authUserId);
+                var createdAppointments = appointments.Where(a => createdAppointmentIds.Contains(a.Id)).ToList();
+                var details = (await MapToDetailDtos(createdAppointments)).ToList();
+                var refreshedGroup = await _context.BookingGroups.AsNoTracking().FirstAsync(g => g.Id == group.Id);
+
+                return new BookingGroupResponseDto
+                {
+                    Id = refreshedGroup.Id,
+                    GroupCode = refreshedGroup.GroupCode,
+                    CustomerId = refreshedGroup.CustomerId,
+                    BranchId = refreshedGroup.BranchId,
+                    Status = refreshedGroup.Status,
+                    TotalAppointments = refreshedGroup.TotalAppointments,
+                    ConfirmedAppointments = refreshedGroup.ConfirmedAppointments,
+                    CanceledAppointments = refreshedGroup.CanceledAppointments,
+                    ConfirmedAt = refreshedGroup.ConfirmedAt,
+                    CanceledAt = refreshedGroup.CanceledAt,
+                    CancelReason = refreshedGroup.CancelReason,
+                    CustomerNote = refreshedGroup.CustomerNote,
+                    CreatedAt = refreshedGroup.CreatedAt,
+                    UpdatedAt = refreshedGroup.UpdatedAt,
+                    Appointments = details
+                };
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+        private async Task<Appointment> BookCoreAsync(
+            long authUserId,
+            BookAppointmentRequestDto dto,
+            long? bookingGroupId,
+            IDbContextTransaction? externalTransaction)
+        {
+            var actorStaffId = await ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
             var flow = ResolveFlow(dto.BookingFlow, dto.RequestedServiceIds);
-            var effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds);
+            var requestedServiceIdList = ParseServiceIds(dto.RequestedServiceIds).Distinct().ToList();
+            var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
+                ? string.Join(",", requestedServiceIdList)
+                : await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds);
             long actualCustomerId = dto.CustomerId ?? authUserId;
             DateTime requestedStartAt;
             DateTime requestedEndAt;
@@ -192,33 +283,41 @@ namespace MyGarage.Services
 
             if (requestedStartAt.Date < DateTime.Today)
                 throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
+            if (string.IsNullOrWhiteSpace(dto.CustomerFullName))
+                throw new InvalidOperationException("Vui long nhap ho ten khach hang.");
+            if (string.IsNullOrWhiteSpace(dto.CustomerPhone))
+                throw new InvalidOperationException("Vui long nhap so dien thoai khach hang.");
+            if (flow == BookingFlowType.Fixed && requestedServiceIdList.Count == 0)
+                throw new InvalidOperationException("Luong gio co dinh yeu cau chon it nhat mot dich vu cu the.");
+            if (flow == BookingFlowType.Flexible && requestedServiceIdList.Count > 0)
+                throw new InvalidOperationException("Check-in linh hoat khong nhan danh sach dich vu co dinh.");
 
-            if (requestedStartAt.Date == DateTime.Today && requestedStartAt < DateTime.Now.AddMinutes(30))
-                throw new InvalidOperationException("Thoi gian hen phai cach hien tai it nhat 30 phut.");
+            if (!dto.VehicleId.HasValue)
+            {
+                if (!dto.VehicleModelId.HasValue) throw new InvalidOperationException("Vui long chon dong xe.");
+                if (string.IsNullOrWhiteSpace(dto.LicensePlate)) throw new InvalidOperationException("Vui long nhap bien so xe.");
+                if (string.IsNullOrWhiteSpace(dto.Vin)) throw new InvalidOperationException("Vui long nhap so VIN.");
+            }
 
             var opHour = await _context.BranchOperatingHours
                 .AsNoTracking()
                 .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)requestedStartAt.DayOfWeek);
-            if (opHour?.IsDayOff == true)
-                throw new InvalidOperationException("Chi nhanh khong hoat dong vao ngay nay.");
+            if (opHour?.IsDayOff == true) throw new InvalidOperationException("Chi nhanh khong hoat dong vao ngay nay.");
 
             var openTime = opHour?.OpenTime ?? new TimeOnly(8, 0);
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
             var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+            var minLeadMinutes = Math.Max(15, slotStepMinutes);
+            if (requestedStartAt.Date == DateTime.Today && requestedStartAt < DateTime.Now.AddMinutes(minLeadMinutes))
+                throw new InvalidOperationException("\u0054h\u1eddi gian h\u1eb9n ph\u1ea3i c\u00e1ch hi\u1ec7n t\u1ea1i \u00edt nh\u1ea5t " + minLeadMinutes + " ph\u00fat.");
 
             if (flow == BookingFlowType.Fixed)
             {
-                var fixedMinutes = await ResolveFixedDurationAsync(
-                    dto.RequestedServiceIds,
-                    slotStepMinutes,
-                    dto.EndTime,
-                    requestedStartAt);
+                var fixedMinutes = await ResolveFixedDurationAsync(dto.RequestedServiceIds, slotStepMinutes, dto.EndTime, requestedStartAt);
                 requestedEndAt = requestedStartAt.AddMinutes(fixedMinutes);
             }
 
-            if (requestedEndAt <= requestedStartAt)
-                throw new InvalidOperationException("Gio ket thuc phai sau gio bat dau.");
-
+            if (requestedEndAt <= requestedStartAt) throw new InvalidOperationException("Gio ket thuc phai sau gio bat dau.");
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
 
             var health = await GetBranchBookingHealthAsync(dto.BranchId, DateTime.Now);
@@ -227,28 +326,14 @@ namespace MyGarage.Services
 
             if (flow == BookingFlowType.Fixed)
             {
-                var activeBays = await _context.Bays
-                    .AsNoTracking()
-                    .Where(b => b.BranchId == dto.BranchId && b.IsActive == true && b.IsDeleted != true)
-                    .ToListAsync();
+                var activeBays = await _context.Bays.AsNoTracking().Where(b => b.BranchId == dto.BranchId && b.IsActive == true && b.IsDeleted != true).ToListAsync();
                 var capacity = ComputeCapacity(activeBays);
                 var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
-
-                var overlapping = await _context.Appointments
-                    .AsNoTracking()
-                    .Where(a => a.BranchId == dto.BranchId
-                        && a.StartTime < requestedEndAt
-                        && a.EndTime > requestedStartAt
-                        && !ClosedStatuses.Contains(a.Status))
+                var overlapping = await _context.Appointments.AsNoTracking()
+                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && !ClosedStatuses.Contains(a.Status))
                     .ToListAsync();
-                var overnightLocks = await _context.WorkSlots
-                    .AsNoTracking()
-                    .Where(s => s.BranchId == dto.BranchId
-                        && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
-                        && s.StartTime < requestedEndAt
-                        && s.EndTime > requestedStartAt
-                        && s.Status != nameof(WorkSlotStatus.CANCELED)
-                        && s.Status != "CANCELLED")
+                var overnightLocks = await _context.WorkSlots.AsNoTracking()
+                    .Where(s => s.BranchId == dto.BranchId && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK) && s.StartTime < requestedEndAt && s.EndTime > requestedStartAt && s.Status != nameof(WorkSlotStatus.CANCELED) && s.Status != "CANCELLED")
                     .ToListAsync();
                 var locked = CountLockedBays(activeBays, overnightLocks, requestedStartAt, requestedEndAt);
                 var effectiveCapacity = new CapacityProfile(
@@ -257,35 +342,45 @@ namespace MyGarage.Services
                     Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
                 var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
                 var slotEvaluation = EvaluateSlot(overlapping, requestedCluster, effectiveCapacity, effectiveOnlineLimit);
-
                 if (effectiveCapacity.Total <= 0 || !slotEvaluation.IsAvailable)
                     throw new InvalidOperationException("Khung gio nay da het cong suat theo loai khoang hoac vuot nguong 85% online.");
             }
             else
             {
-                var queueLoad = await _context.Appointments
-                    .AsNoTracking()
-                    .Where(a => a.BranchId == dto.BranchId
-                        && a.StartTime < requestedEndAt
-                        && a.EndTime > requestedStartAt
-                        && (a.Status == "QUEUED" || a.Status == "ARRIVED" || a.Status == "ARRIVED_LATE"))
+                var queueLoad = await _context.Appointments.AsNoTracking()
+                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && (a.Status == "QUEUED" || a.Status == "ARRIVED" || a.Status == "ARRIVED_LATE"))
                     .CountAsync();
-
-                if (queueLoad >= 40)
-                    throw new InvalidOperationException("Khung check-in dang qua tai. Vui long chon khung khac.");
+                if (queueLoad >= 40) throw new InvalidOperationException("Khung check-in dang qua tai. Vui long chon khung khac.");
             }
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var ownTransaction = externalTransaction == null;
+            using var tx = ownTransaction ? await _context.Database.BeginTransactionAsync() : null;
             try
             {
-                long? vehicleId = dto.VehicleId;
+                var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == actualCustomerId);
+                if (customer == null) throw new InvalidOperationException("Khong tim thay khach hang de dat lich.");
 
+                if (dto.VehicleId.HasValue)
+                {
+                    var existingVehicle = await _context.Vehicles.AsNoTracking().FirstOrDefaultAsync(v => v.Id == dto.VehicleId.Value);
+                    if (existingVehicle == null) throw new InvalidOperationException("Khong tim thay xe da chon.");
+                    var customerOwnsVehicle = await _context.CustomerVehicles.AsNoTracking().AnyAsync(cv =>
+                        cv.CustomerId == actualCustomerId && cv.VehicleId == dto.VehicleId.Value && cv.IsDeleted != true);
+                    if (!customerOwnsVehicle) throw new InvalidOperationException("Xe da chon khong thuoc tai khoan khach hang.");
+                }
+
+                var customerFullName = dto.CustomerFullName?.Trim();
+                if (!string.IsNullOrWhiteSpace(customerFullName) && !string.Equals(customer.FullName, customerFullName, StringComparison.Ordinal))
+                    customer.FullName = customerFullName;
+                var customerPhone = dto.CustomerPhone?.Trim();
+                if (!string.IsNullOrWhiteSpace(customerPhone) && !string.Equals(customer.Phone, customerPhone, StringComparison.Ordinal))
+                    customer.Phone = customerPhone;
+
+                long? vehicleId = dto.VehicleId;
                 if (vehicleId == null && !string.IsNullOrWhiteSpace(dto.LicensePlate) && dto.VehicleModelId.HasValue)
                 {
                     var plate = dto.LicensePlate.Trim().ToUpper();
-                    var existing = await _context.Vehicles
-                        .FirstOrDefaultAsync(v => v.LicensePlate == plate);
-
+                    var existing = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == plate);
                     if (existing != null)
                     {
                         vehicleId = existing.Id;
@@ -303,7 +398,7 @@ namespace MyGarage.Services
                             Vin = dto.Vin,
                             ModelId = dto.VehicleModelId.Value,
                             Color = dto.Color,
-                            CreatedBy = dto.CreatedBy,
+                            CreatedBy = actorStaffId,
                             CreatedAt = DateTime.UtcNow
                         };
                         _context.Vehicles.Add(newVehicle);
@@ -311,9 +406,7 @@ namespace MyGarage.Services
                         vehicleId = newVehicle.Id;
                     }
 
-                    var link = await _context.CustomerVehicles
-                        .FirstOrDefaultAsync(cv => cv.CustomerId == actualCustomerId && cv.VehicleId == vehicleId && cv.IsDeleted != true);
-
+                    var link = await _context.CustomerVehicles.FirstOrDefaultAsync(cv => cv.CustomerId == actualCustomerId && cv.VehicleId == vehicleId && cv.IsDeleted != true);
                     if (link == null)
                     {
                         _context.CustomerVehicles.Add(new CustomerVehicle
@@ -322,14 +415,14 @@ namespace MyGarage.Services
                             VehicleId = vehicleId.Value,
                             IsCurrentOwner = true,
                             OwnershipStartDate = DateOnly.FromDateTime(DateTime.Today),
-                            CreatedBy = dto.CreatedBy,
+                            CreatedBy = actorStaffId,
                             CreatedAt = DateTime.UtcNow
                         });
                         await _context.SaveChangesAsync();
                     }
                     else if (link.CreatedBy == null)
                     {
-                        link.CreatedBy = dto.CreatedBy;
+                        link.CreatedBy = actorStaffId;
                         await _context.SaveChangesAsync();
                     }
                 }
@@ -339,7 +432,8 @@ namespace MyGarage.Services
                     BranchId = dto.BranchId,
                     CustomerId = actualCustomerId,
                     VehicleId = vehicleId,
-                    CreatedBy = dto.CreatedBy,
+                    BookingGroupId = bookingGroupId,
+                    CreatedBy = actorStaffId,
                     StartTime = requestedStartAt,
                     EndTime = requestedEndAt,
                     RequestedServiceIds = effectiveRequestedServiceIds,
@@ -349,24 +443,29 @@ namespace MyGarage.Services
                     Status = flow == BookingFlowType.Flexible ? "QUEUED" : "PENDING",
                     CreatedAt = DateTime.UtcNow
                 };
-
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
 
-                await transaction.CommitAsync();
+                if (bookingGroupId.HasValue)
+                    await SyncBookingGroupCountersAsync(bookingGroupId.Value, actorStaffId);
+
+                if (ownTransaction && tx != null)
+                    await tx.CommitAsync();
                 return appointment;
             }
             catch
             {
-                await transaction.RollbackAsync();
+                if (ownTransaction && tx != null)
+                    await tx.RollbackAsync();
                 throw;
             }
         }
 
-        public async Task<Appointment?> ConfirmAsync(long id)
+        public async Task<Appointment?> ConfirmAsync(long id, long? actorUserId = null)
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
+            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
 
             if (!string.Equals(appointment.Status, "PENDING", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(appointment.Status, "QUEUED", StringComparison.OrdinalIgnoreCase))
@@ -374,13 +473,17 @@ namespace MyGarage.Services
 
             appointment.Status = "CONFIRMED";
             appointment.UpdatedAt = DateTime.UtcNow;
-            return await _appointmentRepository.UpdateAsync(id, appointment);
+            appointment.UpdatedBy = actorStaffId;
+            var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            return updated;
         }
 
-        public async Task<Appointment?> CancelAsync(long id, string? reason)
+        public async Task<Appointment?> CancelAsync(long id, string? reason, long? actorUserId = null)
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
+            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
 
             if (ClosedStatuses.Contains(appointment.Status))
                 throw new InvalidOperationException($"Khong the huy lich hen o trang thai: {appointment.Status}");
@@ -394,26 +497,34 @@ namespace MyGarage.Services
             appointment.Status = "CANCELED";
             appointment.CancelReason = effectiveReason;
             appointment.UpdatedAt = DateTime.UtcNow;
-            return await _appointmentRepository.UpdateAsync(id, appointment);
+            appointment.UpdatedBy = actorStaffId;
+            var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            return updated;
         }
 
-        public async Task<Appointment?> CheckInAsync(long id)
+        public async Task<Appointment?> CheckInAsync(long id, long? actorUserId = null)
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
+            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
             if (!string.Equals(appointment.Status, "CONFIRMED", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(appointment.Status, "QUEUED", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Chi co the check-in lich da xac nhan/queued. Hien tai: {appointment.Status}");
 
             appointment.Status = "ARRIVED";
             appointment.UpdatedAt = DateTime.UtcNow;
-            return await _appointmentRepository.UpdateAsync(id, appointment);
+            appointment.UpdatedBy = actorStaffId;
+            var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            return updated;
         }
 
-        public async Task<Appointment?> ArriveAsync(long id, DateTime? arrivedAt = null)
+        public async Task<Appointment?> ArriveAsync(long id, DateTime? arrivedAt = null, long? actorUserId = null)
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
+            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
             if (ClosedStatuses.Contains(appointment.Status))
                 throw new InvalidOperationException($"Khong the tiep nhan lich o trang thai: {appointment.Status}");
 
@@ -433,7 +544,10 @@ namespace MyGarage.Services
                 }
 
                 appointment.UpdatedAt = DateTime.UtcNow;
-                return await _appointmentRepository.UpdateAsync(id, appointment);
+                appointment.UpdatedBy = actorStaffId;
+                var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                return updated;
             }
 
             if (arriveTime > appointment.StartTime.AddMinutes(NoShowMinutes))
@@ -441,7 +555,10 @@ namespace MyGarage.Services
                 appointment.Status = "NO_SHOW";
                 appointment.CancelReason = "AUTO_NO_SHOW_LATE_ARRIVAL";
                 appointment.UpdatedAt = DateTime.UtcNow;
-                return await _appointmentRepository.UpdateAsync(id, appointment);
+                appointment.UpdatedBy = actorStaffId;
+                var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                return updated;
             }
 
             if (arriveTime > appointment.StartTime.AddMinutes(GraceArrivalMinutes))
@@ -476,12 +593,18 @@ namespace MyGarage.Services
                     appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_SWITCHED_TO_FLEX_QUEUE");
                 }
                 appointment.UpdatedAt = DateTime.UtcNow;
-                return await _appointmentRepository.UpdateAsync(id, appointment);
+                appointment.UpdatedBy = actorStaffId;
+                var updated = await _appointmentRepository.UpdateAsync(id, appointment);
+                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                return updated;
             }
 
             appointment.Status = "ARRIVED";
             appointment.UpdatedAt = DateTime.UtcNow;
-            return await _appointmentRepository.UpdateAsync(id, appointment);
+            appointment.UpdatedBy = actorStaffId;
+            var finalUpdated = await _appointmentRepository.UpdateAsync(id, appointment);
+            await SyncBookingGroupCountersAsync(finalUpdated?.BookingGroupId, actorStaffId);
+            return finalUpdated;
         }
 
         public async Task<int> AutoMarkNoShowsAsync(long branchId, DateTime? now = null)
@@ -503,6 +626,10 @@ namespace MyGarage.Services
             if (candidates.Count > 0)
             {
                 await _context.SaveChangesAsync();
+                foreach (var groupId in candidates.Select(x => x.BookingGroupId).Where(x => x.HasValue).Select(x => x!.Value).Distinct())
+                {
+                    await SyncBookingGroupCountersAsync(groupId);
+                }
             }
 
             return candidates.Count;
@@ -1146,6 +1273,107 @@ namespace MyGarage.Services
 
             var dtos = await MapToDetailDtos(new[] { appointment });
             return dtos.FirstOrDefault();
+        }
+
+        private async Task SyncBookingGroupCountersAsync(long? bookingGroupId, long? actorStaffId = null)
+        {
+            if (!bookingGroupId.HasValue) return;
+
+            var group = await _context.BookingGroups.FirstOrDefaultAsync(x => x.Id == bookingGroupId.Value);
+            if (group == null) return;
+            var previousStatus = group.Status;
+
+            var statuses = await _context.Appointments
+                .AsNoTracking()
+                .Where(x => x.BookingGroupId == bookingGroupId.Value)
+                .Select(x => x.Status)
+                .ToListAsync();
+
+            var total = statuses.Count;
+            var canceled = statuses.Count(x =>
+                string.Equals(x, "CANCELED", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "NO_SHOW", StringComparison.OrdinalIgnoreCase));
+            var confirmed = statuses.Count(x =>
+                string.Equals(x, "CONFIRMED", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "ARRIVED", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "ARRIVED_LATE", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "COMPLETED", StringComparison.OrdinalIgnoreCase));
+            var completed = statuses.Count(x => string.Equals(x, "COMPLETED", StringComparison.OrdinalIgnoreCase));
+
+            group.TotalAppointments = total;
+            group.ConfirmedAppointments = confirmed;
+            group.CanceledAppointments = canceled;
+            var nowUtc = DateTime.UtcNow;
+
+            if (total > 0 && completed == total)
+            {
+                group.Status = "COMPLETED";
+                group.ConfirmedAt ??= nowUtc;
+                group.CanceledAt = null;
+            }
+            else if (total > 0 && canceled == total)
+            {
+                group.Status = "CANCELED";
+                if (!string.Equals(previousStatus, "CANCELED", StringComparison.OrdinalIgnoreCase))
+                {
+                    group.CanceledAt = nowUtc;
+                }
+                group.ConfirmedAt = null;
+            }
+            else if (total > 0 && confirmed == total)
+            {
+                group.Status = "CONFIRMED";
+                if (!string.Equals(previousStatus, "CONFIRMED", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(previousStatus, "PARTIAL_CONFIRMED", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(previousStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+                {
+                    group.ConfirmedAt = nowUtc;
+                }
+                else
+                {
+                    group.ConfirmedAt ??= nowUtc;
+                }
+                group.CanceledAt = null;
+            }
+            else if (confirmed > 0 || canceled > 0)
+            {
+                group.Status = "PARTIAL_CONFIRMED";
+                group.ConfirmedAt ??= nowUtc;
+                group.CanceledAt = null;
+            }
+            else
+            {
+                group.Status = "PENDING";
+                group.ConfirmedAt = null;
+                group.CanceledAt = null;
+            }
+
+            if (actorStaffId.HasValue)
+            {
+                group.UpdatedBy = actorStaffId.Value;
+            }
+            group.UpdatedAt = nowUtc;
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task<long?> ResolveStaffActorIdAsync(long? actorUserId)
+        {
+            if (!actorUserId.HasValue || actorUserId.Value <= 0)
+            {
+                return null;
+            }
+
+            var staffExists = await _context.Staffs
+                .AsNoTracking()
+                .AnyAsync(s => s.Id == actorUserId.Value);
+
+            return staffExists ? actorUserId.Value : null;
+        }
+
+        private static string GenerateBookingGroupCode()
+        {
+            var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            return $"BG-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
         }
 
         private async Task<IEnumerable<AppointmentDetailResponseDto>> MapToDetailDtos(IEnumerable<Appointment> appointments)

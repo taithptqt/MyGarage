@@ -1,9 +1,9 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..800&family=Manrope:wght@300..800&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..800&family=Manrope:wght@300..800&family=Bebas+Neue&family=Oswald:wght@500;600;700&display=swap");
 
 .mg-header-wrap {
   --mg-header-gold: #c5a059;
   --mg-header-white: #ffffff;
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -12,68 +12,101 @@
 }
 
 .mg-header-wrap.solid {
-  background: #081512;
+  background: transparent;
 }
 
 .mg-header-wrap.overlay {
   background: transparent;
 }
 
+.mg-header-wrap .mg-header-main {
+  background: transparent;
+  border-bottom: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .mg-header-wrap.overlay .mg-header-main {
-  background: linear-gradient(180deg, rgba(8, 21, 18, 0.34), rgba(8, 21, 18, 0.22));
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border-bottom: 1px solid rgba(197, 160, 89, 0.22);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+  box-shadow: none;
 }
 
 .mg-header-main {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 12px 140px;
+  padding: 16px 140px;
   min-height: 96px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  column-gap: 40px;
+  column-gap: 92px;
   box-sizing: border-box;
   position: relative;
 }
 
 .mg-header-hotline {
   position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 40px;
+  top: 18px;
+  transform: none;
   z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   white-space: nowrap;
   color: var(--mg-header-gold);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3em;
+  font-size: 0;
+  font-weight: 400;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-family: "Oswald", "Bebas Neue", "Manrope", "Segoe UI", sans-serif;
+}
+
+.mg-header-hotline::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  background: no-repeat center/contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c5a059' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.34 1.78.65 2.62a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6.09 6.09l1.46-1.31a2 2 0 0 1 2.11-.45c.84.31 1.72.53 2.62.65A2 2 0 0 1 22 16.92z'/%3E%3C/svg%3E");
+}
+
+.mg-header-hotline::after {
+  content: "+45 69 133 911";
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
 .mg-header-side {
   display: flex;
-  gap: 34px;
+  gap: 48px;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
+  margin-top: 112px;
 }
 
 .mg-header-side.right {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .mg-header-side a {
   color: var(--mg-header-white);
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+  font-family: "Oswald", "Bebas Neue", "Manrope", "Segoe UI", sans-serif;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 .mg-header-side a:hover {
@@ -81,31 +114,26 @@
 }
 
 .mg-header-logo {
-  text-align: center;
-  color: var(--mg-header-gold);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  width: 160px;
+  height: 92px;
+  display: block;
+  background: url("/assets/mygarage-logo-original.svg") center center / contain no-repeat;
+  margin-top: 34px;
 }
 
 .mg-header-logo span {
-  font-family: "Newsreader", serif;
-  font-size: 66px;
-  line-height: 0.8;
-  letter-spacing: 0.18em;
+  display: none;
 }
 
 .mg-header-logo small {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.58em;
+  display: none;
 }
 
 .mg-header-login-btn {
   position: absolute;
   right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 8px;
+  transform: none;
   z-index: 2;
   border: 1px solid var(--mg-header-gold);
   background: transparent;
@@ -123,8 +151,8 @@
 .mg-header-user {
   position: absolute;
   right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 8px;
+  transform: none;
   z-index: 2;
 }
 
@@ -141,22 +169,22 @@
 
 .mg-header-user-name {
   color: var(--mg-header-gold);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   white-space: nowrap;
 }
 
 .mg-header-user-avatar {
-  width: 34px;
-  height: 34px;
+  width: 46px;
+  height: 46px;
   border-radius: 999px;
-  border: 3px solid var(--mg-header-gold);
+  border: 3.5px solid var(--mg-header-gold);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--mg-header-gold);
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 800;
   overflow: hidden;
   background: transparent;
@@ -251,6 +279,9 @@
     text-overflow: ellipsis;
   }
 }
+
+
+
 
 
 

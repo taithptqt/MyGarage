@@ -57,6 +57,8 @@ public partial class Customer
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<BookingGroup> BookingGroups { get; set; } = new List<BookingGroup>();
+
     public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
     public virtual Staff? CreatedByNavigation { get; set; }
