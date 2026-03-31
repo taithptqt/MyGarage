@@ -329,7 +329,7 @@ namespace MyGarage.Services
             if (appointment == null) return null;
 
             if (appointment.Status != "PENDING")
-                throw new InvalidOperationException($"Chỉ có thể xác nhận lịch hẹn đang ở trạng thái Chờ xác nhận. Trạng thái hiện tại: {appointment.Status}");
+                throw new InvalidOperationException($"Chỉ có thể xác nhận lịch hẹn đang ở trạng thái CHỜ_XÁC_NHẬN. Trạng thái hiện tại: {appointment.Status}");
 
             appointment.Status = "CONFIRMED";
             appointment.UpdatedAt = DateTime.UtcNow;

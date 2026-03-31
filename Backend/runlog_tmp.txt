@@ -1,0 +1,17 @@
+Using launch settings from E:\MyGarage-MainV1\backend\Properties\launchSettings.json...
+info: MyGarage[0]
+      Soft-deleted duplicate branch #9 (Da Nang); kept #2 (Đà Nẵng).
+info: MyGarage[0]
+      Ensured Appointments schema compatibility (ScheduledDate/StartTime/EndTime).
+warn: MyGarage[0]
+      Skip demo appointment seeding because column Appointments.ScheduledDate is missing.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: https://localhost:7009
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: E:\MyGarage-MainV1\backend
+warn: MyGarage.Services.AppointmentNoShowService[0]
+      AppointmentNoShowService disabled because required appointment columns are missing (ScheduledDate/Status).

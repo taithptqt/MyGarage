@@ -106,6 +106,38 @@ public class OrderController(
         return method.Id;
     }
 
+    private async Task<long?> ResolveInvoiceIdAsync(OrderCreateRequest request)
+    {
+        if (request.InvoiceId.HasValue && request.InvoiceId.Value > 0)
+        {
+            return request.InvoiceId.Value;
+        }
+
+        if (request.ServiceOrderId.HasValue && request.ServiceOrderId.Value > 0)
+        {
+            return await _db.Invoices
+                .AsNoTracking()
+                .Where(i => i.ServiceOrderId == request.ServiceOrderId.Value)
+                .OrderByDescending(i => i.IssuedAt ?? i.CreatedAt ?? DateTime.MinValue)
+                .ThenByDescending(i => i.Id)
+                .Select(i => (long?)i.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        if (request.RetailOrderId.HasValue && request.RetailOrderId.Value > 0)
+        {
+            return await _db.Invoices
+                .AsNoTracking()
+                .Where(i => i.RetailOrderId == request.RetailOrderId.Value)
+                .OrderByDescending(i => i.IssuedAt ?? i.CreatedAt ?? DateTime.MinValue)
+                .ThenByDescending(i => i.Id)
+                .Select(i => (long?)i.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        return null;
+    }
+
     private async Task<Payment?> ResolvePaymentAsync(Order order)
     {
         if (order.PaymentRecordId.HasValue)
@@ -215,6 +247,19 @@ public class OrderController(
             return BadRequest(ModelState);
         }
 
+        var normalizedPaymentType = NormalizePaymentType(request.PaymentType);
+        var resolvedInvoiceId = await ResolveInvoiceIdAsync(request);
+
+        if (!request.RetailOrderId.HasValue && !resolvedInvoiceId.HasValue)
+        {
+            return BadRequest(new
+            {
+                message = "Cannot create inflow payment without invoiceId. Please create/select an invoice first.",
+                serviceOrderId = request.ServiceOrderId,
+                invoiceId = request.InvoiceId
+            });
+        }
+
         var orderCode = DateTimeOffset.Now.ToUnixTimeSeconds();
         var returnUrl = request.ReturnUrl ?? "https://your-domain.com/success";
         var cancelUrl = request.CancelUrl ?? "https://your-domain.com/cancel";
@@ -297,14 +342,14 @@ public class OrderController(
             var payment = new Payment
             {
                 ServiceOrderId = request.ServiceOrderId,
-                InvoiceId = request.InvoiceId,
+                InvoiceId = resolvedInvoiceId,
                 RetailOrderId = request.RetailOrderId,
                 PayerType = NormalizePayerType(request.PayerType),
                 PayerId = request.PayerId,
                 MethodId = await ResolvePayOsMethodIdAsync(),
                 Amount = request.TotalAmount,
                 TransactionCode = paymentResponse.PaymentLinkId,
-                Type = NormalizePaymentType(request.PaymentType),
+                Type = normalizedPaymentType,
                 Status = "PENDING",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -316,11 +361,23 @@ public class OrderController(
                 await _db.SaveChangesAsync();
                 order.PaymentRecordId = payment.Id;
             }
-            catch (DbUpdateException ex) when (request.RetailOrderId.HasValue && IsInflowRequiresInvoiceConstraintViolation(ex))
+            catch (DbUpdateException ex) when (IsInflowRequiresInvoiceConstraintViolation(ex))
             {
-                // DB currently enforces invoice-only inflow payments.
-                // Keep retail checkout/payment flow working by storing PayOS order without Payments row.
-                order.PaymentRecordId = null;
+                if (request.RetailOrderId.HasValue)
+                {
+                    // DB currently enforces invoice-only inflow payments.
+                    // Keep retail checkout/payment flow working by storing PayOS order without Payments row.
+                    order.PaymentRecordId = null;
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        message = "Payments inflow requires InvoiceId (CHK_Payments_InflowRequiresInvoice).",
+                        serviceOrderId = request.ServiceOrderId,
+                        invoiceId = resolvedInvoiceId
+                    });
+                }
             }
 
             OrderService.CreateOrder(order);

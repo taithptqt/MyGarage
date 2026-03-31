@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getUser } from "../../../app/authState";
+import { Navigate, useNavigate } from "react-router-dom";
+import { getUser, isAuthenticated } from "../../../app/authState";
 import {
   checkoutRetailOrder,
   getBranches,
@@ -50,6 +50,7 @@ const [cart, setCart] = useState(() => {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [cartOpen, setCartOpen] = useState(false);
 
   function categoryLabel(cat) {
     const raw = cat?.categoryName || cat?.name || "";
@@ -105,6 +106,10 @@ const [cart, setCart] = useState(() => {
 
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + Number(item.retailPrice || 0) * Number(item.qty || 0), 0),
+    [cart]
+  );
+  const totalItems = useMemo(
+    () => cart.reduce((sum, item) => sum + Number(item.qty || 0), 0),
     [cart]
   );
 
@@ -188,29 +193,88 @@ const [cart, setCart] = useState(() => {
     }
   }
 
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
-    <div className="parts-shop">
-      <header className="parts-shop-header">
-        <h1>Ban phu tung</h1>
+    <div className="parts-shop stitch-retail-page">
+      <section className="parts-shop-header">
+        <h2>Retail Parts Shop</h2>
         <p>Dat phu tung nhanh, xem gia ro rang, tao don trong 1 man hinh.</p>
-      </header>
+      </section>
 
       {error ? <div className="parts-shop-card parts-shop-alert parts-shop-alert-error">{error}</div> : null}
       {successMessage ? <div className="parts-shop-card parts-shop-alert parts-shop-alert-success">{successMessage}</div> : null}
 
       <div className="parts-shop-layout">
         <section className="parts-shop-card parts-shop-product-panel">
+          <div className="parts-shop-cart-toolbar">
+            <div className="parts-shop-cart-dropdown-wrap">
+              <button
+                type="button"
+                className="parts-shop-cart-icon-btn"
+                onClick={() => setCartOpen((prev) => !prev)}
+                aria-expanded={cartOpen}
+                aria-label="Toggle cart"
+              >
+                <span className="parts-shop-cart-icon" aria-hidden="true">🛒</span>
+                <span>Cart</span>
+                <span className="parts-shop-cart-badge">{totalItems}</span>
+              </button>
+
+              {cartOpen ? (
+                <div className="parts-shop-cart-dropdown">
+                  <h4>Your cart</h4>
+                  {cart.length === 0 ? (
+                    <p className="parts-shop-empty">No products in cart.</p>
+                  ) : (
+                    <div className="parts-shop-cart-list">
+                      {cart.map((item) => (
+                        <div className="parts-shop-cart-row" key={item.id}>
+                          <div>
+                            <div className="parts-shop-cart-name">{item.name}</div>
+                            <small>{fmtMoney(item.retailPrice)} x {item.qty}</small>
+                          </div>
+                          <div className="parts-shop-cart-actions">
+                            <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => updateCartQty(item.id, -1)}>-</button>
+                            <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => updateCartQty(item.id, 1)}>+</button>
+                            <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => removeFromCart(item.id)}>X</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="parts-shop-cart-footer">
+                    <div>
+                      <span>Subtotal</span>
+                      <strong>{fmtMoney(total)}</strong>
+                    </div>
+                    <button
+                      className="parts-shop-btn parts-shop-btn-primary"
+                      onClick={handleCreateOrder}
+                      disabled={submitting || !cart.length}
+                    >
+                      {submitting ? "Creating..." : "Create order"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <div className="parts-shop-filter">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tim theo ten hoac SKU"
+              placeholder="Search by name or SKU"
             />
             <div className="parts-shop-filter-right">
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                <option value="name-asc">Sap xep: Ten A-Z</option>
-                <option value="price-asc">Gia: Thap den cao</option>
-                <option value="price-desc">Gia: Cao den thap</option>
+                <option value="name-asc">Sort: Name A-Z</option>
+                <option value="price-asc">Price: Low to high</option>
+                <option value="price-desc">Price: High to low</option>
               </select>
             </div>
           </div>
@@ -220,7 +284,7 @@ const [cart, setCart] = useState(() => {
               className={`parts-shop-pill ${catFilter === "all" ? "active" : ""}`}
               onClick={() => setCatFilter("all")}
             >
-              Tat ca
+              ALL
             </button>
             {categories.map((cat) => (
               <button
@@ -234,14 +298,20 @@ const [cart, setCart] = useState(() => {
           </div>
 
           {loading ? (
-            <div className="parts-shop-empty">Dang tai danh sach phu tung...</div>
+            <div className="parts-shop-empty">Loading products...</div>
           ) : (
             <div className="parts-shop-list">
               {filteredProducts.map((p) => (
                 <article className="parts-shop-item" key={p.id}>
+                  <div className="parts-shop-item-media">
+                    <img
+                      src={`https://picsum.photos/seed/parts-${p.id}/640/760`}
+                      alt={p.name}
+                    />
+                  </div>
                   <div className="parts-shop-item-head">
-                    <div className="parts-shop-item-icon">PT</div>
                     <div>
+                      <span className="parts-shop-tag">{categoryLabel(categories.find((c) => String(c.id) === String(p.categoryId)))}</span>
                       <h4>{p.name}</h4>
                       <div className="parts-shop-meta">SKU: {p.sku || "N/A"}</div>
                     </div>
@@ -276,7 +346,7 @@ const [cart, setCart] = useState(() => {
                       </button>
                     </div>
                     <button className="parts-shop-btn parts-shop-btn-primary" onClick={() => addToCart(p)}>
-                      Them vao gio
+                      Add to cart
                     </button>
                   </div>
                 </article>
@@ -284,72 +354,6 @@ const [cart, setCart] = useState(() => {
             </div>
           )}
         </section>
-
-        <aside className="parts-shop-card parts-shop-sidebar">
-          <h3>Don hang phu tung</h3>
-          {cart.length === 0 ? (
-            <div className="parts-shop-empty">Chua co san pham.</div>
-          ) : (
-            <>
-              {cart.map((item) => (
-                <div className="parts-shop-cart-row" key={item.id}>
-                  <div>
-                    <div className="parts-shop-cart-name">{item.name}</div>
-                    <small>{item.qty} x {fmtMoney(item.retailPrice)}</small>
-                  </div>
-                  <div className="parts-shop-cart-actions">
-                    <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => updateCartQty(item.id, -1)}>
-                      -
-                    </button>
-                    <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => updateCartQty(item.id, 1)}>
-                      +
-                    </button>
-                    <button className="parts-shop-btn parts-shop-btn-ghost" onClick={() => removeFromCart(item.id)}>
-                      Xoa
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-
-          <div className="parts-shop-summary">
-            <div>Tam tinh</div>
-            <div className="parts-shop-total">{fmtMoney(total)}</div>
-          </div>
-
-          <div className="parts-shop-order-form">
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">Chon chi nhanh</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.branchName || b.name || `Chi nhanh ${b.id}`}</option>
-              ))}
-            </select>
-            <input
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              placeholder="Ten nguoi mua"
-            />
-            <input
-              value={guestPhone}
-              onChange={(e) => setGuestPhone(e.target.value)}
-              placeholder="So dien thoai"
-            />
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chu don hang"
-            />
-            <button
-              className="parts-shop-btn parts-shop-btn-primary"
-              onClick={handleCreateOrder}
-              disabled={submitting}
-            >
-              {submitting ? "Dang tao don..." : "Tao don ban phu tung"}
-            </button>
-          </div>
-        </aside>
       </div>
     </div>
   );
