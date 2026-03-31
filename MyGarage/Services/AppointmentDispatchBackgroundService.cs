@@ -19,12 +19,17 @@ namespace MyGarage.Services
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AppointmentDispatchBackgroundService> _logger;
+        private readonly ISystemClock _clock;
         private readonly ConcurrentDictionary<long, DateOnly> _overnightProcessedByBranch = new();
 
-        public AppointmentDispatchBackgroundService(IServiceScopeFactory scopeFactory, ILogger<AppointmentDispatchBackgroundService> logger)
+        public AppointmentDispatchBackgroundService(
+            IServiceScopeFactory scopeFactory,
+            ILogger<AppointmentDispatchBackgroundService> logger,
+            ISystemClock clock)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
+            _clock = clock;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,7 +42,7 @@ namespace MyGarage.Services
                     var context = scope.ServiceProvider.GetRequiredService<GarageContext>();
                     var service = scope.ServiceProvider.GetRequiredService<IAppointmentService>();
 
-                    var now = DateTime.Now;
+                    var now = _clock.LocalNow;
                     var branchIds = await context.Branches
                         .AsNoTracking()
                         .Where(b => b.IsDeleted != true)

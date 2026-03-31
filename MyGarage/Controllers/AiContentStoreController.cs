@@ -9,6 +9,7 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
+    [Route("api/ai-content-stores")]
     [Route("api/[controller]")]
     [ApiController]
     public class AiContentStoreController : ControllerBase
@@ -62,7 +63,7 @@ namespace MyGarage.Controllers
 
             _mapper.Map(itemDto, existingItem);
             var updatedItem = await _aiContentStoreService.UpdateAsync(id, existingItem);
-            
+
             if (updatedItem == null)
             {
                 return NotFound();
@@ -83,8 +84,3 @@ namespace MyGarage.Controllers
         }
     }
 }
-
-
-
-
-

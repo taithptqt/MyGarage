@@ -9,6 +9,7 @@ using MyGarage.DTOs.Responses.Auth;
 
 namespace MyGarage.Controllers
 {
+    [Route("api/auth")]
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase

@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use CustomerVehiclesController with route /api/customer-vehicles.")]
     public class CustomerVehicleController : ControllerBase
     {
         private readonly ICustomerVehicleService _customerVehicleService;

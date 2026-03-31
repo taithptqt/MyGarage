@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -9,7 +9,8 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/service-order-details")]
+[Route("api/[controller]")]
     [ApiController]
     public class ServiceOrderDetailController : ControllerBase
     {
@@ -83,6 +84,7 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 
 
 

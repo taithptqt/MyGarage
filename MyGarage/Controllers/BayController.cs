@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use BaysController with route /api/bays.")]
     public class BayController : ControllerBase
     {
         private readonly IBayService _bayService;

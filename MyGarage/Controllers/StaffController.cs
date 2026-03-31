@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
@@ -11,7 +11,8 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/staff")]
+[Route("api/[controller]")]
     [ApiController]
     public class StaffController : ControllerBase
     {
@@ -131,6 +132,7 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 
 
 

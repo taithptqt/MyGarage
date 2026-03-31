@@ -10,7 +10,8 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/diagnose-recommendations")]
+[Route("api/[controller]")]
     [ApiController]
     public class DiagnoseRecommendationController : ControllerBase
     {
@@ -89,3 +90,4 @@ namespace MyGarage.Controllers
         }
     }
 }
+

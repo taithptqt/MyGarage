@@ -8,8 +8,8 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
 using System.Text;
+using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +22,7 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
 
@@ -61,6 +62,10 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<IAppointmentStatusPolicy, AppointmentStatusPolicy>();
+builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembler>();
+builder.Services.AddScoped<IBookingGroupStatusPolicy, BookingGroupStatusPolicy>();
+builder.Services.AddScoped<IBookingGroupService, BookingGroupService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
@@ -348,6 +353,8 @@ var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
 var hasFrontendBuild = Directory.Exists(frontendDistPath);
 PhysicalFileProvider? frontendFileProvider = hasFrontendBuild ? new PhysicalFileProvider(frontendDistPath) : null;
 
+await EnsureBookingSchemaAsync(app);
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -392,6 +399,35 @@ if (hasFrontendBuild)
 }
 
 app.Run();
+
+static async Task EnsureBookingSchemaAsync(WebApplication app)
+{
+    var scriptPath = Path.Combine(app.Environment.ContentRootPath, "SqlScripts", "20260331_add_booking_groups.sql");
+    if (!File.Exists(scriptPath))
+    {
+        return;
+    }
+
+    var sql = await File.ReadAllTextAsync(scriptPath);
+    var batches = Regex
+        .Split(sql, @"(?im)^\s*GO\s*;?\s*$")
+        .Select(batch => batch.Trim())
+        .Where(batch => !string.IsNullOrWhiteSpace(batch))
+        .ToList();
+
+    if (batches.Count == 0)
+    {
+        return;
+    }
+
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<GarageContext>();
+
+    foreach (var batch in batches)
+    {
+        await context.Database.ExecuteSqlRawAsync(batch);
+    }
+}
 
 static string ResolveFrontendDistPath(string contentRootPath)
 {

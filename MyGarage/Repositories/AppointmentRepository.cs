@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Constants;
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;
@@ -15,6 +16,26 @@ namespace MyGarage.Repositories
         {
         }
 
+        public async Task<IEnumerable<Appointment>> GetAllDetailedAsync(string? status = null)
+        {
+            var query = _dbSet
+                .Include(a => a.Branch)
+                .Include(a => a.Customer)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(a => string.Equals(a.Status, status, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return await query
+                .OrderByDescending(a => a.StartTime)
+                .ToListAsync();
+        }
+
         public async Task<IEnumerable<Appointment>> GetByBranchAndDateAsync(long branchId, DateOnly date)
         {
             var dayStart = date.ToDateTime(TimeOnly.MinValue);
@@ -23,7 +44,7 @@ namespace MyGarage.Repositories
                 .Where(a => a.BranchId == branchId
                          && a.StartTime >= dayStart
                          && a.StartTime < dayEnd
-                         && a.Status != "CANCELED")
+                         && !string.Equals(a.Status, AppointmentStatuses.Canceled, StringComparison.OrdinalIgnoreCase))
                 .ToListAsync();
         }
 
@@ -48,8 +69,8 @@ namespace MyGarage.Repositories
                         .ThenInclude(m => m.Brand)
                 .Where(a => a.BranchId == branchId);
 
-            if (!string.IsNullOrEmpty(status))
-                query = query.Where(a => a.Status == status);
+            if (!string.IsNullOrWhiteSpace(status))
+                query = query.Where(a => string.Equals(a.Status, status, StringComparison.OrdinalIgnoreCase));
 
             return await query
                 .OrderByDescending(a => a.StartTime)

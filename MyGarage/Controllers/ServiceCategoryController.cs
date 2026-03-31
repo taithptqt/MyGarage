@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use ServiceCategoriesController with route /api/service-categories.")]
     public class ServiceCategoryController : ControllerBase
     {
         private readonly IServiceCategoryService _serviceCategoryService;

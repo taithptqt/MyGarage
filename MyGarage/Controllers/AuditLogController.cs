@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +11,8 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/audit-logs")]
+[Route("api/[controller]")]
     [ApiController]
     public class AuditLogController : ControllerBase
     {
@@ -162,6 +163,7 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 
 
 

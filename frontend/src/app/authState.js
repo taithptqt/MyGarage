@@ -1,25 +1,24 @@
+import {
+  clearAuthStorage,
+  isAuthTokenAvailable,
+  persistAuthUser,
+  readAuthUser,
+} from "../features/auth/utils/authStorage";
+
 export function setAuth(user) {
   if (!user) return;
-  localStorage.setItem("mygarage_user", JSON.stringify(user));
-  if (user.token) {
-    localStorage.setItem("mygarage_token", user.token);
-  }
+  persistAuthUser(user);
 }
 
 export function clearAuth() {
-  localStorage.removeItem("mygarage_token");
-  localStorage.removeItem("mygarage_user");
+  clearAuthStorage();
 }
 
 export function isAuthenticated() {
-  return !!localStorage.getItem("mygarage_token");
+  return isAuthTokenAvailable();
 }
 
 export function getUser() {
-  const userStr = localStorage.getItem("mygarage_user");
-  try {
-    return userStr ? JSON.parse(userStr) : null;
-  } catch (e) {
-    return null;
-  }
+  return readAuthUser();
 }
+

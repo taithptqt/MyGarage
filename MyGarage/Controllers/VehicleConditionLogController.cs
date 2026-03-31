@@ -14,7 +14,8 @@ using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/vehicle-condition-logs")]
+[Route("api/[controller]")]
     [ApiController]
     public class VehicleConditionLogController : ControllerBase
     {
@@ -458,3 +459,4 @@ namespace MyGarage.Controllers
         }
     }
 }
+

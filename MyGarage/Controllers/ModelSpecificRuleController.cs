@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -6,7 +6,8 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/model-specific-rules")]
+[Route("api/[controller]")]
     [ApiController]
     public class ModelSpecificRuleController : ControllerBase
     {
@@ -68,6 +69,7 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 
 
 

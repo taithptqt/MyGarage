@@ -14,7 +14,8 @@ using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/diagnoses")]
+[Route("api/[controller]")]
     [ApiController]
     public class DiagnosisController : ControllerBase
     {
@@ -399,4 +400,5 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 

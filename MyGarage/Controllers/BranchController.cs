@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use BranchesController with route /api/branches.")]
     public class BranchController : ControllerBase
     {
         private readonly IBranchService _branchService;

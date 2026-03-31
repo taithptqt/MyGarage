@@ -1,131 +1,41 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { cancelAppointment, getMyAppointments } from "../api/appointmentApi";
 import Footer from "../../../shared/components/Footer";
 import Header from "../../../shared/components/Header";
+import { useMyAppointments } from "../hooks/useMyAppointments";
+import { APPOINTMENT_STATUS } from "../constants/appointmentStatuses";
+import {
+  FILTERS,
+  GROUP_STATUS_META,
+  STATUS_META,
+  formatDate,
+  formatTime,
+} from "../utils/myAppointmentsData";
 import "./MyAppointmentsPage.css";
-
-const STATUS_META = {
-  PENDING: { label: "Chờ xác nhận", tone: "pending" },
-  CONFIRMED: { label: "Đã xác nhận", tone: "confirmed" },
-  ARRIVED: { label: "Đã đến", tone: "arrived" },
-  CANCELED: { label: "Đã hủy", tone: "canceled" },
-  NO_SHOW: { label: "Không đến", tone: "no-show" },
-};
-
-const FILTERS = [
-  { key: "", label: "Tất cả" },
-  { key: "PENDING", label: "Chờ xác nhận" },
-  { key: "CONFIRMED", label: "Đã xác nhận" },
-  { key: "ARRIVED", label: "Đã đến" },
-  { key: "CANCELED", label: "Đã hủy" },
-  { key: "NO_SHOW", label: "Không đến" },
-];
-
-function toDateTime(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatDate(value) {
-  const date = toDateTime(value);
-  if (!date) return "--";
-  return date.toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatTime(value) {
-  const date = toDateTime(value);
-  if (!date) return "--";
-  return date.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function normalizeAppointmentsResponse(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.result)) return payload.result;
-  if (Array.isArray(payload?.$values)) return payload.$values;
-  return [];
-}
-
-function extractDisplayNotes(raw) {
-  const source = String(raw || "").trim();
-  if (!source) return "";
-
-  const withoutMeta = source
-    .replace(/\s*\[FLOW:[^\]]*\]/gi, "")
-    .replace(/\s*\[CLUSTER:[^\]]*\]/gi, "")
-    .trim();
-
-  if (!withoutMeta) return "";
-
-  try {
-    const parsed = JSON.parse(withoutMeta);
-    const symptoms = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.symptoms)
-        ? parsed.symptoms
-        : [];
-    const cleaned = symptoms
-      .map((entry) => String(entry || "").trim())
-      .filter(Boolean)
-      .filter((entry) => entry.toLowerCase() !== "không có ghi chú gì");
-    return cleaned.join(", ");
-  } catch {
-    if (withoutMeta.toLowerCase() === "không có ghi chú gì") return "";
-    return withoutMeta;
-  }
-}
-
-function normalizeAppointment(item) {
-  return {
-    id: item?.id ?? item?.Id,
-    status: String(item?.status ?? item?.Status ?? "").toUpperCase(),
-    branchName: item?.branchName ?? item?.BranchName ?? "",
-    startTime: item?.startTime ?? item?.StartTime,
-    endTime: item?.endTime ?? item?.EndTime,
-    vehicleLicensePlate: item?.vehicleLicensePlate ?? item?.VehicleLicensePlate ?? "",
-    vehicleModelName: item?.vehicleModelName ?? item?.VehicleModelName ?? "",
-    serviceNames: Array.isArray(item?.serviceNames)
-      ? item.serviceNames
-      : Array.isArray(item?.ServiceNames)
-        ? item.ServiceNames
-        : [],
-    customerNotes: extractDisplayNotes(item?.customerNotes ?? item?.CustomerNotes ?? ""),
-    cancelReason: item?.cancelReason ?? item?.CancelReason ?? "",
-  };
-}
-
-function sortAppointments(items) {
-  return [...items].sort((a, b) => {
-    const timeA = toDateTime(a.startTime)?.getTime() || 0;
-    const timeB = toDateTime(b.startTime)?.getTime() || 0;
-    return timeB - timeA;
-  });
-}
 
 export default function MyAppointmentsPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [cancelling, setCancelling] = useState(null);
-  const [error, setError] = useState("");
-  const [cancelTarget, setCancelTarget] = useState(null);
-  const [cancelReason, setCancelReason] = useState("");
+  const {
+    loading,
+    filter,
+    searchTerm,
+    cancelling,
+    error,
+    cancelTarget,
+    cancelReason,
+    stats,
+    recentBookingGroups,
+    filtered,
+    setFilter,
+    setSearchTerm,
+    setCancelReason,
+    loadAppointments,
+    openCancelPopup,
+    closeCancelPopup,
+    handleConfirmCancel,
+  } = useMyAppointments();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -133,85 +43,7 @@ export default function MyAppointmentsPage() {
       return;
     }
     loadAppointments();
-  }, [isAuthenticated, navigate]);
-
-  async function loadAppointments() {
-    setLoading(true);
-    setError("");
-    try {
-      const payload = await getMyAppointments();
-      const list = normalizeAppointmentsResponse(payload)
-        .map(normalizeAppointment)
-        .filter((item) => item.id !== undefined && item.id !== null);
-      setAppointments(sortAppointments(list));
-    } catch (err) {
-      setAppointments([]);
-      setError(err?.message || "Không thể tải lịch hẹn. Vui lòng thử lại.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function openCancelPopup(appointment) {
-    setCancelTarget(appointment);
-    setCancelReason("");
-    setError("");
-  }
-
-  function closeCancelPopup() {
-    setCancelTarget(null);
-    setCancelReason("");
-  }
-
-  async function handleConfirmCancel() {
-    if (!cancelTarget) return;
-    setCancelling(cancelTarget.id);
-    setError("");
-    try {
-      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng tự hủy");
-      closeCancelPopup();
-      await loadAppointments();
-    } catch (err) {
-      setError(err?.message || "Hủy lịch thất bại.");
-    } finally {
-      setCancelling(null);
-    }
-  }
-
-  const stats = useMemo(() => {
-    const now = Date.now();
-    const upcomingCount = appointments.filter((item) => {
-      const start = toDateTime(item.startTime)?.getTime() || 0;
-      return start >= now && item.status !== "CANCELED";
-    }).length;
-
-    return {
-      total: appointments.length,
-      upcoming: upcomingCount,
-      confirmed: appointments.filter((item) => item.status === "CONFIRMED").length,
-      canceled: appointments.filter((item) => item.status === "CANCELED").length,
-    };
-  }, [appointments]);
-
-  const filtered = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    return appointments.filter((item) => {
-      if (filter && item.status !== filter) return false;
-      if (!term) return true;
-
-      const combined = [
-        item.branchName,
-        item.vehicleLicensePlate,
-        item.vehicleModelName,
-        Array.isArray(item.serviceNames) ? item.serviceNames.join(" ") : "",
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return combined.includes(term);
-    });
-  }, [appointments, filter, searchTerm]);
+  }, [isAuthenticated, navigate, loadAppointments]);
 
   return (
     <div className="my-appt-page">
@@ -250,6 +82,23 @@ export default function MyAppointmentsPage() {
               <strong>{stats.canceled}</strong>
             </article>
           </section>
+
+          {recentBookingGroups.length > 0 && (
+            <section className="my-appt-groups">
+              {recentBookingGroups.map((group) => {
+                const status = GROUP_STATUS_META[group.status] || { label: group.status || "Không rõ", tone: "default" };
+                return (
+                  <article key={group.id} className="my-appt-group-card">
+                    <div className="my-appt-group-head">
+                      <strong>{group.groupCode || "Nhóm lịch hẹn"}</strong>
+                      <span className={`my-appt-status ${status.tone}`}>{status.label}</span>
+                    </div>
+                    <p>{group.totalAppointments} xe trong nhóm đặt lịch</p>
+                  </article>
+                );
+              })}
+            </section>
+          )}
 
           <section className="my-appt-toolbar">
             <div className="my-appt-filter-list">
@@ -300,7 +149,9 @@ export default function MyAppointmentsPage() {
             <section className="my-appt-list">
               {filtered.map((item) => {
                 const status = STATUS_META[item.status] || { label: item.status || "Không rõ", tone: "default" };
-                const canCancel = item.status === "PENDING" || item.status === "CONFIRMED";
+                const canCancel =
+                  item.status === APPOINTMENT_STATUS.PENDING ||
+                  item.status === APPOINTMENT_STATUS.CONFIRMED;
                 return (
                   <article key={item.id} className="my-appt-card">
                     <div className="my-appt-card-main">

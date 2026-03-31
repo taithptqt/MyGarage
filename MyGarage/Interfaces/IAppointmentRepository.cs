@@ -7,6 +7,7 @@ namespace MyGarage.Interfaces
 {
     public interface IAppointmentRepository : IGenericRepository<Appointment>
     {
+        Task<IEnumerable<Appointment>> GetAllDetailedAsync(string? status = null);
         Task<IEnumerable<Appointment>> GetByBranchAndDateAsync(long branchId, DateOnly date);
         Task<IEnumerable<Appointment>> GetByCustomerIdAsync(long customerId);
         Task<IEnumerable<Appointment>> GetByBranchIdAsync(long branchId, string? status = null);

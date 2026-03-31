@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use BranchExceptionsController with route /api/branch-exceptions.")]
     public class BranchExceptionController : ControllerBase
     {
         private readonly IBranchExceptionService _branchExceptionService;

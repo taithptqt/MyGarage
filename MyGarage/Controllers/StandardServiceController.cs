@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use StandardServicesController with route /api/standard-services.")]
     public class StandardServiceController : ControllerBase
     {
         private readonly IStandardServiceService _standardServiceService;

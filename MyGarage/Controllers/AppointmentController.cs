@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +13,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use AppointmentsController with route /api/appointments.")]
     public class AppointmentController : ControllerBase
     {
         private readonly IAppointmentService _appointmentService;
@@ -25,7 +26,7 @@ namespace MyGarage.Controllers
             _mapper = mapper;
         }
 
-        // ── Generic CRUD (kept for backward compatibility) ──────────────────
+        // Generic CRUD endpoints kept for backward compatibility.
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<AppointmentResponseDto>>> GetAll()
@@ -75,7 +76,7 @@ namespace MyGarage.Controllers
             return NoContent();
         }
 
-        // ── Business endpoints ──────────────────────────────────────────────
+        // Business endpoints.
 
         [HttpGet("available-slots")]
         public async Task<ActionResult<IEnumerable<AvailableSlotResponseDto>>> GetAvailableSlots(
@@ -92,7 +93,7 @@ namespace MyGarage.Controllers
         [HttpGet("my")]
         public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetMyAppointments()
         {
-            var customerId = GetUserIdFromToken();
+            var customerId = this.GetCurrentUserId();
             if (customerId == null) return Unauthorized();
 
             var appointments = await _appointmentService.GetCustomerAppointmentsAsync(customerId.Value);
@@ -121,7 +122,7 @@ namespace MyGarage.Controllers
         [HttpPost("book")]
         public async Task<ActionResult<AppointmentDetailResponseDto>> Book([FromBody] BookAppointmentRequestDto dto)
         {
-            var authUserId = GetUserIdFromToken();
+            var authUserId = this.GetCurrentUserId();
             if (authUserId == null) return Unauthorized();
 
             dto.CreatedBy = authUserId;
@@ -144,7 +145,7 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var actorUserId = GetUserIdFromToken();
+                var actorUserId = this.GetCurrentUserId();
                 var appointment = await _appointmentService.ConfirmAsync(id, actorUserId);
                 if (appointment == null) return NotFound();
 
@@ -159,11 +160,11 @@ namespace MyGarage.Controllers
 
         [Authorize]
         [HttpPut("{id}/cancel")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> Cancel(long id, [FromBody] CancelAppointmentRequestDto? dto)
+        public async Task<ActionResult<AppointmentDetailResponseDto>> Cancel(long id, [FromBody] AppointmentCancelRequestDto? dto)
         {
             try
             {
-                var actorUserId = GetUserIdFromToken();
+                var actorUserId = this.GetCurrentUserId();
                 var appointment = await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId);
                 if (appointment == null) return NotFound();
 
@@ -182,7 +183,7 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var actorUserId = GetUserIdFromToken();
+                var actorUserId = this.GetCurrentUserId();
                 var appointment = await _appointmentService.CheckInAsync(id, actorUserId);
                 if (appointment == null) return NotFound();
 
@@ -199,7 +200,7 @@ namespace MyGarage.Controllers
         [HttpPost("book-batch")]
         public async Task<ActionResult<BookingGroupResponseDto>> BookBatch([FromBody] BookAppointmentBatchRequestDto dto)
         {
-            var authUserId = GetUserIdFromToken();
+            var authUserId = this.GetCurrentUserId();
             if (authUserId == null) return Unauthorized();
 
             try
@@ -219,7 +220,7 @@ namespace MyGarage.Controllers
         {
             try
             {
-                var actorUserId = GetUserIdFromToken();
+                var actorUserId = this.GetCurrentUserId();
                 var appointment = await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId);
                 if (appointment == null) return NotFound();
 
@@ -271,18 +272,7 @@ namespace MyGarage.Controllers
             var result = await _appointmentService.LockOvernightSlotsAsync(branchId, dto?.BusinessDate);
             return Ok(result);
         }
-
-        private long? GetUserIdFromToken()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (claim != null && long.TryParse(claim.Value, out var id))
-                return id;
-            return null;
-        }
-    }
-
-    public class CancelAppointmentRequestDto
-    {
-        public string? Reason { get; set; }
     }
 }
+
+

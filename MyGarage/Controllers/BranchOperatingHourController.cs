@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use BranchOperatingHoursController with route /api/branch-operating-hours.")]
     public class BranchOperatingHourController : ControllerBase
     {
         private readonly IBranchOperatingHourService _branchOperatingHourService;

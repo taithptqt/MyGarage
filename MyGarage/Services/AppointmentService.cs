@@ -12,37 +12,46 @@ using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
+using MyGarage.Constants;
 
 namespace MyGarage.Services
 {
     public class AppointmentService : GenericService<Appointment>, IAppointmentService
     {
         private readonly IAppointmentRepository _appointmentRepository;
+        private readonly IBookingGroupService _bookingGroupService;
+        private readonly IAppointmentStatusPolicy _appointmentStatusPolicy;
+        private readonly IAppointmentDetailAssembler _appointmentDetailAssembler;
+        private readonly ISystemClock _clock;
         private readonly GarageContext _context;
         private const int GraceArrivalMinutes = 15;
         private const int NoShowMinutes = 30;
-        private const int LateCancelMinutes = 60;
         private const int BookingLockHours = 4;
         private const int QuickOnlineCapDefault = 7;
         private const int RepairOnlineCapDefault = 10;
         private const int ReservedRepairForQuickOverflow = 3;
         private const string DefaultDiagnosticServiceCode = "CDTC-001";
 
-        private static readonly HashSet<string> ClosedStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "CANCELED", "CANCELLED", "NO_SHOW", "COMPLETED"
-        };
-
-        public AppointmentService(IAppointmentRepository repository, GarageContext context)
+        public AppointmentService(
+            IAppointmentRepository repository,
+            GarageContext context,
+            IBookingGroupService bookingGroupService,
+            IAppointmentStatusPolicy appointmentStatusPolicy,
+            IAppointmentDetailAssembler appointmentDetailAssembler,
+            ISystemClock clock)
             : base(repository)
         {
             _appointmentRepository = repository;
             _context = context;
+            _bookingGroupService = bookingGroupService;
+            _appointmentStatusPolicy = appointmentStatusPolicy;
+            _appointmentDetailAssembler = appointmentDetailAssembler;
+            _clock = clock;
         }
 
         public async Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date, string? requestedServiceIds = null, string? bookingFlow = null)
         {
-            if (date < DateOnly.FromDateTime(DateTime.Today))
+            if (date < _clock.LocalToday)
             {
                 return Enumerable.Empty<AvailableSlotResponseDto>();
             }
@@ -87,7 +96,7 @@ namespace MyGarage.Services
                         IsTopPick = windowCursor.Minute == 0,
                         Session = ResolveSession(windowCursor.TimeOfDay),
                         CompactionScore = windowCursor.Minute == 0 ? 100 : 80,
-                        BookingFlow = "FLEXIBLE"
+                        BookingFlow = AppointmentBookingFlows.Flexible
                     });
                     windowCursor = windowCursor.AddMinutes(slotStepMinutes);
                 }
@@ -118,7 +127,7 @@ namespace MyGarage.Services
             var dayEnd = dayStart.AddDays(1);
             var appointments = await _context.Appointments
                 .AsNoTracking()
-                .Where(a => a.BranchId == branchId && a.StartTime < dayEnd && a.EndTime > dayStart && !ClosedStatuses.Contains(a.Status))
+                .Where(a => a.BranchId == branchId && a.StartTime < dayEnd && a.EndTime > dayStart && !AppointmentStatusGroups.Closed.Contains(a.Status))
                 .ToListAsync();
             var overnightLocks = await _context.WorkSlots
                 .AsNoTracking()
@@ -127,7 +136,7 @@ namespace MyGarage.Services
                     && s.StartTime < dayEnd
                     && s.EndTime > dayStart
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != "CANCELLED")
+                    && s.Status != AppointmentStatuses.CancelledLegacy)
                 .ToListAsync();
 
             var slots = new List<AvailableSlotResponseDto>();
@@ -136,7 +145,7 @@ namespace MyGarage.Services
             var minLeadMinutes = Math.Max(15, slotStepMinutes);
             while (current <= lastStart)
             {
-                if (date == DateOnly.FromDateTime(DateTime.Today) && current < DateTime.Now.AddMinutes(minLeadMinutes))
+                if (date == _clock.LocalToday && current < _clock.LocalNow.AddMinutes(minLeadMinutes))
                 {
                     current = current.AddMinutes(slotStepMinutes);
                     continue;
@@ -165,7 +174,7 @@ namespace MyGarage.Services
                         IsRoundedHour = current.Minute == 0,
                         Session = ResolveSession(current.TimeOfDay),
                         CompactionScore = score,
-                        BookingFlow = "FIXED"
+                        BookingFlow = AppointmentBookingFlows.Fixed
                     });
                 }
 
@@ -189,24 +198,8 @@ namespace MyGarage.Services
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var actorStaffId = await ResolveStaffActorIdAsync(authUserId);
-                var group = new BookingGroup
-                {
-                    GroupCode = GenerateBookingGroupCode(),
-                    CustomerId = authUserId,
-                    BranchId = dto.BranchId,
-                    Status = "PENDING",
-                    TotalAppointments = 0,
-                    ConfirmedAppointments = 0,
-                    CanceledAppointments = 0,
-                    CustomerNote = string.IsNullOrWhiteSpace(dto.CustomerNote) ? null : dto.CustomerNote.Trim(),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
-                    CreatedBy = actorStaffId,
-                    UpdatedBy = actorStaffId
-                };
-                _context.BookingGroups.Add(group);
-                await _context.SaveChangesAsync();
+                var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(authUserId);
+                var group = await _bookingGroupService.CreateAsync(authUserId, dto.BranchId, dto.CustomerNote, actorStaffId);
 
                 var createdAppointmentIds = new List<long>();
                 foreach (var item in dto.Items)
@@ -217,32 +210,19 @@ namespace MyGarage.Services
                     createdAppointmentIds.Add(created.Id);
                 }
 
-                await SyncBookingGroupCountersAsync(group.Id, actorStaffId);
+                await _bookingGroupService.SyncCountersAsync(group.Id, actorStaffId);
                 await tx.CommitAsync();
 
-                var appointments = await _appointmentRepository.GetByCustomerIdAsync(authUserId);
-                var createdAppointments = appointments.Where(a => createdAppointmentIds.Contains(a.Id)).ToList();
-                var details = (await MapToDetailDtos(createdAppointments)).ToList();
-                var refreshedGroup = await _context.BookingGroups.AsNoTracking().FirstAsync(g => g.Id == group.Id);
-
-                return new BookingGroupResponseDto
+                var response = await _bookingGroupService.GetByCustomerAndIdAsync(authUserId, group.Id);
+                if (response != null)
                 {
-                    Id = refreshedGroup.Id,
-                    GroupCode = refreshedGroup.GroupCode,
-                    CustomerId = refreshedGroup.CustomerId,
-                    BranchId = refreshedGroup.BranchId,
-                    Status = refreshedGroup.Status,
-                    TotalAppointments = refreshedGroup.TotalAppointments,
-                    ConfirmedAppointments = refreshedGroup.ConfirmedAppointments,
-                    CanceledAppointments = refreshedGroup.CanceledAppointments,
-                    ConfirmedAt = refreshedGroup.ConfirmedAt,
-                    CanceledAt = refreshedGroup.CanceledAt,
-                    CancelReason = refreshedGroup.CancelReason,
-                    CustomerNote = refreshedGroup.CustomerNote,
-                    CreatedAt = refreshedGroup.CreatedAt,
-                    UpdatedAt = refreshedGroup.UpdatedAt,
-                    Appointments = details
-                };
+                    response.Appointments = response.Appointments
+                        .Where(a => createdAppointmentIds.Contains(a.Id))
+                        .ToList();
+                    return response;
+                }
+
+                throw new InvalidOperationException("Khong the tai thong tin nhom lich hen sau khi tao.");
             }
             catch
             {
@@ -257,7 +237,7 @@ namespace MyGarage.Services
             long? bookingGroupId,
             IDbContextTransaction? externalTransaction)
         {
-            var actorStaffId = await ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
+            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
             var flow = ResolveFlow(dto.BookingFlow, dto.RequestedServiceIds);
             var requestedServiceIdList = ParseServiceIds(dto.RequestedServiceIds).Distinct().ToList();
             var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
@@ -281,7 +261,7 @@ namespace MyGarage.Services
                 requestedEndAt = dto.EndTime ?? requestedStartAt;
             }
 
-            if (requestedStartAt.Date < DateTime.Today)
+            if (requestedStartAt.Date < _clock.LocalNow.Date)
                 throw new InvalidOperationException("Khong the dat lich cho ngay trong qua khu.");
             if (string.IsNullOrWhiteSpace(dto.CustomerFullName))
                 throw new InvalidOperationException("Vui long nhap ho ten khach hang.");
@@ -308,7 +288,7 @@ namespace MyGarage.Services
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
             var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
             var minLeadMinutes = Math.Max(15, slotStepMinutes);
-            if (requestedStartAt.Date == DateTime.Today && requestedStartAt < DateTime.Now.AddMinutes(minLeadMinutes))
+            if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
                 throw new InvalidOperationException("\u0054h\u1eddi gian h\u1eb9n ph\u1ea3i c\u00e1ch hi\u1ec7n t\u1ea1i \u00edt nh\u1ea5t " + minLeadMinutes + " ph\u00fat.");
 
             if (flow == BookingFlowType.Fixed)
@@ -320,7 +300,7 @@ namespace MyGarage.Services
             if (requestedEndAt <= requestedStartAt) throw new InvalidOperationException("Gio ket thuc phai sau gio bat dau.");
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
 
-            var health = await GetBranchBookingHealthAsync(dto.BranchId, DateTime.Now);
+            var health = await GetBranchBookingHealthAsync(dto.BranchId, _clock.LocalNow);
             if (health.IsBookingLocked && health.LockUntil.HasValue && requestedStartAt < health.LockUntil.Value)
                 throw new InvalidOperationException($"Chi nhanh dang tam khoa nhan lich den {health.LockUntil:HH:mm dd/MM/yyyy} do qua tai.");
 
@@ -330,10 +310,10 @@ namespace MyGarage.Services
                 var capacity = ComputeCapacity(activeBays);
                 var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
                 var overlapping = await _context.Appointments.AsNoTracking()
-                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && !ClosedStatuses.Contains(a.Status))
+                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && !AppointmentStatusGroups.Closed.Contains(a.Status))
                     .ToListAsync();
                 var overnightLocks = await _context.WorkSlots.AsNoTracking()
-                    .Where(s => s.BranchId == dto.BranchId && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK) && s.StartTime < requestedEndAt && s.EndTime > requestedStartAt && s.Status != nameof(WorkSlotStatus.CANCELED) && s.Status != "CANCELLED")
+                    .Where(s => s.BranchId == dto.BranchId && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK) && s.StartTime < requestedEndAt && s.EndTime > requestedStartAt && s.Status != nameof(WorkSlotStatus.CANCELED) && s.Status != AppointmentStatuses.CancelledLegacy)
                     .ToListAsync();
                 var locked = CountLockedBays(activeBays, overnightLocks, requestedStartAt, requestedEndAt);
                 var effectiveCapacity = new CapacityProfile(
@@ -348,7 +328,7 @@ namespace MyGarage.Services
             else
             {
                 var queueLoad = await _context.Appointments.AsNoTracking()
-                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && (a.Status == "QUEUED" || a.Status == "ARRIVED" || a.Status == "ARRIVED_LATE"))
+                    .Where(a => a.BranchId == dto.BranchId && a.StartTime < requestedEndAt && a.EndTime > requestedStartAt && (a.Status == AppointmentStatuses.Queued || a.Status == AppointmentStatuses.Arrived || a.Status == AppointmentStatuses.ArrivedLate))
                     .CountAsync();
                 if (queueLoad >= 40) throw new InvalidOperationException("Khung check-in dang qua tai. Vui long chon khung khac.");
             }
@@ -399,7 +379,7 @@ namespace MyGarage.Services
                             ModelId = dto.VehicleModelId.Value,
                             Color = dto.Color,
                             CreatedBy = actorStaffId,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = _clock.UtcNow
                         };
                         _context.Vehicles.Add(newVehicle);
                         await _context.SaveChangesAsync();
@@ -414,9 +394,9 @@ namespace MyGarage.Services
                             CustomerId = actualCustomerId,
                             VehicleId = vehicleId.Value,
                             IsCurrentOwner = true,
-                            OwnershipStartDate = DateOnly.FromDateTime(DateTime.Today),
+                            OwnershipStartDate = _clock.LocalToday,
                             CreatedBy = actorStaffId,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = _clock.UtcNow
                         });
                         await _context.SaveChangesAsync();
                     }
@@ -440,14 +420,14 @@ namespace MyGarage.Services
                     CustomerNotes = AppendClusterMarker(
                         AppendFlowMarker(dto.CustomerNotes, flow),
                         await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes)),
-                    Status = flow == BookingFlowType.Flexible ? "QUEUED" : "PENDING",
-                    CreatedAt = DateTime.UtcNow
+                    Status = flow == BookingFlowType.Flexible ? AppointmentStatuses.Queued : AppointmentStatuses.Pending,
+                    CreatedAt = _clock.UtcNow
                 };
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
 
                 if (bookingGroupId.HasValue)
-                    await SyncBookingGroupCountersAsync(bookingGroupId.Value, actorStaffId);
+                    await _bookingGroupService.SyncCountersAsync(bookingGroupId.Value, actorStaffId);
 
                 if (ownTransaction && tx != null)
                     await tx.CommitAsync();
@@ -465,17 +445,13 @@ namespace MyGarage.Services
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
-            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
+            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+            _appointmentStatusPolicy.EnsureCanConfirm(appointment);
 
-            if (!string.Equals(appointment.Status, "PENDING", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, "QUEUED", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Chi co the xac nhan lich hen cho trang thai PENDING/QUEUED. Hien tai: {appointment.Status}");
-
-            appointment.Status = "CONFIRMED";
-            appointment.UpdatedAt = DateTime.UtcNow;
-            appointment.UpdatedBy = actorStaffId;
+            appointment.Status = AppointmentStatuses.Confirmed;
+            ApplyUpdateAudit(appointment, actorStaffId);
             var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
             return updated;
         }
 
@@ -483,23 +459,16 @@ namespace MyGarage.Services
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
-            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
+            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+            _appointmentStatusPolicy.EnsureCanCancel(appointment);
 
-            if (ClosedStatuses.Contains(appointment.Status))
-                throw new InvalidOperationException($"Khong the huy lich hen o trang thai: {appointment.Status}");
+            var effectiveReason = _appointmentStatusPolicy.BuildCancelReason(appointment, reason, _clock.LocalNow);
 
-            var effectiveReason = reason;
-            if (appointment.StartTime > DateTime.Now && (appointment.StartTime - DateTime.Now).TotalMinutes < LateCancelMinutes)
-            {
-                effectiveReason = string.IsNullOrWhiteSpace(reason) ? "[LATE_CANCEL]" : $"[LATE_CANCEL] {reason}";
-            }
-
-            appointment.Status = "CANCELED";
+            appointment.Status = AppointmentStatuses.Canceled;
             appointment.CancelReason = effectiveReason;
-            appointment.UpdatedAt = DateTime.UtcNow;
-            appointment.UpdatedBy = actorStaffId;
+            ApplyUpdateAudit(appointment, actorStaffId);
             var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
             return updated;
         }
 
@@ -507,16 +476,13 @@ namespace MyGarage.Services
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
-            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
-            if (!string.Equals(appointment.Status, "CONFIRMED", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, "QUEUED", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Chi co the check-in lich da xac nhan/queued. Hien tai: {appointment.Status}");
+            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+            _appointmentStatusPolicy.EnsureCanCheckIn(appointment);
 
-            appointment.Status = "ARRIVED";
-            appointment.UpdatedAt = DateTime.UtcNow;
-            appointment.UpdatedBy = actorStaffId;
+            appointment.Status = AppointmentStatuses.Arrived;
+            ApplyUpdateAudit(appointment, actorStaffId);
             var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+            await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
             return updated;
         }
 
@@ -524,40 +490,37 @@ namespace MyGarage.Services
         {
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
-            var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
-            if (ClosedStatuses.Contains(appointment.Status))
-                throw new InvalidOperationException($"Khong the tiep nhan lich o trang thai: {appointment.Status}");
+            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+            _appointmentStatusPolicy.EnsureCanArrive(appointment);
 
-            var arriveTime = arrivedAt ?? DateTime.Now;
+            var arriveTime = arrivedAt ?? _clock.LocalNow;
             var flow = ResolveFlowByAppointment(appointment);
 
             if (flow == BookingFlowType.Flexible)
             {
                 if (arriveTime > appointment.EndTime.AddMinutes(NoShowMinutes))
                 {
-                    appointment.Status = "QUEUED";
+                    appointment.Status = AppointmentStatuses.Queued;
                     appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "WINDOW_MISSED_REPRIORITIZED");
                 }
                 else
                 {
-                    appointment.Status = "ARRIVED";
+                    appointment.Status = AppointmentStatuses.Arrived;
                 }
 
-                appointment.UpdatedAt = DateTime.UtcNow;
-                appointment.UpdatedBy = actorStaffId;
+                ApplyUpdateAudit(appointment, actorStaffId);
                 var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
                 return updated;
             }
 
             if (arriveTime > appointment.StartTime.AddMinutes(NoShowMinutes))
             {
-                appointment.Status = "NO_SHOW";
-                appointment.CancelReason = "AUTO_NO_SHOW_LATE_ARRIVAL";
-                appointment.UpdatedAt = DateTime.UtcNow;
-                appointment.UpdatedBy = actorStaffId;
+                appointment.Status = AppointmentStatuses.NoShow;
+                    appointment.CancelReason = AppointmentCancelReasons.AutoNoShowLateArrival;
+                ApplyUpdateAudit(appointment, actorStaffId);
                 var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
                 return updated;
             }
 
@@ -566,7 +529,7 @@ namespace MyGarage.Services
                 var lateMinutes = (arriveTime - appointment.StartTime).TotalMinutes;
                 if (lateMinutes <= NoShowMinutes)
                 {
-                    var candidates = (await GetAvailableSlotsAsync(appointment.BranchId, DateOnly.FromDateTime(appointment.StartTime), appointment.RequestedServiceIds, "FIXED"))
+                    var candidates = (await GetAvailableSlotsAsync(appointment.BranchId, DateOnly.FromDateTime(appointment.StartTime), appointment.RequestedServiceIds, AppointmentBookingFlows.Fixed))
                         .Where(s => s.StartTime >= arriveTime.AddMinutes(15))
                         .OrderByDescending(s => s.IsTopPick)
                         .ThenByDescending(s => s.CompactionScore)
@@ -578,49 +541,47 @@ namespace MyGarage.Services
                         var next = candidates[0];
                         appointment.StartTime = next.StartTime;
                         appointment.EndTime = next.EndTime;
-                        appointment.Status = "ARRIVED_LATE";
+                        appointment.Status = AppointmentStatuses.ArrivedLate;
                         appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_RESCHEDULED");
                     }
                     else
                     {
-                        appointment.Status = "QUEUED";
+                        appointment.Status = AppointmentStatuses.Queued;
                         appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_SWITCHED_TO_FLEX_QUEUE");
                     }
                 }
                 else
                 {
-                    appointment.Status = "QUEUED";
+                    appointment.Status = AppointmentStatuses.Queued;
                     appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_SWITCHED_TO_FLEX_QUEUE");
                 }
-                appointment.UpdatedAt = DateTime.UtcNow;
-                appointment.UpdatedBy = actorStaffId;
+                ApplyUpdateAudit(appointment, actorStaffId);
                 var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-                await SyncBookingGroupCountersAsync(updated?.BookingGroupId, actorStaffId);
+                await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
                 return updated;
             }
 
-            appointment.Status = "ARRIVED";
-            appointment.UpdatedAt = DateTime.UtcNow;
-            appointment.UpdatedBy = actorStaffId;
+            appointment.Status = AppointmentStatuses.Arrived;
+            ApplyUpdateAudit(appointment, actorStaffId);
             var finalUpdated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await SyncBookingGroupCountersAsync(finalUpdated?.BookingGroupId, actorStaffId);
+            await _bookingGroupService.SyncCountersAsync(finalUpdated?.BookingGroupId, actorStaffId);
             return finalUpdated;
         }
 
         public async Task<int> AutoMarkNoShowsAsync(long branchId, DateTime? now = null)
         {
-            var at = now ?? DateTime.Now;
+            var at = now ?? _clock.LocalNow;
             var candidates = await _context.Appointments
                 .Where(a => a.BranchId == branchId
-                    && (a.Status == "CONFIRMED" || a.Status == "PENDING")
+                    && (a.Status == AppointmentStatuses.Confirmed || a.Status == AppointmentStatuses.Pending)
                     && a.StartTime <= at.AddMinutes(-NoShowMinutes))
                 .ToListAsync();
 
             foreach (var a in candidates)
             {
-                a.Status = "NO_SHOW";
-                a.CancelReason = "AUTO_NO_SHOW_TIMEOUT";
-                a.UpdatedAt = DateTime.UtcNow;
+                a.Status = AppointmentStatuses.NoShow;
+                a.CancelReason = AppointmentCancelReasons.AutoNoShowTimeout;
+                a.UpdatedAt = _clock.UtcNow;
             }
 
             if (candidates.Count > 0)
@@ -628,7 +589,7 @@ namespace MyGarage.Services
                 await _context.SaveChangesAsync();
                 foreach (var groupId in candidates.Select(x => x.BookingGroupId).Where(x => x.HasValue).Select(x => x!.Value).Distinct())
                 {
-                    await SyncBookingGroupCountersAsync(groupId);
+                    await _bookingGroupService.SyncCountersAsync(groupId);
                 }
             }
 
@@ -637,7 +598,7 @@ namespace MyGarage.Services
 
         public async Task<BranchBookingHealthResponseDto> GetBranchBookingHealthAsync(long branchId, DateTime? at = null)
         {
-            var atTime = at ?? DateTime.Now;
+            var atTime = at ?? _clock.LocalNow;
             var bays = await _context.Bays.AsNoTracking().Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true).ToListAsync();
             var capacity = ComputeCapacity(bays);
             var delayThreshold = Math.Max(120, capacity.Total * 15);
@@ -648,12 +609,12 @@ namespace MyGarage.Services
                     && s.EndTime < atTime
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != "CANCELLED")
+                    && s.Status != AppointmentStatuses.CancelledLegacy)
                 .ToListAsync();
 
             var totalDelay = delayedSlots.Sum(s => (int)Math.Max(0, Math.Ceiling(((s.ActualReleaseTime ?? atTime) - s.EndTime).TotalMinutes)));
             var queueCount = await _context.Appointments.AsNoTracking()
-                .Where(a => a.BranchId == branchId && (a.Status == "QUEUED" || a.Status == "ARRIVED" || a.Status == "ARRIVED_LATE"))
+                .Where(a => a.BranchId == branchId && (a.Status == AppointmentStatuses.Queued || a.Status == AppointmentStatuses.Arrived || a.Status == AppointmentStatuses.ArrivedLate))
                 .CountAsync();
 
             var locked = totalDelay >= delayThreshold || (totalDelay >= delayThreshold / 2 && queueCount >= parkingThreshold);
@@ -674,14 +635,14 @@ namespace MyGarage.Services
 
         public async Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null)
         {
-            var snapshot = at ?? DateTime.Now;
+            var snapshot = at ?? _clock.LocalNow;
             var bays = await _context.Bays.AsNoTracking().Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true).OrderBy(b => b.Code).ToListAsync();
             var slots = await _context.WorkSlots.AsNoTracking()
                 .Where(s => s.BranchId == branchId
                     && s.StartTime <= snapshot
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != "CANCELLED")
+                    && s.Status != AppointmentStatuses.CancelledLegacy)
                 .OrderByDescending(s => s.StartTime)
                 .ToListAsync();
 
@@ -711,7 +672,7 @@ namespace MyGarage.Services
                 });
             }
 
-            var queue = await _context.Appointments.AsNoTracking().Where(a => a.BranchId == branchId && (a.Status == "QUEUED" || a.Status == "ARRIVED" || a.Status == "ARRIVED_LATE")).CountAsync();
+            var queue = await _context.Appointments.AsNoTracking().Where(a => a.BranchId == branchId && (a.Status == AppointmentStatuses.Queued || a.Status == AppointmentStatuses.Arrived || a.Status == AppointmentStatuses.ArrivedLate)).CountAsync();
             return new DispatchDashboardResponseDto
             {
                 BranchId = branchId,
@@ -727,7 +688,7 @@ namespace MyGarage.Services
 
         public async Task<DispatchCycleResponseDto> RunDispatchCycleAsync(long branchId, DateTime? at = null)
         {
-            var executedAt = at ?? DateTime.Now;
+            var executedAt = at ?? _clock.LocalNow;
             var noShows = await AutoMarkNoShowsAsync(branchId, executedAt);
             var health = await GetBranchBookingHealthAsync(branchId, executedAt);
             var delayNotifications = 0;
@@ -749,7 +710,7 @@ namespace MyGarage.Services
 
         public async Task<OvernightLockResponseDto> LockOvernightSlotsAsync(long branchId, DateOnly? businessDate = null)
         {
-            var date = businessDate ?? DateOnly.FromDateTime(DateTime.Today);
+            var date = businessDate ?? _clock.LocalToday;
             var closingTime = date.ToDateTime(new TimeOnly(18, 0));
             var nextMorning = date.AddDays(1).ToDateTime(new TimeOnly(8, 0));
             var opHour = await _context.BranchOperatingHours
@@ -763,7 +724,7 @@ namespace MyGarage.Services
                     && s.SlotType != nameof(WorkSlotType.OVERNIGHT_LOCK)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != "CANCELLED"
+                    && s.Status != AppointmentStatuses.CancelledLegacy
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > closingTime))
                 .ToListAsync();
 
@@ -837,7 +798,7 @@ namespace MyGarage.Services
 
             var affected = await _context.Appointments
                 .Where(a => a.BranchId == branchId
-                    && (a.Status == "CONFIRMED" || a.Status == "PENDING")
+                    && (a.Status == AppointmentStatuses.Confirmed || a.Status == AppointmentStatuses.Pending)
                     && a.StartTime >= now.AddMinutes(90)
                     && a.StartTime <= health.LockUntil.Value)
                 .ToListAsync();
@@ -855,7 +816,7 @@ namespace MyGarage.Services
                     Title = "Lich hen co nguy co tre",
                     Content = $"Lich hen {appointment.StartTime:HH:mm dd/MM} co the bi tre do xuong qua tai. {suffix}",
                     IsRead = false,
-                    SentAt = DateTime.UtcNow,
+                    SentAt = _clock.UtcNow,
                     LinkAction = $"/appointments/{appointment.Id}"
                 });
             }
@@ -910,9 +871,15 @@ namespace MyGarage.Services
 
         private static BookingFlowType ResolveFlowByAppointment(Appointment appointment)
         {
-            if (!string.IsNullOrWhiteSpace(appointment.CustomerNotes) && appointment.CustomerNotes.Contains("[FLOW:FLEXIBLE]", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(appointment.CustomerNotes) && appointment.CustomerNotes.Contains(AppointmentNoteMarkers.FlowFlexible, StringComparison.OrdinalIgnoreCase))
                 return BookingFlowType.Flexible;
             return ResolveFlow(null, appointment.RequestedServiceIds);
+        }
+
+        private void ApplyUpdateAudit(Appointment appointment, long? actorStaffId)
+        {
+            appointment.UpdatedAt = _clock.UtcNow;
+            appointment.UpdatedBy = actorStaffId;
         }
 
         private static string ResolveSession(TimeSpan time)
@@ -1082,9 +1049,9 @@ namespace MyGarage.Services
 
         private static ServiceCluster ResolveFlowByRequestedServices(string? requestedServiceIds, string? notes)
         {
-            if (!string.IsNullOrWhiteSpace(notes) && notes.Contains("[CLUSTER:HEAVY]", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(notes) && notes.Contains(AppointmentNoteMarkers.ClusterHeavy, StringComparison.OrdinalIgnoreCase))
                 return ServiceCluster.Heavy;
-            if (!string.IsNullOrWhiteSpace(notes) && notes.Contains("[CLUSTER:QUICK]", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(notes) && notes.Contains(AppointmentNoteMarkers.ClusterQuick, StringComparison.OrdinalIgnoreCase))
                 return ServiceCluster.Quick;
             if (IsHeavyHint(notes)) return ServiceCluster.Heavy;
             // Fallback for legacy rows without marker:
@@ -1163,17 +1130,17 @@ namespace MyGarage.Services
 
         private static string AppendFlowMarker(string? notes, BookingFlowType flow)
         {
-            var marker = flow == BookingFlowType.Flexible ? "[FLOW:FLEXIBLE]" : "[FLOW:FIXED]";
+            var marker = flow == BookingFlowType.Flexible ? AppointmentNoteMarkers.FlowFlexible : AppointmentNoteMarkers.FlowFixed;
             if (string.IsNullOrWhiteSpace(notes)) return marker;
-            if (notes.Contains("[FLOW:", StringComparison.OrdinalIgnoreCase)) return notes;
+            if (notes.Contains(AppointmentNoteMarkers.FlowPrefix, StringComparison.OrdinalIgnoreCase)) return notes;
             return $"{notes} {marker}";
         }
 
         private static string AppendClusterMarker(string? notes, ServiceCluster cluster)
         {
-            var marker = cluster == ServiceCluster.Heavy ? "[CLUSTER:HEAVY]" : "[CLUSTER:QUICK]";
+            var marker = cluster == ServiceCluster.Heavy ? AppointmentNoteMarkers.ClusterHeavy : AppointmentNoteMarkers.ClusterQuick;
             if (string.IsNullOrWhiteSpace(notes)) return marker;
-            if (notes.Contains("[CLUSTER:", StringComparison.OrdinalIgnoreCase)) return notes;
+            if (notes.Contains(AppointmentNoteMarkers.ClusterPrefix, StringComparison.OrdinalIgnoreCase)) return notes;
             return $"{notes} {marker}";
         }
 
@@ -1207,7 +1174,7 @@ namespace MyGarage.Services
                 if (bayCount <= 0) bayCount = 20;
 
                 var active = await _context.Appointments.AsNoTracking()
-                    .Where(a => a.BranchId == branch.Id && a.StartTime < at.AddMinutes(15) && a.EndTime > at && !ClosedStatuses.Contains(a.Status))
+                    .Where(a => a.BranchId == branch.Id && a.StartTime < at.AddMinutes(15) && a.EndTime > at && !AppointmentStatusGroups.Closed.Contains(a.Status))
                     .CountAsync();
                 var utilization = Math.Min(100d, active * 100d / bayCount);
                 if (utilization >= 85d) continue;
@@ -1257,13 +1224,19 @@ namespace MyGarage.Services
         public async Task<IEnumerable<AppointmentDetailResponseDto>> GetCustomerAppointmentsAsync(long customerId)
         {
             var appointments = await _appointmentRepository.GetByCustomerIdAsync(customerId);
-            return await MapToDetailDtos(appointments);
+            return await _appointmentDetailAssembler.AssembleManyAsync(appointments);
+        }
+
+        public async Task<IEnumerable<AppointmentDetailResponseDto>> GetAllDetailedAsync(string? status = null)
+        {
+            var appointments = await _appointmentRepository.GetAllDetailedAsync(status);
+            return await _appointmentDetailAssembler.AssembleManyAsync(appointments);
         }
 
         public async Task<IEnumerable<AppointmentDetailResponseDto>> GetBranchAppointmentsAsync(long branchId, string? status = null)
         {
             var appointments = await _appointmentRepository.GetByBranchIdAsync(branchId, status);
-            return await MapToDetailDtos(appointments);
+            return await _appointmentDetailAssembler.AssembleManyAsync(appointments);
         }
 
         public async Task<AppointmentDetailResponseDto?> GetDetailedAsync(long id)
@@ -1271,166 +1244,10 @@ namespace MyGarage.Services
             var appointment = await _appointmentRepository.GetDetailedByIdAsync(id);
             if (appointment == null) return null;
 
-            var dtos = await MapToDetailDtos(new[] { appointment });
-            return dtos.FirstOrDefault();
-        }
-
-        private async Task SyncBookingGroupCountersAsync(long? bookingGroupId, long? actorStaffId = null)
-        {
-            if (!bookingGroupId.HasValue) return;
-
-            var group = await _context.BookingGroups.FirstOrDefaultAsync(x => x.Id == bookingGroupId.Value);
-            if (group == null) return;
-            var previousStatus = group.Status;
-
-            var statuses = await _context.Appointments
-                .AsNoTracking()
-                .Where(x => x.BookingGroupId == bookingGroupId.Value)
-                .Select(x => x.Status)
-                .ToListAsync();
-
-            var total = statuses.Count;
-            var canceled = statuses.Count(x =>
-                string.Equals(x, "CANCELED", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, "NO_SHOW", StringComparison.OrdinalIgnoreCase));
-            var confirmed = statuses.Count(x =>
-                string.Equals(x, "CONFIRMED", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, "ARRIVED", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, "ARRIVED_LATE", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, "COMPLETED", StringComparison.OrdinalIgnoreCase));
-            var completed = statuses.Count(x => string.Equals(x, "COMPLETED", StringComparison.OrdinalIgnoreCase));
-
-            group.TotalAppointments = total;
-            group.ConfirmedAppointments = confirmed;
-            group.CanceledAppointments = canceled;
-            var nowUtc = DateTime.UtcNow;
-
-            if (total > 0 && completed == total)
-            {
-                group.Status = "COMPLETED";
-                group.ConfirmedAt ??= nowUtc;
-                group.CanceledAt = null;
-            }
-            else if (total > 0 && canceled == total)
-            {
-                group.Status = "CANCELED";
-                if (!string.Equals(previousStatus, "CANCELED", StringComparison.OrdinalIgnoreCase))
-                {
-                    group.CanceledAt = nowUtc;
-                }
-                group.ConfirmedAt = null;
-            }
-            else if (total > 0 && confirmed == total)
-            {
-                group.Status = "CONFIRMED";
-                if (!string.Equals(previousStatus, "CONFIRMED", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(previousStatus, "PARTIAL_CONFIRMED", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(previousStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase))
-                {
-                    group.ConfirmedAt = nowUtc;
-                }
-                else
-                {
-                    group.ConfirmedAt ??= nowUtc;
-                }
-                group.CanceledAt = null;
-            }
-            else if (confirmed > 0 || canceled > 0)
-            {
-                group.Status = "PARTIAL_CONFIRMED";
-                group.ConfirmedAt ??= nowUtc;
-                group.CanceledAt = null;
-            }
-            else
-            {
-                group.Status = "PENDING";
-                group.ConfirmedAt = null;
-                group.CanceledAt = null;
-            }
-
-            if (actorStaffId.HasValue)
-            {
-                group.UpdatedBy = actorStaffId.Value;
-            }
-            group.UpdatedAt = nowUtc;
-            await _context.SaveChangesAsync();
-        }
-
-        private async Task<long?> ResolveStaffActorIdAsync(long? actorUserId)
-        {
-            if (!actorUserId.HasValue || actorUserId.Value <= 0)
-            {
-                return null;
-            }
-
-            var staffExists = await _context.Staffs
-                .AsNoTracking()
-                .AnyAsync(s => s.Id == actorUserId.Value);
-
-            return staffExists ? actorUserId.Value : null;
-        }
-
-        private static string GenerateBookingGroupCode()
-        {
-            var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
-            return $"BG-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
-        }
-
-        private async Task<IEnumerable<AppointmentDetailResponseDto>> MapToDetailDtos(IEnumerable<Appointment> appointments)
-        {
-            var serviceCache = new Dictionary<long, string>();
-            var result = new List<AppointmentDetailResponseDto>();
-
-            foreach (var a in appointments)
-            {
-                var dto = new AppointmentDetailResponseDto
-                {
-                    Id = a.Id,
-                    BranchId = a.BranchId,
-                    BranchName = a.Branch?.Name ?? "",
-                    CustomerId = a.CustomerId,
-                    CustomerName = a.Customer?.FullName ?? "",
-                    CustomerPhone = a.Customer?.Phone,
-                    VehicleId = a.VehicleId,
-                    VehicleLicensePlate = a.Vehicle?.LicensePlate,
-                    VehicleModelName = a.Vehicle?.Model?.Brand?.Name != null && a.Vehicle?.Model?.ModelName != null
-                        ? $"{a.Vehicle.Model.Brand.Name} {a.Vehicle.Model.ModelName}"
-                        : null,
-                    CreatedBy = a.CreatedBy,
-                    StartTime = a.StartTime,
-                    EndTime = a.EndTime,
-                    CreatedAt = a.CreatedAt,
-                    RequestedServiceIds = a.RequestedServiceIds,
-                    CustomerNotes = a.CustomerNotes,
-                    IsReminderSent = a.IsReminderSent,
-                    Status = a.Status,
-                    CancelReason = a.CancelReason,
-                    UpdatedAt = a.UpdatedAt
-                };
-
-                if (!string.IsNullOrEmpty(a.RequestedServiceIds))
-                {
-                    var ids = a.RequestedServiceIds
-                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => long.TryParse(s.Trim(), out var v) ? v : 0)
-                        .Where(v => v > 0)
-                        .ToList();
-
-                    foreach (var sid in ids)
-                    {
-                        if (!serviceCache.ContainsKey(sid))
-                        {
-                            var svc = await _context.StandardServices.FindAsync(sid);
-                            serviceCache[sid] = svc?.Name ?? $"#{sid}";
-                        }
-                        dto.ServiceNames.Add(serviceCache[sid]);
-                    }
-                }
-
-                result.Add(dto);
-            }
-
-            return result;
+            return await _appointmentDetailAssembler.AssembleAsync(appointment);
         }
     }
 }
+
+
+

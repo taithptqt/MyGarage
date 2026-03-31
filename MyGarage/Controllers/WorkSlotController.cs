@@ -11,6 +11,8 @@ namespace MyGarage.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [Obsolete("Use WorkSlotsController with route /api/work-slots.")]
     public class WorkSlotController : ControllerBase
     {
         private readonly IWorkSlotService _workSlotService;
