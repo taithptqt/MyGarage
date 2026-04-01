@@ -271,3 +271,11 @@ export async function getStaffBaseSalary(staffId, asOfDate) {
     params
   });
 }
+
+export async function createInitialSalaryRequest(staffId, payload) {
+  return request({
+    url: `/api/Accounting/staff-salary/${staffId}/request-initial`,
+    method: "POST",
+    data: payload
+  });
+}

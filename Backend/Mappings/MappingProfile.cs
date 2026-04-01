@@ -287,6 +287,10 @@ namespace MyGarage.Mappings
             CreateMap<StaffTier, StaffTierResponseDto>();
             CreateMap<StaffTierCreateDto, StaffTier>();
             CreateMap<StaffTierUpdateDto, StaffTier>();
+            // SalaryCoefficient Mappings
+            CreateMap<SalaryCoefficient, SalaryCoefficientResponseDto>();
+            CreateMap<SalaryCoefficientCreateDto, SalaryCoefficient>();
+            CreateMap<SalaryCoefficientUpdateDto, SalaryCoefficient>();
             // StandardService Mappings
             CreateMap<StandardService, StandardServiceResponseDto>();
             CreateMap<StandardServiceCreateDto, StandardService>();

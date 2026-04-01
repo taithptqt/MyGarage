@@ -22,6 +22,8 @@ import {
   MdAssessment,
   MdHistory,
   MdLocalOffer,
+  MdCalculate,
+  MdPayments,
 } from 'react-icons/md';
 
 import MainDashboard from "views/admin/default";
@@ -31,6 +33,7 @@ import ServicesPage from "../features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
 import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
+import AdminSalaryPage from "../features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "../features/voucher/pages/SafeVoucherManagementPage";
 import BayManagementPage from "../features/storage/pages/BayManagementPage";
 import VehicleManagementPage from "../features/cars/pages/VehicleManagementPage";
@@ -330,6 +333,20 @@ const routes = [
     path: '/staff',
     icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
     component: <AdminPage embedded initialSection="staff" />,
+  },
+  {
+    name: 'Hệ số lương',
+    layout: '/admin',
+    path: '/salary-coefficients',
+    icon: <Icon as={MdCalculate} width="20px" height="20px" color="inherit" />,
+    component: <AdminPage embedded initialSection="salaryCoefficients" />,
+  },
+  {
+    name: 'Lương',
+    layout: '/admin',
+    path: '/salary',
+    icon: <Icon as={MdPayments} width="20px" height="20px" color="inherit" />,
+    component: <AdminSalaryPage />,
   },
   {
     name: 'Khách hàng',

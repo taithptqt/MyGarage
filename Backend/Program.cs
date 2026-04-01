@@ -255,6 +255,8 @@ builder.Services.AddScoped<IShiftClosingService, ShiftClosingService>();
 
 builder.Services.AddScoped<IStaffTierRepository, StaffTierRepository>();
 builder.Services.AddScoped<IStaffTierService, StaffTierService>();
+builder.Services.AddScoped<ISalaryCoefficientRepository, SalaryCoefficientRepository>();
+builder.Services.AddScoped<ISalaryCoefficientService, SalaryCoefficientService>();
 
 builder.Services.AddScoped<IStandardServiceRepository, StandardServiceRepository>();
 builder.Services.AddScoped<IStandardServiceService, StandardServiceService>();
@@ -384,6 +386,7 @@ var app = builder.Build();
 await EnsureDefaultBranchesAsync(app);
 await EnsureCustomerPreferredBranchTagsAsync(app);
 await EnsureAppointmentSchemaCompatibilityAsync(app);
+await EnsureSalaryCoefficientSchemaCompatibilityAsync(app);
 await EnsureAdminDemoDataAsync(app);
 var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
 var hasFrontendBuild = Directory.Exists(frontendDistPath);
@@ -565,7 +568,7 @@ static async Task EnsureAppointmentSchemaCompatibilityAsync(WebApplication app)
     var hasDatabaseDdlTriggers = await HasDatabaseDdlTriggersAsync(db);
     if (hasAppointmentTriggers || hasDatabaseDdlTriggers)
     {
-        app.Logger.LogInformation("Skipping Appointments schema fix: active security triggers may block DDL changes.");
+        app.Logger.LogDebug("Skipping Appointments schema fix: active security triggers may block DDL changes.");
         return;
     }
 
@@ -773,6 +776,223 @@ COMMIT TRAN;");
     catch (Exception ex)
     {
         app.Logger.LogWarning(ex, "Could not auto-fix Appointments schema. The app will continue with current schema.");
+    }
+}
+
+static async Task EnsureSalaryCoefficientSchemaCompatibilityAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
+
+    var hasDatabaseDdlTriggers = await HasDatabaseDdlTriggersAsync(db);
+    if (hasDatabaseDdlTriggers)
+    {
+        app.Logger.LogDebug("Skipping SalaryCoefficients schema setup: active security triggers may block DDL changes.");
+        return;
+    }
+
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+SET NOCOUNT ON;
+
+IF OBJECT_ID(N'dbo.SalaryCoefficients', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.SalaryCoefficients
+    (
+        Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SalaryCoefficients PRIMARY KEY,
+        YearsOfService INT NULL,
+        CoefficientName NVARCHAR(120) NOT NULL CONSTRAINT DF_SalaryCoefficients_CoefficientName DEFAULT (N''),
+        CoefficientValue DECIMAL(8,3) NOT NULL,
+        Description NVARCHAR(500) NULL,
+        IsActive BIT NOT NULL CONSTRAINT DF_SalaryCoefficients_IsActive DEFAULT (1),
+        CreatedAt DATETIME NULL CONSTRAINT DF_SalaryCoefficients_CreatedAt DEFAULT (GETDATE()),
+        CreatedBy BIGINT NULL,
+        UpdatedAt DATETIME NULL CONSTRAINT DF_SalaryCoefficients_UpdatedAt DEFAULT (GETDATE()),
+        UpdatedBy BIGINT NULL,
+        IsDeleted BIT NOT NULL CONSTRAINT DF_SalaryCoefficients_IsDeleted DEFAULT (0),
+        DeletedAt DATETIME NULL,
+        DeletedBy BIGINT NULL
+    );
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'YearsOfService') IS NULL
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD YearsOfService INT NULL;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'CoefficientName') IS NULL
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD CoefficientName NVARCHAR(120) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'CoefficientValue') IS NULL
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD CoefficientValue DECIMAL(8,3) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'IsActive') IS NULL
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD IsActive BIT NULL;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'IsDeleted') IS NULL
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD IsDeleted BIT NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.SalaryCoefficients')
+      AND c.name = N'CoefficientName'
+)
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD CONSTRAINT DF_SalaryCoefficients_CoefficientName DEFAULT (N'') FOR CoefficientName;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.SalaryCoefficients')
+      AND c.name = N'IsActive'
+)
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD CONSTRAINT DF_SalaryCoefficients_IsActive DEFAULT (1) FOR IsActive;
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.SalaryCoefficients')
+      AND c.name = N'IsDeleted'
+)
+BEGIN
+    ALTER TABLE dbo.SalaryCoefficients
+        ADD CONSTRAINT DF_SalaryCoefficients_IsDeleted DEFAULT (0) FOR IsDeleted;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'IsActive') IS NOT NULL
+BEGIN
+    EXEC(N'
+        UPDATE dbo.SalaryCoefficients
+        SET IsActive = 1
+        WHERE IsActive IS NULL;
+    ');
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'IsDeleted') IS NOT NULL
+BEGIN
+    EXEC(N'
+        UPDATE dbo.SalaryCoefficients
+        SET IsDeleted = 0
+        WHERE IsDeleted IS NULL;
+    ');
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'CoefficientValue') IS NOT NULL
+BEGIN
+    EXEC(N'
+        UPDATE dbo.SalaryCoefficients
+        SET CoefficientValue = 0
+        WHERE CoefficientValue IS NULL;
+    ');
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'YearsOfService') IS NOT NULL
+BEGIN
+    EXEC(N'
+        UPDATE dbo.SalaryCoefficients
+        SET CoefficientName = CONCAT(CAST(YearsOfService AS NVARCHAR(20)), N'' years'')
+        WHERE YearsOfService IS NOT NULL
+          AND (CoefficientName IS NULL OR LTRIM(RTRIM(CoefficientName)) = N'''');
+    ');
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'YearsOfService') IS NOT NULL
+   AND OBJECT_ID(N'dbo.CK_SalaryCoefficients_YearsOfService_NonNegative', N'C') IS NULL
+BEGIN
+    EXEC(N'
+        ALTER TABLE dbo.SalaryCoefficients WITH NOCHECK
+        ADD CONSTRAINT CK_SalaryCoefficients_YearsOfService_NonNegative
+        CHECK (YearsOfService IS NULL OR YearsOfService >= 0);
+    ');
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'CoefficientValue') IS NOT NULL
+   AND OBJECT_ID(N'dbo.CK_SalaryCoefficients_CoefficientValue_NonNegative', N'C') IS NULL
+BEGIN
+    EXEC(N'
+        ALTER TABLE dbo.SalaryCoefficients WITH NOCHECK
+        ADD CONSTRAINT CK_SalaryCoefficients_CoefficientValue_NonNegative
+        CHECK (CoefficientValue >= 0);
+    ');
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.SalaryCoefficients')
+      AND name = N'UX_SalaryCoefficients_CoefficientName'
+)
+BEGIN
+    DROP INDEX UX_SalaryCoefficients_CoefficientName ON dbo.SalaryCoefficients;
+END;
+
+IF COL_LENGTH(N'dbo.SalaryCoefficients', N'YearsOfService') IS NOT NULL
+   AND COL_LENGTH(N'dbo.SalaryCoefficients', N'IsDeleted') IS NOT NULL
+   AND NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.SalaryCoefficients')
+      AND name = N'UX_SalaryCoefficients_YearsOfService_Active'
+)
+BEGIN
+    DECLARE @HasDuplicateYears BIT = 0;
+
+    EXEC sp_executesql
+        N'
+            SELECT @HasDuplicateYears = CASE WHEN EXISTS (
+                SELECT 1
+                FROM dbo.SalaryCoefficients
+                WHERE YearsOfService IS NOT NULL
+                  AND ISNULL(IsDeleted, 0) = 0
+                GROUP BY YearsOfService
+                HAVING COUNT(1) > 1
+            ) THEN 1 ELSE 0 END;
+        ',
+        N'@HasDuplicateYears BIT OUTPUT',
+        @HasDuplicateYears OUTPUT;
+
+    IF @HasDuplicateYears = 1
+    BEGIN
+        PRINT N'Skipped UX_SalaryCoefficients_YearsOfService_Active creation due to duplicate active YearsOfService values.';
+    END;
+    ELSE
+    BEGIN
+        EXEC(N'
+            CREATE UNIQUE INDEX UX_SalaryCoefficients_YearsOfService_Active
+                ON dbo.SalaryCoefficients (YearsOfService)
+                WHERE YearsOfService IS NOT NULL AND IsDeleted = 0;
+        ');
+    END;
+END;");
+
+        app.Logger.LogInformation("Ensured SalaryCoefficients schema compatibility.");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not auto-create SalaryCoefficients schema. You may need to run SQL script manually.");
     }
 }
 
@@ -1286,7 +1506,7 @@ WHERE TABLE_NAME = @tableName
         // Standard services
         var standardServiceSpecs = new[]
         {
-            new { Code = "MAINT-OC",  Name = "Thay nhớt nhanh",          CategoryId = catMaint.Id,  BasePrice = 280000m, StandardMinutes = 40 },
+            new { Code = "MAINT-OC",  Name = "Thay nhớt nhanh",         CategoryId = catMaint.Id,  BasePrice = 280000m, StandardMinutes = 40 },
             new { Code = "REP-ENG",   Name = "Chẩn đoán động cơ",         CategoryId = catRepair.Id, BasePrice = 450000m, StandardMinutes = 60 },
             new { Code = "TIRE-BAL",  Name = "Cân bằng động bánh xe",     CategoryId = catTire.Id,   BasePrice = 220000m, StandardMinutes = 30 }
         };
@@ -1640,5 +1860,3 @@ WHERE TABLE_NAME = @tableName
         await db.SaveChangesAsync();
     }
 }
-
-

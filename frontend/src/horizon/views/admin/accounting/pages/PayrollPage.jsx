@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -30,6 +30,7 @@ import {
   createPayrollPeriod,
   createPayrollRun,
   createPayslip,
+  createInitialSalaryRequest,
   getBranches,
   getPayrollItems,
   getPayrollPeriods,
@@ -139,6 +140,8 @@ function createDefaultItemForm() {
   return {
     staffId: "",
     baseSalary: "",
+    dependentCount: "0",
+    insuranceZone: "I",
     attendanceDeduction: "0",
     overtimeAmount: "0",
     allowanceAmount: "0",
@@ -148,6 +151,7 @@ function createDefaultItemForm() {
     advanceDeduction: "0",
     loanDeduction: "0",
     insuranceEmployeeAmount: "0",
+    insuranceCompanyAmount: "0",
     pitAmount: "0",
     otherDeduction: "0",
   };
@@ -180,6 +184,153 @@ function safeTime(value) {
   return Number.isNaN(ts) ? 0 : ts;
 }
 
+const VIETNAM_PAYROLL_POLICY_PRE_2026 = {
+  employeeBhxhRate: 0.08,
+  employeeBhytRate: 0.015,
+  employeeBhtnRate: 0.01,
+  employerBhxhRate: 0.175,
+  employerBhytRate: 0.03,
+  employerBhtnRate: 0.01,
+  employerOaidRate: 0.005,
+  personalDeduction: 11000000,
+  dependentDeduction: 4400000,
+  socialInsuranceBaseReference: 2340000,
+  regionalMinimumWageByZone: {
+    I: 4960000,
+    II: 4410000,
+    III: 3860000,
+    IV: 3450000,
+  },
+};
+
+const VIETNAM_PAYROLL_POLICY_2026 = {
+  ...VIETNAM_PAYROLL_POLICY_PRE_2026,
+  personalDeduction: 15500000,
+  dependentDeduction: 6200000,
+};
+
+const VIETNAM_PIT_BRACKETS = [
+  { limit: 5000000, rate: 0.05 },
+  { limit: 10000000, rate: 0.1 },
+  { limit: 18000000, rate: 0.15 },
+  { limit: 32000000, rate: 0.2 },
+  { limit: 52000000, rate: 0.25 },
+  { limit: 80000000, rate: 0.3 },
+  { limit: Number.POSITIVE_INFINITY, rate: 0.35 },
+];
+
+function resolveVietnamPayrollPolicy(asOfDate) {
+  const asOf = asOfDate ? new Date(`${asOfDate}T00:00:00`) : new Date();
+  if (!Number.isNaN(asOf.getTime()) && asOf >= new Date("2026-01-01T00:00:00")) {
+    return VIETNAM_PAYROLL_POLICY_2026;
+  }
+  return VIETNAM_PAYROLL_POLICY_PRE_2026;
+}
+
+function normalizeInsuranceZone(zone) {
+  const text = String(zone || "").trim().toUpperCase();
+  if (text === "II" || text === "III" || text === "IV") return text;
+  return "I";
+}
+
+function roundVnd(value) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+}
+
+function calculatePitByProgressiveBracket(taxableIncome) {
+  let remaining = Math.max(0, toNumber(taxableIncome));
+  if (remaining <= 0) return 0;
+
+  let lowerBound = 0;
+  let totalTax = 0;
+  VIETNAM_PIT_BRACKETS.forEach((bracket) => {
+    if (remaining <= 0) return;
+    const upperBound = bracket.limit;
+    const range = upperBound - lowerBound;
+    const taxableInRange = Math.min(remaining, range);
+    if (taxableInRange > 0) {
+      totalTax += taxableInRange * bracket.rate;
+      remaining -= taxableInRange;
+    }
+    lowerBound = upperBound;
+  });
+  return roundVnd(totalTax);
+}
+
+function calculateVietnamStatutoryAmounts(baseSalaryForInsurance, grossIncome, dependentCount, policy, insuranceZone) {
+  const resolvedPolicy = policy || VIETNAM_PAYROLL_POLICY_2026;
+  const zone = normalizeInsuranceZone(insuranceZone);
+  const normalizedDependents = Math.max(0, Math.trunc(toNumber(dependentCount)));
+  const socialInsuranceCap = 20 * resolvedPolicy.socialInsuranceBaseReference;
+  const unemploymentCap = 20 * toNumber(resolvedPolicy.regionalMinimumWageByZone?.[zone]);
+  const baseSalary = Math.max(0, toNumber(baseSalaryForInsurance));
+  const socialInsurableBase = Math.min(baseSalary, socialInsuranceCap);
+  const unemploymentInsurableBase = Math.min(baseSalary, unemploymentCap);
+
+  const employeeBhxh = roundVnd(socialInsurableBase * resolvedPolicy.employeeBhxhRate);
+  const employeeBhyt = roundVnd(socialInsurableBase * resolvedPolicy.employeeBhytRate);
+  const employeeBhtn = roundVnd(unemploymentInsurableBase * resolvedPolicy.employeeBhtnRate);
+  const employeeInsuranceTotal = roundVnd(employeeBhxh + employeeBhyt + employeeBhtn);
+
+  const employerBhxh = roundVnd(socialInsurableBase * resolvedPolicy.employerBhxhRate);
+  const employerBhyt = roundVnd(socialInsurableBase * resolvedPolicy.employerBhytRate);
+  const employerBhtn = roundVnd(unemploymentInsurableBase * resolvedPolicy.employerBhtnRate);
+  const employerOaid = roundVnd(socialInsurableBase * resolvedPolicy.employerOaidRate);
+  const employerInsuranceTotal = roundVnd(employerBhxh + employerBhyt + employerBhtn + employerOaid);
+
+  const taxableIncome =
+    Math.max(
+      0,
+      toNumber(grossIncome) -
+      employeeInsuranceTotal -
+      resolvedPolicy.personalDeduction -
+      normalizedDependents * resolvedPolicy.dependentDeduction,
+    );
+  const pitAmount = calculatePitByProgressiveBracket(taxableIncome);
+
+  return {
+    employeeBhxh,
+    employeeBhyt,
+    employeeBhtn,
+    employeeInsuranceTotal,
+    employerBhxh,
+    employerBhyt,
+    employerBhtn,
+    employerOaid,
+    employerInsuranceTotal,
+    taxableIncome: roundVnd(taxableIncome),
+    pitAmount,
+    dependentCount: normalizedDependents,
+    insuranceZone: zone,
+    socialInsurableBase: roundVnd(socialInsurableBase),
+    unemploymentInsurableBase: roundVnd(unemploymentInsurableBase),
+    socialInsuranceCap: roundVnd(socialInsuranceCap),
+    unemploymentInsuranceCap: roundVnd(unemploymentCap),
+    personalDeduction: roundVnd(resolvedPolicy.personalDeduction),
+    dependentDeduction: roundVnd(resolvedPolicy.dependentDeduction),
+  };
+}
+
+const TENURE_BRACKETS = [
+  { minYears: 0, label: "Dưới 5 năm" },
+  { minYears: 5, label: "5 đến dưới 10 năm" },
+  { minYears: 10, label: "10 đến dưới 15 năm" },
+  { minYears: 15, label: "15 đến dưới 20 năm" },
+  { minYears: 20, label: "20 đến dưới 25 năm" },
+  { minYears: 25, label: "Từ 25 năm trở lên" },
+];
+
+function tenureRangeLabel(yearsOfService) {
+  const years = toNumber(yearsOfService);
+  if (years < 0) return "--";
+  let matched = TENURE_BRACKETS[0];
+  TENURE_BRACKETS.forEach((bracket) => {
+    if (years >= bracket.minYears) matched = bracket;
+  });
+  return matched?.label || "--";
+}
+
 export default function PayrollPage() {
   const { selectedBranchId, isBranchLocked } = useBranch();
   const toast = useToast();
@@ -205,10 +356,16 @@ export default function PayrollPage() {
   const [savingPeriod, setSavingPeriod] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
   const [applyingSalaryCoefficient, setApplyingSalaryCoefficient] = useState(false);
+  const [submittingInitialSalaryRequest, setSubmittingInitialSalaryRequest] = useState(false);
   const [salaryCoefficientInfo, setSalaryCoefficientInfo] = useState(null);
+  const salaryCoefficientRequestSeqRef = useRef(0);
 
   const [periodForm, setPeriodForm] = useState(() => createDefaultPeriodForm());
   const [itemForm, setItemForm] = useState(() => createDefaultItemForm());
+  const [initialSalaryRequest, setInitialSalaryRequest] = useState({
+    baseSalary: "",
+    reason: "",
+  });
 
   function updatePeriodEndDate(nextEndDate) {
     setPeriodForm((prev) => {
@@ -245,15 +402,15 @@ export default function PayrollPage() {
     const staffList = staffRes.status === "fulfilled" && Array.isArray(staffRes.value) ? staffRes.value : [];
     const branchList = branchRes.status === "fulfilled" && Array.isArray(branchRes.value) ? branchRes.value : [];
 
-    const scopedStaffs = enforcedBranchId
+    const scopedStaffs = targetBranchId
       ? staffList.filter((staff) => {
         const staffBranchId = toId(pick(staff, "branchId", "BranchId"));
-        return !staffBranchId || staffBranchId === enforcedBranchId;
+        return !staffBranchId || staffBranchId === targetBranchId;
       })
       : staffList;
 
-    const scopedBranches = enforcedBranchId
-      ? branchList.filter((branch) => toId(pick(branch, "id", "Id", "branchId", "BranchId")) === enforcedBranchId)
+    const scopedBranches = targetBranchId
+      ? branchList.filter((branch) => toId(pick(branch, "id", "Id", "branchId", "BranchId")) === targetBranchId)
       : branchList;
 
     setStaffs(scopedStaffs);
@@ -267,7 +424,7 @@ export default function PayrollPage() {
 
   useEffect(() => {
     loadData();
-  }, [enforcedBranchId]);
+  }, [targetBranchId]);
 
   const staffNameById = useMemo(() => {
     const map = new Map();
@@ -318,9 +475,9 @@ export default function PayrollPage() {
         createdAt: pick(run, "calculatedAt", "CalculatedAt", "createdAt", "CreatedAt"),
       };
     });
-    if (!enforcedBranchId) return normalized;
-    return normalized.filter((run) => run.branchId === enforcedBranchId);
-  }, [branchNameById, runs.items, enforcedBranchId]);
+    if (!targetBranchId) return normalized;
+    return normalized.filter((run) => run.branchId === targetBranchId);
+  }, [branchNameById, runs.items, targetBranchId]);
 
   const runById = useMemo(() => {
     const map = new Map();
@@ -349,9 +506,9 @@ export default function PayrollPage() {
         hasPayslip: payslipItemIds.has(id),
       };
     });
-    if (!enforcedBranchId) return normalized;
+    if (!targetBranchId) return normalized;
     return normalized.filter((item) => item.payrollRunId && runById.has(item.payrollRunId));
-  }, [items.items, payslipItemIds, runById, staffNameById, enforcedBranchId]);
+  }, [items.items, payslipItemIds, runById, staffNameById, targetBranchId]);
 
   const filteredItems = useMemo(() => {
     return itemRows.filter((item) => {
@@ -377,6 +534,13 @@ export default function PayrollPage() {
     [periods.items],
   );
   const openPeriodId = useMemo(() => toId(pick(openPeriod, "id", "Id")), [openPeriod]);
+  const coefficientAsOfDate = useMemo(() => {
+    const asOfDateRaw =
+      pick(openPeriod, "endDate", "EndDate") ||
+      pick(openPeriod, "payrollDate", "PayrollDate") ||
+      new Date().toISOString();
+    return toDateInputValue(asOfDateRaw);
+  }, [openPeriod]);
 
   const runSummary = useMemo(() => {
     return {
@@ -408,7 +572,77 @@ export default function PayrollPage() {
     return `Sẽ tự tạo đợt Nháp cho kỳ ${periodCode}`;
   }, [activeDraftRun, openPeriod, openPeriodId]);
 
-  const itemPreview = useMemo(() => calcItem(itemForm), [itemForm]);
+  const effectiveBaseSalary = useMemo(() => {
+    const baseSalary = toNumber(itemForm.baseSalary);
+    const appliedSalary = toNumber(pick(salaryCoefficientInfo, "calculatedSalary"));
+    const hasAppliedSalary = Boolean(pick(salaryCoefficientInfo, "hasBaseSalary")) && appliedSalary > 0;
+    return hasAppliedSalary ? appliedSalary : baseSalary;
+  }, [itemForm.baseSalary, salaryCoefficientInfo]);
+
+  const payrollPolicy = useMemo(
+    () => resolveVietnamPayrollPolicy(coefficientAsOfDate),
+    [coefficientAsOfDate],
+  );
+
+  const grossIncomePreview = useMemo(() => {
+    return roundVnd(
+      effectiveBaseSalary +
+      toNumber(itemForm.overtimeAmount) +
+      toNumber(itemForm.allowanceAmount) +
+      toNumber(itemForm.commissionAmount) +
+      toNumber(itemForm.bonusAmount),
+    );
+  }, [
+    effectiveBaseSalary,
+    itemForm.overtimeAmount,
+    itemForm.allowanceAmount,
+    itemForm.commissionAmount,
+    itemForm.bonusAmount,
+  ]);
+
+  const statutoryPreview = useMemo(
+    () =>
+      calculateVietnamStatutoryAmounts(
+        effectiveBaseSalary,
+        grossIncomePreview,
+        itemForm.dependentCount,
+        payrollPolicy,
+        itemForm.insuranceZone,
+      ),
+    [effectiveBaseSalary, grossIncomePreview, itemForm.dependentCount, itemForm.insuranceZone, payrollPolicy],
+  );
+
+  useEffect(() => {
+    const nextInsuranceEmployeeAmount = String(statutoryPreview.employeeInsuranceTotal);
+    const nextPitAmount = String(statutoryPreview.pitAmount);
+    const nextInsuranceCompanyAmount = String(statutoryPreview.employerInsuranceTotal);
+
+    setItemForm((prev) => {
+      if (
+        prev.insuranceEmployeeAmount === nextInsuranceEmployeeAmount &&
+        prev.pitAmount === nextPitAmount &&
+        prev.insuranceCompanyAmount === nextInsuranceCompanyAmount
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        insuranceEmployeeAmount: nextInsuranceEmployeeAmount,
+        pitAmount: nextPitAmount,
+        insuranceCompanyAmount: nextInsuranceCompanyAmount,
+      };
+    });
+  }, [
+    statutoryPreview.employeeInsuranceTotal,
+    statutoryPreview.pitAmount,
+    statutoryPreview.employerInsuranceTotal,
+  ]);
+
+  const itemPreview = useMemo(
+    () => calcItem({ ...itemForm, baseSalary: String(effectiveBaseSalary) }),
+    [effectiveBaseSalary, itemForm],
+  );
 
   async function reloadRuns() {
     const data = await getPayrollRuns();
@@ -529,7 +763,7 @@ export default function PayrollPage() {
       await createPayrollItem({
         payrollRunId,
         staffId,
-        baseSalary: toNumber(itemForm.baseSalary),
+        baseSalary: effectiveBaseSalary,
         attendanceDeduction: toNumber(itemForm.attendanceDeduction),
         overtimeAmount: toNumber(itemForm.overtimeAmount),
         allowanceAmount: toNumber(itemForm.allowanceAmount),
@@ -539,6 +773,7 @@ export default function PayrollPage() {
         advanceDeduction: toNumber(itemForm.advanceDeduction),
         loanDeduction: toNumber(itemForm.loanDeduction),
         insuranceEmployeeAmount: toNumber(itemForm.insuranceEmployeeAmount),
+        insuranceCompanyAmount: toNumber(itemForm.insuranceCompanyAmount),
         pitAmount: toNumber(itemForm.pitAmount),
         otherDeduction: toNumber(itemForm.otherDeduction),
         netPay: itemPreview.netPay,
@@ -547,6 +782,7 @@ export default function PayrollPage() {
       toast({ status: "success", title: "Đã thêm dòng lương." });
       setItemForm(createDefaultItemForm());
       setSalaryCoefficientInfo(null);
+      setInitialSalaryRequest({ baseSalary: "", reason: "" });
       await reloadItemsAndPayslips();
     } catch (err) {
       setError(toFriendlyError(err, "Thêm dòng lương thất bại."));
@@ -555,55 +791,174 @@ export default function PayrollPage() {
     }
   }
 
+  const applySalaryCoefficientFromServer = useCallback(async (staffIdInput, options = {}) => {
+    const { showToast = false } = options;
+    const staffId = toId(staffIdInput);
+    if (!staffId) {
+      setSalaryCoefficientInfo(null);
+      setItemForm((prev) => ({
+        ...prev,
+        baseSalary: "",
+        dependentCount: "0",
+        insuranceZone: "I",
+      }));
+      return;
+    }
+
+    const requestSeq = salaryCoefficientRequestSeqRef.current + 1;
+    salaryCoefficientRequestSeqRef.current = requestSeq;
+
+    setApplyingSalaryCoefficient(true);
+    if (showToast) setError("");
+
+    try {
+      const data = await getStaffSalaryCoefficient(staffId, coefficientAsOfDate);
+      if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
+
+      const baseSalary = toNumber(pick(data, "baseSalary", "BaseSalary"));
+      const hasBaseSalary =
+        Boolean(pick(data, "hasBaseSalary", "HasBaseSalary")) || baseSalary > 0;
+      const coefficient = toNumber(pick(data, "coefficient", "Coefficient")) || 1;
+      const calculatedSalary = toNumber(pick(data, "calculatedSalary", "CalculatedSalary"));
+      const yearsOfService = Math.max(0, Math.trunc(toNumber(pick(data, "yearsOfService", "YearsOfService"))));
+      const appliedSalary =
+        calculatedSalary > 0 ? calculatedSalary : Math.round(baseSalary * coefficient);
+
+      setItemForm((prev) => ({
+        ...prev,
+        baseSalary: hasBaseSalary ? String(Math.round(baseSalary)) : "",
+      }));
+      setSalaryCoefficientInfo({
+        coefficient,
+        yearsOfService,
+        tenureRange: tenureRangeLabel(yearsOfService),
+        baseSalary,
+        hasBaseSalary,
+        calculatedSalary: hasBaseSalary ? appliedSalary : 0,
+        asOfDate: pick(data, "asOfDate", "AsOfDate") || coefficientAsOfDate,
+        policyReference: pick(data, "policyReference", "PolicyReference") || "",
+      });
+
+      if (!showToast) return;
+      if (hasBaseSalary && appliedSalary > 0) {
+        toast({
+          status: "success",
+          title: "Đã áp hệ số lương theo thâm niên.",
+          description: `Hệ số ${coefficient.toFixed(4)} · Lương áp dụng ${formatCurrency(appliedSalary)}`,
+        });
+      } else {
+        toast({
+          status: "warning",
+          title: "Đã tính hệ số thâm niên.",
+          description: `Hệ số ${coefficient.toFixed(4)}. Nhân sự này chưa có lương gốc hiệu lực trong kỳ.`,
+        });
+      }
+    } catch (err) {
+      if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
+      const statusCode = Number(err?.response?.status || err?.status || 0);
+      if (statusCode === 404) {
+        try {
+          const baseData = await getStaffBaseSalary(staffId, coefficientAsOfDate);
+          if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
+          const fallbackBaseSalary = toNumber(pick(baseData, "baseSalary", "BaseSalary"));
+          const hasFallbackBaseSalary = fallbackBaseSalary > 0;
+
+          setItemForm((prev) => ({
+            ...prev,
+            baseSalary: hasFallbackBaseSalary ? String(Math.round(fallbackBaseSalary)) : "",
+          }));
+          setSalaryCoefficientInfo({
+            coefficient: 1,
+            yearsOfService: 0,
+            tenureRange: tenureRangeLabel(0),
+            baseSalary: fallbackBaseSalary,
+            hasBaseSalary: hasFallbackBaseSalary,
+            calculatedSalary: hasFallbackBaseSalary ? Math.round(fallbackBaseSalary) : 0,
+            asOfDate: coefficientAsOfDate,
+            policyReference: "Fallback to base salary because salary-coefficient API returned 404.",
+          });
+
+          if (showToast) {
+            toast({
+              status: "warning",
+              title: "Không tìm thấy API hệ số lương.",
+              description: "Đã tạm dùng hệ số 1.0000 theo lương cơ bản.",
+            });
+          }
+          return;
+        } catch {
+          // Ignore and continue to common error handling below.
+        }
+      }
+
+      setSalaryCoefficientInfo(null);
+      setItemForm((prev) => ({ ...prev, baseSalary: "" }));
+
+      if (showToast) {
+        const fallbackMessage = "Không áp được hệ số lương.";
+        setError(toFriendlyError(err, fallbackMessage));
+      }
+    } finally {
+      if (requestSeq === salaryCoefficientRequestSeqRef.current) {
+        setApplyingSalaryCoefficient(false);
+      }
+    }
+  }, [coefficientAsOfDate, toast]);
+
   async function handleApplySalaryCoefficient() {
     const staffId = toId(itemForm.staffId);
     if (!staffId) {
       setError("Vui lòng chọn nhân sự trước khi áp hệ số lương.");
       return;
     }
+    await applySalaryCoefficientFromServer(staffId, { showToast: true });
+  }
 
-    const asOfDateRaw =
-      pick(openPeriod, "endDate", "EndDate") ||
-      pick(openPeriod, "payrollDate", "PayrollDate") ||
-      new Date().toISOString();
-    const asOfDate = toDateInputValue(asOfDateRaw);
+  async function handleSubmitInitialSalaryRequest() {
+    const staffId = toId(itemForm.staffId);
+    if (!staffId) {
+      setError("Vui lòng chọn nhân sự trước khi gửi yêu cầu lương.");
+      return;
+    }
 
-    setApplyingSalaryCoefficient(true);
+    const proposedBaseSalary = toNumber(initialSalaryRequest.baseSalary);
+    if (proposedBaseSalary <= 0) {
+      setError("Vui lòng nhập mức lương đề xuất lớn hơn 0.");
+      return;
+    }
+
+    setSubmittingInitialSalaryRequest(true);
     setError("");
     try {
-      const data = await getStaffSalaryCoefficient(staffId, asOfDate);
-      const baseSalary = toNumber(pick(data, "baseSalary", "BaseSalary"));
-      const coefficient = toNumber(pick(data, "coefficient", "Coefficient")) || 1;
-      const calculatedSalary = toNumber(pick(data, "calculatedSalary", "CalculatedSalary"));
-      const yearsOfService = toNumber(pick(data, "yearsOfService", "YearsOfService"));
-      const appliedSalary = calculatedSalary > 0 ? calculatedSalary : Math.round(baseSalary * coefficient);
-
-      if (!appliedSalary || appliedSalary <= 0) {
-        throw new Error("Nhân sự chưa có mức lương cơ bản để áp hệ số.");
-      }
-
-      setItemForm((prev) => ({ ...prev, baseSalary: String(Math.round(appliedSalary)) }));
-      setSalaryCoefficientInfo({
-        coefficient,
-        yearsOfService,
-        baseSalary,
-        calculatedSalary: appliedSalary,
-        asOfDate: pick(data, "asOfDate", "AsOfDate") || asOfDate,
-        policyReference: pick(data, "policyReference", "PolicyReference") || "",
+      const reasonText = initialSalaryRequest.reason.trim();
+      const response = await createInitialSalaryRequest(staffId, {
+        baseSalary: proposedBaseSalary,
+        effectiveFrom: coefficientAsOfDate,
+        reason: reasonText || `Đề xuất tạo lương khởi điểm cho nhân sự #${staffId}.`,
+        note: reasonText
       });
-
       toast({
         status: "success",
-        title: "Đã áp hệ số lương theo thâm niên.",
-        description: `Hệ số ${coefficient.toFixed(4)} · Lương áp dụng ${formatCurrency(appliedSalary)}`,
+        title: "Đã gửi yêu cầu duyệt lương lên admin.",
+        description: `Mã yêu cầu #${pick(response, "requestId", "RequestId") || "--"}`
       });
+      setInitialSalaryRequest((prev) => ({ ...prev, reason: "" }));
     } catch (err) {
-      setSalaryCoefficientInfo(null);
-      setError(toFriendlyError(err, "Không áp được hệ số lương."));
+      setError(toFriendlyError(err, "Không gửi được yêu cầu duyệt lương."));
     } finally {
-      setApplyingSalaryCoefficient(false);
+      setSubmittingInitialSalaryRequest(false);
     }
   }
+
+  useEffect(() => {
+    const staffId = toId(itemForm.staffId);
+    if (!staffId) {
+      salaryCoefficientRequestSeqRef.current += 1;
+      setApplyingSalaryCoefficient(false);
+      return;
+    }
+    applySalaryCoefficientFromServer(staffId);
+  }, [applySalaryCoefficientFromServer, itemForm.staffId, coefficientAsOfDate]);
 
   async function handleApprove(runId) {
     const userId = getCurrentUserId();
@@ -827,35 +1182,25 @@ export default function PayrollPage() {
                   value={itemForm.staffId}
                   onChange={(e) => {
                     const newStaffId = e.target.value;
-                    setItemForm((prev) => ({ ...prev, staffId: newStaffId }));
+                    setError("");
+                    setItemForm((prev) => ({
+                      ...prev,
+                      staffId: newStaffId,
+                      baseSalary: "",
+                      dependentCount: "0",
+                      insuranceZone: "I",
+                    }));
                     setSalaryCoefficientInfo(null);
-                    
-                    if (newStaffId) {
-                      const asOfDateRaw =
-                        pick(openPeriod, "endDate", "EndDate") ||
-                        pick(openPeriod, "payrollDate", "PayrollDate") ||
-                        new Date().toISOString();
-                      const asOfDate = toDateInputValue(asOfDateRaw);
-                      
-                      getStaffBaseSalary(newStaffId, asOfDate)
-                        .then((data) => {
-                          const bs = toNumber(pick(data, "baseSalary", "BaseSalary"));
-                          if (bs > 0) {
-                            setItemForm((prev) => ({ ...prev, baseSalary: String(Math.round(bs)) }));
-                          }
-                        })
-                        .catch(() => {});
-                    } else {
-                      setItemForm((prev) => ({ ...prev, baseSalary: "" }));
-                    }
+                    setInitialSalaryRequest({ baseSalary: "", reason: "" });
                   }}>
                   <option value=''>Chọn nhân sự</option>
                   {(staffs || []).map((staff) => {
                     const id = toId(pick(staff, "id", "Id"));
                     if (!id) return null;
+                    const name = pick(staff, "fullName", "FullName") || `Staff #${id}`;
                     return (
                       <option value={id} key={id}>
-                        {pick(staff, "fullName", "FullName") || `Staff #${id}`}
+                        {`${name} (#${id})`}
                       </option>
                     );
                   })}
@@ -864,7 +1209,7 @@ export default function PayrollPage() {
             </SimpleGrid>
             <Flex justify='space-between' align='center' wrap='wrap' gap='8px'>
               <Text color={textColorSecondary} fontSize='xs'>
-                Áp dụng hệ số theo thâm niên từ hợp đồng mẫu (mốc 15/20/25/30 năm).
+                Áp dụng hệ số theo thâm niên (Dưới 5 năm, 5 đến dưới 10, 10 đến dưới 15, 15 đến dưới 20, 20 đến dưới 25, từ 25 năm trở lên).
               </Text>
               <Button
                 size='xs'
@@ -878,21 +1223,75 @@ export default function PayrollPage() {
             </Flex>
             {salaryCoefficientInfo ? (
               <Text color='teal.500' fontSize='xs'>
-                Thâm niên: {salaryCoefficientInfo.yearsOfService} năm · Hệ số: {Number(salaryCoefficientInfo.coefficient || 1).toFixed(4)}
-                {" · "}Lương gốc: {formatCurrency(salaryCoefficientInfo.baseSalary)} · Lương áp dụng:{" "}
-                {formatCurrency(salaryCoefficientInfo.calculatedSalary)} · Mốc tính: {formatDate(salaryCoefficientInfo.asOfDate)}
+                Thâm niên: {salaryCoefficientInfo.yearsOfService} năm ({salaryCoefficientInfo.tenureRange || tenureRangeLabel(salaryCoefficientInfo.yearsOfService)}) · Hệ số: {Number(salaryCoefficientInfo.coefficient || 1).toFixed(4)}
+                {" · "}Lương gốc:{" "}
+                {salaryCoefficientInfo.hasBaseSalary ? formatCurrency(salaryCoefficientInfo.baseSalary) : "Chưa thiết lập"}
+                {" · "}Mốc tính: {formatDate(salaryCoefficientInfo.asOfDate)}
               </Text>
             ) : null}
+            {toId(itemForm.staffId) && salaryCoefficientInfo && !salaryCoefficientInfo.hasBaseSalary ? (
+              <Card p='12px' bg='orange.50'>
+                <Text color='orange.600' fontSize='xs' mb='8px'>
+                  Nhân sự này chưa có lương gốc hiệu lực. Kế toán cần gửi yêu cầu tạo lương để admin duyệt.
+                </Text>
+                <SimpleGrid columns={{ base: 1, md: 3 }} gap='8px'>
+                  <Input
+                    type='number'
+                    placeholder='Mức lương đề xuất'
+                    value={initialSalaryRequest.baseSalary}
+                    onChange={(e) => setInitialSalaryRequest((prev) => ({ ...prev, baseSalary: e.target.value }))}
+                  />
+                  <Input
+                    placeholder='Ghi chú yêu cầu (tuỳ chọn)'
+                    value={initialSalaryRequest.reason}
+                    onChange={(e) => setInitialSalaryRequest((prev) => ({ ...prev, reason: e.target.value }))}
+                  />
+                  <Button
+                    colorScheme='orange'
+                    onClick={handleSubmitInitialSalaryRequest}
+                    isLoading={submittingInitialSalaryRequest}>
+                    Gửi yêu cầu duyệt lương
+                  </Button>
+                </SimpleGrid>
+              </Card>
+            ) : null}
             <SimpleGrid columns={2} gap='10px'>
+              <FormControl>
+                <FormLabel fontSize='xs' mb='4px'>Lương cơ bản</FormLabel>
+                <Input
+                  type='number'
+                  value={itemForm.baseSalary}
+                  isReadOnly
+                  isDisabled
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel fontSize='xs' mb='4px'>Hệ số lương</FormLabel>
+                <Input
+                  type='text'
+                  value={Number(salaryCoefficientInfo?.coefficient || 1).toFixed(4)}
+                  isReadOnly
+                  isDisabled
+                />
+              </FormControl>
               <Input
                 type='number'
-                placeholder='Lương cơ bản'
-                value={itemForm.baseSalary}
+                min='0'
+                placeholder='Số người phụ thuộc'
+                value={itemForm.dependentCount}
                 onChange={(e) => {
-                  setItemForm((prev) => ({ ...prev, baseSalary: e.target.value }));
-                  if (salaryCoefficientInfo) setSalaryCoefficientInfo(null);
+                  const next = Math.max(0, Math.trunc(toNumber(e.target.value)));
+                  setItemForm((prev) => ({ ...prev, dependentCount: String(next) }));
                 }}
               />
+              <Select
+                value={itemForm.insuranceZone}
+                onChange={(e) => setItemForm((prev) => ({ ...prev, insuranceZone: normalizeInsuranceZone(e.target.value) }))}>
+                <option value='I'>Vùng I</option>
+                <option value='II'>Vùng II</option>
+                <option value='III'>Vùng III</option>
+                <option value='IV'>Vùng IV</option>
+              </Select>
               <Input type='number' placeholder='Phụ cấp' value={itemForm.allowanceAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, allowanceAmount: e.target.value }))} />
               <Input type='number' placeholder='Tiền tăng ca' value={itemForm.overtimeAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, overtimeAmount: e.target.value }))} />
               <Input type='number' placeholder='Hoa hồng' value={itemForm.commissionAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, commissionAmount: e.target.value }))} />
@@ -901,13 +1300,31 @@ export default function PayrollPage() {
               <Input type='number' placeholder='Phạt' value={itemForm.penaltyAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, penaltyAmount: e.target.value }))} />
               <Input type='number' placeholder='Tạm ứng' value={itemForm.advanceDeduction} onChange={(e) => setItemForm((prev) => ({ ...prev, advanceDeduction: e.target.value }))} />
               <Input type='number' placeholder='Khoản vay' value={itemForm.loanDeduction} onChange={(e) => setItemForm((prev) => ({ ...prev, loanDeduction: e.target.value }))} />
-              <Input type='number' placeholder='Bảo hiểm NLĐ' value={itemForm.insuranceEmployeeAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, insuranceEmployeeAmount: e.target.value }))} />
-              <Input type='number' placeholder='PIT' value={itemForm.pitAmount} onChange={(e) => setItemForm((prev) => ({ ...prev, pitAmount: e.target.value }))} />
+              <Input type='number' placeholder='Bảo hiểm NLĐ (tự tính)' value={itemForm.insuranceEmployeeAmount} isReadOnly isDisabled />
+              <Input type='number' placeholder='Thuế TNCN/PIT (tự tính)' value={itemForm.pitAmount} isReadOnly isDisabled />
+              <Input type='number' placeholder='Bảo hiểm DN chịu (tham khảo)' value={itemForm.insuranceCompanyAmount} isReadOnly isDisabled />
               <Input type='number' placeholder='Khấu trừ khác' value={itemForm.otherDeduction} onChange={(e) => setItemForm((prev) => ({ ...prev, otherDeduction: e.target.value }))} />
             </SimpleGrid>
-            <Text color={textColorSecondary} fontSize='xs'>
-              Tổng thu nhập: {formatCurrency(itemPreview.grossPay)} · Tổng khấu trừ: {formatCurrency(itemPreview.totalDeduction)} · Thực nhận: {formatCurrency(itemPreview.netPay)}
+            <Text color='teal.500' fontSize='sm' fontWeight='600'>
+              BHXH NLĐ: {formatCurrency(statutoryPreview.employeeBhxh)} · BHYT NLĐ: {formatCurrency(statutoryPreview.employeeBhyt)} · BHTN NLĐ: {formatCurrency(statutoryPreview.employeeBhtn)} · Thu nhập tính thuế: {formatCurrency(statutoryPreview.taxableIncome)} · PIT: {formatCurrency(statutoryPreview.pitAmount)}
             </Text>
+            <Text color={textColorSecondary} fontSize='sm' fontWeight='500'>
+              Giảm trừ bản thân: {formatCurrency(statutoryPreview.personalDeduction)} · Giảm trừ người phụ thuộc: {formatCurrency(statutoryPreview.dependentDeduction)} x {statutoryPreview.dependentCount} · Trần BHXH/BHYT: {formatCurrency(statutoryPreview.socialInsuranceCap)} · Trần BHTN ({statutoryPreview.insuranceZone}): {formatCurrency(statutoryPreview.unemploymentInsuranceCap)}
+            </Text>
+            <Text color={textColorSecondary} fontSize='sm' fontWeight='500'>
+              Đang áp công thức Việt Nam: BHXH NLĐ 8% · BHYT NLĐ 1.5% · BHTN NLĐ 1% · Thuế TNCN lũy tiến theo tháng.
+            </Text>
+            <Box
+              borderWidth='1px'
+              borderColor='green.300'
+              bg='green.50'
+              borderRadius='12px'
+              px='14px'
+              py='10px'>
+              <Text color='green.700' fontSize='xl' fontWeight='800'>
+                Tổng tiền nhận được: {formatCurrency(itemPreview.netPay)}
+              </Text>
+            </Box>
             {!openPeriodId ? (
               <Text color='orange.400' fontSize='xs'>Cần có kỳ lương đang mở để thêm dòng lương.</Text>
             ) : null}

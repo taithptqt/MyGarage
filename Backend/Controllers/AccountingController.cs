@@ -318,14 +318,59 @@ public class AccountingController : ControllerBase
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
 
-        var functionExists = await _crud.ScalarAsync<int?>(
-            "SELECT TOP 1 1 FROM sys.objects WHERE object_id = OBJECT_ID('dbo.fn_staff_salary_coefficient') AND type IN ('FN','IF','TF');");
-        if (!functionExists.HasValue)
+        var staff = await _db.Staffs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == staffId && s.IsDeleted != true);
+        if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
+        if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
+
+        var hireDate = await ResolveStaffHireDateAsync(staff.Id, staff.HireDate);
+        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
+        decimal coefficient = 1.0000m;
+        int yearsOfService = 0;
+
+        if (hireDate.HasValue && asOf >= hireDate.Value)
         {
-            return NotFound(new
-            {
-                message = "fn_staff_salary_coefficient is not available. Please run SQL script 20260329_add_staff_salary_profile_and_coefficient.sql."
-            });
+            yearsOfService = CalculateCompletedYears(hireDate.Value, asOf);
+            coefficient = await ResolveStaffSalaryCoefficientAsync(staff.Id, hireDate.Value, asOf);
+        }
+
+        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
+        var hasBaseSalary = baseSalary.HasValue && baseSalary.Value > 0m;
+        decimal calculatedSalary = hasBaseSalary
+            ? Math.Round(baseSalary!.Value * coefficient, 0, MidpointRounding.AwayFromZero)
+            : 0m;
+
+        return Ok(new
+        {
+            staffId = staff.Id,
+            staffName = staff.FullName,
+            branchId = staff.BranchId,
+            hireDate = hireDate?.ToString("yyyy-MM-dd") ?? "",
+            asOfDate = asOf.ToString("yyyy-MM-dd"),
+            yearsOfService,
+            baseSalary = hasBaseSalary ? baseSalary!.Value : 0m,
+            hasBaseSalary,
+            coefficient,
+            calculatedSalary,
+            policyReference = "Nearest active threshold in SalaryCoefficients where YearsOfService <= completed years; default 1.0 when no threshold is configured."
+        });
+    }
+
+    [HttpPost("staff-salary/{staffId:long}/request-initial")]
+    public async Task<IActionResult> RequestInitialSalary(long staffId, [FromBody] InitialSalaryRequestDto request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var requestedBaseSalary = request.BaseSalary.GetValueOrDefault();
+        if (requestedBaseSalary <= 0m)
+        {
+            return BadRequest(new { message = "baseSalary must be greater than 0." });
+        }
+
+        if (!_crud.TryGetConfig("finance-approval-requests", out var approvalCfg) || !await _crud.TableExistsAsync(approvalCfg))
+        {
+            return BadRequest(new { message = "finance_approval_requests table is required for salary approval flow." });
         }
 
         var staff = await _db.Staffs
@@ -333,43 +378,103 @@ public class AccountingController : ControllerBase
             .FirstOrDefaultAsync(s => s.Id == staffId && s.IsDeleted != true);
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
-        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
-        decimal coefficient = 1.0000m;
-        int yearsOfService = 0;
 
-        if (staff.HireDate.HasValue && asOf >= staff.HireDate.Value)
+        var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? DateTime.UtcNow).Date);
+        var existingBaseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, effectiveFromDate);
+        if (existingBaseSalary.HasValue && existingBaseSalary.Value > 0m)
         {
-            yearsOfService = CalculateCompletedYears(staff.HireDate.Value, asOf);
-            var coefficientRow = (await _crud.QueryAsync(
-                "SELECT CAST(dbo.fn_staff_salary_coefficient(@hireDate,@asOfDate) AS decimal(6,4)) AS coefficient;",
-                [
-                    new SqlParameter("@hireDate", staff.HireDate.Value.ToDateTime(TimeOnly.MinValue)),
-                    new SqlParameter("@asOfDate", asOf.ToDateTime(TimeOnly.MinValue))
-                ])).FirstOrDefault();
-            coefficient = AsDecimal(coefficientRow, "coefficient");
-            if (coefficient <= 0m) coefficient = 1.0000m;
+            return BadRequest(new { message = "Staff already has an active base salary profile for the selected effective date." });
         }
 
-        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
-        if (!baseSalary.HasValue || baseSalary.Value <= 0m)
+        var pendingRequest = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1 id
+            FROM dbo.finance_approval_requests
+            WHERE request_type='PAYROLL_ADJUSTMENT'
+              AND JSON_VALUE(request_payload, '$.requestSubtype') = 'STAFF_INITIAL_SALARY'
+              AND status='PENDING'
+              AND TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.staffId')) = @staffId
+            ORDER BY id DESC;
+            """,
+            [new SqlParameter("@staffId", staff.Id)])).FirstOrDefault();
+        if (pendingRequest is not null)
         {
-            return BadRequest(new { message = "Nhân sự chưa có mốc lương cơ bản được thiết lập (Hồ sơ lương / Hợp đồng) cho kỳ này." });
+            return Conflict(new { message = "A pending initial salary request for this staff already exists." });
         }
 
-        decimal calculatedSalary = Math.Round(baseSalary.Value * coefficient, 0, MidpointRounding.AwayFromZero);
-
-        return Ok(new
+        var payloadObject = new
         {
+            requestType = "PAYROLL_ADJUSTMENT",
+            requestSubtype = "STAFF_INITIAL_SALARY",
             staffId = staff.Id,
             staffName = staff.FullName,
             branchId = staff.BranchId,
-            hireDate = staff.HireDate?.ToString("yyyy-MM-dd") ?? "",
-            asOfDate = asOf.ToString("yyyy-MM-dd"),
-            yearsOfService,
-            baseSalary,
-            coefficient,
-            calculatedSalary,
-            policyReference = "Hệ số thâm niên (Mặc định: 1.0 nếu chưa đủ mốc hoặc chưa có ngày vào làm)."
+            baseSalary = requestedBaseSalary,
+            effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
+            note = request.Note?.Trim() ?? "",
+            requestedBy = access.UserId,
+            requestedAt = DateTime.UtcNow.ToString("O")
+        };
+        var payloadJson = JsonSerializer.Serialize(payloadObject);
+        var reason = string.IsNullOrWhiteSpace(request.Reason)
+            ? $"Yêu cầu tạo lương khởi điểm cho nhân sự {staff.FullName} (#{staff.Id})."
+            : request.Reason.Trim();
+
+        var createdId = await _crud.ScalarAsync<long?>(
+            """
+            DECLARE @inserted TABLE (id bigint);
+            INSERT INTO dbo.finance_approval_requests
+            (
+                request_type,
+                requested_by,
+                approver_id,
+                status,
+                risk_level,
+                amount,
+                reason,
+                reject_reason,
+                request_payload,
+                created_at,
+                updated_at
+            )
+            OUTPUT INSERTED.id INTO @inserted(id)
+            VALUES
+            (
+                'PAYROLL_ADJUSTMENT',
+                @requestedBy,
+                NULL,
+                'PENDING',
+                'MEDIUM',
+                @amount,
+                @reason,
+                NULL,
+                @payload,
+                SYSDATETIME(),
+                SYSDATETIME()
+            );
+            SELECT TOP 1 id FROM @inserted;
+            """,
+            [
+                new SqlParameter("@requestedBy", access.UserId),
+                new SqlParameter("@amount", requestedBaseSalary),
+                new SqlParameter("@reason", reason),
+                new SqlParameter("@payload", payloadJson)
+            ]);
+
+        if (!createdId.HasValue)
+        {
+            return BadRequest(new { message = "Failed to create initial salary approval request." });
+        }
+
+        return Ok(new
+        {
+            requestId = createdId.Value,
+            status = "PENDING",
+            staffId = staff.Id,
+            staffName = staff.FullName,
+            baseSalary = requestedBaseSalary,
+            effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
+            message = "Initial salary request has been sent to admin for approval."
         });
     }
 
@@ -515,6 +620,106 @@ public class AccountingController : ControllerBase
         return null;
     }
 
+    private async Task<DateOnly?> ResolveStaffHireDateAsync(long staffId, DateOnly? currentHireDate)
+    {
+        if (currentHireDate.HasValue) return currentHireDate.Value;
+
+        var staffRow = (await _crud.QueryAsync(
+            """
+            IF OBJECT_ID('dbo.Staffs', 'U') IS NULL
+            BEGIN
+                SELECT CAST(NULL AS date) AS hire_date;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'HireDate') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(HireDate AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'hire_date') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(hire_date AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'CreatedAt') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(CreatedAt AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'created_at') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(created_at AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE
+            BEGIN
+                SELECT CAST(NULL AS date) AS hire_date;
+            END
+            """,
+            [new SqlParameter("@staffId", staffId)])).FirstOrDefault();
+        var hireDate = AsDateOnly(staffRow, "hireDate");
+        if (hireDate.HasValue) return hireDate;
+
+        if (_crud.TryGetConfig("staff-contracts", out var contractCfg) && await _crud.TableExistsAsync(contractCfg))
+        {
+            var contractRow = (await _crud.QueryAsync(
+                """
+                SELECT TOP 1 effective_from AS hire_date
+                FROM dbo.staff_contracts
+                WHERE staff_id=@staffId
+                  AND effective_from IS NOT NULL
+                ORDER BY effective_from ASC, id ASC;
+                """,
+                [new SqlParameter("@staffId", staffId)])).FirstOrDefault();
+            hireDate = AsDateOnly(contractRow, "hireDate");
+            if (hireDate.HasValue) return hireDate;
+        }
+
+        if (_crud.TryGetConfig("staff-salary-profiles", out var salaryCfg) && await _crud.TableExistsAsync(salaryCfg))
+        {
+            var salaryRow = (await _crud.QueryAsync(
+                """
+                SELECT TOP 1 effective_from AS hire_date
+                FROM dbo.staff_salary_profiles
+                WHERE staff_id=@staffId
+                  AND effective_from IS NOT NULL
+                ORDER BY effective_from ASC, id ASC;
+                """,
+                [new SqlParameter("@staffId", staffId)])).FirstOrDefault();
+            hireDate = AsDateOnly(salaryRow, "hireDate");
+            if (hireDate.HasValue) return hireDate;
+        }
+
+        return null;
+    }
+
+    private async Task<decimal> ResolveStaffSalaryCoefficientAsync(long staffId, DateOnly hireDate, DateOnly asOfDate)
+    {
+        _ = staffId;
+        var yearsOfService = CalculateCompletedYears(hireDate, asOfDate);
+
+        var configuredCoefficient = await _db.SalaryCoefficients
+            .AsNoTracking()
+            .Where(item =>
+                item.IsDeleted != true &&
+                item.IsActive != false &&
+                item.YearsOfService.HasValue &&
+                item.YearsOfService.Value <= yearsOfService)
+            .OrderByDescending(item => item.YearsOfService)
+            .Select(item => (decimal?)item.CoefficientValue)
+            .FirstOrDefaultAsync();
+
+        if (configuredCoefficient.HasValue && configuredCoefficient.Value > 0m)
+        {
+            return configuredCoefficient.Value;
+        }
+
+        return 1.0000m;
+    }
+
     private static int CalculateCompletedYears(DateOnly fromDate, DateOnly toDate)
     {
         if (toDate < fromDate) return 0;
@@ -606,6 +811,20 @@ public class AccountingController : ControllerBase
     private static string AsString(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null ? Convert.ToString(v) ?? "" : "";
     private static long? AsLong(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null && v != DBNull.Value ? Convert.ToInt64(v) : null;
     private static decimal AsDecimal(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null && v != DBNull.Value ? Convert.ToDecimal(v) : 0m;
+    
+    private static DateOnly? AsDateOnly(IDictionary<string, object?>? row, string key)
+    {
+        if (row == null || !row.TryGetValue(key, out var v) || v == null || v == DBNull.Value) return null;
+        if (v is DateOnly dateOnly) return dateOnly;
+        if (v is DateTime dateTime) return DateOnly.FromDateTime(dateTime);
+        if (v is DateTimeOffset dateTimeOffset) return DateOnly.FromDateTime(dateTimeOffset.DateTime);
+
+        var text = Convert.ToString(v, CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (DateOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateOnly)) return parsedDateOnly;
+        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateTime)) return DateOnly.FromDateTime(parsedDateTime);
+        return null;
+    }
 
     private sealed record AccountingAccess(long UserId, long? BranchId);
     public sealed class PostJournalRequest { public long PostedBy { get; set; } }
@@ -613,4 +832,12 @@ public class AccountingController : ControllerBase
     public sealed class PayrollApproveRequest { public long ApprovedBy { get; set; } }
     public sealed class PayrollPaidRequest { public long PaidBy { get; set; } }
     public sealed class SupplierPaymentVoidRequest { public long? ApprovalRequestId { get; set; } public long? ApprovedBy { get; set; } public string? Reason { get; set; } }
+    
+    public sealed class InitialSalaryRequestDto
+    {
+        public decimal? BaseSalary { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
+        public string? Reason { get; set; }
+        public string? Note { get; set; }
+    }
 }
