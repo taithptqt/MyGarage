@@ -67,7 +67,7 @@ apiClient.interceptors.response.use(
       if (typeof window !== "undefined") {
         const isLoginPage = window.location.pathname === "/login";
         const requestUrl = String(error.config?.url || "").toLowerCase();
-        const isLoginRequest = requestUrl.includes("/api/auth/login");
+    const isLoginRequest = requestUrl.includes("/api/auth/sessions");
         
         // Only redirect if NOT on login page AND NOT a login request
         if (!isLoginPage && !isLoginRequest) {

@@ -1,4 +1,4 @@
-﻿import { request } from "../../../app/apiClient";
+import { request } from "@app/apiClient";
 
 /**
  * SERVICE ORDER API
@@ -7,53 +7,92 @@
 
 export const serviceOrderApi = {
   // --- Service Orders ---
-  getAll: () => request({ url: "/api/ServiceOrder", method: "GET" }),
-  getById: (id) => request({ url: `/api/ServiceOrder/${id}`, method: "GET" }),
-  create: (data) => request({ url: "/api/ServiceOrder", method: "POST", data }),
-  createWorkshop: (data) => request({ url: "/api/ServiceOrder/workshop-create", method: "POST", data }),
-  update: (id, data) => request({ url: `/api/ServiceOrder/${id}`, method: "PUT", data }),
-  delete: (id) => request({ url: `/api/ServiceOrder/${id}`, method: "DELETE" }),
+  getAll: () => request({ url: "/api/service-orders", method: "GET" }),
+  getById: (id) => request({ url: `/api/service-orders/${id}`, method: "GET" }),
+  create: (data) => request({ url: "/api/service-orders", method: "POST", data }),
+  createWorkshop: (data) => request({ url: "/api/service-orders", method: "POST", data }),
+  update: (id, data) => request({ url: `/api/service-orders/${id}`, method: "PUT", data }),
+  delete: (id) => request({ url: `/api/service-orders/${id}`, method: "DELETE" }),
 
   // --- Service Order Details (Services & Parts) ---
-  getDetails: (orderId) => request({ url: `/api/ServiceOrderDetail`, method: "GET", params: { serviceOrderId: orderId } }),
-  createDetail: (data) => request({ url: "/api/ServiceOrderDetail", method: "POST", data }),
-  updateDetail: (id, data) => request({ url: `/api/ServiceOrderDetail/${id}`, method: "PUT", data }),
-  deleteDetail: (id) => request({ url: `/api/ServiceOrderDetail/${id}`, method: "DELETE" }),
+  getDetails: (orderId) => request({ url: `/api/service-order-details`, method: "GET", params: { serviceOrderId: orderId } }),
+  createDetail: (data) => request({ url: "/api/service-order-details", method: "POST", data }),
+  updateDetail: (id, data) => request({ url: `/api/service-order-details/${id}`, method: "PUT", data }),
+  deleteDetail: (id) => request({ url: `/api/service-order-details/${id}`, method: "DELETE" }),
 
   // --- Check-in Requests ---
-  getCheckInRequests: () => request({ url: "/api/VehicleConditionLog/checkin-requests", method: "GET" }),
-  createCheckInRequest: (serviceOrderId) => request({ url: `/api/VehicleConditionLog/checkin-requests/${serviceOrderId}`, method: "POST" }),
-  acceptCheckInRequest: (serviceOrderId, technicianId) => request({ url: `/api/VehicleConditionLog/checkin-requests/${serviceOrderId}/accept`, method: "POST", data: { technicianId } }),
-  getCheckOutRequests: () => request({ url: "/api/VehicleConditionLog/checkout-requests", method: "GET" }),
-  createCheckOutRequest: (serviceOrderId) => request({ url: `/api/VehicleConditionLog/checkout-requests/${serviceOrderId}`, method: "POST" }),
-  acceptCheckOutRequest: (serviceOrderId, technicianId) => request({ url: `/api/VehicleConditionLog/checkout-requests/${serviceOrderId}/accept`, method: "POST", data: { technicianId } }),
+  getCheckInRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_IN" } }),
+  createCheckInRequest: (serviceOrderId) =>
+    request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_IN" } }),
+  acceptCheckInRequest: (serviceOrderId, technicianId) =>
+    request({
+      url: `/api/vehicle-condition-logs/condition-jobs/${serviceOrderId}`,
+      method: "PATCH",
+      data: { requestType: "CHECK_IN", technicianId },
+    }),
+  getCheckOutRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_OUT" } }),
+  createCheckOutRequest: (serviceOrderId) =>
+    request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_OUT" } }),
+  acceptCheckOutRequest: (serviceOrderId, technicianId) =>
+    request({
+      url: `/api/vehicle-condition-logs/condition-jobs/${serviceOrderId}`,
+      method: "PATCH",
+      data: { requestType: "CHECK_OUT", technicianId },
+    }),
 
   // --- Diagnosis ---
-  getDiagnoses: (orderId) => request({ url: "/api/Diagnosis", method: "GET", params: orderId ? { serviceOrderId: orderId } : undefined }),
-  getDiagnosisById: (id) => request({ url: `/api/Diagnosis/${id}`, method: "GET" }),
-  createDiagnosis: (data) => request({ url: "/api/Diagnosis", method: "POST", data }),
-  updateDiagnosis: (id, data) => request({ url: `/api/Diagnosis/${id}`, method: "PUT", data }),
-  completeDiagnosis: (id, data) => request({ url: `/api/Diagnosis/${id}/complete`, method: "POST", data }),
-  requestDiagnosis: (serviceOrderId) => request({ url: `/api/Diagnosis/requests/${serviceOrderId}`, method: "POST" }),
-  recallDiagnosisRequest: (serviceOrderId) => request({ url: `/api/Diagnosis/requests/${serviceOrderId}/recall`, method: "POST" }),
-  getDiagnosisRequests: () => request({ url: "/api/Diagnosis", method: "GET", params: { requestOnly: true } }),
-  acceptDiagnosisRequest: (serviceOrderId, technicianId) => request({ url: `/api/Diagnosis/requests/${serviceOrderId}/accept`, method: "POST", data: { technicianId } }),
+  getDiagnoses: (orderId) => request({ url: "/api/diagnoses", method: "GET", params: orderId ? { serviceOrderId: orderId } : undefined }),
+  getDiagnosisById: (id) => request({ url: `/api/diagnoses/${id}`, method: "GET" }),
+  createDiagnosis: (data) => request({ url: "/api/diagnoses", method: "POST", data }),
+  updateDiagnosis: (id, data) => request({ url: `/api/diagnoses/${id}`, method: "PUT", data }),
+  completeDiagnosis: (id, data) => {
+    const payload = {
+      status: "COMPLETED",
+      symptom: data?.symptom ?? null,
+      rootCause: data?.rootCause ?? null,
+      severity: data?.severity ?? null,
+      serviceOrderId: data?.serviceOrderId ?? null,
+      technicianId: data?.technicianId ?? null,
+      updatedBy: data?.updatedBy ?? null,
+      approvedByForemanId: data?.approvedByForemanId ?? null,
+      diagnosedAt: data?.diagnosedAt ?? null,
+    };
+
+    if (!Number(id) || Number(id) <= 0) {
+      return request({ url: "/api/diagnoses", method: "POST", data: payload });
+    }
+
+    return request({
+      url: `/api/diagnoses/${id}`,
+      method: "PATCH",
+      data: payload,
+    });
+  },
+  requestDiagnosis: (serviceOrderId) => request({ url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`, method: "POST" }),
+  recallDiagnosisRequest: (serviceOrderId) => request({ url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`, method: "DELETE" }),
+  getDiagnosisRequests: () => request({ url: "/api/diagnoses", method: "GET", params: { requestOnly: true } }),
+  acceptDiagnosisRequest: (serviceOrderId, technicianId) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
+      method: "PATCH",
+      data: { technicianId },
+    }),
 
   // --- Diagnose Recommendations ---
-  getDiagnoseRecommendations: (diagnoseId) => request({ url: "/api/DiagnoseRecommendation", method: "GET", params: diagnoseId ? { diagnoseId } : undefined }),
-  createDiagnoseRecommendation: (data) => request({ url: "/api/DiagnoseRecommendation", method: "POST", data }),
-  updateDiagnoseRecommendation: (id, data) => request({ url: `/api/DiagnoseRecommendation/${id}`, method: "PUT", data }),
-  deleteDiagnoseRecommendation: (id) => request({ url: `/api/DiagnoseRecommendation/${id}`, method: "DELETE" }),
+  getDiagnoseRecommendations: (diagnoseId) => request({ url: "/api/diagnose-recommendations", method: "GET", params: diagnoseId ? { diagnoseId } : undefined }),
+  createDiagnoseRecommendation: (data) => request({ url: "/api/diagnose-recommendations", method: "POST", data }),
+  updateDiagnoseRecommendation: (id, data) => request({ url: `/api/diagnose-recommendations/${id}`, method: "PUT", data }),
+  deleteDiagnoseRecommendation: (id) => request({ url: `/api/diagnose-recommendations/${id}`, method: "DELETE" }),
 
   // --- QC Inspections ---
-  getQcInspections: (orderId) => request({ url: `/api/QcInspection`, method: "GET", params: { serviceOrderId: orderId } }),
-  createQcInspection: (data) => request({ url: "/api/QcInspection", method: "POST", data }),
+  getQcInspections: (orderId) => request({ url: `/api/qc-inspections`, method: "GET", params: { serviceOrderId: orderId } }),
+  createQcInspection: (data) => request({ url: "/api/qc-inspections", method: "POST", data }),
 
   // --- Staff Assignments ---
-  getAssignments: (orderId) => request({ url: `/api/ServiceStaffAssignment`, method: "GET", params: { serviceOrderId: orderId } }),
-  createAssignment: (data) => request({ url: "/api/ServiceStaffAssignment", method: "POST", data }),
-  updateAssignment: (id, data) => request({ url: `/api/ServiceStaffAssignment/${id}`, method: "PUT", data }),
-  deleteAssignment: (id) => request({ url: `/api/ServiceStaffAssignment/${id}`, method: "DELETE" }),
+  getAssignments: (orderId) => request({ url: `/api/service-staff-assignments`, method: "GET", params: { serviceOrderId: orderId } }),
+  createAssignment: (data) => request({ url: "/api/service-staff-assignments", method: "POST", data }),
+  updateAssignment: (id, data) => request({ url: `/api/service-staff-assignments/${id}`, method: "PUT", data }),
+  deleteAssignment: (id) => request({ url: `/api/service-staff-assignments/${id}`, method: "DELETE" }),
 
   // --- Helpers ---
   generateCode: () => `SO-${new Date().getTime().toString().slice(-6)}`,

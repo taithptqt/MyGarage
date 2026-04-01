@@ -1,7 +1,7 @@
 ﻿import { useCallback, useMemo, useState } from "react";
-import { cancelAppointment, getMyAppointments } from "../api/appointmentApi";
-import { getMyBookingGroups } from "../api/bookingGroupApi";
-import { APPOINTMENT_STATUS } from "../constants/appointmentStatuses";
+import { cancelAppointment, getMyAppointments } from "@features/appointments/api/appointmentApi";
+import { getMyBookingGroups } from "@features/appointments/api/bookingGroupApi";
+import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
 import {
   normalizeAppointment,
   normalizeAppointmentsResponse,
@@ -9,7 +9,7 @@ import {
   normalizeBookingGroupsResponse,
   sortAppointments,
   toDateTime,
-} from "../utils/myAppointmentsData";
+} from "@features/appointments/utils/myAppointmentsData";
 
 export function useMyAppointments() {
   const [appointments, setAppointments] = useState([]);
@@ -139,3 +139,7 @@ export function useMyAppointments() {
     handleConfirmCancel,
   };
 }
+
+
+
+

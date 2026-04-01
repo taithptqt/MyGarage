@@ -1,18 +1,18 @@
 ﻿import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { serviceOrderApi } from "../api/serviceOrderApi";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import {
   getAllCustomers,
   getAllVehicles,
   getAllCustomerVehicles,
-} from "../../admin/api/customerApi";
-import { getAllStaff, getAllRoles } from "../../admin/api/staffApi";
-import { getAllServiceCategories, getAllStandardServices } from "../../admin/api/serviceApi";
-import { getVehicleBrands, getVehicleModels } from "../../appointments/api/appointmentApi";
-import { useBranch } from "../../../context/BranchContext";
-import { useAuth } from "../../../context/AuthContext";
-import DateTimePicker from "../components/DateTimePicker";
-import { formatLicensePlate } from "../utils/serviceOrderDetailUtils";
+} from "@features/admin/api/customerApi";
+import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
+import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
+import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { useBranch } from "@shared/core/context/BranchContext";
+import { useAuth } from "@shared/core/context/AuthContext";
+import DateTimePicker from "@features/workshop/components/DateTimePicker";
+import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
 import "./Workshop.css";
 
 export default function CreateServiceOrderPage() {
@@ -102,7 +102,7 @@ export default function CreateServiceOrderPage() {
       return `Dữ liệu liên kết chưa hợp lệ. ${text}`;
     }
     if (/timeout|network|failed to fetch/i.test(text)) {
-      return "Không kết nối được tới máy chủ. Vui lòng thử lại sau.";
+      return "Không kết nđi được tơi máy chủ. Vui lòng thử lại sau.";
     }
 
     return text || fallback;
@@ -180,7 +180,7 @@ export default function CreateServiceOrderPage() {
     const checkIn = data.checkInTime ? new Date(data.checkInTime) : null;
     const maxPastTime = new Date(now.getTime() - 30 * 60 * 1000);
 
-    if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
+    if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cđ vấn dịch vụ.";
 
     if (!checkIn || Number.isNaN(checkIn.getTime())) {
       errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
@@ -207,27 +207,27 @@ export default function CreateServiceOrderPage() {
       if (!String(data.guestPhone || "").trim()) {
         errors.guestPhone = "Vui lòng nhập số điện thoại khách vãng lai.";
       } else if (!validateVietnamesePhone(data.guestPhone)) {
-        errors.guestPhone = "Số điện thoại không đúng định dạng Việt Nam.";
+        errors.guestPhone = "Sđ điện thoại không đúng định dạng Việt Nam.";
       }
-      if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lòng nhập biển số xe.";
+      if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lòng nhập biển sđ xe.";
       if (!guestSelectedBrandId) errors.guestBrandId = "Vui lòng chọn hãng xe.";
       if (!data.guestVehicleModelId) errors.guestVehicleModelId = "Vui lòng chọn dòng xe.";
-      if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lòng chọn năm sản xuất.";
+      if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lòng chọn nểm sản xuất.";
     } else {
       if (!data.customerId) errors.customerId = "Vui lòng chọn khách hàng.";
 
       if (!data.isNewVehicle) {
         if (!data.vehicleId) errors.vehicleId = "Vui lòng chọn xe đã lưu.";
       } else {
-        if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lòng nhập biển số xe mới.";
+        if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lòng nhập biển sđ xe mơi.";
         if (!selectedBrandId) errors.brandId = "Vui lòng chọn hãng xe.";
         if (!data.vehicleModelId) errors.vehicleModelId = "Vui lòng chọn dòng xe.";
-        if (!data.vehicleYear) errors.vehicleYear = "Vui lòng chọn năm sản xuất.";
+        if (!data.vehicleYear) errors.vehicleYear = "Vui lòng chọn nểm sản xuất.";
       }
     }
 
     if (!selectedBranchId) {
-      errors.executeBranchId = "Vui lòng chọn chi nhánh làm việc trước khi tạo lệnh.";
+      errors.executeBranchId = "Vui lòng chọn chi nhánh làm việc trươc khi tạo lệnh.";
     }
 
     return errors;
@@ -453,7 +453,7 @@ export default function CreateServiceOrderPage() {
     const errors = validateForm(formData);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
+      setError("Vui lòng xử lý các lđ-i trong biểu mẫu trươc khi lưu.");
       return;
     }
 
@@ -517,12 +517,12 @@ export default function CreateServiceOrderPage() {
     <div className="create-order-page">
       <div className="page-header-actions">
         <button className="btn-back" onClick={() => navigate(-1)}>Quay lại Dashboard</button>
-        <h2 className="page-title">Tiếp nhận xe và Tạo lệnh sửa chữa mới</h2>
+        <h2 className="page-title">Tiếp nhận xe và Tạo lệnh sửa chữa mơi</h2>
       </div>
       {error && <div className="alert alert-danger">{error}</div>}
       {submitAttempted && Object.keys(fieldErrors).length > 0 && (
         <div className="validation-summary" role="alert">
-          <strong>Vui lòng xử lý các lỗi sau:</strong>
+          <strong>Vui lòng xử lý các lđ-i sau:</strong>
           <ul>
             {Object.values(fieldErrors).map((msg, idx) => (
               <li key={`${msg}-${idx}`}>{msg}</li>
@@ -548,7 +548,7 @@ export default function CreateServiceOrderPage() {
                   <input
                     type="text"
                     className={showError("customerId") ? "input-invalid" : ""}
-                    placeholder="Nhập tên hoặc số điện thoại..."
+                    placeholder="Nhập tên hoặc sđ điện thoại..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     required={!formData.customerId}
@@ -588,9 +588,9 @@ export default function CreateServiceOrderPage() {
                         }))
                       }
                     />
-                    <label htmlFor="isNewVehicle">Sử dụng xe mới</label>
+                    <label htmlFor="isNewVehicle">Sử dụng xe mơi</label>
                   </div>
-                  {customerHasNoVehicles && <div style={{ color: "#e6522c" }}>Khách chưa có xe, bắt buộc nhập xe mới.</div>}
+                  {customerHasNoVehicles && <div style={{ color: "#e6522c" }}>Khách chưa có xe, bắt buộc nhập xe mơi.</div>}
                 </div>
               )}
 
@@ -605,7 +605,7 @@ export default function CreateServiceOrderPage() {
                     required={!!formData.customerId && !formData.isNewVehicle}
                     disabled={!formData.customerId || customerHasNoVehicles}
                   >
-                    <option value="">-- Chọn biển số xe --</option>
+                    <option value="">-- Chọn biển sđ xe --</option>
                     {customerVehiclesFiltered.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.licensePlate} {(v.brandName || v.modelName) ? `(${v.brandName || ""} ${v.modelName || ""})`.trim() : ""}
@@ -617,7 +617,7 @@ export default function CreateServiceOrderPage() {
               ) : (
                 <>
                   <div className="form-group">
-                    <label>Biển số xe *</label>
+                    <label>Biển sđ xe *</label>
                     <input className={showError("vehicleLicensePlate") ? "input-invalid" : ""} name="vehicleLicensePlate" value={formData.vehicleLicensePlate} onChange={handleChange} onBlur={handlePlateBlur} required />
                     {showError("vehicleLicensePlate") && <div className="field-error">{fieldErrors.vehicleLicensePlate}</div>}
                   </div>
@@ -642,9 +642,9 @@ export default function CreateServiceOrderPage() {
                   <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
                     <div className="form-group"><label>Màu sắc</label><input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} /></div>
                     <div className="form-group">
-                      <label>Năm SX *</label>
+                      <label>Nểm SX *</label>
                       <select className={showError("vehicleYear") ? "input-invalid" : ""} name="vehicleYear" value={formData.vehicleYear} onChange={handleChange} required>
-                        <option value="">Chọn năm</option>
+                        <option value="">Chọn nểm</option>
                         {years.map((y) => <option key={y} value={y}>{y}</option>)}
                       </select>
                       {showError("vehicleYear") && <div className="field-error">{fieldErrors.vehicleYear}</div>}
@@ -663,13 +663,13 @@ export default function CreateServiceOrderPage() {
                   {showError("guestName") && <div className="field-error">{fieldErrors.guestName}</div>}
                 </div>
                 <div className="form-group">
-                  <label>Số điện thoại *</label>
+                  <label>Sđ điện thoại *</label>
                   <input className={showError("guestPhone") ? "input-invalid" : ""} name="guestPhone" value={formData.guestPhone} onChange={handleChange} required />
                   {showError("guestPhone") && <div className="field-error">{fieldErrors.guestPhone}</div>}
                 </div>
               </div>
               <div className="form-group">
-                <label>Biển số xe *</label>
+                <label>Biển sđ xe *</label>
                 <input className={showError("guestVehiclePlate") ? "input-invalid" : ""} name="guestVehiclePlate" value={formData.guestVehiclePlate} onChange={handleChange} onBlur={handlePlateBlur} required />
                 {showError("guestVehiclePlate") && <div className="field-error">{fieldErrors.guestVehiclePlate}</div>}
               </div>
@@ -694,9 +694,9 @@ export default function CreateServiceOrderPage() {
               <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
                 <div className="form-group"><label>Màu sắc</label><input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} /></div>
                 <div className="form-group">
-                  <label>Năm SX *</label>
+                  <label>Nểm SX *</label>
                   <select className={showError("guestVehicleYear") ? "input-invalid" : ""} name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange} required>
-                    <option value="">Chọn năm</option>
+                    <option value="">Chọn nểm</option>
                     {years.map((y) => <option key={y} value={y}>{y}</option>)}
                   </select>
                   {showError("guestVehicleYear") && <div className="field-error">{fieldErrors.guestVehicleYear}</div>}
@@ -738,7 +738,7 @@ export default function CreateServiceOrderPage() {
                   return (
                     <button key={sid} type="button" className="service-chip" onClick={() => handleServiceToggle(sid)}>
                       <span>{s?.Name || s?.name}</span>
-                      <span className="remove">×</span>
+                      <span className="remove">đ-</span>
                     </button>
                   );
                 })}
@@ -747,7 +747,7 @@ export default function CreateServiceOrderPage() {
             {formData.serviceIds.length > 0 && (
               <div className="service-summary-card">
                 <div className="service-summary-item">
-                  <span className="label">Tổng thời gian</span>
+                  <span className="label">Tđ.ng thời gian</span>
                   <span className="value">{totalMinutes} phút</span>
                 </div>
                 <div className="service-summary-item">
@@ -755,7 +755,7 @@ export default function CreateServiceOrderPage() {
                   <span className="value">{finishTimeStr || "--:--"}</span>
                 </div>
                 <div className="service-summary-item">
-                  <span className="label">Tổng tiền</span>
+                  <span className="label">Tđ.ng tiền</span>
                   <span className="value">{totalPrice?.toLocaleString("vi-VN") || 0} đ</span>
                 </div>
               </div>
@@ -763,9 +763,9 @@ export default function CreateServiceOrderPage() {
           </div>
 
           <div className="form-group">
-            <label>Cố vấn dịch vụ *</label>
+            <label>Cđ vấn dịch vụ *</label>
             <select className={showError("serviceAdvisorId") ? "input-invalid" : ""} name="serviceAdvisorId" value={formData.serviceAdvisorId} onChange={handleChange} required>
-              <option value="">-- Chọn cố vấn --</option>
+              <option value="">-- Chọn cđ vấn --</option>
               {staff.map((s) => <option key={s.id} value={s.id}>{s.fullName}</option>)}
             </select>
             {showError("serviceAdvisorId") && <div className="field-error">{fieldErrors.serviceAdvisorId}</div>}
@@ -775,11 +775,11 @@ export default function CreateServiceOrderPage() {
             <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
               <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
               <option value="RETURN_ALL">Trả lại cho khách hàng</option>
-              <option value="CUSTOM">Cho khách kiểm tra rồi quyết định</option>
+              <option value="CUSTOM">Cho khách kiểm tra rôi quyết định</option>
             </select>
           </div>
           <div className="form-group">
-            <label>Số tiền cọc (VND)</label>
+            <label>Sđ tiền cọc (VND)</label>
             <input type="number" name="requiredDepositAmount" value={formData.requiredDepositAmount} onChange={handleChange} min="0" step="10000" />
           </div>
         </div>
@@ -841,5 +841,14 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 

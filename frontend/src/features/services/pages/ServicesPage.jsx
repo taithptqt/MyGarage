@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { servicesApi } from "../api/servicesApi";
-import { Modal, ConfirmDialog } from "../../admin/components/AdminModals";
-import { generateAcronym } from "../../../utils/stringUtils";
-import { useSearch } from "@context/SearchContext";
+import { servicesApi } from "@features/services/api/servicesApi";
+import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
+import { generateAcronym } from "@shared/core/utils/stringUtils";
+import { useSearch } from "@shared/core/context/SearchContext";
 
 const EMPTY_SERVICE = {
   name: "",
@@ -51,7 +51,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>Đơn giá (VNĐ) *</label>
+          <label>?on gi? (VN?) *</label>
           <input name="basePrice" type="number" value={form.basePrice} onChange={handleChange} required />
         </div>
         <div className="form-group">
@@ -70,12 +70,12 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
         <input name="isActive" type="checkbox" checked={form.isActive !== false} onChange={(e) => setForm(prev => ({ ...prev, isActive: e.target.checked }))} id="chk-active-service" />
-        <label htmlFor="chk-active-service" style={{ marginBottom: 0, cursor: 'pointer' }}>Đang kinh doanh</label>
+        <label htmlFor="chk-active-service" style={{ marginBottom: 0, cursor: 'pointer' }}>?ang kinh doanh</label>
       </div>
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang lưu…" : "Lưu"}
+          {loading ? "?ang luu?" : "Luu"}
         </button>
       </div>
     </form>
@@ -164,14 +164,14 @@ export default function ServicesPage() {
 
       <div className="table-wrapper">
         {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Đang tải…</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải...</p></div>
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Mã</th>
+                <th>M?</th>
                 <th>Tên dịch vụ</th>
-                <th>Đơn giá</th>
+                <th>?on gi?</th>
                 <th>Thời gian</th>
                 <th className="th-center">Danh mục</th>
                 <th className="th-center">Trạng thái</th>
@@ -183,9 +183,9 @@ export default function ServicesPage() {
                 <tr key={s.id}>
                   <td className="td-id">{s.code}</td>
                   <td className="td-name">{s.name}</td>
-                  <td>{s.basePrice ? s.basePrice.toLocaleString() : 0}đ</td>
+                  <td>{s.basePrice ? s.basePrice.toLocaleString() : 0}d</td>
                   <td>{s.standardMinutes} phút</td>
-                  <td className="td-center">{categories.find(c => c.id === s.categoryId)?.name || "—"}</td>
+                  <td className="td-center">{categories.find(c => c.id === s.categoryId)?.name || "?"}</td>
                   <td className="td-center">
                     <span className={`badge ${s.isActive !== false ? 'badge-active' : 'badge-inactive'}`}>
                       {s.isActive !== false ? "Kinh doanh" : "Ngừng"}
@@ -193,8 +193,8 @@ export default function ServicesPage() {
                   </td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => { setSelected(s); setModal("edit"); }}>✏️</button>
-                      <button className="btn-icon" onClick={() => { setSelected(s); setModal("delete"); }}>🗑️</button>
+                      <button className="btn-icon" onClick={() => { setSelected(s); setModal("edit"); }}>??</button>
+                      <button className="btn-icon" onClick={() => { setSelected(s); setModal("delete"); }}>???</button>
                     </div>
                   </td>
                 </tr>
@@ -212,7 +212,7 @@ export default function ServicesPage() {
       )}
 
       {modal === "edit" && selected && (
-        <Modal title={`Sửa — ${selected.name}`} onClose={closeModal}>
+        <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <ServiceForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
         </Modal>
@@ -226,3 +226,7 @@ export default function ServicesPage() {
     </div>
   );
 }
+
+
+
+

@@ -1,5 +1,5 @@
-import { request } from "../../../app/apiClient";
-import { REFERENCE_ROUTES } from "./referenceRoutes";
+import { request } from "@app/apiClient";
+import { REFERENCE_ROUTES } from "@features/appointments/api/referenceRoutes";
 
 export async function getAllBranches() {
   return request({ url: REFERENCE_ROUTES.branches, method: "GET" });

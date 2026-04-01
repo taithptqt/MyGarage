@@ -1,4 +1,4 @@
-function AuthResult({ result, onLogout }) {
+﻿function AuthResult({ result, onLogout }) {
   if (!result) return null;
 
   return (

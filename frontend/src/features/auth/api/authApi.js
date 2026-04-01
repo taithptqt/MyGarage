@@ -1,7 +1,7 @@
-import { getApiBaseUrl as getBaseUrl } from "../../../app/apiClient";
+import { getApiBaseUrl as getBaseUrl } from "@app/apiClient";
 
-export * from "./authSessionApi";
-export * from "./authProfileApi";
+export * from "@features/auth/api/authSessionApi";
+export * from "@features/auth/api/authProfileApi";
 
 export function getApiBaseUrl() {
   return getBaseUrl();

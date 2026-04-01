@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import VoucherManagementPage from "./VoucherManagementPage";
+import VoucherManagementPage from "@features/voucher/pages/VoucherManagementPage";
 
 class VoucherPageErrorBoundary extends React.Component {
   constructor(props) {
@@ -8,7 +8,7 @@ class VoucherPageErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, message: error?.message || "Lỗi render không xác định" };
+    return { hasError: true, message: error?.message || "Lđ-i render không xác định" };
   }
 
   componentDidCatch(error) {
@@ -28,7 +28,7 @@ class VoucherPageErrorBoundary extends React.Component {
             </div>
           </header>
           <div className="alert alert-error">
-            Voucher UI gặp lỗi runtime: {this.state.message}
+            Voucher UI gặp lđ-i runtime: {this.state.message}
           </div>
           <div className="table-toolbar">
             <button className="btn-primary" onClick={() => window.location.reload()} type="button">
@@ -50,4 +50,8 @@ export default function SafeVoucherManagementPage({ section }) {
     </VoucherPageErrorBoundary>
   );
 }
+
+
+
+
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 
 export const getCroppedImg = async (imageSrc, pixelCrop) => {
@@ -58,7 +58,7 @@ export default function ImageCropper({ image, onCropComplete, onCancel }) {
       onCropComplete(croppedImageBlob);
     } catch (e) {
       console.error("Crop error:", e);
-      alert("Có lỗi xảy ra khi cắt ảnh. Vui lòng thử lại.");
+      alert("Có lđ-i xảy ra khi cắt ảnh. Vui lòng thử lại.");
     }
   };
 
@@ -103,3 +103,5 @@ export default function ImageCropper({ image, onCropComplete, onCancel }) {
     </div>
   );
 }
+
+

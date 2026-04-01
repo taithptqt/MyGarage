@@ -6,7 +6,7 @@ import {
   getDispatchDashboard,
   lockOvernightSlots,
   runDispatchCycle,
-} from "../../appointments/api/appointmentApi";
+} from "@features/appointments/api/appointmentApi";
 import "./DispatchCenterPage.css";
 
 function fmtDateTime(value) {
@@ -254,3 +254,5 @@ export default function DispatchCenterPage() {
     </div>
   );
 }
+
+

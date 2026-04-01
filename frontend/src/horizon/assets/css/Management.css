@@ -1,4 +1,4 @@
-/* ─── CSS Variables: Light + Dark Mode ─── */
+﻿/* ─── CSS Variables: Light + Dark Mode ─── */
 :root {
   --mgmt-bg: #f0f4f8;
   --mgmt-text: #1a202c;
@@ -18,7 +18,7 @@
 
 
 
-/* Dark mode: theo Chakra UI toggle (data-theme="dark" hoặc class="chakra-ui-dark") */
+/* Dark mode: theo Chakra UI toggle (data-theme="dark" hoáº·c class="chakra-ui-dark") */
 [data-theme="dark"],
 .chakra-ui-dark {
   --mgmt-bg: #1a202c;

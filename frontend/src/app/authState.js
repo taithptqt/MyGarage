@@ -3,7 +3,7 @@ import {
   isAuthTokenAvailable,
   persistAuthUser,
   readAuthUser,
-} from "../features/auth/utils/authStorage";
+} from "@features/auth/utils/authStorage";
 
 export function setAuth(user) {
   if (!user) return;

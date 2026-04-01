@@ -1,4 +1,4 @@
-/*!
+﻿/*!
   _   _  ___  ____  ___ ________  _   _   _   _ ___   
  | | | |/ _ \|  _ \|_ _|__  / _ \| \ | | | | | |_ _| 
  | |_| | | | | |_) || |  / / | | |  \| | | | | || | 
@@ -32,11 +32,11 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 // Assets
-import Usa from "assets/img/dashboards/usa.png";
+import Usa from "@horizon/assets/img/dashboards/usa.png";
 // Custom components
-import MiniCalendar from "components/calendar/MiniCalendar";
-import MiniStatistics from "components/card/MiniStatistics";
-import IconBox from "components/icons/IconBox";
+import MiniCalendar from "@horizon/components/calendar/MiniCalendar";
+import MiniStatistics from "@horizon/components/card/MiniStatistics";
+import IconBox from "@horizon/components/icons/IconBox";
 import React from "react";
 import {
   MdAddTask,
@@ -44,19 +44,19 @@ import {
   MdBarChart,
   MdFileCopy,
 } from "react-icons/md";
-import CheckTable from "views/admin/default/components/CheckTable";
-import ComplexTable from "views/admin/default/components/ComplexTable";
-import DailyTraffic from "views/admin/default/components/DailyTraffic";
-import PieCard from "views/admin/default/components/PieCard";
-import Tasks from "views/admin/default/components/Tasks";
-import TotalSpent from "views/admin/default/components/TotalSpent";
-import WeeklyRevenue from "views/admin/default/components/WeeklyRevenue";
+import CheckTable from "@horizon/views/admin/default/components/CheckTable";
+import ComplexTable from "@horizon/views/admin/default/components/ComplexTable";
+import DailyTraffic from "@horizon/views/admin/default/components/DailyTraffic";
+import PieCard from "@horizon/views/admin/default/components/PieCard";
+import Tasks from "@horizon/views/admin/default/components/Tasks";
+import TotalSpent from "@horizon/views/admin/default/components/TotalSpent";
+import WeeklyRevenue from "@horizon/views/admin/default/components/WeeklyRevenue";
 import {
   columnsDataCheck,
   columnsDataComplex,
-} from "views/admin/default/variables/columnsData";
-import tableDataCheck from "views/admin/default/variables/tableDataCheck.json";
-import tableDataComplex from "views/admin/default/variables/tableDataComplex.json";
+} from "@horizon/views/admin/default/variables/columnsData";
+import tableDataCheck from "@horizon/views/admin/default/variables/tableDataCheck.json";
+import tableDataComplex from "@horizon/views/admin/default/variables/tableDataComplex.json";
 
 export default function UserReports() {
   // Chakra Color Mode
@@ -170,3 +170,4 @@ export default function UserReports() {
     </Box>
   );
 }
+

@@ -1,8 +1,8 @@
-// Chakra Imports
+﻿// Chakra Imports
 import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Link, Text, useColorModeValue } from '@chakra-ui/react';
 import PropTypes from 'prop-types';
 import React, { useState, useEffect } from 'react';
-import AdminNavbarLinks from 'components/navbar/NavbarLinksAdmin';
+import AdminNavbarLinks from '@horizon/components/navbar/NavbarLinksAdmin';
 
 export default function AdminNavbar(props) {
 	const [ scrolled, setScrolled ] = useState(false);
@@ -144,3 +144,4 @@ AdminNavbar.propTypes = {
 	onOpen: PropTypes.func,
 	sidebarWidth: PropTypes.number
 };
+

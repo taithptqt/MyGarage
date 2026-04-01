@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 const SYSTEM_CATEGORIES = [
-  { id: "engine", label: "Động cơ", icon: Activity },
+  { id: "engine", label: "??ng co", icon: Activity },
   { id: "transmission", label: "Hộp số", icon: Wrench },
   { id: "brakes", label: "Phanh & ABS", icon: AlertTriangle },
   { id: "steering", label: "Hệ thống Lái / Gầm", icon: Car },
@@ -50,8 +50,8 @@ const SYSTEM_CATEGORIES = [
 const SYMPTOM_TYPES = {
   engine: ["Rung giật", "Mất công suất", "Chết máy", "Không khởi động được", "Khói bất thường"],
   transmission: ["Khó sang số", "Trượt số", "Giật cục", "Chậm phản hồi"],
-  brakes: ["Kêu rít / Xèo xèo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
-  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va đập gầm"],
+  brakes: ["Kêu rít / Xào xạo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
+  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va dập gầm"],
   electrical: ["Đèn pha mờ", "Còi tịt", "Đồng hồ taplo lỗi", "Hết bình"],
   hvac: ["Không mát", "Mát yếu", "Mùi hôi", "Quạt gió kêu"],
   fluids: ["Nước làm mát", "Dầu máy", "Dầu phanh", "Nước rửa kính"],
@@ -132,7 +132,7 @@ export default function CustomerSymptomDiagnosticsPage() {
             <Box bg="white" p={5} borderRadius="xl" boxShadow="sm" border="1px solid #e2e8f0">
               <HStack mb={4} color="#4318ff">
                 <Icon as={Car} />
-                <Heading size="sm">Thông tin Đầu vào</Heading>
+                <Heading size="sm">Thông tin đầu vào</Heading>
               </HStack>
               
               <VStack spacing={4} align="stretch">
@@ -215,8 +215,8 @@ export default function CustomerSymptomDiagnosticsPage() {
                   >
                     <option value="cold_start">Khi nổ máy nguội (Sáng sớm)</option>
                     <option value="idling">Khi nổ máy không tải (Dừng đèn đỏ)</option>
-                    <option value="accelerating">Khi tăng tốc / Đạp ga</option>
-                    <option value="braking">Khi rà phanh</option>
+                    <option value="accelerating">Khi tăng tốc / đạp ga</option>
+                    <option value="braking">Khi r? phanh</option>
                     <option value="turning">Khi đánh lái / Cua</option>
                     <option value="high_speed">Khi chạy tốc độ cao (&gt; 60km/h)</option>
                     <option value="always">Bất kỳ lúc nào</option>
@@ -303,7 +303,7 @@ export default function CustomerSymptomDiagnosticsPage() {
               
               <FormControl>
                  <Textarea 
-                    placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rột rột rồi lên đèn check engine, xe rung bần bật không chạy được...'" 
+                    placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rít rít rồi lên đèn check engine, xe rung bần bật không chạy được...'" 
                     rows={4}
                     value={form.customerDescription}
                     onChange={(e) => setForm({...form, customerDescription: e.target.value})}
@@ -333,3 +333,5 @@ export default function CustomerSymptomDiagnosticsPage() {
     </Box>
   );
 }
+
+

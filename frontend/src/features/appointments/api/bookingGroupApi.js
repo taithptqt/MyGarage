@@ -1,5 +1,5 @@
-import { request } from "../../../app/apiClient";
-import { BOOKING_GROUPS_ROUTES } from "./bookingGroupRoutes";
+import { request } from "@app/apiClient";
+import { BOOKING_GROUPS_ROUTES } from "@features/appointments/api/bookingGroupRoutes";
 
 export async function createBookingGroup(payload) {
   return request({

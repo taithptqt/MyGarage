@@ -11,7 +11,6 @@ using MyGarage.DTOs.Responses;
 namespace MyGarage.Controllers
 {
     [Route("api/customer-vouchers")]
-[Route("api/[controller]")]
     [ApiController]
     public class CustomerVoucherController : ControllerBase
     {
@@ -85,6 +84,9 @@ namespace MyGarage.Controllers
         }
     }
 }
+
+
+
 
 
 

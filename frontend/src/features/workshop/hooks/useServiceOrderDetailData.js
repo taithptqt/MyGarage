@@ -1,9 +1,9 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
-import { serviceOrderApi } from "../api/serviceOrderApi";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import {
   calculateOrderTotal,
   parseCustomerNotes,
-} from "../utils/serviceOrderDetailUtils";
+} from "@features/workshop/utils/serviceOrderDetailUtils";
 
 export function useServiceOrderDetailData(orderId) {
   const [order, setOrder] = useState(null);
@@ -59,4 +59,7 @@ export function useServiceOrderDetailData(orderId) {
     refresh,
   };
 }
+
+
+
 

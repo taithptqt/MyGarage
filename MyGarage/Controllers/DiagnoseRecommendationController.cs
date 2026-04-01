@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +11,6 @@ using MyGarage.DTOs.Responses;
 namespace MyGarage.Controllers
 {
     [Route("api/diagnose-recommendations")]
-[Route("api/[controller]")]
     [ApiController]
     public class DiagnoseRecommendationController : ControllerBase
     {

@@ -1,10 +1,7 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
@@ -18,13 +15,11 @@ namespace MyGarage.Controllers
     {
         private readonly ICustomerService _customerService;
         private readonly IMapper _mapper;
-        private readonly GarageContext _context;
 
-        public CustomersController(ICustomerService customerService, IMapper mapper, GarageContext context)
+        public CustomersController(ICustomerService customerService, IMapper mapper)
         {
             _customerService = customerService;
             _mapper = mapper;
-            _context = context;
         }
 
         [HttpGet]
@@ -37,26 +32,7 @@ namespace MyGarage.Controllers
             }
             else
             {
-                var preferredBranchTag = $"[PreferredBranchId:{branchId.Value}]";
-                var customerIdsByBranch = _context.ServiceOrders
-                    .Where(so => so.OriginBranchId == branchId.Value || so.ExecuteBranchId == branchId.Value)
-                    .Select(so => so.CustomerId)
-                    .Distinct();
-
-                var customerIdsByAppointment = _context.Appointments
-                    .Where(a => a.BranchId == branchId.Value)
-                    .Select(a => a.CustomerId)
-                    .Distinct();
-
-                var customerIds = await customerIdsByBranch
-                    .Union(customerIdsByAppointment)
-                    .ToListAsync();
-
-                customers = await _context.Customers
-                    .Where(c =>
-                        customerIds.Contains(c.Id) ||
-                        (c.Note ?? string.Empty).Contains(preferredBranchTag))
-                    .ToListAsync();
+                customers = await _customerService.GetByBranchIdAsync(branchId.Value);
             }
 
             var dtos = _mapper.Map<IEnumerable<CustomerResponseDto>>(customers);

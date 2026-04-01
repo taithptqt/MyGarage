@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Modal } from "../../admin/components/AdminModals";
+import { Modal } from "@features/admin/components/AdminModals";
 import {
   Badge,
   Box,
@@ -15,9 +15,9 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdHistory, MdPerson, MdEdit } from "react-icons/md";
-import { formatOrderDateTime, parseCustomerNotes } from "../utils/serviceOrderDetailUtils";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { vehicleConditionLogApi } from "../api/vehicleConditionLogApi";
+import { formatOrderDateTime, parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
 
 export default function ServiceOrderDetailModal({ order, onClose, onRefresh, customers = [], vehicles = [], staff = [] }) {
   const navigate = useNavigate();
@@ -46,26 +46,26 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
   };
 
   const handleRequestDiagnosis = async () => {
-    if (!window.confirm(`Gửi yêu cầu chuẩn đoán cho phương tiện ${vehicle?.licensePlate || "N/A"} tới Kỹ thuật viên?`)) return;
+    if (!window.confirm(`Gửi yêu cầu chuẩn đoán cho phương tiện ${vehicle?.licensePlate || "N/A"} tơi Kỹ thuật viên?`)) return;
     try {
       await serviceOrderApi.requestDiagnosis(order.id);
       if (onRefresh) await onRefresh();
       const diagRes = await serviceOrderApi.getDiagnoses(order.id);
       setDiagnoses(Array.isArray(diagRes) ? diagRes : []);
     } catch (err) {
-      alert("Lỗi khi yêu cầu chuẩn đoán: " + err.message);
+      alert("Lđ-i khi yêu cầu chuẩn đoán: " + err.message);
     }
   };
 
   const handleRecallDiagnosis = async () => {
-    if (!window.confirm("Thu hồi yêu cầu chuẩn đoán?")) return;
+    if (!window.confirm("Thu hôi yêu cầu chuẩn đoán?")) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
       if (onRefresh) await onRefresh();
       const diagRes = await serviceOrderApi.getDiagnoses(order.id);
       setDiagnoses(Array.isArray(diagRes) ? diagRes : []);
     } catch (err) {
-      alert("Lỗi khi thu hồi yêu cầu chuẩn đoán: " + err.message);
+      alert("Lđ-i khi thu hôi yêu cầu chuẩn đoán: " + err.message);
     }
   };
 
@@ -111,7 +111,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
         });
         setHasSignedCheckIn(signedCheckInExists);
       } catch (err) {
-        console.error("Lỗi tải chi tiết lệnh:", err);
+        console.error("Lđ-i tải chi tiết lệnh:", err);
         setHasSignedCheckIn(false);
       } finally {
         setLoadingDetails(false);
@@ -138,7 +138,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
   let sourceIcon = MdAssignment;
 
   if (isFromAppt) {
-    sourceText = "Từ Lịch hẹn trước";
+    sourceText = "Từ Lịch hẹn trươc";
     sourceColor = "blue";
     sourceIcon = MdHistory;
   } else if (isGuest) {
@@ -166,7 +166,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
             px={4}
             boxShadow="0 4px 12px rgba(0,0,0,0.1)"
           >
-            Chỉnh sửa
+            Chệnh sửa
           </Button>
         </HStack>
       }
@@ -294,7 +294,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
           <VStack align="start" spacing={2}>
             <HStack color="whiteAlpha.500" fontSize="xs" fontWeight="bold" letterSpacing="widest">
               <Icon as={MdCheckCircle} />
-              <Text textTransform="uppercase">Cố vấn dịch vụ</Text>
+              <Text textTransform="uppercase">Cđ vấn dịch vụ</Text>
             </HStack>
             <Text fontSize="md" color="white" fontWeight="medium">{advisor?.fullName || "-"}</Text>
           </VStack>
@@ -305,12 +305,12 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
         <VStack align="start" spacing={4}>
           <HStack color="blue.300">
             <Icon as={MdAssignment} boxSize={5} />
-            <Heading size="md" letterSpacing="tight">Ghi chú & Nguồn gốc tiếp nhận</Heading>
+            <Heading size="md" letterSpacing="tight">Ghi chú & Nguôn gđc tiếp nhận</Heading>
           </HStack>
           <Box w="100%" pl={9}>
             <VStack align="stretch" spacing={3}>
 
-              {/* Nguồn Gốc Lệnh */}
+              {/* Nguôn Gđc Lệnh */}
               <HStack
                 bg={`${sourceColor}.900`}
                 p={2}
@@ -351,16 +351,16 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                 )}
               </Box>
 
-              {/* Ghi chú văn bản */}
+              {/* Ghi chú vển bản */}
               <Box p={4} bg="whiteAlpha.50" borderRadius="xl" borderLeft="4px solid" borderColor="blue.400">
                 <Text fontSize="xs" color="whiteAlpha.500" fontWeight="bold" mb={2} letterSpacing="wider">
-                  GHI CHÚ / YÊU CẦU THÊM:
+                  GHI CHđs / YđSU CẦU THđSM:
                 </Text>
                 {symptomNoteItems.length > 0 ? (
                   <VStack align="start" spacing={1} pl={2}>
                     {symptomNoteItems.map((item, index) => (
                       <Text key={`${item}-${index}`} fontSize="md" color="white">
-                        • {item}
+                        ệđ {item}
                       </Text>
                     ))}
                   </VStack>
@@ -368,7 +368,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                   <Text fontSize="md" fontStyle="italic" color="white">
                     {String(parsedNotes.mainNotes || "").toLowerCase().includes("không có")
                       ? "Không có ghi chú gì"
-                      : `• ${parsedNotes.mainNotes}`}
+                      : `ệđ ${parsedNotes.mainNotes}`}
                   </Text>
                 )}
               </Box>
@@ -428,7 +428,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                     onClick={handleRecallDiagnosis}
                     whiteSpace="nowrap"
                   >
-                    Thu hồi yêu cầu
+                    Thu hôi yêu cầu
                   </Button>
                   {isDiagnosisAssigned ? (
                     <Text
@@ -451,7 +451,7 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
                   colorScheme="purple"
                   onClick={handleRequestDiagnosis}
                   isDisabled={!hasSignedCheckIn}
-                  title={!hasSignedCheckIn ? "Cần khách ký check-in trước khi yêu cầu chuẩn đoán." : ""}
+                  title={!hasSignedCheckIn ? "Cần khách ký check-in trươc khi yêu cầu chuẩn đoán." : ""}
                   whiteSpace="nowrap"
                 >
                   Yêu cầu chuẩn đoán
@@ -481,6 +481,12 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
     </Modal>
   );
 }
+
+
+
+
+
+
 
 
 

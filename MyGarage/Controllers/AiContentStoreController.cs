@@ -10,7 +10,6 @@ using MyGarage.DTOs.Responses;
 namespace MyGarage.Controllers
 {
     [Route("api/ai-content-stores")]
-    [Route("api/[controller]")]
     [ApiController]
     public class AiContentStoreController : ControllerBase
     {

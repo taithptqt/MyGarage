@@ -42,15 +42,15 @@ namespace MyGarage.Controllers
             return Ok(_mapper.Map<VoucherRedemptionResponseDto>(item));
         }
 
-        [HttpPost("check")]
-        public async Task<ActionResult<VoucherValidationResultResponseDto>> Check([FromBody] VoucherRedemptionRequestDto request)
+        [HttpPost("validations")]
+        public async Task<ActionResult<VoucherValidationResultResponseDto>> Validate([FromBody] VoucherRedemptionRequestDto request)
         {
             var result = await _service.CheckEligibilityAsync(request);
             return result.IsEligible ? Ok(result) : BadRequest(result);
         }
 
-        [HttpPost("redeem")]
-        public async Task<ActionResult<VoucherRedeemResultResponseDto>> Redeem([FromBody] VoucherRedemptionRequestDto request)
+        [HttpPost("transactions")]
+        public async Task<ActionResult<VoucherRedeemResultResponseDto>> CreateTransaction([FromBody] VoucherRedemptionRequestDto request)
         {
             var result = await _service.RedeemAsync(request);
             if (!result.Success)
@@ -66,8 +66,8 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = result.Redemption.Id }, result);
         }
 
-        [HttpPost("{id:long}/reverse")]
-        public async Task<ActionResult<VoucherRedeemResultResponseDto>> Reverse(long id, [FromBody] VoucherRedemptionReverseDto request)
+        [HttpPost("transactions/{id:long}/reversals")]
+        public async Task<ActionResult<VoucherRedeemResultResponseDto>> CreateReversal(long id, [FromBody] VoucherRedemptionReverseDto request)
         {
             var result = await _service.ReverseAsync(id, request);
             return result.Success ? Ok(result) : BadRequest(result);

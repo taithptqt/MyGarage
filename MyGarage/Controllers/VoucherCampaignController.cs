@@ -1,4 +1,4 @@
-// Mục đích: Cung cấp API CRUD chiến dịch voucher và quản lý danh sách voucher áp dụng trong từng chiến dịch.
+﻿// Mục đích: Cung cấp API CRUD chiến dịch voucher và quản lý danh sách voucher áp dụng trong từng chiến dịch.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,7 +36,7 @@ namespace MyGarage.Controllers
             return Ok(items.Select(item => MapResponse(item)));
         }
 
-        [HttpGet("budget-alerts")]
+        [HttpGet("budget-monitors")]
         public async Task<ActionResult<IEnumerable<VoucherCampaignResponseDto>>> GetBudgetAlerts(
             [FromQuery] decimal thresholdPercent = BudgetWarningThresholdPercent,
             [FromQuery] bool includeOverLimit = true)
@@ -124,7 +124,7 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpPost("{id:long}/vouchers")]
+        [HttpPost("{id:long}/voucher-links")]
         public async Task<ActionResult<VoucherCampaignResponseDto>> AssignVouchers(long id, [FromBody] VoucherCampaignAssignVouchersDto dto)
         {
             try
@@ -225,3 +225,6 @@ namespace MyGarage.Controllers
         }
     }
 }
+
+
+

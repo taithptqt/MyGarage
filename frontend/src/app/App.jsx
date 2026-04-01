@@ -1,30 +1,30 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import AuthPage from "../features/auth/pages/AuthPage";
-import HomePage from "../features/home/pages/HomePage";
-import AdminPage from "../features/admin/pages/AdminPage";
-import DispatchCenterPage from "../features/admin/pages/DispatchCenterPage";
-import WorkshopPage from "../features/workshop/pages/WorkshopPage";
-import ReceptionOrdersSection from "../features/workshop/components/ReceptionOrdersSection";
-import ManagerDashboard from "../features/workshop/components/ManagerDashboard";
-import ForemanDashboard from "../features/workshop/components/ForemanDashboard";
-import TechnicianDashboard from "../features/workshop/components/TechnicianDashboard";
-import QCDashboard from "../features/workshop/components/QCDashboard";
-import CreateServiceOrderPage from "../features/workshop/pages/CreateServiceOrderPage";
-import ServiceOrderDiagnosisPage from "../features/workshop/pages/ServiceOrderDiagnosisPage";
-import ServiceOrderItemsPage from "../features/workshop/pages/ServiceOrderItemsPage";
-import ServiceOrderQuotePage from "../features/workshop/pages/ServiceOrderQuotePage";
-import VehicleConditionLogsPage from "../features/workshop/pages/VehicleConditionLogsPage";
-import TechnicianConditionLogPage from "../features/workshop/pages/TechnicianConditionLogPage";
-import ServiceOrderEditPage from "../features/workshop/pages/ServiceOrderEditPage";
-import HorizonMain from "../horizon/Main";
-import ProtectedRoute from "../components/auth/ProtectedRoute";
-import { useAuth } from "../context/AuthContext";
-import { BranchProvider } from "../context/BranchContext";
-import useIdleTimeout from "../hooks/useIdleTimeout";
-import CustomerLayout from "../shared/layouts/CustomerLayout";
-import BookingPage from "../features/appointments/pages/BookingPage";
-import BookingIntroPage from "../features/appointments/pages/BookingIntroPage";
-import MyAppointmentsPage from "../features/appointments/pages/MyAppointmentsPage";
+import AuthPage from "@features/auth/pages/AuthPage";
+import HomePage from "@features/home/pages/HomePage";
+import AdminPage from "@features/admin/pages/AdminPage";
+import DispatchCenterPage from "@features/admin/pages/DispatchCenterPage";
+import WorkshopPage from "@features/workshop/pages/WorkshopPage";
+import ReceptionOrdersSection from "@features/workshop/components/ReceptionOrdersSection";
+import ManagerDashboard from "@features/workshop/components/ManagerDashboard";
+import ForemanDashboard from "@features/workshop/components/ForemanDashboard";
+import TechnicianDashboard from "@features/workshop/components/TechnicianDashboard";
+import QCDashboard from "@features/workshop/components/QCDashboard";
+import CreateServiceOrderPage from "@features/workshop/pages/CreateServiceOrderPage";
+import ServiceOrderDiagnosisPage from "@features/workshop/pages/ServiceOrderDiagnosisPage";
+import ServiceOrderItemsPage from "@features/workshop/pages/ServiceOrderItemsPage";
+import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePage";
+import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
+import TechnicianConditionLogPage from "@features/workshop/pages/TechnicianConditionLogPage";
+import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
+import HorizonMain from "@horizon/Main";
+import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { BranchProvider } from "@shared/core/context/BranchContext";
+import useIdleTimeout from "@shared/core/hooks/useIdleTimeout";
+import CustomerLayout from "@shared/layouts/CustomerLayout";
+import BookingPage from "@features/appointments/pages/BookingPage";
+import BookingIntroPage from "@features/appointments/pages/BookingIntroPage";
+import MyAppointmentsPage from "@features/appointments/pages/MyAppointmentsPage";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -138,4 +138,6 @@ function App() {
 }
 
 export default App;
+
+
 

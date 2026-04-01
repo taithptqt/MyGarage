@@ -18,7 +18,12 @@ export default defineConfig({
       variables: path.resolve(__dirname, "src/horizon/variables"),
       views: path.resolve(__dirname, "src/horizon/views"),
       routes: path.resolve(__dirname, "src/horizon/routes.jsx"),
-      "@context": path.resolve(__dirname, "src/context")
+      "@context": path.resolve(__dirname, "src/shared/core/context"),
+      "@app": path.resolve(__dirname, "src/app"),
+      "@features": path.resolve(__dirname, "src/features"),
+      "@shared": path.resolve(__dirname, "src/shared"),
+      "@horizon": path.resolve(__dirname, "src/horizon"),
+      "@legacy": path.resolve(__dirname, "src/legacy")
     }
   },
   server: {

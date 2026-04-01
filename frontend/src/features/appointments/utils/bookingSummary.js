@@ -1,4 +1,4 @@
-﻿import { BOOKING_FLOW } from "../constants/bookingConstants";
+﻿import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import {
   extractField,
   formatDateVi,
@@ -6,7 +6,7 @@ import {
   formatVehicleDescriptor,
   timeLabel,
   toSafeUpper,
-} from "./bookingCommon";
+} from "@features/appointments/utils/bookingCommon";
 
 export function buildSummaryItems({
   customerForm,
@@ -123,3 +123,8 @@ export function buildSelectedCategorySummaryLabel(selectedCategories) {
   if (names.length === 0) return "Chưa chọn";
   return names.join(", ");
 }
+
+
+
+
+

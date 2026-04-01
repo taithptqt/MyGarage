@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import App from "./app/App";
-import { AuthProvider } from "./context/AuthContext";
-import { SearchProvider } from "./context/SearchContext";
-import "./styles/global.css";
+import App from "@app/App";
+import { AuthProvider } from "@shared/core/context/AuthContext";
+import { SearchProvider } from "@shared/core/context/SearchContext";
+import "./shared/core/styles/global.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -17,3 +17,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+

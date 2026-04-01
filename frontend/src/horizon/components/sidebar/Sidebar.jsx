@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 // chakra imports
 import {
@@ -13,15 +13,15 @@ import {
   DrawerContent,
   DrawerCloseButton,
 } from "@chakra-ui/react";
-import Content from "components/sidebar/components/Content";
+import Content from "@horizon/components/sidebar/components/Content";
 import {
   renderThumb,
   renderTrack,
   renderView,
-} from "components/scrollbar/Scrollbar";
+} from "@horizon/components/scrollbar/Scrollbar";
 import { Scrollbars } from "react-custom-scrollbars-2";
 import PropTypes from "prop-types";
-import { SidebarContext } from "contexts/SidebarContext";
+import { SidebarContext } from "@horizon/contexts/SidebarContext";
 
 // Assets
 import { IoMenuOutline } from "react-icons/io5";
@@ -311,3 +311,4 @@ Sidebar.propTypes = {
 };
 
 export default Sidebar;
+

@@ -11,8 +11,7 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/staff")]
-[Route("api/[controller]")]
+    [Route("api/staffs")]
     [ApiController]
     public class StaffController : ControllerBase
     {
@@ -91,7 +90,7 @@ namespace MyGarage.Controllers
             return NoContent();
         }
 
-        [HttpPost("{id}/avatar")]
+        [HttpPost("{id}/avatars")]
         public async Task<ActionResult<object>> UploadAvatar(long id, [FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
@@ -132,6 +131,9 @@ namespace MyGarage.Controllers
         }
     }
 }
+
+
+
 
 
 

@@ -1,22 +1,38 @@
-using MyGarage.Models;
-using MyGarage.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using MyGarage.Data;
+using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Services
 {
-    public class VehicleConditionLogService : GenericService<VehicleConditionLog>, IVehicleConditionLogService
+    public partial class VehicleConditionLogService : GenericService<VehicleConditionLog>, IVehicleConditionLogService
     {
         private readonly IVehicleConditionLogRepository _vehicleConditionLogRepository;
+        private readonly GarageContext _context;
 
-        public VehicleConditionLogService(IVehicleConditionLogRepository repository) : base(repository)
+        public VehicleConditionLogService(IVehicleConditionLogRepository repository, GarageContext context)
+            : base(repository)
         {
             _vehicleConditionLogRepository = repository;
+            _context = context;
         }
 
         public async Task<IEnumerable<VehicleConditionLog>> GetByServiceOrderIdAsync(long serviceOrderId)
         {
             return await _vehicleConditionLogRepository.GetByServiceOrderIdAsync(serviceOrderId);
+        }
+
+        public async Task<bool> ServiceOrderExistsAsync(long serviceOrderId)
+        {
+            return await _context.ServiceOrders.AnyAsync(x => x.Id == serviceOrderId);
+        }
+
+        public async Task<bool> TechnicianExistsAsync(long technicianId)
+        {
+            return await _context.Staffs.AnyAsync(x => x.Id == technicianId);
         }
     }
 }

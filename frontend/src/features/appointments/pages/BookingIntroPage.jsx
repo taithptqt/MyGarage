@@ -1,9 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
-import { getAllServiceCategories, getAllStandardServices } from "../api/appointmentApi";
-import Footer from "../../../shared/components/Footer";
-import Header from "../../../shared/components/Header";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
+import Footer from "@shared/components/Footer";
+import Header from "@shared/components/Header";
 import "./BookingIntroPage.css";
 
 const showcaseServices = [
@@ -428,7 +428,7 @@ export default function BookingIntroPage() {
 
       <section className="booking-intro-cta">
         <p className="booking-intro-eyebrow">Sẵn sàng đặt lịch?</p>
-        <h2>Cuộn đến đây là đúng lúc để chăm sóc xe của bạn</h2>
+        <h2>Cuộn đến đây là động lực để chăm sóc xe của bạn</h2>
         <p>
           Đặt lịch ngay để chọn khung giờ phù hợp, tránh chờ đợi và nhận tư vấn
           chính xác theo tình trạng xe.
@@ -446,3 +446,10 @@ export default function BookingIntroPage() {
     </div>
   );
 }
+
+
+
+
+
+
+

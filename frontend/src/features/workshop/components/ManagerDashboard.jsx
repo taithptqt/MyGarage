@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { getAllStaff, getAllRoles } from "../../admin/api/staffApi";
-import { Modal } from "../../admin/components/AdminModals";
-import { getStatusBadge } from "../../admin/utils/adminUtils";
-import { useBranch } from "../../../context/BranchContext";
+﻿import React, { useCallback, useEffect, useState, useMemo } from "react";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
+import { Modal } from "@features/admin/components/AdminModals";
+import { getStatusBadge } from "@features/admin/utils/adminUtils";
+import { useBranch } from "@shared/core/context/BranchContext";
 
 export default function ManagerDashboard() {
   const { searchQuery } = useSearch();
@@ -54,7 +54,7 @@ export default function ManagerDashboard() {
       await serviceOrderApi.update(orderId, { ...order, status: newStatus });
       fetchData();
     } catch (err) {
-      alert("Lỗi khi cập nhật trạng thái: " + err.message);
+      alert("Lđ-i khi cập nhật trạng thái: " + err.message);
     }
   };
 
@@ -98,18 +98,18 @@ export default function ManagerDashboard() {
                     <div className="card-code">{order.code}</div>
                     <div className="card-customer">{order.customerName || "-"}</div>
                     <div className="card-footer">
-                       <span className="card-time">⌚ {order.checkInTime ? new Date(order.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}</span>
+                       <span className="card-time">đOs {order.checkInTime ? new Date(order.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}</span>
                     </div>
                  </div>
                ))}
-               {list.length === 0 && <div className="empty-slot">Trống</div>}
+               {list.length === 0 && <div className="empty-slot">Trđng</div>}
              </div>
           </div>
         ))}
       </div>
 
       {selectedOrder && (
-        <Modal title={`Điều phối lệnh: ${selectedOrder.code}`} onClose={() => setSelectedOrder(null)}>
+        <Modal title={`Điều phđi lệnh: ${selectedOrder.code}`} onClose={() => setSelectedOrder(null)}>
            <div className="order-details-summary">
               <p><strong>Khách hàng:</strong> {selectedOrder.customerName || "-"}</p>
               <p><strong>Yêu cầu:</strong> {selectedOrder.customerNotes || "Không có ghi chú"}</p>
@@ -118,9 +118,9 @@ export default function ManagerDashboard() {
            <div className="workflow-actions" style={{ marginTop: '20px', padding: '16px', border: '1px solid #e9edf7', borderRadius: '12px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Chuyển trạng thái tiếp theo:</label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {(selectedOrder.status === "NEW" || selectedOrder.status === "RECEPTION") && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "DIAGNOSING")}>➡️ Bắt đầu chẩn đoán</button>}
-                {selectedOrder.status === "DIAGNOSING" && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "WAITING_APPROVAL")}>➡️ Gửi báo giá</button>}
-                {selectedOrder.status === "REPAIRING" && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "QC_PENDING")}>➡️ Chuyển QC</button>}
+                {(selectedOrder.status === "NEW" || selectedOrder.status === "RECEPTION") && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "DIAGNOSING")}>đzđ️ Bắt đầu chẩn đoán</button>}
+                {selectedOrder.status === "DIAGNOSING" && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "WAITING_APPROVAL")}>đzđ️ Gửi báo giá</button>}
+                {selectedOrder.status === "REPAIRING" && <button className="btn-primary" onClick={() => handleUpdateStatus(selectedOrder.id, "QC_PENDING")}>đzđ️ Chuyển QC</button>}
               </div>
            </div>
 
@@ -224,3 +224,8 @@ export default function ManagerDashboard() {
     </div>
   );
 }
+
+
+
+
+

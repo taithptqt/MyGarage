@@ -1,9 +1,9 @@
-// Chakra imports
+﻿// Chakra imports
 import { Flex, Text, useColorModeValue } from "@chakra-ui/react";
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 // Custom components
-import SwitchField from "components/fields/SwitchField";
-import Menu from "components/menu/MainMenu";
+import SwitchField from "@horizon/components/fields/SwitchField";
+import Menu from "@horizon/components/menu/MainMenu";
 
 export default function Notifications(props) {
   const { ...rest } = props;
@@ -99,4 +99,5 @@ export default function Notifications(props) {
     </Card>
   );
 }
+
 

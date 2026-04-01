@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getAdminChangeLogs } from "../api/auditLogApi";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAdminChangeLogs } from "@features/admin/api/auditLogApi";
 import "./AdminPage.css";
 import "./AdminChangeLogPage.css";
 
@@ -34,7 +34,7 @@ export default function AdminChangeLogPage() {
       setLogs(res?.items || []);
       setTotal(Number(res?.total || 0));
     } catch (err) {
-      setError(err.message || "Không tải được nhật ký chỉnh sửa.");
+      setError(err.message || "Không tải được nhật ký chệnh sửa.");
     } finally {
       setLoading(false);
     }
@@ -61,15 +61,15 @@ export default function AdminChangeLogPage() {
     <div className="management-content admin-change-log-page">
       <header className="admin-header">
         <div>
-          <h1>Nhật ký chỉnh sửa</h1>
+          <h1>Nhật ký chệnh sửa</h1>
           <p className="header-sub">Theo dõi toàn bộ thao tác thêm/sửa/xóa trên màn hình quản trị.</p>
         </div>
       </header>
 
       <div className="stats-bar">
-        <div className="stat-card"><div className="stat-value">{total.toLocaleString()}</div><div className="stat-label">Tổng bản ghi</div></div>
+        <div className="stat-card"><div className="stat-value">{total.toLocaleString()}</div><div className="stat-label">Tđ.ng bản ghi</div></div>
         <div className="stat-card"><div className="stat-value">{filters.page}</div><div className="stat-label">Trang hiện tại</div></div>
-        <div className="stat-card"><div className="stat-value">{totalPages}</div><div className="stat-label">Tổng trang</div></div>
+        <div className="stat-card"><div className="stat-value">{totalPages}</div><div className="stat-label">Tđ.ng trang</div></div>
       </div>
 
       <div className="table-toolbar admin-log-filters">
@@ -79,7 +79,7 @@ export default function AdminChangeLogPage() {
           ))}
         </select>
         <input className="search-input" placeholder="Lọc theo bảng (Branches, Staffs, ...)" value={filters.tableName} onChange={(e) => updateFilter("tableName", e.target.value)} />
-        <input className="search-input" placeholder="Tìm theo nội dung thay đổi..." value={filters.query} onChange={(e) => updateFilter("query", e.target.value)} />
+        <input className="search-input" placeholder="Tìm theo nội dung thay đđ.i..." value={filters.query} onChange={(e) => updateFilter("query", e.target.value)} />
         <input className="search-input" type="datetime-local" value={filters.from} onChange={(e) => updateFilter("from", e.target.value)} />
         <input className="search-input" type="datetime-local" value={filters.to} onChange={(e) => updateFilter("to", e.target.value)} />
         <button className="btn-primary" onClick={fetchLogs}>Lọc</button>
@@ -102,7 +102,7 @@ export default function AdminChangeLogPage() {
                 <th>User</th>
                 <th>IP</th>
                 <th>Dữ liệu cũ</th>
-                <th>Dữ liệu mới</th>
+                <th>Dữ liệu mơi</th>
               </tr>
             </thead>
             <tbody>
@@ -131,10 +131,15 @@ export default function AdminChangeLogPage() {
       </div>
 
       <div className="table-toolbar">
-        <button className="btn-ghost" onClick={() => changePage(-1)} disabled={filters.page <= 1}>Trang trước</button>
+        <button className="btn-ghost" onClick={() => changePage(-1)} disabled={filters.page <= 1}>Trang trươc</button>
         <span className="result-count">Trang {filters.page} / {totalPages}</span>
         <button className="btn-ghost" onClick={() => changePage(1)} disabled={filters.page >= totalPages}>Trang sau</button>
       </div>
     </div>
   );
 }
+
+
+
+
+

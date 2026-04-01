@@ -1,4 +1,4 @@
-// Chakra Imports
+﻿// Chakra Imports
 import {
   Avatar,
   Button,
@@ -13,20 +13,20 @@ import {
   useColorMode,
 } from '@chakra-ui/react';
 // Custom Components
-import { ItemContent } from 'components/menu/ItemContent';
-import { SearchBar } from 'components/navbar/searchBar/SearchBar';
-import { SidebarResponsive } from 'components/sidebar/Sidebar';
+import { ItemContent } from '@horizon/components/menu/ItemContent';
+import { SearchBar } from '@horizon/components/navbar/searchBar/SearchBar';
+import { SidebarResponsive } from '@horizon/components/sidebar/Sidebar';
 import PropTypes from 'prop-types';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
-import { useBranch } from '../../../context/BranchContext';
-import ProfileDialog from '../../../features/profile/components/ProfileDialog';
-import { getApiBaseUrl } from '../../../features/auth/api/authApi';
+import { useAuth } from '@shared/core/context/AuthContext';
+import { useBranch } from '@shared/core/context/BranchContext';
+import ProfileDialog from '@features/profile/components/ProfileDialog';
+import { getApiBaseUrl } from '@features/auth/api/authApi';
 import { MdNotificationsNone } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
-import routes from 'routes';
+import routes from '@horizon/routes.jsx';
 
 function getDisplayName(user) {
   if (!user) return 'User';
@@ -332,3 +332,7 @@ HeaderLinks.propTypes = {
   secondary: PropTypes.bool,
   onOpen: PropTypes.func,
 };
+
+
+
+

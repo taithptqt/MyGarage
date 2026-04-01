@@ -2,9 +2,9 @@
 import {
   getVehicleBrands,
   getVehicleModels
-} from "../../appointments/api/appointmentApi";
-import DateTimePicker from "./DateTimePicker";
-import { formatLicensePlate } from "../utils/serviceOrderDetailUtils";
+} from "@features/appointments/api/appointmentApi";
+import DateTimePicker from "@features/workshop/components/DateTimePicker";
+import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
 
 export default function AppointmentForm({ customers = [], vehicles = [], customerVehicles = [], branchId, onSubmit, onCancel, loading, services = [] }) {
   const [formData, setFormData] = useState({
@@ -207,7 +207,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
         finishTime = `${fh}:${fm}`;
         if (current.getHours() >= 13) {
           const [hStart] = formData.startTime.split(':').map(Number);
-          if (hStart < 12) warning = "Cảnh báo: Xe sẽ được giao vào buổi chiều.";
+          if (hStart < 12) warning = "Cảnh báo: Xe sẽ được giao vào buđ.i chiều.";
         }
       }
 
@@ -227,11 +227,11 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
         if (startTotal < 7 * 60) {
           error = "Giờ làm việc bắt đầu từ 07:00.";
         } else if (startTotal > 11.5 * 60 && startTotal < 13.5 * 60) {
-          error = "Giờ nghỉ trưa 12:00 - 13:30. Vui lòng đặt lịch trước 11:30 hoặc sau 13:30";
+          error = "Giờ nghệ trưa 12:00 - 13:30. Vui lòng đặt lịch trươc 11:30 hoặc sau 13:30";
         } else {
           const closeTime = 17.5 * 60; // Closing at 17:30
           if (startTotal > 17 * 60) {
-            error = "Vui lòng đặt lịch trước 17:00 (trước giờ đóng cửa ít nhất 30 phút).";
+            error = "Vui lòng đặt lịch trươc 17:00 (trươc giờ đóng cửa ít nhất 30 phút).";
           }
         }
       }
@@ -263,11 +263,11 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
         return;
       }
       if (!formData.isNewVehicle && !formData.vehicleId) {
-        alert("Vui lòng chọn xe hoặc tích chọn 'Xe mới'.");
+        alert("Vui lòng chọn xe hoặc tích chọn 'Xe mơi'.");
         return;
       }
       if (formData.isNewVehicle && (!formData.vehicleLicensePlate || !formData.vehicleModelId)) {
-        alert("Vui lòng nhập đầy đủ thông tin xe mới (Biển số & Dòng xe).");
+        alert("Vui lòng nhập đầy đủ thông tin xe mơi (Biển sđ & Dòng xe).");
         return;
       }
     }
@@ -306,7 +306,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
                 <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                   {filteredCustomers.map(c => (
                     <div key={c.id} className="dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f4f7fe' }} onClick={() => selectCustomer(c)}>
-                      <strong>{c.fullName}</strong> — {c.phone}
+                      <strong>{c.fullName}</strong> ệ" {c.phone}
                     </div>
                   ))}
                 </div>
@@ -326,7 +326,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
                   disabled={customerVehiclesFiltered.length === 0}
                   onChange={(e) => setFormData(prev => ({ ...prev, isNewVehicle: e.target.checked, vehicleId: e.target.checked ? "" : prev.vehicleId }))}
                 />
-                <label htmlFor="isNewVeh" style={{ fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>Sử dụng xe mới (chưa có trong danh sách)</label>
+                <label htmlFor="isNewVeh" style={{ fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>Sử dụng xe mơi (chưa có trong danh sách)</label>
               </div>
             </div>
           )}
@@ -354,9 +354,9 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
             </div>
           ) : (
             <div className="new-vehicle-fields" style={{ padding: '16px', background: '#fff9e6', borderRadius: '12px', border: '1px solid #ffe58f', marginBottom: '16px' }}>
-              <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '14px', color: '#856404' }}>Thông tin xe mới</h4>
+              <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '14px', color: '#856404' }}>Thông tin xe mơi</h4>
               <div className="form-group">
-                <label>Biển số xe *</label>
+                <label>Biển sđ xe *</label>
                 <input type="text" name="vehicleLicensePlate" value={formData.vehicleLicensePlate} onChange={handleChange} onBlur={handlePlateBlur} required placeholder="VD: 30A-11111" style={{ textTransform: 'uppercase' }} />
               </div>
               <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -383,15 +383,15 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
                   <input type="text" name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} placeholder="VD: Trắng" />
                 </div>
                 <div className="form-group">
-                  <label>Năm SX *</label>
+                  <label>Nểm SX *</label>
                   <select name="vehicleYear" value={formData.vehicleYear} onChange={handleChange} required style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                    <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn năm</option>
+                    <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn nểm</option>
                     {years.map(y => <option key={y} value={y} style={{ background: '#1b254b', color: '#fff' }}>{y}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Số khung (VIN)</label>
-                  <input type="text" name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} placeholder="Nhập số khung VIN..." />
+                  <label>Sđ khung (VIN)</label>
+                  <input type="text" name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} placeholder="Nhập sđ khung VIN..." />
                 </div>
               </div>
             </div>
@@ -402,10 +402,10 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="form-group">
               <label>Họ tên khách *</label>
-              <input type="text" name="guestName" value={formData.guestName} onChange={handleChange} required placeholder="VD: Nguyễn Văn A" />
+              <input type="text" name="guestName" value={formData.guestName} onChange={handleChange} required placeholder="VD: Nguyđ.n Vển A" />
             </div>
             <div className="form-group">
-              <label>Số điện thoại *</label>
+              <label>Sđ điện thoại *</label>
               <input type="text" name="guestPhone" value={formData.guestPhone} onChange={handleChange} required placeholder="VD: 0987654321" />
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           </div>
 
           <div className="form-group" style={{ marginTop: '10px' }}>
-            <label>Biển số xe {(formData.guestVehiclePlate || guestSelectedBrandId) ? '*' : ''}</label>
+            <label>Biển sđ xe {(formData.guestVehiclePlate || guestSelectedBrandId) ? '*' : ''}</label>
             <input type="text" name="guestVehiclePlate" value={formData.guestVehiclePlate} onChange={handleChange} onBlur={handlePlateBlur} placeholder="VD: 30A-12345 (Tùy chọn)" required={!!guestSelectedBrandId} style={{ textTransform: 'uppercase', fontWeight: 700 }} />
           </div>
 
@@ -444,15 +444,15 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
               <input type="text" name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} placeholder="VD: Đen" />
             </div>
             <div className="form-group">
-              <label>Năm SX *</label>
+              <label>Nểm SX *</label>
               <select name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange} required={!!formData.guestVehiclePlate || !!guestSelectedBrandId} style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn năm</option>
+                <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn nểm</option>
                 {years.map(y => <option key={y} value={y} style={{ background: '#1b254b', color: '#fff' }}>{y}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Số khung (VIN)</label>
-              <input type="text" name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} placeholder="Nhập số khung VIN..." />
+              <label>Sđ khung (VIN)</label>
+              <input type="text" name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} placeholder="Nhập sđ khung VIN..." />
             </div>
           </div>
         </div>
@@ -465,7 +465,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
         <div style={{ position: 'relative', marginBottom: '10px' }}>
           <input
             type="text"
-            placeholder="Gõ để tìm dịch vụ (VD: Thay nhớt, Rửa xe...)"
+            placeholder="Gõ để tìm dịch vụ (VD: Thay nhơt, Rửa xe...)"
             value={serviceSearch}
             onChange={(e) => setServiceSearch(e.target.value)}
           />
@@ -480,7 +480,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           )}
           {serviceSearch && filteredServices.length === 0 && (
             <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, padding: '12px', color: '#a3aed0', fontStyle: 'italic' }}>
-              Không tìm thấy dịch vụ nào phù hợp với "{serviceSearch}"
+              Không tìm thấy dịch vụ nào phù hợp vơi "{serviceSearch}"
             </div>
           )}
         </div>
@@ -492,7 +492,7 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
               return (
                 <div key={sid} style={{ background: '#4318ff', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {s?.Name || s?.name || "Unknown"} - {s?.StandardMinutes || s?.standardMinutes || 0} phút - {(s?.basePrice || s?.BasePrice || 0).toLocaleString()}đ
-                  <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px' }} onClick={() => handleServiceToggle(sid)}>×</span>
+                  <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px' }} onClick={() => handleServiceToggle(sid)}>đ-</span>
                 </div>
               );
             })}
@@ -503,15 +503,15 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           <>
             <div style={{ marginTop: '12px', padding: '12px', background: '#e9edf7', borderRadius: '8px', color: '#1b254b', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <strong>Tổng thời gian:</strong> {totalMinutes} phút
+                <strong>Tđ.ng thời gian:</strong> {totalMinutes} phút
                 {finishTimeStr && <span> (Dự kiến xong: <strong style={{ color: '#4318ff' }}>{finishTimeStr}</strong>)</span>}
               </div>
               <div>
-                <strong>Tổng tiền:</strong> <span style={{ color: '#05cd99', fontWeight: 'bold', fontSize: '16px' }}>{totalPrice?.toLocaleString() || 0}đ</span>
+                <strong>Tđ.ng tiền:</strong> <span style={{ color: '#05cd99', fontWeight: 'bold', fontSize: '16px' }}>{totalPrice?.toLocaleString() || 0}đ</span>
               </div>
             </div>
             <div style={{ marginTop: '8px', fontSize: '12px', color: '#e6522c', fontStyle: 'italic', fontWeight: 500 }}>
-              * Lưu ý: Giá trên chưa bao gồm vật tư/phụ tùng. Kỹ thuật viên sẽ báo giá chính xác sau khi kiểm tra xe trực tiếp.
+              * Lưu ý: Giá trên chưa bao gôm vật tư/phụ tùng. Kỹ thuật viên sẽ báo giá chính xác sau khi kiểm tra xe trực tiếp.
             </div>
           </>
         )}
@@ -534,8 +534,8 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           minDate={new Date()}
           placeholder="Chọn ngày và giờ hẹn..."
         />
-        {timeError && <div style={{ color: '#ee5d50', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>❌ {timeError}</div>}
-        {warningMsg && !timeError && <div style={{ color: '#ff8f00', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>⚠️ {warningMsg}</div>}
+        {timeError && <div style={{ color: '#ee5d50', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>đO {timeError}</div>}
+        {warningMsg && !timeError && <div style={{ color: '#ff8f00', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>đsđ️ {warningMsg}</div>}
         {!timeError && <div style={{ color: '#4318ff', fontSize: '11px', fontWeight: 600, marginTop: '8px', lineHeight: '1.4' }}>Thông tin: Gara hỗ trợ giao xe đến 19:00 nếu xe đã xong cho khách đã thanh toán nhưng đến lấy muộn, ngược lại giao xe vào hôm sau.</div>}
       </div>
       <div className="form-group" style={{ marginTop: '10px' }}>
@@ -552,4 +552,11 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
     </form>
   );
 }
+
+
+
+
+
+
+
 

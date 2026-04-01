@@ -1,10 +1,10 @@
-import React from "react";
+﻿import React from "react";
 
 // Chakra imports
 import { Flex, useColorModeValue, Text } from "@chakra-ui/react";
 
 // Custom components
-import { HSeparator } from "components/separator/Separator";
+import { HSeparator } from "@horizon/components/separator/Separator";
 
 export function SidebarBrand({ collapsed = false }) {
   //   Chakra color mode
@@ -38,3 +38,4 @@ export function SidebarBrand({ collapsed = false }) {
 }
 
 export default SidebarBrand;
+

@@ -1,4 +1,4 @@
-function AuthTabs({ mode, onModeChange }) {
+﻿function AuthTabs({ mode, onModeChange }) {
   return (
     <div className="tabs">
       <button

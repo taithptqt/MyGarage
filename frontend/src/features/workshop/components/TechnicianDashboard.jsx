@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { useAuth } from "../../../context/AuthContext";
-import { getAllStaff } from "../../admin/api/staffApi";
-import { Modal } from "../../admin/components/AdminModals";
-import { useSearch } from "../../../context/SearchContext";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getAllStaff } from "@features/admin/api/staffApi";
+import { Modal } from "@features/admin/components/AdminModals";
+import { useSearch } from "@shared/core/context/SearchContext";
 import {
   Badge,
   Box,
@@ -30,7 +30,7 @@ import {
   MdInfo,
   MdPerson,
 } from "react-icons/md";
-import { request } from "../../../app/apiClient";
+import { request } from "@app/apiClient";
 
 const TAB_CHECKIN = "CHECKIN";
 const TAB_CHECKOUT = "CHECKOUT";
@@ -69,8 +69,8 @@ export default function TechnicianDashboard() {
       const [oRes, sRes, assignmentsRes, detailsRes, diagnosisRes, checkinRes, checkoutRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllStaff(),
-        request({ url: "/api/ServiceStaffAssignment", method: "GET" }),
-        request({ url: "/api/ServiceOrderDetail", method: "GET" }),
+        request({ url: "/api/service-staff-assignments", method: "GET" }),
+        request({ url: "/api/service-order-details", method: "GET" }),
         serviceOrderApi.getDiagnosisRequests(),
         serviceOrderApi.getCheckInRequests(),
         serviceOrderApi.getCheckOutRequests(),
@@ -662,6 +662,11 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onDiagnosis
     </Box>
   );
 };
+
+
+
+
+
 
 
 

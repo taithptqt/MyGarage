@@ -1,4 +1,4 @@
-// Mục đích: Tự động cập nhật trạng thái chiến dịch voucher theo lịch bắt đầu/kết thúc và đồng bộ ngân sách định kỳ.
+// Muc dich: Tu dong cap nhat trang thai chien dich voucher theo lich bat dau/ket thuc va dong bo ngan sach dinh ky.
 using System;
 using System.Threading;
 using System.Threading.Tasks;

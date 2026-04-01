@@ -45,10 +45,10 @@ import {
   MdDirectionsCar,
   MdPerson,
 } from "react-icons/md";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { vehicleConditionLogApi } from "../api/vehicleConditionLogApi";
-import { useAuth } from "../../../context/AuthContext";
-import { getAllStaff } from "../../admin/api/staffApi";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getAllStaff } from "@features/admin/api/staffApi";
 
 function parseDefectsData(raw) {
   if (!raw) return [];
@@ -233,7 +233,7 @@ export default function TechnicianConditionLogPage() {
         }
       } catch (err) {
         setErrorHeader("Đã xảy ra lỗi khi tải dữ liệu. Vui lòng thử lại.");
-        toast({ title: "Lỗi tải thông tin", status: "error" });
+        toast({ title: "Lđ-i tải thông tin", status: "error" });
       } finally {
         setLoading(false);
       }
@@ -245,11 +245,11 @@ export default function TechnicianConditionLogPage() {
   const validateOdo = (value) => {
     const val = parseInt(value, 10);
     if (!value) {
-      setOdoError("Vui lòng nhập số KM (ODO)");
+      setOdoError("Vui lòng nhập sđ KM (ODO)");
       return false;
     }
     if (Number.isNaN(val) || val <= 0 || val >= 2000000) {
-      setOdoError("Số KM phải lớn hơn 0 và nhỏ hơn 2,000,000");
+      setOdoError("Sđ KM phải lơn hơn 0 và nhỏ hơn 2,000,000");
       return false;
     }
 
@@ -314,7 +314,7 @@ export default function TechnicianConditionLogPage() {
 
   const handleSave = async () => {
     if (!validateOdo(odo)) {
-      toast({ title: odoError || "Vui lòng kiểm tra lại chỉ số ODO", status: "warning" });
+      toast({ title: odoError || "Vui lòng kiểm tra lại chệ sđ ODO", status: "warning" });
       return;
     }
 
@@ -374,7 +374,7 @@ export default function TechnicianConditionLogPage() {
       navigate("/workshop/technician");
     } catch (err) {
       toast({
-        title: "Lỗi khi lưu dữ liệu",
+        title: "Lđ-i khi lưu dữ liệu",
         description: err?.response?.data?.message || err?.message,
         status: "error",
       });
@@ -399,7 +399,7 @@ export default function TechnicianConditionLogPage() {
 
   const parsedDefects = parseDefectsData(targetLog?.defectsAndImages);
   const displayWarningLights = sanitizeWarningLightsValue(targetLog?.dashboardWarningLights);
-  const titleText = `${phase === "CHECK_IN" ? "CHECK-IN" : "CHECK-OUT"} - KIỂM TRA TÌNH TRẠNG XE`;
+  const titleText = `${phase === "CHECK_IN" ? "CHECK-IN" : "CHECK-OUT"} - KIđ,M TRA TđONH TRẠNG XE`;
 
   return (
     <Box bg="#f4f7fe" minH="100vh" pb={10}>
@@ -424,7 +424,7 @@ export default function TechnicianConditionLogPage() {
             <VStack align="start" spacing={0}>
               <Heading size="lg" color="#1B2559">{titleText}</Heading>
               <Text fontSize="sm" color="gray.500">
-                Lệnh: <strong>{order?.code || `#${orderId}`}</strong> - Biển số: <strong>{order?.vehicleLicensePlate || "-"}</strong>
+                Lệnh: <strong>{order?.code || `#${orderId}`}</strong> - Biển sđ: <strong>{order?.vehicleLicensePlate || "-"}</strong>
               </Text>
             </VStack>
           </HStack>
@@ -447,7 +447,7 @@ export default function TechnicianConditionLogPage() {
             </HStack>
           ) : (
             <IconButton
-              aria-label="Chỉnh sửa"
+              aria-label="Chệnh sửa"
               icon={<MdEdit />}
               colorScheme="blue"
               variant="outline"
@@ -464,15 +464,15 @@ export default function TechnicianConditionLogPage() {
               <Card borderRadius="2xl" border="none" boxShadow="0px 18px 40px rgba(112, 144, 176, 0.12)">
                 <CardBody>
                   <VStack align="stretch" spacing={6}>
-                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Thông số vận hành</Heading>
+                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Thông sđ vận hành</Heading>
 
                     <FormControl isRequired isInvalid={!!odoError}>
-                      <FormLabel fontSize="sm" fontWeight="bold">Số KM hiển thị trên Taplo (ODO)</FormLabel>
+                      <FormLabel fontSize="sm" fontWeight="bold">Sđ KM hiển thị trên Taplo (ODO)</FormLabel>
                       <HStack mb={2}>
                         <Icon as={MdSpeed} color={odoError ? "red.500" : "blue.500"} boxSize={5} />
                         <Input
                           type="number"
-                          placeholder="Nhập số KM..."
+                          placeholder="Nhập sđ KM..."
                           value={odo}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -505,7 +505,7 @@ export default function TechnicianConditionLogPage() {
               <Card borderRadius="2xl" border="none" boxShadow="0px 18px 40px rgba(112, 144, 176, 0.12)">
                 <CardBody>
                   <VStack align="stretch" spacing={6}>
-                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Hệ thống cảnh báo</Heading>
+                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Hệ thđng cảnh báo</Heading>
                     <FormControl>
                       <FormLabel fontSize="sm" fontWeight="bold">Đèn cảnh báo đang sáng</FormLabel>
                       <CheckboxGroup colorScheme="red" value={warningLights} onChange={setWarningLights}>
@@ -546,7 +546,7 @@ export default function TechnicianConditionLogPage() {
                         <FormControl isRequired>
                           <FormLabel fontSize="sm" fontWeight="bold">Vị trí / Bộ phận</FormLabel>
                           <Input
-                            placeholder="VD: Cửa trước trái, Đuôi xe..."
+                            placeholder="VD: Cửa trươc trái, Đuôi xe..."
                             value={item.part}
                             onChange={(e) => updateDefectField(idx, "part", e.target.value)}
                             borderRadius="xl"
@@ -558,7 +558,7 @@ export default function TechnicianConditionLogPage() {
                       <FormControl isRequired>
                         <FormLabel fontSize="sm" fontWeight="bold">Mô tả hư hại</FormLabel>
                         <Textarea
-                          placeholder="VD: Trầy xước, móp nhẹ..."
+                          placeholder="VD: Trầy xươc, móp nhẹ..."
                           value={item.issue}
                           onChange={(e) => updateDefectField(idx, "issue", e.target.value)}
                           borderRadius="xl"
@@ -699,3 +699,10 @@ export default function TechnicianConditionLogPage() {
     </Box>
   );
 }
+
+
+
+
+
+
+

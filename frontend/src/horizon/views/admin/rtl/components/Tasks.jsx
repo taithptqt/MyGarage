@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Flex,
@@ -8,9 +8,9 @@ import {
   Checkbox,
 } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
-import Menu from "components/menu/MainMenu";
-import IconBox from "components/icons/IconBox";
+import Card from "@horizon/components/card/Card";
+import Menu from "@horizon/components/menu/MainMenu";
+import IconBox from "@horizon/components/icons/IconBox";
 
 // Assets
 import { MdCheckBox, MdDragIndicator } from "react-icons/md";
@@ -129,4 +129,5 @@ export default function Conversion(props) {
     </Card>
   );
 }
+
 

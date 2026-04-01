@@ -1,9 +1,9 @@
-// Chakra imports
+﻿// Chakra imports
 import { SimpleGrid, Text, useColorModeValue } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 import React from "react";
-import Information from "views/admin/profile/components/Information";
+import Information from "@horizon/views/admin/profile/components/Information";
 
 // Assets
 export default function GeneralInformation(props) {
@@ -67,4 +67,5 @@ export default function GeneralInformation(props) {
     </Card>
   );
 }
+
 

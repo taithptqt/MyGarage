@@ -1,4 +1,4 @@
-export function formatOrderDateTime(isoString) {
+﻿export function formatOrderDateTime(isoString) {
   if (!isoString) return "-";
   try {
     return new Date(isoString).toLocaleString("vi-VN", {
@@ -90,8 +90,8 @@ export function calculateOrderTotal(details = []) {
 
 /**
  * Auto-format Vietnamese license plates
- * e.g., 56A56789   -> 56A-567.89   (5-digit → NNN.NN)
- *       43A1234     -> 43A-1234     (4-digit  → NNNN)
+ * e.g., 56A56789   -> 56A-567.89   (5-digit ệ' NNN.NN)
+ *       43A1234     -> 43A-1234     (4-digit  ệ' NNNN)
  *       30A156789   -> 30A1-567.89  (series + 5-digit)
  */
 export const formatLicensePlate = (val) => {
@@ -119,4 +119,8 @@ export const formatLicensePlate = (val) => {
 
   return clean;
 };
+
+
+
+
 

@@ -1,4 +1,4 @@
-import "./Footer.css";
+﻿import "./Footer.css";
 
 function Footer() {
   return (
@@ -8,9 +8,9 @@ function Footer() {
           <h3>MY GARAGE</h3>
           <p>Điểm đến hàng đầu cho đam mê ô tô và văn hóa sưu tầm xe.</p>
           <div className="mg-footer-icons">
-            <span>↗</span>
-            <span>👍</span>
-            <span>✉</span>
+            <span>→</span>
+            <span>{"\u{1F44D}"}</span>
+            <span>★</span>
           </div>
         </div>
         <div>
@@ -37,3 +37,6 @@ function Footer() {
 }
 
 export default Footer;
+
+
+

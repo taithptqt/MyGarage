@@ -1,12 +1,12 @@
 import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
   deleteStaff,
   getAllRoles,
   getAllStaff,
   updateStaff
-} from "../api/staffApi";
+} from "@features/admin/api/staffApi";
 import {
   createCustomerVehicle,
   createCustomer,
@@ -20,7 +20,7 @@ import {
   updateVehicle,
   updateCustomerVehicle,
   updateCustomer
-} from "../api/customerApi";
+} from "@features/admin/api/customerApi";
 import {
   createVehicleBrand,
   createVehicleModel,
@@ -30,25 +30,25 @@ import {
   getAllVehicleModels,
   updateVehicleBrand,
   updateVehicleModel
-} from "../api/vehicleCatalogApi";
+} from "@features/admin/api/vehicleCatalogApi";
 import {
   createStandardService,
   deleteStandardService,
   getAllServiceCategories,
   getAllStandardServices,
   updateStandardService
-} from "../api/serviceApi";
+} from "@features/admin/api/serviceApi";
 import {
   createBranch,
   deleteBranch,
   getAllBranches,
   updateBranch
-} from "../api/branchApi";
+} from "@features/admin/api/branchApi";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearch } from "@context/SearchContext";
-import { useBranch } from "../../../context/BranchContext";
-import ImageCropper from "../../workshop/components/ImageCropper";
-import TablePagination from "../../../shared/components/TablePagination";
+import { useSearch } from "@shared/core/context/SearchContext";
+import { useBranch } from "@shared/core/context/BranchContext";
+import ImageCropper from "@features/workshop/components/ImageCropper";
+import TablePagination from "@shared/components/TablePagination";
 import "./AdminPage.css";
 
 const EMPTY_STAFF_FORM = {
@@ -334,7 +334,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Hạng Khách</label>
+        <label>Hạng khách</label>
         <select name="tierId" value={form.tierId} onChange={handleChange}>
           <option value="">Chọn hạng</option>
           {tiers.map((tier) => (
@@ -355,11 +355,11 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Biển Số Xe</label>
+        <label>Biển số xe</label>
         <input name="licensePlate" value={form.licensePlate || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Hãng Xe</label>
+        <label>Hãng xe</label>
         <select name="brandId" value={form.brandId} onChange={handleChange}>
           <option value="">Chọn hãng xe</option>
           {brands.map((brand) => (
@@ -370,7 +370,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Dòng Xe</label>
+        <label>Dòng xe</label>
         <select name="modelId" value={form.modelId} onChange={handleChange}>
           <option value="">Chọn dòng xe</option>
           {modelOptions.map((model) => (
@@ -381,11 +381,11 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Màu Xe</label>
+        <label>Màu xe</label>
         <input name="color" value={form.color || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Năm SX</label>
+        <label>Nam SX</label>
         <input
           name="manufactureYear"
           type="number"
@@ -1471,7 +1471,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>???</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1505,7 +1505,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.modelName || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>???</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1521,7 +1521,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>???</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1535,7 +1535,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Brand #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>???</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1566,7 +1566,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
                         <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>???</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1718,3 +1718,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     </div>
   );
 }
+
+
+
+

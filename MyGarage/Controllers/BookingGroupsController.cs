@@ -43,7 +43,7 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpGet("my")]
+        [HttpGet("customers/current")]
         public async Task<ActionResult<IEnumerable<BookingGroupResponseDto>>> GetMyGroups()
         {
             var customerId = this.GetCurrentUserId();
@@ -56,7 +56,7 @@ namespace MyGarage.Controllers
             return Ok(groups);
         }
 
-        [HttpGet("my/{id:long}")]
+        [HttpGet("customers/current/{id:long}")]
         public async Task<ActionResult<BookingGroupResponseDto>> GetMyGroupDetail(long id)
         {
             var customerId = this.GetCurrentUserId();

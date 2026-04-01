@@ -1,33 +1,29 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
-using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
     [Route("api/audit-logs")]
-[Route("api/[controller]")]
     [ApiController]
     public class AuditLogController : ControllerBase
     {
         private readonly IAuditLogService _auditLogService;
-        private readonly GarageContext _context;
         private readonly IMapper _mapper;
 
-        public AuditLogController(IAuditLogService auditLogService, GarageContext context, IMapper mapper)
+        public AuditLogController(IAuditLogService auditLogService, IMapper mapper)
         {
             _auditLogService = auditLogService;
-            _context = context;
             _mapper = mapper;
         }
 
-        [HttpGet("admin-changes")]
+        [HttpGet("administrative-change-entries")]
         public async Task<IActionResult> GetAdminChanges(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
@@ -37,50 +33,19 @@ namespace MyGarage.Controllers
             [FromQuery] DateTime? from = null,
             [FromQuery] DateTime? to = null)
         {
+            var (items, total) = await _auditLogService.GetAdminChangesAsync(
+                page,
+                pageSize,
+                action,
+                tableName,
+                query,
+                from,
+                to);
+
             page = page < 1 ? 1 : page;
             pageSize = pageSize < 1 ? 1 : (pageSize > 200 ? 200 : pageSize);
 
-            var logsQuery = _context.AuditLogs
-                .AsNoTracking()
-                .Where(x => x.TableName != null && x.TableName.ToUpper() != "AUDITLOGS");
-
-            if (!string.IsNullOrWhiteSpace(action))
-            {
-                var normalized = action.Trim().ToUpperInvariant();
-                logsQuery = logsQuery.Where(x => x.Action != null && x.Action.ToUpper() == normalized);
-            }
-
-            if (!string.IsNullOrWhiteSpace(tableName))
-            {
-                var normalized = tableName.Trim().ToUpperInvariant();
-                logsQuery = logsQuery.Where(x => x.TableName != null && x.TableName.ToUpper().Contains(normalized));
-            }
-
-            if (!string.IsNullOrWhiteSpace(query))
-            {
-                var normalized = query.Trim().ToUpperInvariant();
-                logsQuery = logsQuery.Where(x =>
-                    (x.TableName != null && x.TableName.ToUpper().Contains(normalized)) ||
-                    (x.Action != null && x.Action.ToUpper().Contains(normalized)) ||
-                    (x.OldValue != null && x.OldValue.ToUpper().Contains(normalized)) ||
-                    (x.NewValue != null && x.NewValue.ToUpper().Contains(normalized)));
-            }
-
-            if (from.HasValue)
-            {
-                logsQuery = logsQuery.Where(x => x.Timestamp.HasValue && x.Timestamp.Value >= from.Value);
-            }
-
-            if (to.HasValue)
-            {
-                logsQuery = logsQuery.Where(x => x.Timestamp.HasValue && x.Timestamp.Value <= to.Value);
-            }
-
-            var total = await logsQuery.CountAsync();
-            var items = await logsQuery
-                .OrderByDescending(x => x.Timestamp)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+            var payloadItems = items
                 .Select(x => new
                 {
                     id = x.Id,
@@ -97,9 +62,9 @@ namespace MyGarage.Controllers
                     sessionId = x.SessionId,
                     timestamp = x.Timestamp
                 })
-                .ToListAsync();
+                .ToList();
 
-            return Ok(new { items, total, page, pageSize });
+            return Ok(new { items = payloadItems, total, page, pageSize });
         }
 
         [HttpGet]

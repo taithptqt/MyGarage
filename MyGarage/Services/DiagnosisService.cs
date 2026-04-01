@@ -1,12 +1,23 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Services
 {
-    public class DiagnosisService : GenericService<Diagnosis>, IDiagnosisService
+    public partial class DiagnosisService : GenericService<Diagnosis>, IDiagnosisService
     {
-        public DiagnosisService(IDiagnosisRepository repository) : base(repository)
+        private readonly GarageContext _context;
+
+        public DiagnosisService(IDiagnosisRepository repository, GarageContext context) : base(repository)
         {
+            _context = context;
         }
+
     }
 }
+

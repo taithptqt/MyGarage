@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -10,7 +10,6 @@ using MyGarage.DTOs.Responses;
 namespace MyGarage.Controllers
 {
     [Route("api/customer-tiers")]
-[Route("api/[controller]")]
     [ApiController]
     public class CustomerTierController : ControllerBase
     {

@@ -1,13 +1,13 @@
-// Chakra imports
+﻿// Chakra imports
 import { Portal, Box, useDisclosure } from '@chakra-ui/react';
-import Footer from 'components/footer/FooterAdmin';
+import Footer from '@horizon/components/footer/FooterAdmin';
 // Layout components
-import Navbar from 'components/navbar/NavbarAdmin';
-import Sidebar from 'components/sidebar/Sidebar';
-import { SidebarContext } from 'contexts/SidebarContext';
+import Navbar from '@horizon/components/navbar/NavbarAdmin';
+import Sidebar from '@horizon/components/sidebar/Sidebar';
+import { SidebarContext } from '@horizon/contexts/SidebarContext';
 import React, { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import routes from 'routes';
+import routes from '@horizon/routes.jsx';
 
 const SIDEBAR_EXPANDED_WIDTH = 300;
 const SIDEBAR_COLLAPSED_WIDTH = 5;
@@ -218,3 +218,4 @@ export default function Dashboard(props) {
     </Box>
   );
 }
+

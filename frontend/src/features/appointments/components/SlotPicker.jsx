@@ -1,4 +1,4 @@
-export default function SlotPicker({ slots, selectedSlot, onSelect, loading, selectedDate }) {
+﻿export default function SlotPicker({ slots, selectedSlot, onSelect, loading, selectedDate }) {
   if (loading) {
     return (
       <div className="spinner-container">
@@ -11,10 +11,10 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     const isSunday = selectedDate && selectedDate.getDay() === 0;
     return (
       <div className="empty-state">
-        <div className="empty-icon">{isSunday ? "😴" : "📅"}</div>
+        <div className="empty-icon">{isSunday ? "\u{1F634}" : "\u{1F4C5}"}</div>
         <p>
           {isSunday
-            ? "Chủ nhật là ngày nghỉ. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
+            ? "Chủ nhật là ngày nghệ. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
             : "Không có khung giờ nào khả dụng cho ngày này."}
         </p>
       </div>
@@ -59,8 +59,8 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
             </div>
             <div className="slot-remaining">
               {slot.isAvailable
-                ? `Còn ${slot.remainingCapacity} chỗ`
-                : "Hết chỗ"}
+                ? `Còn ${slot.remainingCapacity} chđ-`
+                : "Hết chđ-"}
             </div>
           </div>
         );
@@ -68,3 +68,6 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     </div>
   );
 }
+
+
+

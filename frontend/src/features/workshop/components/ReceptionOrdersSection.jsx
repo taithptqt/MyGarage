@@ -1,25 +1,25 @@
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+﻿import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { getAllCustomers, getAllVehicles, getAllCustomerVehicles, createCustomer, createVehicle, createCustomerVehicle } from "../../admin/api/customerApi";
-import { getAllStaff, getAllRoles } from "../../admin/api/staffApi";
-import { Modal } from "../../admin/components/AdminModals";
-import { getStatusBadge } from "../../admin/utils/adminUtils";
-import { useSearch } from "../../../context/SearchContext";
-import { useBranch } from "../../../context/BranchContext";
-import { useAuth } from "../../../context/AuthContext";
-import TablePagination from "../../../shared/components/TablePagination";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getAllCustomers, getAllVehicles, getAllCustomerVehicles, createCustomer, createVehicle, createCustomerVehicle } from "@features/admin/api/customerApi";
+import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
+import { Modal } from "@features/admin/components/AdminModals";
+import { getStatusBadge } from "@features/admin/utils/adminUtils";
+import { useSearch } from "@shared/core/context/SearchContext";
+import { useBranch } from "@shared/core/context/BranchContext";
+import { useAuth } from "@shared/core/context/AuthContext";
+import TablePagination from "@shared/components/TablePagination";
 import {
   getBranchAppointments,
   cancelAppointment,
   bookAppointment,
   getAllStandardServices,
-} from "../../appointments/api/appointmentApi";
-import AppointmentForm from "./AppointmentForm";
-import ServiceOrderDetailModal from "./ServiceOrderDetailModal";
-import ReceptionAppointmentsSection from "./ReceptionAppointmentsSection";
+} from "@features/appointments/api/appointmentApi";
+import AppointmentForm from "@features/workshop/components/AppointmentForm";
+import ServiceOrderDetailModal from "@features/workshop/components/ServiceOrderDetailModal";
+import ReceptionAppointmentsSection from "@features/workshop/components/ReceptionAppointmentsSection";
 
 export default function ReceptionOrdersSection() {
   const navigate = useNavigate();
@@ -544,7 +544,7 @@ export default function ReceptionOrdersSection() {
       </div>
       {error && (
         <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>
-          ❌ {error}
+          ? {error}
         </div>
       )}
 
@@ -605,7 +605,7 @@ export default function ReceptionOrdersSection() {
 
       {modal === "create_appt" && (
         <Modal title="Tạo lịch hẹn mới (Lễ tân)" onClose={() => setModal(null)} className="modal-lg">
-           {error && <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>❌ {error}</div>}
+           {error && <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>? {error}</div>}
            <AppointmentForm 
              customers={customers} 
             vehicles={vehicles}
@@ -622,7 +622,7 @@ export default function ReceptionOrdersSection() {
       {modal === "appt_success" && successAppt && (
         <Modal title="Đặt lịch thành công" onClose={() => { setModal(null); setSuccessAppt(null); }}>
           <div className="success-summary" style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', color: '#05cd99', marginBottom: '16px' }}>✅</div>
+            <div style={{ fontSize: '48px', color: '#05cd99', marginBottom: '16px' }}>?</div>
             <h3 style={{ color: '#2b3674', marginTop: 0 }}>Đã xác nhận lịch hẹn!</h3>
             <div style={{ background: '#f4f7fe', padding: '16px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', lineHeight: '1.8' }}>
               <p style={{margin: 0}}><strong>Khách hàng:</strong> {successAppt.customerName} - {successAppt.customerPhone}</p>
@@ -638,14 +638,14 @@ export default function ReceptionOrdersSection() {
       )}
 
       {modal === "date_range" && (
-        <Modal title="Lịch lọc theo khoảng ngày" onClose={() => setModal(null)} className="date-range-modal">
+        <Modal title="Lọc lịch theo khoảng ngày" onClose={() => setModal(null)} className="date-range-modal">
           <div className="date-range-picker-shell">
             <div className="date-range-summary">
               <div className="date-pill">
                 <span className="date-pill-label">Bắt đầu</span>
                 <strong>{toDisplayDate(draftDateFrom)}</strong>
               </div>
-              <div className="date-pill-arrow">→</div>
+              <div className="date-pill-arrow">?</div>
               <div className="date-pill">
                 <span className="date-pill-label">Kết thúc</span>
                 <strong>{toDisplayDate(draftDateTo)}</strong>
@@ -692,7 +692,7 @@ export default function ReceptionOrdersSection() {
 
             <div className="date-range-footer">
               <button type="button" className="btn-secondary-outline" style={{ height: "42px", minWidth: "90px", borderRadius: "10px", padding: "0 16px" }} onClick={() => setModal(null)}>
-                Đóng
+                ??ng
               </button>
               <button
                 type="button"
@@ -821,10 +821,10 @@ function OrdersTableContent({
                   <td className="td-center" onClick={(e) => e.stopPropagation()} style={{ width: "120px" }}>
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", width: "100%" }}>
                       {order.status === "WAITING_APPROVAL" && (
-                        <button className="btn-primary btn-sm" onClick={() => navigate(`/workshop/reception/orders/${order.id}/quote`)}>💰 Báo giá</button>
+                        <button className="btn-primary btn-sm" onClick={() => navigate(`/workshop/reception/orders/${order.id}/quote`)}>✍ Báo giá</button>
                       )}
                       {order.status === "READY" && (
-                        <button className="btn-success btn-sm" onClick={() => handleCompleteOrder(order)}>🤝 Bàn giao</button>
+                        <button className="btn-success btn-sm" onClick={() => handleCompleteOrder(order)}>🚗 Bàn giao</button>
                       )}
                       {statusPermitUpdate(order.status) && (
                         <button
@@ -857,6 +857,11 @@ function OrdersTableContent({
     </>
   );
 }
+
+
+
+
+
 
 
 

@@ -3,7 +3,7 @@
   formatStoredVehicleLabel,
   formatVehicleDescriptor,
   toSafeUpper,
-} from "./bookingCommon";
+} from "@features/appointments/utils/bookingCommon";
 
 export function buildCurrentVehiclePayload({
   linkedVehicles,

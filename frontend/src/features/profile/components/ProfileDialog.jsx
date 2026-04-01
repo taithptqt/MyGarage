@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useAuth } from "../../../context/AuthContext";
-import { getApiBaseUrl } from "../../auth/api/authApi";
-import { updateCustomer } from "../../admin/api/customerApi";
-import { updateStaff, uploadStaffAvatar } from "../../admin/api/staffApi";
-import ImageCropper from "../../workshop/components/ImageCropper";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getApiBaseUrl } from "@features/auth/api/authApi";
+import { updateCustomer } from "@features/admin/api/customerApi";
+import { updateStaff, uploadStaffAvatar } from "@features/admin/api/staffApi";
+import ImageCropper from "@features/workshop/components/ImageCropper";
 import "./ProfileDialog.css";
 
 const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"];
@@ -102,7 +102,7 @@ export default function ProfileDialog({ onClose }) {
     try {
       const res = await uploadStaffAvatar(userId, croppedBlob);
       const nextAvatar = res?.avatarUrl || "";
-      if (!nextAvatar) throw new Error("Không nhận được đường dẫn ảnh mới.");
+      if (!nextAvatar) throw new Error("Không nhận được đường dẫn ảnh mơi.");
 
       const nextUser = { ...user, avatarUrl: nextAvatar, AvatarUrl: nextAvatar };
       setFormData((prev) => ({ ...prev, avatarUrl: nextAvatar }));
@@ -132,7 +132,7 @@ export default function ProfileDialog({ onClose }) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!phoneRegex.test(phone)) {
-      setError("Số điện thoại không đúng định dạng.");
+      setError("Sđ điện thoại không đúng định dạng.");
       return;
     }
     if (!emailRegex.test(email)) {
@@ -140,7 +140,7 @@ export default function ProfileDialog({ onClose }) {
       return;
     }
     if (citizenId && !/^\d{12}$/.test(citizenId)) {
-      setError("Số CCCD phải gồm đúng 12 chữ số.");
+      setError("Sđ CCCD phải gôm đúng 12 chữ sđ.");
       return;
     }
 
@@ -167,9 +167,9 @@ export default function ProfileDialog({ onClose }) {
       setTimeout(() => {
         onClose();
       }, 2000);
-      setSuccess("Lưu hồ sơ thành công.");
+      setSuccess("Lưu hô sơ thành công.");
     } catch (e) {
-      setError(e?.message || "Không thể lưu hồ sơ.");
+      setError(e?.message || "Không thể lưu hô sơ.");
     } finally {
       setSaving(false);
     }
@@ -187,7 +187,7 @@ export default function ProfileDialog({ onClose }) {
                 </div>
                 {isStaffRole ? (
                   <label className="profile-dialog-avatar-btn">
-                    {uploadingAvatar ? "..." : "📷"}
+                    {uploadingAvatar ? "..." : "\u{1F4F7}"}
                     <input type="file" accept="image/*" onChange={onAvatarChange} disabled={uploadingAvatar} />
                   </label>
                 ) : null}
@@ -198,7 +198,7 @@ export default function ProfileDialog({ onClose }) {
               </div>
             </div>
             <button type="button" className="profile-dialog-close" onClick={onClose} aria-label="Đóng">
-              ×
+              đ-
             </button>
           </header>
 
@@ -211,7 +211,7 @@ export default function ProfileDialog({ onClose }) {
               <input name="fullName" value={formData.fullName} onChange={onChange} required />
             </label>
             <label>
-              Số điện thoại
+              Sđ điện thoại
               <input name="phone" value={formData.phone} onChange={onChange} required />
             </label>
             <label>
@@ -219,7 +219,7 @@ export default function ProfileDialog({ onClose }) {
               <input name="email" value={formData.email} onChange={onChange} required />
             </label>
             <label>
-              Số CCCD
+              Sđ CCCD
               <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chưa cập nhật" />
             </label>
             <label>
@@ -236,7 +236,7 @@ export default function ProfileDialog({ onClose }) {
                 Hủy
               </button>
               <button type="submit" disabled={saving || uploadingAvatar}>
-                {saving ? "Đang lưu..." : "Lưu hồ sơ"}
+                {saving ? "Đang lưu..." : "Lưu hô sơ"}
               </button>
             </div>
           </form>
@@ -259,3 +259,11 @@ export default function ProfileDialog({ onClose }) {
   if (typeof document === "undefined") return content;
   return createPortal(content, document.body);
 }
+
+
+
+
+
+
+
+

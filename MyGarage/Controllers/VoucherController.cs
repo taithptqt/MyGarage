@@ -12,10 +12,14 @@ using MyGarage.DTOs.Responses;
 namespace MyGarage.Controllers
 {
     [Route("api/vouchers")]
-[Route("api/[controller]")]
     [ApiController]
     public class VoucherController : ControllerBase
     {
+        public sealed record VoucherStatusPatchDto
+        {
+            public string? Status { get; init; }
+        }
+
         private readonly IVoucherService _voucherService;
         private readonly IMapper _mapper;
 
@@ -76,22 +80,17 @@ namespace MyGarage.Controllers
             return Ok(responseDto);
         }
 
-        [HttpPost("{id}/activate")]
-        public async Task<ActionResult<VoucherResponseDto>> Activate(long id)
+        [HttpPatch("{id}")]
+        public async Task<ActionResult<VoucherResponseDto>> PatchStatus(long id, [FromBody] VoucherStatusPatchDto dto)
         {
-            return await UpdateStatusAsync(id, "ACTIVE", true);
-        }
-
-        [HttpPost("{id}/pause")]
-        public async Task<ActionResult<VoucherResponseDto>> Pause(long id)
-        {
-            return await UpdateStatusAsync(id, "PAUSED", false);
-        }
-
-        [HttpPost("{id}/revoke")]
-        public async Task<ActionResult<VoucherResponseDto>> Revoke(long id)
-        {
-            return await UpdateStatusAsync(id, "REVOKED", false);
+            var status = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
+            return status switch
+            {
+                "ACTIVE" => await UpdateStatusAsync(id, "ACTIVE", true),
+                "PAUSED" => await UpdateStatusAsync(id, "PAUSED", false),
+                "REVOKED" => await UpdateStatusAsync(id, "REVOKED", false),
+                _ => BadRequest(new { message = "Status must be ACTIVE, PAUSED, or REVOKED." }),
+            };
         }
 
         [HttpDelete("{id}")]
@@ -159,6 +158,9 @@ namespace MyGarage.Controllers
         }
     }
 }
+
+
+
 
 
 

@@ -38,9 +38,9 @@ import {
   MdDelete,
   MdEdit,
 } from "react-icons/md";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { vehicleConditionLogApi } from "../api/vehicleConditionLogApi";
-import { formatOrderDateTime } from "../utils/serviceOrderDetailUtils";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
+import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
 
 function pick(obj, keys, fallback = null) {
   for (const k of keys) {
@@ -638,3 +638,5 @@ export default function VehicleConditionLogsPage() {
     </Box>
   );
 }
+
+

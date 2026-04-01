@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import ProfileDialog from "../../features/profile/components/ProfileDialog";
+import { useAuth } from "@shared/core/context/AuthContext";
+import ProfileDialog from "@features/profile/components/ProfileDialog";
 import "./Header.css";
 
 function Header({ overlay = false }) {
@@ -74,7 +74,7 @@ function Header({ overlay = false }) {
   return (
     <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"}`}>
       <div className="mg-header-main">
-        <span className="mg-header-hotline">HOTLINE +45 69 133 911</span>
+        <span className="mg-header-hotline">+45 69 133 911</span>
 
         <div className="mg-header-side">
           <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
@@ -88,7 +88,7 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="#">HỘP & SỰ KIỆN</a>
+          <a href="#">HỌP & SỰ KIỆN</a>
           <a href="#">ĐỐI TÁC</a>
           <a href="#">TIN TỨC</a>
           <a href="#">LIÊN HỆ</a>
@@ -149,3 +149,9 @@ function Header({ overlay = false }) {
 }
 
 export default Header;
+
+
+
+
+
+

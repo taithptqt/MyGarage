@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { inventoryApi } from "../api/inventoryApi";
-import { Modal, ConfirmDialog } from "../../admin/components/AdminModals";
-import { useSearch } from "@context/SearchContext";
-import { generateSlug } from "../../../utils/stringUtils";
+import { inventoryApi } from "@features/inventory/api/inventoryApi";
+import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
+import { useSearch } from "@shared/core/context/SearchContext";
+import { generateSlug } from "@shared/core/utils/stringUtils";
 
 const EMPTY_PART = {
   name: "",
@@ -80,7 +80,7 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>Thuế (%)</label>
+          <label>Thu? (%)</label>
           <input name="taxRate" type="number" value={form.taxRate} onChange={handleChange} />
         </div>
         <div className="form-group">
@@ -99,12 +99,12 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
         <input name="isActive" type="checkbox" checked={form.isActive} onChange={handleChange} id="chk-active-part" />
-        <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>Đang kinh doanh</label>
+        <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>?ang kinh doanh</label>
       </div>
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang lưu…" : "Lưu"}
+          {loading ? "?ang luu?" : "Luu"}
         </button>
       </div>
     </form>
@@ -193,16 +193,16 @@ export default function PartsPage() {
 
       <div className="table-wrapper">
         {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Đang tải…</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải...</p></div>
         ) : (
           <table className="admin-table">
             <thead>
                 <tr>
-                  <th>Mã</th>
+                  <th>M?</th>
                   <th>Tên vật tư</th>
-                  <th>Đơn vị</th>
+                  <th>?on v?</th>
                   <th>Giá vốn</th>
-                  <th>Giá lẻ</th>
+                  <th>Gi? l?</th>
                   <th>Giá dịch vụ</th>
                   <th>Bảo hành</th>
                   <th className="th-center">Danh mục</th>
@@ -216,11 +216,11 @@ export default function PartsPage() {
                   <td className="td-id">{p.sku}</td>
                   <td className="td-name">{p.name}</td>
                   <td className="td-center"><span className="badge badge-info">{p.unit}</span></td>
-                  <td style={{ color: '#94a3b8' }}>{p.costPrice ? p.costPrice.toLocaleString() : 0}đ</td>
-                  <td style={{ fontWeight: 600, color: '#60a5fa' }}>{p.retailPrice ? p.retailPrice.toLocaleString() : 0}đ</td>
-                  <td>{p.servicePrice ? p.servicePrice.toLocaleString() : 0}đ</td>
-                  <td>{p.warrantyMonths > 0 ? `${p.warrantyMonths} th` : "—"}</td>
-                  <td className="td-center">{categories.find(c => c.id === p.categoryId)?.categoryName || "—"}</td>
+                  <td style={{ color: '#94a3b8' }}>{p.costPrice ? p.costPrice.toLocaleString() : 0}d</td>
+                  <td style={{ fontWeight: 600, color: '#60a5fa' }}>{p.retailPrice ? p.retailPrice.toLocaleString() : 0}d</td>
+                  <td>{p.servicePrice ? p.servicePrice.toLocaleString() : 0}d</td>
+                  <td>{p.warrantyMonths > 0 ? `${p.warrantyMonths} th` : "?"}</td>
+                  <td className="td-center">{categories.find(c => c.id === p.categoryId)?.categoryName || "?"}</td>
                   <td className="td-center">
                     <span className={`badge ${p.isActive ? 'badge-active' : 'badge-inactive'}`}>
                       {p.isActive ? "Kinh doanh" : "Ngừng"}
@@ -228,8 +228,8 @@ export default function PartsPage() {
                   </td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("edit"); }}>✏️</button>
-                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("delete"); }}>🗑️</button>
+                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("edit"); }}>??</button>
+                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("delete"); }}>???</button>
                     </div>
                   </td>
                 </tr>
@@ -247,7 +247,7 @@ export default function PartsPage() {
       )}
 
       {modal === "edit" && selected && (
-        <Modal title={`Sửa — ${selected.name}`} onClose={closeModal}>
+        <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <PartForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
         </Modal>
@@ -261,3 +261,7 @@ export default function PartsPage() {
     </div>
   );
 }
+
+
+
+

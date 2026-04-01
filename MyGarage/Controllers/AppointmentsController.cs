@@ -13,6 +13,13 @@ namespace MyGarage.Controllers
     [ApiController]
     public class AppointmentsController : ControllerBase
     {
+        public sealed record AppointmentStatusPatchRequestDto
+        {
+            public string? Status { get; init; }
+            public string? Reason { get; init; }
+            public DateTime? ArrivedAt { get; init; }
+        }
+
         private readonly IAppointmentService _appointmentService;
 
         public AppointmentsController(IAppointmentService appointmentService)
@@ -20,7 +27,7 @@ namespace MyGarage.Controllers
             _appointmentService = appointmentService;
         }
 
-        [HttpGet("availability")]
+        [HttpGet("slots")]
         public async Task<ActionResult<IEnumerable<AvailableSlotResponseDto>>> GetAvailability(
             [FromQuery] long branchId,
             [FromQuery] DateOnly date,
@@ -40,7 +47,7 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpGet("me")]
+        [HttpGet("customers/current")]
         public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetMine()
         {
             var customerId = this.GetCurrentUserId();
@@ -89,7 +96,7 @@ namespace MyGarage.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("guest")]
+        [HttpPost("public-bookings")]
         public async Task<ActionResult<AppointmentDetailResponseDto>> CreateGuest([FromBody] BookAppointmentRequestDto dto)
         {
             if (!dto.CustomerId.HasValue)
@@ -111,32 +118,36 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpPost("groups")]
-        public async Task<ActionResult<BookingGroupResponseDto>> CreateGroup([FromBody] BookAppointmentBatchRequestDto dto)
+        [HttpPatch("{id:long}")]
+        public async Task<ActionResult<AppointmentDetailResponseDto>> UpdateStatus(long id, [FromBody] AppointmentStatusPatchRequestDto dto)
         {
-            var authUserId = this.GetCurrentUserId();
-            if (authUserId == null) return Unauthorized();
-
-            try
+            var requested = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(requested))
             {
-                var result = await _appointmentService.BookBatchAsync(authUserId.Value, dto);
-                return Ok(result);
+                return BadRequest(new { message = "Status is required." });
             }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
 
-        [Authorize]
-        [HttpPatch("{id:long}/confirm")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> Confirm(long id)
-        {
             try
             {
                 var actorUserId = this.GetCurrentUserId();
-                var appointment = await _appointmentService.ConfirmAsync(id, actorUserId);
-                if (appointment == null) return NotFound();
+                global::MyGarage.Models.Appointment? appointment = requested switch
+                {
+                    "CONFIRMED" => await _appointmentService.ConfirmAsync(id, actorUserId),
+                    "CANCELED" => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
+                    "CHECKED_IN" => await _appointmentService.CheckInAsync(id, actorUserId),
+                    "ARRIVED" => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
+                    _ => null
+                };
+
+                if (appointment == null)
+                {
+                    if (requested is "CONFIRMED" or "CANCELED" or "CHECKED_IN" or "ARRIVED")
+                    {
+                        return NotFound();
+                    }
+
+                    return BadRequest(new { message = "Unsupported status transition." });
+                }
 
                 var detail = await _appointmentService.GetDetailedAsync(id);
                 return Ok(detail);
@@ -148,72 +159,15 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpPatch("{id:long}/cancel")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> Cancel(long id, [FromBody] AppointmentCancelRequestDto? dto)
-        {
-            try
-            {
-                var actorUserId = this.GetCurrentUserId();
-                var appointment = await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId);
-                if (appointment == null) return NotFound();
-
-                var detail = await _appointmentService.GetDetailedAsync(id);
-                return Ok(detail);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        [Authorize]
-        [HttpPatch("{id:long}/check-in")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> CheckIn(long id)
-        {
-            try
-            {
-                var actorUserId = this.GetCurrentUserId();
-                var appointment = await _appointmentService.CheckInAsync(id, actorUserId);
-                if (appointment == null) return NotFound();
-
-                var detail = await _appointmentService.GetDetailedAsync(id);
-                return Ok(detail);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        [Authorize]
-        [HttpPatch("{id:long}/arrive")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> Arrive(long id, [FromBody] ArriveAppointmentRequestDto? dto)
-        {
-            try
-            {
-                var actorUserId = this.GetCurrentUserId();
-                var appointment = await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId);
-                if (appointment == null) return NotFound();
-
-                var detail = await _appointmentService.GetDetailedAsync(id);
-                return Ok(detail);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        [Authorize]
-        [HttpPost("branches/{branchId:long}/auto-no-show")]
-        public async Task<ActionResult<object>> AutoMarkNoShows(long branchId, [FromQuery] DateTime? now = null)
+        [HttpPost("branches/{branchId:long}/no-show-cycles")]
+        public async Task<ActionResult<object>> RunNoShow(long branchId, [FromQuery] DateTime? now = null)
         {
             var affected = await _appointmentService.AutoMarkNoShowsAsync(branchId, now);
             return Ok(new { updated = affected });
         }
 
         [Authorize]
-        [HttpGet("branches/{branchId:long}/booking-health")]
+        [HttpGet("branches/{branchId:long}/health-metrics")]
         public async Task<ActionResult<BranchBookingHealthResponseDto>> GetBookingHealth(long branchId, [FromQuery] DateTime? at = null)
         {
             var health = await _appointmentService.GetBranchBookingHealthAsync(branchId, at);
@@ -221,7 +175,7 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpGet("branches/{branchId:long}/dispatch-dashboard")]
+        [HttpGet("branches/{branchId:long}/allocation-metrics")]
         public async Task<ActionResult<DispatchDashboardResponseDto>> GetDispatchDashboard(long branchId, [FromQuery] DateTime? at = null)
         {
             var dashboard = await _appointmentService.GetDispatchDashboardAsync(branchId, at);
@@ -229,16 +183,16 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpPost("branches/{branchId:long}/dispatch-cycle")]
-        public async Task<ActionResult<DispatchCycleResponseDto>> RunDispatchCycle(long branchId, [FromQuery] DateTime? at = null)
+        [HttpPost("branches/{branchId:long}/allocation-cycles")]
+        public async Task<ActionResult<DispatchCycleResponseDto>> CreateDispatchRun(long branchId, [FromQuery] DateTime? at = null)
         {
             var result = await _appointmentService.RunDispatchCycleAsync(branchId, at);
             return Ok(result);
         }
 
         [Authorize]
-        [HttpPost("branches/{branchId:long}/overnight-lock")]
-        public async Task<ActionResult<OvernightLockResponseDto>> LockOvernightSlots(long branchId, [FromBody] OvernightLockRequestDto? dto)
+        [HttpPost("branches/{branchId:long}/overnight-slot-constraints")]
+        public async Task<ActionResult<OvernightLockResponseDto>> CreateOvernightLock(long branchId, [FromBody] OvernightLockRequestDto? dto)
         {
             var result = await _appointmentService.LockOvernightSlotsAsync(branchId, dto?.BusinessDate);
             return Ok(result);

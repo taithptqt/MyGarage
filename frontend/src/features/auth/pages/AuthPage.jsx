@@ -1,13 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { getApiBaseUrl } from "../api/authApi";
-import AuthResult from "../components/AuthResult";
-import GoogleLoginButton from "../components/GoogleLoginButton";
-import LoginForm from "../login/LoginForm";
-import { isLoginFormValid } from "../login/loginValidation";
-import RegisterForm from "../register/RegisterForm";
-import { isRegisterFormValid } from "../register/registerValidation";
-import { useAuth } from "../../../context/AuthContext";
+import { getApiBaseUrl } from "@features/auth/api/authApi";
+import AuthResult from "@features/auth/components/AuthResult";
+import GoogleLoginButton from "@features/auth/components/GoogleLoginButton";
+import LoginForm from "@features/auth/login/LoginForm";
+import { isLoginFormValid } from "@features/auth/login/loginValidation";
+import RegisterForm from "@features/auth/register/RegisterForm";
+import { isRegisterFormValid } from "@features/auth/register/registerValidation";
+import { useAuth } from "@shared/core/context/AuthContext";
 import "./AuthPage.css";
 
 const AUTH_HIGHLIGHTS = [

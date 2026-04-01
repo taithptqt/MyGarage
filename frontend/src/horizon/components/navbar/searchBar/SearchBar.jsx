@@ -11,18 +11,18 @@ import {
 } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
-import { useSearch } from "@context/SearchContext";
-import { getAllStaff } from "../../../../features/admin/api/staffApi";
-import { getAllCustomers } from "../../../../features/admin/api/customerApi";
+import { useSearch } from "@shared/core/context/SearchContext";
+import { getAllStaff } from "@features/admin/api/staffApi";
+import { getAllCustomers } from "@features/admin/api/customerApi";
 import {
   getAllVehicleBrands,
   getAllVehicleModels,
-} from "../../../../features/admin/api/vehicleCatalogApi";
+} from "@features/admin/api/vehicleCatalogApi";
 import {
   getAllServiceCategories,
   getAllStandardServices,
-} from "../../../../features/admin/api/serviceApi";
-import { inventoryApi } from "../../../../features/inventory/api/inventoryApi";
+} from "@features/admin/api/serviceApi";
+import { inventoryApi } from "@features/inventory/api/inventoryApi";
 
 const INDEX_CACHE_MS = 3 * 60 * 1000;
 const MAX_RESULTS = 10;

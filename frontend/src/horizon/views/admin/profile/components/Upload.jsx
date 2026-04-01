@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Button,
@@ -8,11 +8,11 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 import React from "react";
 // Assets
 import { MdUpload } from "react-icons/md";
-import Dropzone from "views/admin/profile/components/Dropzone";
+import Dropzone from "@horizon/views/admin/profile/components/Dropzone";
 
 export default function Upload(props) {
   const { used, total, ...rest } = props;
@@ -77,4 +77,5 @@ export default function Upload(props) {
     </Card>
   );
 }
+
 

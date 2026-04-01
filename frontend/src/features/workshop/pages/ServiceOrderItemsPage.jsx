@@ -1,7 +1,7 @@
-import React from "react";
+﻿import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Button, Heading, HStack, Spinner, Text } from "@chakra-ui/react";
-import { useServiceOrderDetailData } from "../hooks/useServiceOrderDetailData";
+import { useServiceOrderDetailData } from "@features/workshop/hooks/useServiceOrderDetailData";
 
 export default function ServiceOrderItemsPage() {
   const navigate = useNavigate();
@@ -62,7 +62,7 @@ export default function ServiceOrderItemsPage() {
             <tfoot>
               <tr>
                 <td colSpan={3} style={{ textAlign: "right", fontWeight: 700 }}>
-                  Tổng cộng:
+                  Tđ.ng cộng:
                 </td>
                 <td style={{ fontWeight: 800, color: "#4318ff" }}>
                   {totalAmount.toLocaleString("vi-VN")}
@@ -75,3 +75,7 @@ export default function ServiceOrderItemsPage() {
     </div>
   );
 }
+
+
+
+

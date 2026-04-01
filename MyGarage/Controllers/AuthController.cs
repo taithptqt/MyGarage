@@ -10,7 +10,6 @@ using MyGarage.DTOs.Responses.Auth;
 namespace MyGarage.Controllers
 {
     [Route("api/auth")]
-    [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
@@ -21,7 +20,7 @@ namespace MyGarage.Controllers
             _authService = authService;
         }
 
-        [HttpPost("login")]
+        [HttpPost("sessions")]
         public async Task<ActionResult<AuthResponseDto>> Login([FromBody] LoginRequestDto request)
         {
             try
@@ -39,7 +38,7 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpPost("register")]
+        [HttpPost("accounts")]
         public async Task<ActionResult<AuthResponseDto>> Register([FromBody] RegisterRequestDto request)
         {
             try
@@ -57,7 +56,7 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpPost("google")]
+        [HttpPost("external-sessions/google")]
         public async Task<ActionResult<AuthResponseDto>> GoogleLogin([FromBody] GoogleLoginRequestDto request)
         {
             try
@@ -75,14 +74,14 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpPost("forgot-password")]
+        [HttpPost("credential-recovery-requests")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
         {
             await _authService.ForgotPasswordAsync(request);
             return Ok(new { Message = "If that email is registered, a password reset link has been sent." });
         }
 
-        [HttpPost("reset-password")]
+        [HttpPost("credential-recovery-finalizations")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
         {
             try
@@ -97,7 +96,7 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpPost("change-password")]
+        [HttpPatch("password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -120,7 +119,7 @@ namespace MyGarage.Controllers
         }
 
         [Authorize]
-        [HttpGet("me")]
+        [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

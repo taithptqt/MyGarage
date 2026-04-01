@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 export function Modal({ title, onClose, children, className = "" }) {
   const handleBackdropClick = (e) => {

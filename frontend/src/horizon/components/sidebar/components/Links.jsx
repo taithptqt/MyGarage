@@ -1,4 +1,4 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 // chakra imports
@@ -11,7 +11,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { MdExpandMore, MdChevronRight } from "react-icons/md";
-import { SidebarContext } from "contexts/SidebarContext";
+import { SidebarContext } from "@horizon/contexts/SidebarContext";
 
 export function SidebarLinks(props) {
   //   Chakra color mode
@@ -233,3 +233,4 @@ export function SidebarLinks(props) {
 }
 
 export default SidebarLinks;
+

@@ -82,6 +82,7 @@ builder.Services.AddScoped<IServiceCategoryService, ServiceCategoryService>();
 
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IInventoryAdminService, InventoryAdminService>();
 
 builder.Services.AddScoped<IStaffScheduleRepository, StaffScheduleRepository>();
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();

@@ -1,5 +1,5 @@
-﻿import { request } from "../../../app/apiClient";
-import { APPOINTMENTS_ROUTES } from "./appointmentRoutes";
+import { request } from "@app/apiClient";
+import { APPOINTMENTS_ROUTES } from "@features/appointments/api/appointmentRoutes";
 
 export async function getAvailableSlots(branchId, date, options = {}) {
   const params = { branchId, date };

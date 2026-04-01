@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { useAuth } from "../../../context/AuthContext";
-import { getAllStaff } from "../../admin/api/staffApi";
-import { Modal } from "../../admin/components/AdminModals";
-import { getStatusBadge } from "../../admin/utils/adminUtils";
-import { useBranch } from "../../../context/BranchContext";
-import { useSearch } from "../../../context/SearchContext";
-import TablePagination from "../../../shared/components/TablePagination";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getAllStaff } from "@features/admin/api/staffApi";
+import { Modal } from "@features/admin/components/AdminModals";
+import { getStatusBadge } from "@features/admin/utils/adminUtils";
+import { useBranch } from "@shared/core/context/BranchContext";
+import { useSearch } from "@shared/core/context/SearchContext";
+import TablePagination from "@shared/components/TablePagination";
 
 export default function QCDashboard() {
   const { searchQuery } = useSearch();
@@ -122,8 +122,8 @@ export default function QCDashboard() {
                     <td style={{ fontWeight: 600 }}>{order.customerName || "-"}</td>
                     <td><span className={`badge ${getStatusBadge(order.status)}`}>{order.status}</span></td>
                     <td className="td-center">
-                       <button className="btn-success" style={{ marginRight: '8px' }} onClick={() => handleInspect(order.id, true)}>ĐẠT ✅</button>
-                       <button className="btn-danger" onClick={() => setActiveInspection({ orderId: order.id, reason: "" })}>HỎNG ❌</button>
+                       <button className="btn-success" style={{ marginRight: '8px' }} onClick={() => handleInspect(order.id, true)}>??T ?</button>
+                       <button className="btn-danger" onClick={() => setActiveInspection({ orderId: order.id, reason: "" })}>Hỏng ✖</button>
                     </td>
                   </tr>
                 ))}
@@ -174,3 +174,7 @@ export default function QCDashboard() {
     </div>
   );
 }
+
+
+
+

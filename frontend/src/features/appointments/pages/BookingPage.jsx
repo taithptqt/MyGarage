@@ -1,8 +1,8 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
-import Header from "../../../shared/components/Header";
-import DateTimePicker from "../../workshop/components/DateTimePicker";
+import { useAuth } from "@shared/core/context/AuthContext";
+import Header from "@shared/components/Header";
+import DateTimePicker from "@features/workshop/components/DateTimePicker";
 import {
   BOOKING_FLOW,
   BOOKING_STEPS,
@@ -10,13 +10,13 @@ import {
   INITIAL_NEW_VEHICLE_FORM,
   INITIAL_ODD_SLOT_VISIBILITY,
   SESSION_TABS,
-} from "../constants/bookingConstants";
+} from "@features/appointments/constants/bookingConstants";
 import {
   loadBookingAvailableSlots,
   loadBookingFormMasterData,
   submitBatchBooking,
   submitSingleBooking,
-} from "../api/bookingFormApi";
+} from "@features/appointments/api/bookingFormApi";
 import {
   buildCustomerNotesPayload,
   extractField,
@@ -29,19 +29,19 @@ import {
   normalizeText,
   timeLabel,
   toIsoDateInput,
-} from "../utils/bookingCommon";
+} from "@features/appointments/utils/bookingCommon";
 import {
   buildDisplayedSlots,
   buildSlotsBySession,
   getAutoExpandOddStateForFixedFlow,
   resolveFirstActiveSession,
-} from "../utils/bookingSlots";
+} from "@features/appointments/utils/bookingSlots";
 import {
   buildSelectedCategorySummaryLabel,
   buildSummaryItems,
-} from "../utils/bookingSummary";
-import { validateBookingStep } from "../utils/bookingValidation";
-import { buildCurrentVehiclePayload } from "../utils/bookingVehicle";
+} from "@features/appointments/utils/bookingSummary";
+import { validateBookingStep } from "@features/appointments/utils/bookingValidation";
+import { buildCurrentVehiclePayload } from "@features/appointments/utils/bookingVehicle";
 import "./BookingPage.css";
 
 export default function BookingPage() {
@@ -675,7 +675,7 @@ export default function BookingPage() {
       </div>
       <div className="booking-flow">
         <section className="booking-hero">
-          <p>HỆ THỐNG BOOKING MY GARAGE</p>
+          <p>Hệ THỐNG BOOKING MY GARAGE</p>
           <h1>Đặt lịch dịch vụ chuyên nghiệp trong vài bước</h1>
           <span>Chọn đúng nhóm dịch vụ, kỹ thuật và thời gian bạn mong muốn.</span>
         </section>
@@ -814,7 +814,7 @@ export default function BookingPage() {
                       <button
                         type="button"
                         className="selected-category-tab-remove"
-                        aria-label={`Bo loai dich vu ${extractField(category, ["name", "Name"], "")}`}
+                        aria-label={`Bỏ loại dịch vụ ${extractField(category, ["name", "Name"], "")}`}
                         onClick={() => toggleCategorySelection(Number(categoryId))}
                       >
                         ×
@@ -1218,7 +1218,7 @@ export default function BookingPage() {
           {currentStep === 5 && (
             success ? (
               <div className="summary-card summary-card-large booking-success-screen">
-                <div className="booking-success-icon" aria-hidden="true">✓</div>
+                <div className="booking-success-icon" aria-hidden="true">đo"</div>
                 <h3>Đặt lịch thành công</h3>
                 <p>{success}</p>
                 <div className="summary-total">
@@ -1348,5 +1348,12 @@ export default function BookingPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
 
 

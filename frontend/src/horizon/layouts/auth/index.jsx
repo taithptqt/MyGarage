@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import routes from 'routes';
+import routes from '@horizon/routes.jsx';
 
 // Chakra imports
 import { Box, useColorModeValue } from '@chakra-ui/react';
 
 // Layout components
-import { SidebarContext } from 'contexts/SidebarContext';
+import { SidebarContext } from '@horizon/contexts/SidebarContext';
 
 // Custom Chakra theme
 export default function Auth() {
@@ -71,3 +71,4 @@ export default function Auth() {
     </Box>
   );
 }
+

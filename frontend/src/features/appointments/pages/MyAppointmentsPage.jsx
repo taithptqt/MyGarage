@@ -1,17 +1,17 @@
 ﻿import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
-import Footer from "../../../shared/components/Footer";
-import Header from "../../../shared/components/Header";
-import { useMyAppointments } from "../hooks/useMyAppointments";
-import { APPOINTMENT_STATUS } from "../constants/appointmentStatuses";
+import { useAuth } from "@shared/core/context/AuthContext";
+import Footer from "@shared/components/Footer";
+import Header from "@shared/components/Header";
+import { useMyAppointments } from "@features/appointments/hooks/useMyAppointments";
+import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
 import {
   FILTERS,
   GROUP_STATUS_META,
   STATUS_META,
   formatDate,
   formatTime,
-} from "../utils/myAppointmentsData";
+} from "@features/appointments/utils/myAppointmentsData";
 import "./MyAppointmentsPage.css";
 
 export default function MyAppointmentsPage() {
@@ -250,3 +250,11 @@ export default function MyAppointmentsPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

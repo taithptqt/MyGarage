@@ -1,4 +1,4 @@
-// Mục đích: Truy cập dữ liệu chiến dịch voucher, hỗ trợ lọc theo từ khóa/trạng thái và lấy chi tiết kèm voucher.
+﻿// Mục đích: Truy cập dữ liệu chiến dịch voucher, hđ- trợ lọc theo từ khóa/trạng thái và lấy chi tiết kèm voucher.
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -81,3 +81,6 @@ namespace MyGarage.Repositories
         }
     }
 }
+
+
+

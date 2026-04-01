@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 const STAGES = [
   { key: "RECEPTION", label: "Tiếp nhận" },
@@ -21,7 +21,7 @@ export default function WorkflowTimeline({ currentStatus }) {
         return (
           <div key={stage.key} className={`timeline-step ${isCompleted ? "completed" : ""} ${isActive ? "active" : ""}`}>
             <div className="step-circle">
-              {isCompleted ? "✓" : index + 1}
+                {isCompleted ? "✓" : index + 1}
             </div>
             <div className="step-label">{stage.label}</div>
             {index < STAGES.length - 1 && <div className="step-line" />}
@@ -99,3 +99,6 @@ export default function WorkflowTimeline({ currentStatus }) {
     </div>
   );
 }
+
+
+

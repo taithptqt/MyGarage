@@ -1,5 +1,5 @@
-﻿import { request } from "../../../app/apiClient";
-import { APPOINTMENTS_ROUTES } from "./appointmentRoutes";
+import { request } from "@app/apiClient";
+import { APPOINTMENTS_ROUTES } from "@features/appointments/api/appointmentRoutes";
 
 export async function getMyAppointments() {
   return request({ url: APPOINTMENTS_ROUTES.mine, method: "GET" });
@@ -23,8 +23,8 @@ export async function bookGuestAppointment(payload) {
 
 export async function cancelAppointment(id, reason) {
   return request({
-    url: APPOINTMENTS_ROUTES.cancel(id),
+    url: APPOINTMENTS_ROUTES.status(id),
     method: "PATCH",
-    data: { reason: reason || null },
+    data: { status: "CANCELED", reason: reason || null },
   });
 }

@@ -1,20 +1,20 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@shared/core/context/AuthContext";
 import "./Workshop.css";
 import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { AiOutlineSearch } from 'react-icons/ai';
-import { useSearch } from "../../../context/SearchContext";
+import { useSearch } from "@shared/core/context/SearchContext";
 
 // Role Components are now imported in App.jsx for routing
-import WorkflowTimeline from "../components/WorkflowTimeline";
-import ProfileDialog from "../../profile/components/ProfileDialog";
+import WorkflowTimeline from "@features/workshop/components/WorkflowTimeline";
+import ProfileDialog from "@features/profile/components/ProfileDialog";
 import { ChakraProvider } from "@chakra-ui/react";
-import initialTheme from "../../../horizon/theme/theme";
+import initialTheme from "@horizon/theme/theme";
 
 const ROLES_META = {
-  RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📋", description: "Tiếp nhận, Báo giá & Thanh toán" },
+  RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📝", description: "Tiếp nhận, Báo giá & Thanh toán" },
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
   FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
   TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
@@ -408,4 +408,8 @@ export default function WorkshopPage() {
     </ChakraProvider>
   );
 }
+
+
+
+
 

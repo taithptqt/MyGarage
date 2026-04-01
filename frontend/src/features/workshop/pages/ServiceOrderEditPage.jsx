@@ -1,10 +1,10 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { getAllStaff, getAllRoles } from "../../admin/api/staffApi";
-import { getAllServiceCategories, getAllStandardServices } from "../../admin/api/serviceApi";
-import { useBranch } from "../../../context/BranchContext";
-import DateTimePicker from "../components/DateTimePicker";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
+import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
+import { useBranch } from "@shared/core/context/BranchContext";
+import DateTimePicker from "@features/workshop/components/DateTimePicker";
 import "./Workshop.css";
 
 export default function ServiceOrderEditPage() {
@@ -250,7 +250,7 @@ export default function ServiceOrderEditPage() {
 
       await serviceOrderApi.update(orderId, payload);
 
-      // Đồng bộ service details theo danh sách đang chọn (xử lý cả dữ liệu trùng cũ)
+      // Đông bộ service details theo danh sách đang chọn (xử lý cả dữ liệu trùng cũ)
       const currentIds = Array.from(new Set(formData.serviceIds.map(Number).filter((x) => x > 0)));
       const latestDetails = await serviceOrderApi.getDetails(orderId).catch(() => []);
       const editableDetails = (latestDetails || []).filter((d) => {
@@ -269,7 +269,7 @@ export default function ServiceOrderEditPage() {
 
       const detailPromises = [];
 
-      // Với dịch vụ đang chọn: giữ 1 dòng, xóa dòng trùng
+      // Vơi dịch vụ đang chọn: giữ 1 dòng, xóa dòng trùng
       currentIds.forEach((sid) => {
         const rows = groupedByServiceId[sid] || [];
         if (rows.length > 1) {
@@ -277,14 +277,14 @@ export default function ServiceOrderEditPage() {
         }
       });
 
-      // Với dịch vụ không còn chọn: xóa toàn bộ dòng
+      // Vơi dịch vụ không còn chọn: xóa toàn bộ dòng
       Object.keys(groupedByServiceId).map(Number).forEach((sid) => {
         if (!currentIds.includes(sid)) {
           (groupedByServiceId[sid] || []).forEach((d) => detailPromises.push(serviceOrderApi.deleteDetail(d.id)));
         }
       });
 
-      // Với dịch vụ chọn mới chưa có dòng: thêm mới
+      // Vơi dịch vụ chọn mơi chưa có dòng: thêm mơi
       currentIds.forEach((sid) => {
         const rows = groupedByServiceId[sid] || [];
         if (rows.length === 0) {
@@ -295,7 +295,7 @@ export default function ServiceOrderEditPage() {
               standardServiceId: sid,
               itemType: "LABOR",
               itemName: service.Name || service.name,
-              description: "Dịch vụ khách yêu cầu trước (Edit)",
+              description: "Dịch vụ khách yêu cầu trươc (Edit)",
               quantity: 1,
               unit: "Lần",
               unitPriceAtTime: service.BasePrice || service.basePrice || 0,
@@ -315,7 +315,7 @@ export default function ServiceOrderEditPage() {
 
       navigate(`/workshop/reception?viewOrderId=${orderId}`);
     } catch (err) {
-      setError("Lỗi khi cập nhật: " + err.message);
+      setError("Lđ-i khi cập nhật: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -342,8 +342,8 @@ export default function ServiceOrderEditPage() {
   return (
     <div className="create-order-page">
       <div className="page-header-actions">
-        <button className="btn-back" onClick={() => navigate(-1)}>← Quay lại Dashboard</button>
-        <h2 className="page-title">Chỉnh sửa thông tin lệnh sửa chữa: {order?.code}</h2>
+        <button className="btn-back" onClick={() => navigate(-1)}>ệđ Quay lại Dashboard</button>
+        <h2 className="page-title">Chệnh sửa thông tin lệnh sửa chữa: {order?.code}</h2>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}
@@ -397,7 +397,7 @@ export default function ServiceOrderEditPage() {
                   return (
                     <div key={sid} style={{ background: '#4318ff', color: '#fff', padding: '6px 12px', borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 6px rgba(67, 24, 255, 0.3)' }}>
                       {s?.Name || s?.name || "Ký hiệu không xác định"} - {(s?.basePrice || s?.BasePrice || 0).toLocaleString()}đ
-                      <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px', background: 'rgba(255,255,255,0.2)', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }} onClick={() => handleServiceToggle(sid)}>×</span>
+                      <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px', background: 'rgba(255,255,255,0.2)', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }} onClick={() => handleServiceToggle(sid)}>đ-</span>
                     </div>
                   );
                 })}
@@ -408,11 +408,11 @@ export default function ServiceOrderEditPage() {
               <>
                 <div style={{ marginTop: '16px', padding: '12px', background: '#fff', borderRadius: '8px', color: '#1b254b', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(67, 24, 255, 0.1)' }}>
                   <div>
-                    <strong>Tổng thời gian:</strong> {totalMinutes} phút
+                    <strong>Tđ.ng thời gian:</strong> {totalMinutes} phút
                     {finishTimeStr && <span style={{ display: 'block', fontSize: '12px', color: '#a3aed0', marginTop: '4px' }}>Dự kiến xong: <strong style={{ color: '#4318ff' }}>{finishTimeStr}</strong></span>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '12px', color: '#a3aed0' }}>Tổng tiền tạm tính</div>
+                    <div style={{ fontSize: '12px', color: '#a3aed0' }}>Tđ.ng tiền tạm tính</div>
                     <span style={{ color: '#05cd99', fontWeight: 'bold', fontSize: '20px' }}>{totalPrice?.toLocaleString() || 0}đ</span>
                   </div>
                 </div>
@@ -421,14 +421,14 @@ export default function ServiceOrderEditPage() {
           </div>
 
           <div className="form-group" style={{ marginTop: '16px' }}>
-            <label>Cố vấn dịch vụ (Service Advisor) *</label>
+            <label>Cđ vấn dịch vụ (Service Advisor) *</label>
             <select 
               name="serviceAdvisorId" 
               value={formData.serviceAdvisorId} 
               onChange={handleChange}
               required
             >
-              <option value="">-- Chọn cố vấn --</option>
+              <option value="">-- Chọn cđ vấn --</option>
               {staff.map(s => (
                 <option key={s.id} value={s.id}>{s.fullName}</option>
               ))}
@@ -445,12 +445,12 @@ export default function ServiceOrderEditPage() {
             <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
               <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
               <option value="RETURN_ALL">Trả lại cho khách hàng</option>
-              <option value="CUSTOM">Chờ khách kiểm tra rồi quyết định</option>
+              <option value="CUSTOM">Chờ khách kiểm tra rôi quyết định</option>
             </select>
           </div>
 
           <div className="form-group">
-            <label>Số tiền cọc yêu cầu (VNĐ)</label>
+            <label>Sđ tiền cọc yêu cầu (VNĐ)</label>
             <input
               type="number"
               name="requiredDepositAmount"
@@ -507,7 +507,7 @@ export default function ServiceOrderEditPage() {
               />
             </div>
             <div className="form-group">
-              <label>Dự kiến hoàn thành (Ước tính)</label>
+              <label>Dự kiến hoàn thành (Ươc tính)</label>
               <DateTimePicker 
                 value={formData.estimatedHandover || estimatedFinishIso} 
                 onChange={(val) => handleChange({ target: { name: 'estimatedHandover', value: val } })}
@@ -520,13 +520,22 @@ export default function ServiceOrderEditPage() {
         <div className="form-footer full-width">
           <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>Hủy và Quay lại</button>
           <button type="submit" className="btn-primary-large" disabled={saving}>
-            {saving ? "Đang xử lý..." : "Lưu thay đổi"}
+            {saving ? "Đang xử lý..." : "Lưu thay đđ.i"}
           </button>
         </div>
       </form>
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 
 

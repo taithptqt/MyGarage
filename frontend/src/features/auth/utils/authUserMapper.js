@@ -1,4 +1,4 @@
-export function mapAuthUserPayload(data, tokenOverride = null) {
+﻿export function mapAuthUserPayload(data, tokenOverride = null) {
   if (!data) return null;
 
   return {

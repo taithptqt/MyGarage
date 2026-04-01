@@ -1,8 +1,8 @@
-import React from "react";
+﻿import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Badge, Box, Button, Heading, HStack, Spinner, Text, VStack } from "@chakra-ui/react";
-import { useServiceOrderDetailData } from "../hooks/useServiceOrderDetailData";
-import { formatOrderDateTime } from "../utils/serviceOrderDetailUtils";
+import { useServiceOrderDetailData } from "@features/workshop/hooks/useServiceOrderDetailData";
+import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
 
 export default function ServiceOrderQuotePage() {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ export default function ServiceOrderQuotePage() {
               <Text fontWeight="700">{order?.customerName || "-"}</Text>
             </Box>
             <Box>
-              <Text fontSize="sm" color="#707eae">Biển số/Thông tin xe</Text>
+              <Text fontSize="sm" color="#707eae">Biển sđ/Thông tin xe</Text>
               <Text fontWeight="700">{order?.vehicleLicensePlate || "-"}</Text>
             </Box>
             <Box>
@@ -94,7 +94,7 @@ export default function ServiceOrderQuotePage() {
           </Box>
 
           <Box p={4} borderRadius="md" bg="#f4f7fe" border="1px dashed #a3aed0">
-            <Text fontSize="sm" color="#707eae">Tổng giá trị ước tính</Text>
+            <Text fontSize="sm" color="#707eae">Tđ.ng giá trị ươc tính</Text>
             <Text fontSize="2xl" fontWeight="800" color="#4318ff">
               {totalAmount.toLocaleString("vi-VN")}
             </Text>
@@ -104,3 +104,8 @@ export default function ServiceOrderQuotePage() {
     </div>
   );
 }
+
+
+
+
+

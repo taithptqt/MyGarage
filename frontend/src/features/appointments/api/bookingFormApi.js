@@ -1,4 +1,4 @@
-﻿import {
+import {
   bookAppointment,
   getAllBranches,
   getAllCustomerVehicles,
@@ -9,9 +9,9 @@
   getAvailableSlots,
   getVehicleBrands,
   getVehicleModels,
-} from "./appointmentApi";
-import { createBookingGroup } from "./bookingGroupApi";
-import { normalizeText } from "../utils/bookingCommon";
+} from "@features/appointments/api/appointmentApi";
+import { createBookingGroup } from "@features/appointments/api/bookingGroupApi";
+import { normalizeText } from "@features/appointments/utils/bookingCommon";
 
 export async function loadBookingFormMasterData() {
   const [

@@ -15,6 +15,14 @@ namespace MyGarage.Controllers
     [ApiController]
     public class VoucherApprovalRequestController : ControllerBase
     {
+        public sealed record VoucherApprovalDecisionPatchDto
+        {
+            public long ApproverId { get; init; }
+            public string? Decision { get; init; }
+            public string? Reason { get; init; }
+            public string? Note { get; init; }
+        }
+
         private readonly IVoucherApprovalRequestService _service;
         private readonly IMapper _mapper;
 
@@ -58,17 +66,33 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
         }
 
-        [HttpPost("{id:long}/approve")]
-        public async Task<ActionResult<VoucherApprovalRequestResponseDto>> Approve(long id, [FromBody] VoucherApprovalDecisionDto decision)
+        [HttpPatch("{id:long}")]
+        public async Task<ActionResult<VoucherApprovalRequestResponseDto>> PatchDecision(long id, [FromBody] VoucherApprovalDecisionPatchDto decision)
         {
             if (decision.ApproverId <= 0)
             {
                 return BadRequest(new { message = "ApproverId is required." });
             }
 
+            var normalizedDecision = (decision.Decision ?? string.Empty).Trim().ToUpperInvariant();
+            if (normalizedDecision is not ("APPROVE" or "REJECT"))
+            {
+                return BadRequest(new { message = "Decision must be APPROVE or REJECT." });
+            }
+
+            var mapped = new VoucherApprovalDecisionDto
+            {
+                ApproverId = decision.ApproverId,
+                Reason = decision.Reason,
+                Note = decision.Note,
+            };
+
             try
             {
-                var updated = await _service.ApproveAsync(id, decision);
+                var updated = normalizedDecision == "APPROVE"
+                    ? await _service.ApproveAsync(id, mapped)
+                    : await _service.RejectAsync(id, mapped);
+
                 if (updated == null)
                 {
                     return NotFound();
@@ -82,34 +106,6 @@ namespace MyGarage.Controllers
             }
         }
 
-        [HttpPost("{id:long}/reject")]
-        public async Task<ActionResult<VoucherApprovalRequestResponseDto>> Reject(long id, [FromBody] VoucherApprovalDecisionDto decision)
-        {
-            if (decision.ApproverId <= 0)
-            {
-                return BadRequest(new { message = "ApproverId is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(decision.Reason) && string.IsNullOrWhiteSpace(decision.Note))
-            {
-                return BadRequest(new { message = "Reason or note is required for rejection." });
-            }
-
-            try
-            {
-                var updated = await _service.RejectAsync(id, decision);
-                if (updated == null)
-                {
-                    return NotFound();
-                }
-
-                return Ok(_mapper.Map<VoucherApprovalRequestResponseDto>(updated));
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
     }
 }
 

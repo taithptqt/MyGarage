@@ -1,12 +1,12 @@
-// chakra imports
+﻿// chakra imports
 import { Box, Flex, Stack, Text, Icon } from "@chakra-ui/react";
 //   Custom components
-import Brand from "components/sidebar/components/Brand";
-import Links from "components/sidebar/components/Links";
+import Brand from "@horizon/components/sidebar/components/Brand";
+import Links from "@horizon/components/sidebar/components/Links";
 import React from "react";
 import { MdOutlineLogout } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
-import { clearAuth } from "../../../../app/authState";
+import { clearAuth } from "@app/authState";
 
 // FUNCTIONS
 
@@ -57,3 +57,4 @@ function SidebarContent(props) {
 }
 
 export default SidebarContent;
+

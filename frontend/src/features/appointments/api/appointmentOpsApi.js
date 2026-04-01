@@ -1,5 +1,5 @@
-﻿import { request } from "../../../app/apiClient";
-import { APPOINTMENTS_ROUTES } from "./appointmentRoutes";
+import { request } from "@app/apiClient";
+import { APPOINTMENTS_ROUTES } from "@features/appointments/api/appointmentRoutes";
 
 export async function getAllAppointments(status) {
   return request({
@@ -22,18 +22,26 @@ export async function getAppointmentDetail(id) {
 }
 
 export async function confirmAppointment(id) {
-  return request({ url: APPOINTMENTS_ROUTES.confirm(id), method: "PATCH" });
+  return request({
+    url: APPOINTMENTS_ROUTES.status(id),
+    method: "PATCH",
+    data: { status: "CONFIRMED" },
+  });
 }
 
 export async function checkInAppointment(id) {
-  return request({ url: APPOINTMENTS_ROUTES.checkIn(id), method: "PATCH" });
+  return request({
+    url: APPOINTMENTS_ROUTES.status(id),
+    method: "PATCH",
+    data: { status: "CHECKED_IN" },
+  });
 }
 
 export async function arriveAppointment(id, payload) {
   return request({
-    url: APPOINTMENTS_ROUTES.arrive(id),
+    url: APPOINTMENTS_ROUTES.status(id),
     method: "PATCH",
-    data: payload,
+    data: { status: "ARRIVED", arrivedAt: payload?.arrivedAt },
   });
 }
 

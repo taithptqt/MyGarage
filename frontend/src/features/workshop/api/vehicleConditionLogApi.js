@@ -1,4 +1,4 @@
-import { request } from "../../../app/apiClient";
+﻿import { request } from "@app/apiClient";
 
 async function toUploadFile(input, fallbackFileName) {
   if (input instanceof File) {
@@ -19,18 +19,19 @@ async function toUploadFile(input, fallbackFileName) {
 }
 
 export const vehicleConditionLogApi = {
-  getAll: () => request({ url: "/api/VehicleConditionLog", method: "GET" }),
-  getById: (id) => request({ url: `/api/VehicleConditionLog/${id}`, method: "GET" }),
-  create: (data) => request({ url: "/api/VehicleConditionLog", method: "POST", data }),
-  update: (id, data) => request({ url: `/api/VehicleConditionLog/${id}`, method: "PUT", data }),
-  remove: (id) => request({ url: `/api/VehicleConditionLog/${id}`, method: "DELETE" }),
-  getByServiceOrderId: (serviceOrderId) => request({ url: `/api/VehicleConditionLog/by-order/${serviceOrderId}`, method: "GET" }),
+  getAll: () => request({ url: "/api/vehicle-condition-logs", method: "GET" }),
+  getById: (id) => request({ url: `/api/vehicle-condition-logs/${id}`, method: "GET" }),
+  create: (data) => request({ url: "/api/vehicle-condition-logs", method: "POST", data }),
+  update: (id, data) => request({ url: `/api/vehicle-condition-logs/${id}`, method: "PUT", data }),
+  remove: (id) => request({ url: `/api/vehicle-condition-logs/${id}`, method: "DELETE" }),
+  getByServiceOrderId: (serviceOrderId) =>
+    request({ url: "/api/vehicle-condition-logs", method: "GET", params: { serviceOrderId } }),
   uploadSignature: async (fileInput) => {
     const file = await toUploadFile(fileInput, "signature.png");
     const formData = new FormData();
     formData.append("file", file, file.name || "signature.png");
     return request({
-      url: "/api/VehicleConditionLog/upload-signature",
+      url: "/api/vehicle-condition-logs/signatures",
       method: "POST",
       data: formData,
       headers: { "Content-Type": "multipart/form-data" }
@@ -41,10 +42,13 @@ export const vehicleConditionLogApi = {
     const formData = new FormData();
     formData.append("file", file, file.name || "upload-file");
     return request({
-      url: "/api/VehicleConditionLog/upload-image",
+      url: "/api/vehicle-condition-logs/attachments",
       method: "POST",
       data: formData,
       headers: { "Content-Type": "multipart/form-data" }
     });
   },
 };
+
+
+

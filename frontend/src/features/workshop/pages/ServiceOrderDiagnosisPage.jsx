@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Badge,
@@ -39,14 +39,14 @@ import {
   Clock,
 } from "lucide-react";
 
-import { serviceOrderApi } from "../api/serviceOrderApi";
-import { getAllStandardServices } from "../../admin/api/serviceApi";
-import { inventoryApi } from "../../admin/api/inventoryApi";
-import { useAuth } from "../../../context/AuthContext";
-import { vehicleConditionLogApi } from "../api/vehicleConditionLogApi";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getAllStandardServices } from "@features/admin/api/serviceApi";
+import { inventoryApi } from "@features/admin/api/inventoryApi";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
 
 const SYSTEM_CATEGORIES = [
-  { id: "engine", label: "Động cơ", icon: Activity },
+  { id: "engine", label: "??ng co", icon: Activity },
   { id: "transmission", label: "Hộp số", icon: Wrench },
   { id: "brakes", label: "Phanh & ABS", icon: AlertTriangle },
   { id: "steering", label: "Hệ thống Lái / Gầm", icon: Car },
@@ -59,8 +59,8 @@ const SYSTEM_CATEGORIES = [
 const SYMPTOM_TYPES = {
   engine: ["Rung giật", "Mất công suất", "Chết máy", "Không khởi động được", "Khói bất thường"],
   transmission: ["Khó sang số", "Trượt số", "Giật cục", "Chậm phản hồi"],
-  brakes: ["Kêu rít / Xèo xèo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
-  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va đập gầm"],
+  brakes: ["Kêu rít / Xào xạo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
+  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va dập gầm"],
   electrical: ["Đèn pha mờ", "Còi tịt", "Đồng hồ taplo lỗi", "Hết bình"],
   hvac: ["Không mát", "Mát yếu", "Mùi hôi", "Quạt gió kêu"],
   fluids: ["Nước làm mát", "Dầu máy", "Dầu phanh", "Nước rửa kính"],
@@ -213,7 +213,7 @@ export default function ServiceOrderDiagnosisPage() {
         await selectDiagnosis(initialActive.id, diagnosesList);
       }
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu chẩn đoán.");
+      setError(err?.message || "Không thể tải dữ liệu chuẩn đoán.");
     } finally {
       setLoading(false);
     }
@@ -384,10 +384,10 @@ export default function ServiceOrderDiagnosisPage() {
         }
       }
 
-      toast({ title: `Đã lưu chẩn đoán cho triệu chứng này`, status: "success", duration: 2500, isClosable: true });
+      toast({ title: `Đã lưu chuẩn đoán cho triệu chứng này`, status: "success", duration: 2500, isClosable: true });
       await loadData();
     } catch (err) {
-      toast({ title: "Lưu chẩn đoán thất bại", description: err.message, status: "error" });
+      toast({ title: "Lưu chuẩn đoán thất bại", description: err.message, status: "error" });
     } finally {
       setSaving(false);
     }
@@ -554,7 +554,7 @@ export default function ServiceOrderDiagnosisPage() {
                     >
                       <option value="cold_start">Máy nguội (Mới khởi động)</option>
                       <option value="idling">Không tải (Đứng yên nổ máy)</option>
-                      <option value="accelerating">Lúc tăng tốc / Đạp ga mạnh</option>
+                      <option value="accelerating">Lúc tăng tốc / đạp ga mạnh</option>
                       <option value="braking">Lúc rà phanh</option>
                       <option value="turning">Lúc đánh lái cua</option>
                       <option value="high_speed">Chạy tốc độ cao (&gt; 60km/h)</option>
@@ -774,3 +774,8 @@ function RecommendationRow({ item, canEdit, services, products, onChange, onRemo
     </Stack>
   );
 }
+
+
+
+
+

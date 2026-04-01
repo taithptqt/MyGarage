@@ -1,5 +1,5 @@
-import React from "react";
-import TablePagination from "../../../shared/components/TablePagination";
+﻿import React from "react";
+import TablePagination from "@shared/components/TablePagination";
 
 export default function ReceptionAppointmentsSection({
   setModal,
@@ -37,7 +37,7 @@ export default function ReceptionAppointmentsSection({
           </select>
           <label htmlFor="appt-sort" className="toolbar-label">Sắp xếp:</label>
           <select id="appt-sort" className="toolbar-select" value={apptSortBy} onChange={(e) => setApptSortBy(e.target.value)} style={{ minWidth: "190px" }}>
-            <option value="NEWEST">Mới nhất</option>
+            <option value="NEWEST">Mơi nhất</option>
             <option value="OLDEST">Cũ nhất</option>
             <option value="NAME_ASC">Tên khách A-Z</option>
             <option value="NAME_DESC">Tên khách Z-A</option>
@@ -51,7 +51,7 @@ export default function ReceptionAppointmentsSection({
             </button>
           )}
         </div>
-        <span className="result-count">{filteredAppts.length} lịch đặt trước</span>
+        <span className="result-count">{filteredAppts.length} lịch đặt trươc</span>
       </div>
 
       <div className="workshop-table-card">
@@ -116,3 +116,8 @@ export default function ReceptionAppointmentsSection({
     </>
   );
 }
+
+
+
+
+

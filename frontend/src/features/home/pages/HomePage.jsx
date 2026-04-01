@@ -1,5 +1,5 @@
-﻿import Header from "../../../shared/components/Header";
-import Footer from "../../../shared/components/Footer";
+﻿import Header from "@shared/components/Header";
+import Footer from "@shared/components/Footer";
 import "./HomePage.css";
 
 const brandLogos = [
@@ -14,7 +14,7 @@ const brandLogos = [
 const featuredCars = [
   {
     title: "PORSCHE 911 (992) GT3",
-    tag: "SẴN SÀNG GIAO NGAY",
+    tag: "SẴN SệNG GIAO NGAY",
     year: "2023",
     mileage: "1,250 KM",
     image:
@@ -22,7 +22,7 @@ const featuredCars = [
   },
   {
     title: "FERRARI F8 TRIBUTO",
-    tag: "BỘ SƯU TẬP RIÊNG",
+    tag: "Bđ~ SƯU TẬP RIđSNG",
     year: "2021",
     mileage: "3,400 KM",
     image:
@@ -30,7 +30,7 @@ const featuredCars = [
   },
   {
     title: "LAMBORGHINI SVJ ROADSTER",
-    tag: "PHIÊN BẢN SƯU TẦM",
+    tag: "PHIđSN BẢN SƯU TẦM",
     year: "2022",
     mileage: "850 KM",
     image:
@@ -71,7 +71,7 @@ function HomePage() {
         </div>
 
         <div className="hero-scroll">
-          <span>CUỘN</span>
+          <span>CUđ~N</span>
           <div className="scroll-line" />
           <div className="scroll-dot" />
         </div>
@@ -85,9 +85,9 @@ function HomePage() {
 
       <section className="cars-section">
         <div className="cars-head">
-          <h2>XE NỔI BẬT TỪ KHU MUA BÁN</h2>
+          <h2>XE NôI BẬT TỪ KHU MUA BÁN</h2>
           <button type="button" className="outline-btn">
-            XEM TOÀN BỘ XE
+            XEM TOệN Bđ~ XE
           </button>
         </div>
         <div className="cars-grid">
@@ -99,7 +99,7 @@ function HomePage() {
               <span className="gold-label">{car.tag}</span>
               <h3>{car.title}</h3>
               <div className="car-meta">
-                <span>NĂM SX: {car.year}</span>
+                <span>Nđ,M SX: {car.year}</span>
                 <span>SỐ KM: {car.mileage}</span>
               </div>
             </article>
@@ -115,15 +115,15 @@ function HomePage() {
           />
         </div>
         <div className="split-content light">
-          <span className="gold-label">AN NINH TUYỆT ĐỐI</span>
+          <span className="gold-label">AN NINH TUYệT ĐỐI</span>
           <h2>LƯU TRỮ</h2>
           <p>
             Khu lưu trữ kiểm soát nhiệt độ của chúng tôi mang đến không gian an toàn
-            tối ưu cho tài sản xe của bạn. Với hệ thống giám sát 24/7 và chương trình
-            bảo dưỡng chuyên biệt, chiếc xe luôn giữ được tình trạng như mới.
+            tđi ưu cho tài sản xe của bạn. Vơi hệ thđng giám sát 24/7 và chương trình
+            bảo dưỡng chuyên biệt, chiếc xe luôn giữ được tình trạng như mơi.
           </p>
           <button type="button" className="outline-btn">
-            XEM THÊM
+            XEM THđSM
           </button>
         </div>
       </section>
@@ -136,29 +136,29 @@ function HomePage() {
           />
         </div>
         <div className="split-content muted">
-          <span className="gold-label">KHÔNG GIAN ĐẲNG CẤP</span>
+          <span className="gold-label">KHôNG GIAN ĐẲNG CẤP</span>
           <h2>
-            HỌP
+            HđOP
             <br />
-            &amp; SỰ KIỆN
+            &amp; SỰ KIệN
           </h2>
           <p>
-            Tổ chức cuộc họp quan trọng hoặc bữa tiệc riêng giữa những mẫu xe đẹp bậc
+            Tđ. chức cuộc họp quan trọng hoặc bữa tiệc riêng giữa những mẫu xe đẹp bậc
             nhất thế giới. Không gian được thiết kế riêng cho những ai trân trọng sự
             giao thoa giữa kỹ thuật và tinh tế.
           </p>
           <button type="button" className="outline-btn">
-            KHÁM PHÁ KHÔNG GIAN
+            KHÁM PHÁ KHôNG GIAN
           </button>
         </div>
       </section>
 
       <section className="partners-section">
         <div className="partners-head">
-          <h2>GẶP GỠ ĐỐI TÁC CỦA CHÚNG TÔI</h2>
+          <h2>GẶP GỠ ĐỐI TÁC CỦA CHđsNG TôI</h2>
           <p>
-            Hệ sinh thái được tuyển chọn gồm các chuyên gia ô tô, từ dịch vụ chăm sóc
-            xe cao cấp đến kỹ thuật viên hàng đầu và cố vấn tài chính đẳng cấp quốc tế.
+            Hệ sinh thái được tuyển chọn gôm các chuyên gia ô tô, từ dịch vụ chểm sóc
+            xe cao cấp đến kỹ thuật viên hàng đầu và cđ vấn tài chính đẳng cấp quđc tế.
           </p>
         </div>
         <div className="partners-grid">
@@ -170,7 +170,7 @@ function HomePage() {
 
       <section className="contact-section-home">
         <div className="contact-left">
-          <h2>LIÊN HỆ</h2>
+          <h2>LIđSN Hệ</h2>
           <div className="contact-block">
             <p>
               MY GARAGE AS
@@ -195,11 +195,11 @@ function HomePage() {
         </div>
         <form className="contact-form-home" onSubmit={(event) => event.preventDefault()}>
           <label>
-            HỌ VÀ TÊN
+            HđO Vệ TđSN
             <input type="text" placeholder="Nhập tại đây..." />
           </label>
           <label>
-            ĐỊA CHỈ EMAIL
+            ĐđSA CHđ^ EMAIL
             <input type="email" placeholder="your@email.com" />
           </label>
           <label>
@@ -207,7 +207,7 @@ function HomePage() {
             <textarea rows={4} placeholder="Hãy cho chúng tôi biết nhu cầu của bạn..." />
           </label>
           <button type="submit" className="filled-btn">
-            GỬI YÊU CẦU
+            GỬI YđSU CẦU
           </button>
         </form>
       </section>
@@ -218,6 +218,12 @@ function HomePage() {
 }
 
 export default HomePage;
+
+
+
+
+
+
 
 
 

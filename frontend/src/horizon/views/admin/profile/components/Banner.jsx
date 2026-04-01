@@ -1,6 +1,6 @@
-// Chakra imports
+﻿// Chakra imports
 import { Avatar, Box, Flex, Text, useColorModeValue } from "@chakra-ui/react";
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 import React from "react";
 
 export default function Banner(props) {
@@ -65,4 +65,5 @@ export default function Banner(props) {
     </Card>
   );
 }
+
 

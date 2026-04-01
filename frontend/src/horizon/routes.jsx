@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 import { Icon } from '@chakra-ui/react';
 import {
@@ -23,13 +23,13 @@ import {
   MdLocalOffer,
 } from 'react-icons/md';
 
-import MainDashboard from "views/admin/default";
-import AdminPage from "../features/admin/pages/AdminPage";
-import InventoryAdminPage from "../features/inventory/pages/InventoryAdminPage";
-import ServicesPage from "../features/services/pages/ServicesPage";
-import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
-import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
-import SafeVoucherManagementPage from "../features/voucher/pages/SafeVoucherManagementPage";
+import MainDashboard from "@horizon/views/admin/default";
+import AdminPage from "@features/admin/pages/AdminPage";
+import InventoryAdminPage from "@features/inventory/pages/InventoryAdminPage";
+import ServicesPage from "@features/services/pages/ServicesPage";
+import ServiceCategoriesPage from "@features/services/pages/ServiceCategoriesPage";
+import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
+import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
 
 const inventoryItems = [
   {
@@ -113,7 +113,7 @@ const inventoryItems = [
 
 const vehicleItems = [
   {
-    name: 'Hãng xe',
+    name: 'H?ng xe',
     layout: '/admin',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     path: '/brands',
@@ -220,7 +220,7 @@ const routes = [
     component: <AdminPage embedded initialSection="branches" />,
   },
   {
-    name: 'Nhân sự',
+    name: 'Nh?n s?',
     layout: '/admin',
     path: '/staff',
     icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,

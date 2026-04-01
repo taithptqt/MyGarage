@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@shared/core/context/AuthContext";
 import "./CustomerLayout.css";
 
 export default function CustomerLayout({ children }) {
@@ -47,3 +47,5 @@ export default function CustomerLayout({ children }) {
     </div>
   );
 }
+
+

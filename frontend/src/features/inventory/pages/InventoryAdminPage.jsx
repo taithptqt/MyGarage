@@ -1,7 +1,7 @@
 ﻿
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { inventoryApi } from "../api/inventoryApi";
-import { Modal } from "../../admin/components/AdminModals";
+import { inventoryApi } from "@features/inventory/api/inventoryApi";
+import { Modal } from "@features/admin/components/AdminModals";
 import "../../admin/pages/AdminPage.css";
 import "./InventoryAdminPage.css";
 
@@ -19,12 +19,12 @@ const SECTION_META = {
   catalogCategories: {
     title: "Quản lý danh mục sản phẩm",
     subtitle: "Tạo/sửa nhóm hàng để phân loại vật tư rõ ràng và đồng nhất toàn hệ thống",
-    hint: "Nên tạo cấu trúc danh mục ngắn gọn, dễ hiểu để người mới tìm hàng nhanh hơn."
+    hint: "Nên tạo cấu trúc danh mục ngắn gọn, dđ. hiểu để người mơi tìm hàng nhanh hơn."
   },
   catalogSuppliers: {
     title: "Quản lý nhà cung cấp",
-    subtitle: "Lưu thông tin nhà cung cấp phục vụ truy xuất nguồn hàng và đối soát mua vào",
-    hint: "Chuẩn tên nhà cung cấp ngay từ đầu để tránh trùng và dễ truy vấn lịch sử giao dịch."
+    subtitle: "Lưu thông tin nhà cung cấp phục vụ truy xuất nguôn hàng và đđi soát mua vào",
+    hint: "Chuẩn tên nhà cung cấp ngay từ đầu để tránh trùng và dđ. truy vấn lịch sử giao dịch."
   },
   catalog: {
     title: "Quản lý sản phẩm kho",
@@ -32,45 +32,45 @@ const SECTION_META = {
     hint: "Chuẩn hóa mã SKU và danh mục trước khi nhập kho để tránh trùng lặp dữ liệu."
   },
   policy: {
-    title: "Cấu hình chính sách tồn kho",
+    title: "Cấu hình chính sách tôn kho",
     subtitle: "Min/Max, ngưỡng cảnh báo, âm kho, reserve, vượt định mức, hoàn trả, chuyển kho",
-    hint: "Thiết lập chính sách chung trước, sau đó điều chỉnh tồn an toàn riêng cho từng chi nhánh."
+    hint: "Thiết lập chính sách chung trươc, sau đó điều chệnh tôn an toàn riêng cho từng chi nhánh."
   },
   monitoring: {
-    title: "Giám sát tồn kho toàn hệ thống",
-    subtitle: "Theo chi nhánh, kho, sản phẩm, hàng sắp hết, tồn chậm, reserved, giá trị tồn",
-    hint: "Theo dõi các chỉ số tổng quan hàng ngày để phát hiện sớm thiếu hàng hoặc lệch tồn."
+    title: "Giám sát tôn kho toàn hệ thđng",
+    subtitle: "Theo chi nhánh, kho, sản phẩm, hàng sắp hết, tôn chậm, reserved, giá trị tôn",
+    hint: "Theo dõi các chệ sđ tđ.ng quan hàng ngày để phát hiện sơm thiếu hàng hoặc lệch tôn."
   },
   audits: {
     title: "Quản lý và duyệt kiểm kê",
-    subtitle: "Theo dõi kỳ kiểm kê, chênh lệch và duyệt điều chỉnh sau kiểm kê",
-    hint: "Ưu tiên xử lý các phiếu có chênh lệch lớn trước để giảm rủi ro sai lệch tồn kho."
+    subtitle: "Theo dõi kỳ kiểm kê, chênh lệch và duyệt điều chệnh sau kiểm kê",
+    hint: "Ưu tiên xử lý các phiếu có chênh lệch lơn trươc để giảm rủi ro sai lệch tôn kho."
   },
   transactions: {
     title: "Lịch sử nhập xuất và truy vết",
-    subtitle: "Truy vết đầy đủ theo chi nhánh/kho/sản phẩm/loại giao dịch và chứng từ nguồn",
-    hint: "Dùng bộ lọc theo loại giao dịch để kiểm tra nhanh các luồng nhập/xuất bất thường."
+    subtitle: "Truy vết đầy đủ theo chi nhánh/kho/sản phẩm/loại giao dịch và chứng từ nguôn",
+    hint: "Dùng bộ lọc theo loại giao dịch để kiểm tra nhanh các luông nhập/xuất bất thường."
   },
   approvals: {
     title: "Phê duyệt ngoại lệ kho",
-    subtitle: "Duyệt các case xuất vượt, điều chỉnh tồn, hoàn trả bất thường, kho lỗi",
+    subtitle: "Duyệt các case xuất vượt, điều chệnh tôn, hoàn trả bất thường, kho lđ-i",
     hint: "Chỉ duyệt ngoại lệ khi có đủ chứng từ và ghi chú rõ nguyên nhân."
   },
   alerts: {
     title: "Cảnh báo và xử lý block",
     subtitle: "Trung tâm cảnh báo tồn thấp, âm kho, chứng từ treo, giao dịch bất thường",
-    hint: "Xử lý cảnh báo mức cao trước để tránh ảnh hưởng đến hoàn tất sửa chữa và xuất hàng."
+    hint: "Xử lý cảnh báo mức cao trươc để tránh ảnh hưởng đến hoàn tất sửa chữa và xuất hàng."
   },
   reports: {
     title: "Báo cáo quản trị kho",
     subtitle: "Báo cáo tồn kho, giá trị, luân chuyển, top xuất/hoàn, chênh lệch kiểm kê và audit log",
-    hint: "Có thể dùng báo cáo này để đối soát nội bộ và chuẩn bị hồ sơ kiểm toán."
+    hint: "Có thể dùng báo cáo này để đđi soát nội bộ và chuẩn bị hô sơ kiểm toán."
   }
 };
 
 const ITEM_TYPE_OPTIONS = [
   { value: "SELLABLE", label: "Bán được" },
-  { value: "DEFECTIVE", label: "Lỗi/Hỏng" },
+  { value: "DEFECTIVE", label: "Lđ-i/Hỏng" },
   { value: "CONSUMABLE", label: "Tiêu hao" },
   { value: "TRANSIT", label: "Trung chuyển" }
 ];
@@ -97,13 +97,13 @@ const EMPTY_CATEGORY_FORM = {
 };
 
 const RESERVE_RULE_OPTIONS = [
-  { value: "STRICT", label: "Nghiêm ngặt (giữ đúng số lượng đã reserve)" },
-  { value: "FLEXIBLE", label: "Linh hoạt (cho phép điều phối khi thiếu)" }
+  { value: "STRICT", label: "Nghiêm ngặt (giữ đúng số lượng để reserve)" },
+  { value: "FLEXIBLE", label: "Linh hoạt (cho phép điều phđi khi thiếu)" }
 ];
 
 const RETURN_RULE_OPTIONS = [
   { value: "ALLOW_WITH_REASON", label: "Cho phép, bắt buộc ghi lý do" },
-  { value: "REQUIRE_APPROVAL", label: "Phải duyệt trước khi hoàn" },
+  { value: "REQUIRE_APPROVAL", label: "Phải duyệt trươc khi hoàn" },
   { value: "BLOCK_IF_MISSING_INFO", label: "Chặn nếu thiếu thông tin" }
 ];
 
@@ -116,14 +116,14 @@ const TRANSFER_RULE_OPTIONS = [
 const APPROVAL_STATUS_META = {
   PENDING: { label: "Chờ duyệt", className: "badge-suspended" },
   APPROVED: { label: "Đã duyệt", className: "badge-active" },
-  REJECTED: { label: "Từ chối", className: "badge-deleted" }
+  REJECTED: { label: "Từ chđi", className: "badge-deleted" }
 };
 
 const AUDIT_STATUS_META = {
   DRAFT: { label: "Nháp", className: "badge-inactive" },
   PENDING: { label: "Chờ duyệt", className: "badge-suspended" },
   APPROVED: { label: "Đã duyệt", className: "badge-active" },
-  REJECTED: { label: "Từ chối", className: "badge-deleted" },
+  REJECTED: { label: "Từ chđi", className: "badge-deleted" },
   CLOSED: { label: "Đã chốt", className: "badge-active" }
 };
 
@@ -140,7 +140,7 @@ const SOURCE_LABELS = {
   RetailReturn: "Trả hàng bán lẻ",
   MaterialRequest: "Phiếu yêu cầu vật tư",
   MaterialReturn: "Phiếu hoàn vật tư",
-  Unknown: "Không rõ nguồn"
+  Unknown: "Không rõ nguôn"
 };
 
 const TRANSACTION_TYPE_LABELS = {
@@ -156,23 +156,23 @@ const TRANSACTION_TYPE_LABELS = {
 
 const APPROVAL_TYPE_LABELS = {
   OVER_ISSUE: "Xuất vượt định mức",
-  OVER_SERVICE_ORDER_QTY: "Xuất vượt số lượng lệnh sửa chữa",
-  AUDIT_ADJUSTMENT: "Điều chỉnh tồn sau kiểm kê",
-  DEFECTIVE_RETURN: "Nhập lại hàng lỗi",
-  DEFECTIVE_TRANSFER: "Chuyển hàng sang kho lỗi",
-  DAMAGE_BY_STAFF: "Hàng hỏng do nhân viên",
+  OVER_SERVICE_ORDER_QTY: "Xuất vượt sđ lượng lệnh sửa chữa",
+  AUDIT_ADJUSTMENT: "Điều chệnh tôn sau kiểm kê",
+  DEFECTIVE_RETURN: "Nhập lại hàng lđ-i",
+  DEFECTIVE_TRANSFER: "Chuyển hàng sang kho lđ-i",
+  DAMAGE_BY_STAFF: "Hỏng hàng do nhân viên",
   ABNORMAL_RETURN: "Hoàn trả bất thường",
   UNBLOCK_CASE: "Mở khóa case bị block"
 };
 
 const ALERT_TYPE_LABELS = {
   LOW_STOCK: "Sắp hết hàng",
-  NEGATIVE_STOCK: "Âm kho",
+  NEGATIVE_STOCK: "?m kho",
   TX_NO_SOURCE: "Giao dịch thiếu chứng từ",
   RETURN_PENDING: "Phiếu hoàn trả treo",
   ISSUE_BLOCKED: "Phiếu xuất bị treo",
   AUDIT_GAP: "Chênh lệch kiểm kê",
-  DEFECTIVE_MISMATCH: "Kho lỗi chưa đồng bộ"
+  DEFECTIVE_MISMATCH: "Kho lđ-i chưa đông bộ"
 };
 
 const ITEM_TYPE_LABEL_MAP = Object.fromEntries(ITEM_TYPE_OPTIONS.map((opt) => [opt.value, opt.label]));
@@ -201,15 +201,15 @@ function csvEscape(value) {
 
 function normalizeBranchStatus(status) {
   const normalized = normalizeKey(status);
-  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOẠT_ĐỘNG"].includes(normalized)) return "Hoạt động";
-  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐÓNG"].includes(normalized)) return "Ngừng hoạt động";
+  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOẠT_Đđ~NG"].includes(normalized)) return "Hoạt động";
+  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐôNG"].includes(normalized)) return "Ngừng hoạt động";
   return status || "Chưa cấu hình";
 }
 
 function normalizeBranchStatusClass(status) {
   const normalized = normalizeKey(status);
-  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOẠT_ĐỘNG"].includes(normalized)) return "is-active";
-  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐÓNG"].includes(normalized)) return "is-inactive";
+  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOẠT_Đđ~NG"].includes(normalized)) return "is-active";
+  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐôNG"].includes(normalized)) return "is-inactive";
   return "is-unknown";
 }
 
@@ -638,7 +638,7 @@ export default function InventoryAdminPage({ section }) {
         throw new Error("Danh mục cha không hợp lệ.");
       }
       const exists = (categories || []).some((item) => Number(item.id) === parsedParentId);
-      if (!exists) throw new Error("Danh mục cha không tồn tại.");
+      if (!exists) throw new Error("Danh mục cha không tôn tại.");
       if (editingCategory?.id && Number(editingCategory.id) === parsedParentId) {
         throw new Error("Danh mục cha không thể là chính danh mục hiện tại.");
       }
@@ -707,7 +707,7 @@ export default function InventoryAdminPage({ section }) {
       const parsed = toNullableNumber(rawValue);
       if (parsed == null) return null;
       if (!Number.isInteger(parsed)) {
-        throw new Error(`${label} phải là số nguyên.`);
+        throw new Error(`${label} phải là sđ nguyên.`);
       }
       return parsed;
     };
@@ -798,7 +798,7 @@ export default function InventoryAdminPage({ section }) {
     if (nextNameInput == null) return;
     const nextName = nextNameInput.trim();
     if (!nextName) {
-      setError("Tên nhà cung cấp không được để trống.");
+      setError("Tên nhà cung cấp không được để trđng.");
       return;
     }
     await inventoryApi.updateSupplier(supplier.id, {
@@ -882,7 +882,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleRejectAudit = async (id) => {
-    await inventoryApi.rejectAudit(id, { note: "Từ chối bởi quản trị viên" });
+    await inventoryApi.rejectAudit(id, { note: "Từ chđi bởi quản trị viên" });
     await fetchData();
   };
 
@@ -892,7 +892,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleRejectRequest = async (id) => {
-    await inventoryApi.rejectRequest(id, { note: "Từ chối bởi quản trị viên" });
+    await inventoryApi.rejectRequest(id, { note: "Từ chđi bởi quản trị viên" });
     await fetchData();
   };
 
@@ -935,18 +935,18 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng số kho", value: warehouseStructure.warehouses.length },
-                  { label: "Số bin", value: warehouseStructure.bins.length },
+                  { label: "Tđ.ng sđ kho", value: warehouseStructure.warehouses.length },
+                  { label: "Sđ bin", value: warehouseStructure.bins.length },
                   { label: "Kho đang hoạt động", value: warehouseStructure.warehouses.filter((w) => w.isActive).length }
                 ]}
               />
               <ActionPanel
-                title="Tạo kho mới"
-                description="Nhập thông tin cơ bản để thêm kho mới theo từng chi nhánh."
+                title="Tạo kho mơi"
+                description="Nhập thông tin cơ bản để thêm kho mơi theo từng chi nhánh."
               >
                 <div className="table-toolbar inventory-form-grid">
                   <label className="compact-field">
-                    <span>Mã kho</span>
+                    <span>M? kho</span>
                     <input
                       className="search-input"
                       placeholder="Ví dụ: MAIN-WH"
@@ -997,7 +997,7 @@ export default function InventoryAdminPage({ section }) {
               {settings ? (
                 <ActionPanel
                   title="Gán kho mặc định theo loại hàng"
-                  description="Hệ thống sẽ tự động ưu tiên kho này khi phát sinh nghiệp vụ tương ứng."
+                  description="Hệ thđng sẽ tự động ưu tiên kho này khi phát sinh nghiệp vụ tương ứng."
                 >
                   <div className="table-toolbar inventory-form-grid">
                     {ITEM_TYPE_OPTIONS.map((type) => (
@@ -1036,12 +1036,12 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Mã kho</th>
+                      <th>M? kho</th>
                       <th>Tên kho</th>
                       <th>Loại kho</th>
                       <th>Chi nhánh</th>
                       <th>Trạng thái</th>
-                      <th>Số bin</th>
+                      <th>Sđ bin</th>
                       <th>Thao tác</th>
                     </tr>
                   </thead>
@@ -1082,7 +1082,7 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng sản phẩm", value: products.length },
+                  { label: "Tđ.ng sản phẩm", value: products.length },
                   { label: "Danh mục", value: categories.length },
                   { label: "Nhà cung cấp", value: suppliers.length }
                 ]}
@@ -1090,7 +1090,7 @@ export default function InventoryAdminPage({ section }) {
 
               <ActionPanel
                 title="Quản lý danh mục sản phẩm"
-                description="Thêm mới sản phẩm bằng popup chi tiết theo Product model, đồng thời hỗ trợ import/export CSV."
+                description="Thêm mơi sản phẩm bằng popup chi tiết theo Product model, đông thời hđ- trợ import/export CSV."
               >
                 <div className="table-toolbar inventory-form-actions">
                   <button className="btn-primary" onClick={openCreateProductModal}>
@@ -1115,7 +1115,7 @@ export default function InventoryAdminPage({ section }) {
               </ActionPanel>
 
               {showCreateProductModal ? (
-                <Modal title={productModalMode === "edit" ? "Sửa sản phẩm" : "Thêm sản phẩm mới"} onClose={closeCreateProductModal}>
+                <Modal title={productModalMode === "edit" ? "Sửa sản phẩm" : "Thêm sản phẩm mơi"} onClose={closeCreateProductModal}>
                   <div className="inventory-product-modal">
                     <p className="inventory-product-modal-desc">
                       Điền các thông tin cần thiết để thêm sản phẩm vào danh mục kho.
@@ -1139,7 +1139,7 @@ export default function InventoryAdminPage({ section }) {
                             className="search-input"
                             value={productForm.name}
                             onChange={(e) => updateProductForm("name", e.target.value)}
-                            placeholder="Ví dụ: Lọc nhớt Honda"
+                            placeholder="Ví dụ: Lọc nhơt Honda"
                           />
                         </label>
                         <label className="compact-field">
@@ -1173,7 +1173,7 @@ export default function InventoryAdminPage({ section }) {
                       <h4>Giá và chính sách</h4>
                       <div className="inventory-product-modal-grid inventory-product-modal-grid--price">
                         <label className="compact-field">
-                          <span>Giá vốn</span>
+                          <span>Giá vđn</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1269,7 +1269,7 @@ export default function InventoryAdminPage({ section }) {
                       <th>Tên sản phẩm</th>
                       <th>Đơn vị</th>
                       <th>Danh mục</th>
-                      <th>Giá vốn</th>
+                      <th>Giá vđn</th>
                       <th>Giá bán lẻ</th>
                       <th>Giá dịch vụ</th>
                       <th>Thuế (%)</th>
@@ -1331,7 +1331,7 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng danh mục", value: categories.length },
+                  { label: "Tđ.ng danh mục", value: categories.length },
                   { label: "Sản phẩm đã phân loại", value: products.filter((p) => !!p.categoryId).length },
                   { label: "Sản phẩm chưa gán danh mục", value: products.filter((p) => !p.categoryId).length }
                 ]}
@@ -1349,7 +1349,7 @@ export default function InventoryAdminPage({ section }) {
               </ActionPanel>
 
               {showCategoryModal ? (
-                <Modal title={categoryModalMode === "edit" ? "Sửa danh mục" : "Thêm danh mục mới"} onClose={closeCategoryModal}>
+                <Modal title={categoryModalMode === "edit" ? "Sửa danh mục" : "Thêm danh mục mơi"} onClose={closeCategoryModal}>
                   <div className="inventory-product-modal">
                     <p className="inventory-product-modal-desc">
                       Quản lý nhóm danh mục để chuẩn hóa phân loại sản phẩm trong kho.
@@ -1364,7 +1364,7 @@ export default function InventoryAdminPage({ section }) {
                             className="search-input"
                             value={categoryForm.categoryName}
                             onChange={(e) => updateCategoryForm("categoryName", e.target.value)}
-                            placeholder="Ví dụ: Dầu nhớt"
+                            placeholder="Ví dụ: Dầu nhơt"
                           />
                         </label>
                         <label className="compact-field">
@@ -1432,7 +1432,7 @@ export default function InventoryAdminPage({ section }) {
                       <th>Danh mục cha</th>
                       <th>Mô tả</th>
                       <th>Đặt cọc</th>
-                      <th>Số sản phẩm</th>
+                      <th>Sđ sản phẩm</th>
                       <th>Thao tác</th>
                     </tr>
                   </thead>
@@ -1471,15 +1471,15 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng nhà cung cấp", value: suppliers.length },
+                  { label: "Tđ.ng nhà cung cấp", value: suppliers.length },
                   { label: "Sản phẩm hiện có", value: products.length },
                   { label: "Danh mục hiện có", value: categories.length }
                 ]}
               />
 
               <ActionPanel
-                title="Tạo nhà cung cấp mới"
-                description="Quản lý danh sách nhà cung cấp để phục vụ truy xuất nguồn gốc và mua hàng."
+                title="Tạo nhà cung cấp mơi"
+                description="Quản lý danh sách nhà cung cấp để phục vụ truy xuất nguôn gđc và mua hàng."
               >
                 <div className="table-toolbar inventory-form-grid inventory-form-grid--small">
                   <label className="compact-field">
@@ -1509,7 +1509,7 @@ export default function InventoryAdminPage({ section }) {
                   </thead>
                   <tbody>
                     {suppliers.length === 0 ? (
-                      <NoDataRow colSpan={4} message="Chưa có nhà cung cấp nào trong hệ thống." />
+                      <NoDataRow colSpan={4} message="Chưa có nhà cung cấp nào trong hệ thđng." />
                     ) : (
                       suppliers.map((supplier) => (
                         <tr key={supplier.id}>
@@ -1540,7 +1540,7 @@ export default function InventoryAdminPage({ section }) {
               <div className="policy-card">
                 <div className="policy-card-head">
                   <h3>Thiết lập chính sách chung</h3>
-                  <p>Áp dụng cho toàn hệ thống kho. Cấu hình này ảnh hưởng đến cảnh báo và phê duyệt.</p>
+                  <p>Áp dụng cho toàn hệ thđng kho. Cấu hình này ảnh hưởng đến cảnh báo và phê duyệt.</p>
                 </div>
                 <div className="policy-grid">
                   <label className="compact-field policy-toggle">
@@ -1552,7 +1552,7 @@ export default function InventoryAdminPage({ section }) {
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Ngưỡng cảnh báo tồn thấp (%)</span>
+                    <span>Ngưỡng cảnh báo tôn thấp (%)</span>
                     <input
                       className="search-input"
                       type="number"
@@ -1610,17 +1610,17 @@ export default function InventoryAdminPage({ section }) {
               </div>
 
               <div className="policy-overview">
-                <div className="policy-overview-item"><span>Tổng chi nhánh</span><strong>{policyOverview.branchCount}</strong></div>
+                <div className="policy-overview-item"><span>Tđ.ng chi nhánh</span><strong>{policyOverview.branchCount}</strong></div>
                 <div className="policy-overview-item"><span>Chi nhánh hoạt động</span><strong>{policyOverview.activeBranchCount}</strong></div>
-                <div className="policy-overview-item"><span>Tồn hiện tại</span><strong>{policyOverview.totalCurrent.toLocaleString()}</strong></div>
-                <div className="policy-overview-item"><span>Đã giữ chỗ</span><strong>{policyOverview.totalReserved.toLocaleString()}</strong></div>
-                <div className="policy-overview-item"><span>Tổng tồn an toàn</span><strong>{policyOverview.totalSafeStock.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>Tôn hiện tại</span><strong>{policyOverview.totalCurrent.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>?? gi? ch?</span><strong>{policyOverview.totalReserved.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>Tđ.ng tôn an toàn</span><strong>{policyOverview.totalSafeStock.toLocaleString()}</strong></div>
               </div>
 
               <div className="policy-card">
                 <div className="policy-card-head">
-                  <h3>Cấu hình tồn an toàn theo chi nhánh</h3>
-                  <p>Đặt mức tồn tối thiểu riêng cho từng chi nhánh để hệ thống cảnh báo sát thực tế vận hành.</p>
+                  <h3>Cấu hình tôn an toàn theo chi nhánh</h3>
+                  <p>Đặt mức tôn tđi thiểu riêng cho từng chi nhánh để hệ thđng cảnh báo sát thực tế vận hành.</p>
                 </div>
                 <div className="table-wrapper policy-table-wrapper">
                   <table className="admin-table">
@@ -1628,15 +1628,15 @@ export default function InventoryAdminPage({ section }) {
                       <tr>
                         <th>Chi nhánh</th>
                         <th>Trạng thái</th>
-                        <th>Số kho</th>
-                        <th>Tồn hiện tại</th>
-                        <th>Đã giữ chỗ</th>
-                        <th>Tồn an toàn</th>
+                        <th>Sđ kho</th>
+                        <th>Tôn hiện tại</th>
+                        <th>?? gi? ch?</th>
+                        <th>Tôn an toàn</th>
                       </tr>
                     </thead>
                     <tbody>
                       {branchSummary.length === 0 ? (
-                        <NoDataRow colSpan={6} message="Chưa có dữ liệu chi nhánh để cấu hình tồn an toàn." />
+                        <NoDataRow colSpan={6} message="Chưa có dữ liệu chi nhánh để cấu hình tôn an toàn." />
                       ) : (
                         branchSummary.map((b) => (
                           <tr key={b.branchId}>
@@ -1678,12 +1678,12 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng tồn", value: toNumber(overview.totalQuantity).toLocaleString() },
-                  { label: "Đã giữ chỗ", value: toNumber(overview.reservedQuantity).toLocaleString() },
+                  { label: "Tđ.ng tôn", value: toNumber(overview.totalQuantity).toLocaleString() },
+                  { label: "?? gi? ch?", value: toNumber(overview.reservedQuantity).toLocaleString() },
                   { label: "Sắp hết", value: toNumber(overview.lowStockCount).toLocaleString() },
-                  { label: "Âm kho", value: toNumber(overview.negativeStockCount).toLocaleString() },
-                  { label: "Kho lỗi", value: toNumber(overview.defectiveStockCount).toLocaleString() },
-                  { label: "Giá trị tồn", value: toNumber(overview.totalInventoryValue).toLocaleString() }
+                  { label: "?m kho", value: toNumber(overview.negativeStockCount).toLocaleString() },
+                  { label: "Kho lđ-i", value: toNumber(overview.defectiveStockCount).toLocaleString() },
+                  { label: "Giá trị tôn", value: toNumber(overview.totalInventoryValue).toLocaleString() }
                 ]}
               />
               <div className="table-wrapper">
@@ -1691,16 +1691,16 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>Chi nhánh</th>
-                      <th>Tồn hiện tại</th>
-                      <th>Đã giữ chỗ</th>
+                      <th>Tôn hiện tại</th>
+                      <th>?? gi? ch?</th>
                       <th>Sắp hết</th>
-                      <th>Âm kho</th>
-                      <th>Giá trị tồn</th>
+                      <th>?m kho</th>
+                      <th>Giá trị tôn</th>
                     </tr>
                   </thead>
                   <tbody>
                     {branchSummary.length === 0 ? (
-                      <NoDataRow colSpan={6} message="Chưa có dữ liệu giám sát tồn kho." />
+                      <NoDataRow colSpan={6} message="Chưa có dữ liệu giám sát tôn kho." />
                     ) : (
                       branchSummary.map((b) => (
                         <tr key={b.branchId}>
@@ -1729,7 +1729,7 @@ export default function InventoryAdminPage({ section }) {
                     <th>Chi nhánh</th>
                     <th>Kho</th>
                     <th>Trạng thái</th>
-                    <th>Tổng chênh lệch</th>
+                    <th>Tđ.ng chênh lệch</th>
                     <th>Thao tác</th>
                   </tr>
                 </thead>
@@ -1752,10 +1752,10 @@ export default function InventoryAdminPage({ section }) {
                             {canAction ? (
                               <div className="row-actions">
                                 <button className="btn-icon" onClick={() => runAction(() => handleApproveAudit(a.id))}>Duyệt</button>
-                                <button className="btn-icon" onClick={() => runAction(() => handleRejectAudit(a.id))}>Từ chối</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleRejectAudit(a.id))}>Từ chđi</button>
                               </div>
                             ) : (
-                              <span className="result-count">Đã xử lý</span>
+                              <span className="result-count">?? x? l?</span>
                             )}
                           </td>
                         </tr>
@@ -1847,14 +1847,14 @@ export default function InventoryAdminPage({ section }) {
                       <th>Chi nhánh</th>
                       <th>Kho</th>
                       <th>SKU</th>
-                      <th>Số lượng</th>
-                      <th>Nguồn phát sinh</th>
+                      <th>Sđ lượng</th>
+                      <th>Nguôn phát sinh</th>
                       <th>Người thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(transactions.items || []).length === 0 ? (
-                      <NoDataRow colSpan={9} message="Không có giao dịch nào khớp với bộ lọc hiện tại." />
+                      <NoDataRow colSpan={9} message="Không có giao dịch nào khơp vơi bộ lọc hiện tại." />
                     ) : (
                       (transactions.items || []).map((t) => (
                         <tr key={t.id}>
@@ -1876,10 +1876,10 @@ export default function InventoryAdminPage({ section }) {
 
               <div className="table-toolbar">
                 <button className="btn-ghost" onClick={() => changePage(-1)} disabled={txParams.page <= 1}>
-                  Trang trước
+                  Trang trươc
                 </button>
                 <span className="result-count">
-                  Trang {txParams.page} / {txTotalPages} - Tổng {toNumber(transactions.total).toLocaleString()} giao dịch
+                  Trang {txParams.page} / {txTotalPages} - Tđ.ng {toNumber(transactions.total).toLocaleString()} giao dịch
                 </span>
                 <button className="btn-ghost" onClick={() => changePage(1)} disabled={txParams.page >= txTotalPages}>
                   Trang sau
@@ -1919,10 +1919,10 @@ export default function InventoryAdminPage({ section }) {
                             {canAction ? (
                               <div className="row-actions">
                                 <button className="btn-icon" onClick={() => runAction(() => handleApproveRequest(a.id))}>Duyệt</button>
-                                <button className="btn-icon" onClick={() => runAction(() => handleRejectRequest(a.id))}>Từ chối</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleRejectRequest(a.id))}>Từ chđi</button>
                               </div>
                             ) : (
-                              <span className="result-count">Đã xử lý</span>
+                              <span className="result-count">?? x? l?</span>
                             )}
                           </td>
                         </tr>
@@ -1949,7 +1949,7 @@ export default function InventoryAdminPage({ section }) {
                 </thead>
                 <tbody>
                   {alerts.length === 0 ? (
-                    <NoDataRow colSpan={6} message="Hiện chưa có cảnh báo tồn kho." />
+                    <NoDataRow colSpan={6} message="Hiện chưa có cảnh báo tôn kho." />
                   ) : (
                     alerts.map((a, idx) => {
                       const severity = resolveStatusMeta(a.severity, ALERT_SEVERITY_META);
@@ -1977,13 +1977,13 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>Chi nhánh</th>
-                      <th>Tổng tồn</th>
-                      <th>Giá trị tồn</th>
+                      <th>Tđ.ng tôn</th>
+                      <th>Giá trị tôn</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(reports.stockByBranch || []).length === 0 ? (
-                      <NoDataRow colSpan={3} message="Chưa có dữ liệu tồn kho theo chi nhánh." />
+                      <NoDataRow colSpan={3} message="Chưa có dữ liệu tôn kho theo chi nhánh." />
                     ) : (
                       (reports.stockByBranch || []).map((r) => (
                         <tr key={r.branchId}>
@@ -2002,7 +2002,7 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>Top sản phẩm xuất nhiều</th>
-                      <th>Số lượng xuất</th>
+                      <th>Sđ lượng xuất</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2055,3 +2055,9 @@ export default function InventoryAdminPage({ section }) {
     </div>
   );
 }
+
+
+
+
+
+

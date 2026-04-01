@@ -1,37 +1,22 @@
-import { request } from "../../../app/apiClient";
+import { servicesApi } from "@features/services/api/servicesApi";
 
 export async function getAllServiceCategories() {
-  return request({ url: "/api/ServiceCategory", method: "GET" });
+  return servicesApi.getServiceCategories();
 }
 
 export async function getAllStandardServices(branchId) {
-  return request({
-    url: "/api/StandardService",
-    method: "GET",
-    params: branchId ? { branchId } : undefined
-  });
+  return servicesApi.getStandardServices(branchId);
 }
 
 export async function createStandardService(payload) {
-  return request({
-    url: "/api/StandardService",
-    method: "POST",
-    data: payload
-  });
+  return servicesApi.createStandardService(payload);
 }
 
 export async function updateStandardService(id, payload) {
-  return request({
-    url: `/api/StandardService/${id}`,
-    method: "PUT",
-    data: payload
-  });
+  return servicesApi.updateStandardService(id, payload);
 }
 
 export async function deleteStandardService(id) {
-  await request({
-    url: `/api/StandardService/${id}`,
-    method: "DELETE"
-  });
+  await servicesApi.deleteStandardService(id);
   return true;
 }

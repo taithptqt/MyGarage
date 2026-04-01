@@ -1,4 +1,4 @@
-import {
+﻿import {
   Button,
   Flex,
   Image,
@@ -6,7 +6,7 @@ import {
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
-import logoWhite from "assets/img/layout/logoWhite.png";
+import logoWhite from "@horizon/assets/img/layout/logoWhite.png";
 import React from "react";
 
 export default function SidebarDocs() {
@@ -83,3 +83,4 @@ export default function SidebarDocs() {
     </Flex>
   );
 }
+

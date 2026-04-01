@@ -1,5 +1,5 @@
-﻿import { APPOINTMENT_STATUS } from "../constants/appointmentStatuses";
-import { BOOKING_GROUP_STATUS } from "../constants/bookingGroupStatuses";
+﻿import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
+import { BOOKING_GROUP_STATUS } from "@features/appointments/constants/bookingGroupStatuses";
 
 export const STATUS_META = {
   [APPOINTMENT_STATUS.PENDING]: { label: "Chờ xác nhận", tone: "pending" },
@@ -135,5 +135,8 @@ export function sortAppointments(items) {
     return timeB - timeA;
   });
 }
+
+
+
 
 

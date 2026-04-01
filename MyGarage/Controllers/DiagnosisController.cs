@@ -5,8 +5,6 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
@@ -15,45 +13,35 @@ using MyGarage.Models;
 namespace MyGarage.Controllers
 {
     [Route("api/diagnoses")]
-[Route("api/[controller]")]
     [ApiController]
     public class DiagnosisController : ControllerBase
     {
+        public sealed record DiagnosisStatusPatchDto
+        {
+            public string? Status { get; init; }
+            public string? Symptom { get; init; }
+            public string? RootCause { get; init; }
+            public string? Severity { get; init; }
+        }
+
         private readonly IDiagnosisService _diagnosisService;
         private readonly IMapper _mapper;
-        private readonly GarageContext _context;
 
-        public DiagnosisController(IDiagnosisService diagnosisService, IMapper mapper, GarageContext context)
+        public DiagnosisController(IDiagnosisService diagnosisService, IMapper mapper)
         {
             _diagnosisService = diagnosisService;
             _mapper = mapper;
-            _context = context;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DiagnosisResponseDto>>> GetAll([FromQuery] long? serviceOrderId, [FromQuery] bool requestOnly = false)
         {
-            var query = _context.Diagnoses.AsNoTracking().AsQueryable();
-
-            if (serviceOrderId.HasValue)
-            {
-                query = query.Where(x => x.ServiceOrderId == serviceOrderId.Value);
-            }
-
-            if (requestOnly)
-            {
-                query = query.Where(x => x.Status == "PENDING" || x.Status == "ASSIGNED");
-            }
-
-            var items = await query
-                .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
-                .ToListAsync();
-
+            var items = await _diagnosisService.GetAllFilteredAsync(serviceOrderId, requestOnly);
             var dtos = _mapper.Map<IEnumerable<DiagnosisResponseDto>>(items);
             return Ok(dtos);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:long}")]
         public async Task<ActionResult<DiagnosisResponseDto>> GetById(long id)
         {
             var item = await _diagnosisService.GetByIdAsync(id);
@@ -61,6 +49,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
             var dto = _mapper.Map<DiagnosisResponseDto>(item);
             return Ok(dto);
         }
@@ -86,7 +75,7 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:long}")]
         public async Task<ActionResult<DiagnosisResponseDto>> Update(long id, [FromBody] DiagnosisUpdateDto itemDto)
         {
             var existingItem = await _diagnosisService.GetByIdAsync(id);
@@ -106,7 +95,6 @@ namespace MyGarage.Controllers
             existingItem.UpdatedAt = DateTime.UtcNow;
 
             var updatedItem = await _diagnosisService.UpdateAsync(id, existingItem);
-
             if (updatedItem == null)
             {
                 return NotFound();
@@ -116,25 +104,22 @@ namespace MyGarage.Controllers
             return Ok(responseDto);
         }
 
-        [HttpPost("requests/{serviceOrderId:long}")]
+        [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues")]
         public async Task<ActionResult<DiagnosisResponseDto>> RequestDiagnosis(long serviceOrderId)
         {
-            var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
                 return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
-            var hasSignedCheckIn = await HasSignedCheckInAsync(serviceOrderId);
+            var hasSignedCheckIn = await _diagnosisService.HasSignedCheckInAsync(serviceOrderId);
             if (!hasSignedCheckIn)
             {
-                return BadRequest(new { message = "Chỉ được yêu cầu chuẩn đoán sau khi khách đã ký check-in." });
+                return BadRequest(new { message = "Chỉ được yêu cầu chẩn đoán sau khi khách đã ký check-in." });
             }
 
-            var allDiagnosis = await _context.Diagnoses
-                .Where(x => x.ServiceOrderId == serviceOrderId)
-                .ToListAsync();
-
+            var allDiagnosis = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
             if (allDiagnosis.Any(x => x.Status == "COMPLETED"))
             {
                 return BadRequest(new { message = "Lệnh này đã có kết quả chẩn đoán hoàn tất." });
@@ -144,164 +129,53 @@ namespace MyGarage.Controllers
             if (activeDiagnosis.Count > 0)
             {
                 var activeIds = activeDiagnosis.Select(x => x.Id).ToList();
-                var recs = await _context.DiagnoseRecommendations
-                    .Where(x => activeIds.Contains(x.DiagnoseId))
-                    .ToListAsync();
-                if (recs.Count > 0)
-                {
-                    _context.DiagnoseRecommendations.RemoveRange(recs);
-                }
-                _context.Diagnoses.RemoveRange(activeDiagnosis);
+                await _diagnosisService.RemoveRecommendationsByDiagnosisIdsAsync(activeIds);
+                await _diagnosisService.RemoveDiagnosesAsync(activeDiagnosis);
             }
 
             var symptoms = ExtractSymptomsFromNotes(serviceOrder.CustomerNotes);
-            var placeholderTechnicianId = await ResolvePlaceholderTechnicianId(serviceOrder);
-            var now = DateTime.UtcNow;
-            var newDiagnosis = symptoms.Select(symptom => new Diagnosis
-            {
-                ServiceOrderId = serviceOrderId,
-                TechnicianId = placeholderTechnicianId,
-                Symptom = symptom,
-                Status = "PENDING",
-                CreatedAt = now,
-                UpdatedAt = now
-            }).ToList();
+            var placeholderTechnicianId = await _diagnosisService.ResolvePlaceholderTechnicianIdAsync(serviceOrder);
+            var newDiagnosis = await _diagnosisService.CreatePendingDiagnosesAsync(serviceOrderId, placeholderTechnicianId, symptoms);
 
-            _context.Diagnoses.AddRange(newDiagnosis);
-
-            serviceOrder.Status = "INSPECTING";
-            serviceOrder.UpdatedAt = DateTime.UtcNow;
-            _context.ServiceOrders.Update(serviceOrder);
-
-            await _context.SaveChangesAsync();
+            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, "INSPECTING");
 
             var dto = _mapper.Map<DiagnosisResponseDto>(newDiagnosis.First());
             return Ok(dto);
         }
 
-        [HttpPost("requests/{serviceOrderId:long}/accept")]
-        public async Task<ActionResult<DiagnosisResponseDto>> AcceptDiagnosisRequest(long serviceOrderId, [FromBody] DiagnosisAcceptRequestDto request)
+        [HttpPatch("service-orders/{serviceOrderId:long}/diagnosis-queues")]
+        public async Task<ActionResult<DiagnosisResponseDto>> PatchRequestAssignment(long serviceOrderId, [FromBody] DiagnosisAcceptRequestDto request)
         {
-            if (request == null || request.TechnicianId <= 0)
-            {
-                return BadRequest(new { message = "Thiếu kỹ thuật viên nhận yêu cầu." });
-            }
-
-            var activeDiagnosis = await _context.Diagnoses
-                .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => x.Status == "PENDING" || x.Status == "ASSIGNED")
-                .ToListAsync();
-
-            if (activeDiagnosis.Count == 0)
-            {
-                return BadRequest(new { message = "Yêu cầu chẩn đoán chưa được tạo." });
-            }
-
-            if (activeDiagnosis.Any(x => x.Status == "COMPLETED"))
-            {
-                return BadRequest(new { message = "Chẩn đoán đã hoàn tất, không thể nhận lại." });
-            }
-
-            if (activeDiagnosis.Any(x => x.Status == "ASSIGNED" && x.TechnicianId != request.TechnicianId))
-            {
-                return Conflict(new { message = "Yêu cầu đã được kỹ thuật viên khác nhận." });
-            }
-
-            var technicianExists = await _context.Staffs.AnyAsync(x => x.Id == request.TechnicianId);
-            if (!technicianExists)
-            {
-                return BadRequest(new { message = "Kỹ thuật viên không tồn tại." });
-            }
-
-            foreach (var diagnosis in activeDiagnosis)
-            {
-                diagnosis.TechnicianId = request.TechnicianId;
-                diagnosis.Status = "ASSIGNED";
-                diagnosis.UpdatedAt = DateTime.UtcNow;
-            }
-            _context.Diagnoses.UpdateRange(activeDiagnosis);
-            await _context.SaveChangesAsync();
-
-            var response = activeDiagnosis
-                .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
-                .First();
-            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
+            return await AssignRequestAsync(serviceOrderId, request);
         }
 
-        [HttpPost("requests/{serviceOrderId:long}/recall")]
-        public async Task<IActionResult> RecallDiagnosisRequest(long serviceOrderId)
+        [HttpDelete("service-orders/{serviceOrderId:long}/diagnosis-queues")]
+        public async Task<IActionResult> DeleteRequest(long serviceOrderId)
         {
-            var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
-            if (serviceOrder == null)
-            {
-                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
-            }
-
-            var activeDiagnosis = await _context.Diagnoses
-                .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => x.Status == "PENDING" || x.Status == "ASSIGNED")
-                .ToListAsync();
-
-            if (activeDiagnosis.Count == 0)
-            {
-                return Ok(new { message = "Không có yêu cầu chẩn đoán để thu hồi." });
-            }
-
-            var activeIds = activeDiagnosis.Select(x => x.Id).ToList();
-            var recs = await _context.DiagnoseRecommendations
-                .Where(x => activeIds.Contains(x.DiagnoseId))
-                .ToListAsync();
-            if (recs.Count > 0)
-            {
-                _context.DiagnoseRecommendations.RemoveRange(recs);
-            }
-
-            _context.Diagnoses.RemoveRange(activeDiagnosis);
-
-            if (serviceOrder.Status == "INSPECTING")
-            {
-                serviceOrder.Status = "NEW";
-            }
-            serviceOrder.UpdatedAt = DateTime.UtcNow;
-            _context.ServiceOrders.Update(serviceOrder);
-
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã thu hồi yêu cầu chẩn đoán." });
+            return await DeleteRequestAsync(serviceOrderId);
         }
 
-        [HttpPost("{id:long}/complete")]
-        public async Task<ActionResult<DiagnosisResponseDto>> Complete(long id, [FromBody] DiagnosisUpdateDto itemDto)
+        [HttpPatch("{id:long}")]
+        public async Task<ActionResult<DiagnosisResponseDto>> PatchStatus(long id, [FromBody] DiagnosisStatusPatchDto dto)
         {
-            var existingItem = await _context.Diagnoses.FirstOrDefaultAsync(x => x.Id == id);
-            if (existingItem == null)
+            var status = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
+            if (status != "COMPLETED")
             {
-                return NotFound(new { message = "Không tìm thấy phiên chẩn đoán." });
+                return BadRequest(new { message = "Chỉ hỗ trợ chuyển trạng thái sang COMPLETED." });
             }
 
-            _mapper.Map(itemDto, existingItem);
-            existingItem.Status = "COMPLETED";
-            existingItem.DiagnosedAt = DateTime.UtcNow;
-            existingItem.UpdatedAt = DateTime.UtcNow;
-
-            var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == existingItem.ServiceOrderId);
-            if (order != null)
+            var payload = new DiagnosisUpdateDto
             {
-                var allStatus = await _context.Diagnoses
-                    .Where(x => x.ServiceOrderId == existingItem.ServiceOrderId)
-                    .Select(x => x.Status)
-                    .ToListAsync();
-                var allCompleted = allStatus.Count > 0 && allStatus.All(s => s == "COMPLETED");
-                order.Status = allCompleted ? "WAITING_APPROVAL" : "INSPECTING";
-                order.UpdatedAt = DateTime.UtcNow;
-                _context.ServiceOrders.Update(order);
-            }
+                Status = "COMPLETED",
+                Symptom = dto?.Symptom,
+                RootCause = dto?.RootCause,
+                Severity = dto?.Severity,
+            };
 
-            await _context.SaveChangesAsync();
-            var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);
-            return Ok(dto);
+            return await CompleteAsync(id, payload);
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _diagnosisService.DeleteAsync(id);
@@ -309,6 +183,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
             return NoContent();
         }
 
@@ -365,40 +240,81 @@ namespace MyGarage.Controllers
             return new List<string> { notes };
         }
 
-        private async Task<long> ResolvePlaceholderTechnicianId(ServiceOrder serviceOrder)
+        private async Task<ActionResult<DiagnosisResponseDto>> AssignRequestAsync(long serviceOrderId, DiagnosisAcceptRequestDto request)
         {
-            if (serviceOrder.ServiceAdvisorId.HasValue)
+            if (request == null || request.TechnicianId <= 0)
             {
-                var advisorExists = await _context.Staffs.AnyAsync(x => x.Id == serviceOrder.ServiceAdvisorId.Value);
-                if (advisorExists)
-                {
-                    return serviceOrder.ServiceAdvisorId.Value;
-                }
+                return BadRequest(new { message = "Thiếu kỹ thuật viên nhận yêu cầu." });
             }
 
-            var firstStaffId = await _context.Staffs
-                .OrderBy(x => x.Id)
-                .Select(x => x.Id)
-                .FirstOrDefaultAsync();
-
-            if (firstStaffId <= 0)
+            var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
+            if (activeDiagnosis.Count == 0)
             {
-                throw new InvalidOperationException("Không có nhân sự trong hệ thống để khởi tạo yêu cầu chẩn đoán.");
+                return BadRequest(new { message = "Yêu cầu chẩn đoán chưa được tạo." });
             }
 
-            return firstStaffId;
+            if (activeDiagnosis.Any(x => x.Status == "COMPLETED"))
+            {
+                return BadRequest(new { message = "Chẩn đoán đã hoàn tất, không thể nhận lại." });
+            }
+
+            if (activeDiagnosis.Any(x => x.Status == "ASSIGNED" && x.TechnicianId != request.TechnicianId))
+            {
+                return Conflict(new { message = "Yêu cầu đã được kỹ thuật viên khác nhận." });
+            }
+
+            var technicianExists = await _diagnosisService.TechnicianExistsAsync(request.TechnicianId);
+            if (!technicianExists)
+            {
+                return BadRequest(new { message = "Kỹ thuật viên không tồn tại." });
+            }
+
+            await _diagnosisService.AssignDiagnosesAsync(activeDiagnosis, request.TechnicianId);
+
+            var response = activeDiagnosis
+                .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                .First();
+            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
         }
 
-        private async Task<bool> HasSignedCheckInAsync(long serviceOrderId)
+        private async Task<IActionResult> DeleteRequestAsync(long serviceOrderId)
         {
-            return await _context.VehicleConditionLogs
-                .AnyAsync(x =>
-                    x.ServiceOrderId == serviceOrderId &&
-                    x.LogType == "CHECK_IN" &&
-                    x.CustomerSignatureUrl != null &&
-                    x.CustomerSignatureUrl != "");
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
+            }
+
+            var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
+            if (activeDiagnosis.Count == 0)
+            {
+                return Ok(new { message = "Không có yêu cầu chẩn đoán để thu hồi." });
+            }
+
+            await _diagnosisService.RecallDiagnosesAsync(serviceOrder, activeDiagnosis);
+            return Ok(new { message = "Đã thu hồi yêu cầu chẩn đoán." });
+        }
+
+        private async Task<ActionResult<DiagnosisResponseDto>> CompleteAsync(long id, DiagnosisUpdateDto itemDto)
+        {
+            var existingItem = await _diagnosisService.GetDiagnosisEntityAsync(id);
+            if (existingItem == null)
+            {
+                return NotFound(new { message = "Không tìm thấy phiên chẩn đoán." });
+            }
+
+            _mapper.Map(itemDto, existingItem);
+            await _diagnosisService.CompleteDiagnosisAsync(existingItem);
+
+            var order = await _diagnosisService.GetServiceOrderAsync(existingItem.ServiceOrderId);
+            if (order != null)
+            {
+                var allCompleted = await _diagnosisService.AreAllDiagnosesCompletedAsync(existingItem.ServiceOrderId);
+                await _diagnosisService.UpdateServiceOrderStatusAsync(order, allCompleted ? "WAITING_APPROVAL" : "INSPECTING");
+            }
+
+            var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);
+            return Ok(dto);
         }
     }
 }
-
-

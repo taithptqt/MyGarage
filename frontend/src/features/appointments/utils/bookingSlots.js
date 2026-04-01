@@ -1,5 +1,5 @@
-﻿import { BOOKING_FLOW } from "../constants/bookingConstants";
-import { extractField } from "./bookingCommon";
+import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
+import { extractField } from "@features/appointments/utils/bookingCommon";
 
 export function buildSlotsBySession(availableSlots) {
   const base = {
