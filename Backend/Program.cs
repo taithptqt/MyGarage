@@ -1506,7 +1506,7 @@ WHERE TABLE_NAME = @tableName
         // Standard services
         var standardServiceSpecs = new[]
         {
-            new { Code = "MAINT-OC",  Name = "Thay nhớt nhanh",          CategoryId = catMaint.Id,  BasePrice = 280000m, StandardMinutes = 40 },
+            new { Code = "MAINT-OC",  Name = "Thay nhớt nhanh",         CategoryId = catMaint.Id,  BasePrice = 280000m, StandardMinutes = 40 },
             new { Code = "REP-ENG",   Name = "Chẩn đoán động cơ",         CategoryId = catRepair.Id, BasePrice = 450000m, StandardMinutes = 60 },
             new { Code = "TIRE-BAL",  Name = "Cân bằng động bánh xe",     CategoryId = catTire.Id,   BasePrice = 220000m, StandardMinutes = 30 }
         };
@@ -1860,5 +1860,3 @@ WHERE TABLE_NAME = @tableName
         await db.SaveChangesAsync();
     }
 }
-
-

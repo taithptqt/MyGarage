@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -323,6 +323,7 @@ public class AccountingController : ControllerBase
             .FirstOrDefaultAsync(s => s.Id == staffId && s.IsDeleted != true);
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
+
         var hireDate = await ResolveStaffHireDateAsync(staff.Id, staff.HireDate);
         var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
         decimal coefficient = 1.0000m;
@@ -810,6 +811,7 @@ public class AccountingController : ControllerBase
     private static string AsString(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null ? Convert.ToString(v) ?? "" : "";
     private static long? AsLong(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null && v != DBNull.Value ? Convert.ToInt64(v) : null;
     private static decimal AsDecimal(IDictionary<string, object?>? row, string key) => row != null && row.TryGetValue(key, out var v) && v != null && v != DBNull.Value ? Convert.ToDecimal(v) : 0m;
+    
     private static DateOnly? AsDateOnly(IDictionary<string, object?>? row, string key)
     {
         if (row == null || !row.TryGetValue(key, out var v) || v == null || v == DBNull.Value) return null;
@@ -830,6 +832,7 @@ public class AccountingController : ControllerBase
     public sealed class PayrollApproveRequest { public long ApprovedBy { get; set; } }
     public sealed class PayrollPaidRequest { public long PaidBy { get; set; } }
     public sealed class SupplierPaymentVoidRequest { public long? ApprovalRequestId { get; set; } public long? ApprovedBy { get; set; } public string? Reason { get; set; } }
+    
     public sealed class InitialSalaryRequestDto
     {
         public decimal? BaseSalary { get; set; }
@@ -838,4 +841,3 @@ public class AccountingController : ControllerBase
         public string? Note { get; set; }
     }
 }
-

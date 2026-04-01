@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -1090,7 +1090,7 @@ export default function PayrollPage() {
       <SimpleGrid columns={{ base: 1, md: 2, xl: 5 }} gap='20px' mb='20px'>
         <MiniStatistics
           name='Kỳ đang mở'
-          value={String(pick(openPeriod, "periodCode", "PeriodCode") || "Chua có")}
+          value={String(pick(openPeriod, "periodCode", "PeriodCode") || "Chưa có")}
         />
         <MiniStatistics name='Đợt tính lương' value={String(runRows.length)} />
         <MiniStatistics name='Dòng lương' value={String(itemRows.length)} />
@@ -1100,10 +1100,10 @@ export default function PayrollPage() {
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
-          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chua có"}</Badge>
+          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chưa có"}</Badge>
           <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
         </Flex>
       </Card>
@@ -1157,7 +1157,7 @@ export default function PayrollPage() {
               </FormControl>
             </SimpleGrid>
             <Text color={textColorSecondary} fontSize='xs'>
-              Luu ý: Ngày trả lương phải bằng hoặc sau ngày kết thúc kỳ.
+              Lưu ý: Ngày trả lương phải bằng hoặc sau ngày kết thúc kỳ.
             </Text>
             <Button size='sm' colorScheme='blue' onClick={handleCreatePeriod} isLoading={savingPeriod}>
               Tạo kỳ lương
@@ -1170,7 +1170,7 @@ export default function PayrollPage() {
           <SimpleGrid columns={1} gap='10px'>
             <SimpleGrid columns={2} gap='10px'>
               <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Đợt tính lương (t? d?ng)</FormLabel>
+                <FormLabel fontSize='xs' mb='4px'>Đợt tính lương (tự động)</FormLabel>
                 <Input
                   value={autoRunLabel}
                   isReadOnly
@@ -1387,7 +1387,7 @@ export default function PayrollPage() {
               <Thead>
                 <Tr>
                   <Th>Mã đợt</Th>
-                  <Th>K?</Th>
+                  <Th>Kỳ</Th>
                   <Th>Chi nhánh</Th>
                   <Th>Ngày tạo</Th>
                   <Th>Status</Th>
@@ -1540,6 +1540,3 @@ export default function PayrollPage() {
     </Box>
   );
 }
-
-
-

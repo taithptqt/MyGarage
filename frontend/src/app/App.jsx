@@ -61,7 +61,7 @@ function App() {
       <Route path="/login" element={<AuthPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/booking" element={<CustomerRoute><BookingPage /></CustomerRoute>} />
-      <Route path="/parts-shop" element={<CustomerRoute><PartsSalesPage /></CustomerRoute>} />
+      <Route path="/parts-shop" element={<PartsSalesPage />} />
       <Route path="/my-retail-orders" element={<CustomerRoute><MyRetailOrdersPage /></CustomerRoute>} />
       <Route path="/my-appointments" element={<CustomerRoute><MyAppointmentsPage /></CustomerRoute>} />
       <Route path="/payment" element={<CustomerRoute><PayosCheckoutPage /></CustomerRoute>} />
