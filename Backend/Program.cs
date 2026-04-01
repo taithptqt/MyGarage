@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -9,7 +9,6 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
 using PayOS;
-using System.Data;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,7 +41,6 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped(typeof(IGenericService<>), typeof(GenericService<>));
-builder.Services.AddScoped<AccountingCrudService>();
 
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -321,7 +319,6 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
 });
-builder.Services.AddAuthorization();
 
 builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 {
@@ -383,7 +380,6 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 await EnsureDefaultBranchesAsync(app);
 await EnsureCustomerPreferredBranchTagsAsync(app);
-await EnsureAppointmentSchemaCompatibilityAsync(app);
 await EnsureAdminDemoDataAsync(app);
 var frontendDistPath = ResolveFrontendDistPath(app.Environment.ContentRootPath);
 var hasFrontendBuild = Directory.Exists(frontendDistPath);
@@ -467,384 +463,10 @@ static string ResolveFrontendDistPath(string contentRootPath)
     return Path.Combine(contentRootPath, "frontend", "dist");
 }
 
-/// <summary>
-/// Checks if the given table has active (non-disabled) triggers in SQL Server.
-/// Used to skip seeding/schema operations silently when security triggers would block them.
-/// </summary>
-static async Task<bool> HasActiveTriggersAsync(GarageContext db, string tableName)
-{
-    try
-    {
-        var connection = db.Database.GetDbConnection();
-        var wasClosed = connection.State != ConnectionState.Open;
-        if (wasClosed)
-        {
-            await connection.OpenAsync();
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = @"
-SELECT COUNT(1) FROM sys.triggers
-WHERE parent_id = OBJECT_ID(@tableName)
-  AND is_disabled = 0";
-
-            var param = command.CreateParameter();
-            param.ParameterName = "@tableName";
-            param.Value = $"dbo.{tableName}";
-            command.Parameters.Add(param);
-
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result ?? 0) > 0;
-        }
-        finally
-        {
-            if (wasClosed)
-            {
-                await connection.CloseAsync();
-            }
-        }
-    }
-    catch
-    {
-        return false; // If we can't check, assume no triggers and let normal error handling work.
-    }
-}
-
-/// <summary>
-/// Checks for active database-level DDL triggers.
-/// Used to avoid runtime schema changes when security policies block ALTER statements.
-/// </summary>
-static async Task<bool> HasDatabaseDdlTriggersAsync(GarageContext db)
-{
-    try
-    {
-        var connection = db.Database.GetDbConnection();
-        var wasClosed = connection.State != ConnectionState.Open;
-        if (wasClosed)
-        {
-            await connection.OpenAsync();
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = @"
-SELECT COUNT(1)
-FROM sys.triggers
-WHERE parent_class_desc = 'DATABASE'
-  AND is_disabled = 0";
-
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result ?? 0) > 0;
-        }
-        finally
-        {
-            if (wasClosed)
-            {
-                await connection.CloseAsync();
-            }
-        }
-    }
-    catch
-    {
-        // Be conservative for DDL operations: if metadata check fails, do not attempt ALTER TABLE.
-        return true;
-    }
-}
-
-static async Task EnsureAppointmentSchemaCompatibilityAsync(WebApplication app)
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
-
-    // Check for DDL-blocking triggers on Appointments table first.
-    // If active triggers exist, skip schema changes silently — they will be blocked anyway.
-    var hasAppointmentTriggers = await HasActiveTriggersAsync(db, "Appointments");
-    var hasDatabaseDdlTriggers = await HasDatabaseDdlTriggersAsync(db);
-    if (hasAppointmentTriggers || hasDatabaseDdlTriggers)
-    {
-        app.Logger.LogInformation("Skipping Appointments schema fix: active security triggers may block DDL changes.");
-        return;
-    }
-
-    try
-    {
-        await db.Database.ExecuteSqlRawAsync(@"
-SET NOCOUNT ON;
-IF OBJECT_ID(N'dbo.Appointments', N'U') IS NULL
-    RETURN;
-
-IF COL_LENGTH(N'dbo.Appointments', N'ScheduledDate') IS NULL
-    ALTER TABLE dbo.Appointments ADD ScheduledDate date NULL;
-
-IF COL_LENGTH(N'dbo.Appointments', N'StartTime') IS NULL
-    ALTER TABLE dbo.Appointments ADD StartTime time(0) NULL;
-
-IF COL_LENGTH(N'dbo.Appointments', N'EndTime') IS NULL
-    ALTER TABLE dbo.Appointments ADD EndTime time(0) NULL;");
-
-        await db.Database.ExecuteSqlRawAsync(@"
-SET NOCOUNT ON;
-SET XACT_ABORT ON;
-IF OBJECT_ID(N'dbo.Appointments', N'U') IS NULL
-    RETURN;
-
-BEGIN TRAN;
-
-DECLARE @dcName sysname;
-DECLARE @scheduledType nvarchar(128);
-DECLARE @startType nvarchar(128);
-DECLARE @endType nvarchar(128);
-
-SELECT @scheduledType = DATA_TYPE
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'Appointments' AND COLUMN_NAME = 'ScheduledDate';
-
-SELECT @startType = DATA_TYPE
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'Appointments' AND COLUMN_NAME = 'StartTime';
-
-SELECT @endType = DATA_TYPE
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'Appointments' AND COLUMN_NAME = 'EndTime';
-
-IF LOWER(ISNULL(@scheduledType, '')) <> 'date'
-BEGIN
-    UPDATE dbo.Appointments
-    SET ScheduledDate = TRY_CONVERT(date, ScheduledDate)
-    WHERE TRY_CONVERT(date, ScheduledDate) IS NOT NULL;
-
-    SELECT @dcName = dc.name
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'ScheduledDate';
-
-    IF @dcName IS NOT NULL
-        EXEC(N'ALTER TABLE dbo.Appointments DROP CONSTRAINT [' + @dcName + N']');
-
-    ALTER TABLE dbo.Appointments ALTER COLUMN ScheduledDate date NULL;
-END;
-
-IF LOWER(ISNULL(@startType, '')) <> 'time'
-BEGIN
-    UPDATE dbo.Appointments
-    SET StartTime = TRY_CONVERT(time(0), StartTime)
-    WHERE TRY_CONVERT(time(0), StartTime) IS NOT NULL;
-
-    SELECT @dcName = dc.name
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'StartTime';
-
-    IF @dcName IS NOT NULL
-        EXEC(N'ALTER TABLE dbo.Appointments DROP CONSTRAINT [' + @dcName + N']');
-
-    ALTER TABLE dbo.Appointments ALTER COLUMN StartTime time(0) NULL;
-END;
-
-IF LOWER(ISNULL(@endType, '')) <> 'time'
-BEGIN
-    UPDATE dbo.Appointments
-    SET EndTime = TRY_CONVERT(time(0), EndTime)
-    WHERE TRY_CONVERT(time(0), EndTime) IS NOT NULL;
-
-    SELECT @dcName = dc.name
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'EndTime';
-
-    IF @dcName IS NOT NULL
-        EXEC(N'ALTER TABLE dbo.Appointments DROP CONSTRAINT [' + @dcName + N']');
-
-    ALTER TABLE dbo.Appointments ALTER COLUMN EndTime time(0) NULL;
-END;
-
-COMMIT TRAN;");
-
-        await db.Database.ExecuteSqlRawAsync(@"
-SET NOCOUNT ON;
-SET XACT_ABORT ON;
-IF OBJECT_ID(N'dbo.Appointments', N'U') IS NULL
-    RETURN;
-
-BEGIN TRAN;
-
-UPDATE dbo.Appointments
-SET ScheduledDate = COALESCE(
-    TRY_CONVERT(date, ScheduledDate),
-    TRY_CONVERT(date, CreatedAt),
-    CONVERT(date, GETDATE())
-)
-WHERE ScheduledDate IS NULL;
-
-UPDATE dbo.Appointments
-SET StartTime = COALESCE(TRY_CONVERT(time(0), StartTime), CAST('08:00:00' AS time(0)))
-WHERE StartTime IS NULL;
-
-UPDATE dbo.Appointments
-SET EndTime = COALESCE(
-    TRY_CONVERT(time(0), EndTime),
-    TRY_CONVERT(time(0), DATEADD(HOUR, 1, CAST(StartTime AS datetime2))),
-    CAST('09:00:00' AS time(0))
-)
-WHERE EndTime IS NULL;
-
-IF EXISTS (
-    SELECT 1
-    FROM sys.columns
-    WHERE object_id = OBJECT_ID(N'dbo.Appointments')
-      AND name = N'ScheduledDate'
-      AND is_nullable = 1
-)
-    ALTER TABLE dbo.Appointments ALTER COLUMN ScheduledDate date NOT NULL;
-
-IF EXISTS (
-    SELECT 1
-    FROM sys.columns
-    WHERE object_id = OBJECT_ID(N'dbo.Appointments')
-      AND name = N'StartTime'
-      AND is_nullable = 1
-)
-    ALTER TABLE dbo.Appointments ALTER COLUMN StartTime time(0) NOT NULL;
-
-IF EXISTS (
-    SELECT 1
-    FROM sys.columns
-    WHERE object_id = OBJECT_ID(N'dbo.Appointments')
-      AND name = N'EndTime'
-      AND is_nullable = 1
-)
-    ALTER TABLE dbo.Appointments ALTER COLUMN EndTime time(0) NOT NULL;
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'ScheduledDate'
-)
-    ALTER TABLE dbo.Appointments
-        ADD CONSTRAINT DF_Appointments_ScheduledDate
-        DEFAULT (CONVERT(date, GETDATE())) FOR ScheduledDate;
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'StartTime'
-)
-    ALTER TABLE dbo.Appointments
-        ADD CONSTRAINT DF_Appointments_StartTime
-        DEFAULT ('08:00:00') FOR StartTime;
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns c
-        ON c.object_id = dc.parent_object_id
-       AND c.column_id = dc.parent_column_id
-    WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Appointments')
-      AND c.name = N'EndTime'
-)
-    ALTER TABLE dbo.Appointments
-        ADD CONSTRAINT DF_Appointments_EndTime
-        DEFAULT ('09:00:00') FOR EndTime;
-
-COMMIT TRAN;");
-
-        app.Logger.LogInformation("Ensured Appointments schema compatibility (ScheduledDate/StartTime/EndTime).");
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogWarning(ex, "Could not auto-fix Appointments schema. The app will continue with current schema.");
-    }
-}
-
 static async Task EnsureDefaultBranchesAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
-    var now = DateTime.UtcNow;
-
-    static string RemoveDiacritics(string? value)
-    {
-        var text = value ?? string.Empty;
-        var normalized = text.Normalize(NormalizationForm.FormD);
-        var chars = new List<char>(normalized.Length);
-
-        foreach (var ch in normalized)
-        {
-            var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (category != System.Globalization.UnicodeCategory.NonSpacingMark)
-            {
-                chars.Add(ch);
-            }
-        }
-
-        return new string(chars.ToArray())
-            .Normalize(NormalizationForm.FormC)
-            .Replace('\u0111', 'd')
-            .Replace('\u0110', 'D');
-    }
-
-    static string NormalizeBranchNameKey(string? value)
-    {
-        var normalized = RemoveDiacritics(value)
-            .ToLowerInvariant()
-            .Replace('.', ' ')
-            .Replace('-', ' ')
-            .Replace('_', ' ')
-            .Trim();
-
-        normalized = string.Join(" ", normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-
-        return normalized switch
-        {
-            "ha noi" or "hanoi" => "ha noi",
-            "da nang" or "danang" => "da nang",
-            "hcm" or "tp hcm" or "tphcm" or "ho chi minh" or "sai gon" or "saigon" => "hcm",
-            _ => normalized
-        };
-    }
-
-    static int BranchScore(Branch branch, string canonicalName)
-    {
-        var score = 0;
-        var branchName = branch.Name?.Trim() ?? string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(branchName) && RemoveDiacritics(branchName) != branchName)
-        {
-            score += 2;
-        }
-
-        if (string.Equals(branchName, canonicalName, StringComparison.OrdinalIgnoreCase))
-        {
-            score += 3;
-        }
-
-        if (string.Equals(branch.Status, "active", StringComparison.OrdinalIgnoreCase))
-        {
-            score += 1;
-        }
-
-        return score;
-    }
 
     var defaults = new[]
     {
@@ -864,7 +486,7 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
             Hotline = "1900-0002",
             Lat = 16.0544m,
             Lng = 108.2022m,
-            LegacyNames = new[] { "Chi nhánh Trung", "Trung", "DaNang", "Da Nang", "Đà Nẵng" }
+            LegacyNames = new[] { "Chi nhánh Trung", "Trung", "DaNang", "Đà Nẵng" }
         },
         new
         {
@@ -873,7 +495,7 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
             Hotline = "1900-0003",
             Lat = 10.8231m,
             Lng = 106.6297m,
-            LegacyNames = new[] { "Chi nhánh Nam", "Nam", "Sai Gon", "Ho Chi Minh", "TP.HCM", "TP HCM" }
+            LegacyNames = new[] { "Chi nhánh Nam", "Nam", "Sai Gon", "Ho Chi Minh", "TP.HCM" }
         }
     };
 
@@ -883,17 +505,13 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
 
     foreach (var item in defaults)
     {
-        var knownKeys = item.LegacyNames
+        var knownNames = item.LegacyNames
             .Append(item.Name)
-            .Select(NormalizeBranchNameKey)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToHashSet(StringComparer.Ordinal);
+            .Select(x => x.Trim().ToLowerInvariant())
+            .ToHashSet();
 
-        var existing = existingBranches
-            .Where(b => b.Name != null && knownKeys.Contains(NormalizeBranchNameKey(b.Name)))
-            .OrderByDescending(b => BranchScore(b, item.Name))
-            .ThenBy(b => b.Id)
-            .FirstOrDefault();
+        var existing = existingBranches.FirstOrDefault(
+            b => b.Name != null && knownNames.Contains(b.Name.Trim().ToLowerInvariant()));
 
         if (existing is null)
         {
@@ -907,8 +525,8 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
                 Status = "active",
                 MaxWorkSlots = 20,
                 IsDeleted = false,
-                CreatedAt = now,
-                UpdatedAt = now
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             db.Branches.Add(branch);
             existingBranches.Add(branch);
@@ -917,11 +535,6 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
 
         existing.Name = item.Name;
         existing.Address = item.Address;
-        existing.Status = "active";
-        existing.IsDeleted = false;
-        existing.DeletedAt = null;
-        existing.DeletedBy = null;
-        existing.UpdatedAt = now;
 
         if (!existing.Lat.HasValue || !existing.Lng.HasValue)
         {
@@ -936,52 +549,6 @@ static async Task EnsureDefaultBranchesAsync(WebApplication app)
     }
 
     await db.SaveChangesAsync();
-
-    // Soft-delete legacy duplicates (e.g. "Da Nang" vs "Đà Nẵng") so dropdowns never show duplicates again.
-    var activeBranches = await db.Branches
-        .Where(b => b.IsDeleted != true && b.Name != null)
-        .OrderBy(b => b.Id)
-        .ToListAsync();
-
-    var hasDuplicateChanges = false;
-
-    foreach (var item in defaults)
-    {
-        var canonicalKey = NormalizeBranchNameKey(item.Name);
-        var candidates = activeBranches
-            .Where(b => NormalizeBranchNameKey(b.Name) == canonicalKey)
-            .ToList();
-
-        if (candidates.Count <= 1)
-        {
-            continue;
-        }
-
-        var keeper = candidates
-            .OrderByDescending(b => BranchScore(b, item.Name))
-            .ThenBy(b => b.Id)
-            .First();
-
-        foreach (var duplicate in candidates.Where(b => b.Id != keeper.Id))
-        {
-            duplicate.IsDeleted = true;
-            duplicate.DeletedAt ??= now;
-            duplicate.UpdatedAt = now;
-            hasDuplicateChanges = true;
-
-            app.Logger.LogInformation(
-                "Soft-deleted duplicate branch #{DuplicateId} ({DuplicateName}); kept #{KeepId} ({KeepName}).",
-                duplicate.Id,
-                duplicate.Name,
-                keeper.Id,
-                keeper.Name);
-        }
-    }
-
-    if (hasDuplicateChanges)
-    {
-        await db.SaveChangesAsync();
-    }
 }
 
 static async Task EnsureCustomerPreferredBranchTagsAsync(WebApplication app)
@@ -1036,50 +603,6 @@ static async Task EnsureAdminDemoDataAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
-
-    async Task<bool> HasColumnAsync(string tableName, string columnName)
-    {
-        var connection = db.Database.GetDbConnection();
-        var wasClosed = connection.State != ConnectionState.Open;
-        if (wasClosed)
-        {
-            await connection.OpenAsync();
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = @"
-SELECT COUNT(1)
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = @tableName
-  AND COLUMN_NAME = @columnName";
-
-            var tableParam = command.CreateParameter();
-            tableParam.ParameterName = "@tableName";
-            tableParam.Value = tableName;
-            command.Parameters.Add(tableParam);
-
-            var columnParam = command.CreateParameter();
-            columnParam.ParameterName = "@columnName";
-            columnParam.Value = columnName;
-            command.Parameters.Add(columnParam);
-
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result ?? 0) > 0;
-        }
-        finally
-        {
-            if (wasClosed)
-            {
-                await connection.CloseAsync();
-            }
-        }
-    }
-
-    // Check which tables have DML-blocking triggers so we can skip seeding silently
-    var serviceCategoriesLocked = await HasActiveTriggersAsync(db, "ServiceCategories");
-    var standardServicesLocked = await HasActiveTriggersAsync(db, "StandardServices");
 
     var now = DateTime.UtcNow;
 
@@ -1224,102 +747,87 @@ WHERE TABLE_NAME = @tableName
     }
 
     // Service categories
-    if (serviceCategoriesLocked)
+    var categorySpecs = new[]
     {
-        app.Logger.LogInformation("Skipping ServiceCategories seeding: table has active security triggers.");
-    }
-    else
-    {
-        var categorySpecs = new[]
-        {
-            new { Code = "MAINT",  Name = "Bảo dưỡng", Description = "Dịch vụ bảo dưỡng định kỳ" },
-            new { Code = "REPAIR", Name = "Sửa chữa",  Description = "Dịch vụ sửa chữa" },
-            new { Code = "TIRES",  Name = "Lốp & Phanh", Description = "Dịch vụ lốp và phanh" }
-        };
-
-        var existingCodes = (await db.ServiceCategories
-            .Where(c => c.Code != null)
-            .Select(c => c.Code!)
-            .ToListAsync())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var spec in categorySpecs)
-        {
-            if (existingCodes.Contains(spec.Code))
-                continue;
-
-            try
-            {
-                await db.Database.ExecuteSqlRawAsync(
-                    @"INSERT INTO dbo.ServiceCategories (Code, Name, Description, IsActive, IsDeleted, CreatedAt, UpdatedAt)
-                      VALUES ({0}, {1}, {2}, 1, 0, {3}, {4})",
-                    spec.Code, spec.Name, spec.Description, now, now);
-                app.Logger.LogInformation("Seeded ServiceCategory: {Code}", spec.Code);
-            }
-            catch (Exception ex)
-            {
-                app.Logger.LogWarning(ex, "Could not seed ServiceCategory {Code}.", spec.Code);
-            }
-        }
-    }
-
-    // Re-fetch all categories (including newly inserted) for the rest of the seeder.
-    var categoryByCode = (await db.ServiceCategories
+        new { Code = "MAINT", Name = "BÃ¡ÂºÂ£o dÃ†Â°Ã¡Â»Â¡ng", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ bÃ¡ÂºÂ£o dÃ†Â°Ã¡Â»Â¡ng Ã„â€˜Ã¡Â»â€¹nh kÃ¡Â»Â³" },
+        new { Code = "REPAIR", Name = "SÃ¡Â»Â­a chÃ¡Â»Â¯a", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ sÃ¡Â»Â­a chÃ¡Â»Â¯a" },
+        new { Code = "TIRES", Name = "LÃ¡Â»â€˜p & Phanh", Description = "DÃ¡Â»â€¹ch vÃ¡Â»Â¥ lÃ¡Â»â€˜p vÃƒÂ  phanh" }
+    };
+    var categories = await db.ServiceCategories
         .Where(c => c.Code != null)
-        .ToListAsync())
-        .ToDictionary(c => c.Code!, c => c, StringComparer.OrdinalIgnoreCase);
+        .ToListAsync();
+    var categoryByCode = categories.ToDictionary(
+        c => c.Code!,
+        c => c,
+        StringComparer.OrdinalIgnoreCase);
 
-
-    // Guard: if DB trigger blocked the inserts or categories missing, skip standard service seeding.
-    if (standardServicesLocked ||
-        !categoryByCode.TryGetValue("MAINT",  out var catMaint)  ||
-        !categoryByCode.TryGetValue("REPAIR", out var catRepair) ||
-        !categoryByCode.TryGetValue("TIRES",  out var catTire))
+    foreach (var spec in categorySpecs)
     {
-        if (standardServicesLocked)
-            app.Logger.LogInformation("Skipping StandardServices seeding: table has active security triggers.");
-        else
-            app.Logger.LogInformation("Skipping StandardServices seeding: required ServiceCategories not found.");
-    }
-    else
-    {
-        // Standard services
-        var standardServiceSpecs = new[]
+        if (categoryByCode.ContainsKey(spec.Code))
         {
-            new { Code = "MAINT-OC",  Name = "Thay nhớt nhanh",          CategoryId = catMaint.Id,  BasePrice = 280000m, StandardMinutes = 40 },
-            new { Code = "REP-ENG",   Name = "Chẩn đoán động cơ",         CategoryId = catRepair.Id, BasePrice = 450000m, StandardMinutes = 60 },
-            new { Code = "TIRE-BAL",  Name = "Cân bằng động bánh xe",     CategoryId = catTire.Id,   BasePrice = 220000m, StandardMinutes = 30 }
+            continue;
+        }
+
+        var category = new ServiceCategory
+        {
+            Code = spec.Code,
+            Name = spec.Name,
+            Description = spec.Description,
+            IsActive = true,
+            IsDeleted = false,
+            CreatedAt = now,
+            UpdatedAt = now
         };
-        var serviceCodeSet = (await db.StandardServices
-            .Where(s => s.Code != null)
-            .Select(s => s.Code!)
-            .ToListAsync())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        db.ServiceCategories.Add(category);
+        categoryByCode[spec.Code] = category;
+    }
 
-        foreach (var spec in standardServiceSpecs)
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
+    }
+
+    var catMaint = categoryByCode["MAINT"];
+    var catRepair = categoryByCode["REPAIR"];
+    var catTire = categoryByCode["TIRES"];
+
+    // Standard services
+    var standardServiceSpecs = new[]
+    {
+        new { Code = "MAINT-OC", Name = "Thay nhÃ¡Â»â€ºt nhanh", CategoryId = catMaint.Id, BasePrice = 280000m, StandardMinutes = 40 },
+        new { Code = "REP-ENG", Name = "ChÃ¡ÂºÂ©n Ã„â€˜oÃƒÂ¡n Ã„â€˜Ã¡Â»â„¢ng cÃ†Â¡", CategoryId = catRepair.Id, BasePrice = 450000m, StandardMinutes = 60 },
+        new { Code = "TIRE-BAL", Name = "CÃƒÂ¢n bÃ¡ÂºÂ±ng Ã„â€˜Ã¡Â»â„¢ng bÃƒÂ¡nh xe", CategoryId = catTire.Id, BasePrice = 220000m, StandardMinutes = 30 }
+    };
+    var serviceCodeSet = (await db.StandardServices
+        .Where(s => s.Code != null)
+        .Select(s => s.Code!)
+        .ToListAsync())
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var spec in standardServiceSpecs)
+    {
+        if (serviceCodeSet.Contains(spec.Code))
         {
-            if (serviceCodeSet.Contains(spec.Code))
-                continue;
-
-            db.StandardServices.Add(new StandardService
-            {
-                Code = spec.Code,
-                Name = spec.Name,
-                CategoryId = spec.CategoryId,
-                BasePrice = spec.BasePrice,
-                StandardMinutes = spec.StandardMinutes,
-                IsActive = true,
-                IsDeleted = false,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
+            continue;
         }
 
-        if (db.ChangeTracker.HasChanges())
+        db.StandardServices.Add(new StandardService
         {
-            try { await db.SaveChangesAsync(); }
-            catch (Exception ex) { app.Logger.LogWarning(ex, "Could not seed StandardServices. Non-fatal."); }
-        }
+            Code = spec.Code,
+            Name = spec.Name,
+            CategoryId = spec.CategoryId,
+            BasePrice = spec.BasePrice,
+            StandardMinutes = spec.StandardMinutes,
+            IsActive = true,
+            IsDeleted = false,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+    }
+
+    if (db.ChangeTracker.HasChanges())
+    {
+        await db.SaveChangesAsync();
     }
 
     // Vehicle brands + models
@@ -1419,14 +927,14 @@ WHERE TABLE_NAME = @tableName
     // Staff demo data per branch
     var demoStaff = new[]
     {
-        new { FullName = "Admin Bắc", Phone = "0901000001", Email = "admin.bac@mygarage.local", BranchId = northBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cố vấn Bắc", Phone = "0901000002", Email = "advisor.bac@mygarage.local", BranchId = northBranch.Id, RoleId = advisorRole.Id },
-        new { FullName = "KTV Bắc", Phone = "0901000003", Email = "tech.bac@mygarage.local", BranchId = northBranch.Id, RoleId = techRole.Id },
+        new { FullName = "Admin BÃ¡ÂºÂ¯c", Phone = "0901000001", Email = "admin.bac@mygarage.local", BranchId = northBranch.Id, RoleId = adminRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n BÃ¡ÂºÂ¯c", Phone = "0901000002", Email = "advisor.bac@mygarage.local", BranchId = northBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "KTV BÃ¡ÂºÂ¯c", Phone = "0901000003", Email = "tech.bac@mygarage.local", BranchId = northBranch.Id, RoleId = techRole.Id },
         new { FullName = "Admin Trung", Phone = "0902000001", Email = "admin.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cố vấn Trung", Phone = "0902000002", Email = "advisor.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n Trung", Phone = "0902000002", Email = "advisor.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = advisorRole.Id },
         new { FullName = "KTV Trung", Phone = "0902000003", Email = "tech.trung@mygarage.local", BranchId = centralBranch.Id, RoleId = techRole.Id },
         new { FullName = "Admin Nam", Phone = "0903000001", Email = "admin.nam@mygarage.local", BranchId = southBranch.Id, RoleId = adminRole.Id },
-        new { FullName = "Cố vấn Nam", Phone = "0903000002", Email = "advisor.nam@mygarage.local", BranchId = southBranch.Id, RoleId = advisorRole.Id },
+        new { FullName = "CÃ¡Â»â€˜ vÃ¡ÂºÂ¥n Nam", Phone = "0903000002", Email = "advisor.nam@mygarage.local", BranchId = southBranch.Id, RoleId = advisorRole.Id },
         new { FullName = "KTV Nam", Phone = "0903000003", Email = "tech.nam@mygarage.local", BranchId = southBranch.Id, RoleId = techRole.Id }
     };
 
@@ -1479,7 +987,7 @@ WHERE TABLE_NAME = @tableName
         {
             var customerEmail = $"customer{j}.b{branch.Id}@mygarage.local";
             var customerPhone = $"091{branch.Id % 10}{j}000{j}";
-            var customerName = $"Khách {j} - {branch.Name}";
+            var customerName = $"KhÃƒÂ¡ch {j} - {branch.Name}";
             var model = demoModels[(i + j - 1) % demoModels.Length];
             var plate = $"{30 + i}{char.ConvertFromUtf32(65 + i)}-{12000 + i * 100 + j}";
             demoEntries.Add((branch, j, customerEmail, customerPhone, customerName, plate, model));
@@ -1573,25 +1081,16 @@ WHERE TABLE_NAME = @tableName
         .ToListAsync())
         .ToHashSet(StringComparer.Ordinal);
 
-    var canSeedAppointments = await HasColumnAsync("Appointments", "ScheduledDate");
-    var existingAppointmentSet = new HashSet<string>(StringComparer.Ordinal);
-    if (canSeedAppointments)
-    {
-        existingAppointmentSet = (await db.Appointments
-            .Where(a =>
-                branchIds.Contains(a.BranchId) &&
-                demoCustomerIds.Contains(a.CustomerId) &&
-                a.VehicleId.HasValue &&
-                demoVehicleIds.Contains(a.VehicleId.Value) &&
-                a.ScheduledDate == tomorrow)
-            .Select(a => $"{a.BranchId}:{a.CustomerId}:{a.VehicleId!.Value}")
-            .ToListAsync())
-            .ToHashSet(StringComparer.Ordinal);
-    }
-    else
-    {
-        app.Logger.LogInformation("Skipping demo appointment seeding: column Appointments.ScheduledDate not found.");
-    }
+    var existingAppointmentSet = (await db.Appointments
+        .Where(a =>
+            branchIds.Contains(a.BranchId) &&
+            demoCustomerIds.Contains(a.CustomerId) &&
+            a.VehicleId.HasValue &&
+            demoVehicleIds.Contains(a.VehicleId.Value) &&
+            a.ScheduledDate == tomorrow)
+        .Select(a => $"{a.BranchId}:{a.CustomerId}:{a.VehicleId!.Value}")
+        .ToListAsync())
+        .ToHashSet(StringComparer.Ordinal);
 
     foreach (var entry in demoEntries)
     {
@@ -1615,7 +1114,7 @@ WHERE TABLE_NAME = @tableName
         }
 
         var appointmentKey = $"{entry.Branch.Id}:{customer.Id}:{vehicle.Id}";
-        if (canSeedAppointments && !existingAppointmentSet.Contains(appointmentKey))
+        if (!existingAppointmentSet.Contains(appointmentKey))
         {
             db.Appointments.Add(new Appointment
             {
@@ -1626,7 +1125,7 @@ WHERE TABLE_NAME = @tableName
                 StartTime = new TimeOnly(9 + entry.J, 0),
                 EndTime = new TimeOnly(10 + entry.J, 0),
                 Status = "PENDING",
-                CustomerNotes = $"Lịch hẹn demo {entry.Branch.Name}",
+                CustomerNotes = $"LÃ¡Â»â€¹ch hÃ¡ÂºÂ¹n demo {entry.Branch.Name}",
                 IsReminderSent = false,
                 CreatedAt = now,
                 UpdatedAt = now

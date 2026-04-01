@@ -10,9 +10,6 @@ using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Data;
-using MyGarage.Services;
-using System;
-using System.Linq;
 
 namespace MyGarage.Controllers
 {
@@ -24,14 +21,12 @@ namespace MyGarage.Controllers
         private readonly IPaymentService _paymentService;
         private readonly IMapper _mapper;
         private readonly GarageContext _db;
-        private readonly PaymentConfirmationService _paymentConfirmationService;
 
-        public PaymentController(IPaymentService paymentService, IMapper mapper, GarageContext db, PaymentConfirmationService paymentConfirmationService)
+        public PaymentController(IPaymentService paymentService, IMapper mapper, GarageContext db)
         {
             _paymentService = paymentService;
             _mapper = mapper;
             _db = db;
-            _paymentConfirmationService = paymentConfirmationService;
         }
 
         [Authorize(Roles = "Staff")]
@@ -110,30 +105,8 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<PaymentResponseDto>> Create([FromBody] PaymentCreateDto itemDto)
         {
-            // Validate Source Reference
-            var sourceCount = (itemDto.InvoiceId.HasValue ? 1 : 0) + 
-                              (itemDto.ServiceOrderId.HasValue ? 1 : 0) + 
-                              (itemDto.RetailOrderId.HasValue ? 1 : 0);
-                              
-            if (sourceCount > 1)
-            {
-                return BadRequest(new { message = "Payment must reference at most one target document (Invoice, ServiceOrder, or RetailOrder)." });
-            }
-
             var entity = _mapper.Map<Payment>(itemDto);
-            
-            // Temporary trick: if the user passes COMPLETED, we set to PENDING first so that ApplyOutcomeAsync registers it as a transition.
-            var intendedStatus = string.IsNullOrWhiteSpace(itemDto.Status) ? "PENDING" : itemDto.Status.Trim().ToUpperInvariant();
-            entity.Status = "PENDING"; 
-
             var createdItem = await _paymentService.AddAsync(entity);
-            
-            if (intendedStatus == "COMPLETED")
-            {
-                // Sync with invoice / order
-                await _paymentConfirmationService.ApplyOutcomeAsync(createdItem, createdItem.Amount, "COMPLETED");
-            }
-
             var responseDto = _mapper.Map<PaymentResponseDto>(createdItem);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
@@ -148,31 +121,14 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            var currentStatus = (existingItem.Status ?? string.Empty).Trim().ToUpperInvariant();
-            if (currentStatus == "COMPLETED")
-            {
-                return BadRequest(new { message = "Cannot modify a COMPLETED payment. Strict accounting policy requires issuing a logical refund or reversal instead." });
-            }
-
-            // Apply updates to fields (Amount, Type, etc.)
             _mapper.Map(itemDto, existingItem);
+            var updatedItem = await _paymentService.UpdateAsync(id, existingItem);
             
-            var targetStatus = string.IsNullOrWhiteSpace(itemDto.Status) ? "PENDING" : itemDto.Status.Trim().ToUpperInvariant();
-
-            // Explicitly sync if transforming from non-COMPLETED into COMPLETED
-            if (targetStatus == "COMPLETED")
+            if (updatedItem == null)
             {
-                // ApplyOutcomeAsync handles the DB save and related document updates internally.
-                await _paymentConfirmationService.ApplyOutcomeAsync(existingItem, itemDto.Amount ?? existingItem.Amount, "COMPLETED");
+                return NotFound();
             }
-            else
-            {
-                // Just normal update
-                existingItem.Status = targetStatus;
-                await _paymentService.UpdateAsync(id, existingItem);
-            }
-            
-            var responseDto = _mapper.Map<PaymentResponseDto>(existingItem);
+            var responseDto = _mapper.Map<PaymentResponseDto>(updatedItem);
             return Ok(responseDto);
         }
 
@@ -180,18 +136,6 @@ namespace MyGarage.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var existingItem = await _paymentService.GetByIdAsync(id);
-            if (existingItem == null)
-            {
-                return NotFound();
-            }
-
-            var currentStatus = (existingItem.Status ?? string.Empty).Trim().ToUpperInvariant();
-            if (currentStatus == "COMPLETED" || currentStatus == "REFUNDED" || currentStatus == "REVERSED")
-            {
-                return BadRequest(new { message = "Strict internal policy prohibits deleting a processed financial transaction." });
-            }
-
             var result = await _paymentService.DeleteAsync(id);
             if (!result)
             {

@@ -28,14 +28,9 @@ namespace MyGarage.Services
 
             if (senderEmail == "your-email@gmail.com" || senderEmail == "string")
             {
-                var enableMockEmailLogs =
-                    bool.TryParse(emailSettings["EnableMockEmailLogs"], out var parsed) && parsed;
-
-                if (enableMockEmailLogs)
-                {
-                    Console.WriteLine($"[MOCK EMAIL BYPASS] Sending email to {toEmail}");
-                    Console.WriteLine($"Subject: {subject}");
-                }
+                Console.WriteLine($"[MOCK EMAIL BYPASS] Sending email to {toEmail}");
+                Console.WriteLine($"Subject: {subject}");
+                Console.WriteLine($"Body: {body}");
                 return;
             }
 

@@ -8,7 +8,6 @@ import { isLoginFormValid } from "../login/loginValidation";
 import RegisterForm from "../register/RegisterForm";
 import { isRegisterFormValid } from "../register/registerValidation";
 import { useAuth } from "../../../context/AuthContext";
-import { resolveStaffHome } from "../../../app/staffHome";
 import MyGarageLogo from "../components/MyGarageLogo";
 import "./AuthPage.css";
 
@@ -63,7 +62,7 @@ function AuthPage() {
   const redirectAfterAuth = (data) => {
     let destination = "/home";
     if (data?.role === "Staff") {
-      destination = resolveStaffHome(data);
+      destination = "/admin/default";
     }
     navigate(destination, { replace: true });
   };
@@ -162,7 +161,7 @@ function AuthPage() {
     }
     let dest = "/home";
     if (savedUser?.role === "Staff") {
-      dest = resolveStaffHome(savedUser);
+      dest = "/admin/default";
     }
     return <Navigate to={dest} replace />;
   }

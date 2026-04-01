@@ -102,11 +102,9 @@ export function SidebarLinks(props) {
         );
       } else if (
         route.layout === "/admin" ||
-        route.layout === "/accounting" ||
         route.layout === "/auth" ||
         route.layout === "/rtl" ||
         route.layout === "/horizon/admin" ||
-        route.layout === "/horizon/accounting" ||
         route.layout === "/horizon/auth" ||
         route.layout === "/horizon/rtl"
       ) {

@@ -15,7 +15,7 @@ export default function AdminNavbar(props) {
 		};
 	});
 
-	const { secondary, message, brandText, routes } = props;
+	const { secondary, message, brandText } = props;
 
 	// Here are all the props that may change depending on navbar's type or state.(secondary, variant, scrolled)
 	let mainText = useColorModeValue('navy.700', 'white');
@@ -128,7 +128,6 @@ export default function AdminNavbar(props) {
 						secondary={props.secondary}
 						fixed={props.fixed}
 						scrolled={scrolled}
-						routes={routes}
 					/>
 				</Box>
 			</Flex>
@@ -142,6 +141,5 @@ AdminNavbar.propTypes = {
 	variant: PropTypes.string,
 	secondary: PropTypes.bool,
 	fixed: PropTypes.bool,
-	onOpen: PropTypes.func,
-	routes: PropTypes.arrayOf(PropTypes.object)
+	onOpen: PropTypes.func
 };
