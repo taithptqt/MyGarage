@@ -300,7 +300,7 @@ export function SearchBar(props) {
         fontWeight="500"
         _placeholder={{ color: "gray.400", fontSize: "14px" }}
         borderRadius={borderRadius || "30px"}
-        placeholder={placeholder || "Tim kiem..."}
+        placeholder={placeholder || "Tìm kiếm..."}
         value={searchQuery}
         onFocus={() => setIsOpen(true)}
         onChange={(e) => setSearchQuery(e.target.value)}
@@ -334,7 +334,7 @@ export function SearchBar(props) {
             </Box>
           ) : entries.length === 0 ? (
             <Text px="8px" py="10px" fontSize="sm" color={subtitleColor}>
-              Khong tim thay ket qua phu hop.
+              Không tìm thấy kết quả phù hợp.
             </Text>
           ) : (
             entries.map((item) => (

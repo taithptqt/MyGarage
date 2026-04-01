@@ -1,0 +1,135 @@
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (91ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id], [b].[Address], [b].[AvatarUrl], [b].[CreatedAt], [b].[CreatedBy], [b].[DeletedAt], [b].[DeletedBy], [b].[Description], [b].[Email], [b].[Hotline], [b].[IsDeleted], [b].[Lat], [b].[Lng], [b].[ManagerId], [b].[MaxWorkSlots], [b].[Name], [b].[Status], [b].[TaxCode], [b].[UpdatedAt], [b].[UpdatedBy]
+      FROM [Branches] AS [b]
+      WHERE [b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (62ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [b].[Id]
+      FROM [Branches] AS [b]
+      WHERE [b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL
+      ORDER BY [b].[Id]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [c].[Id], [c].[AccessFailedCount], [c].[CreatedAt], [c].[CreatedBy], [c].[DeletedAt], [c].[DeletedBy], [c].[Email], [c].[FullName], [c].[IsActive], [c].[IsDeleted], [c].[IsLockedOut], [c].[LastLoginAt], [c].[LockoutEnd], [c].[NoShowCount], [c].[Note], [c].[PasswordHash], [c].[Phone], [c].[SecurityStamp], [c].[TierId], [c].[TotalSpending], [c].[UpdatedAt], [c].[UpdatedBy]
+      FROM [Customers] AS [c]
+      WHERE [c].[IsDeleted] <> CAST(1 AS bit) OR [c].[IsDeleted] IS NULL
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (61ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [r].[Id], [r].[CreatedAt], [r].[CreatedBy], [r].[DeletedAt], [r].[DeletedBy], [r].[Description], [r].[IsActive], [r].[IsDeleted], [r].[RoleCode], [r].[RoleName], [r].[Scope], [r].[UpdatedAt], [r].[UpdatedBy]
+      FROM [Roles] AS [r]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id], [b].[Address], [b].[AvatarUrl], [b].[CreatedAt], [b].[CreatedBy], [b].[DeletedAt], [b].[DeletedBy], [b].[Description], [b].[Email], [b].[Hotline], [b].[IsDeleted], [b].[Lat], [b].[Lng], [b].[ManagerId], [b].[MaxWorkSlots], [b].[Name], [b].[Status], [b].[TaxCode], [b].[UpdatedAt], [b].[UpdatedBy]
+      FROM [Branches] AS [b]
+      WHERE [b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (68ms) [Parameters=[@__branchIds_0='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[BranchId], [b].[DayOfWeek]
+      FROM [BranchOperatingHours] AS [b]
+      WHERE [b].[BranchId] IN (
+          SELECT [b0].[value]
+          FROM OPENJSON(@__branchIds_0) WITH ([value] bigint '$') AS [b0]
+      )
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT LOWER([c].[TierName])
+      FROM [CustomerTiers] AS [c]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [s].[Id], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[DeletedAt], [s].[DeletedBy], [s].[Description], [s].[DisplayOrder], [s].[IsActive], [s].[IsDeleted], [s].[Name], [s].[ParentCategoryId], [s].[UpdatedAt], [s].[UpdatedBy]
+      FROM [ServiceCategories] AS [s]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [s].[Code]
+      FROM [StandardServices] AS [s]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (59ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [v].[Id], [v].[Code], [v].[CountryOfOrigin], [v].[CreatedAt], [v].[CreatedBy], [v].[DeletedAt], [v].[DeletedBy], [v].[IsActive], [v].[IsDeleted], [v].[LogoUrl], [v].[Name], [v].[UpdatedAt], [v].[UpdatedBy]
+      FROM [VehicleBrands] AS [v]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[@__modelBrandIds_0='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT [v].[Id], [v].[BrandId], [v].[CreatedAt], [v].[CreatedBy], [v].[CylinderCapacity], [v].[DeletedAt], [v].[DeletedBy], [v].[FuelType], [v].[IsDeleted], [v].[ModelName], [v].[Segment], [v].[UpdatedAt], [v].[UpdatedBy]
+      FROM [VehicleModels] AS [v]
+      WHERE [v].[BrandId] IN (
+          SELECT [m].[value]
+          FROM OPENJSON(@__modelBrandIds_0) WITH ([value] bigint '$') AS [m]
+      ) AND [v].[ModelName] IN (N'Vios', N'City', N'Ranger')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[@__demoStaffEmails_0='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT LOWER([s].[Email])
+      FROM [Staffs] AS [s]
+      WHERE [s].[Email] IS NOT NULL AND LOWER([s].[Email]) IN (
+          SELECT [d].[value]
+          FROM OPENJSON(@__demoStaffEmails_0) WITH ([value] varchar(255) '$') AS [d]
+      )
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (59ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [c].[Id], [c].[Benefits], [c].[CreatedAt], [c].[CreatedBy], [c].[DeletedAt], [c].[DeletedBy], [c].[DiscountPercent], [c].[IsDeleted], [c].[MinSpending], [c].[TierName], [c].[UpdatedAt], [c].[UpdatedBy]
+      FROM [CustomerTiers] AS [c]
+      ORDER BY [c].[Id]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (79ms) [Parameters=[@__demoCustomerEmails_0='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT [c].[Id], [c].[AccessFailedCount], [c].[CreatedAt], [c].[CreatedBy], [c].[DeletedAt], [c].[DeletedBy], [c].[Email], [c].[FullName], [c].[IsActive], [c].[IsDeleted], [c].[IsLockedOut], [c].[LastLoginAt], [c].[LockoutEnd], [c].[NoShowCount], [c].[Note], [c].[PasswordHash], [c].[Phone], [c].[SecurityStamp], [c].[TierId], [c].[TotalSpending], [c].[UpdatedAt], [c].[UpdatedBy]
+      FROM [Customers] AS [c]
+      WHERE [c].[Email] IS NOT NULL AND LOWER([c].[Email]) IN (
+          SELECT [d].[value]
+          FROM OPENJSON(@__demoCustomerEmails_0) WITH ([value] varchar(255) '$') AS [d]
+      )
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (61ms) [Parameters=[@__demoPlates_0='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT [v].[Id], [v].[Color], [v].[CreatedAt], [v].[CreatedBy], [v].[DeletedAt], [v].[DeletedBy], [v].[IsDeleted], [v].[LicensePlate], [v].[ManufactureYear], [v].[ModelId], [v].[ODO], [v].[OdoLastUpdatedAt], [v].[UpdatedAt], [v].[UpdatedBy], [v].[VIN]
+      FROM [Vehicles] AS [v]
+      WHERE [v].[LicensePlate] IN (
+          SELECT [d].[value]
+          FROM OPENJSON(@__demoPlates_0) WITH ([value] varchar(50) '$') AS [d]
+      )
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (61ms) [Parameters=[@__demoCustomerIds_0='?' (Size = 4000), @__demoVehicleIds_1='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SELECT [c].[CustomerId], [c].[VehicleId]
+      FROM [CustomerVehicles] AS [c]
+      WHERE [c].[CustomerId] IN (
+          SELECT [d].[value]
+          FROM OPENJSON(@__demoCustomerIds_0) WITH ([value] bigint '$') AS [d]
+      ) AND [c].[VehicleId] IN (
+          SELECT [d0].[value]
+          FROM OPENJSON(@__demoVehicleIds_1) WITH ([value] bigint '$') AS [d0]
+      ) AND ([c].[IsDeleted] <> CAST(1 AS bit) OR [c].[IsDeleted] IS NULL)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (62ms) [Parameters=[@__branchIds_0='?' (Size = 4000), @__demoCustomerIds_1='?' (Size = 4000), @__demoVehicleIds_2='?' (Size = 4000), @__tomorrow_3='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT [a].[BranchId], [a].[CustomerId], [a].[VehicleId]
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] IN (
+          SELECT [b].[value]
+          FROM OPENJSON(@__branchIds_0) WITH ([value] bigint '$') AS [b]
+      ) AND [a].[CustomerId] IN (
+          SELECT [d].[value]
+          FROM OPENJSON(@__demoCustomerIds_1) WITH ([value] bigint '$') AS [d]
+      ) AND [a].[VehicleId] IS NOT NULL AND [a].[VehicleId] IN (
+          SELECT [d0].[value]
+          FROM OPENJSON(@__demoVehicleIds_2) WITH ([value] bigint '$') AS [d0]
+      ) AND [a].[ScheduledDate] = @__tomorrow_3
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:7084
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: E:\MyGarage-MainV1\Backend
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[@__today_0='?' (DbType = Date)], CommandType='Text', CommandTimeout='30']
+      SELECT [a].[Id], [a].[BranchId], [a].[CancelReason], [a].[CreatedAt], [a].[CreatedBy], [a].[CustomerId], [a].[CustomerNotes], [a].[EndTime], [a].[IsReminderSent], [a].[RequestedServiceIds], [a].[ScheduledDate], [a].[StartTime], [a].[Status], [a].[UpdatedAt], [a].[VehicleId]
+      FROM [Appointments] AS [a]
+      WHERE [a].[Status] IN ('PENDING', 'CONFIRMED') AND [a].[ScheduledDate] <= @__today_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (78ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [v].[Id], [v].[BudgetLimit], [v].[BudgetUsed], [v].[CampaignCode], [v].[CreatedAt], [v].[CreatedBy], [v].[DeletedAt], [v].[DeletedBy], [v].[Description], [v].[EndDate], [v].[IsActive], [v].[IsDeleted], [v].[Name], [v].[Objective], [v].[OwnerStaffId], [v].[StartDate], [v].[Status], [v].[UpdatedAt], [v].[UpdatedBy]
+      FROM [VoucherCampaigns] AS [v]
+      WHERE ([v].[IsDeleted] <> CAST(1 AS bit) OR [v].[IsDeleted] IS NULL) AND ([v].[Status] IS NULL OR [v].[Status] <> 'ARCHIVED')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (58ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [v].[CampaignId], COALESCE(COALESCE(SUM([v].[BudgetUsed]), 0.0), 0.0) AS [BudgetUsed]
+      FROM [Vouchers] AS [v]
+      WHERE [v].[CampaignId] IS NOT NULL AND ([v].[IsDeleted] <> CAST(1 AS bit) OR [v].[IsDeleted] IS NULL)
+      GROUP BY [v].[CampaignId]

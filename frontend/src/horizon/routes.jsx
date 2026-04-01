@@ -22,6 +22,8 @@ import {
   MdAssessment,
   MdHistory,
   MdLocalOffer,
+  MdCalculate,
+  MdPayments,
 } from 'react-icons/md';
 
 import MainDashboard from "views/admin/default";
@@ -31,7 +33,10 @@ import ServicesPage from "../features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
 import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
+import AdminSalaryPage from "../features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "../features/voucher/pages/SafeVoucherManagementPage";
+import BayManagementPage from "../features/storage/pages/BayManagementPage";
+import VehicleManagementPage from "../features/cars/pages/VehicleManagementPage";
 
 const inventoryItems = [
   {
@@ -115,6 +120,55 @@ const inventoryItems = [
 
 const vehicleItems = [
   {
+    name: 'Danh sách & thông tin',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/list',
+    component: <VehicleManagementPage section="list" />,
+  },
+  {
+    name: 'Trạng thái xe',
+    layout: '/admin',
+    icon: <Icon as={MdFactCheck} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/status',
+    component: <VehicleManagementPage section="status" />,
+  },
+  {
+    name: 'Vị trí xe',
+    layout: '/admin',
+    icon: <Icon as={MdWarehouse} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/location',
+    component: <VehicleManagementPage section="location" />,
+  },
+  {
+    name: 'Phân công',
+    layout: '/admin',
+    icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/assignment',
+    component: <VehicleManagementPage section="assignment" />,
+  },
+  {
+    name: 'Lịch sử xe',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/history',
+    component: <VehicleManagementPage section="history" />,
+  },
+  {
+    name: 'Cảnh báo',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/alerts',
+    component: <VehicleManagementPage section="alerts" />,
+  },
+  {
+    name: 'Thống kê',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles/stats',
+    component: <VehicleManagementPage section="stats" />,
+  },
+  {
     name: 'Hãng xe',
     layout: '/admin',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
@@ -127,6 +181,51 @@ const vehicleItems = [
     icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
     path: '/models',
     component: <AdminPage embedded initialSection="models" />,
+  },
+];
+
+const bayItems = [
+  {
+    name: 'Danh sách & thông tin',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/bays/list',
+    component: <BayManagementPage section="list" />,
+  },
+  {
+    name: 'Xe trong khoang',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/bays/vehicles',
+    component: <BayManagementPage section="vehicles" />,
+  },
+  {
+    name: 'Theo dõi sử dụng',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/bays/usage',
+    component: <BayManagementPage section="usage" />,
+  },
+  {
+    name: 'Sơ đồ & điều phối',
+    layout: '/admin',
+    icon: <Icon as={MdSwapHoriz} width="20px" height="20px" color="inherit" />,
+    path: '/bays/layout',
+    component: <BayManagementPage section="layout" />,
+  },
+  {
+    name: 'Cảnh báo',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/bays/alerts',
+    component: <BayManagementPage section="alerts" />,
+  },
+  {
+    name: 'Thống kê',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/bays/stats',
+    component: <BayManagementPage section="stats" />,
   },
 ];
 
@@ -236,6 +335,20 @@ const routes = [
     component: <AdminPage embedded initialSection="staff" />,
   },
   {
+    name: 'Hệ số lương',
+    layout: '/admin',
+    path: '/salary-coefficients',
+    icon: <Icon as={MdCalculate} width="20px" height="20px" color="inherit" />,
+    component: <AdminPage embedded initialSection="salaryCoefficients" />,
+  },
+  {
+    name: 'Lương',
+    layout: '/admin',
+    path: '/salary',
+    icon: <Icon as={MdPayments} width="20px" height="20px" color="inherit" />,
+    component: <AdminSalaryPage />,
+  },
+  {
     name: 'Khách hàng',
     layout: '/admin',
     icon: <Icon as={MdPerson} width="20px" height="20px" color="inherit" />,
@@ -247,6 +360,12 @@ const routes = [
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     collapse: true,
     items: vehicleItems,
+  },
+  {
+    name: 'Khoang',
+    icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: bayItems,
   },
   {
     name: 'Dịch vụ',

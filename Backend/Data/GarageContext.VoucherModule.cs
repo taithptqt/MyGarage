@@ -237,6 +237,24 @@ public partial class GarageContext
                 .HasForeignKey(d => d.VoucherId)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });
+
+        modelBuilder.Entity<SalaryCoefficient>(entity =>
+        {
+            entity.ToTable("SalaryCoefficients");
+
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.YearsOfService)
+                .IsUnique()
+                .HasFilter("[YearsOfService] IS NOT NULL AND [IsDeleted] = 0");
+
+            entity.Property(e => e.YearsOfService);
+            entity.Property(e => e.CoefficientName).HasMaxLength(120);
+            entity.Property(e => e.CoefficientValue).HasColumnType("decimal(8, 3)");
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+        });
     }
 }
-

@@ -12,6 +12,8 @@ import PaymentSuccessPage from "../features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "../features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "../features/retail/pages/PartsSalesPage";
 import MyRetailOrdersPage from "../features/retail/pages/MyRetailOrdersPage";
+import AccountingMain from "../horizon/AccountingMain";
+import { isAccountingStaff, resolveStaffHome } from "./staffHome";
 
 function parseSavedUser() {
   const userStr = localStorage.getItem("mygarage_user");
@@ -21,10 +23,6 @@ function parseSavedUser() {
   } catch {
     return null;
   }
-}
-
-function resolveStaffHome(user) {
-  return "/admin/default";
 }
 
 function CustomerRoute({ children }) {
@@ -39,7 +37,24 @@ function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
 }
 
+function AccountingRoute({ children }) {
+  const user = parseSavedUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAccountingStaff(user)) {
+    if (user.role === "Staff") {
+      return <Navigate to={resolveStaffHome(user)} replace />;
+    }
+    return <Navigate to="/home" replace />;
+  }
+  return children;
+}
+
 function App() {
+  const savedUser = parseSavedUser();
+  const staffHome = savedUser?.role === "Staff" ? resolveStaffHome(savedUser) : "/admin/default";
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
@@ -53,8 +68,9 @@ function App() {
       <Route path="/payment/success" element={<CustomerRoute><PaymentSuccessPage /></CustomerRoute>} />
       <Route path="/payment/cancel" element={<CustomerRoute><PaymentCancelPage /></CustomerRoute>} />
       <Route path="/admin/*" element={<HorizonMain />} />
+      <Route path="/accounting/*" element={<AccountingRoute><AccountingMain /></AccountingRoute>} />
       <Route path="/admin-legacy" element={<AdminPage />} />
-      <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />
+      <Route path="/horizon/*" element={<Navigate to={staffHome} replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

@@ -44,6 +44,12 @@ import {
   getAllBranches,
   updateBranch
 } from "../api/branchApi";
+import {
+  createSalaryCoefficient,
+  deleteSalaryCoefficient,
+  getAllSalaryCoefficients,
+  updateSalaryCoefficient
+} from "../api/salaryCoefficientApi";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearch } from "@context/SearchContext";
 import { useBranch } from "../../../context/BranchContext";
@@ -109,6 +115,27 @@ const EMPTY_BRANCH_FORM = {
   description: ""
 };
 
+const EMPTY_SALARY_COEFFICIENT_FORM = {
+  yearsOfService: "",
+  coefficientValue: "",
+  description: "",
+  isActive: true
+};
+
+const SALARY_TENURE_BRACKETS = [
+  { minYears: 0, label: "Dưới 5 năm" },
+  { minYears: 5, label: "5 đến dưới 10 năm" },
+  { minYears: 10, label: "10 đến dưới 15 năm" },
+  { minYears: 15, label: "15 đến dưới 20 năm" },
+  { minYears: 20, label: "20 đến dưới 25 năm" },
+  { minYears: 25, label: "Từ 25 năm trở lên" }
+];
+
+const SALARY_TENURE_MIN_YEARS = SALARY_TENURE_BRACKETS.map((item) => item.minYears);
+const SALARY_TENURE_LABEL_BY_MIN_YEARS = new Map(
+  SALARY_TENURE_BRACKETS.map((item) => [item.minYears, item.label])
+);
+
 const SECTION_META = {
   staff: {
     title: "Staff Management",
@@ -145,8 +172,32 @@ const SECTION_META = {
     subtitle: "Manage repair and maintenance service catalog",
     addLabel: "+ Add Service",
     searchPlaceholder: "Search by code, service name, category or status..."
+  },
+  salaryCoefficients: {
+    title: "Salary Coefficients",
+    subtitle: "Manage salary coefficient levels used in payroll calculation",
+    addLabel: "+ Add Coefficient",
+    searchPlaceholder: "Search by tenure range, coefficient value or status..."
   }
 };
+
+function getSalaryTenureLabel(yearsOfService) {
+  const years = Number(yearsOfService);
+  if (!Number.isFinite(years)) return "-";
+  const normalizedYears = Math.trunc(years);
+
+  const knownLabel = SALARY_TENURE_LABEL_BY_MIN_YEARS.get(normalizedYears);
+  if (knownLabel) {
+    return knownLabel;
+  }
+
+  const nextBracket = SALARY_TENURE_MIN_YEARS.find((item) => item > normalizedYears);
+  if (nextBracket != null) {
+    return `${normalizedYears} đến dưới ${nextBracket} năm`;
+  }
+
+  return `Từ ${normalizedYears} năm trở lên`;
+}
 
 function normalizeText(value) {
   return String(value || "")
@@ -719,6 +770,116 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
   );
 }
 
+function isAdminStaffUser(user) {
+  if (!user || user.role !== "Staff") {
+    return false;
+  }
+
+  const roleCode = normalizeText(user.roleCode || "");
+  const roleName = normalizeText(user.roleName || "");
+
+  return roleCode === "admin" || roleName.includes("admin");
+}
+
+function SalaryCoefficientForm({ initial, onSubmit, onCancel, loading }) {
+  const [form, setForm] = useState({
+    ...initial,
+    yearsOfService:
+      initial.yearsOfService == null || Number.isNaN(Number(initial.yearsOfService))
+        ? ""
+        : String(initial.yearsOfService),
+    coefficientValue:
+      initial.coefficientValue == null || Number.isNaN(Number(initial.coefficientValue))
+        ? ""
+        : String(initial.coefficientValue),
+    isActive: initial.isActive ?? true
+  });
+  const isLegacyValueSelected =
+    form.yearsOfService !== "" &&
+    !SALARY_TENURE_MIN_YEARS.includes(Number(form.yearsOfService));
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onSubmit({
+      ...form,
+      yearsOfService:
+        form.yearsOfService === "" ? null : Number(form.yearsOfService),
+      coefficientValue:
+        form.coefficientValue === "" ? null : Number(form.coefficientValue),
+      isActive: form.isActive === true || form.isActive === "true"
+    });
+  };
+
+  return (
+    <form className="admin-form" onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label>Thâm niên *</label>
+        <select
+          name="yearsOfService"
+          value={form.yearsOfService}
+          onChange={handleChange}
+          required
+        >
+          <option value="" disabled>
+            Chọn mốc thâm niên
+          </option>
+          {SALARY_TENURE_BRACKETS.map((item) => (
+            <option key={item.minYears} value={item.minYears}>
+              {item.label}
+            </option>
+          ))}
+          {isLegacyValueSelected ? (
+            <option value={form.yearsOfService}>
+              {`${form.yearsOfService} năm (mốc cũ)`}
+            </option>
+          ) : null}
+        </select>
+      </div>
+      <div className="form-group">
+        <label>Coefficient Value *</label>
+        <input
+          name="coefficientValue"
+          type="number"
+          min="0"
+          step="0.001"
+          value={form.coefficientValue}
+          onChange={handleChange}
+          required
+        />
+      </div>
+      <div className="form-group">
+        <label>Description</label>
+        <input name="description" value={form.description || ""} onChange={handleChange} />
+      </div>
+      <div className="form-group">
+        <label>Status</label>
+        <select
+          name="isActive"
+          value={String(form.isActive ?? true)}
+          onChange={handleChange}
+        >
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+
+      <div className="form-actions">
+        <button className="btn-ghost" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="btn-primary" type="submit" disabled={loading}>
+          {loading ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function getStatusBadge(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "active" || normalized === "true") return "badge-active";
@@ -747,6 +908,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   const [models, setModels] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [services, setServices] = useState([]);
+  const [salaryCoefficients, setSalaryCoefficients] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -755,6 +917,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const { searchQuery } = useSearch();
   const [modal, setModal] = useState(null);
+  const canManageSalaryCoefficients = useMemo(() => isAdminStaffUser(user), [user]);
 
   useEffect(() => {
     setSection(initialSection || "staff");
@@ -790,6 +953,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     async () => setServices((await getAllStandardServices(selectedBranchId)) || []),
     [selectedBranchId]
   );
+  const fetchSalaryCoefficients = useCallback(
+    async () => setSalaryCoefficients((await getAllSalaryCoefficients()) || []),
+    []
+  );
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -806,7 +973,8 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         fetchBrands(),
         fetchModels(),
         fetchServiceCategories(),
-        fetchServices()
+        fetchServices(),
+        fetchSalaryCoefficients()
       ]);
     } catch (apiError) {
       setError(apiError.message || "Failed to load admin data.");
@@ -822,6 +990,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     fetchModels,
     fetchServiceCategories,
     fetchRoles,
+    fetchSalaryCoefficients,
     fetchStaff,
     fetchVehicles,
     fetchServices
@@ -1012,6 +1181,23 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     });
   }, [branches, searchQuery]);
 
+  const filteredSalaryCoefficients = useMemo(() => {
+    const query = String(searchQuery || "").trim().toLowerCase();
+    const data = salaryCoefficients || [];
+    if (!query) return data;
+    return data.filter((item) => {
+      const statusText = item.isActive === true ? "active" : "inactive";
+      const tenureText = getSalaryTenureLabel(item.yearsOfService).toLowerCase();
+      return (
+        String(item.yearsOfService ?? "").toLowerCase().includes(query) ||
+        tenureText.includes(query) ||
+        String(item.coefficientValue ?? "").toLowerCase().includes(query) ||
+        (item.description || "").toLowerCase().includes(query) ||
+        statusText.includes(query)
+      );
+    });
+  }, [salaryCoefficients, searchQuery]);
+
   // Early returns AFTER all hooks (required by React Rules of Hooks)
   if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Đang xác thực...</p></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -1027,7 +1213,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
           ? filteredBrands
           : section === "models"
             ? filteredModels
-            : filteredServices;
+            : section === "services"
+              ? filteredServices
+              : filteredSalaryCoefficients;
 
   const openModal = (entity, mode, item = null) => {
     setFormError("");
@@ -1050,7 +1238,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     if (section === "customers") return openModal("customer", "create");
     if (section === "brands") return openModal("brand", "create");
     if (section === "models") return openModal("model", "create");
-    return openModal("service", "create");
+    if (section === "services") return openModal("service", "create");
+    if (!canManageSalaryCoefficients) {
+      setError("Only admin can create or modify salary coefficients.");
+      return;
+    }
+    return openModal("salaryCoefficient", "create");
   };
 
   const reloadSectionData = async (entity) => {
@@ -1070,6 +1263,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     if (entity === "brand") return Promise.all([fetchBrands(), fetchModels()]);
     if (entity === "model") return fetchModels();
     if (entity === "service") return Promise.all([fetchServices(), fetchServiceCategories()]);
+    if (entity === "salaryCoefficient") return fetchSalaryCoefficients();
     return fetchModels();
   };
 
@@ -1168,6 +1362,33 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
         if (modal.mode === "create") await createVehicleModel(formData);
         else await updateVehicleModel(modal.item.id, formData);
+      } else if (modal.entity === "salaryCoefficient") {
+        const yearsOfService = Number(formData.yearsOfService);
+        if (
+          formData.yearsOfService == null ||
+          formData.yearsOfService === "" ||
+          Number.isNaN(yearsOfService) ||
+          yearsOfService < 0
+        ) {
+          throw new Error("Years of service must be greater than or equal to 0.");
+        }
+        const normalizedYearsOfService = Math.trunc(yearsOfService);
+        if (!SALARY_TENURE_MIN_YEARS.includes(normalizedYearsOfService)) {
+          throw new Error("Tenure must be one of: under 5, 5-<10, 10-<15, 15-<20, 20-<25, or 25+ years.");
+        }
+        if (formData.coefficientValue == null || Number(formData.coefficientValue) < 0) {
+          throw new Error("Coefficient value must be greater than or equal to 0.");
+        }
+
+        const payload = {
+          yearsOfService: normalizedYearsOfService,
+          coefficientValue: Number(formData.coefficientValue),
+          description: formData.description || null,
+          isActive: formData.isActive === true || formData.isActive === "true"
+        };
+
+        if (modal.mode === "create") await createSalaryCoefficient(payload);
+        else await updateSalaryCoefficient(modal.item.id, payload);
       } else {
         if (!formData.categoryId || Number.isNaN(formData.categoryId)) {
           throw new Error("Service category is required.");
@@ -1216,6 +1437,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       }
       else if (modal.entity === "brand") await deleteVehicleBrand(modal.item.id);
       else if (modal.entity === "model") await deleteVehicleModel(modal.item.id);
+      else if (modal.entity === "salaryCoefficient") await deleteSalaryCoefficient(modal.item.id);
       else await deleteStandardService(modal.item.id);
 
       await reloadSectionData(modal.entity);
@@ -1228,6 +1450,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   };
 
   const sectionMeta = SECTION_META[section];
+  const isCreateDisabled = section === "salaryCoefficients" && !canManageSalaryCoefficients;
 
   return (
     <div className={`admin-page ${embedded ? "embedded" : ""}`}>
@@ -1256,6 +1479,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
               Services
             </button>
+            <button className={`nav-item ${section === "salaryCoefficients" ? "active" : ""}`} type="button" onClick={() => { setSection("salaryCoefficients"); }}>
+              Salary Coefficients
+            </button>
             <button className="nav-item" type="button" onClick={handleLogout}>
               Logout
             </button>
@@ -1272,7 +1498,17 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
               <p className="header-sub">Current branch: {selectedBranch.name}</p>
             )}
           </div>
-          <button className="btn-primary" onClick={handleCreateClick} type="button">
+          <button
+            className="btn-primary"
+            onClick={handleCreateClick}
+            type="button"
+            disabled={isCreateDisabled}
+            title={
+              isCreateDisabled
+                ? "Only admin can create salary coefficients."
+                : undefined
+            }
+          >
             {sectionMeta.addLabel}
           </button>
         </header>
@@ -1323,6 +1559,14 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
               <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Total Services</div></div>
               <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
               <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Categories</div></div>
+            </>
+          )}
+
+          {section === "salaryCoefficients" && (
+            <>
+              <div className="stat-card"><div className="stat-value">{salaryCoefficients.length}</div><div className="stat-label">Total Coefficients</div></div>
+              <div className="stat-card"><div className="stat-value">{salaryCoefficients.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
+              <div className="stat-card"><div className="stat-value">{salaryCoefficients.length > 0 ? Number(Math.max(...salaryCoefficients.map((item) => Number(item.coefficientValue) || 0))).toFixed(3) : "0.000"}</div><div className="stat-label">Max Coefficient</div></div>
             </>
           )}
         </div>
@@ -1487,13 +1731,51 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   </tbody>
                 </>
               )}
+
+              {section === "salaryCoefficients" && (
+                <>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Tenure Range</th>
+                      <th>Value</th>
+                      <th>Description</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                      <th className="th-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(filteredSalaryCoefficients || []).map((item) => (
+                      <tr key={item.id}>
+                        <td className="td-id">#{item.id}</td>
+                        <td>{getSalaryTenureLabel(item.yearsOfService)}</td>
+                        <td>{item.coefficientValue != null ? Number(item.coefficientValue).toFixed(3) : "-"}</td>
+                        <td>{item.description || "-"}</td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
+                        <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-"}</td>
+                        <td className="td-center">
+                          {canManageSalaryCoefficients ? (
+                            <div className="row-actions">
+                              <button className="btn-icon btn-edit" type="button" onClick={() => openModal("salaryCoefficient", "edit", item)}>Edit</button>
+                              <button className="btn-icon btn-del" type="button" onClick={() => openModal("salaryCoefficient", "delete", item)}>Del</button>
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </>
+              )}
             </table>
           )}
         </div>
       </main>
 
       {modal?.mode === "create" && (
-        <Modal title={modal.entity === "branch" ? "Add Branch" : modal.entity === "staff" ? "Add Staff" : modal.entity === "customer" ? "Add Customer" : modal.entity === "brand" ? "Add Vehicle Brand" : modal.entity === "model" ? "Add Vehicle Model" : "Add Service"} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? "Add Branch" : modal.entity === "staff" ? "Add Staff" : modal.entity === "customer" ? "Add Customer" : modal.entity === "brand" ? "Add Vehicle Brand" : modal.entity === "model" ? "Add Vehicle Model" : modal.entity === "salaryCoefficient" ? "Add Salary Coefficient" : "Add Service"} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && <BranchForm initial={EMPTY_BRANCH_FORM} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
@@ -1512,11 +1794,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
           {modal.entity === "brand" && <VehicleBrandForm initial={EMPTY_BRAND_FORM} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
           {modal.entity === "model" && <VehicleModelForm initial={EMPTY_MODEL_FORM} brands={brands} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
           {modal.entity === "service" && <ServiceForm initial={EMPTY_SERVICE_FORM} categories={serviceCategoryOptions} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
+          {modal.entity === "salaryCoefficient" && <SalaryCoefficientForm initial={EMPTY_SALARY_COEFFICIENT_FORM} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
         </Modal>
       )}
 
       {modal?.mode === "edit" && modal.item && (
-        <Modal title={modal.entity === "branch" ? `Edit Branch #${modal.item.id}` : modal.entity === "staff" ? `Edit Staff #${modal.item.id}` : modal.entity === "customer" ? `Edit Customer #${modal.item.id}` : modal.entity === "brand" ? `Edit Brand #${modal.item.id}` : modal.entity === "model" ? `Edit Model #${modal.item.id}` : `Edit Service #${modal.item.id}`} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? `Edit Branch #${modal.item.id}` : modal.entity === "staff" ? `Edit Staff #${modal.item.id}` : modal.entity === "customer" ? `Edit Customer #${modal.item.id}` : modal.entity === "brand" ? `Edit Brand #${modal.item.id}` : modal.entity === "model" ? `Edit Model #${modal.item.id}` : modal.entity === "salaryCoefficient" ? `Edit Salary Coefficient #${modal.item.id}` : `Edit Service #${modal.item.id}`} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && (
@@ -1605,6 +1888,21 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 isActive: modal.item.isActive ?? true
               }}
               categories={serviceCategoryOptions}
+              onSubmit={handleSave}
+              onCancel={closeModal}
+              loading={saving}
+            />
+          )}
+
+          {modal.entity === "salaryCoefficient" && (
+            <SalaryCoefficientForm
+              initial={{
+                id: modal.item.id,
+                yearsOfService: modal.item.yearsOfService ?? "",
+                coefficientValue: modal.item.coefficientValue ?? "",
+                description: modal.item.description || "",
+                isActive: modal.item.isActive ?? true
+              }}
               onSubmit={handleSave}
               onCancel={closeModal}
               loading={saving}
