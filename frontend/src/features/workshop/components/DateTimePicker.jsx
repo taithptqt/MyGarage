@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import {
@@ -11,15 +11,22 @@ import {
   PopoverContent,
   PopoverTrigger,
   Text,
+  useDisclosure,
   VStack,
 } from "@chakra-ui/react";
 import { MdClose, MdEvent, MdToday } from "react-icons/md";
 
-const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ", minDate, showTime = true }) => {
+const DateTimePicker = ({
+  value,
+  onChange,
+  placeholder = "Chọn ngày và giờ",
+  minDate,
+  showTime = true,
+}) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState("08");
   const [selectedMinute, setSelectedMinute] = useState("00");
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
     if (!value) {
@@ -37,8 +44,8 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
     }
   }, [value]);
 
-  const hours = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, "0"));
-  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 8).padStart(2, "0"));
+  const minutes = ["00", "15", "30", "45"];
 
   const updateValue = (date, h, m) => {
     const next = new Date(date);
@@ -73,78 +80,77 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
     const day = String(selectedDate.getDate()).padStart(2, "0");
     const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
     const year = selectedDate.getFullYear();
-    if (!showTime) {
-      return `${day}/${month}/${year}`;
-    }
+    if (!showTime) return `${day}/${month}/${year}`;
     return `${day}/${month}/${year} ${selectedHour}:${selectedMinute}`;
   };
 
   return (
     <Popover
       isOpen={isOpen}
-      onOpen={() => setIsOpen(true)}
-      onClose={() => setIsOpen(false)}
+      onOpen={onOpen}
+      onClose={onClose}
       placement="bottom-start"
       closeOnBlur
-      strategy="fixed"
       gutter={8}
     >
       <PopoverTrigger>
-        <Box>
-          <Flex
-            cursor="pointer"
-            onClick={() => setIsOpen(true)}
-            maxW="360px"
-            w="100%"
-            minH="40px"
-            px="12px"
-            border="1px solid #2e4e70"
-            borderRadius="12px"
-            bg="#071d36"
-            align="center"
-            justify="space-between"
-            gap="8px"
+        <Button
+          type="button"
+          w="100%"
+          maxW="360px"
+          minH="45px"
+          p="0 13px"
+          bg="#ffffff"
+          border="1px solid rgba(29, 42, 38, 0.2)"
+          borderRadius="12px"
+          cursor="pointer"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          transition="all 0.2s"
+          _active={{ transform: "scale(0.98)" }}
+          _hover={{ borderColor: "rgba(197, 160, 89, 0.42)", bg: "#fcfcfc" }}
+          _focus={{
+            boxShadow: "0 0 0 3px rgba(197, 160, 89, 0.25)",
+            borderColor: "#c5a059",
+            outline: "none",
+          }}
+          _focusVisible={{
+            boxShadow: "0 0 0 3px rgba(197, 160, 89, 0.25)",
+            borderColor: "#c5a059",
+            outline: "none",
+          }}
+        >
+          <Text
+            flex="1"
+            fontSize="16px"
+            fontWeight="600"
+            color={selectedDate ? "#1d2a26" : "rgba(29, 42, 38, 0.52)"}
+            whiteSpace="nowrap"
+            overflow="hidden"
+            textOverflow="ellipsis"
+            textAlign="left"
           >
-            <Text
-              flex="1"
-              fontSize="sm"
-              fontWeight="600"
-              color={selectedDate ? "#eaf4ff" : "#aac0d8"}
-              whiteSpace="nowrap"
-              overflow="hidden"
-              textOverflow="ellipsis"
-            >
-              {formatDisplay() || placeholder}
-            </Text>
-            <Flex
-              w="28px"
-              h="28px"
-              align="center"
-              justify="center"
-              borderRadius="8px"
-              color="#f5a623"
-              fontSize="20px"
-              flexShrink={0}
-            >
-              <Icon as={MdEvent} />
-            </Flex>
-          </Flex>
-        </Box>
+            {formatDisplay() || placeholder}
+          </Text>
+          <Icon as={MdEvent} boxSize="20px" color="#c5a059" />
+        </Button>
       </PopoverTrigger>
 
       <PopoverContent
         w="auto"
         maxW={showTime ? "640px" : "360px"}
         borderRadius="16px"
-        border="1px solid #2e4e70"
-        bg="#0a2342"
-        color="#eaf4ff"
-        boxShadow="0 24px 48px rgba(0, 0, 0, 0.45)"
-        zIndex={20000}
+        border="1px solid rgba(29, 42, 38, 0.2)"
+        bg="#ffffff"
+        color="#1d2a26"
+        boxShadow="0 24px 48px rgba(29, 42, 38, 0.15)"
+        zIndex={9999}
+        _focus={{ outline: "none" }}
       >
         <PopoverBody p="0">
           <Flex direction={{ base: "column", md: "row" }} overflow="hidden" borderRadius="16px">
-            <Box p="10px" borderRight="1px solid #2e4e70">
+            <Box p="10px" borderRight="1px solid rgba(29, 42, 38, 0.1)">
               <Calendar
                 onChange={handleDateChange}
                 value={selectedDate || new Date()}
@@ -169,7 +175,6 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
                   onClick={() => {
                     setSelectedDate(null);
                     onChange("");
-                    setIsOpen(false);
                   }}
                   color="#a9bfd9"
                 >
@@ -179,18 +184,20 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
             </Box>
 
             {showTime ? (
-              <Flex direction="row" bg="#071d36" p="14px" gap="14px">
+              <Flex direction="row" bg="#f8fbff" p="14px" gap="14px">
                 <VStack align="center" spacing="2px">
-                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">GIỜ</Text>
+                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">
+                    GIỜ
+                  </Text>
                   <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
                     {hours.map((h) => (
                       <Button
                         key={h}
                         size="sm"
                         w="100%"
-                        bg={selectedHour === h ? "#24cde5" : "transparent"}
-                        color={selectedHour === h ? "#03203d" : "#d8e9fb"}
-                        _hover={{ bg: selectedHour === h ? "#24cde5" : "rgba(255,255,255,0.08)" }}
+                        bg={selectedHour === h ? "#2f6bd8" : "transparent"}
+                        color={selectedHour === h ? "#ffffff" : "#1d2a26"}
+                        _hover={{ bg: selectedHour === h ? "#2f6bd8" : "rgba(47,107,216,0.12)" }}
                         onClick={() => handleHourSelect(h)}
                         borderRadius="8px"
                         mb="2px"
@@ -202,16 +209,18 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
                 </VStack>
 
                 <VStack align="center" spacing="2px">
-                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">PHÚT</Text>
+                  <Text fontSize="xs" fontWeight="700" color="#7fa1c5" mb="5px">
+                    PHÚT
+                  </Text>
                   <Box h="200px" overflowY="auto" className="hide-scrollbar" w="56px">
                     {minutes.map((m) => (
                       <Button
                         key={m}
                         size="sm"
                         w="100%"
-                        bg={selectedMinute === m ? "#24cde5" : "transparent"}
-                        color={selectedMinute === m ? "#03203d" : "#d8e9fb"}
-                        _hover={{ bg: selectedMinute === m ? "#24cde5" : "rgba(255,255,255,0.08)" }}
+                        bg={selectedMinute === m ? "#2f6bd8" : "transparent"}
+                        color={selectedMinute === m ? "#ffffff" : "#1d2a26"}
+                        _hover={{ bg: selectedMinute === m ? "#2f6bd8" : "rgba(47,107,216,0.12)" }}
                         onClick={() => handleMinuteSelect(m)}
                         borderRadius="8px"
                         mb="2px"
@@ -231,43 +240,43 @@ const DateTimePicker = ({ value, onChange, placeholder = "Chọn ngày và giờ
         .custom-react-calendar {
           border: none !important;
           width: 250px !important;
-          background: #0a2342 !important;
-          color: #eaf4ff !important;
+          background: #ffffff !important;
+          color: #1d2a26 !important;
         }
 
         .custom-react-calendar .react-calendar__navigation button {
-          color: #eaf4ff !important;
+          color: #1d2a26 !important;
         }
 
         .custom-react-calendar .react-calendar__month-view__weekdays__weekday {
-          color: #9eb8d3 !important;
+          color: rgba(29, 42, 38, 0.6) !important;
           text-transform: capitalize;
         }
 
         .custom-react-calendar .react-calendar__tile {
-          color: #dce9f7 !important;
+          color: #1d2a26 !important;
           border-radius: 8px;
         }
 
         .custom-react-calendar .react-calendar__tile:disabled {
-          color: #9bb4cd !important;
+          color: rgba(29, 42, 38, 0.3) !important;
           opacity: 0.75 !important;
-          background: rgba(255, 255, 255, 0.02) !important;
+          background: rgba(0, 0, 0, 0.02) !important;
         }
 
         .custom-react-calendar .react-calendar__tile:enabled:hover,
         .custom-react-calendar .react-calendar__tile:enabled:focus {
-          background: rgba(36, 205, 229, 0.2) !important;
+          background: rgba(47, 107, 216, 0.15) !important;
         }
 
         .custom-react-calendar .react-calendar__tile--active {
-          background: #24cde5 !important;
-          color: #03203d !important;
+          background: #2f6bd8 !important;
+          color: #ffffff !important;
         }
 
         .custom-react-calendar .react-calendar__tile--now {
-          background: rgba(245, 166, 35, 0.2) !important;
-          color: #ffe3a9 !important;
+          background: rgba(138, 106, 46, 0.1) !important;
+          color: #8a6a2e !important;
         }
 
         .hide-scrollbar::-webkit-scrollbar {

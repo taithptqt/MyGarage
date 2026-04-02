@@ -31,8 +31,7 @@ export function buildDisplayedSlots({ slotsBySession, activeSession, bookingFlow
   if (sessionSlots.length === 0) return [];
 
   if (bookingFlow === BOOKING_FLOW.FLEXIBLE) {
-    if (showOddSlots?.[activeSession]) return sessionSlots;
-    return sessionSlots.filter((slot) => extractField(slot, ["isTopPick", "IsTopPick"], false)).slice(0, 5);
+    return sessionSlots;
   }
 
   const roundedTopPicks = sessionSlots.filter(

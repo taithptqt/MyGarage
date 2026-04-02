@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,7 +11,13 @@ namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        public async Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date, string? requestedServiceIds = null, string? bookingFlow = null)
+        public async Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(
+            long branchId,
+            DateOnly date,
+            string? requestedServiceIds = null,
+            string? bookingFlow = null,
+            int vehicleCount = 1,
+            bool isParallel = true)
         {
             if (date < _clock.LocalToday)
             {
@@ -44,7 +50,7 @@ namespace MyGarage.Services
 
             if (flow == BookingFlowType.Flexible)
             {
-                return BuildFlexibleSlots(date, openTime, closeTime, slotStepMinutes);
+                return BuildFlexibleSlots(date, openTime, closeTime);
             }
 
             if (flow == BookingFlowType.Fixed && requestedServiceIdList.Count == 0)
@@ -64,7 +70,9 @@ namespace MyGarage.Services
                 openTime,
                 closeTime,
                 slotStepMinutes,
-                effectiveRequestedServiceIds);
+                effectiveRequestedServiceIds,
+                vehicleCount,
+                isParallel);
 
             return slots.OrderBy(s => s.StartTime);
         }

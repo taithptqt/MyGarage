@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using MyGarage.Constants;
@@ -10,7 +10,7 @@ namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        private static (int lockedQuick, int lockedRepair) CountLockedBays(List<Bay> activeBays, List<WorkSlot> locks, DateTime start, DateTime end)
+        private static (int lockedQuick, int lockedRepair) CountLockedBays(IEnumerable<Bay> activeBays, IEnumerable<WorkSlot> locks, DateTime start, DateTime end)
         {
             var bayById = activeBays.ToDictionary(b => b.Id, b => b);
             var overlapping = locks.Where(l => l.StartTime < end && l.EndTime > start).ToList();

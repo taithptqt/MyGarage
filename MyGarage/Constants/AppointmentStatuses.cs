@@ -3,7 +3,7 @@
     public static class AppointmentStatuses
     {
         public const string Pending = "PENDING";
-        public const string Queued = "QUEUED";
+        public const string Queued = Pending;
         public const string Confirmed = "CONFIRMED";
         public const string Arrived = "ARRIVED";
         public const string ArrivedLate = "ARRIVED_LATE";

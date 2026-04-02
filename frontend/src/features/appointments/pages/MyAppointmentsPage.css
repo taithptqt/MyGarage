@@ -113,37 +113,34 @@
   margin-bottom: 18px;
 }
 
-.my-appt-groups {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.my-appt-group-card {
-  background: #f7fbff;
-  border: 1px solid #d9e5f5;
-  border-radius: 14px;
-  padding: 12px 14px;
-}
-
-.my-appt-group-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.my-appt-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  background: #edf3fb;
+  border: 1px solid #d3e0f1;
+  border-radius: 12px;
+  padding: 6px;
+  margin-bottom: 14px;
 }
 
-.my-appt-group-card strong {
-  color: #17325b;
+.my-appt-view-tabs button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #446286;
   font-size: 13px;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
 }
 
-.my-appt-group-card p {
-  margin: 8px 0 0;
-  color: #5b6f8c;
-  font-size: 13px;
+.my-appt-view-tabs button.active {
+  background: #ffffff;
+  color: #173c73;
+  border-color: #c3d4ed;
+  box-shadow: 0 3px 10px rgba(23, 60, 115, 0.12);
 }
 
 .my-appt-stat-card {
@@ -238,6 +235,44 @@
   gap: 12px;
 }
 
+.my-appt-group-list {
+  display: grid;
+  gap: 14px;
+}
+
+.my-appt-group-block {
+  border: 1px solid #d8e3f3;
+  border-radius: 16px;
+  background: #f7fbff;
+  box-shadow: 0 2px 16px rgba(13, 33, 61, 0.05);
+  padding: 14px;
+}
+
+.my-appt-group-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.my-appt-group-block-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #17325b;
+}
+
+.my-appt-group-block-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #5b6f8c;
+}
+
+.my-appt-group-appointments {
+  display: grid;
+  gap: 10px;
+}
+
 .my-appt-card {
   background: var(--appt-surface);
   border: 1px solid #dbe3f0;
@@ -247,6 +282,10 @@
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
+}
+
+.my-appt-card-in-group {
+  box-shadow: none;
 }
 
 .my-appt-card-head {
@@ -429,10 +468,6 @@
   .my-appt-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .my-appt-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 768px) {
@@ -451,9 +486,9 @@
   .my-appt-card-grid {
     grid-template-columns: 1fr;
   }
-
-  .my-appt-groups {
-    grid-template-columns: 1fr;
+  .my-appt-view-tabs {
+    display: grid;
+    width: 100%;
   }
 }
 

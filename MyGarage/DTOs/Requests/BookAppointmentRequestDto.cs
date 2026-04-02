@@ -39,5 +39,7 @@ namespace MyGarage.DTOs.Requests
         public string? RequestedServiceIds { get; set; }
 
         public string? CustomerNotes { get; set; }
+
+        public string? SlotHoldToken { get; set; }
     }
 }

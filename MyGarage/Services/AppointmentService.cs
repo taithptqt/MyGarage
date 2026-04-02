@@ -22,6 +22,7 @@ namespace MyGarage.Services
         private readonly IBookingGroupService _bookingGroupService;
         private readonly IAppointmentStatusPolicy _appointmentStatusPolicy;
         private readonly IAppointmentDetailAssembler _appointmentDetailAssembler;
+        private readonly ISlotHoldService _slotHoldService;
         private readonly ISystemClock _clock;
         private readonly GarageContext _context;
         private const int GraceArrivalMinutes = 15;
@@ -38,6 +39,7 @@ namespace MyGarage.Services
             IBookingGroupService bookingGroupService,
             IAppointmentStatusPolicy appointmentStatusPolicy,
             IAppointmentDetailAssembler appointmentDetailAssembler,
+            ISlotHoldService slotHoldService,
             ISystemClock clock)
             : base(repository)
         {
@@ -46,6 +48,7 @@ namespace MyGarage.Services
             _bookingGroupService = bookingGroupService;
             _appointmentStatusPolicy = appointmentStatusPolicy;
             _appointmentDetailAssembler = appointmentDetailAssembler;
+            _slotHoldService = slotHoldService;
             _clock = clock;
         }
 

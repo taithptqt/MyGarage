@@ -50,13 +50,16 @@ namespace MyGarage.Services
             int requiredDuration,
             DateTime openTime,
             IReadOnlyList<Appointment> appointments,
+            IReadOnlyList<Appointment> syntheticHoldAppointments,
             List<Bay> activeBays,
-            List<WorkSlot> overnightLocks,
+            IReadOnlyList<WorkSlot> overnightLocks,
             CapacityProfile capacity,
-            ServiceCluster requestedCluster)
+            ServiceCluster requestedCluster,
+            int vehicleCount = 1)
         {
             var end = current.AddMinutes(requiredDuration);
             var overlap = appointments.Where(a => a.StartTime < end && a.EndTime > current).ToList();
+            overlap.AddRange(syntheticHoldAppointments.Where(a => a.StartTime < end && a.EndTime > current));
             var locked = CountLockedBays(activeBays, overnightLocks, current, end);
             var effectiveCapacity = new CapacityProfile(
                 Math.Max(0, capacity.Quick - locked.lockedQuick),
@@ -64,7 +67,11 @@ namespace MyGarage.Services
                 Math.Max(0, capacity.Total - locked.lockedQuick - locked.lockedRepair));
             var effectiveOnlineLimit = Math.Max(1, (int)Math.Floor(effectiveCapacity.Total * 0.85m));
             var slotEvaluation = EvaluateSlot(overlap, requestedCluster, effectiveCapacity, effectiveOnlineLimit);
-            if (effectiveCapacity.Total <= 0 || !slotEvaluation.IsAvailable)
+            
+            // Bo sung kiem tra cho truong hop batch booking
+            bool hasEnoughCapacity = slotEvaluation.IsAvailable && (slotEvaluation.RemainingCapacity >= vehicleCount);
+
+            if (effectiveCapacity.Total <= 0 || !hasEnoughCapacity)
             {
                 return null;
             }

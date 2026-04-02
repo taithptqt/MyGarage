@@ -13,7 +13,8 @@ namespace MyGarage.Services
             long branchId,
             DateTime requestedStartAt,
             DateTime requestedEndAt,
-            ServiceCluster requestedCluster)
+            ServiceCluster requestedCluster,
+            string? excludeHoldToken = null)
         {
             var activeBays = await _context.Bays
                 .AsNoTracking()
@@ -30,6 +31,13 @@ namespace MyGarage.Services
                     a.EndTime > requestedStartAt &&
                     !AppointmentStatusGroups.Closed.Contains(a.Status))
                 .ToListAsync();
+            var activeHolds = _slotHoldService.GetActiveHolds(
+                branchId,
+                requestedStartAt,
+                requestedEndAt,
+                AppointmentBookingFlows.Fixed,
+                excludeHoldToken);
+            overlapping.AddRange(BuildSyntheticAppointmentsFromHolds(activeHolds));
 
             var overnightLocks = await _context.WorkSlots
                 .AsNoTracking()
@@ -54,7 +62,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Khung gi\u1edd n\u00e0y \u0111\u00e3 h\u1ebft c\u00f4ng su\u1ea5t theo lo\u1ea1i khoang ho\u1eb7c v\u01b0\u1ee3t ng\u01b0\u1ee1ng 85% online.");
         }
 
-        private async Task EnsureFlexibleQueueCapacityAsync(long branchId, DateTime requestedStartAt, DateTime requestedEndAt)
+        private async Task EnsureFlexibleQueueCapacityAsync(long branchId, DateTime requestedStartAt, DateTime requestedEndAt, string? excludeHoldToken = null)
         {
             var queueLoad = await _context.Appointments
                 .AsNoTracking()
@@ -66,8 +74,11 @@ namespace MyGarage.Services
                      a.Status == AppointmentStatuses.Arrived ||
                      a.Status == AppointmentStatuses.ArrivedLate))
                 .CountAsync();
+            var heldCount = _slotHoldService
+                .GetActiveHolds(branchId, requestedStartAt, requestedEndAt, AppointmentBookingFlows.Flexible, excludeHoldToken)
+                .Sum(h => Math.Max(1, h.VehicleCount));
 
-            if (queueLoad >= 40)
+            if ((queueLoad + heldCount) >= 40)
                 throw new InvalidOperationException("Khung check-in \u0111ang qu\u00e1 t\u1ea3i. Vui l\u00f2ng ch\u1ecdn khung kh\u00e1c.");
         }
     }

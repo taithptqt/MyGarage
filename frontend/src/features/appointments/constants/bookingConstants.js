@@ -1,8 +1,9 @@
 ﻿export const BOOKING_STEPS = [
-  "Loại dịch vụ",
-  "Chọn dịch vụ",
+  "Thông tin & xe",
+  "Phân loại dịch vụ",
+  "Chi tiết dịch vụ",
   "Chi nhánh",
-  "Thông tin đặt hẹn",
+  "Khung giờ",
   "Hoàn thành",
 ];
 
@@ -11,7 +12,7 @@ export const BOOKING_FLOW = {
   FLEXIBLE: "FLEXIBLE",
 };
 
-export const DEFAULT_DIAGNOSTIC_SERVICE_CODE = "CDTC-001";
+export const DEFAULT_DIAGNOSTIC_SERVICE_CODE = "KTTQ-001";
 
 export const SESSION_TABS = [
   { key: "MORNING", label: "Buổi sáng", hint: "08:00 - 12:00" },

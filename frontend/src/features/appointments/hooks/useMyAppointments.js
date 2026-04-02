@@ -1,6 +1,6 @@
 ﻿import { useCallback, useMemo, useState } from "react";
 import { cancelAppointment, getMyAppointments } from "@features/appointments/api/appointmentApi";
-import { getMyBookingGroups } from "@features/appointments/api/bookingGroupApi";
+import { getMyBookingGroupDetail, getMyBookingGroups } from "@features/appointments/api/bookingGroupApi";
 import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
 import {
   normalizeAppointment,
@@ -33,10 +33,32 @@ export function useMyAppointments() {
       const list = normalizeAppointmentsResponse(appointmentsPayload)
         .map(normalizeAppointment)
         .filter((item) => item.id !== undefined && item.id !== null);
-      const groups = normalizeBookingGroupsResponse(bookingGroupsPayload)
+
+      const groupsHeader = normalizeBookingGroupsResponse(bookingGroupsPayload)
         .map(normalizeBookingGroup)
         .filter((item) => item.id !== undefined && item.id !== null);
-      setAppointments(sortAppointments(list));
+
+      const groups = await Promise.all(
+        groupsHeader.map(async (group) => {
+          if (!group.id) return group;
+          try {
+            const detailPayload = await getMyBookingGroupDetail(group.id);
+            return normalizeBookingGroup(detailPayload);
+          } catch {
+            return group;
+          }
+        }),
+      );
+
+      const groupedAppointmentIds = new Set(
+        groups
+          .flatMap((group) => (Array.isArray(group.appointments) ? group.appointments : []))
+          .map((item) => item.id),
+      );
+
+      const standaloneAppointments = list.filter((item) => !groupedAppointmentIds.has(item.id));
+
+      setAppointments(sortAppointments(standaloneAppointments));
       setBookingGroups(groups);
     } catch (err) {
       setAppointments([]);
@@ -73,50 +95,82 @@ export function useMyAppointments() {
     }
   }, [cancelReason, cancelTarget, closeCancelPopup, loadAppointments]);
 
+  const allAppointments = useMemo(() => {
+    return [
+      ...appointments,
+      ...bookingGroups.flatMap((group) => (Array.isArray(group.appointments) ? group.appointments : [])),
+    ];
+  }, [appointments, bookingGroups]);
+
   const stats = useMemo(() => {
     const now = Date.now();
-    const upcomingCount = appointments.filter((item) => {
+    const upcomingCount = allAppointments.filter((item) => {
       const start = toDateTime(item.startTime)?.getTime() || 0;
       return start >= now && item.status !== APPOINTMENT_STATUS.CANCELED;
     }).length;
 
     return {
-      total: appointments.length,
+      total: allAppointments.length,
       upcoming: upcomingCount,
-      confirmed: appointments.filter((item) => item.status === APPOINTMENT_STATUS.CONFIRMED).length,
-      canceled: appointments.filter((item) => item.status === APPOINTMENT_STATUS.CANCELED).length,
+      confirmed: allAppointments.filter((item) => item.status === APPOINTMENT_STATUS.CONFIRMED).length,
+      canceled: allAppointments.filter((item) => item.status === APPOINTMENT_STATUS.CANCELED).length,
     };
-  }, [appointments]);
+  }, [allAppointments]);
 
-  const recentBookingGroups = useMemo(() => {
-    return [...bookingGroups]
-      .sort((a, b) => {
-        const ta = toDateTime(a.createdAt)?.getTime() || 0;
-        const tb = toDateTime(b.createdAt)?.getTime() || 0;
-        return tb - ta;
-      })
-      .slice(0, 3);
+  const bookingGroupsSorted = useMemo(() => {
+    return [...bookingGroups].sort((a, b) => {
+      const ta = toDateTime(a.createdAt)?.getTime() || 0;
+      const tb = toDateTime(b.createdAt)?.getTime() || 0;
+      return tb - ta;
+    });
   }, [bookingGroups]);
 
-  const filtered = useMemo(() => {
+  const matchSearchTerm = useCallback((item, term) => {
+    if (!term) return true;
+
+    const combined = [
+      item?.branchName,
+      item?.vehicleLicensePlate,
+      item?.vehicleModelName,
+      Array.isArray(item?.serviceNames) ? item.serviceNames.join(" ") : "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return combined.includes(term);
+  }, []);
+
+  const filteredAppointments = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return appointments.filter((item) => {
       if (filter && item.status !== filter) return false;
-      if (!term) return true;
-
-      const combined = [
-        item.branchName,
-        item.vehicleLicensePlate,
-        item.vehicleModelName,
-        Array.isArray(item.serviceNames) ? item.serviceNames.join(" ") : "",
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return combined.includes(term);
+      return matchSearchTerm(item, term);
     });
-  }, [appointments, filter, searchTerm]);
+  }, [appointments, filter, searchTerm, matchSearchTerm]);
+
+  const filteredBookingGroups = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    return bookingGroupsSorted
+      .map((group) => {
+        const groupCodeMatches = String(group.groupCode || "").toLowerCase().includes(term);
+        const groupBranchMatches = String(group.branchName || "").toLowerCase().includes(term);
+
+        const appointmentsInGroup = (Array.isArray(group.appointments) ? group.appointments : []).filter((item) => {
+          if (filter && item.status !== filter) return false;
+          if (!term) return true;
+          if (groupCodeMatches || groupBranchMatches) return true;
+          return matchSearchTerm(item, term);
+        });
+
+        return {
+          ...group,
+          appointments: appointmentsInGroup,
+        };
+      })
+      .filter((group) => group.appointments.length > 0 || (!filter && !term));
+  }, [bookingGroupsSorted, filter, searchTerm, matchSearchTerm]);
 
   return {
     loading,
@@ -127,8 +181,9 @@ export function useMyAppointments() {
     cancelTarget,
     cancelReason,
     stats,
-    recentBookingGroups,
-    filtered,
+    bookingGroups: bookingGroupsSorted,
+    filteredAppointments,
+    filteredBookingGroups,
     setFilter,
     setSearchTerm,
     setCancelReason,
@@ -139,7 +194,3 @@ export function useMyAppointments() {
     handleConfirmCancel,
   };
 }
-
-
-
-

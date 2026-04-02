@@ -2014,3 +2014,14 @@ D:\IT\OJT\repos\MyGarage\MyGarage\bin\codex-check19\runtimes\win\lib\net6.0\Syst
 D:\IT\OJT\repos\MyGarage\MyGarage\bin\codex-check19\runtimes\win\lib\net8.0\System.Security.Cryptography.Pkcs.dll
 D:\IT\OJT\repos\MyGarage\MyGarage\bin\codex-check19\runtimes\win\lib\net6.0\System.Security.Cryptography.ProtectedData.dll
 D:\IT\OJT\repos\MyGarage\MyGarage\bin\codex-check19\runtimes\win\lib\net6.0\System.Windows.Extensions.dll
+D:\IT\OJT\repos\MyGarage\temp\build-check\appsettings.Development.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\appsettings.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\Configurations\inventory-admin-settings.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\package-lock.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.staticwebassets.runtime.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.staticwebassets.endpoints.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.exe
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.deps.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.runtimeconfig.json
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.dll
+D:\IT\OJT\repos\MyGarage\temp\build-check\MyGarage.pdb

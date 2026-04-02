@@ -25,6 +25,27 @@ namespace MyGarage.Services
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("Danh sach lich hen khong duoc de trong.");
 
+            var fixedLeadViolations = new List<string>();
+            foreach (var item in dto.Items)
+            {
+                var flow = ResolveFlow(item.BookingFlow, item.RequestedServiceIds);
+                if (flow != BookingFlowType.Fixed) continue;
+
+                var (requestedStartAt, _) = ResolveRequestedWindow(flow, item);
+                var opHour = await _context.BranchOperatingHours
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)requestedStartAt.DayOfWeek);
+                var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+                var minLeadMinutes = Math.Max(15, slotStepMinutes);
+                if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
+                {
+                    fixedLeadViolations.Add($"{ResolveBookingItemLabel(item)} (cần cách hiện tại ít nhất {minLeadMinutes} phút)");
+                }
+            }
+
+            if (fixedLeadViolations.Count > 0)
+                throw new InvalidOperationException("Các xe chưa đáp ứng điều kiện giờ cố định: " + string.Join("; ", fixedLeadViolations));
+
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -59,6 +80,17 @@ namespace MyGarage.Services
                 await tx.RollbackAsync();
                 throw;
             }
+        }
+
+        private static string ResolveBookingItemLabel(BookAppointmentRequestDto dto)
+        {
+            if (!string.IsNullOrWhiteSpace(dto.LicensePlate))
+                return $"Xe {dto.LicensePlate.Trim()}";
+            if (dto.VehicleId.HasValue)
+                return $"Xe ID {dto.VehicleId.Value}";
+            if (!string.IsNullOrWhiteSpace(dto.Vin))
+                return $"Xe VIN {dto.Vin.Trim()}";
+            return "Xe chưa rõ biển số";
         }
 
     }

@@ -36,18 +36,20 @@ namespace MyGarage.Services
             var openTime = opHour?.OpenTime ?? new TimeOnly(8, 0);
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
             var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
-            var minLeadMinutes = Math.Max(15, slotStepMinutes);
-            if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
-                throw new InvalidOperationException("Thời gian hẹn phải cách hiện tại ít nhất " + minLeadMinutes + " phút.");
 
             if (flow == BookingFlowType.Fixed)
             {
+                var minLeadMinutes = Math.Max(15, slotStepMinutes);
+                if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
+                    throw new InvalidOperationException("Thời gian hẹn phải cách hiện tại ít nhất " + minLeadMinutes + " phút.");
+
                 var fixedMinutes = await ResolveFixedDurationAsync(dto.RequestedServiceIds, slotStepMinutes, dto.EndTime, requestedStartAt);
                 requestedEndAt = requestedStartAt.AddMinutes(fixedMinutes);
             }
 
             if (requestedEndAt <= requestedStartAt) throw new InvalidOperationException("Giờ kết thúc phải sau giờ bắt đầu.");
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
+            ValidateSlotHoldOrThrow(dto, flow, requestedStartAt, requestedEndAt);
 
             var health = await GetBranchBookingHealthAsync(dto.BranchId, _clock.LocalNow);
             if (health.IsBookingLocked && health.LockUntil.HasValue && requestedStartAt < health.LockUntil.Value)
@@ -55,11 +57,10 @@ namespace MyGarage.Services
 
             var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
             if (flow == BookingFlowType.Fixed)
-                await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster);
+                await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
             else
-                await EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt);
-
-            return await PersistBookingAsync(
+                await EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, dto.SlotHoldToken);
+            var created = await PersistBookingAsync(
                 externalTransaction,
                 actorStaffId,
                 dto,
@@ -70,6 +71,11 @@ namespace MyGarage.Services
                 flow,
                 effectiveRequestedServiceIds,
                 requestedCluster);
+            if (!string.IsNullOrWhiteSpace(dto.SlotHoldToken))
+            {
+                _slotHoldService.ConsumeHold(dto.SlotHoldToken);
+            }
+            return created;
         }
 
 

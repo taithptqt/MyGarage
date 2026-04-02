@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -32,10 +32,39 @@ namespace MyGarage.Controllers
             [FromQuery] long branchId,
             [FromQuery] DateOnly date,
             [FromQuery] string? requestedServiceIds = null,
-            [FromQuery] string? bookingFlow = null)
+            [FromQuery] string? bookingFlow = null,
+            [FromQuery] int vehicleCount = 1,
+            [FromQuery] bool isParallel = true)
         {
-            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, bookingFlow);
+            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, bookingFlow, vehicleCount, isParallel);
             return Ok(slots);
+        }
+
+        [Authorize]
+        [HttpPost("slot-holds")]
+        public async Task<ActionResult<SlotHoldResponseDto>> CreateSlotHold([FromBody] SlotHoldRequestDto dto)
+        {
+            try
+            {
+                var result = await _appointmentService.CreateSlotHoldAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpDelete("slot-holds/{holdToken}")]
+        public async Task<ActionResult> ReleaseSlotHold(string holdToken)
+        {
+            var released = await _appointmentService.ReleaseSlotHoldAsync(holdToken);
+            if (!released)
+            {
+                return NotFound();
+            }
+            return NoContent();
         }
 
         [Authorize]

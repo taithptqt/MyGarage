@@ -26,6 +26,20 @@ export const FILTERS = [
   { key: APPOINTMENT_STATUS.NO_SHOW, label: "Không đến" },
 ];
 
+export const APPOINTMENTS_VIEW_TABS = {
+  SINGLE: "single",
+  GROUP: "group",
+};
+
+function extractCollection(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.result)) return payload.result;
+  if (Array.isArray(payload?.$values)) return payload.$values;
+  return [];
+}
+
 export function toDateTime(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -53,30 +67,30 @@ export function formatTime(value) {
 }
 
 export function normalizeAppointmentsResponse(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.result)) return payload.result;
-  if (Array.isArray(payload?.$values)) return payload.$values;
-  return [];
+  return extractCollection(payload);
 }
 
 export function normalizeBookingGroupsResponse(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.result)) return payload.result;
-  if (Array.isArray(payload?.$values)) return payload.$values;
-  return [];
+  return extractCollection(payload);
 }
 
 export function normalizeBookingGroup(item) {
+  const appointments = extractCollection(item?.appointments ?? item?.Appointments)
+    .map(normalizeAppointment)
+    .filter((appointment) => appointment.id !== undefined && appointment.id !== null);
+
   return {
     id: item?.id ?? item?.Id,
     groupCode: item?.groupCode ?? item?.GroupCode ?? "",
     status: String(item?.status ?? item?.Status ?? "").toUpperCase(),
     totalAppointments: Number(item?.totalAppointments ?? item?.TotalAppointments ?? 0),
+    confirmedAppointments: Number(item?.confirmedAppointments ?? item?.ConfirmedAppointments ?? 0),
+    canceledAppointments: Number(item?.canceledAppointments ?? item?.CanceledAppointments ?? 0),
+    branchName: item?.branchName ?? item?.BranchName ?? "",
+    cancelReason: item?.cancelReason ?? item?.CancelReason ?? "",
+    customerNote: item?.customerNote ?? item?.CustomerNote ?? "",
     createdAt: item?.createdAt ?? item?.CreatedAt ?? null,
+    appointments: sortAppointments(appointments),
   };
 }
 

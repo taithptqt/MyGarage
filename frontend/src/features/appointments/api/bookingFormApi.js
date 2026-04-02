@@ -7,6 +7,8 @@ import {
   getAllStandardServices,
   getAllVehicles,
   getAvailableSlots,
+  createSlotHold,
+  releaseSlotHold,
   getVehicleBrands,
   getVehicleModels,
 } from "@features/appointments/api/appointmentApi";
@@ -46,10 +48,22 @@ export async function loadBookingFormMasterData() {
   };
 }
 
-export async function loadBookingAvailableSlots({ branchId, date, serviceIds, bookingFlow }) {
+export async function loadBookingAvailableSlots({
+  branchId,
+  date,
+  serviceIds,
+  requestedServiceIds,
+  bookingFlow,
+  vehicleCount = 1,
+  isParallel = true,
+}) {
+  const mergedRequestedServiceIds =
+    requestedServiceIds || (serviceIds?.length ? serviceIds.join(",") : null);
   return getAvailableSlots(Number(branchId), date, {
-    requestedServiceIds: serviceIds?.length ? serviceIds.join(",") : null,
+    requestedServiceIds: mergedRequestedServiceIds,
     bookingFlow,
+    vehicleCount,
+    isParallel,
   });
 }
 
@@ -59,4 +73,12 @@ export async function submitSingleBooking(payload) {
 
 export async function submitBatchBooking(payload) {
   return createBookingGroup(payload);
+}
+
+export async function createBookingSlotHold(payload) {
+  return createSlotHold(payload);
+}
+
+export async function releaseBookingSlotHold(holdToken) {
+  return releaseSlotHold(holdToken);
 }

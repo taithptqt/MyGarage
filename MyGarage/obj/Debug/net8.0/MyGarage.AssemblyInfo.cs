@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MyGarage")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+23d07fb45e3f6f38fe7b46ea69f4eeb069cbc8d8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7eb7923b4c8d064fd085fc756727085ba74c7545")]
 [assembly: System.Reflection.AssemblyProductAttribute("MyGarage")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MyGarage")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

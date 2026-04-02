@@ -23,6 +23,7 @@ if (builder.Environment.IsDevelopment())
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
+builder.Services.AddSingleton<ISlotHoldService, SlotHoldService>();
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
 

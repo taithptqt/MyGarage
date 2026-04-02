@@ -37,7 +37,7 @@ namespace MyGarage.Services
         private static IEnumerable<long> ParseServiceIds(string? csv)
         {
             if (string.IsNullOrWhiteSpace(csv)) return Enumerable.Empty<long>();
-            return csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            return csv.Split(new[] { ',', '|' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => long.TryParse(s.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
                 .Where(id => id > 0);
         }

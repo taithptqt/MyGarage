@@ -10,7 +10,9 @@ namespace MyGarage.Interfaces
     public interface IAppointmentService : IGenericService<Appointment>
     {
         Task<IEnumerable<AppointmentDetailResponseDto>> GetAllDetailedAsync(string? status = null);
-        Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date, string? requestedServiceIds = null, string? bookingFlow = null);
+        Task<IEnumerable<AvailableSlotResponseDto>> GetAvailableSlotsAsync(long branchId, DateOnly date, string? requestedServiceIds = null, string? bookingFlow = null, int vehicleCount = 1, bool isParallel = true);
+        Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto);
+        Task<bool> ReleaseSlotHoldAsync(string holdToken);
         Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto);
         Task<BookingGroupResponseDto> BookBatchAsync(long customerId, BookAppointmentBatchRequestDto dto);
         Task<Appointment?> ConfirmAsync(long id, long? actorUserId = null);
