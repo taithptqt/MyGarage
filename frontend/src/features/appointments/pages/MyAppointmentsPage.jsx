@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -80,6 +80,7 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false })
 
 export default function MyAppointmentsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const {
     loading,
@@ -101,7 +102,29 @@ export default function MyAppointmentsPage() {
     closeCancelPopup,
     handleConfirmCancel,
   } = useMyAppointments();
-  const [activeTab, setActiveTab] = useState(APPOINTMENTS_VIEW_TABS.SINGLE);
+  const resolveTabFromQuery = (tabParam) => (
+    tabParam === APPOINTMENTS_VIEW_TABS.GROUP
+      ? APPOINTMENTS_VIEW_TABS.GROUP
+      : APPOINTMENTS_VIEW_TABS.SINGLE
+  );
+
+  const [activeTab, setActiveTab] = useState(() => resolveTabFromQuery(searchParams.get("tab")));
+
+  useEffect(() => {
+    const nextTab = resolveTabFromQuery(searchParams.get("tab"));
+    setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
+  }, [searchParams]);
+
+  const handleChangeTab = (nextTab) => {
+    setActiveTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === APPOINTMENTS_VIEW_TABS.SINGLE) {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", nextTab);
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -158,14 +181,14 @@ export default function MyAppointmentsPage() {
             <button
               type="button"
               className={activeTab === APPOINTMENTS_VIEW_TABS.SINGLE ? "active" : ""}
-              onClick={() => setActiveTab(APPOINTMENTS_VIEW_TABS.SINGLE)}
+              onClick={() => handleChangeTab(APPOINTMENTS_VIEW_TABS.SINGLE)}
             >
               Lịch hẹn thường ({filteredAppointments.length})
             </button>
             <button
               type="button"
               className={activeTab === APPOINTMENTS_VIEW_TABS.GROUP ? "active" : ""}
-              onClick={() => setActiveTab(APPOINTMENTS_VIEW_TABS.GROUP)}
+              onClick={() => handleChangeTab(APPOINTMENTS_VIEW_TABS.GROUP)}
             >
               Lịch hẹn nhóm ({bookingGroups.length})
             </button>

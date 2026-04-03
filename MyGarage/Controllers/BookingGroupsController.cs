@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,15 +27,23 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<BookingGroupResponseDto>> Create([FromBody] BookAppointmentBatchRequestDto dto)
         {
-            var customerId = this.GetCurrentUserId();
-            if (!customerId.HasValue)
+            var actorUserId = this.GetCurrentUserId();
+            if (!actorUserId.HasValue)
             {
                 return Unauthorized();
             }
 
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var isCustomer = string.Equals(role, "Customer", StringComparison.OrdinalIgnoreCase);
+            var customerId = isCustomer ? actorUserId.Value : (dto.CustomerId ?? 0);
+            if (customerId <= 0)
+            {
+                return BadRequest(new { message = "Vui long cung cap CustomerId hop le cho luong dat lich nhom." });
+            }
+
             try
             {
-                var result = await _appointmentService.BookBatchAsync(customerId.Value, dto);
+                var result = await _appointmentService.BookBatchForCustomerAsync(actorUserId.Value, customerId, dto);
                 return CreatedAtAction(nameof(GetMyGroupDetail), new { id = result.Id }, result);
             }
             catch (InvalidOperationException ex)
@@ -66,6 +75,25 @@ namespace MyGarage.Controllers
             }
 
             var group = await _bookingGroupService.GetByCustomerAndIdAsync(customerId.Value, id);
+            if (group == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(group);
+        }
+
+        [HttpGet("branches/{branchId:long}")]
+        public async Task<ActionResult<IEnumerable<BookingGroupResponseDto>>> GetByBranch(long branchId)
+        {
+            var groups = await _bookingGroupService.GetByBranchAsync(branchId);
+            return Ok(groups);
+        }
+
+        [HttpGet("branches/{branchId:long}/{id:long}")]
+        public async Task<ActionResult<BookingGroupResponseDto>> GetByBranchDetail(long branchId, long id)
+        {
+            var group = await _bookingGroupService.GetByBranchAndIdAsync(branchId, id);
             if (group == null)
             {
                 return NotFound();

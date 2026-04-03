@@ -37,7 +37,13 @@ namespace MyGarage.Services
                 requestedEndAt,
                 AppointmentBookingFlows.Fixed,
                 excludeHoldToken);
-            overlapping.AddRange(BuildSyntheticAppointmentsFromHolds(activeHolds));
+            var flexibleHolds = _slotHoldService.GetActiveHolds(
+                branchId,
+                requestedStartAt,
+                requestedEndAt,
+                AppointmentBookingFlows.Flexible,
+                excludeHoldToken);
+            overlapping.AddRange(BuildSyntheticAppointmentsFromHolds(activeHolds.Concat(flexibleHolds).ToList()));
 
             var overnightLocks = await _context.WorkSlots
                 .AsNoTracking()

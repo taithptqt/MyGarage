@@ -19,8 +19,8 @@ namespace MyGarage.Services
             IDbContextTransaction? externalTransaction)
         {
             var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
-            var flow = ResolveFlow(dto.BookingFlow, dto.RequestedServiceIds);
             var requestedServiceIdList = ParseServiceIds(dto.RequestedServiceIds).Distinct().ToList();
+            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds);
             var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
                 ? string.Join(",", requestedServiceIdList)
                 : await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds);
@@ -42,10 +42,13 @@ namespace MyGarage.Services
                 var minLeadMinutes = Math.Max(15, slotStepMinutes);
                 if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
                     throw new InvalidOperationException("Thời gian hẹn phải cách hiện tại ít nhất " + minLeadMinutes + " phút.");
-
-                var fixedMinutes = await ResolveFixedDurationAsync(dto.RequestedServiceIds, slotStepMinutes, dto.EndTime, requestedStartAt);
-                requestedEndAt = requestedStartAt.AddMinutes(fixedMinutes);
             }
+
+            var plannedDurationMinutes = await ResolveScheduledDurationAsync(
+                effectiveRequestedServiceIds,
+                slotStepMinutes,
+                isParallel: false);
+            requestedEndAt = requestedStartAt.AddMinutes(plannedDurationMinutes);
 
             if (requestedEndAt <= requestedStartAt) throw new InvalidOperationException("Giờ kết thúc phải sau giờ bắt đầu.");
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
@@ -56,10 +59,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException($"Chi nhánh đang tạm khóa nhận lịch đến {health.LockUntil:HH:mm dd/MM/yyyy} do quá tải.");
 
             var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
-            if (flow == BookingFlowType.Fixed)
-                await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
-            else
-                await EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, dto.SlotHoldToken);
+            await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
             var created = await PersistBookingAsync(
                 externalTransaction,
                 actorStaffId,

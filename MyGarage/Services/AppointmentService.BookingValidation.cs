@@ -15,8 +15,7 @@ namespace MyGarage.Services
             {
                 var startAt = dto.CheckInWindowStart ?? dto.StartTime
                     ?? throw new InvalidOperationException("Cần cung cấp khung giờ check-in bắt đầu.");
-                var endAt = dto.CheckInWindowEnd ?? dto.EndTime
-                    ?? throw new InvalidOperationException("Cần cung cấp khung giờ check-in kết thúc.");
+                var endAt = dto.CheckInWindowEnd ?? dto.EndTime ?? startAt;
                 return (startAt, endAt);
             }
 
@@ -40,8 +39,6 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Vui lòng nhập số điện thoại khách hàng.");
             if (flow == BookingFlowType.Fixed && requestedServiceIds.Count == 0)
                 throw new InvalidOperationException("Luồng giờ cố định yêu cầu chọn ít nhất một dịch vụ cụ thể.");
-            if (flow == BookingFlowType.Flexible && requestedServiceIds.Count > 0)
-                throw new InvalidOperationException("Check-in linh hoạt không nhận danh sách dịch vụ cố định.");
 
             if (!dto.VehicleId.HasValue)
             {

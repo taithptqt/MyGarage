@@ -15,6 +15,8 @@ public partial class Bay
 
     public string BayType { get; set; } = null!;
 
+    public string ServiceArea { get; set; } = null!;
+
     public decimal? MaxTonnage { get; set; }
 
     public string? OperationalStatus { get; set; }

@@ -16,6 +16,7 @@ import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePag
 import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
 import TechnicianConditionLogPage from "@features/workshop/pages/TechnicianConditionLogPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
+import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
 import HorizonMain from "@horizon/Main";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -116,6 +117,7 @@ function App() {
         >
           <Route path="reception" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionOrdersSection /></ProtectedRoute>} />
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
+          <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderQuotePage /></ProtectedRoute>} />

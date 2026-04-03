@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./Workshop.css";
@@ -6,6 +6,7 @@ import { MdNotificationsNone, MdInfoOutline } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { AiOutlineSearch } from 'react-icons/ai';
 import { useSearch } from "@shared/core/context/SearchContext";
+import { getApiBaseUrl } from "@features/auth/api/authApi";
 
 // Role Components are now imported in App.jsx for routing
 import WorkflowTimeline from "@features/workshop/components/WorkflowTimeline";
@@ -24,6 +25,23 @@ const ROLES_META = {
 const WORKSHOP_SIDEBAR_EXPANDED_WIDTH = 280;
 const WORKSHOP_SIDEBAR_COLLAPSED_WIDTH = 5;
 const WORKSHOP_SIDEBAR_COLLAPSE_STORAGE_KEY = "mygarage.workshop.sidebar.collapsed";
+
+function resolveAvatarUrl(avatarUrl) {
+  if (!avatarUrl) return "";
+  const raw = String(avatarUrl).trim();
+  if (!raw) return "";
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("data:") ||
+    raw.startsWith("blob:")
+  ) {
+    return raw;
+  }
+  const base = getApiBaseUrl();
+  if (!base) return raw;
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+}
 
 export default function WorkshopPage() {
   const { searchQuery, setSearchQuery } = useSearch();
@@ -57,10 +75,20 @@ export default function WorkshopPage() {
   const sidebarDragStartWidthRef = useRef(sidebarWidth);
   const currentSidebarWidthRef = useRef(sidebarWidth);
   const sidebarMovedRef = useRef(false);
+  const notificationsMenuRef = useRef(null);
+  const infoMenuRef = useRef(null);
+  const profileMenuRef = useRef(null);
+  const resolvedAvatarUrl = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl);
 
   const handleLogout = () => {
     logout();
   };
+
+  const closeHeaderPopups = useCallback(() => {
+    setShowNotifications(false);
+    setShowInfo(false);
+    setShowProfileMenu(false);
+  }, []);
 
   useEffect(() => {
     currentSidebarWidthRef.current = sidebarWidth;
@@ -81,6 +109,34 @@ export default function WorkshopPage() {
       }
     };
   }, []);
+  useEffect(() => {
+    if (!showNotifications && !showInfo && !showProfileMenu) return undefined;
+
+    const handleOutsideInteraction = (event) => {
+      const target = event.target;
+      const clickedInsidePopup = [notificationsMenuRef, infoMenuRef, profileMenuRef].some(
+        (ref) => ref.current && ref.current.contains(target)
+      );
+      if (!clickedInsidePopup) {
+        closeHeaderPopups();
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        closeHeaderPopups();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideInteraction);
+    document.addEventListener("touchstart", handleOutsideInteraction);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideInteraction);
+      document.removeEventListener("touchstart", handleOutsideInteraction);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [showNotifications, showInfo, showProfileMenu, closeHeaderPopups]);
 
   const persistWorkshopSidebarState = (collapsed) => {
     if (typeof window === "undefined") return;
@@ -200,7 +256,11 @@ export default function WorkshopPage() {
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
   const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
-  const receptionTab = new URLSearchParams(location.search).get("tab") === "appointments" ? "appointments" : "orders";
+  const isReceptionAppointmentsRoute = location.pathname.startsWith("/workshop/reception/appointments");
+  const receptionTab = (
+    isReceptionAppointmentsRoute ||
+    new URLSearchParams(location.search).get("tab") === "appointments"
+  ) ? "appointments" : "orders";
 
   const goReceptionTab = (tab) => {
     const safeTab = tab === "appointments" ? "appointments" : "orders";
@@ -309,7 +369,7 @@ export default function WorkshopPage() {
                   />
                 </div>
 
-                <div className="header-menu-container">
+                <div className="header-menu-container" ref={notificationsMenuRef}>
                   <button className="header-icon-btn" title="Thông báo" onClick={() => { setShowNotifications(!showNotifications); setShowInfo(false); setShowProfileMenu(false); }}>
                     <MdNotificationsNone />
                   </button>
@@ -330,7 +390,7 @@ export default function WorkshopPage() {
                   )}
                 </div>
 
-                <div className="header-menu-container">
+                <div className="header-menu-container" ref={infoMenuRef}>
                   <button className="header-icon-btn" title="Thông tin" onClick={() => { setShowInfo(!showInfo); setShowNotifications(false); setShowProfileMenu(false); }}>
                     <MdInfoOutline />
                   </button>
@@ -353,19 +413,19 @@ export default function WorkshopPage() {
                   {isDarkMode ? <IoMdSunny /> : <IoMdMoon />}
                 </button>
 
-                <div className="profile-container">
+                <div className="profile-container" ref={profileMenuRef}>
                   <div
                     className="user-avatar"
                     title={user?.fullName}
                     onClick={() => setShowProfileMenu(!showProfileMenu)}
                     style={{
                       cursor: 'pointer',
-                      backgroundImage: user?.avatarUrl ? `url(${user.avatarUrl})` : 'none',
+                      backgroundImage: resolvedAvatarUrl ? `url("${resolvedAvatarUrl}")` : 'none',
                       backgroundSize: 'cover',
                       backgroundPosition: 'center'
                     }}
                   >
-                    {!user?.avatarUrl && (user?.fullName?.split(' ').pop().substring(0, 2).toUpperCase() || 'US')}
+                    {!resolvedAvatarUrl && (user?.fullName?.split(' ').pop().substring(0, 2).toUpperCase() || 'US')}
                   </div>
 
                   {showProfileMenu && (
@@ -408,8 +468,4 @@ export default function WorkshopPage() {
     </ChakraProvider>
   );
 }
-
-
-
-
 

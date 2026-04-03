@@ -22,15 +22,21 @@ namespace MyGarage.Services
 
         public async Task<BookingGroupResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
         {
+            return await BookBatchForCustomerAsync(authUserId, authUserId, dto);
+        }
+
+        public async Task<BookingGroupResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto)
+        {
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("Danh sach lich hen khong duoc de trong.");
+
+            if (targetCustomerId <= 0)
+                throw new InvalidOperationException("Khach hang dat lich khong hop le.");
 
             var fixedLeadViolations = new List<string>();
             foreach (var item in dto.Items)
             {
-                var flow = ResolveFlow(item.BookingFlow, item.RequestedServiceIds);
-                if (flow != BookingFlowType.Fixed) continue;
-
+                var flow = await ResolveFlowAsync(item.BookingFlow, item.RequestedServiceIds);
                 var (requestedStartAt, _) = ResolveRequestedWindow(flow, item);
                 var opHour = await _context.BranchOperatingHours
                     .AsNoTracking()
@@ -49,22 +55,23 @@ namespace MyGarage.Services
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(authUserId);
-                var group = await _bookingGroupService.CreateAsync(authUserId, dto.BranchId, dto.CustomerNote, actorStaffId);
+                var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+                var group = await _bookingGroupService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
 
                 var createdAppointmentIds = new List<long>();
                 foreach (var item in dto.Items)
                 {
                     item.BranchId = dto.BranchId;
                     item.CreatedBy = actorStaffId;
-                    var created = await BookCoreAsync(authUserId, item, group.Id, tx);
+                    item.CustomerId ??= targetCustomerId;
+                    var created = await BookCoreAsync(actorUserId, item, group.Id, tx);
                     createdAppointmentIds.Add(created.Id);
                 }
 
                 await _bookingGroupService.SyncCountersAsync(group.Id, actorStaffId);
                 await tx.CommitAsync();
 
-                var response = await _bookingGroupService.GetByCustomerAndIdAsync(authUserId, group.Id);
+                var response = await _bookingGroupService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
                 if (response != null)
                 {
                     response.Appointments = response.Appointments

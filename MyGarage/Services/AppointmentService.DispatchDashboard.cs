@@ -31,7 +31,7 @@ namespace MyGarage.Services
             {
                 var slot = slots.FirstOrDefault(s => s.BayId == bay.Id);
                 if (slot != null) busy++;
-                var isOverflow = slot != null && !IsQuickBay(bay.BayType) && IsQuickSlotType(slot.SlotType, slot.Notes);
+                var isOverflow = slot != null && IsRepairBay(bay) && IsQuickSlotType(slot.SlotType, slot.Notes);
                 if (isOverflow) overflow++;
 
                 bayDtos.Add(new DispatchBayStatusDto
@@ -40,6 +40,7 @@ namespace MyGarage.Services
                     BayCode = bay.Code,
                     BayName = bay.Name,
                     BayType = bay.BayType,
+                    ServiceArea = bay.ServiceArea ?? string.Empty,
                     Status = slot == null ? "IDLE" : "BUSY",
                     IsOverflowFromQuick = isOverflow,
                     SlotType = slot?.SlotType,

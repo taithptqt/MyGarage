@@ -11,11 +11,11 @@ namespace MyGarage.Services
             var executedAt = at ?? _clock.LocalNow;
             var noShows = await AutoMarkNoShowsAsync(branchId, executedAt);
             var health = await GetBranchBookingHealthAsync(branchId, executedAt);
-            var delayNotifications = 0;
+            var delayNotifications = await SendProactiveDelayNotificationsAsync(branchId, executedAt);
 
             if (health.IsBookingLocked)
             {
-                delayNotifications = await SendDelayNotificationsAsync(branchId, executedAt, health);
+                delayNotifications += await SendDelayNotificationsAsync(branchId, executedAt, health);
             }
 
             return new DispatchCycleResponseDto

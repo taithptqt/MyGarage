@@ -113,7 +113,7 @@ const inventoryItems = [
 
 const vehicleItems = [
   {
-    name: 'H?ng xe',
+    name: 'Hãng xe',
     layout: '/admin',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     path: '/brands',
@@ -220,7 +220,7 @@ const routes = [
     component: <AdminPage embedded initialSection="branches" />,
   },
   {
-    name: 'Nh?n s?',
+    name: 'Nhân sự',
     layout: '/admin',
     path: '/staff',
     icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,

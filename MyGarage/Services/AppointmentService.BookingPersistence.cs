@@ -48,7 +48,7 @@ namespace MyGarage.Services
                     CustomerNotes = AppendClusterMarker(
                         AppendFlowMarker(dto.CustomerNotes, flow),
                         requestedCluster),
-                    Status = flow == BookingFlowType.Flexible ? AppointmentStatuses.Queued : AppointmentStatuses.Pending,
+                    Status = AppointmentStatuses.Pending,
                     CreatedAt = _clock.UtcNow
                 };
                 _context.Appointments.Add(appointment);

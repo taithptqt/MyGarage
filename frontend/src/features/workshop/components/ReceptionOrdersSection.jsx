@@ -13,13 +13,15 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import TablePagination from "@shared/components/TablePagination";
 import {
   getBranchAppointments,
+  getAppointmentDetail,
   cancelAppointment,
-  bookAppointment,
   getAllStandardServices,
 } from "@features/appointments/api/appointmentApi";
 import AppointmentForm from "@features/workshop/components/AppointmentForm";
 import ServiceOrderDetailModal from "@features/workshop/components/ServiceOrderDetailModal";
 import ReceptionAppointmentsSection from "@features/workshop/components/ReceptionAppointmentsSection";
+import AppointmentDetailModal from "@features/workshop/components/AppointmentDetailModal";
+import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
 
 export default function ReceptionOrdersSection() {
   const navigate = useNavigate();
@@ -36,6 +38,10 @@ export default function ReceptionOrdersSection() {
   const [appointments, setAppointments] = useState([]);
   const [apptLoading, setApptLoading] = useState(false);
   const [actingAppt, setActingAppt] = useState(null);
+  const [selectedApptForView, setSelectedApptForView] = useState(null);
+  const [apptDetailLoading, setApptDetailLoading] = useState(false);
+  const [apptDetailError, setApptDetailError] = useState("");
+  const [editingAppt, setEditingAppt] = useState(null);
   const [services, setServices] = useState([]); // New services state
   const [selectedOrderForView, setSelectedOrderForView] = useState(null);
   const [successAppt, setSuccessAppt] = useState(null);
@@ -47,6 +53,7 @@ export default function ReceptionOrdersSection() {
   const [draftDateTo, setDraftDateTo] = useState("");
   const [apptStatusFilter, setApptStatusFilter] = useState("ALL");
   const [apptSortBy, setApptSortBy] = useState("NEWEST");
+  const [apptViewMode, setApptViewMode] = useState("SINGLE");
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
   const [apptsPage, setApptsPage] = useState(1);
@@ -55,7 +62,13 @@ export default function ReceptionOrdersSection() {
   const { searchQuery } = useSearch();
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
-  const effectiveBranchId = Number(selectedBranchId || user?.branchId || 0);
+  const parseBranchId = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+  const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
+  const contextBranchId = parseBranchId(selectedBranchId);
+  const effectiveBranchId = userBranchId || contextBranchId;
   const activeTab = useMemo(() => {
     const tab = new URLSearchParams(location.search).get("tab");
     return tab === "appointments" ? "appointments" : "orders";
@@ -65,6 +78,7 @@ export default function ReceptionOrdersSection() {
     const s = String(status || "").toUpperCase();
     if (s === 'PENDING') return 'badge-warning';
     if (s === 'CONFIRMED') return 'badge-active';
+    if (s === 'PARTIAL_CONFIRMED') return 'badge-active';
     if (s === 'ARRIVED' || s === 'CHECKED_IN') return 'badge-success';
     if (s === 'CANCELED' || s === 'CANCELLED') return 'badge-danger';
     if (s === 'COMPLETED') return 'badge-completed';
@@ -110,6 +124,69 @@ export default function ReceptionOrdersSection() {
     return Number.isNaN(d.getTime()) ? "--:--" : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   }, []);
 
+  const normalizeAppointmentItem = useCallback((item) => {
+    const source = item || {};
+    const pick = (...keys) => {
+      for (const key of keys) {
+        const value = source?.[key];
+        if (value !== undefined && value !== null) return value;
+      }
+      return null;
+    };
+    const numeric = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const text = (value) => (value === undefined || value === null ? "" : String(value));
+
+    return {
+      ...source,
+      id: numeric(pick("id", "Id")),
+      branchId: numeric(pick("branchId", "BranchId")),
+      branchName: text(pick("branchName", "BranchName")),
+      customerId: numeric(pick("customerId", "CustomerId")),
+      customerName: text(pick("customerName", "CustomerName", "customerFullName", "CustomerFullName")),
+      customerPhone: text(pick("customerPhone", "CustomerPhone")),
+      startTime: pick("startTime", "StartTime"),
+      endTime: pick("endTime", "EndTime"),
+      status: text(pick("status", "Status")),
+      createdAt: pick("createdAt", "CreatedAt"),
+      updatedAt: pick("updatedAt", "UpdatedAt"),
+      vehicleLicensePlate: text(pick("vehicleLicensePlate", "VehicleLicensePlate", "licensePlate", "LicensePlate")),
+      vehicleId: numeric(pick("vehicleId", "VehicleId")),
+      vehicleModelName: text(pick("vehicleModelName", "VehicleModelName")),
+      requestedServiceIds: text(pick("requestedServiceIds", "RequestedServiceIds")),
+      serviceNames: Array.isArray(pick("serviceNames", "ServiceNames"))
+        ? pick("serviceNames", "ServiceNames").map((name) => String(name || "").trim()).filter(Boolean)
+        : [],
+      customerNotes: text(pick("customerNotes", "CustomerNotes")),
+      cancelReason: text(pick("cancelReason", "CancelReason")),
+      bookingGroupId: numeric(pick("bookingGroupId", "BookingGroupId")),
+      bookingGroupCode: text(pick("bookingGroupCode", "BookingGroupCode")),
+      bookingGroupStatus: text(pick("bookingGroupStatus", "BookingGroupStatus")),
+    };
+  }, []);
+
+  const normalizeAppointments = useCallback((payload) => {
+    const list = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload?.Items)
+          ? payload.Items
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.Data)
+              ? payload.Data
+              : [];
+
+    return list
+      .map(normalizeAppointmentItem)
+      .filter((item) =>
+        item.id > 0 &&
+        (!effectiveBranchId || item.branchId === 0 || item.branchId === effectiveBranchId));
+  }, [effectiveBranchId, normalizeAppointmentItem]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -133,7 +210,8 @@ export default function ReceptionOrdersSection() {
       const filteredStaff = sRes.filter(s => {
         const role = rRes.find(r => r.id === s.roleId);
         const isMatchedRole = role && role.roleCode === "RECEPTIONIST";
-        const isMatchedBranch = !effectiveBranchId || s.branchId === effectiveBranchId;
+        const staffBranchId = Number(s.branchId ?? s.BranchId ?? 0);
+        const isMatchedBranch = !effectiveBranchId || staffBranchId === effectiveBranchId;
         return isMatchedRole && isMatchedBranch;
       });
       setStaff(filteredStaff);
@@ -149,33 +227,47 @@ export default function ReceptionOrdersSection() {
   }, [fetchData]);
 
   const fetchAppointments = useCallback(async () => {
-    if (!effectiveBranchId) return;
+    if (!effectiveBranchId) {
+      setAppointments([]);
+      return;
+    }
     setApptLoading(true);
     try {
       const data = await getBranchAppointments(effectiveBranchId);
-      setAppointments(Array.isArray(data) ? data : []);
+      setAppointments(normalizeAppointments(data));
     } catch (err) {
       setError(err.message || "Không thể tải dữ liệu lịch hẹn.");
     } finally {
       setApptLoading(false);
     }
-  }, [effectiveBranchId]);
+  }, [effectiveBranchId, normalizeAppointments]);
 
   const fetchAppointmentsSilent = useCallback(async () => {
-    if (!effectiveBranchId) return;
+    if (!effectiveBranchId) {
+      setAppointments([]);
+      return;
+    }
     try {
       const data = await getBranchAppointments(effectiveBranchId);
-      setAppointments(Array.isArray(data) ? data : []);
+      setAppointments(normalizeAppointments(data));
     } catch (err) {
       setError(err.message || "Không thể tải dữ liệu lịch hẹn.");
     }
-  }, [effectiveBranchId]);
+  }, [effectiveBranchId, normalizeAppointments]);
 
   useEffect(() => {
     if (activeTab === "appointments") {
       fetchAppointments();
     }
   }, [activeTab, fetchAppointments]);
+
+  useEffect(() => {
+    if (activeTab !== "appointments" || !effectiveBranchId) return;
+    const timer = setInterval(() => {
+      fetchAppointmentsSilent();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, effectiveBranchId, fetchAppointmentsSilent]);
 
   const getOrderCustomerName = useCallback((order) => {
     if (order.customerName) return order.customerName;
@@ -299,8 +391,8 @@ export default function ReceptionOrdersSection() {
         customerNotes: finalCustomerNotes,
         code: serviceOrderApi.generateCode(),
         status: "NEW",
-        originBranchId: selectedBranchId ? Number(selectedBranchId) : 1,
-        executeBranchId: selectedBranchId ? Number(selectedBranchId) : 1,
+        originBranchId: effectiveBranchId || 1,
+        executeBranchId: effectiveBranchId || 1,
         CreatedBy: user?.id
       };
       
@@ -343,6 +435,33 @@ export default function ReceptionOrdersSection() {
       setSaving(false);
     }
   };
+
+  const handleSaveAppointment = async (formData, options = {}) => {
+    setSaving(true);
+    setError("");
+    try {
+      const summary = await saveReceptionAppointment({
+        effectiveBranchId,
+        formData,
+        customers,
+        vehicles,
+        customerVehicles,
+        services,
+        replaceAppointmentId: Number(options?.replaceAppointmentId || 0),
+      });
+
+      await fetchData();
+      await fetchAppointmentsSilent();
+
+      setSuccessAppt(summary);
+      setModal("appt_success");
+    } catch (err) {
+      setError(err?.message || "Không thể tạo lịch hẹn.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCompleteOrder = async (order) => {
     if (!statusPermitUpdate(order.status)) {
       alert("Lệnh này đã kết thúc hoặc đã hủy, không thể bàn giao.");
@@ -382,20 +501,100 @@ export default function ReceptionOrdersSection() {
   };
 
   const statusPermitUpdate = (status) => !["COMPLETED", "CANCELLED"].includes(status);
+  const canEditAppointment = useCallback((status) => {
+    const normalized = normalizeStatus(status);
+    return normalized === "PENDING" || normalized === "CONFIRMED" || normalized === "PARTIAL_CONFIRMED";
+  }, [normalizeStatus]);
 
-  const handleApptAction = async (id) => {
+  const buildEditInitialValues = useCallback((appointment) => {
+    if (!appointment) return null;
+    return {
+      customerId: Number(appointment.customerId || 0) || "",
+      customerName: appointment.customerName || "",
+      customerPhone: appointment.customerPhone || "",
+      vehicleId: Number(appointment.vehicleId || 0) || 0,
+      startTime: appointment.startTime || appointment.StartTime || "",
+      requestedServiceIds: appointment.requestedServiceIds || appointment.RequestedServiceIds || "",
+      customerNotes: appointment.customerNotes || appointment.CustomerNotes || "",
+    };
+  }, []);
+
+  const handleOpenApptDetail = useCallback(async (appt) => {
+    if (!appt) return;
+    const base = normalizeAppointmentItem(appt);
+    if (!base?.id) return;
+
+    setSelectedApptForView(base);
+    setApptDetailError("");
+    setApptDetailLoading(true);
+    setModal("appt_detail");
+
+    try {
+      const detail = await getAppointmentDetail(base.id);
+      const normalizedDetail = normalizeAppointmentItem(detail);
+      setSelectedApptForView((prev) => {
+        if (!prev || Number(prev.id) !== Number(base.id)) return prev;
+        return { ...prev, ...normalizedDetail };
+      });
+    } catch (err) {
+      setApptDetailError(err?.message || "Không thể tải chi tiết lịch hẹn.");
+    } finally {
+      setApptDetailLoading(false);
+    }
+  }, [normalizeAppointmentItem]);
+
+  const closeApptDetailModal = useCallback(() => {
+    setModal(null);
+    setSelectedApptForView(null);
+    setApptDetailError("");
+    setApptDetailLoading(false);
+  }, []);
+
+  const handleOpenApptEdit = useCallback(async (appointment) => {
+    const base = normalizeAppointmentItem(appointment || selectedApptForView);
+    if (!base?.id) return;
+    if (!canEditAppointment(base.status)) {
+      setApptDetailError("Chỉ có thể sửa lịch ở trạng thái chờ xác nhận hoặc đã xác nhận.");
+      return;
+    }
+
+    setError("");
+    setSaving(false);
+    setModal("edit_appt");
+
+    try {
+      const detail = await getAppointmentDetail(base.id);
+      setEditingAppt(normalizeAppointmentItem(detail));
+    } catch {
+      setEditingAppt(base);
+    }
+  }, [canEditAppointment, normalizeAppointmentItem, selectedApptForView]);
+
+  const closeEditApptModal = useCallback(() => {
+    setModal(null);
+    setEditingAppt(null);
+  }, []);
+
+  const handleSaveEditedAppointment = useCallback(async (formData) => {
+    if (!editingAppt?.id) return;
+    await handleSaveAppointment(formData, { replaceAppointmentId: editingAppt.id });
+    setEditingAppt(null);
+  }, [editingAppt, handleSaveAppointment]);
+
+  const handleApptAction = useCallback(async (id) => {
     setActingAppt(id);
     try {
       const reason = window.prompt("Lý do hủy lịch:", "Nhân viên hủy");
       if (reason === null) return;
       await cancelAppointment(id, reason);
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'CANCELED' } : a));
+      fetchAppointmentsSilent();
     } catch (err) {
       setError("Thao tác lịch hẹn thất bại: " + err.message);
     } finally {
       setActingAppt(null);
     }
-  };
+  }, [fetchAppointmentsSilent]);
   const apptStatusOptions = useMemo(() => {
     const statuses = Array.from(new Set((appointments || []).map((a) => normalizeStatus(a.status)).filter(Boolean)));
     return statuses.sort((a, b) => a.localeCompare(b));
@@ -418,6 +617,7 @@ export default function ReceptionOrdersSection() {
         !query ||
         (a.customerName || "").toLowerCase().includes(query) ||
         (a.customerPhone || "").toLowerCase().includes(query) ||
+        (a.bookingGroupCode || "").toLowerCase().includes(query) ||
         apptPlate.includes(query) ||
         (queryCompact && apptPlateCompact.includes(queryCompact));
       return byStatus && byDate && byQuery;
@@ -435,10 +635,50 @@ export default function ReceptionOrdersSection() {
       return bTime - aTime;
     });
   }, [appointments, searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo, toStartOfDay, toEndOfDay]);
-  const pagedAppts = useMemo(() => {
+  const groupedAppts = useMemo(() => {
+    const grouped = new Map();
+    filteredAppts.forEach((appt) => {
+      const gid = Number(appt.bookingGroupId || 0);
+      if (!gid) return;
+      if (!grouped.has(gid)) {
+        grouped.set(gid, {
+          id: gid,
+          groupCode: appt.bookingGroupCode || `BG-${gid}`,
+          status: appt.bookingGroupStatus || "PENDING",
+          customerName: appt.customerName || "",
+          customerPhone: appt.customerPhone || "",
+          appointments: [],
+        });
+      }
+      grouped.get(gid).appointments.push(appt);
+    });
+
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        appointments: [...group.appointments].sort((a, b) =>
+          new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime()),
+      }))
+      .sort((a, b) => {
+        const aTime = new Date(a.appointments[0]?.startTime || 0).getTime();
+        const bTime = new Date(b.appointments[0]?.startTime || 0).getTime();
+        return apptSortBy === "OLDEST" ? aTime - bTime : bTime - aTime;
+      });
+  }, [filteredAppts, apptSortBy]);
+
+  const filteredSingleAppts = useMemo(() => (
+    filteredAppts.filter((appt) => !Number(appt.bookingGroupId || 0))
+  ), [filteredAppts]);
+
+  const pagedSingleAppts = useMemo(() => {
     const start = (apptsPage - 1) * apptsPageSize;
-    return filteredAppts.slice(start, start + apptsPageSize);
-  }, [filteredAppts, apptsPage, apptsPageSize]);
+    return filteredSingleAppts.slice(start, start + apptsPageSize);
+  }, [filteredSingleAppts, apptsPage, apptsPageSize]);
+
+  const pagedGroupedAppts = useMemo(() => {
+    const start = (apptsPage - 1) * apptsPageSize;
+    return groupedAppts.slice(start, start + apptsPageSize);
+  }, [groupedAppts, apptsPage, apptsPageSize]);
 
   useEffect(() => {
     setOrdersPage(1);
@@ -446,7 +686,7 @@ export default function ReceptionOrdersSection() {
 
   useEffect(() => {
     setApptsPage(1);
-  }, [searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo, appointments.length]);
+  }, [searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo, appointments.length, apptViewMode, groupedAppts.length, filteredSingleAppts.length]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -544,7 +784,7 @@ export default function ReceptionOrdersSection() {
       </div>
       {error && (
         <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>
-          ? {error}
+          Lỗi: {error}
         </div>
       )}
 
@@ -578,7 +818,7 @@ export default function ReceptionOrdersSection() {
         />
       ) : (
         <ReceptionAppointmentsSection
-          setModal={setModal}
+          onCreateAppointment={() => navigate("/workshop/reception/appointments/new")}
           apptStatusFilter={apptStatusFilter}
           setApptStatusFilter={setApptStatusFilter}
           apptStatusOptions={apptStatusOptions}
@@ -588,45 +828,67 @@ export default function ReceptionOrdersSection() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           clearDateRange={clearDateRange}
-          filteredAppts={filteredAppts}
+          apptViewMode={apptViewMode}
+          setApptViewMode={setApptViewMode}
+          filteredSingleAppts={filteredSingleAppts}
+          groupedAppts={groupedAppts}
           apptLoading={apptLoading}
-          pagedAppts={pagedAppts}
+          pagedSingleAppts={pagedSingleAppts}
+          pagedGroupedAppts={pagedGroupedAppts}
           formatApptDate={formatApptDate}
           formatApptTime={formatApptTime}
           getApptStatusBadge={getApptStatusBadge}
           handleApptAction={handleApptAction}
           actingAppt={actingAppt}
+          onAppointmentClick={handleOpenApptDetail}
           apptsPage={apptsPage}
           apptsPageSize={apptsPageSize}
+          apptsTotalItems={apptViewMode === "GROUP" ? groupedAppts.length : filteredSingleAppts.length}
           setApptsPage={setApptsPage}
           setApptsPageSize={setApptsPageSize}
         />
       )}
 
-      {modal === "create_appt" && (
-        <Modal title="Tạo lịch hẹn mới (Lễ tân)" onClose={() => setModal(null)} className="modal-lg">
-           {error && <div style={{ padding: '12px', background: '#fee', color: '#e6522c', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>? {error}</div>}
-           <AppointmentForm 
-             customers={customers} 
+      {modal === "edit_appt" && editingAppt && (
+        <Modal title="Chỉnh sửa lịch hẹn" onClose={closeEditApptModal} className="modal-lg">
+          <div className="appt-edit-intro">
+            <strong>Mã lịch hẹn #{editingAppt.id}</strong>
+            <span>
+              Điều chỉnh thông tin lịch hẹn và lưu để cập nhật lịch mới cho khách hàng.
+            </span>
+          </div>
+          {error && <div style={{ padding: "12px", background: "#fee", color: "#e6522c", borderRadius: "8px", marginBottom: "16px", fontWeight: 600 }}>Lỗi: {error}</div>}
+          <AppointmentForm
+            customers={customers}
             vehicles={vehicles}
             customerVehicles={customerVehicles}
             services={services}
-            branchId={selectedBranchId}
-             onSubmit={handleSaveAppointment} 
-             onCancel={() => setModal(null)} 
-             loading={saving} 
-           />
+            branchId={effectiveBranchId || undefined}
+            initialValues={buildEditInitialValues(editingAppt)}
+            submitLabel="Lưu thay đổi"
+            onSubmit={handleSaveEditedAppointment}
+            onCancel={closeEditApptModal}
+            loading={saving}
+          />
         </Modal>
       )}
 
       {modal === "appt_success" && successAppt && (
         <Modal title="Đặt lịch thành công" onClose={() => { setModal(null); setSuccessAppt(null); }}>
           <div className="success-summary" style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', color: '#05cd99', marginBottom: '16px' }}>?</div>
+            <div style={{ fontSize: '48px', color: '#05cd99', marginBottom: '16px' }}>✓</div>
             <h3 style={{ color: '#2b3674', marginTop: 0 }}>Đã xác nhận lịch hẹn!</h3>
             <div style={{ background: '#f4f7fe', padding: '16px', borderRadius: '12px', textAlign: 'left', marginTop: '20px', lineHeight: '1.8' }}>
+              {successAppt.updateMode && (
+                <p style={{ margin: 0, color: "#2f4f9d", fontWeight: 700 }}>
+                  Đã cập nhật lịch hẹn thành công.
+                </p>
+              )}
               <p style={{margin: 0}}><strong>Khách hàng:</strong> {successAppt.customerName} - {successAppt.customerPhone}</p>
               <p style={{margin: 0}}><strong>Biển số xe:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>{successAppt.vehicleLicensePlate}</span></p>
+              {Number(successAppt.groupVehicleCount || 0) > 1 && (
+                <p style={{margin: 0}}><strong>Loại lịch:</strong> Lịch nhóm ({successAppt.groupVehicleCount} xe)</p>
+              )}
               <p style={{margin: 0}}><strong>Thời gian nhận xe:</strong> <span style={{ color: '#4318ff', fontWeight: 'bold' }}>{formatApptTime(successAppt.startTime)}</span> ngày {formatApptDate(successAppt.startTime)}</p>
               <p style={{margin: 0}}><strong>Dịch vụ yêu cầu:</strong> {successAppt.services.length > 0 ? successAppt.services.map(s => s.Name || s.name).join(', ') : 'Chưa định trước'}</p>
             </div>
@@ -637,6 +899,20 @@ export default function ReceptionOrdersSection() {
         </Modal>
       )}
 
+      {modal === "appt_detail" && selectedApptForView && (
+        <AppointmentDetailModal
+          appointment={selectedApptForView}
+          loading={apptDetailLoading}
+          error={apptDetailError}
+          onClose={closeApptDetailModal}
+          onEdit={handleOpenApptEdit}
+          onEditDisabled={apptDetailLoading || !canEditAppointment(selectedApptForView?.status)}
+          formatApptDate={formatApptDate}
+          formatApptTime={formatApptTime}
+          getApptStatusBadge={getApptStatusBadge}
+        />
+      )}
+
       {modal === "date_range" && (
         <Modal title="Lọc lịch theo khoảng ngày" onClose={() => setModal(null)} className="date-range-modal">
           <div className="date-range-picker-shell">
@@ -645,7 +921,7 @@ export default function ReceptionOrdersSection() {
                 <span className="date-pill-label">Bắt đầu</span>
                 <strong>{toDisplayDate(draftDateFrom)}</strong>
               </div>
-              <div className="date-pill-arrow">?</div>
+              <div className="date-pill-arrow">→</div>
               <div className="date-pill">
                 <span className="date-pill-label">Kết thúc</span>
                 <strong>{toDisplayDate(draftDateTo)}</strong>
@@ -692,7 +968,7 @@ export default function ReceptionOrdersSection() {
 
             <div className="date-range-footer">
               <button type="button" className="btn-secondary-outline" style={{ height: "42px", minWidth: "90px", borderRadius: "10px", padding: "0 16px" }} onClick={() => setModal(null)}>
-                ??ng
+                Đóng
               </button>
               <button
                 type="button"
@@ -756,7 +1032,7 @@ function OrdersTableContent({
         <div className="toolbar-controls">
           <label htmlFor="order-status-filter" className="toolbar-label">Trạng thái:</label>
           <select id="order-status-filter" className="toolbar-select" value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} style={{ minWidth: "160px" }}>
-            <option value="ALL">{"T\u1ea5t c\u1ea3"}</option>
+            <option value="ALL">Tất cả</option>
             {orderStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
           </select>
           <label htmlFor="order-sort" className="toolbar-label">Sắp xếp:</label>

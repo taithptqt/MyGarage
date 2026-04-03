@@ -1,312 +1,385 @@
-﻿import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   getVehicleBrands,
-  getVehicleModels
+  getVehicleModels,
 } from "@features/appointments/api/appointmentApi";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
 import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
 
-export default function AppointmentForm({ customers = [], vehicles = [], customerVehicles = [], branchId, onSubmit, onCancel, loading, services = [] }) {
-  const [formData, setFormData] = useState({
-    customerId: "",
-    vehicleId: "",
-    customerName: "",
-    customerPhone: "",
-    vehicleLicensePlate: "",
-    vehicleModelId: "",
-    vehicleColor: "",
-    vehicleVin: "",
-    vehicleYear: "",
-    guestName: "",
-    guestPhone: "",
-    guestVehiclePlate: "",
-    guestVehicleModelId: "",
-    guestVehicleColor: "",
-    guestVehicleVin: "",
-    guestVehicleYear: "",
-    isQuickOrder: false,
-    isNewVehicle: false,
-    appointmentDate: "",
-    startTime: "",
-    serviceIds: [],
-    customerNotes: ""
-  });
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\s+/g, "");
+}
 
+function isValidPhone(phone) {
+  return /^(0\d{9,10}|\+84\d{9,10})$/.test(normalizePhone(phone));
+}
+
+const EMPTY_FORM_DATA = {
+  customerId: "",
+  customerName: "",
+  customerPhone: "",
+  selectedVehicleIds: [],
+  isQuickOrder: false,
+  isNewVehicle: false,
+
+  vehicleLicensePlate: "",
+  vehicleModelId: "",
+  vehicleColor: "",
+  vehicleVin: "",
+  vehicleYear: "",
+
+  guestName: "",
+  guestPhone: "",
+  guestVehiclePlate: "",
+  guestVehicleModelId: "",
+  guestVehicleColor: "",
+  guestVehicleVin: "",
+  guestVehicleYear: "",
+
+  appointmentDate: "",
+  startTime: "",
+  serviceIds: [],
+  customerNotes: "",
+};
+
+function toDateTimeParts(value) {
+  if (!value) return { appointmentDate: "", startTime: "" };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { appointmentDate: "", startTime: "" };
+  const appointmentDate = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  const startTime = `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+  return { appointmentDate, startTime };
+}
+
+function buildInitialFormData(initialValues) {
+  if (!initialValues) return { ...EMPTY_FORM_DATA };
+
+  const serviceIds = Array.isArray(initialValues.serviceIds)
+    ? initialValues.serviceIds.map(Number).filter((id) => id > 0)
+    : String(initialValues.requestedServiceIds || "")
+      .split(",")
+      .map((value) => Number(String(value).trim()))
+      .filter((id) => id > 0);
+
+  const selectedVehicleIds = Array.isArray(initialValues.selectedVehicleIds)
+    ? initialValues.selectedVehicleIds.map(Number).filter((id) => id > 0)
+    : Number(initialValues.vehicleId) > 0
+      ? [Number(initialValues.vehicleId)]
+      : [];
+
+  const { appointmentDate, startTime } = toDateTimeParts(initialValues.startTime);
+
+  return {
+    ...EMPTY_FORM_DATA,
+    customerId: initialValues.customerId ? Number(initialValues.customerId) : "",
+    customerName: initialValues.customerName || "",
+    customerPhone: initialValues.customerPhone || "",
+    selectedVehicleIds,
+    appointmentDate,
+    startTime,
+    serviceIds,
+    customerNotes: initialValues.customerNotes || "",
+  };
+}
+
+export default function AppointmentForm({
+  customers = [],
+  vehicles = [],
+  customerVehicles = [],
+  onSubmit,
+  onCancel,
+  loading,
+  services = [],
+  initialValues = null,
+  submitLabel = "Xác nhận đặt lịch",
+}) {
+  const [formData, setFormData] = useState(() => buildInitialFormData(initialValues));
   const [search, setSearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [guestSelectedBrandId, setGuestSelectedBrandId] = useState("");
+  const [errorText, setErrorText] = useState("");
 
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const arr = [];
-    for (let y = currentYear; y >= 1980; y--) arr.push(y);
-    return arr;
+    const list = [];
+    for (let y = currentYear; y >= 1980; y -= 1) list.push(y);
+    return list;
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    let ignore = false;
+
+    (async () => {
       try {
-        const [bRes, mRes] = await Promise.all([
+        const [brandRes, modelRes] = await Promise.all([
           getVehicleBrands(),
-          getVehicleModels()
+          getVehicleModels(),
         ]);
-        setBrands(bRes || []);
-        setModels(mRes || []);
-      } catch (err) { console.error("Failed to fetch reference data", err); }
+        if (ignore) return;
+        setBrands(Array.isArray(brandRes) ? brandRes : []);
+        setModels(Array.isArray(modelRes) ? modelRes : []);
+      } catch {
+        if (!ignore) {
+          setBrands([]);
+          setModels([]);
+        }
+      }
+    })();
+
+    return () => {
+      ignore = true;
     };
-    fetchData();
   }, []);
 
+  useEffect(() => {
+    setErrorText("");
+    setSearch("");
+    setServiceSearch("");
+    setSelectedBrandId("");
+    setGuestSelectedBrandId("");
+    setFormData(buildInitialFormData(initialValues));
+  }, [initialValues]);
+
   const filteredCustomers = useMemo(() => {
-    if (!search) return [];
-    return customers.filter(c =>
-      (c.fullName || "").toLowerCase().includes(search.toLowerCase()) ||
-      (c.phone || "").includes(search)
-    ).slice(0, 5);
+    const term = String(search || "").trim().toLowerCase();
+    if (!term) return [];
+    return customers
+      .filter((customer) =>
+        String(customer.fullName || "").toLowerCase().includes(term) ||
+        String(customer.phone || "").includes(term))
+      .slice(0, 8);
   }, [customers, search]);
 
   const customerVehiclesFiltered = useMemo(() => {
     if (!formData.customerId) return [];
-    // Filter mappings for this customer
-    const mappings = customerVehicles.filter(cv => cv.customerId === Number(formData.customerId));
-    // Find corresponding vehicles
-    return vehicles.filter(v => mappings.some(m => m.vehicleId === v.id));
-  }, [vehicles, customerVehicles, formData.customerId]);
+    const customerId = Number(formData.customerId);
+    const linkedVehicleIds = new Set(
+      customerVehicles
+        .filter((item) => Number(item.customerId) === customerId)
+        .map((item) => Number(item.vehicleId)),
+    );
+    return vehicles.filter((vehicle) => linkedVehicleIds.has(Number(vehicle.id)));
+  }, [customerVehicles, vehicles, formData.customerId]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const filteredServices = useMemo(() => {
+    const term = String(serviceSearch || "").trim().toLowerCase();
+    if (!term) return [];
+    const selectedIds = new Set(formData.serviceIds.map(Number));
+    return services
+      .filter((service) => !selectedIds.has(Number(service.id)))
+      .filter((service) => String(service.Name || service.name || "").toLowerCase().includes(term))
+      .slice(0, 12);
+  }, [services, serviceSearch, formData.serviceIds]);
+
+  const selectedServices = useMemo(() => {
+    const selectedIds = new Set(formData.serviceIds.map(Number));
+    return services.filter((service) => selectedIds.has(Number(service.id)));
+  }, [services, formData.serviceIds]);
+
+  const totalMinutes = useMemo(() => (
+    selectedServices.reduce(
+      (sum, service) => sum + Number(service.StandardMinutes || service.standardMinutes || 60),
+      0,
+    )
+  ), [selectedServices]);
+
+  const totalPrice = useMemo(() => (
+    selectedServices.reduce(
+      (sum, service) => sum + Number(service.BasePrice || service.basePrice || 0),
+      0,
+    )
+  ), [selectedServices]);
+
+  const selectedVehicleCount = formData.isQuickOrder
+    ? 1
+    : formData.isNewVehicle
+      ? 1
+      : formData.selectedVehicleIds.length;
+
+  const appointmentSummary = useMemo(() => {
+    if (!formData.appointmentDate || !formData.startTime) return "";
+    const start = new Date(`${formData.appointmentDate}T${formData.startTime}`);
+    if (Number.isNaN(start.getTime())) return "";
+    const end = new Date(start.getTime() + totalMinutes * 60 * 1000);
+    return `${start.toLocaleString("vi-VN")} - ${end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+  }, [formData.appointmentDate, formData.startTime, totalMinutes]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setErrorText("");
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const selectCustomer = (customer) => {
-    const mappings = customerVehicles.filter(cv => cv.customerId === Number(customer.id));
-    const forceNewVeh = mappings.length === 0;
+  const handlePlateBlur = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: formatLicensePlate(value) }));
+  };
 
-    setFormData(prev => ({
+  const toggleQuickOrder = () => {
+    setErrorText("");
+    setSearch("");
+    setSelectedBrandId("");
+    setGuestSelectedBrandId("");
+    setFormData((prev) => ({
       ...prev,
-      customerId: customer.id,
-      customerName: customer.fullName,
-      customerPhone: customer.phone,
-      vehicleId: "",
-      isNewVehicle: forceNewVeh,
+      isQuickOrder: !prev.isQuickOrder,
+      isNewVehicle: false,
+      customerId: "",
+      customerName: "",
+      customerPhone: "",
+      selectedVehicleIds: [],
+      vehicleLicensePlate: "",
       vehicleModelId: "",
       vehicleColor: "",
       vehicleVin: "",
-      vehicleYear: ""
-    }));
-    setSearch("");
-    setSelectedBrandId("");
-  };
-
-
-  const handlePlateBlur = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: formatLicensePlate(value) }));
-  };
-
-  const handleServiceToggle = (id) => {
-    setFormData(prev => {
-      const exists = prev.serviceIds.includes(id);
-      return {
-        ...prev,
-        serviceIds: exists ? prev.serviceIds.filter(sid => sid !== id) : [...prev.serviceIds, id]
-      };
-    });
-    setServiceSearch(""); // Clear search after seleciton
-  };
-
-  const filteredServices = useMemo(() => {
-    if (!serviceSearch) return [];
-    console.log("Services in form:", services); // Debug
-    return services.filter(s =>
-      ((s.Name || s.name || "").toLowerCase().includes(serviceSearch.toLowerCase())) &&
-      !formData.serviceIds.includes(s.id)
-    ).slice(0, 10);
-  }, [services, serviceSearch, formData.serviceIds]);
-
-  const toggleQuickOrder = () => {
-    setFormData(prev => ({
-      ...prev,
-      isQuickOrder: !prev.isQuickOrder,
-      customerId: "",
-      vehicleId: "",
+      vehicleYear: "",
       guestName: "",
       guestPhone: "",
       guestVehiclePlate: "",
-      guestVehicleModel: "",
-      isNewVehicle: false
+      guestVehicleModelId: "",
+      guestVehicleColor: "",
+      guestVehicleVin: "",
+      guestVehicleYear: "",
     }));
-    setSearch("");
   };
 
-  const { totalMinutes, isOvernight, timeError, warningMsg, totalPrice, finishTimeStr } = useMemo(() => {
-    const selectedServices = services.filter(s => formData.serviceIds.includes(s.id));
-    const total = selectedServices.reduce((sum, s) => sum + (s.StandardMinutes || s.standardMinutes || 60), 0);
-    const priceSum = selectedServices.reduce((sum, s) => sum + (s.basePrice || s.BasePrice || 0), 0);
+  const selectCustomer = (customer) => {
+    setErrorText("");
+    setSearch("");
+    setSelectedBrandId("");
+    const customerId = Number(customer.id);
+    setFormData((prev) => ({
+      ...prev,
+      customerId,
+      customerName: customer.fullName || "",
+      customerPhone: customer.phone || "",
+      isNewVehicle: false,
+      selectedVehicleIds: [],
+      vehicleLicensePlate: "",
+      vehicleModelId: "",
+      vehicleColor: "",
+      vehicleVin: "",
+      vehicleYear: "",
+    }));
+  };
 
-    let error = "";
-    let overnight = false;
-    let warning = "";
-    let finishTime = "";
-
-    if (formData.startTime && formData.appointmentDate) {
-      const [sh, sm] = formData.startTime.split(':').map(Number);
-
-      // Helper to calculate next working time
-      let current = new Date(`${formData.appointmentDate}T${formData.startTime}`);
-      let remaining = total;
-
-      while (remaining > 0) {
-        const day = current.getDay();
-        const isSunday = day === 0;
-        const openMins = 7 * 60;
-        const lunchStart = 12 * 60;
-        const lunchEnd = 13.5 * 60;
-        const closeMins = isSunday ? 12 * 60 : 17.5 * 60; // 17:30
-
-        const curMins = current.getHours() * 60 + current.getMinutes();
-
-        if (curMins < openMins) {
-          current.setHours(7, 0, 0, 0);
-          continue;
-        }
-        if (curMins >= closeMins) {
-          current.setDate(current.getDate() + 1);
-          current.setHours(7, 0, 0, 0);
-          overnight = true;
-          continue;
-        }
-        if (curMins >= lunchStart && curMins < lunchEnd) {
-          current.setHours(13, 30, 0, 0);
-          continue;
-        }
-
-        let toNext = (curMins < lunchStart) ? (lunchStart - curMins) : (closeMins - curMins);
-        let consume = Math.min(remaining, toNext);
-        current.setMinutes(current.getMinutes() + consume);
-        remaining -= consume;
-      }
-
-      // Check if it's the same day as scheduled
-      const schedDate = new Date(formData.appointmentDate);
-      if (current.getDate() !== schedDate.getDate() || current.getMonth() !== schedDate.getMonth()) {
-        overnight = true;
-      }
-
-      const fh = current.getHours().toString().padStart(2, '0');
-      const fm = current.getMinutes().toString().padStart(2, '0');
-      const fDate = current.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-
-      if (overnight) {
-        finishTime = `${fh}:${fm} - Ngày ${fDate}`;
-        warning = "Lưu ý: Thời gian hoàn thành dự kiến sang (những) ngày tiếp theo.";
+  const toggleVehicleSelection = (vehicleId) => {
+    const numericId = Number(vehicleId);
+    setFormData((prev) => {
+      const existing = new Set(prev.selectedVehicleIds.map(Number));
+      if (existing.has(numericId)) {
+        existing.delete(numericId);
       } else {
-        finishTime = `${fh}:${fm}`;
-        if (current.getHours() >= 13) {
-          const [hStart] = formData.startTime.split(':').map(Number);
-          if (hStart < 12) warning = "Cảnh báo: Xe sẽ được giao vào buđ.i chiều.";
-        }
+        existing.add(numericId);
       }
+      return { ...prev, selectedVehicleIds: Array.from(existing) };
+    });
+  };
 
-      // Validation Errors
-      const startTotal = sh * 60 + sm;
-      const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-
-      if (formData.appointmentDate === todayStr) {
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-        if (startTotal < currentMins + 30) {
-          error = "Thời gian hẹn phải cách thời gian hiện tại ít nhất 30 phút.";
-        }
+  const toggleService = (serviceId) => {
+    const numericId = Number(serviceId);
+    setFormData((prev) => {
+      const existing = new Set(prev.serviceIds.map(Number));
+      if (existing.has(numericId)) {
+        existing.delete(numericId);
+      } else {
+        existing.add(numericId);
       }
+      return { ...prev, serviceIds: Array.from(existing) };
+    });
+    setServiceSearch("");
+  };
 
-      if (!error) {
-        if (startTotal < 7 * 60) {
-          error = "Giờ làm việc bắt đầu từ 07:00.";
-        } else if (startTotal > 11.5 * 60 && startTotal < 13.5 * 60) {
-          error = "Giờ nghệ trưa 12:00 - 13:30. Vui lòng đặt lịch trươc 11:30 hoặc sau 13:30";
-        } else {
-          const closeTime = 17.5 * 60; // Closing at 17:30
-          if (startTotal > 17 * 60) {
-            error = "Vui lòng đặt lịch trươc 17:00 (trươc giờ đóng cửa ít nhất 30 phút).";
-          }
-        }
-      }
+  const validateBeforeSubmit = () => {
+    if (!formData.appointmentDate || !formData.startTime) {
+      return "Vui lòng chọn ngày giờ hẹn.";
     }
-
-    return { totalMinutes: total, isOvernight: overnight, timeError: error, warningMsg: warning, totalPrice: priceSum, finishTimeStr: finishTime };
-  }, [formData.serviceIds, formData.startTime, formData.appointmentDate, services]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (timeError) {
-      alert(timeError);
-      return;
+    if (formData.serviceIds.length === 0) {
+      return "Vui lòng chọn ít nhất 1 dịch vụ.";
     }
 
     if (formData.isQuickOrder) {
-      if (!formData.guestName || !formData.guestPhone) {
-        alert("Vui lòng nhập đầy đủ họ tên và SĐT của khách.");
-        return;
-      }
-      // Info xe của khách vãng lai là tùy chọn, nhưng nếu nhập thì phải đầy đủ
-      if ((formData.guestVehiclePlate || guestSelectedBrandId || formData.guestVehicleModelId) && (!formData.guestVehiclePlate || !guestSelectedBrandId || !formData.guestVehicleModelId)) {
-        alert("Vui lòng nhập đầy đủ Biển số, Hãng và Dòng xe.");
-        return;
-      }
-    } else {
-      if (!formData.customerId) {
-        alert("Vui lòng chọn khách hàng.");
-        return;
-      }
-      if (!formData.isNewVehicle && !formData.vehicleId) {
-        alert("Vui lòng chọn xe hoặc tích chọn 'Xe mơi'.");
-        return;
-      }
-      if (formData.isNewVehicle && (!formData.vehicleLicensePlate || !formData.vehicleModelId)) {
-        alert("Vui lòng nhập đầy đủ thông tin xe mơi (Biển sđ & Dòng xe).");
-        return;
-      }
+      if (!String(formData.guestName || "").trim()) return "Vui lòng nhập tên khách vãng lai.";
+      if (!isValidPhone(formData.guestPhone)) return "Số điện thoại khách vãng lai không hợp lệ.";
+      if (!String(formData.guestVehiclePlate || "").trim()) return "Vui lòng nhập biển số xe.";
+      if (!formData.guestVehicleModelId) return "Vui lòng chọn dòng xe cho khách vãng lai.";
+      if (!String(formData.guestVehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe vãng lai.";
+      return "";
     }
 
-    onSubmit({ ...formData, totalMinutes });
+    if (!formData.customerId) return "Vui lòng chọn khách hàng.";
+    if (!isValidPhone(formData.customerPhone)) return "Số điện thoại khách hàng không hợp lệ.";
+
+    if (formData.isNewVehicle) {
+      if (!String(formData.vehicleLicensePlate || "").trim()) return "Vui lòng nhập biển số xe mới.";
+      if (!formData.vehicleModelId) return "Vui lòng chọn dòng xe mới.";
+      if (!String(formData.vehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe mới.";
+      return "";
+    }
+
+    if (formData.selectedVehicleIds.length === 0) {
+      return "Vui lòng chọn ít nhất 1 xe của khách.";
+    }
+    return "";
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const validationError = validateBeforeSubmit();
+    if (validationError) {
+      setErrorText(validationError);
+      return;
+    }
+
+    onSubmit({
+      ...formData,
+      customerId: formData.customerId ? Number(formData.customerId) : null,
+      selectedVehicleIds: formData.selectedVehicleIds.map(Number).filter((id) => id > 0),
+      serviceIds: formData.serviceIds.map(Number).filter((id) => id > 0),
+      vehicleModelId: formData.vehicleModelId ? Number(formData.vehicleModelId) : null,
+      guestVehicleModelId: formData.guestVehicleModelId ? Number(formData.guestVehicleModelId) : null,
+      totalMinutes,
+    });
   };
 
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
-      <div className="quick-toggle" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <input
+          id="appt-quick-toggle"
           type="checkbox"
-          id="isQuickOrderAppt"
           checked={formData.isQuickOrder}
           onChange={toggleQuickOrder}
-          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
         />
-        <label htmlFor="isQuickOrderAppt" style={{ cursor: 'pointer', fontWeight: 600 }}>
-          Khách vãng lai (Chưa có tài khoản)
+        <label htmlFor="appt-quick-toggle" style={{ fontWeight: 600 }}>
+          Đặt lịch cho khách vãng lai
         </label>
       </div>
 
       {!formData.isQuickOrder ? (
         <>
           <div className="form-group">
-            <label>Tìm kiếm Khách hàng *</label>
-            <div style={{ position: 'relative' }}>
+            <label>Tìm khách hàng</label>
+            <div style={{ position: "relative" }}>
               <input
                 type="text"
-                placeholder="Nhập Họ tên hoặc SĐT..."
+                placeholder="Nhập tên hoặc số điện thoại..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(event) => setSearch(event.target.value)}
                 required={!formData.customerId}
               />
               {filteredCustomers.length > 0 && (
-                <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                  {filteredCustomers.map(c => (
-                    <div key={c.id} className="dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f4f7fe' }} onClick={() => selectCustomer(c)}>
-                      <strong>{c.fullName}</strong> ệ" {c.phone}
+                <div className="dropdown-panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20 }}>
+                  {filteredCustomers.map((customer) => (
+                    <div
+                      key={customer.id}
+                      className="dropdown-item"
+                      onClick={() => selectCustomer(customer)}
+                    >
+                      <strong>{customer.fullName}</strong> - {customer.phone}
                     </div>
                   ))}
                 </div>
@@ -315,248 +388,269 @@ export default function AppointmentForm({ customers = [], vehicles = [], custome
           </div>
 
           {formData.customerId && (
-            <div className="customer-info-box" style={{ padding: '12px', background: '#e9edf7', borderRadius: '12px', marginBottom: '16px' }}>
-              <p style={{ margin: 0, fontSize: '14px', color: '#2b3674' }}><strong>Khách hàng:</strong> {formData.customerName} ({formData.customerPhone})</p>
-
-              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ background: "#f4f7fe", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+              <div style={{ fontSize: 13, marginBottom: 8 }}>
+                <strong>{formData.customerName}</strong> - {formData.customerPhone}
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                 <input
                   type="checkbox"
-                  id="isNewVeh"
                   checked={formData.isNewVehicle}
-                  disabled={customerVehiclesFiltered.length === 0}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isNewVehicle: e.target.checked, vehicleId: e.target.checked ? "" : prev.vehicleId }))}
+                  onChange={(event) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      isNewVehicle: event.target.checked,
+                      selectedVehicleIds: event.target.checked ? [] : prev.selectedVehicleIds,
+                    }))}
                 />
-                <label htmlFor="isNewVeh" style={{ fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>Sử dụng xe mơi (chưa có trong danh sách)</label>
-              </div>
+                Xe mới (chưa có trong danh sách)
+              </label>
             </div>
           )}
 
           {!formData.isNewVehicle ? (
             <div className="form-group">
-              <label>Chọn xe của khách *</label>
-              <select
-                name="vehicleId"
-                value={formData.vehicleId}
-                onChange={(e) => {
-                  const v = vehicles.find(veh => veh.id === Number(e.target.value));
-                  setFormData(prev => ({ ...prev, vehicleId: e.target.value, vehicleLicensePlate: v?.licensePlate || "" }));
-                }}
-                required={formData.customerId && !formData.isNewVehicle}
-                disabled={!formData.customerId}
-              >
-                <option value="">-- Chọn xe --</option>
-                {customerVehiclesFiltered.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.licensePlate} {(v.brandName || v.modelName) ? `(${v.brandName || ""} ${v.modelName || ""})` : ""}
-                  </option>
-                ))}
-              </select>
+              <label>Xe của khách (có thể chọn nhiều xe để đặt lịch nhóm)</label>
+              {!formData.customerId ? (
+                <div style={{ fontSize: 13, color: "#a3aed0" }}>Hãy chọn khách hàng trước.</div>
+              ) : customerVehiclesFiltered.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#a3aed0" }}>Khách hàng chưa có xe đã lưu.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 8, maxHeight: 200, overflowY: "auto", border: "1px solid #e9edf7", borderRadius: 10, padding: 10 }}>
+                  {customerVehiclesFiltered.map((vehicle) => {
+                    const checked = formData.selectedVehicleIds.map(Number).includes(Number(vehicle.id));
+                    return (
+                      <label key={vehicle.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleVehicleSelection(vehicle.id)}
+                        />
+                        <span>
+                          <strong>{vehicle.licensePlate}</strong>
+                          {(vehicle.brandName || vehicle.modelName) ? ` (${vehicle.brandName || ""} ${vehicle.modelName || ""})` : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="new-vehicle-fields" style={{ padding: '16px', background: '#fff9e6', borderRadius: '12px', border: '1px solid #ffe58f', marginBottom: '16px' }}>
-              <h4 style={{ marginTop: 0, marginBottom: '12px', fontSize: '14px', color: '#856404' }}>Thông tin xe mơi</h4>
+            <div style={{ border: "1px solid #ffe2ad", background: "#fff9f2", borderRadius: 12, padding: 12 }}>
               <div className="form-group">
-                <label>Biển sđ xe *</label>
-                <input type="text" name="vehicleLicensePlate" value={formData.vehicleLicensePlate} onChange={handleChange} onBlur={handlePlateBlur} required placeholder="VD: 30A-11111" style={{ textTransform: 'uppercase' }} />
+                <label>Biển số xe mới *</label>
+                <input
+                  type="text"
+                  name="vehicleLicensePlate"
+                  value={formData.vehicleLicensePlate}
+                  onChange={handleChange}
+                  onBlur={handlePlateBlur}
+                  placeholder="VD: 30A-12345"
+                />
               </div>
-              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div className="form-group">
                   <label>Hãng xe *</label>
-                  <select value={selectedBrandId} onChange={(e) => setSelectedBrandId(e.target.value)} required style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                    <option value="" style={{ background: '#1b254b', color: '#fff' }}>-- Chọn hãng --</option>
-                    {brands.map(b => <option key={b.id} value={b.id} style={{ background: '#1b254b', color: '#fff' }}>{b.name}</option>)}
+                  <select value={selectedBrandId} onChange={(event) => setSelectedBrandId(event.target.value)}>
+                    <option value="">-- Chọn hãng --</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>{brand.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Dòng xe *</label>
-                  <select name="vehicleModelId" value={formData.vehicleModelId} onChange={handleChange} required disabled={!selectedBrandId} style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                    <option value="" style={{ background: '#1b254b', color: '#fff' }}>-- Chọn dòng xe --</option>
-                    {models.filter(m => m.brandId === Number(selectedBrandId)).map(m => (
-                      <option key={m.id} value={m.id} style={{ background: '#1b254b', color: '#fff' }}>{m.modelName}</option>
-                    ))}
+                  <select name="vehicleModelId" value={formData.vehicleModelId} onChange={handleChange} disabled={!selectedBrandId}>
+                    <option value="">-- Chọn dòng xe --</option>
+                    {models
+                      .filter((model) => Number(model.brandId) === Number(selectedBrandId))
+                      .map((model) => (
+                        <option key={model.id} value={model.id}>{model.modelName}</option>
+                      ))}
                   </select>
                 </div>
               </div>
-              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) minmax(80px, 0.8fr) minmax(150px, 1.5fr)', gap: '12px' }}>
+              <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <div className="form-group">
                   <label>Màu sắc</label>
-                  <input type="text" name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} placeholder="VD: Trắng" />
+                  <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
                 </div>
                 <div className="form-group">
-                  <label>Nểm SX *</label>
-                  <select name="vehicleYear" value={formData.vehicleYear} onChange={handleChange} required style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                    <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn nểm</option>
-                    {years.map(y => <option key={y} value={y} style={{ background: '#1b254b', color: '#fff' }}>{y}</option>)}
+                  <label>Năm SX</label>
+                  <select name="vehicleYear" value={formData.vehicleYear} onChange={handleChange}>
+                    <option value="">-- Chọn năm --</option>
+                    {years.map((year) => <option key={year} value={year}>{year}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Sđ khung (VIN)</label>
-                  <input type="text" name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} placeholder="Nhập sđ khung VIN..." />
+                  <label>VIN *</label>
+                  <input name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} />
                 </div>
               </div>
             </div>
           )}
         </>
       ) : (
-        <div className="guest-info-fields" style={{ padding: '16px', background: '#f4f7fe', borderRadius: '16px', marginBottom: '20px', border: '1px dashed #4318ff' }}>
-          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ border: "1px dashed #c8d8ff", background: "#f7faff", borderRadius: 12, padding: 12 }}>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div className="form-group">
-              <label>Họ tên khách *</label>
-              <input type="text" name="guestName" value={formData.guestName} onChange={handleChange} required placeholder="VD: Nguyđ.n Vển A" />
+              <label>Tên khách *</label>
+              <input name="guestName" value={formData.guestName} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Sđ điện thoại *</label>
-              <input type="text" name="guestPhone" value={formData.guestPhone} onChange={handleChange} required placeholder="VD: 0987654321" />
+              <label>Số điện thoại *</label>
+              <input name="guestPhone" value={formData.guestPhone} onChange={handleChange} />
             </div>
           </div>
-
-          <div style={{ borderTop: '1px solid #e9edf7', margin: '15px 0', paddingTop: '15px' }}>
-            <strong>Thông tin xe vãng lai</strong>
+          <div className="form-group">
+            <label>Biển số xe *</label>
+            <input
+              name="guestVehiclePlate"
+              value={formData.guestVehiclePlate}
+              onChange={handleChange}
+              onBlur={handlePlateBlur}
+              style={{ textTransform: "uppercase" }}
+            />
           </div>
-
-          <div className="form-group" style={{ marginTop: '10px' }}>
-            <label>Biển sđ xe {(formData.guestVehiclePlate || guestSelectedBrandId) ? '*' : ''}</label>
-            <input type="text" name="guestVehiclePlate" value={formData.guestVehiclePlate} onChange={handleChange} onBlur={handlePlateBlur} placeholder="VD: 30A-12345 (Tùy chọn)" required={!!guestSelectedBrandId} style={{ textTransform: 'uppercase', fontWeight: 700 }} />
-          </div>
-
-          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div className="form-group">
-              <label>Hãng xe {(formData.guestVehiclePlate || guestSelectedBrandId) ? '*' : ''}</label>
-              <select value={guestSelectedBrandId} onChange={(e) => setGuestSelectedBrandId(e.target.value)} required={!!formData.guestVehiclePlate} style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                <option value="" style={{ background: '#1b254b', color: '#fff' }}>-- Chọn hãng --</option>
-                {brands.map(b => <option key={b.id} value={b.id} style={{ background: '#1b254b', color: '#fff' }}>{b.name}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Dòng xe {(formData.guestVehiclePlate || guestSelectedBrandId) ? '*' : ''}</label>
-              <select name="guestVehicleModelId" value={formData.guestVehicleModelId} onChange={handleChange} disabled={!guestSelectedBrandId} required={!!formData.guestVehiclePlate || !!guestSelectedBrandId} style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                <option value="" style={{ background: '#1b254b', color: '#fff' }}>-- Chọn dòng xe --</option>
-                {models.filter(m => m.brandId === Number(guestSelectedBrandId)).map(m => (
-                  <option key={m.id} value={m.id} style={{ background: '#1b254b', color: '#fff' }}>{m.modelName}</option>
+              <label>Hãng xe *</label>
+              <select value={guestSelectedBrandId} onChange={(event) => setGuestSelectedBrandId(event.target.value)}>
+                <option value="">-- Chọn hãng --</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>{brand.name}</option>
                 ))}
               </select>
             </div>
+            <div className="form-group">
+              <label>Dòng xe *</label>
+              <select
+                name="guestVehicleModelId"
+                value={formData.guestVehicleModelId}
+                onChange={handleChange}
+                disabled={!guestSelectedBrandId}
+              >
+                <option value="">-- Chọn dòng xe --</option>
+                {models
+                  .filter((model) => Number(model.brandId) === Number(guestSelectedBrandId))
+                  .map((model) => (
+                    <option key={model.id} value={model.id}>{model.modelName}</option>
+                  ))}
+              </select>
+            </div>
           </div>
-
-          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) minmax(80px, 0.8fr) minmax(150px, 1.5fr)', gap: '12px' }}>
+          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <div className="form-group">
               <label>Màu sắc</label>
-              <input type="text" name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} placeholder="VD: Đen" />
+              <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Nểm SX *</label>
-              <select name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange} required={!!formData.guestVehiclePlate || !!guestSelectedBrandId} style={{ background: '#1b254b', color: '#fff', border: '1px solid #4318ff' }}>
-                <option value="" style={{ background: '#1b254b', color: '#fff' }}>Chọn nểm</option>
-                {years.map(y => <option key={y} value={y} style={{ background: '#1b254b', color: '#fff' }}>{y}</option>)}
+              <label>Năm SX</label>
+              <select name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange}>
+                <option value="">-- Chọn năm --</option>
+                {years.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Sđ khung (VIN)</label>
-              <input type="text" name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} placeholder="Nhập sđ khung VIN..." />
+              <label>VIN *</label>
+              <input name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} />
             </div>
           </div>
         </div>
       )}
 
-
-
-      <div className="form-group">
-        <label>Tìm & Chọn dịch vụ yêu cầu</label>
-        <div style={{ position: 'relative', marginBottom: '10px' }}>
+      <div className="form-group" style={{ marginTop: 14 }}>
+        <label>Dịch vụ yêu cầu</label>
+        <div style={{ position: "relative" }}>
           <input
             type="text"
-            placeholder="Gõ để tìm dịch vụ (VD: Thay nhơt, Rửa xe...)"
+            placeholder="Tìm dịch vụ..."
             value={serviceSearch}
-            onChange={(e) => setServiceSearch(e.target.value)}
+            onChange={(event) => setServiceSearch(event.target.value)}
           />
           {filteredServices.length > 0 && (
-            <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-              {filteredServices.map(s => (
-                <div key={s.id} className="dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f4f7fe' }} onClick={() => handleServiceToggle(s.id)}>
-                  {s.Name || s.name} <span style={{ float: 'right', color: '#05cd99', fontSize: '12px' }}>{s.basePrice?.toLocaleString()}đ</span>
+            <div className="dropdown-panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20 }}>
+              {filteredServices.map((service) => (
+                <div key={service.id} className="dropdown-item" onClick={() => toggleService(service.id)}>
+                  {service.Name || service.name}
                 </div>
               ))}
             </div>
           )}
-          {serviceSearch && filteredServices.length === 0 && (
-            <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, padding: '12px', color: '#a3aed0', fontStyle: 'italic' }}>
-              Không tìm thấy dịch vụ nào phù hợp vơi "{serviceSearch}"
-            </div>
-          )}
         </div>
-
         {formData.serviceIds.length > 0 && (
-          <div className="selected-services-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '10px', background: '#f4f7fe', borderRadius: '12px' }}>
-            {formData.serviceIds.map(sid => {
-              const s = services.find(srv => srv.id === sid);
-              return (
-                <div key={sid} style={{ background: '#4318ff', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {s?.Name || s?.name || "Unknown"} - {s?.StandardMinutes || s?.standardMinutes || 0} phút - {(s?.basePrice || s?.BasePrice || 0).toLocaleString()}đ
-                  <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px' }} onClick={() => handleServiceToggle(sid)}>đ-</span>
-                </div>
-              );
-            })}
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {selectedServices.map((service) => (
+              <button
+                key={service.id}
+                type="button"
+                className="toolbar-action-btn toolbar-action-outline"
+                onClick={() => toggleService(service.id)}
+              >
+                {service.Name || service.name} x
+              </button>
+            ))}
           </div>
         )}
+      </div>
 
-        {formData.serviceIds.length > 0 && (
-          <>
-            <div style={{ marginTop: '12px', padding: '12px', background: '#e9edf7', borderRadius: '8px', color: '#1b254b', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <strong>Tđ.ng thời gian:</strong> {totalMinutes} phút
-                {finishTimeStr && <span> (Dự kiến xong: <strong style={{ color: '#4318ff' }}>{finishTimeStr}</strong>)</span>}
-              </div>
-              <div>
-                <strong>Tđ.ng tiền:</strong> <span style={{ color: '#05cd99', fontWeight: 'bold', fontSize: '16px' }}>{totalPrice?.toLocaleString() || 0}đ</span>
-              </div>
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '12px', color: '#e6522c', fontStyle: 'italic', fontWeight: 500 }}>
-              * Lưu ý: Giá trên chưa bao gôm vật tư/phụ tùng. Kỹ thuật viên sẽ báo giá chính xác sau khi kiểm tra xe trực tiếp.
-            </div>
-          </>
+      <div style={{ marginTop: 12, background: "#f4f7fe", borderRadius: 10, padding: 10, fontSize: 13 }}>
+        <div><strong>Tổng thời gian:</strong> {totalMinutes} phút</div>
+        <div><strong>Tổng giá ước tính:</strong> {totalPrice.toLocaleString("vi-VN")}đ</div>
+        <div><strong>Số xe:</strong> {selectedVehicleCount} {selectedVehicleCount > 1 ? "(lịch nhóm)" : "(lịch thường)"}</div>
+      </div>
+
+      <div className="form-group" style={{ marginTop: 12 }}>
+        <label>Ngày giờ hẹn *</label>
+        <DateTimePicker
+          value={formData.appointmentDate && formData.startTime ? `${formData.appointmentDate}T${formData.startTime}` : ""}
+          onChange={(value) => {
+            if (!value) {
+              setFormData((prev) => ({ ...prev, appointmentDate: "", startTime: "" }));
+              return;
+            }
+            const date = new Date(value);
+            const d = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+            const t = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+            setFormData((prev) => ({ ...prev, appointmentDate: d, startTime: t }));
+          }}
+          minDate={new Date()}
+          placeholder="Chọn ngày giờ..."
+        />
+        {appointmentSummary && (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#445b7c" }}>
+            {appointmentSummary}
+          </div>
         )}
       </div>
 
-      <div className="form-group" style={{ marginTop: '10px' }}>
-        <label>Ngày & Giờ hẹn *</label>
-        <DateTimePicker
-          value={formData.appointmentDate && formData.startTime ? `${formData.appointmentDate}T${formData.startTime}` : ""}
-          onChange={(val) => {
-            if (!val) {
-              setFormData(prev => ({ ...prev, appointmentDate: "", startTime: "" }));
-              return;
-            }
-            const d = new Date(val);
-            const dateStr = d.toISOString().split('T')[0];
-            const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-            setFormData(prev => ({ ...prev, appointmentDate: dateStr, startTime: timeStr }));
-          }}
-          minDate={new Date()}
-          placeholder="Chọn ngày và giờ hẹn..."
-        />
-        {timeError && <div style={{ color: '#ee5d50', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>đO {timeError}</div>}
-        {warningMsg && !timeError && <div style={{ color: '#ff8f00', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>đsđ️ {warningMsg}</div>}
-        {!timeError && <div style={{ color: '#4318ff', fontSize: '11px', fontWeight: 600, marginTop: '8px', lineHeight: '1.4' }}>Thông tin: Gara hỗ trợ giao xe đến 19:00 nếu xe đã xong cho khách đã thanh toán nhưng đến lấy muộn, ngược lại giao xe vào hôm sau.</div>}
-      </div>
-      <div className="form-group" style={{ marginTop: '10px' }}>
+      <div className="form-group">
         <label>Ghi chú</label>
-        <textarea name="customerNotes" value={formData.customerNotes} onChange={handleChange} rows={2} placeholder="Yêu cầu riêng của khách..." style={{ resize: 'none' }} />
+        <textarea
+          name="customerNotes"
+          rows={3}
+          value={formData.customerNotes}
+          onChange={handleChange}
+          placeholder="Mô tả triệu chứng, yêu cầu khác..."
+          style={{ resize: "vertical" }}
+        />
       </div>
 
-      <div className="form-actions" style={{ marginTop: '20px' }}>
-        <button type="button" className="btn-ghost" onClick={onCancel}>Hủy bỏ</button>
+      {errorText && (
+        <div style={{ background: "#fee2e2", color: "#9f1d1d", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 13 }}>
+          {errorText}
+        </div>
+      )}
+
+      <div className="form-actions" style={{ marginTop: 18 }}>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          Hủy
+        </button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang xử lý..." : "Xác nhận đặt lịch"}
+          {loading ? "Đang xử lý..." : submitLabel}
         </button>
       </div>
     </form>
   );
 }
-
-
-
-
-
-
-
-

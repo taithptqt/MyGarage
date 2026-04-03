@@ -1471,7 +1471,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>???</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1505,7 +1505,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.modelName || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>???</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1521,7 +1521,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>???</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1535,7 +1535,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Brand #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>???</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1566,7 +1566,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
                         <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>??</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>???</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>

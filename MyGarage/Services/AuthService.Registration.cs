@@ -46,6 +46,8 @@ namespace MyGarage.Services
                 customer.Id.ToString(),
                 customer.FullName ?? "",
                 customer.Email ?? "",
+                customer.Phone ?? "",
+                "",
                 "Customer",
                 "CUSTOMER",
                 "Customer",

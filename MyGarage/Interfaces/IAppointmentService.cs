@@ -15,10 +15,12 @@ namespace MyGarage.Interfaces
         Task<bool> ReleaseSlotHoldAsync(string holdToken);
         Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto);
         Task<BookingGroupResponseDto> BookBatchAsync(long customerId, BookAppointmentBatchRequestDto dto);
+        Task<BookingGroupResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto);
         Task<Appointment?> ConfirmAsync(long id, long? actorUserId = null);
         Task<Appointment?> CancelAsync(long id, string? reason, long? actorUserId = null);
         Task<Appointment?> CheckInAsync(long id, long? actorUserId = null);
         Task<Appointment?> ArriveAsync(long id, DateTime? arrivedAt = null, long? actorUserId = null);
+        Task<WorkSlotDynamicExtensionResponseDto> ProcessDynamicExtensionAsync(long workSlotId, WorkSlotDynamicExtensionRequestDto dto, long? actorUserId = null);
         Task<int> AutoMarkNoShowsAsync(long branchId, DateTime? now = null);
         Task<BranchBookingHealthResponseDto> GetBranchBookingHealthAsync(long branchId, DateTime? at = null);
         Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null);

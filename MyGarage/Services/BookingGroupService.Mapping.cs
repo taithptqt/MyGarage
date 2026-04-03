@@ -46,6 +46,9 @@ namespace MyGarage.Services
                 VehicleModelName = appointment.Vehicle?.Model?.Brand?.Name != null && appointment.Vehicle?.Model?.ModelName != null
                     ? $"{appointment.Vehicle.Model.Brand.Name} {appointment.Vehicle.Model.ModelName}"
                     : null,
+                BookingGroupId = appointment.BookingGroupId,
+                BookingGroupCode = appointment.BookingGroup?.GroupCode,
+                BookingGroupStatus = appointment.BookingGroup?.Status,
                 CreatedBy = appointment.CreatedBy,
                 StartTime = appointment.StartTime,
                 EndTime = appointment.EndTime,

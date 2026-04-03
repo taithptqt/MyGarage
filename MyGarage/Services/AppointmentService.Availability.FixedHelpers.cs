@@ -88,7 +88,8 @@ namespace MyGarage.Services
                 IsRoundedHour = current.Minute == 0,
                 Session = ResolveSession(current.TimeOfDay),
                 CompactionScore = score,
-                BookingFlow = AppointmentBookingFlows.Fixed
+                BookingFlow = AppointmentBookingFlows.Fixed,
+                EstimatedDurationMinutes = requiredDuration
             };
         }
     }

@@ -14,7 +14,7 @@ namespace MyGarage.Services
 {
     public class AppointmentDispatchBackgroundService : BackgroundService
     {
-        private static readonly TimeSpan DispatchInterval = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan DispatchInterval = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan OvernightCutoff = new(18, 5, 0);
 
         private readonly IServiceScopeFactory _scopeFactory;

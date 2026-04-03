@@ -21,6 +21,7 @@ namespace MyGarage.DTOs.Responses
         public string BayCode { get; set; } = string.Empty;
         public string BayName { get; set; } = string.Empty;
         public string BayType { get; set; } = string.Empty;
+        public string ServiceArea { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public bool IsOverflowFromQuick { get; set; }
         public string? SlotType { get; set; }

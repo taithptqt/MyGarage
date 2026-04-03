@@ -28,8 +28,6 @@ namespace MyGarage.Services
         private const int GraceArrivalMinutes = 15;
         private const int NoShowMinutes = 30;
         private const int BookingLockHours = 4;
-        private const int QuickOnlineCapDefault = 7;
-        private const int RepairOnlineCapDefault = 10;
         private const int ReservedRepairForQuickOverflow = 3;
         private const string DefaultDiagnosticServiceCode = "CDTC-001";
 

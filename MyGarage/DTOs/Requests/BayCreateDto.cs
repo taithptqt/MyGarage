@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 namespace MyGarage.DTOs.Requests
 {
     public class BayCreateDto
@@ -7,6 +8,9 @@ namespace MyGarage.DTOs.Requests
         public string? Code { get; set; }
         public string? Name { get; set; }
         public string? BayType { get; set; }
+        [Required]
+        [RegularExpression("^\\s*(?i:QUICK|REPAIR)\\s*$")]
+        public string? ServiceArea { get; set; }
         public decimal? MaxTonnage { get; set; }
         public string? OperationalStatus { get; set; }
         public long? CurrentOccupiedVehicleId { get; set; }

@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Responses
         public string? Code { get; set; }
         public string? Name { get; set; }
         public string? BayType { get; set; }
+        public string ServiceArea { get; set; } = string.Empty;
         public decimal? MaxTonnage { get; set; }
         public string? OperationalStatus { get; set; }
         public long? CurrentOccupiedVehicleId { get; set; }

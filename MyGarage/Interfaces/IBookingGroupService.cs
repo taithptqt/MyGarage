@@ -12,6 +12,7 @@ namespace MyGarage.Interfaces
         Task SyncCountersAsync(long? bookingGroupId, long? actorStaffId = null);
         Task<IEnumerable<BookingGroupResponseDto>> GetByCustomerAsync(long customerId);
         Task<BookingGroupResponseDto?> GetByCustomerAndIdAsync(long customerId, long bookingGroupId);
+        Task<IEnumerable<BookingGroupResponseDto>> GetByBranchAsync(long branchId);
+        Task<BookingGroupResponseDto?> GetByBranchAndIdAsync(long branchId, long bookingGroupId);
     }
 }
-

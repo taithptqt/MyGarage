@@ -38,32 +38,26 @@ namespace MyGarage.Services
 
         private static (int quickCap, int repairCap) ComputeClusterOnlineCaps(CapacityProfile capacity, int onlineLimit)
         {
-            var quickCap = Math.Min(capacity.Quick, QuickOnlineCapDefault);
-            var repairCap = Math.Min(capacity.Repair, RepairOnlineCapDefault);
+            var quickCap = capacity.Quick <= 0
+                ? 0
+                : (int)Math.Round(capacity.Quick * 0.85m, MidpointRounding.AwayFromZero);
+            var repairCap = capacity.Repair <= 0
+                ? 0
+                : (int)Math.Round(capacity.Repair * 0.85m, MidpointRounding.AwayFromZero);
 
+            // Defensive guard: keep cluster caps not exceeding overall online limit.
             if (quickCap + repairCap > onlineLimit)
             {
                 var excess = (quickCap + repairCap) - onlineLimit;
-                var trimRepair = Math.Min(excess, repairCap);
-                repairCap -= trimRepair;
-                excess -= trimRepair;
-                if (excess > 0)
+                if (repairCap >= excess)
                 {
-                    quickCap = Math.Max(0, quickCap - excess);
+                    repairCap -= excess;
                 }
-            }
-            else if (quickCap + repairCap < onlineLimit)
-            {
-                var missing = onlineLimit - (quickCap + repairCap);
-                var canAddRepair = Math.Max(0, capacity.Repair - repairCap);
-                var repairAdded = Math.Min(missing, canAddRepair);
-                repairCap += repairAdded;
-                missing -= repairAdded;
-
-                if (missing > 0)
+                else
                 {
-                    var canAddQuick = Math.Max(0, capacity.Quick - quickCap);
-                    quickCap += Math.Min(missing, canAddQuick);
+                    var remain = excess - repairCap;
+                    repairCap = 0;
+                    quickCap = Math.Max(0, quickCap - remain);
                 }
             }
 

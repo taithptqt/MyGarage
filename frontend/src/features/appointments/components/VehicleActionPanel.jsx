@@ -21,6 +21,14 @@ export default function VehicleActionPanel({
     () => new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
     [selectedVehicles]
   );
+  const selectableLinkedVehicles = useMemo(
+    () =>
+      (linkedVehicles || []).filter((vehicle) => {
+        const key = `existing-${Number(extractField(vehicle, ["id", "Id"]))}`;
+        return !selectedExistingKeys.has(key);
+      }),
+    [linkedVehicles, selectedExistingKeys]
+  );
 
   const modelOptions = useMemo(
     () =>
@@ -68,10 +76,12 @@ export default function VehicleActionPanel({
     handleCancelNewVehicleForm();
   }
 
-  function handleToggleExistingVehicle(event, vehicle) {
+  function handlePickExistingVehicle(event, vehicle) {
     event.preventDefault();
     event.stopPropagation();
     onToggleExistingVehicle(vehicle);
+    const key = `existing-${Number(extractField(vehicle, ["id", "Id"]))}`;
+    onSelectVehicle?.(key);
   }
 
   function handleSelectVehicle(event, vehicleKey) {
@@ -108,27 +118,37 @@ export default function VehicleActionPanel({
         <div className="vehicle-popup-backdrop" onClick={() => setIsOpen(false)}>
           <div className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
             <div className="vehicle-popup-head">
-              <h5>Chọn xe đã lưu lại</h5>
-              <button type="button" className="summary-remove-btn" onClick={handleCloseSavedVehicles}>
-                x
+              <div className="vehicle-popup-head-text">
+                <h5>Chọn xe đã lưu lại</h5>
+                <p>Chỉ hiển thị các xe chưa chọn.</p>
+              </div>
+              <button type="button" className="vehicle-popup-close-btn" onClick={handleCloseSavedVehicles}>
+                Đóng
               </button>
             </div>
             <div className="vehicle-popup-list">
               {(linkedVehicles || []).length === 0 ? (
-                <p className="booking-empty">Chưa có xe đã lưu.</p>
+                <p className="booking-empty">Chưa có xe đã lưu để chọn.</p>
+              ) : selectableLinkedVehicles.length === 0 ? (
+                <p className="booking-empty">Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.</p>
               ) : (
-                linkedVehicles.map((vehicle) => {
+                selectableLinkedVehicles.map((vehicle) => {
                   const key = `existing-${Number(extractField(vehicle, ["id", "Id"]))}`;
-                  const active = selectedExistingKeys.has(key);
                   return (
                     <button
                       key={key}
                       type="button"
-                      className={`vehicle-popup-item ${active ? "selected" : ""}`}
-                      onClick={(event) => handleToggleExistingVehicle(event, vehicle)}
+                      className="vehicle-popup-item"
+                      onClick={(event) => handlePickExistingVehicle(event, vehicle)}
                     >
-                      <strong>{formatStoredVehicleLabel(vehicle)}</strong>
-                      <span>{active ? "Đã chọn" : "Chọn"}</span>
+                      <span className="vehicle-popup-item-mark" aria-hidden="true">
+                        +
+                      </span>
+                      <div className="vehicle-popup-item-content">
+                        <strong>{formatStoredVehicleLabel(vehicle)}</strong>
+                        <small>Nhấn để thêm xe vào lịch hẹn</small>
+                      </div>
+                      <span className="vehicle-popup-item-action">Thêm xe</span>
                     </button>
                   );
                 })

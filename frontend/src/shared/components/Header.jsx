@@ -1,8 +1,26 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { getApiBaseUrl } from "@features/auth/api/authApi";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
 import "./Header.css";
+
+function resolveAvatarUrl(avatarUrl) {
+  if (!avatarUrl) return "";
+  const raw = String(avatarUrl).trim();
+  if (!raw) return "";
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("data:") ||
+    raw.startsWith("blob:")
+  ) {
+    return raw;
+  }
+  const base = getApiBaseUrl();
+  if (!base) return raw;
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+}
 
 function Header({ overlay = false }) {
   const { isAuthenticated, user, logout } = useAuth();
@@ -13,7 +31,7 @@ function Header({ overlay = false }) {
   const menuRef = useRef(null);
 
   const displayName = String(user?.fullName || user?.name || "Bạn").trim();
-  const avatarUrl = String(user?.avatarUrl || user?.AvatarUrl || "").trim();
+  const avatarUrl = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl);
   const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
   const isStaffOrAdmin = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(roleCode);

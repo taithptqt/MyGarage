@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -14,11 +16,13 @@ namespace MyGarage.Controllers
     public class WorkSlotsController : ControllerBase
     {
         private readonly IWorkSlotService _workSlotService;
+        private readonly IAppointmentService _appointmentService;
         private readonly IMapper _mapper;
 
-        public WorkSlotsController(IWorkSlotService workSlotService, IMapper mapper)
+        public WorkSlotsController(IWorkSlotService workSlotService, IAppointmentService appointmentService, IMapper mapper)
         {
             _workSlotService = workSlotService;
+            _appointmentService = appointmentService;
             _mapper = mapper;
         }
 
@@ -82,6 +86,28 @@ namespace MyGarage.Controllers
             }
 
             return NoContent();
+        }
+
+        [Authorize]
+        [HttpPost("{id:long}/dynamic-extensions")]
+        public async Task<ActionResult<WorkSlotDynamicExtensionResponseDto>> ProcessDynamicExtension(
+            long id,
+            [FromBody] WorkSlotDynamicExtensionRequestDto dto)
+        {
+            try
+            {
+                var actorUserId = this.GetCurrentUserId();
+                var result = await _appointmentService.ProcessDynamicExtensionAsync(id, dto, actorUserId);
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

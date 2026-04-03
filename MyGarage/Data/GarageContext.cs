@@ -513,6 +513,10 @@ public partial class GarageContext : DbContext
             entity.Property(e => e.BayType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.ServiceArea)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .IsRequired();
             entity.Property(e => e.Code)
                 .HasMaxLength(50)
                 .IsUnicode(false);

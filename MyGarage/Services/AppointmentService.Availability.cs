@@ -24,8 +24,7 @@ namespace MyGarage.Services
                 return Enumerable.Empty<AvailableSlotResponseDto>();
             }
 
-            var flow = ResolveFlow(bookingFlow, requestedServiceIds);
-            var requestedServiceIdList = ParseServiceIds(requestedServiceIds).Distinct().ToList();
+            var flow = await ResolveFlowAsync(bookingFlow, requestedServiceIds);
             var dayOfWeek = (int)date.DayOfWeek;
 
             var opHour = await _context.BranchOperatingHours
@@ -48,35 +47,74 @@ namespace MyGarage.Services
             if (exception?.StartTime.HasValue == true) openTime = exception.StartTime.Value;
             if (exception?.EndTime.HasValue == true) closeTime = exception.EndTime.Value;
 
-            if (flow == BookingFlowType.Flexible)
-            {
-                return BuildFlexibleSlots(date, openTime, closeTime);
-            }
-
-            if (flow == BookingFlowType.Fixed && requestedServiceIdList.Count == 0)
-            {
-                return Enumerable.Empty<AvailableSlotResponseDto>();
-            }
-
             var effectiveRequestedServiceIds = requestedServiceIds;
-            if (flow == BookingFlowType.Fixed && string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
+            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
             {
                 effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null);
             }
 
-            var slots = await BuildFixedSlotsAsync(
+            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
+            {
+                return Enumerable.Empty<AvailableSlotResponseDto>();
+            }
+
+            var effectiveVehicleCount = Math.Max(1, vehicleCount);
+            var useParallel = isParallel;
+
+            var requiredDuration = await ResolveScheduledDurationAsync(
+                effectiveRequestedServiceIds,
+                slotStepMinutes,
+                useParallel);
+
+            var slots = await BuildScheduledSlotsAsync(
                 branchId,
                 date,
                 openTime,
                 closeTime,
                 slotStepMinutes,
                 effectiveRequestedServiceIds,
-                vehicleCount,
-                isParallel);
+                requiredDuration,
+                effectiveVehicleCount);
+
+            if (!slots.Any() &&
+                useParallel &&
+                HasGroupedRequestedServices(effectiveRequestedServiceIds))
+            {
+                requiredDuration = await ResolveScheduledDurationAsync(
+                    effectiveRequestedServiceIds,
+                    slotStepMinutes,
+                    isParallel: false);
+
+                slots = await BuildScheduledSlotsAsync(
+                    branchId,
+                    date,
+                    openTime,
+                    closeTime,
+                    slotStepMinutes,
+                    effectiveRequestedServiceIds,
+                    requiredDuration,
+                    effectiveVehicleCount);
+            }
+
+            var dynamicNotice = flow == BookingFlowType.Flexible
+                ? BuildFlexibleDynamicNotice(requiredDuration)
+                : null;
+
+            foreach (var slot in slots)
+            {
+                slot.BookingFlow = AppointmentBookingFlows.Fixed;
+                slot.EstimatedDurationMinutes = requiredDuration;
+                slot.DynamicNotice = dynamicNotice;
+            }
 
             return slots.OrderBy(s => s.StartTime);
         }
 
+        private static bool HasGroupedRequestedServices(string? requestedServiceIds)
+        {
+            return !string.IsNullOrWhiteSpace(requestedServiceIds)
+                   && requestedServiceIds.Contains('|', StringComparison.Ordinal);
+        }
 
     }
 }

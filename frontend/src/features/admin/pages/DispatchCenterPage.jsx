@@ -239,7 +239,7 @@ export default function DispatchCenterPage() {
                   return (
                     <tr key={bay?.bayId || bay?.BayId}>
                       <td>{bay?.bayCode || bay?.BayCode || bay?.bayName || bay?.BayName || "-"}</td>
-                      <td>{bay?.bayType || bay?.BayType || "-"}</td>
+                      <td>{bay?.serviceArea || bay?.ServiceArea || "-"}</td>
                       <td><span className={`pill ${statusTone(status)}`}>{status}</span></td>
                       <td>{(bay?.isOverflowFromQuick ?? bay?.IsOverflowFromQuick) ? "Có" : "Không"}</td>
                       <td>{fmtDateTime(bay?.plannedReleaseAt || bay?.PlannedReleaseAt || bay?.actualReleaseAt || bay?.ActualReleaseAt)}</td>

@@ -16,6 +16,23 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const hydrateProfileAfterAuth = async (baseUser) => {
+    try {
+      const token = baseUser?.token || readAuthToken();
+      const { ok, data } = await authApi.getProfile();
+      if (ok && data) {
+        const updatedUser = mapAuthUserPayload(data, token);
+        ensureAuthorizedRole(updatedUser);
+        setUser(updatedUser);
+        persistAuthUser(updatedUser);
+        return updatedUser;
+      }
+    } catch (error) {
+      console.error("Profile hydration after auth failed:", error);
+    }
+    return baseUser;
+  };
+
   const logout = () => {
     clearAuthStorage();
     setUser(null);
@@ -60,7 +77,7 @@ export const AuthProvider = ({ children }) => {
     ensureAuthorizedRole(userData);
     persistAuthUser(userData);
     setUser(userData);
-    return userData;
+    return await hydrateProfileAfterAuth(userData);
   };
 
   const register = async (payload) => {
@@ -71,7 +88,7 @@ export const AuthProvider = ({ children }) => {
     ensureAuthorizedRole(userData);
     persistAuthUser(userData);
     setUser(userData);
-    return userData;
+    return await hydrateProfileAfterAuth(userData);
   };
 
   const googleLogin = async (payload) => {
@@ -82,7 +99,7 @@ export const AuthProvider = ({ children }) => {
     ensureAuthorizedRole(userData);
     persistAuthUser(userData);
     setUser(userData);
-    return userData;
+    return await hydrateProfileAfterAuth(userData);
   };
 
   return (

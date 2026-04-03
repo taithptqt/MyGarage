@@ -6,6 +6,7 @@ import {
   Button,
   Flex,
   Icon,
+  Portal,
   Popover,
   PopoverBody,
   PopoverContent,
@@ -63,6 +64,7 @@ const DateTimePicker = ({
       return;
     }
     updateValue(date, "08", "00");
+    onClose();
   };
 
   const handleHourSelect = (h) => {
@@ -91,6 +93,7 @@ const DateTimePicker = ({
       onClose={onClose}
       placement="bottom-start"
       closeOnBlur
+      strategy="fixed"
       gutter={8}
     >
       <PopoverTrigger>
@@ -137,7 +140,9 @@ const DateTimePicker = ({
         </Button>
       </PopoverTrigger>
 
+      <Portal>
       <PopoverContent
+        rootProps={{ zIndex: 26000 }}
         w="auto"
         maxW={showTime ? "640px" : "360px"}
         borderRadius="16px"
@@ -145,7 +150,7 @@ const DateTimePicker = ({
         bg="#ffffff"
         color="#1d2a26"
         boxShadow="0 24px 48px rgba(29, 42, 38, 0.15)"
-        zIndex={9999}
+        zIndex={26000}
         _focus={{ outline: "none" }}
       >
         <PopoverBody p="0">
@@ -235,6 +240,7 @@ const DateTimePicker = ({
           </Flex>
         </PopoverBody>
       </PopoverContent>
+      </Portal>
 
       <style>{`
         .custom-react-calendar {

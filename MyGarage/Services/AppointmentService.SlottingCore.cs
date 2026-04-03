@@ -24,7 +24,7 @@ namespace MyGarage.Services
                     continue;
                 }
 
-                if (IsQuickBay(bay.BayType))
+                if (IsQuickBay(bay))
                 {
                     quick++;
                 }

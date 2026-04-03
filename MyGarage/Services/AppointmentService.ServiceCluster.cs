@@ -1,14 +1,33 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Enums;
+using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
+        private const int FlexibleBufferMinutes = 15;
+
+        private async Task<BookingFlowType> ResolveFlowAsync(string? bookingFlow, string? requestedServiceIds)
+        {
+            var explicitFlow = ParseExplicitFlow(bookingFlow);
+            var services = await LoadRequestedServicesAsync(requestedServiceIds);
+
+            if (services.Count > 0)
+            {
+                return services.Any(IsInspectionService)
+                    ? BookingFlowType.Flexible
+                    : BookingFlowType.Fixed;
+            }
+
+            return explicitFlow ?? BookingFlowType.Flexible;
+        }
+
         private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(string? requestedServiceIds)
         {
             var normalizedIds = ParseServiceIds(requestedServiceIds)
@@ -53,16 +72,81 @@ namespace MyGarage.Services
             return fallbackDiagnostic?.Id;
         }
 
-        private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
+        private static string BuildFlexibleDynamicNotice(int estimatedMinutes)
         {
-            var ids = ParseServiceIds(requestedServiceIds).ToList();
-            if (!ids.Any()) return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
+            return $"D\u1EF1a tr\u00EAn c\u00E1c h\u1EA1ng m\u1EE5c b\u1EA1n ch\u1ECDn, th\u1EDDi gian d\u1EF1 ki\u1EBFn ho\u00E0n t\u1EA5t l\u00E0 {estimatedMinutes} ph\u00FAt. " +
+                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ki\u1EC3m tra xong.";
+        }
 
-            var services = await _context.StandardServices
+        private async Task<List<StandardService>> LoadRequestedServicesAsync(string? requestedServiceIds)
+        {
+            var ids = ParseServiceIds(requestedServiceIds).Distinct().ToList();
+            if (ids.Count == 0)
+            {
+                return new List<StandardService>();
+            }
+
+            return await _context.StandardServices
                 .AsNoTracking()
                 .Include(s => s.Category)
-                .Where(s => ids.Contains(s.Id))
+                .Where(s => ids.Contains(s.Id) && s.IsDeleted != true && s.IsActive == true)
                 .ToListAsync();
+        }
+
+        private async Task<int> ResolveDefaultDiagnosticServiceMinutesAsync()
+        {
+            var defaultDiagnosticServiceId = await ResolveDefaultDiagnosticServiceIdAsync();
+            if (!defaultDiagnosticServiceId.HasValue)
+            {
+                return 60;
+            }
+
+            var minutes = await _context.StandardServices
+                .AsNoTracking()
+                .Where(s => s.Id == defaultDiagnosticServiceId.Value)
+                .Select(s => (int?)s.StandardMinutes)
+                .FirstOrDefaultAsync();
+
+            return Math.Max(30, minutes ?? 60);
+        }
+
+        private static BookingFlowType? ParseExplicitFlow(string? bookingFlow)
+        {
+            if (string.IsNullOrWhiteSpace(bookingFlow))
+            {
+                return null;
+            }
+
+            var key = NormalizeText(bookingFlow);
+            if (key.Contains("flex") || key.Contains("window") || key.Contains("check"))
+            {
+                return BookingFlowType.Flexible;
+            }
+
+            if (key.Contains("fixed") || key.Contains("slot"))
+            {
+                return BookingFlowType.Fixed;
+            }
+
+            return null;
+        }
+
+        private static bool IsInspectionService(StandardService service)
+        {
+            var text = NormalizeText($"{service.Code} {service.Name} {service.Category?.Name}");
+            return text.Contains("kiem tra")
+                   || text.Contains("chuan doan")
+                   || text.Contains("diagnostic")
+                   || text.Contains("general check")
+                   || text.Contains("quick check")
+                   || text.Contains("checkup")
+                   || text.Contains("check-up");
+        }
+
+        private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
+        {
+            var services = await LoadRequestedServicesAsync(requestedServiceIds);
+            if (services.Count == 0) return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
 
             var heavy = services.Any(s => IsHeavyHint(s.Name) || IsHeavyHint(s.Category?.Name));
             return heavy ? ServiceCluster.Heavy : ServiceCluster.Quick;

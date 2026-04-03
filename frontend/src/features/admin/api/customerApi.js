@@ -8,6 +8,13 @@ export async function getAllCustomers(branchId) {
   });
 }
 
+export async function getCustomerById(id) {
+  return request({
+    url: `/api/customers/${id}`,
+    method: "GET",
+  });
+}
+
 export async function createCustomer(payload) {
   return request({
     url: "/api/customers",

@@ -8,10 +8,11 @@ namespace MyGarage.DTOs.Requests
         [Required]
         public long BranchId { get; set; }
 
+        public long? CustomerId { get; set; }
+
         public string? CustomerNote { get; set; }
 
         [Required]
         public List<BookAppointmentRequestDto> Items { get; set; } = new();
     }
 }
-
