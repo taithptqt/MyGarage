@@ -464,17 +464,17 @@ export default function ServiceOrderEditPage() {
 
         {/* Section 3: Timeline & Notes */}
         <div className="form-section shadow-sm full-width">
-          <h3 className="section-title">3. Mô tả triệu chứng và Lịch trình</h3>
+          <h3 className="section-title">3. Mô tả thêm và Lịch trình</h3>
 
           <div className="form-group">
-            <label>Mô tả triệu chứng</label>
+            <label>Mô tả thêm</label>
             <div className="symptom-list" style={{ display: "grid", gap: "10px" }}>
               {symptomInputs.map((symptom, index) => (
                 <div key={`symptom-edit-${index}`} className="form-group" style={{ marginBottom: 0 }}>
                   <input
                     type="text"
                     value={symptom}
-                    placeholder={`Nhập mô tả triệu chứng ${index + 1}...`}
+                    placeholder={`Nhập mô tả ${index + 1}...`}
                     onChange={(e) => handleSymptomChange(index, e.target.value)}
                     onFocus={() => handleSymptomFocus(index)}
                     disabled={index > 0 && !String(symptomInputs[index - 1] || "").trim()}

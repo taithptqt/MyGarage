@@ -100,7 +100,7 @@ export default function ReceptionCreateAppointmentPage() {
   }, [fetchReferenceData]);
 
   const handleGoBack = useCallback(() => {
-    navigate("/workshop/reception?tab=appointments");
+    navigate("/workshop/reception/appointments");
   }, [navigate]);
 
   const handleCreateAnother = useCallback(() => {

@@ -1,5 +1,7 @@
 ﻿import React from "react";
 import TablePagination from "@shared/components/TablePagination";
+import FilterDropdown from "@shared/components/FilterDropdown";
+import { getStatusLabelVi, toStatusOptionVi } from "@shared/core/utils/statusLabelUtils";
 
 function buildRowInteraction(appt, onAppointmentClick) {
   if (!onAppointmentClick) return {};
@@ -18,23 +20,30 @@ function buildRowInteraction(appt, onAppointmentClick) {
   };
 }
 
+function canCancelAppointment(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  return normalized === "PENDING" || normalized === "CONFIRMED";
+}
+
 function GroupBlock({
   group,
   formatApptDate,
   formatApptTime,
   getApptStatusBadge,
   handleApptAction,
+  handleGroupCancel,
   actingAppt,
+  actingGroup,
   onAppointmentClick,
 }) {
   return (
     <article
       style={{
-        border: "1px solid #d8e3f3",
+        border: "2px solid #c3d6f2",
         borderRadius: 14,
-        background: "#f7fbff",
-        boxShadow: "0 2px 16px rgba(13, 33, 61, 0.05)",
-        padding: 12,
+        background: "#f5f9ff",
+        boxShadow: "0 6px 20px rgba(23, 60, 115, 0.08)",
+        padding: 14,
       }}
     >
       <header
@@ -44,6 +53,8 @@ function GroupBlock({
           alignItems: "center",
           gap: 12,
           marginBottom: 12,
+          paddingBottom: 10,
+          borderBottom: "1px solid #d9e6fb",
           flexWrap: "wrap",
         }}
       >
@@ -53,10 +64,49 @@ function GroupBlock({
             {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.appointments.length} lịch
           </p>
         </div>
-        <span className={`badge ${getApptStatusBadge(group.status)}`}>{group.status || "PENDING"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 10 }}>
+          <span
+            className={`badge ${getApptStatusBadge(group.status)}`}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 30 }}
+          >
+            {getStatusLabelVi(group.status || "PENDING", "Chờ xác nhận")}
+          </span>
+          {group.hasCancelableAppointments && (
+            <button
+              className={`btn-icon btn-action-danger ${actingGroup === group.id ? "faded" : ""}`}
+              title="Hủy nhóm"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleGroupCancel(group);
+              }}
+              disabled={actingGroup === group.id}
+              style={{
+                width: "auto",
+                height: 30,
+                whiteSpace: "nowrap",
+                padding: "0 12px",
+                minWidth: 56,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+                margin: 0,
+              }}
+            >
+              Hủy
+            </button>
+          )}
+        </div>
       </header>
 
-      <div style={{ overflowX: "auto" }}>
+      <div
+        style={{
+          overflowX: "auto",
+          border: "1px solid #dbe7f8",
+          borderRadius: 12,
+          background: "#ffffff",
+        }}
+      >
         <table className="admin-table">
           <thead>
             <tr>
@@ -76,21 +126,34 @@ function GroupBlock({
                   <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
                   <td>{appt.vehicleLicensePlate || "--"}</td>
                   <td className="th-center">
-                    <span className={`badge ${getApptStatusBadge(appt.status)}`}>{appt.status}</span>
+                    <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
                   </td>
                   <td className="col-actions">
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <button
-                        className={`btn-icon btn-action-danger ${(appt.status !== "PENDING" && appt.status !== "CONFIRMED") ? "faded" : ""}`}
-                        title="Hủy lịch hẹn"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleApptAction(appt.id);
-                        }}
-                        disabled={(appt.status !== "PENDING" && appt.status !== "CONFIRMED") || actingAppt === appt.id}
-                      >
-                        Hủy
-                      </button>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 30 }}>
+                      {canCancelAppointment(appt.status) && (
+                        <button
+                          className={`btn-icon btn-action-danger ${actingAppt === appt.id ? "faded" : ""}`}
+                          title="Hủy lịch hẹn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleApptAction(appt.id);
+                          }}
+                          disabled={actingAppt === appt.id}
+                          style={{
+                            width: "auto",
+                            height: 30,
+                            minWidth: 56,
+                            padding: "0 12px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                            margin: 0,
+                          }}
+                        >
+                          Hủy
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -125,7 +188,9 @@ export default function ReceptionAppointmentsSection({
   formatApptTime,
   getApptStatusBadge,
   handleApptAction,
+  handleGroupCancel,
   actingAppt,
+  actingGroup,
   onAppointmentClick,
   apptsPage,
   apptsPageSize,
@@ -136,39 +201,36 @@ export default function ReceptionAppointmentsSection({
   const isGroupMode = apptViewMode === "GROUP";
   const totalSingle = filteredSingleAppts.length;
   const totalGroups = groupedAppts.length;
+  const apptFilterOptions = [toStatusOptionVi("ALL"), ...apptStatusOptions.map(toStatusOptionVi)];
+  const apptSortOptions = [
+    { value: "NEWEST", label: "Mới nhất" },
+    { value: "OLDEST", label: "Cũ nhất" },
+    { value: "NAME_ASC", label: "Tên khách A-Z" },
+    { value: "NAME_DESC", label: "Tên khách Z-A" },
+  ];
 
   return (
     <>
       <div className="table-toolbar">
         <button className="btn-primary" onClick={onCreateAppointment}>+ Tạo lịch hẹn</button>
         <div className="toolbar-controls">
-          <label htmlFor="appt-status-filter" className="toolbar-label">Trạng thái:</label>
-          <select
+          <FilterDropdown
             id="appt-status-filter"
-            className="toolbar-select"
+            label="Trạng thái"
             value={apptStatusFilter}
-            onChange={(e) => setApptStatusFilter(e.target.value)}
-            style={{ minWidth: "160px" }}
-          >
-            <option value="ALL">Tất cả</option>
-            {apptStatusOptions.map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
+            options={apptFilterOptions}
+            onChange={setApptStatusFilter}
+            minWidth={160}
+          />
 
-          <label htmlFor="appt-sort" className="toolbar-label">Sắp xếp:</label>
-          <select
+          <FilterDropdown
             id="appt-sort"
-            className="toolbar-select"
+            label="Sắp xếp"
             value={apptSortBy}
-            onChange={(e) => setApptSortBy(e.target.value)}
-            style={{ minWidth: "190px" }}
-          >
-            <option value="NEWEST">Mới nhất</option>
-            <option value="OLDEST">Cũ nhất</option>
-            <option value="NAME_ASC">Tên khách A-Z</option>
-            <option value="NAME_DESC">Tên khách Z-A</option>
-          </select>
+            options={apptSortOptions}
+            onChange={setApptSortBy}
+            minWidth={190}
+          />
 
           <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
             Chọn khoảng ngày
@@ -237,7 +299,7 @@ export default function ReceptionAppointmentsSection({
           totalGroups === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: "#a3aed0" }}>Không có lịch hẹn nhóm nào.</div>
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "grid", gap: 16, padding: 14 }}>
               {pagedGroupedAppts.map((group) => (
                 <GroupBlock
                   key={group.id}
@@ -246,7 +308,9 @@ export default function ReceptionAppointmentsSection({
                   formatApptTime={formatApptTime}
                   getApptStatusBadge={getApptStatusBadge}
                   handleApptAction={handleApptAction}
+                  handleGroupCancel={handleGroupCancel}
                   actingAppt={actingAppt}
+                  actingGroup={actingGroup}
                   onAppointmentClick={onAppointmentClick}
                 />
               ))}
@@ -283,21 +347,34 @@ export default function ReceptionAppointmentsSection({
                       <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
                       <td>{appt.vehicleLicensePlate}</td>
                       <td className="th-center">
-                        <span className={`badge ${getApptStatusBadge(appt.status)}`}>{appt.status}</span>
+                        <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
                       </td>
                       <td className="col-actions">
-                        <div style={{ display: "flex", justifyContent: "center" }}>
-                          <button
-                            className={`btn-icon btn-action-danger ${(appt.status !== "PENDING" && appt.status !== "CONFIRMED") ? "faded" : ""}`}
-                            title="Hủy lịch hẹn"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleApptAction(appt.id);
-                            }}
-                            disabled={(appt.status !== "PENDING" && appt.status !== "CONFIRMED") || actingAppt === appt.id}
-                          >
-                            Hủy
-                          </button>
+                        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 30 }}>
+                          {canCancelAppointment(appt.status) && (
+                            <button
+                              className={`btn-icon btn-action-danger ${actingAppt === appt.id ? "faded" : ""}`}
+                              title="Hủy lịch hẹn"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleApptAction(appt.id);
+                              }}
+                              disabled={actingAppt === appt.id}
+                              style={{
+                                width: "auto",
+                                height: 30,
+                                minWidth: 56,
+                                padding: "0 12px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                lineHeight: 1,
+                                margin: 0,
+                              }}
+                            >
+                              Hủy
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -322,4 +399,5 @@ export default function ReceptionAppointmentsSection({
     </>
   );
 }
+
 

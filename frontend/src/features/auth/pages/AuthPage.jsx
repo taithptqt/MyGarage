@@ -102,6 +102,8 @@ function AuthPage() {
       destination = "/booking/form";
     } else if (code === "ADMIN" || roleName === "admin") {
       destination = "/admin";
+    } else if (code === "ACCOUNTANT") {
+      destination = "/accounting/dashboard";
     } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
       destination = "/workshop";
     }
@@ -245,6 +247,8 @@ function AuthPage() {
       dest = "/booking/form";
     } else if (code === "ADMIN" || roleName === "admin") {
       dest = "/admin";
+    } else if (code === "ACCOUNTANT") {
+      dest = "/accounting/dashboard";
     } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
       dest = "/workshop";
     }
@@ -391,3 +395,4 @@ function AuthPage() {
 }
 
 export default AuthPage;
+

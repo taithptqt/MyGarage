@@ -156,10 +156,37 @@
   padding: 11px 14px;
 }
 
+select.search-input:not([multiple]) {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #d8e1ef;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  color: #334155;
+  font-weight: 600;
+  padding: 9px 38px 9px 12px;
+  box-shadow: 0 2px 8px rgba(58, 99, 168, 0.08);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M3 5.5L7 9.5L11 5.5' stroke='%2373859f' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 14px 14px;
+}
+
+select.search-input:not([multiple]):hover {
+  border-color: #cdd9ee;
+  box-shadow: 0 4px 12px rgba(58, 99, 168, 0.12);
+}
+
 .search-input:focus {
   outline: none;
   border-color: #c5b8ff;
   box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.12);
+}
+
+select.search-input:not([multiple]):focus {
+  border-color: #95b7f6;
+  box-shadow: 0 0 0 3px rgba(149, 183, 246, 0.22), 0 6px 18px rgba(58, 99, 168, 0.16);
 }
 
 .result-count {

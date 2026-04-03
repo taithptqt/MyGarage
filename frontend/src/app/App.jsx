@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+﻿import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "@features/auth/pages/AuthPage";
 import HomePage from "@features/home/pages/HomePage";
 import AdminPage from "@features/admin/pages/AdminPage";
@@ -17,6 +17,7 @@ import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionL
 import TechnicianConditionLogPage from "@features/workshop/pages/TechnicianConditionLogPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
+import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
 import HorizonMain from "@horizon/Main";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -26,6 +27,12 @@ import CustomerLayout from "@shared/layouts/CustomerLayout";
 import BookingPage from "@features/appointments/pages/BookingPage";
 import BookingIntroPage from "@features/appointments/pages/BookingIntroPage";
 import MyAppointmentsPage from "@features/appointments/pages/MyAppointmentsPage";
+import PayosCheckoutPage from "@features/payment/pages/PayosCheckoutPage";
+import PaymentSuccessPage from "@features/payment/pages/PaymentSuccessPage";
+import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
+import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
+import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
+import AccountingMain from "@horizon/AccountingMain";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -76,6 +83,40 @@ function App() {
           } 
         />
 
+        <Route path="/parts-shop" element={<CustomerRoute><PartsSalesPage /></CustomerRoute>} />
+        <Route
+          path="/my-retail-orders"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><MyRetailOrdersPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><PayosCheckoutPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment/success"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><PaymentSuccessPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment/cancel"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><PaymentCancelPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+
         <Route 
           path="/admin/*" 
           element={
@@ -88,6 +129,15 @@ function App() {
               or kept as a separate route inside Horizon layout. 
               For now, let's assume it's part of Horizon navigation. */}
         </Route>
+
+        <Route
+          path="/accounting/*"
+          element={
+            <ProtectedRoute allowedRoles={["ADMIN", "MANAGER", "ACCOUNTANT"]}>
+              <AccountingMain />
+            </ProtectedRoute>
+          }
+        />
 
         <Route 
           path="/admin-legacy" 
@@ -117,6 +167,7 @@ function App() {
         >
           <Route path="reception" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionOrdersSection /></ProtectedRoute>} />
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
+          <Route path="reception/appointments" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionAppointmentsPage /></ProtectedRoute>} />
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
@@ -140,6 +191,7 @@ function App() {
 }
 
 export default App;
+
 
 
 

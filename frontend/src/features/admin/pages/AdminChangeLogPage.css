@@ -5,11 +5,13 @@
   align-items: end;
 }
 
-.admin-change-log-page .admin-log-json {
-  max-width: 320px;
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 12px;
-  color: #243763;
+.admin-change-log-page .admin-log-summary {
+  min-width: 280px;
+  max-width: 560px;
+  line-height: 1.5;
+  font-size: 13px;
+  color: #1f2d4d;
+  font-weight: 600;
 }
 
 @media (max-width: 1200px) {
@@ -23,7 +25,8 @@
     grid-template-columns: 1fr;
   }
 
-  .admin-change-log-page .admin-log-json {
-    max-width: 200px;
+  .admin-change-log-page .admin-log-summary {
+    min-width: 180px;
+    max-width: 240px;
   }
 }

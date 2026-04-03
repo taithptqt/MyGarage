@@ -256,23 +256,17 @@ export default function WorkshopPage() {
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
   const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
-  const isReceptionAppointmentsRoute = location.pathname.startsWith("/workshop/reception/appointments");
-  const receptionTab = (
-    isReceptionAppointmentsRoute ||
-    new URLSearchParams(location.search).get("tab") === "appointments"
-  ) ? "appointments" : "orders";
+  const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
+    ? "appointments"
+    : "orders";
 
-  const goReceptionTab = (tab) => {
-    const safeTab = tab === "appointments" ? "appointments" : "orders";
-    navigate(
-      {
-        pathname: "/workshop/reception",
-        search: `?tab=${safeTab}`,
-      },
-      { replace: location.pathname === "/workshop/reception" }
-    );
-  };
-
+  const goReceptionTab = useCallback((tab) => {
+    if (tab === "appointments") {
+      navigate("/workshop/reception/appointments");
+      return;
+    }
+    navigate("/workshop/reception");
+  }, [navigate]);
   return (
     <ChakraProvider theme={initialTheme}>
       <div className={`workshop-page ${isDarkMode ? "dark" : ""}`}>

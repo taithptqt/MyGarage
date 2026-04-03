@@ -1488,7 +1488,7 @@ export default function BookingPage() {
                 </div>
                 <VehicleActionPanel linkedVehicles={linkedVehicles} selectedVehicles={multi.vehicles} brands={brands} models={models} activeVehicleKey={activeSymptomVehicleKey} onSelectVehicle={setActiveSymptomVehicleKey} draftVehicle={draftVehicle} onDraftChange={updateDraftVehicle} onToggleExistingVehicle={toggleExistingVehicle} onAddNewVehicle={addNewVehicle} onRemoveVehicle={handleRemoveVehicle} />
                 <label className="notes-field">
-                  Mô tả triệu chứng
+                  Mô tả thêm
                   {(multi.vehicles || []).length > 0 ? (
                     <div style={{ display: "grid", gap: "10px" }}>
                       <strong style={{ fontSize: "15px", fontWeight: 700, color: "rgba(29,42,38,0.86)" }}>
@@ -1500,13 +1500,13 @@ export default function BookingPage() {
                             key={`symptom-${activeSymptomVehicle?.key || "none"}-${index}`}
                             rows={1}
                             value={item}
-                            placeholder={`Nhập mô tả triệu chứng ${index + 1}...`}
+                            placeholder={`Nhập mô tả ${index + 1}...`}
                             onChange={(e) => onSymptomChange(activeSymptomVehicle?.key || "", index, e.target.value)}
                           />
                         ))}
                       </div>
                       <p className="vehicle-batch-note">
-                        Chọn xe ở danh sách phía trên để nhập triệu chứng cho xe cụ thể. Mỗi xe có thể nhập nhiều triệu chứng (1, 2, 3...).
+                        Chọn xe ở danh sách phía trên để nhập mô tả cho xe cụ thể. Mỗi xe có thể nhập nhiều mô tả (1, 2, 3...).
                       </p>
                     </div>
                   ) : null}
@@ -1637,7 +1637,7 @@ export default function BookingPage() {
                               <p><span>Dịch vụ cụ thể:</span> {vehicle.serviceNames.length > 0 ? vehicle.serviceNames.join(", ") : "Chưa chọn"}</p>
                               <p><span>Giờ bắt đầu:</span> {vehicle.slotStartLabel}</p>
                               <p><span>Giờ kết thúc:</span> {vehicle.slotEndLabel}</p>
-                              <p><span>Triệu chứng:</span> {vehicle.symptomValues.length > 0 ? vehicle.symptomValues.join(" | ") : "Không có"}</p>
+                              <p><span>Mô tả thêm:</span> {vehicle.symptomValues.length > 0 ? vehicle.symptomValues.join(" | ") : "Không có"}</p>
                               <p><span>Tổng tiền xe:</span> {formatVnd(vehicle.totalVehiclePrice)}</p>
                               <p><span>Thời lượng xe:</span> {vehicle.durationLabel}</p>
                             </div>

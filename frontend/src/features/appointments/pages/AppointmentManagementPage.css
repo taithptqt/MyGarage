@@ -1,0 +1,161 @@
+.appointment-management-page .date-quick-btn {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid #d6deeb;
+  background: #ffffff;
+  color: #2b3674;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "Be Vietnam Pro", "Nunito Sans", "Segoe UI", Arial, sans-serif;
+  cursor: pointer;
+}
+
+.appointment-management-page .date-quick-btn:hover {
+  background: #f4f7fe;
+}
+
+.appointment-management-page .date-range-modal {
+  max-width: 860px !important;
+}
+
+.appointment-management-page .date-range-modal .modal-header {
+  padding: 26px 28px 14px !important;
+}
+
+.appointment-management-page .date-range-modal .modal-body-content {
+  padding: 18px 22px 22px !important;
+}
+
+.appointment-management-page .date-range-picker-shell {
+  display: grid;
+  gap: 18px;
+  padding: 6px 4px 2px;
+}
+
+.appointment-management-page .date-range-summary {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+}
+
+.appointment-management-page .date-pill {
+  border: 1px solid #d6deeb;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.appointment-management-page .date-pill-label {
+  font-size: 12px;
+  color: #6b7a99;
+  font-weight: 700;
+}
+
+.appointment-management-page .date-pill strong {
+  color: #1b2559;
+  font-size: 15px;
+}
+
+.appointment-management-page .date-pill-arrow {
+  color: #7b8caf;
+  font-weight: 800;
+}
+
+.appointment-management-page .date-range-hint {
+  font-size: 13px;
+  color: #5a6c92;
+  font-weight: 600;
+  margin-top: -2px;
+}
+
+.appointment-management-page .date-range-calendar-wrap {
+  border: 1px solid #e4eaf6;
+  border-radius: 14px;
+  padding: 16px 14px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.appointment-management-page .date-range-calendar {
+  width: 100% !important;
+  border: none !important;
+  font-family: "Be Vietnam Pro", "Nunito Sans", "Segoe UI", Arial, sans-serif !important;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__navigation button {
+  border-radius: 10px;
+  color: #2b3674;
+  font-weight: 700;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__month-view__weekdays__weekday {
+  color: #7b8caf;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile {
+  height: 42px;
+  border-radius: 10px;
+  color: #2b3674;
+  font-weight: 600;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile:enabled:hover {
+  background: #eef2ff;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile--now {
+  background: #eef2ff;
+  color: #3047d6;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-middle {
+  background: linear-gradient(90deg, rgba(67, 24, 255, 0.14) 0%, rgba(67, 24, 255, 0.2) 100%) !important;
+  border-radius: 0 !important;
+  color: #2b3674;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-start,
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-end {
+  background: #4318ff !important;
+  color: #ffffff !important;
+  font-weight: 800;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-start {
+  border-radius: 10px 0 0 10px !important;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-end {
+  border-radius: 0 10px 10px 0 !important;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile.range-start.range-end {
+  border-radius: 10px !important;
+}
+
+.appointment-management-page .date-range-calendar .react-calendar__tile:disabled {
+  color: #c0cadf;
+  background: #fbfcff;
+}
+
+.appointment-management-page .date-range-quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.appointment-management-page .date-range-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: 2px;
+}

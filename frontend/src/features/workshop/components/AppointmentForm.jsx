@@ -632,7 +632,7 @@ export default function AppointmentForm({
           rows={3}
           value={formData.customerNotes}
           onChange={handleChange}
-          placeholder="Mô tả triệu chứng, yêu cầu khác..."
+          placeholder="Mô tả thêm, yêu cầu khác..."
           style={{ resize: "vertical" }}
         />
       </div>

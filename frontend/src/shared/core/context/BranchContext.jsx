@@ -3,6 +3,7 @@ import { request } from "@app/apiClient";
 
 const BranchContext = createContext(undefined);
 const STORAGE_KEY = "mygarage_branch_id";
+const ALL_BRANCHES_ID = 0;
 
 async function fetchBranches() {
   try {
@@ -13,9 +14,25 @@ async function fetchBranches() {
   }
 }
 
+function parseBranchId(rawValue) {
+  const raw = String(rawValue ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "all") return ALL_BRANCHES_ID;
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  return null;
+}
+
+function isBranchInList(branchList, branchId) {
+  if (branchId === ALL_BRANCHES_ID) return true;
+  return branchList.some((item) => Number(item?.id) === Number(branchId));
+}
+
 export function BranchProvider({ children }) {
   const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState(() =>
+    parseBranchId(localStorage.getItem(STORAGE_KEY))
+  );
   const [loading, setLoading] = useState(false);
 
   const refreshBranches = useCallback(async () => {
@@ -31,30 +48,22 @@ export function BranchProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-    const parsed = Number(saved);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      setSelectedBranchId(parsed);
-    }
-  }, []);
-
-  useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const list = await refreshBranches();
         if (!mounted) return;
-        if (!list.length) {
-          setSelectedBranchId(null);
-          localStorage.removeItem(STORAGE_KEY);
-          return;
-        }
 
-        const hasSaved = list.some((item) => item.id === selectedBranchId);
-        const nextId = hasSaved ? selectedBranchId : list[0].id;
-        setSelectedBranchId(nextId);
-        localStorage.setItem(STORAGE_KEY, String(nextId));
+        setSelectedBranchId((currentId) => {
+          if (!list.length) {
+            localStorage.setItem(STORAGE_KEY, String(ALL_BRANCHES_ID));
+            return ALL_BRANCHES_ID;
+          }
+
+          const nextId = isBranchInList(list, currentId) ? currentId : Number(list[0]?.id) || ALL_BRANCHES_ID;
+          localStorage.setItem(STORAGE_KEY, String(nextId));
+          return nextId;
+        });
       } catch {
       }
     })();
@@ -65,27 +74,29 @@ export function BranchProvider({ children }) {
   }, [refreshBranches]);
 
   const selectBranch = useCallback((branchId) => {
-    const parsed = Number(branchId);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const parsed = parseBranchId(branchId);
+    if (parsed === null) return;
     setSelectedBranchId(parsed);
     localStorage.setItem(STORAGE_KEY, String(parsed));
   }, []);
 
   const selectedBranch = useMemo(
-    () => branches.find((item) => item.id === selectedBranchId) || null,
+    () => branches.find((item) => Number(item?.id) === Number(selectedBranchId)) || null,
     [branches, selectedBranchId]
   );
+  const isAllBranches = selectedBranchId === ALL_BRANCHES_ID;
 
   const value = useMemo(
     () => ({
       branches,
       selectedBranchId,
       selectedBranch,
+      isAllBranches,
       selectBranch,
       refreshBranches,
       loading
     }),
-    [branches, selectedBranchId, selectedBranch, selectBranch, refreshBranches, loading]
+    [branches, selectedBranchId, selectedBranch, isAllBranches, selectBranch, refreshBranches, loading]
   );
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;

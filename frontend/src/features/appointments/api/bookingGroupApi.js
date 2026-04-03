@@ -22,3 +22,11 @@ export async function getMyBookingGroupDetail(id) {
     method: "GET",
   });
 }
+
+export async function cancelBookingGroupAll(id, reason) {
+  return request({
+    url: BOOKING_GROUPS_ROUTES.cancelAll(id),
+    method: "POST",
+    data: { reason: reason || null },
+  });
+}

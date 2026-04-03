@@ -14,12 +14,14 @@ import {
   formatTime,
 } from "@features/appointments/utils/myAppointmentsData";
 import "./MyAppointmentsPage.css";
+import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
 
 function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false }) {
   const status = STATUS_META[item.status] || { label: item.status || "Không rõ", tone: "default" };
   const canCancel =
     item.status === APPOINTMENT_STATUS.PENDING ||
     item.status === APPOINTMENT_STATUS.CONFIRMED;
+  const displayCancelReason = formatAppointmentCancelReason(item.cancelReason);
 
   return (
     <article className={`my-appt-card ${inGroup ? "my-appt-card-in-group" : ""}`}>
@@ -56,9 +58,9 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false })
         <p className="my-appt-note">
           <strong>Ghi chú:</strong> {item.customerNotes || ""}
         </p>
-        {item.cancelReason && (
+        {displayCancelReason && (
           <p className="my-appt-note cancel">
-            <strong>Lý do hủy:</strong> {item.cancelReason}
+            <strong>Lý do hủy:</strong> {displayCancelReason}
           </p>
         )}
       </div>

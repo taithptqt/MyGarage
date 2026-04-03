@@ -1,5 +1,7 @@
 ﻿import React, { useMemo } from "react";
 import { Modal } from "@features/admin/components/AdminModals";
+import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
+import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
 
 function parseServiceNames(appointment) {
   const rawList = appointment?.serviceNames ?? appointment?.ServiceNames;
@@ -16,15 +18,19 @@ function parseServiceNames(appointment) {
     .map((id) => `Dịch vụ #${id}`);
 }
 
-function parseSymptomItems(customerNotes, cancelReason) {
+function normalizeDisplayText(value) {
+  return String(value || "")
+    .replace(/\[[A-Z_]+:[^\]]*]/g, " ")
+    .replace(/^(?:[\s-]|•)+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseSymptomItems(customerNotes) {
   const items = String(customerNotes || "")
     .split(/\r?\n|;/g)
-    .map((entry) => entry.replace(/^(?:[\s-]|•)+/, "").trim())
+    .map((entry) => normalizeDisplayText(entry))
     .filter(Boolean);
-
-  if (cancelReason) {
-    items.push(`Lý do hủy: ${cancelReason}`);
-  }
   return items;
 }
 
@@ -61,12 +67,11 @@ export default function AppointmentDetailModal({
   const bookingGroupCode = appointment.bookingGroupCode || appointment.BookingGroupCode || "";
   const customerNotes = appointment.customerNotes || appointment.CustomerNotes || "";
   const cancelReason = appointment.cancelReason || appointment.CancelReason || "";
-  const symptomItems = useMemo(
-    () => parseSymptomItems(customerNotes, cancelReason),
-    [customerNotes, cancelReason],
-  );
+  const symptomItems = useMemo(() => parseSymptomItems(customerNotes), [customerNotes]);
+  const displayCancelReason = useMemo(() => formatAppointmentCancelReason(cancelReason), [cancelReason]);
   const createdAt = appointment.createdAt || appointment.CreatedAt;
   const statusText = appointment.status || appointment.Status || "PENDING";
+  const statusLabel = getStatusLabelVi(statusText, statusText);
 
   return (
     <Modal title="Chi tiết lịch hẹn" onClose={onClose} className="appt-detail-modal">
@@ -78,7 +83,7 @@ export default function AppointmentDetailModal({
             <p>{customerPhone}</p>
           </div>
           <div className="appt-detail-hero-side">
-            <span className={`badge ${getApptStatusBadge(statusText)}`}>{statusText}</span>
+            <span className={`badge ${getApptStatusBadge(statusText)}`}>{statusLabel}</span>
             {bookingGroupCode ? (
               <span className="appt-detail-group-chip">{bookingGroupCode}</span>
             ) : (
@@ -142,7 +147,7 @@ export default function AppointmentDetailModal({
             </section>
 
             <section className="appt-detail-notes">
-              <h4>Triệu chứng</h4>
+              <h4>Mô tả thêm</h4>
               {symptomItems.length > 0 ? (
                 <ul className="appt-detail-notes-list">
                   {symptomItems.map((item, index) => (
@@ -150,9 +155,16 @@ export default function AppointmentDetailModal({
                   ))}
                 </ul>
               ) : (
-                <p>Không có ghi chú gì.</p>
+                <p>Không có</p>
               )}
             </section>
+
+            {displayCancelReason ? (
+              <section className="appt-detail-notes">
+                <h4>Lý do hủy</h4>
+                <p>{displayCancelReason}</p>
+              </section>
+            ) : null}
           </>
         )}
 
@@ -162,7 +174,7 @@ export default function AppointmentDetailModal({
             className="btn-secondary-outline appt-detail-edit-btn"
             onClick={() => onEdit?.(appointment)}
             disabled={!onEdit || onEditDisabled}
-            title={onEditDisabled ? "Chỉ có thể sửa lịch ở trạng thái chờ xác nhận hoặc đã xác nhận." : "Sửa lịch hẹn"}
+            title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
           >
             Sửa lịch hẹn
           </button>
@@ -174,4 +186,5 @@ export default function AppointmentDetailModal({
     </Modal>
   );
 }
+
 

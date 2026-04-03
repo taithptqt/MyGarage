@@ -3,6 +3,7 @@ import React from 'react';
 import { Icon } from '@chakra-ui/react';
 import {
   MdBuild,
+  MdCalendarToday,
   MdCategory,
   MdDirectionsCar,
   MdHome,
@@ -28,7 +29,9 @@ import AdminPage from "@features/admin/pages/AdminPage";
 import InventoryAdminPage from "@features/inventory/pages/InventoryAdminPage";
 import ServicesPage from "@features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "@features/services/pages/ServiceCategoriesPage";
+import AppointmentManagementPage from "@features/appointments/pages/AppointmentManagementPage";
 import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
+import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
 
 const inventoryItems = [
@@ -213,6 +216,13 @@ const routes = [
     component: <MainDashboard />,
   },
   {
+    name: 'Lịch hẹn',
+    layout: '/admin',
+    path: '/appointments',
+    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
+    component: <AppointmentManagementPage />,
+  },
+  {
     name: 'Chi nhánh',
     layout: '/admin',
     path: '/branches',
@@ -225,6 +235,13 @@ const routes = [
     path: '/staff',
     icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
     component: <AdminPage embedded initialSection="staff" />,
+  },
+  {
+    name: 'Lương',
+    layout: '/admin',
+    path: '/salary',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    component: <AdminSalaryPage />,
   },
   {
     name: 'Khách hàng',
@@ -267,5 +284,6 @@ const routes = [
 ];
 
 export default routes;
+
 
 
