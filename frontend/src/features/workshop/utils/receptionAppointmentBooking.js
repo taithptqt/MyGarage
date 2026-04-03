@@ -6,6 +6,17 @@ import {
 import { createBookingGroup } from "@features/appointments/api/bookingGroupApi";
 import { bookAppointment, cancelAppointment } from "@features/appointments/api/appointmentApi";
 
+const ERRORS = {
+  invalidBranch: "Chi nh\u00e1nh hi\u1ec7n t\u1ea1i kh\u00f4ng h\u1ee3p l\u1ec7.",
+  invalidDateTime: "Ng\u00e0y gi\u1edd h\u1eb9n kh\u00f4ng h\u1ee3p l\u1ec7.",
+  missingGuestModel: "Vui l\u00f2ng ch\u1ecdn d\u00f2ng xe cho kh\u00e1ch v\u00e3ng lai.",
+  invalidCustomer: "Kh\u00e1ch h\u00e0ng kh\u00f4ng h\u1ee3p l\u1ec7.",
+  missingNewVehicleModel: "Vui l\u00f2ng ch\u1ecdn d\u00f2ng xe m\u1edbi.",
+  missingVehicle: "Vui l\u00f2ng ch\u1ecdn xe c\u1ee7a kh\u00e1ch.",
+  vehicleNotFound: "Kh\u00f4ng t\u00ecm th\u1ea5y xe \u0111\u00e3 ch\u1ecdn.",
+  replaceReason: "\u0110i\u1ec1u ch\u1ec9nh l\u1ecbch h\u1eb9n b\u1edfi l\u1ec5 t\u00e2n",
+};
+
 function toNumberList(value) {
   if (!Array.isArray(value)) return [];
   return value.map(Number).filter((id) => id > 0);
@@ -24,8 +35,7 @@ function findVehicleByPlate(vehicles, plate) {
   if (!normalizedPlate) return null;
   return (
     (vehicles || []).find(
-      (vehicle) =>
-        String(vehicle.licensePlate || "").trim().toUpperCase() === normalizedPlate,
+      (vehicle) => String(vehicle.licensePlate || "").trim().toUpperCase() === normalizedPlate,
     ) || null
   );
 }
@@ -65,12 +75,12 @@ export async function saveReceptionAppointment({
   replaceAppointmentId = 0,
 }) {
   if (!effectiveBranchId) {
-    throw new Error("Chi nhánh hiện tại không hợp lệ.");
+    throw new Error(ERRORS.invalidBranch);
   }
 
   const startAt = new Date(`${formData.appointmentDate}T${formData.startTime}`);
   if (Number.isNaN(startAt.getTime())) {
-    throw new Error("Ngày giờ hẹn không hợp lệ.");
+    throw new Error(ERRORS.invalidDateTime);
   }
 
   const durationMinutes = Math.max(Number(formData.totalMinutes || 0), 30);
@@ -99,7 +109,7 @@ export async function saveReceptionAppointment({
 
     const modelId = Number(formData.guestVehicleModelId || 0);
     if (!modelId) {
-      throw new Error("Vui lòng chọn dòng xe cho khách vãng lai.");
+      throw new Error(ERRORS.missingGuestModel);
     }
 
     let vehicle = findVehicleByPlate(vehicles, formData.guestVehiclePlate);
@@ -152,13 +162,13 @@ export async function saveReceptionAppointment({
     const customerId = Number(formData.customerId || 0);
     const customer = findCustomerById(customers, customerId);
     if (!customerId || !customer) {
-      throw new Error("Khách hàng không hợp lệ.");
+      throw new Error(ERRORS.invalidCustomer);
     }
 
     if (formData.isNewVehicle) {
       const modelId = Number(formData.vehicleModelId || 0);
       if (!modelId) {
-        throw new Error("Vui lòng chọn dòng xe mới.");
+        throw new Error(ERRORS.missingNewVehicleModel);
       }
 
       const newVehicle = await createVehicle({
@@ -200,13 +210,13 @@ export async function saveReceptionAppointment({
     } else {
       const selectedVehicleIds = toNumberList(formData.selectedVehicleIds);
       if (selectedVehicleIds.length === 0) {
-        throw new Error("Vui lòng chọn xe của khách.");
+        throw new Error(ERRORS.missingVehicle);
       }
 
       if (selectedVehicleIds.length === 1) {
         const vehicle = findVehicleById(vehicles, selectedVehicleIds[0]);
         if (!vehicle) {
-          throw new Error("Không tìm thấy xe đã chọn.");
+          throw new Error(ERRORS.vehicleNotFound);
         }
         const payload = {
           ...buildAppointmentBasePayload({
@@ -265,7 +275,7 @@ export async function saveReceptionAppointment({
 
   const shouldReplace = Number(replaceAppointmentId) > 0;
   if (shouldReplace) {
-    await cancelAppointment(Number(replaceAppointmentId), "Điều chỉnh lịch hẹn bởi lễ tân");
+    await cancelAppointment(Number(replaceAppointmentId), ERRORS.replaceReason);
   }
 
   return {
