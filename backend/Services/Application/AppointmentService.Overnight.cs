@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -65,7 +64,7 @@ namespace MyGarage.Services
 
             var affected = await _context.Appointments
                 .Where(a => a.BranchId == branchId
-                    && (a.Status == AppointmentStatuses.Confirmed || a.Status == AppointmentStatuses.Pending)
+                    && (a.Status == nameof(AppointmentStatus.CONFIRMED) || a.Status == nameof(AppointmentStatus.PENDING))
                     && a.StartTime >= now.AddMinutes(90)
                     && a.StartTime <= health.LockUntil.Value)
                 .ToListAsync();

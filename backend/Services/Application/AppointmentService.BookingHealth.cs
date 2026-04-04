@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -24,12 +23,12 @@ namespace MyGarage.Services
                     && s.EndTime < atTime
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != AppointmentStatuses.CancelledLegacy)
+                    && s.Status != nameof(AppointmentStatus.CANCELLED))
                 .ToListAsync();
 
             var totalDelay = delayedSlots.Sum(s => (int)Math.Max(0, Math.Ceiling(((s.ActualReleaseTime ?? atTime) - s.EndTime).TotalMinutes)));
             var queueCount = await _context.Appointments.AsNoTracking()
-                .Where(a => a.BranchId == branchId && (a.Status == AppointmentStatuses.Queued || a.Status == AppointmentStatuses.Arrived || a.Status == AppointmentStatuses.ArrivedLate))
+                .Where(a => a.BranchId == branchId && (a.Status == nameof(AppointmentStatus.PENDING) || a.Status == nameof(AppointmentStatus.ARRIVED) || a.Status == nameof(AppointmentStatus.ARRIVED_LATE)))
                 .CountAsync();
 
             var locked = totalDelay >= delayThreshold || (totalDelay >= delayThreshold / 2 && queueCount >= parkingThreshold);

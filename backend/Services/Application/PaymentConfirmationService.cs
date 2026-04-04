@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -27,7 +28,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
         await UpdateRelatedDocumentsAsync(payment);
 
-        if (previousStatus != "COMPLETED" && normalizedStatus == "COMPLETED")
+        if (previousStatus != nameof(PaymentStatusCode.COMPLETED) && normalizedStatus == nameof(PaymentStatusCode.COMPLETED))
         {
             await TrySendPaymentSuccessEmailAsync(payment);
         }
@@ -38,10 +39,10 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         var normalized = status?.Trim().ToUpperInvariant();
         return normalized switch
         {
-            "COMPLETED" => "COMPLETED",
-            "CANCELED" => "CANCELED",
-            "FAILED" => "FAILED",
-            _ => "PENDING"
+            nameof(PaymentStatusCode.COMPLETED) => nameof(PaymentStatusCode.COMPLETED),
+            nameof(PaymentStatusCode.CANCELED) => nameof(PaymentStatusCode.CANCELED),
+            nameof(PaymentStatusCode.FAILED) => nameof(PaymentStatusCode.FAILED),
+            _ => nameof(PaymentStatusCode.PENDING)
         };
     }
 
@@ -53,12 +54,12 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (invoice is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 invoice.PaidAmount = paidAmount;
                 var invoiceTotal = invoice.TotalAmount ?? 0m;
-                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal ? "COMPLETED" : "PENDING";
+                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal ? nameof(PaymentStatusCode.COMPLETED) : nameof(PaymentStatusCode.PENDING);
                 invoice.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -69,11 +70,11 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (serviceOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
-                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal ? "COMPLETED" : "PENDING";
+                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal ? nameof(PaymentStatusCode.COMPLETED) : nameof(PaymentStatusCode.PENDING);
                 serviceOrder.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -84,11 +85,11 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (retailOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 // Retail order status follows existing DB check constraint.
-                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? "CONFIRMED" : "DRAFT";
+                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? nameof(RetailOrderStatus.CONFIRMED) : nameof(RetailOrderStatus.DRAFT);
                 retailOrder.UpdatedAt = DateTime.UtcNow;
             }
         }

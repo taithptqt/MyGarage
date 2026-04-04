@@ -9,9 +9,9 @@ namespace MyGarage.Services
 {
     public partial class VehicleConditionLogService
     {
-        private const string StatusPending = "PENDING";
-        private const string StatusAssigned = "ASSIGNED";
-        private const string StatusCompleted = "COMPLETED";
+        private const string StatusPending = nameof(ConditionRequestStatusCode.PENDING);
+        private const string StatusAssigned = nameof(ConditionRequestStatusCode.ASSIGNED);
+        private const string StatusCompleted = nameof(ConditionRequestStatusCode.COMPLETED);
         private const string LogTypeCheckIn = "CHECK_IN";
 
         public async Task<IReadOnlyList<VehicleConditionLog>> GetByOrderAsync(long serviceOrderId)

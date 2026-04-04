@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -48,7 +47,7 @@ namespace MyGarage.Services
                     CustomerNotes = AppendClusterMarker(
                         AppendFlowMarker(dto.CustomerNotes, flow),
                         requestedCluster),
-                    Status = AppointmentStatuses.Pending,
+                    Status = nameof(AppointmentStatus.PENDING),
                     CreatedAt = _clock.UtcNow
                 };
                 _context.Appointments.Add(appointment);

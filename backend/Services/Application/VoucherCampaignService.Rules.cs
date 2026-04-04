@@ -71,30 +71,30 @@ namespace MyGarage.Services
         {
             if (isDeleted == true)
             {
-                return "ARCHIVED";
+                return nameof(VoucherStatusCode.ARCHIVED);
             }
 
-            if (string.Equals(currentStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(currentStatus, nameof(VoucherStatusCode.PENDING_APPROVAL), StringComparison.OrdinalIgnoreCase))
             {
-                return "PENDING_APPROVAL";
+                return nameof(VoucherStatusCode.PENDING_APPROVAL);
             }
 
             if (isActive != true)
             {
-                return endDate < now ? "ENDED" : "PAUSED";
+                return endDate < now ? nameof(VoucherStatusCode.ENDED) : nameof(VoucherStatusCode.PAUSED);
             }
 
             if (endDate < now)
             {
-                return "ENDED";
+                return nameof(VoucherStatusCode.ENDED);
             }
 
             if (startDate > now)
             {
-                return "SCHEDULED";
+                return nameof(VoucherStatusCode.SCHEDULED);
             }
 
-            return "ACTIVE";
+            return nameof(VoucherStatusCode.ACTIVE);
         }
     }
 }

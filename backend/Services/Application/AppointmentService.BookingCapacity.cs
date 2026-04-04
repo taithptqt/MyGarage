@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
-using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -53,7 +52,7 @@ namespace MyGarage.Services
                     s.StartTime < requestedEndAt &&
                     s.EndTime > requestedStartAt &&
                     s.Status != nameof(WorkSlotStatus.CANCELED) &&
-                    s.Status != AppointmentStatuses.CancelledLegacy)
+                    s.Status != nameof(AppointmentStatus.CANCELLED))
                 .ToListAsync();
 
             var locked = CountLockedBays(activeBays, overnightLocks, requestedStartAt, requestedEndAt);
@@ -76,9 +75,9 @@ namespace MyGarage.Services
                     a.BranchId == branchId &&
                     a.StartTime < requestedEndAt &&
                     a.EndTime > requestedStartAt &&
-                    (a.Status == AppointmentStatuses.Queued ||
-                     a.Status == AppointmentStatuses.Arrived ||
-                     a.Status == AppointmentStatuses.ArrivedLate))
+                    (a.Status == nameof(AppointmentStatus.PENDING) ||
+                     a.Status == nameof(AppointmentStatus.ARRIVED) ||
+                     a.Status == nameof(AppointmentStatus.ARRIVED_LATE)))
                 .CountAsync();
             var heldCount = _slotHoldService
                 .GetActiveHolds(branchId, requestedStartAt, requestedEndAt, AppointmentBookingFlows.Flexible, excludeHoldToken)

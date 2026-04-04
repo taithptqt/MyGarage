@@ -26,3 +26,27 @@ dist/
 .env.*
 **/.env
 **/.env.*
+
+# Local build/cache/temp artifacts
+/_build_tmp/
+/artifacts/
+/temp/
+/tmp_build_verify*/
+/backend/.dotnet_home/
+/backend/bin/
+/backend/obj/
+/frontend/node_modules/
+/frontend/dist/
+
+# Local analysis/output scratch files
+/backend_analysis.json
+/backend_diff.txt
+/backend_diff_summary.txt
+/diffs.json
+/temp_unicode_test.txt
+/workspace.code-workspace
+/backend/build_errors_fix.txt
+/backend/build_errors_refactor.txt
+/backend/MyGarage.csproj.user
+/backend/package-lock.json
+/package-lock.json

@@ -156,26 +156,26 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Status is required." });
             }
 
+            if (!Enum.TryParse<AppointmentPatchAction>(requested, ignoreCase: true, out var action))
+            {
+                return BadRequest(new { message = "Unsupported status transition." });
+            }
+
             try
             {
                 var actorUserId = this.GetCurrentUserId();
-                global::MyGarage.Models.Appointment? appointment = requested switch
+                global::MyGarage.Models.Appointment? appointment = action switch
                 {
-                    "CONFIRMED" => await _appointmentService.ConfirmAsync(id, actorUserId),
-                    "CANCELED" => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
-                    "CHECKED_IN" => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
-                    "ARRIVED" => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
+                    AppointmentPatchAction.CONFIRMED => await _appointmentService.ConfirmAsync(id, actorUserId),
+                    AppointmentPatchAction.CANCELED => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
+                    AppointmentPatchAction.CHECKED_IN => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
+                    AppointmentPatchAction.ARRIVED => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
                     _ => null
                 };
 
                 if (appointment == null)
                 {
-                    if (requested is "CONFIRMED" or "CANCELED" or "CHECKED_IN" or "ARRIVED")
-                    {
-                        return NotFound();
-                    }
-
-                    return BadRequest(new { message = "Unsupported status transition." });
+                    return NotFound();
                 }
 
                 var detail = await _appointmentService.GetDetailedAsync(id);

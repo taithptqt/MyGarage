@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Interfaces;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services;
@@ -55,11 +56,11 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
     private static readonly HashSet<string> AcceptedApprovalStatuses =
     [
-        "APPROVED",
-        "APPLIED",
-        "PAID",
-        "POSTED",
-        "COMPLETED"
+        nameof(AccountingStatus.APPROVED),
+        nameof(AccountingStatus.APPLIED),
+        nameof(AccountingStatus.PAID),
+        nameof(AccountingStatus.POSTED),
+        nameof(AccountingStatus.COMPLETED)
     ];
 
     private static readonly HashSet<string> AttendanceDeductionTypes =
@@ -75,25 +76,25 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
     private static readonly HashSet<string> AcceptedAdvanceStatuses =
     [
-        "APPROVED",
-        "DISBURSED",
-        "PAID",
-        "DEDUCTING"
+        nameof(AccountingStatus.APPROVED),
+        nameof(AccountingStatus.DISBURSED),
+        nameof(AccountingStatus.PAID),
+        nameof(AccountingStatus.DEDUCTING)
     ];
 
     private static readonly HashSet<string> AcceptedLoanStatuses =
     [
-        "ACTIVE",
-        "APPROVED",
-        "REPAYING"
+        nameof(StaffStatusCode.ACTIVE),
+        nameof(AccountingStatus.APPROVED),
+        nameof(AccountingStatus.REPAYING)
     ];
 
     private static readonly HashSet<string> ActiveStaffStatuses =
     [
-        "ACTIVE",
-        "WORKING",
-        "PROBATION",
-        "ONBOARDING"
+        nameof(StaffStatusCode.ACTIVE),
+        nameof(StaffStatusCode.WORKING),
+        nameof(StaffStatusCode.PROBATION),
+        nameof(StaffStatusCode.ONBOARDING)
     ];
 
     public async Task<PayrollBatchCalculationResult> CalculatePayrollForAllAsync(
@@ -103,7 +104,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         var now = DateTime.UtcNow;
         var period = await ResolvePayrollPeriodAsync(command, cancellationToken);
 
-        if (!string.Equals(NormalizeKey(period.Status), "OPEN", StringComparison.Ordinal))
+        if (!string.Equals(NormalizeKey(period.Status), nameof(AccountingStatus.OPEN), StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Batch payroll calculation only supports OPEN payroll period.");
         }
@@ -282,7 +283,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     item.PitAmount = pitAmount;
                     item.OtherDeduction = 0m;
                     item.NetPay = netPay;
-                    item.Status = "DRAFT";
+                    item.Status = nameof(AccountingStatus.DRAFT);
                     item.UpdatedAt = now;
                     updated++;
                 }
@@ -306,7 +307,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         PitAmount = pitAmount,
                         OtherDeduction = 0m,
                         NetPay = netPay,
-                        Status = "DRAFT",
+                        Status = nameof(AccountingStatus.DRAFT),
                         CreatedAt = now,
                         UpdatedAt = now
                     };
@@ -384,7 +385,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
         var openPeriod = await _db.PayrollPeriods
             .AsNoTracking()
-            .Where(x => x.Status != null && x.Status.ToUpper() == "OPEN")
+            .Where(x => x.Status != null && x.Status.ToUpper() == nameof(AccountingStatus.OPEN))
             .OrderByDescending(x => x.StartDate)
             .ThenByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -418,7 +419,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 throw new InvalidOperationException("Selected payroll run does not belong to the selected payroll period.");
             }
 
-            if (!string.Equals(NormalizeKey(provided.Status), "DRAFT", StringComparison.Ordinal))
+            if (!string.Equals(NormalizeKey(provided.Status), nameof(AccountingStatus.DRAFT), StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Batch calculation can only update a DRAFT payroll run.");
             }
@@ -427,7 +428,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         }
 
         var draftQuery = _db.PayrollRuns
-            .Where(x => x.PayrollPeriodId == payrollPeriodId && x.Status != null && x.Status.ToUpper() == "DRAFT");
+            .Where(x => x.PayrollPeriodId == payrollPeriodId && x.Status != null && x.Status.ToUpper() == nameof(AccountingStatus.DRAFT));
         if (branchId.HasValue)
         {
             draftQuery = draftQuery.Where(x => x.BranchId == branchId.Value);
@@ -459,7 +460,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             PayrollPeriodId = payrollPeriodId,
             BranchId = branchId,
             RunNo = nextRunNo,
-            Status = "DRAFT",
+            Status = nameof(AccountingStatus.DRAFT),
             CalculatedBy = calculatedByUserId,
             CalculatedAt = now,
             CreatedAt = now,
@@ -521,7 +522,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         foreach (var row in rows)
         {
             if (result.ContainsKey(row.StaffId)) continue;
-            if (!string.Equals(NormalizeStatus(row.Status, "ACTIVE"), "ACTIVE", StringComparison.Ordinal)) continue;
+            if (!string.Equals(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)), nameof(StaffStatusCode.ACTIVE), StringComparison.Ordinal)) continue;
             if (row.BaseSalary <= 0m) continue;
             result[row.StaffId] = row.BaseSalary;
         }
@@ -550,7 +551,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         foreach (var row in rows)
         {
             if (result.ContainsKey(row.StaffId)) continue;
-            if (!string.Equals(NormalizeStatus(row.Status, "ACTIVE"), "ACTIVE", StringComparison.Ordinal)) continue;
+            if (!string.Equals(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)), nameof(StaffStatusCode.ACTIVE), StringComparison.Ordinal)) continue;
             result[row.StaffId] = new ContractCompensationSnapshot(
                 BaseSalary: Math.Max(0m, row.BaseSalary),
                 AllowanceAmount: Math.Max(0m, row.AllowanceAmount));
@@ -717,7 +718,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
         foreach (var row in rows)
         {
-            if (!AcceptedLoanStatuses.Contains(NormalizeStatus(row.Status, "ACTIVE"))) continue;
+            if (!AcceptedLoanStatuses.Contains(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)))) continue;
             var plannedDeduction = row.MonthlyDeduction > 0m
                 ? Math.Min(row.MonthlyDeduction, row.OutstandingAmount)
                 : row.OutstandingAmount;
@@ -892,7 +893,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             return true;
         }
 
-        if (normalizedStatus.Contains("INACTIVE", StringComparison.Ordinal) ||
+        if (normalizedStatus.Contains(nameof(StaffStatusCode.INACTIVE), StringComparison.Ordinal) ||
             normalizedStatus.Contains("TERMINAT", StringComparison.Ordinal) ||
             normalizedStatus.Contains("RESIGN", StringComparison.Ordinal) ||
             normalizedStatus.Contains("QUIT", StringComparison.Ordinal) ||

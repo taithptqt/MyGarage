@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using MyGarage.DTOs.Responses.Auth;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -22,7 +23,7 @@ namespace MyGarage.Services
                     Role = "Customer",
                     RoleCode = "CUSTOMER",
                     RoleName = "Customer",
-                    Status = customer.IsActive == true ? "Active" : "Inactive",
+                    Status = customer.IsActive == true ? nameof(ProfileAccountStatus.Active) : nameof(ProfileAccountStatus.Inactive),
                     CreatedAt = customer.CreatedAt,
                     BranchId = ExtractPreferredBranchId(customer.Note),
                     BranchName = await GetBranchNameAsync(ExtractPreferredBranchId(customer.Note))
@@ -44,7 +45,7 @@ namespace MyGarage.Services
                     RoleCode = roleCode,
                     RoleName = roleName,
                     AvatarUrl = staff.AvatarUrl ?? "",
-                    Status = staff.Status ?? "Unknown",
+                    Status = staff.Status ?? nameof(ProfileAccountStatus.Unknown),
                     CreatedAt = staff.CreatedAt,
                     BranchId = staff.BranchId,
                     BranchName = await GetBranchNameAsync(staff.BranchId)

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -20,7 +19,7 @@ namespace MyGarage.Services
                     && s.StartTime <= snapshot
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != AppointmentStatuses.CancelledLegacy)
+                    && s.Status != nameof(AppointmentStatus.CANCELLED))
                 .OrderByDescending(s => s.StartTime)
                 .ToListAsync();
 
@@ -41,7 +40,7 @@ namespace MyGarage.Services
                     BayName = bay.Name,
                     BayType = bay.BayType,
                     ServiceArea = bay.ServiceArea ?? string.Empty,
-                    Status = slot == null ? "IDLE" : "BUSY",
+                    Status = slot == null ? nameof(DispatchBayLoadStatus.IDLE) : nameof(DispatchBayLoadStatus.BUSY),
                     IsOverflowFromQuick = isOverflow,
                     SlotType = slot?.SlotType,
                     CurrentCustomerId = slot?.CustomerId,
@@ -51,7 +50,7 @@ namespace MyGarage.Services
                 });
             }
 
-            var queue = await _context.Appointments.AsNoTracking().Where(a => a.BranchId == branchId && (a.Status == AppointmentStatuses.Queued || a.Status == AppointmentStatuses.Arrived || a.Status == AppointmentStatuses.ArrivedLate)).CountAsync();
+            var queue = await _context.Appointments.AsNoTracking().Where(a => a.BranchId == branchId && (a.Status == nameof(AppointmentStatus.PENDING) || a.Status == nameof(AppointmentStatus.ARRIVED) || a.Status == nameof(AppointmentStatus.ARRIVED_LATE))).CountAsync();
             return new DispatchDashboardResponseDto
             {
                 BranchId = branchId,

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests.Auth;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -121,7 +122,7 @@ namespace MyGarage.Services
 
         private static void ValidateStaffAccountForLogin(Staff staff)
         {
-            if (staff.IsDeleted == true || string.Equals(staff.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+            if (staff.IsDeleted == true || string.Equals(staff.Status, nameof(StaffStatusCode.INACTIVE), StringComparison.OrdinalIgnoreCase))
             {
                 throw new UnauthorizedAccessException("Account is inactive.");
             }

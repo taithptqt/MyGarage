@@ -9,11 +9,11 @@ namespace MyGarage.Services
 {
     public partial class DiagnosisService
     {
-        private const string DiagnosisStatusPending = "PENDING";
-        private const string DiagnosisStatusAssigned = "ASSIGNED";
-        private const string DiagnosisStatusCompleted = "COMPLETED";
-        private const string ServiceOrderStatusInspecting = "INSPECTING";
-        private const string ServiceOrderStatusNew = "NEW";
+        private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
+        private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
+        private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
+        private const string ServiceOrderStatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
+        private const string ServiceOrderStatusNew = nameof(ServiceOrderLifecycleStatus.NEW);
 
         public async Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder)
         {

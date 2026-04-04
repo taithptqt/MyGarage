@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -36,7 +35,7 @@ namespace MyGarage.Services
                     && s.StartTime < dayEnd
                     && s.EndTime > dayStart
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != AppointmentStatuses.CancelledLegacy)
+                    && s.Status != nameof(AppointmentStatus.CANCELLED))
                 .ToListAsync();
         }
 

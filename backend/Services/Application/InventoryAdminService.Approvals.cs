@@ -8,8 +8,8 @@ namespace MyGarage.Services
 {
     public partial class InventoryAdminService
     {
-        private const string ApprovalStatusApproved = "APPROVED";
-        private const string ApprovalStatusRejected = "REJECTED";
+        private const string ApprovalStatusApproved = nameof(ApprovalRequestStatusCode.APPROVED);
+        private const string ApprovalStatusRejected = nameof(ApprovalRequestStatusCode.REJECTED);
 
         public async Task<IReadOnlyList<object>> GetApprovalsAsync(string? status)
         {

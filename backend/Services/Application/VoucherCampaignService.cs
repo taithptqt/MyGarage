@@ -14,13 +14,13 @@ namespace MyGarage.Services
     {
         private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            "DRAFT",
-            "PENDING_APPROVAL",
-            "SCHEDULED",
-            "ACTIVE",
-            "PAUSED",
-            "ENDED",
-            "ARCHIVED"
+            nameof(VoucherStatusCode.DRAFT),
+            nameof(VoucherStatusCode.PENDING_APPROVAL),
+            nameof(VoucherStatusCode.SCHEDULED),
+            nameof(VoucherStatusCode.ACTIVE),
+            nameof(VoucherStatusCode.PAUSED),
+            nameof(VoucherStatusCode.ENDED),
+            nameof(VoucherStatusCode.ARCHIVED)
         };
 
         private readonly IVoucherCampaignRepository _voucherCampaignRepository;

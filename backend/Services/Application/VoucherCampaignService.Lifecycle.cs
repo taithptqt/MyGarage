@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +11,7 @@ namespace MyGarage.Services
         {
             var current = now ?? DateTime.UtcNow;
             var campaigns = await _context.VoucherCampaigns
-                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != "ARCHIVED"))
+                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != nameof(VoucherStatusCode.ARCHIVED)))
                 .ToListAsync();
 
             if (campaigns.Count == 0)

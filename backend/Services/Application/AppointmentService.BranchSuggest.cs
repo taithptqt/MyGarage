@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Constants;
 
 namespace MyGarage.Services

@@ -23,7 +23,7 @@ namespace MyGarage.Services
                 };
             }
 
-            if (!string.Equals(redemption.RedemptionStatus, "REDEEMED", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(redemption.RedemptionStatus, nameof(VoucherRedemptionStatusCode.REDEEMED), StringComparison.OrdinalIgnoreCase))
             {
                 return new VoucherRedeemResultResponseDto
                 {
@@ -47,7 +47,7 @@ namespace MyGarage.Services
             {
                 var invoice = await _context.Invoices.FirstOrDefaultAsync(x => x.Id == redemption.InvoiceId.Value);
                 if (invoice != null &&
-                    string.Equals(invoice.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(invoice.PaymentStatus, nameof(PaymentStatusCode.PAID), StringComparison.OrdinalIgnoreCase) &&
                     !request.ApprovalRequestId.HasValue)
                 {
                     return new VoucherRedeemResultResponseDto
@@ -75,8 +75,8 @@ namespace MyGarage.Services
 
         private static void ApplyReverseState(VoucherRedemption redemption, VoucherRedemptionReverseDto request, DateTime now)
         {
-            redemption.RedemptionStatus = "REVERSED";
-            redemption.ValidationStatus = "VALIDATED";
+            redemption.RedemptionStatus = nameof(VoucherRedemptionStatusCode.REVERSED);
+            redemption.ValidationStatus = nameof(VoucherRedemptionStatusCode.VALIDATED);
             redemption.FailReasonCode = null;
             redemption.ReversedAt = now;
             redemption.ReverseReason = request.Reason?.Trim();
@@ -92,7 +92,7 @@ namespace MyGarage.Services
             voucher.UpdatedAt = now;
             voucher.UpdatedBy = approvedBy;
 
-            if (!string.Equals(voucher.Status, "EXHAUSTED", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(voucher.Status, nameof(VoucherStatusCode.EXHAUSTED), StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -106,17 +106,17 @@ namespace MyGarage.Services
 
             if (now > voucher.EndDate)
             {
-                voucher.Status = "EXPIRED";
+                voucher.Status = nameof(VoucherStatusCode.EXPIRED);
                 voucher.IsActive = false;
             }
             else if (now < voucher.StartDate)
             {
-                voucher.Status = "SCHEDULED";
+                voucher.Status = nameof(VoucherStatusCode.SCHEDULED);
                 voucher.IsActive = true;
             }
             else
             {
-                voucher.Status = "ACTIVE";
+                voucher.Status = nameof(VoucherStatusCode.ACTIVE);
                 voucher.IsActive = true;
             }
         }

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MyGarage.Constants;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -41,9 +40,9 @@ namespace MyGarage.Services
 
             var candidates = await _context.Appointments
                 .Where(a => a.BranchId == branchId
-                    && (a.Status == AppointmentStatuses.Pending
-                        || a.Status == AppointmentStatuses.Confirmed
-                        || a.Status == AppointmentStatuses.Late)
+                    && (a.Status == nameof(AppointmentStatus.PENDING)
+                        || a.Status == nameof(AppointmentStatus.CONFIRMED)
+                        || a.Status == nameof(AppointmentStatus.LATE))
                     && a.StartTime <= at.AddMinutes(policy.PreReminderMinutes))
                 .OrderBy(a => a.StartTime)
                 .ToListAsync();
@@ -101,7 +100,7 @@ namespace MyGarage.Services
 
                 if (ShouldAutoCancel(appointment, at, cancelAfterMinutes))
                 {
-                    appointment.Status = AppointmentStatuses.NoShow;
+                    appointment.Status = nameof(AppointmentStatus.NO_SHOW);
                     appointment.CancelReason = ResolveAutoCancelReason(lane);
                     appointment.UpdatedAt = _clock.UtcNow;
 
@@ -132,7 +131,7 @@ namespace MyGarage.Services
 
                 if (ShouldSwitchToLate(appointment, at, warningAfterMinutes))
                 {
-                    appointment.Status = AppointmentStatuses.Late;
+                    appointment.Status = nameof(AppointmentStatus.LATE);
                     appointment.CancelReason = null;
                     appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_WAITING_CONFIRMATION");
                     appointment.UpdatedAt = _clock.UtcNow;
@@ -289,8 +288,8 @@ namespace MyGarage.Services
 
         private static bool ShouldSendPreReminder(Appointment appointment, DateTime now, int preReminderMinutes)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Pending, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -301,9 +300,9 @@ namespace MyGarage.Services
 
         private static bool ShouldSendLateReminder(Appointment appointment, DateTime now, int lateReminderAfterMinutes)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Pending, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Late, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.LATE), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -313,8 +312,8 @@ namespace MyGarage.Services
 
         private static bool ShouldSwitchToLate(Appointment appointment, DateTime now, int warningAfterMinutes)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Pending, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -324,9 +323,9 @@ namespace MyGarage.Services
 
         private static bool ShouldAutoCancel(Appointment appointment, DateTime now, int cancelAfterMinutes)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Pending, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Late, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.LATE), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -432,9 +431,9 @@ namespace MyGarage.Services
                 .AsNoTracking()
                 .Include(a => a.Vehicle)
                 .Where(a => a.BranchId == branchId
-                    && (a.Status == AppointmentStatuses.Queued
-                        || a.Status == AppointmentStatuses.Arrived
-                        || a.Status == AppointmentStatuses.ArrivedLate)
+                    && (a.Status == nameof(AppointmentStatus.PENDING)
+                        || a.Status == nameof(AppointmentStatus.ARRIVED)
+                        || a.Status == nameof(AppointmentStatus.ARRIVED_LATE))
                     && (a.CustomerNotes == null
                         || a.CustomerNotes.Contains(AppointmentNoteMarkers.FlowFlexible)
                         || a.CustomerNotes.Contains(AppointmentNoteMarkers.ClusterHeavy)))
@@ -463,7 +462,7 @@ namespace MyGarage.Services
                 Date = DateOnly.FromDateTime(now),
                 Recommendation = $"[AUTO_NO_SHOW_APPOINTMENT:{noShowAppointment.Id}] {bayLabel} \u0111\u00E3 tr\u1ED1ng do kh\u00E1ch kh\u00F4ng \u0111\u1EBFn. C\u00F3 th\u1EC3 \u0111\u01B0a {vehicleLabel} v\u00E0o l\u00E0m ngay.",
                 EfficiencyScore = null,
-                Status = "PENDING",
+                Status = nameof(AiDispatchStatus.PENDING),
                 CreatedAt = _clock.UtcNow
             });
         }

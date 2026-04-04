@@ -10,9 +10,9 @@ namespace MyGarage.Services
 {
     public partial class VoucherApprovalRequestService : GenericService<VoucherApprovalRequest>, IVoucherApprovalRequestService
     {
-        private const string StatusPending = "PENDING";
-        private const string StatusApproved = "APPROVED";
-        private const string StatusRejected = "REJECTED";
+        private const string StatusPending = nameof(ApprovalRequestStatusCode.PENDING);
+        private const string StatusApproved = nameof(ApprovalRequestStatusCode.APPROVED);
+        private const string StatusRejected = nameof(ApprovalRequestStatusCode.REJECTED);
 
         private readonly IVoucherApprovalRequestRepository _voucherApprovalRequestRepository;
         private readonly IGarageContext _context;

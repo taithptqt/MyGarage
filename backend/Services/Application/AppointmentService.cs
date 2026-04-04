@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,7 +12,6 @@ using MyGarage.Models;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Constants;
 
 namespace MyGarage.Services

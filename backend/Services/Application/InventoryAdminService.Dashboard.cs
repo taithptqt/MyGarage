@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -25,11 +26,11 @@ namespace MyGarage.Services
 
             var pendingApprovals = await _context.ApprovalRequests
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && a.Status.ToUpper() == "PENDING");
+                .CountAsync(a => a.Status != null && a.Status.ToUpper() == nameof(AccountingStatus.PENDING));
 
             var pendingAudits = await _context.InventoryAudits
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == "DRAFT" || a.Status.ToUpper() == "PENDING"));
+                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == nameof(AccountingStatus.DRAFT) || a.Status.ToUpper() == nameof(AccountingStatus.PENDING)));
 
             var lastTransactionByProduct = transactions
                 .Where(t => t.ProductId > 0)

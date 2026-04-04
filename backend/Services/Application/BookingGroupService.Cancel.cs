@@ -13,26 +13,26 @@ namespace MyGarage.Services
     {
         private static readonly HashSet<string> GroupCancelableAppointmentStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            AppointmentStatuses.Pending,
-            AppointmentStatuses.Late,
-            AppointmentStatuses.Confirmed,
-            AppointmentStatuses.Arrived,
-            AppointmentStatuses.ArrivedLate
+            nameof(AppointmentStatus.PENDING),
+            nameof(AppointmentStatus.LATE),
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.ARRIVED),
+            nameof(AppointmentStatus.ARRIVED_LATE)
         };
 
         private static readonly HashSet<string> ConfirmedLikeAppointmentStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            AppointmentStatuses.Confirmed,
-            AppointmentStatuses.Arrived,
-            AppointmentStatuses.ArrivedLate
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.ARRIVED),
+            nameof(AppointmentStatus.ARRIVED_LATE)
         };
 
         private static readonly HashSet<string> NotStartedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            "NEW",
-            "RECEPTION",
-            "CANCELED",
-            "CANCELLED"
+            nameof(ServiceOrderLifecycleStatus.NEW),
+            nameof(ServiceOrderLifecycleStatus.RECEPTION),
+            nameof(ServiceOrderLifecycleStatus.CANCELED),
+            nameof(ServiceOrderLifecycleStatus.CANCELLED)
         };
 
         public async Task<CancelBookingGroupResponseDto?> CancelAllAsync(long bookingGroupId, string reason, long? actorUserId = null)
@@ -40,7 +40,7 @@ namespace MyGarage.Services
             var trimmedReason = (reason ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(trimmedReason))
             {
-                throw new InvalidOperationException("Vui lòng nhập lý do hủy nhóm.");
+                throw new InvalidOperationException("Vui l\u00F2ng nh\u1EADp l\u00FD do h\u1EE7y nh\u00F3m.");
             }
 
             var actorStaffId = await ResolveStaffActorIdAsync(actorUserId);
@@ -59,7 +59,7 @@ namespace MyGarage.Services
 
             if (appointments.Count == 0)
             {
-                throw new InvalidOperationException("Nhóm này không có lịch hẹn để hủy.");
+                throw new InvalidOperationException("Nh\u00F3m n\u00E0y kh\u00F4ng c\u00F3 l\u1ECBch h\u1EB9n \u0111\u1EC3 h\u1EE7y.");
             }
 
             var response = new CancelBookingGroupResponseDto
@@ -121,7 +121,7 @@ namespace MyGarage.Services
                     continue;
                 }
 
-                appointment.Status = AppointmentStatuses.Canceled;
+                appointment.Status = nameof(AppointmentStatus.CANCELED);
                 appointment.CancelReason = trimmedReason;
                 appointment.UpdatedAt = nowUtc;
                 if (actorStaffId.HasValue)
@@ -154,7 +154,7 @@ namespace MyGarage.Services
             _context.Notifications.Add(new Notification
             {
                 CustomerId = group.CustomerId,
-                Title = "Cập nhật lịch hẹn nhóm",
+                Title = "C\u1EADp nh\u1EADt l\u1ECBch h\u1EB9n nh\u00F3m",
                 Content = BuildGroupCancelNotificationContent(response.SkippedStartedCount > 0),
                 IsRead = false,
                 SentAt = nowUtc,
@@ -199,10 +199,10 @@ namespace MyGarage.Services
         {
             if (isPartialCancellation)
             {
-                return "Do một số xe trong nhóm không xác định được trạng thái và đã quá giờ hẹn, gara xin phép hủy các xe chưa đến trong nhóm của bạn để điều phối cho xe khác. Vui lòng liên hệ hotline để hỗ trợ.";
+                return "Do m\u1ED9t s\u1ED1 xe trong nh\u00F3m kh\u00F4ng x\u00E1c \u0111\u1ECBnh \u0111\u01B0\u1EE3c tr\u1EA1ng th\u00E1i v\u00E0 \u0111\u00E3 qu\u00E1 gi\u1EDD h\u1EB9n, gara xin ph\u00E9p h\u1EE7y c\u00E1c xe ch\u01B0a \u0111\u1EBFn trong nh\u00F3m c\u1EE7a b\u1EA1n \u0111\u1EC3 \u0111i\u1EC1u ph\u1ED1i cho xe kh\u00E1c. Vui l\u00F2ng li\u00EAn h\u1EC7 hotline \u0111\u1EC3 h\u1ED7 tr\u1EE3.";
             }
 
-            return "Do một số xe trong nhóm không xác định được trạng thái và đã quá giờ hẹn, gara xin phép hủy toàn bộ lịch hẹn nhóm của bạn để điều phối cho xe khác. Vui lòng liên hệ hotline để hỗ trợ.";
+            return "Do m\u1ED9t s\u1ED1 xe trong nh\u00F3m kh\u00F4ng x\u00E1c \u0111\u1ECBnh \u0111\u01B0\u1EE3c tr\u1EA1ng th\u00E1i v\u00E0 \u0111\u00E3 qu\u00E1 gi\u1EDD h\u1EB9n, gara xin ph\u00E9p h\u1EE7y to\u00E0n b\u1ED9 l\u1ECBch h\u1EB9n nh\u00F3m c\u1EE7a b\u1EA1n \u0111\u1EC3 \u0111i\u1EC1u ph\u1ED1i cho xe kh\u00E1c. Vui l\u00F2ng li\u00EAn h\u1EC7 hotline \u0111\u1EC3 h\u1ED7 tr\u1EE3.";
         }
 
         private sealed class ServiceOrderStatusSnapshot

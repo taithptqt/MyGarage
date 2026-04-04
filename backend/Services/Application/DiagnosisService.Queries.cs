@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -20,7 +21,7 @@ namespace MyGarage.Services
 
             if (requestOnly)
             {
-                query = query.Where(x => x.Status == "PENDING" || x.Status == "ASSIGNED");
+                query = query.Where(x => x.Status == nameof(DiagnosisStatus.PENDING) || x.Status == nameof(DiagnosisStatus.ASSIGNED));
             }
 
             return await query

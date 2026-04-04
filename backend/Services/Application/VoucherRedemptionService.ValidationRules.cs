@@ -17,7 +17,7 @@ namespace MyGarage.Services
             }
 
             var status = (voucher.Status ?? string.Empty).Trim().ToUpperInvariant();
-            if (!string.IsNullOrWhiteSpace(status) && status != "ACTIVE")
+            if (!string.IsNullOrWhiteSpace(status) && status != nameof(VoucherStatusCode.ACTIVE))
             {
                 return BuildFail(MapStatusReason(status), $"Voucher status is {status}.", voucher);
             }

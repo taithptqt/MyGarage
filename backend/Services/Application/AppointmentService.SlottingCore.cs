@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
