@@ -6,7 +6,6 @@ public enum VoucherStatusCode
     PENDING_APPROVAL,
     ACTIVE,
     PAUSED,
-    ENDED,
     ARCHIVED,
     EXHAUSTED,
     EXPIRED,

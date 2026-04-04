@@ -1151,6 +1151,24 @@
   font-size: 15px;
 }
 
+.date-pill-input {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid #d6deeb;
+  background: #ffffff;
+  color: #1b2559;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "Be Vietnam Pro", "Nunito Sans", "Segoe UI", Arial, sans-serif;
+  outline: none;
+}
+
+.date-pill-input:focus {
+  border-color: #6f89ff;
+  box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.14);
+}
+
 .date-pill-arrow {
   color: #7b8caf;
   font-weight: 800;

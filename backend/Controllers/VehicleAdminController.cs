@@ -1691,7 +1691,7 @@ public class VehicleAdminController : ControllerBase
             nameof(VehicleLifecycleStatus.WAITING_DELIVERY) or "CHO_GIAO" => StatusWaitingDelivery,
             nameof(VehicleLifecycleStatus.COMPLETED) or "DONE" or "HOAN_TAT" => StatusCompleted,
             nameof(VehicleLifecycleStatus.DELIVERED) or "DA_GIAO" or "HANDOVER" => StatusDelivered,
-            nameof(ServiceOrderLifecycleStatus.CANCELLED) or nameof(VehicleLifecycleStatus.CANCELED) or "HUY" => StatusCanceled,
+            nameof(ServiceOrderLifecycleStatus.CANCELED) or "CANCELLED" or nameof(VehicleLifecycleStatus.CANCELED) or "HUY" => StatusCanceled,
             _ => normalized
         };
     }

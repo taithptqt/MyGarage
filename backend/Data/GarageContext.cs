@@ -530,7 +530,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.OperationalStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue(nameof(CommonStatusCode.ACTIVE));
+                .HasDefaultValue(nameof(BayOperationalStatusCode.ACTIVE));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Bays)

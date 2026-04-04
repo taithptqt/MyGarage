@@ -10,7 +10,7 @@ namespace MyGarage.Services
     public partial class VoucherRedemptionService
     {
         private const string RedemptionStatusRedeemed = nameof(VoucherRedemptionStatusCode.REDEEMED);
-        private const string ValidationStatusValidated = nameof(VoucherRedemptionStatusCode.VALIDATED);
+        private const string ValidationStatusValidated = nameof(VoucherValidationStatusCode.VALIDATED);
         private const string VoucherStatusExhausted = nameof(VoucherStatusCode.EXHAUSTED);
 
         public async Task<VoucherRedeemResultResponseDto> RedeemAsync(VoucherRedemptionRequestDto request)

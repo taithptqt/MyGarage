@@ -5,7 +5,5 @@ public enum PaymentStatusCode
     PENDING,
     COMPLETED,
     CANCELED,
-    FAILED,
-    PAID,
-    SUCCESS
+    FAILED
 }

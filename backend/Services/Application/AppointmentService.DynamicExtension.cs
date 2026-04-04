@@ -446,7 +446,7 @@ namespace MyGarage.Services
 
             return string.Equals(status, nameof(WorkSlotStatus.CANCELED), StringComparison.OrdinalIgnoreCase)
                    || string.Equals(status, nameof(WorkSlotStatus.COMPLETED), StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(status, nameof(WorkSlotStatus.CANCELLED), StringComparison.OrdinalIgnoreCase);
+                   || string.Equals(status, "CANCELLED", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string AppendWorkSlotTag(string? notes, string tag)

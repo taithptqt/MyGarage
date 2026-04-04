@@ -122,7 +122,13 @@ namespace MyGarage.Services
 
         private static void ValidateStaffAccountForLogin(Staff staff)
         {
-            if (staff.IsDeleted == true || string.Equals(staff.Status, nameof(StaffStatusCode.INACTIVE), StringComparison.OrdinalIgnoreCase))
+            var normalizedStatus = (staff.Status ?? string.Empty).Trim().ToUpperInvariant();
+            var isInactiveStatus =
+                normalizedStatus == nameof(StaffStatusCode.TERMINATED) ||
+                normalizedStatus == nameof(StaffStatusCode.SUSPENDED) ||
+                normalizedStatus.Contains("INACTIVE", StringComparison.Ordinal);
+
+            if (staff.IsDeleted == true || isInactiveStatus)
             {
                 throw new UnauthorizedAccessException("Account is inactive.");
             }

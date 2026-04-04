@@ -11,7 +11,7 @@ namespace MyGarage.Services
         {
             var current = now ?? DateTime.UtcNow;
             var campaigns = await _context.VoucherCampaigns
-                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != nameof(VoucherStatusCode.ARCHIVED)))
+                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != nameof(VoucherCampaignStatusCode.ARCHIVED)))
                 .ToListAsync();
 
             if (campaigns.Count == 0)

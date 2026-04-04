@@ -64,7 +64,7 @@ namespace MyGarage.Controllers
             }
 
             var status = (itemDto.Status ?? nameof(DiagnosisStatus.PENDING)).Trim().ToUpperInvariant();
-            if (status == nameof(DiagnosisStatus.DRAFT))
+            if (status == "DRAFT")
             {
                 status = nameof(DiagnosisStatus.PENDING);
             }
@@ -86,7 +86,7 @@ namespace MyGarage.Controllers
             }
 
             var status = (itemDto.Status ?? existingItem.Status ?? nameof(DiagnosisStatus.PENDING)).Trim().ToUpperInvariant();
-            if (status == nameof(DiagnosisStatus.DRAFT))
+            if (status == "DRAFT")
             {
                 return BadRequest(new { message = "Không còn hỗ trợ trạng thái DRAFT." });
             }

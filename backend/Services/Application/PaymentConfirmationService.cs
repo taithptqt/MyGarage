@@ -59,7 +59,9 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
                 invoice.PaidAmount = paidAmount;
                 var invoiceTotal = invoice.TotalAmount ?? 0m;
-                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal ? nameof(PaymentStatusCode.COMPLETED) : nameof(PaymentStatusCode.PENDING);
+                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal
+                    ? nameof(PaymentDocumentStatusCode.PAID)
+                    : (paidAmount > 0m ? nameof(PaymentDocumentStatusCode.PARTIAL) : nameof(PaymentDocumentStatusCode.UNPAID));
                 invoice.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -74,7 +76,9 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
-                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal ? nameof(PaymentStatusCode.COMPLETED) : nameof(PaymentStatusCode.PENDING);
+                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal
+                    ? nameof(PaymentDocumentStatusCode.PAID)
+                    : (paidAmount > 0m ? nameof(PaymentDocumentStatusCode.PARTIAL) : nameof(PaymentDocumentStatusCode.UNPAID));
                 serviceOrder.UpdatedAt = DateTime.UtcNow;
             }
         }

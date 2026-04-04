@@ -3,5 +3,9 @@ namespace MyGarage.Enums;
 public enum RetailOrderStatus
 {
     DRAFT,
-    CONFIRMED
+    CONFIRMED,
+    SHIPPING,
+    DELIVERED,
+    COMPLETED,
+    CANCELED
 }

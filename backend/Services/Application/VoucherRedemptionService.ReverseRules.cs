@@ -47,7 +47,7 @@ namespace MyGarage.Services
             {
                 var invoice = await _context.Invoices.FirstOrDefaultAsync(x => x.Id == redemption.InvoiceId.Value);
                 if (invoice != null &&
-                    string.Equals(invoice.PaymentStatus, nameof(PaymentStatusCode.PAID), StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(invoice.PaymentStatus, nameof(PaymentDocumentStatusCode.PAID), StringComparison.OrdinalIgnoreCase) &&
                     !request.ApprovalRequestId.HasValue)
                 {
                     return new VoucherRedeemResultResponseDto
@@ -76,7 +76,7 @@ namespace MyGarage.Services
         private static void ApplyReverseState(VoucherRedemption redemption, VoucherRedemptionReverseDto request, DateTime now)
         {
             redemption.RedemptionStatus = nameof(VoucherRedemptionStatusCode.REVERSED);
-            redemption.ValidationStatus = nameof(VoucherRedemptionStatusCode.VALIDATED);
+            redemption.ValidationStatus = nameof(VoucherValidationStatusCode.VALIDATED);
             redemption.FailReasonCode = null;
             redemption.ReversedAt = now;
             redemption.ReverseReason = request.Reason?.Trim();

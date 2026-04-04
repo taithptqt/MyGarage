@@ -1,11 +1,10 @@
 ﻿import { useState, useEffect, useCallback, useMemo } from "react";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
 import { useSearch } from "@context/SearchContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import FilterDropdown from "@shared/components/FilterDropdown";
 import { getStatusLabelVi, toStatusOptionVi } from "@shared/core/utils/statusLabelUtils";
 import { Modal } from "@features/admin/components/AdminModals";
+import DateRangePickerModal, { getDateRangeButtonLabel } from "@features/admin/components/DateRangePickerModal";
 import AppointmentDetailModal from "@features/workshop/components/AppointmentDetailModal";
 import "./AppointmentManagementPage.css";
 import {
@@ -135,13 +134,6 @@ function toDateText(dateObj) {
   return `${y}-${m}-${d}`;
 }
 
-function toDisplayDate(dateText) {
-  if (!dateText) return "--/--/----";
-  const d = new Date(`${dateText}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return "--/--/----";
-  return d.toLocaleDateString("vi-VN");
-}
-
 function toStartOfDay(dateText) {
   if (!dateText) return null;
   const d = new Date(`${dateText}T00:00:00`);
@@ -262,8 +254,6 @@ export default function AppointmentManagementPage() {
   const [sortBy, setSortBy] = useState("NEWEST");
   const [dateFrom, setDateFrom] = useState(() => toDateText(new Date()));
   const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
-  const [draftDateFrom, setDraftDateFrom] = useState(() => toDateText(new Date()));
-  const [draftDateTo, setDraftDateTo] = useState(() => toDateText(new Date()));
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [acting, setActing] = useState(null);
   const [error, setError] = useState("");
@@ -518,62 +508,27 @@ export default function AppointmentManagementPage() {
   }, [filtered.length, groupedViewData.groupedAppointments.length, viewMode]);
 
   const defaultDateFilter = useMemo(() => toDateText(new Date()), []);
-  const isDefaultTodayDateFilter = dateFrom === defaultDateFilter && dateTo === defaultDateFilter;
-  const dateFilterButtonLabel = isDefaultTodayDateFilter ? "Hôm nay" : "Chọn khoảng ngày";
-  const canResetToolbarFilters = statusFilter !== "ALL" || sortBy !== "NEWEST" || !isDefaultTodayDateFilter;
+  const dateFilterButtonLabel = useMemo(
+    () => getDateRangeButtonLabel(dateFrom, dateTo, { todayDateText: defaultDateFilter }),
+    [dateFrom, dateTo, defaultDateFilter]
+  );
+  const canResetToolbarFilters = statusFilter !== "ALL" || sortBy !== "NEWEST" || Boolean(dateFrom || dateTo);
 
   const resetToolbarFilters = () => {
     setStatusFilter("ALL");
     setSortBy("NEWEST");
-    setDateFrom(defaultDateFilter);
-    setDateTo(defaultDateFilter);
-    setDraftDateFrom(defaultDateFilter);
-    setDraftDateTo(defaultDateFilter);
+    setDateFrom("");
+    setDateTo("");
   };
 
   const openDateRangePicker = () => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
     setShowDateRangeModal(true);
   };
 
-  const applyDateRange = () => {
-    setDateFrom(draftDateFrom || "");
-    setDateTo(draftDateTo || "");
-    setShowDateRangeModal(false);
-  };
-
-  const quickSetDateRange = (days) => {
-    const now = new Date();
-    const to = now.toISOString().slice(0, 10);
-    const fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - (days - 1));
-    const from = fromDate.toISOString().slice(0, 10);
-    setDraftDateFrom(from);
-    setDraftDateTo(to);
-  };
-
-  const handleRangeDayClick = (dateObj) => {
-    const picked = toDateText(dateObj);
-    if (!picked) return;
-    if (!draftDateFrom || (draftDateFrom && draftDateTo)) {
-      setDraftDateFrom(picked);
-      setDraftDateTo("");
-      return;
-    }
-    if (picked < draftDateFrom) return;
-    setDraftDateTo(picked);
-  };
-
-  const tileClassName = ({ date, view }) => {
-    if (view !== "month") return "";
-    const text = toDateText(date);
-    if (!text || !draftDateFrom) return "";
-    if (text === draftDateFrom) return "range-start";
-    if (draftDateTo && text === draftDateTo) return "range-end";
-    if (draftDateTo && text > draftDateFrom && text < draftDateTo) return "range-middle";
-    return "";
-  };
+  const handleApplyDateRange = useCallback(({ dateFrom: nextDateFrom, dateTo: nextDateTo }) => {
+    setDateFrom(nextDateFrom || "");
+    setDateTo(nextDateTo || "");
+  }, []);
 
   const renderTableHead = () => (
     <thead>
@@ -804,55 +759,13 @@ export default function AppointmentManagementPage() {
       )}
 
       {showDateRangeModal && (
-        <Modal title="Lọc lịch theo khoảng ngày" onClose={() => setShowDateRangeModal(false)} className="date-range-modal">
-          <div className="date-range-picker-shell">
-            <div className="date-range-summary">
-              <div className="date-pill">
-                <span className="date-pill-label">Bắt đầu</span>
-                <strong>{toDisplayDate(draftDateFrom)}</strong>
-              </div>
-              <div className="date-pill-arrow">→</div>
-              <div className="date-pill">
-                <span className="date-pill-label">Kết thúc</span>
-                <strong>{toDisplayDate(draftDateTo)}</strong>
-              </div>
-            </div>
-
-            <div className="date-range-hint">
-              {!draftDateFrom && "Chọn ngày bắt đầu"}
-              {draftDateFrom && !draftDateTo && "Chọn ngày kết thúc (không nhỏ hơn ngày bắt đầu)"}
-              {draftDateFrom && draftDateTo && "Đã chọn xong khoảng ngày"}
-            </div>
-
-            <div className="date-range-calendar-wrap">
-              <Calendar
-                locale="vi-VN"
-                className="date-range-calendar"
-                onClickDay={handleRangeDayClick}
-                tileClassName={tileClassName}
-                tileDisabled={({ date, view }) => view === "month" && Boolean(draftDateFrom && !draftDateTo && toDateText(date) < draftDateFrom)}
-                value={draftDateTo ? [new Date(`${draftDateFrom}T00:00:00`), new Date(`${draftDateTo}T00:00:00`)] : (draftDateFrom ? new Date(`${draftDateFrom}T00:00:00`) : new Date())}
-              />
-            </div>
-
-            <div className="date-range-quick-actions">
-              <button type="button" className="date-quick-btn" onClick={() => quickSetDateRange(7)}>7 ngày gần nhất</button>
-              <button type="button" className="date-quick-btn" onClick={() => quickSetDateRange(30)}>30 ngày gần nhất</button>
-              <button type="button" className="date-quick-btn" onClick={() => {
-                const now = new Date();
-                const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-                const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-                setDraftDateFrom(from);
-                setDraftDateTo(to);
-              }}>Tháng này</button>
-            </div>
-
-            <div className="date-range-footer">
-              <button type="button" className="btn-secondary-outline" style={{ height: "42px", minWidth: "90px", borderRadius: "10px", padding: "0 16px" }} onClick={() => setShowDateRangeModal(false)}>Đóng</button>
-              <button type="button" className="btn-primary" style={{ height: "42px", minWidth: "110px", borderRadius: "10px", padding: "0 18px" }} onClick={applyDateRange} disabled={!draftDateFrom || !draftDateTo}>Áp dụng</button>
-            </div>
-          </div>
-        </Modal>
+        <DateRangePickerModal
+          isOpen={showDateRangeModal}
+          onClose={() => setShowDateRangeModal(false)}
+          initialDateFrom={dateFrom}
+          initialDateTo={dateTo}
+          onApply={handleApplyDateRange}
+        />
       )}
     </div>
   );

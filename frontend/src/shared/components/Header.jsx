@@ -108,7 +108,7 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="#">HỌP & SỰ KIỆN</a>
+          <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>MUA SẮM</a>
           <a href="#">ĐỐI TÁC</a>
           <a href="#">TIN TỨC</a>
           <a href="#">LIÊN HỆ</a>

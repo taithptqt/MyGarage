@@ -30,9 +30,9 @@ namespace MyGarage.Services
         private static readonly HashSet<string> NotStartedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             nameof(ServiceOrderLifecycleStatus.NEW),
-            nameof(ServiceOrderLifecycleStatus.RECEPTION),
             nameof(ServiceOrderLifecycleStatus.CANCELED),
-            nameof(ServiceOrderLifecycleStatus.CANCELLED)
+            "RECEPTION",
+            "CANCELLED"
         };
 
         public async Task<CancelBookingGroupResponseDto?> CancelAllAsync(long bookingGroupId, string reason, long? actorUserId = null)

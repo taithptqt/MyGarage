@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
-import { Modal } from "@features/admin/components/AdminModals";
+import DateRangePickerModal, { getDateRangeButtonLabel } from "@features/admin/components/DateRangePickerModal";
 import { getStatusBadge } from "@features/admin/utils/adminUtils";
 import { useSearch } from "@shared/core/context/SearchContext";
 import { useBranch } from "@shared/core/context/BranchContext";
@@ -18,21 +16,6 @@ import ServiceOrderDetailModal from "@features/workshop/components/ServiceOrderD
 function parseBranchId(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toDateText(dateObj) {
-  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
-  const y = dateObj.getFullYear();
-  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const d = String(dateObj.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function toDisplayDate(dateText) {
-  if (!dateText) return "--/--/----";
-  const d = new Date(`${dateText}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return "--/--/----";
-  return d.toLocaleDateString("vi-VN");
 }
 
 function toStartOfDay(dateText) {
@@ -49,6 +32,14 @@ function toEndOfDay(dateText) {
 
 function normalizeStatus(status) {
   return String(status || "").trim().toUpperCase();
+}
+
+function toDateText(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export default function ReceptionOrdersSection() {
@@ -69,10 +60,8 @@ export default function ReceptionOrdersSection() {
   const [selectedOrderForView, setSelectedOrderForView] = useState(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState("ALL");
   const [orderSortBy, setOrderSortBy] = useState("CREATED_DESC");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => toDateText(new Date()));
+  const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
 
@@ -201,7 +190,7 @@ export default function ReceptionOrdersSection() {
 
   const handleCompleteOrder = useCallback(async (order) => {
     if (!statusPermitUpdate(order.status)) {
-      alert("Lệnh này đã kết thúc hoặc đã hủy, không thể bàn giao.");
+      alert("L?nh n?y d? k?t th?c ho?c d? h?y, kh?ng th? b?n giao.");
       return;
     }
     if (!window.confirm(`Xác nhận bàn giao xe ${order.code} cho khách?`)) return;
@@ -256,57 +245,29 @@ export default function ReceptionOrdersSection() {
   }, [location.pathname, location.search, navigate, orders]);
 
   const openDateRangePicker = useCallback(() => {
-    setDraftDateFrom(dateFrom);
-    setDraftDateTo(dateTo);
     setModal("date_range");
-  }, [dateFrom, dateTo]);
+  }, []);
 
-  const applyDateRange = useCallback(() => {
-    setDateFrom(draftDateFrom || "");
-    setDateTo(draftDateTo || "");
+  const defaultDateFilter = useMemo(() => toDateText(new Date()), []);
+  const dateFilterButtonLabel = useMemo(
+    () => getDateRangeButtonLabel(dateFrom, dateTo, { todayDateText: defaultDateFilter }),
+    [dateFrom, dateTo, defaultDateFilter]
+  );
+  const canResetToolbarFilters =
+    orderStatusFilter !== "ALL" || orderSortBy !== "CREATED_DESC" || Boolean(dateFrom || dateTo);
+
+  const handleApplyDateRange = useCallback(({ dateFrom: nextDateFrom, dateTo: nextDateTo }) => {
+    setDateFrom(nextDateFrom || "");
+    setDateTo(nextDateTo || "");
     setModal(null);
-  }, [draftDateFrom, draftDateTo]);
+  }, []);
 
-  const clearDateRange = useCallback(() => {
+  const resetToolbarFilters = useCallback(() => {
+    setOrderStatusFilter("ALL");
+    setOrderSortBy("CREATED_DESC");
     setDateFrom("");
     setDateTo("");
-    setDraftDateFrom("");
-    setDraftDateTo("");
   }, []);
-
-  const quickSetDateRange = useCallback((days) => {
-    const now = new Date();
-    const to = now.toISOString().slice(0, 10);
-    const fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - (days - 1));
-    const from = fromDate.toISOString().slice(0, 10);
-    setDraftDateFrom(from);
-    setDraftDateTo(to);
-  }, []);
-
-  const handleRangeDayClick = useCallback((dateObj) => {
-    const picked = toDateText(dateObj);
-    if (!picked) return;
-
-    if (!draftDateFrom || (draftDateFrom && draftDateTo)) {
-      setDraftDateFrom(picked);
-      setDraftDateTo("");
-      return;
-    }
-
-    if (picked < draftDateFrom) return;
-    setDraftDateTo(picked);
-  }, [draftDateFrom, draftDateTo]);
-
-  const tileClassName = useCallback(({ date, view }) => {
-    if (view !== "month") return "";
-    const text = toDateText(date);
-    if (!text || !draftDateFrom) return "";
-    if (text === draftDateFrom) return "range-start";
-    if (draftDateTo && text === draftDateTo) return "range-end";
-    if (draftDateTo && text > draftDateFrom && text < draftDateTo) return "range-middle";
-    return "";
-  }, [draftDateFrom, draftDateTo]);
 
   return (
     <div className="reception-dashboard">
@@ -343,9 +304,9 @@ export default function ReceptionOrdersSection() {
         orderSortBy={orderSortBy}
         setOrderSortBy={setOrderSortBy}
         openDateRangePicker={openDateRangePicker}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        clearDateRange={clearDateRange}
+        dateFilterButtonLabel={dateFilterButtonLabel}
+        canResetToolbarFilters={canResetToolbarFilters}
+        onResetToolbarFilters={resetToolbarFilters}
         filteredOrders={filteredOrders}
         loading={loading}
         pagedOrders={pagedOrders}
@@ -364,74 +325,13 @@ export default function ReceptionOrdersSection() {
       />
 
       {modal === "date_range" && (
-        <Modal title="Lọc lịch theo khoảng ngày" onClose={() => setModal(null)} className="date-range-modal">
-          <div className="date-range-picker-shell">
-            <div className="date-range-summary">
-              <div className="date-pill">
-                <span className="date-pill-label">Bắt đầu</span>
-                <strong>{toDisplayDate(draftDateFrom)}</strong>
-              </div>
-              <div className="date-pill-arrow">→</div>
-              <div className="date-pill">
-                <span className="date-pill-label">Kết thúc</span>
-                <strong>{toDisplayDate(draftDateTo)}</strong>
-              </div>
-            </div>
-
-            <div className="date-range-hint">
-              {!draftDateFrom && "Chọn ngày bắt đầu"}
-              {draftDateFrom && !draftDateTo && "Chọn ngày kết thúc (không nhỏ hơn ngày bắt đầu)"}
-              {draftDateFrom && draftDateTo && "Đã chọn xong khoảng ngày"}
-            </div>
-
-            <div className="date-range-calendar-wrap">
-              <Calendar
-                locale="vi-VN"
-                className="date-range-calendar"
-                onClickDay={handleRangeDayClick}
-                tileClassName={tileClassName}
-                tileDisabled={({ date, view }) =>
-                  view === "month" &&
-                  Boolean(draftDateFrom && !draftDateTo && toDateText(date) < draftDateFrom)
-                }
-                value={draftDateTo ? [new Date(`${draftDateFrom}T00:00:00`), new Date(`${draftDateTo}T00:00:00`)] : (draftDateFrom ? new Date(`${draftDateFrom}T00:00:00`) : new Date())}
-              />
-            </div>
-
-            <div className="date-range-quick-actions">
-              <button type="button" className="date-quick-btn" onClick={() => quickSetDateRange(7)}>7 ngày gần nhất</button>
-              <button type="button" className="date-quick-btn" onClick={() => quickSetDateRange(30)}>30 ngày gần nhất</button>
-              <button
-                type="button"
-                className="date-quick-btn"
-                onClick={() => {
-                  const now = new Date();
-                  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-                  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-                  setDraftDateFrom(from);
-                  setDraftDateTo(to);
-                }}
-              >
-                Tháng này
-              </button>
-            </div>
-
-            <div className="date-range-footer">
-              <button type="button" className="btn-secondary-outline" style={{ height: "42px", minWidth: "90px", borderRadius: "10px", padding: "0 16px" }} onClick={() => setModal(null)}>
-                Đóng
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ height: "42px", minWidth: "110px", borderRadius: "10px", padding: "0 18px" }}
-                onClick={applyDateRange}
-                disabled={!draftDateFrom || !draftDateTo}
-              >
-                Áp dụng
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <DateRangePickerModal
+          isOpen={modal === "date_range"}
+          onClose={() => setModal(null)}
+          initialDateFrom={dateFrom}
+          initialDateTo={dateTo}
+          onApply={handleApplyDateRange}
+        />
       )}
 
       {modal === "order_detail" && selectedOrderForView && (
@@ -456,9 +356,9 @@ function OrdersTableContent({
   orderSortBy,
   setOrderSortBy,
   openDateRangePicker,
-  dateFrom,
-  dateTo,
-  clearDateRange,
+  dateFilterButtonLabel,
+  canResetToolbarFilters,
+  onResetToolbarFilters,
   filteredOrders,
   loading,
   pagedOrders,
@@ -506,13 +406,16 @@ function OrdersTableContent({
             minWidth={220}
           />
           <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
-            Chọn khoảng ngày
+            {dateFilterButtonLabel}
           </button>
-          {(dateFrom || dateTo) && (
-            <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={clearDateRange}>
-              Xóa lọc
-            </button>
-          )}
+          <button
+            type="button"
+            className="toolbar-action-btn toolbar-action-ghost"
+            onClick={onResetToolbarFilters}
+            disabled={!canResetToolbarFilters}
+          >
+            Xóa lọc
+          </button>
         </div>
         <span className="result-count">{filteredOrders.length} lệnh sửa chữa</span>
       </div>
@@ -608,3 +511,4 @@ function OrdersTableContent({
     </>
   );
 }
+

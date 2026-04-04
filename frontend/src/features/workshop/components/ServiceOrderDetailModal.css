@@ -1,0 +1,245 @@
+﻿.service-order-detail-modal {
+  max-width: 980px !important;
+}
+
+.service-order-detail-modal .modal-body-content {
+  padding: 14px 22px 22px;
+}
+
+.so-detail-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.so-detail-hero {
+  border-radius: 16px;
+  padding: 16px 18px;
+  border: 1px solid #dbe6fb;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(67, 24, 255, 0.16), transparent 42%),
+    linear-gradient(135deg, #f7faff 0%, #eef3ff 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.so-detail-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5a6c92;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.so-detail-hero-actions {
+  justify-content: flex-end;
+}
+
+.so-detail-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.so-detail-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.so-detail-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.so-detail-card {
+  border-radius: 14px;
+  border: 1px solid #e5ecfa;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(43, 54, 116, 0.04);
+}
+
+.so-detail-card-heading {
+  margin-bottom: 10px;
+  color: #2b3674;
+}
+
+.so-detail-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.so-detail-field {
+  display: grid;
+  gap: 2px;
+}
+
+.so-detail-field-label {
+  margin: 0;
+  color: #6d7e9d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.so-detail-field-value {
+  margin: 0;
+  color: #1f2f54;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.so-detail-field-value.is-emphasis {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1b2559;
+}
+
+.so-detail-stat-card {
+  min-height: 88px;
+}
+
+.so-detail-stat-label {
+  margin: 0;
+  color: #6d7e9d;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+}
+
+.so-detail-stat-value {
+  margin-top: 8px;
+  color: #1f2f54;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.so-detail-source-chip {
+  margin-bottom: 10px;
+}
+
+.so-detail-note-block {
+  border-radius: 12px;
+  border: 1px solid #e7edfb;
+  background: #fcfdff;
+  padding: 12px;
+}
+
+.so-detail-note-block + .so-detail-note-block {
+  margin-top: 10px;
+}
+
+.so-detail-note-block.service {
+  border-left: 4px solid #805ad5;
+}
+
+.so-detail-note-block.note {
+  border-left: 4px solid #3182ce;
+}
+
+.so-detail-note-block-label {
+  margin: 0 0 10px;
+  color: #50608a;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.so-detail-note-muted {
+  margin: 0;
+  color: #7b8caf;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.so-detail-note-text {
+  margin: 0;
+  color: #334b7a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.so-detail-service-row {
+  border-radius: 10px;
+  border: 1px solid #e6edfb;
+  background: #f8fbff;
+  padding: 8px 10px;
+}
+
+.so-detail-service-name {
+  margin: 0;
+  color: #1f2f54;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.so-detail-service-amount {
+  margin: 0;
+  color: #2f4f9d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.so-detail-note-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #334b7a;
+  display: grid;
+  gap: 6px;
+}
+
+.so-detail-note-list li {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.so-detail-quick-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.so-detail-diagnosis-action {
+  display: grid;
+  gap: 3px;
+}
+
+.so-detail-inline-hint {
+  margin: 0;
+  color: #b76e00;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .so-detail-grid--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .so-detail-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .so-detail-hero-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .service-order-detail-modal .modal-body-content {
+    padding: 12px 14px 16px;
+  }
+
+  .so-detail-grid--two,
+  .so-detail-grid--four {
+    grid-template-columns: 1fr;
+  }
+}

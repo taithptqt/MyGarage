@@ -9,6 +9,5 @@ public enum WorkSlotStatus
     NO_SHOW,
     OVERNIGHT_HOLD,
     COMPLETED,
-    CANCELED,
-    CANCELLED
+    CANCELED
 }

@@ -1166,12 +1166,12 @@ public class AccountingController : ControllerBase
             return true;
         }
 
-        if (normalizedStatus is nameof(StaffStatusCode.ACTIVE) or nameof(StaffStatusCode.WORKING) or nameof(StaffStatusCode.PROBATION) or nameof(StaffStatusCode.ONBOARDING))
+        if (normalizedStatus is nameof(StaffStatusCode.ACTIVE) or nameof(StaffStatusCode.ON_LEAVE))
         {
             return true;
         }
 
-        if (normalizedStatus.Contains(nameof(StaffStatusCode.INACTIVE), StringComparison.Ordinal) ||
+        if (normalizedStatus.Contains("INACTIVE", StringComparison.Ordinal) ||
             normalizedStatus.Contains("TERMINAT", StringComparison.Ordinal) ||
             normalizedStatus.Contains("RESIGN", StringComparison.Ordinal) ||
             normalizedStatus.Contains("QUIT", StringComparison.Ordinal) ||

@@ -92,9 +92,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
     private static readonly HashSet<string> ActiveStaffStatuses =
     [
         nameof(StaffStatusCode.ACTIVE),
-        nameof(StaffStatusCode.WORKING),
-        nameof(StaffStatusCode.PROBATION),
-        nameof(StaffStatusCode.ONBOARDING)
+        nameof(StaffStatusCode.ON_LEAVE)
     ];
 
     public async Task<PayrollBatchCalculationResult> CalculatePayrollForAllAsync(
@@ -893,7 +891,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             return true;
         }
 
-        if (normalizedStatus.Contains(nameof(StaffStatusCode.INACTIVE), StringComparison.Ordinal) ||
+        if (normalizedStatus.Contains("INACTIVE", StringComparison.Ordinal) ||
             normalizedStatus.Contains("TERMINAT", StringComparison.Ordinal) ||
             normalizedStatus.Contains("RESIGN", StringComparison.Ordinal) ||
             normalizedStatus.Contains("QUIT", StringComparison.Ordinal) ||

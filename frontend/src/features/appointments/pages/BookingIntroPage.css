@@ -16,10 +16,7 @@
   --intro-brand-soft: #c5a059;
   --intro-border: rgba(29, 42, 38, 0.16);
   color: var(--intro-text);
-  background:
-    radial-gradient(circle at 12% 20%, rgba(197, 160, 89, 0.2), transparent 40%),
-    radial-gradient(circle at 88% 12%, rgba(29, 42, 38, 0.08), transparent 35%),
-    linear-gradient(180deg, #fffdf8 0%, var(--intro-bg) 35%, #f8f3e8 100%);
+  background: #fef9ee;
   font-family: "Barlow", "Segoe UI", sans-serif;
   padding-bottom: 0;
 }

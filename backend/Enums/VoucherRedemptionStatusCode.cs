@@ -2,7 +2,9 @@ namespace MyGarage.Enums;
 
 public enum VoucherRedemptionStatusCode
 {
+    RESERVED,
     REDEEMED,
     REVERSED,
-    VALIDATED
+    CANCELED,
+    FAILED
 }
