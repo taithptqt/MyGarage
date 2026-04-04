@@ -163,7 +163,7 @@ namespace MyGarage.Controllers
                 {
                     "CONFIRMED" => await _appointmentService.ConfirmAsync(id, actorUserId),
                     "CANCELED" => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
-                    "CHECKED_IN" => await _appointmentService.CheckInAsync(id, actorUserId),
+                    "CHECKED_IN" => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
                     "ARRIVED" => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
                     _ => null
                 };

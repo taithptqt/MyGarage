@@ -6,6 +6,7 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers;
 
 [Route("api/inventory-management")]
+[Route("api/admin/inventories")]
 [ApiController]
 public class InventoryAdminController : ControllerBase
 {

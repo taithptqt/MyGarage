@@ -3,22 +3,26 @@ using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Models.Webhooks;
 using PayOS.Models.V2.PaymentRequests;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Services;
 using MyGarage.Models;
 
 namespace MyGarage.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/webhooks")]
 public class WebhookController(
     [FromKeyedServices("OrderClient")] PayOSClient client,
-    GarageContext db,
-    PaymentConfirmationService paymentConfirmationService) : ControllerBase
+    IGarageContext db,
+    IPaymentConfirmationService paymentConfirmationService,
+    IOrderStore orderStore,
+    IOrderTransactionStore orderTransactionStore) : ControllerBase
 {
     private readonly PayOSClient _client = client;
-    private readonly GarageContext _db = db;
-    private readonly PaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
+    private readonly IGarageContext _db = db;
+    private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
+    private readonly IOrderStore _orderStore = orderStore;
+    private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
 
     private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
     {
@@ -67,10 +71,10 @@ public class WebhookController(
                 return Ok(new { message = "Webhook processed successfully" });
             }
 
-            var order = OrderService.GetOrderByOrderCode(webhookData.OrderCode);
+            var order = _orderStore.GetOrderByOrderCode(webhookData.OrderCode);
             if (order != null)
             {
-                var existingTransactions = OrderTransactionService.GetTransactionsByOrderId(order.Id);
+                var existingTransactions = _orderTransactionStore.GetTransactionsByOrderId(order.Id);
                 var transactionExists = existingTransactions.Any(t => t.Reference == webhookData.Reference);
 
                 if (!transactionExists)
@@ -93,10 +97,10 @@ public class WebhookController(
                         CounterAccountNumber = webhookData.CounterAccountNumber
                     };
 
-                    OrderTransactionService.CreateTransaction(transaction);
+                    _orderTransactionStore.CreateTransaction(transaction);
                 }
 
-                var allTransactions = OrderTransactionService.GetTransactionsByOrderId(order.Id);
+                var allTransactions = _orderTransactionStore.GetTransactionsByOrderId(order.Id);
                 var totalAmountPaid = allTransactions.Sum(t => t.Amount);
 
                 order.AmountPaid = totalAmountPaid;
@@ -104,7 +108,7 @@ public class WebhookController(
                 order.Status = order.AmountRemaining > 0 ? PaymentLinkStatus.Underpaid : PaymentLinkStatus.Paid;
                 order.LastTransactionUpdate = DateTimeOffset.Now;
 
-                OrderService.UpdateOrder(order.Id, order);
+                _orderStore.UpdateOrder(order.Id, order);
 
                 Payment? payment = null;
                 if (order.PaymentRecordId.HasValue)

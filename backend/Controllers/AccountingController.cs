@@ -6,23 +6,24 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Services;
 
 namespace MyGarage.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/accounting")]
 [ApiController]
 [Authorize]
 public class AccountingController : ControllerBase
 {
-    private readonly AccountingCrudService _crud;
-    private readonly GarageContext _db;
-    private readonly PayrollBatchCalculationService _payrollBatchCalculationService;
+    private readonly IAccountingCrudService _crud;
+    private readonly IGarageContext _db;
+    private readonly IPayrollBatchCalculationService _payrollBatchCalculationService;
 
     public AccountingController(
-        AccountingCrudService crud,
-        GarageContext db,
-        PayrollBatchCalculationService payrollBatchCalculationService)
+        IAccountingCrudService crud,
+        IGarageContext db,
+        IPayrollBatchCalculationService payrollBatchCalculationService)
     {
         _crud = crud;
         _db = db;

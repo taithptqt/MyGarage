@@ -5,7 +5,7 @@ export async function getAdminChangeLogs(params = {}) {
     Object.entries(params).filter(([, value]) => value !== "" && value !== null && value !== undefined)
   );
   return request({
-    url: "/api/AuditLog/admin-changes",
+    url: "/api/audit-logs/admin-changes",
     method: "GET",
     params: cleanedParams
   });

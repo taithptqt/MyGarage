@@ -9,7 +9,7 @@ using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/bay")]
     [ApiController]
     public class BayController : ControllerBase
     {

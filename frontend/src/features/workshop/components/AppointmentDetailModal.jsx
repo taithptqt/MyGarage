@@ -2,6 +2,7 @@
 import { Modal } from "@features/admin/components/AdminModals";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
+import "./AppointmentDetailModal.css";
 
 function parseServiceNames(appointment) {
   const rawList = appointment?.serviceNames ?? appointment?.ServiceNames;
@@ -169,15 +170,17 @@ export default function AppointmentDetailModal({
         )}
 
         <div className="appt-detail-actions">
-          <button
-            type="button"
-            className="btn-secondary-outline appt-detail-edit-btn"
-            onClick={() => onEdit?.(appointment)}
-            disabled={!onEdit || onEditDisabled}
-            title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
-          >
-            Sửa lịch hẹn
-          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              className="btn-secondary-outline appt-detail-edit-btn"
+              onClick={() => onEdit(appointment)}
+              disabled={onEditDisabled}
+              title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
+            >
+              Sửa lịch hẹn
+            </button>
+          ) : null}
           <button type="button" className="btn-primary" onClick={onClose}>
             Đóng
           </button>

@@ -2,7 +2,7 @@ import { request } from "../../../app/apiClient";
 
 export const bayApi = {
   getLookups: (params = {}) => request({ url: "/api/bay-admin/lookups", method: "GET", params }),
-  getList: (params = {}) => request({ url: "/api/bay-admin/list", method: "GET", params }),
+  getList: (params = {}) => request({ url: "/api/bay-admin/bays", method: "GET", params }),
   getSummary: (params = {}) => request({ url: "/api/bay-admin/summary", method: "GET", params }),
   getUsage: (params = {}) => request({ url: "/api/bay-admin/usage", method: "GET", params }),
   getLayout: (params = {}) => request({ url: "/api/bay-admin/layout", method: "GET", params }),
@@ -18,7 +18,7 @@ export const bayApi = {
   lockBay: (id) => request({ url: `/api/bay-admin/bays/${id}/lock`, method: "POST" }),
   unlockBay: (id) => request({ url: `/api/bay-admin/bays/${id}/unlock`, method: "POST" }),
   updateBayStatus: (id, status) =>
-    request({ url: `/api/bay-admin/bays/${id}/status`, method: "POST", data: { status } }),
+    request({ url: `/api/bay-admin/bays/${id}/status`, method: "PATCH", data: { status } }),
 
   assignVehicle: (bayId, data) =>
     request({ url: `/api/bay-admin/bays/${bayId}/assign-vehicle`, method: "POST", data }),

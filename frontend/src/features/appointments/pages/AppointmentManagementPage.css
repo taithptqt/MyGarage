@@ -159,3 +159,97 @@
   padding-top: 10px;
   margin-top: 2px;
 }
+
+.appointment-management-page .appointment-row-hint {
+  margin: -6px 0 14px;
+  font-size: 13px;
+  color: #5b6f8c;
+  font-weight: 600;
+}
+
+.appointment-management-page .appointment-click-row {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-bottom: 1px solid #f4f7fe;
+  position: relative;
+}
+
+.appointment-management-page .appointment-click-row td {
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.appointment-management-page .appointment-click-row:hover {
+  background-color: #ffffff !important;
+  transform: translateY(-3px) scale(1.005);
+  box-shadow: 0 15px 35px -5px rgba(112, 144, 176, 0.25), 0 10px 15px -10px rgba(112, 144, 176, 0.15);
+  z-index: 20;
+  border-radius: 12px;
+}
+
+.appointment-management-page .appointment-click-row:hover td {
+  background: transparent;
+}
+
+.appointment-management-page .appointment-click-row:focus-visible td {
+  background: #f2f7ff;
+  box-shadow: inset 0 0 0 2px #8eaef6;
+}
+
+.appointment-management-page .row-actions-balanced {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.appointment-management-page .action-col-header,
+.appointment-management-page .action-col-cell {
+  width: 330px;
+  min-width: 330px;
+  text-align: center;
+}
+
+.appointment-management-page .admin-table th.action-col-header {
+  text-align: center !important;
+}
+
+.appointment-management-page .btn-action-pill {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  line-height: 1;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appointment-management-page .btn-action-confirm {
+  background: #edfdf3;
+  color: #0f766e;
+  border-color: #b7ebcf;
+}
+
+.appointment-management-page .btn-action-checkin {
+  background: #eef5ff;
+  color: #1d4ed8;
+  border-color: #c7dcff;
+}
+
+.appointment-management-page .btn-action-cancel {
+  background: #fff1f2;
+  color: #be123c;
+  border-color: #ffd0d8;
+}
+
+.appointment-management-page .btn-action-pill:disabled,
+.appointment-management-page .btn-action-pill.is-disabled-action {
+  opacity: 0.4;
+  filter: grayscale(0.25);
+  cursor: not-allowed;
+}

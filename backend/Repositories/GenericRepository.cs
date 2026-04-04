@@ -1,16 +1,16 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 
 namespace MyGarage.Repositories
 {
     public class GenericRepository<T> : Interfaces.IGenericRepository<T> where T : class
     {
-        protected readonly GarageContext _context;
+        protected readonly IGarageContext _context;
         protected readonly DbSet<T> _dbSet;
 
-        public GenericRepository(GarageContext context)
+        public GenericRepository(IGarageContext context)
         {
             _context = context;
             _dbSet = _context.Set<T>();
@@ -58,3 +58,4 @@ namespace MyGarage.Repositories
         }
     }
 }
+

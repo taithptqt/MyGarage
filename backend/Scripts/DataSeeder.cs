@@ -1,12 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Models;
 
 namespace MyGarage.Scripts
 {
     public class DataSeeder
     {
-        public static async Task SeedCatalogsAsync(GarageContext context)
+        public static async Task SeedCatalogsAsync(IGarageContext context)
         {
             if (await context.ServiceCategories.AnyAsync()) return;
 
@@ -72,6 +72,7 @@ namespace MyGarage.Scripts
         }
     }
 }
+
 
 
 

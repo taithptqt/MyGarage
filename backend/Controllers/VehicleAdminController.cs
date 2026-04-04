@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Models;
 
 namespace MyGarage.Controllers;
@@ -46,16 +46,17 @@ public class VehicleAdminController : ControllerBase
         WriteIndented = true
     };
 
-    private readonly GarageContext _context;
+    private readonly IGarageContext _context;
     private readonly IWebHostEnvironment _environment;
 
-    public VehicleAdminController(GarageContext context, IWebHostEnvironment environment)
+    public VehicleAdminController(IGarageContext context, IWebHostEnvironment environment)
     {
         _context = context;
         _environment = environment;
     }
 
     [HttpGet("lookups")]
+    [HttpGet("~/api/admin/vehicles/lookups")]
     public async Task<IActionResult> GetLookups()
     {
         var branches = await _context.Branches
@@ -160,6 +161,8 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpGet("list")]
+    [HttpGet("vehicles")]
+    [HttpGet("~/api/admin/vehicles")]
     public async Task<IActionResult> GetList(
         [FromQuery] long? branchId,
         [FromQuery] long? brandId,
@@ -228,6 +231,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpGet("summary")]
+    [HttpGet("~/api/admin/vehicles/summary")]
     public async Task<IActionResult> GetSummary([FromQuery] long? branchId)
     {
         var settings = await ReadSettingsAsync();
@@ -360,6 +364,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpGet("alerts")]
+    [HttpGet("~/api/admin/vehicles/alerts")]
     public async Task<IActionResult> GetAlerts([FromQuery] long? branchId)
     {
         var now = DateTime.UtcNow;
@@ -439,6 +444,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpGet("vehicles/{id:long}")]
+    [HttpGet("~/api/admin/vehicles/{id:long}")]
     public async Task<IActionResult> GetVehicleDetail(long id, [FromQuery] int takeHistory = 200)
     {
         takeHistory = Math.Clamp(takeHistory, 20, 2000);
@@ -494,6 +500,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpGet("history")]
+    [HttpGet("~/api/admin/vehicles/history")]
     public async Task<IActionResult> GetHistory([FromQuery] long? vehicleId, [FromQuery] long? branchId, [FromQuery] int take = 300)
     {
         take = Math.Clamp(take, 50, 5000);
@@ -568,6 +575,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles")]
+    [HttpPost("~/api/admin/vehicles")]
     public async Task<IActionResult> CreateVehicle([FromBody] VehicleUpsertRequest request)
     {
         if (request == null) return BadRequest(new { message = "Payload is required." });
@@ -639,6 +647,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPut("vehicles/{id:long}")]
+    [HttpPut("~/api/admin/vehicles/{id:long}")]
     public async Task<IActionResult> UpdateVehicle(long id, [FromBody] VehicleUpsertRequest request)
     {
         if (request == null) return BadRequest(new { message = "Payload is required." });
@@ -714,6 +723,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/lock-edit")]
+    [HttpPut("~/api/admin/vehicles/{id:long}/edit-locks")]
     public async Task<IActionResult> LockEdit(long id)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id);
@@ -733,6 +743,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/unlock-edit")]
+    [HttpDelete("~/api/admin/vehicles/{id:long}/edit-locks")]
     public async Task<IActionResult> UnlockEdit(long id)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id);
@@ -752,6 +763,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/hide")]
+    [HttpDelete("~/api/admin/vehicles/{id:long}")]
     public async Task<IActionResult> HideVehicle(long id)
     {
         var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == id);
@@ -778,6 +790,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/status")]
+    [HttpPatch("~/api/admin/vehicles/{id:long}/status")]
     public async Task<IActionResult> UpdateStatus(long id, [FromBody] ChangeStatusRequest request)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id && v.IsDeleted != true);
@@ -800,6 +813,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/owner")]
+    [HttpPatch("~/api/admin/vehicles/{id:long}/owner")]
     public async Task<IActionResult> ChangeOwner(long id, [FromBody] ChangeOwnerRequest request)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id && v.IsDeleted != true);
@@ -825,6 +839,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/assign-staff")]
+    [HttpPost("~/api/admin/vehicles/{id:long}/staff-assignments")]
     public async Task<IActionResult> AssignStaff(long id, [FromBody] AssignStaffRequest request)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id && v.IsDeleted != true);
@@ -878,6 +893,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/assign-bay")]
+    [HttpPost("~/api/admin/vehicles/{id:long}/bay-assignments")]
     public async Task<IActionResult> AssignBay(long id, [FromBody] AssignBayRequest request)
     {
         if (request.BayId <= 0) return BadRequest(new { message = "BayId is required." });
@@ -920,6 +936,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/move-bay")]
+    [HttpPost("~/api/admin/vehicles/{id:long}/bay-transfers")]
     public async Task<IActionResult> MoveBay(long id, [FromBody] MoveBayRequest request)
     {
         if (request.ToBayId <= 0) return BadRequest(new { message = "ToBayId is required." });
@@ -999,6 +1016,7 @@ public class VehicleAdminController : ControllerBase
     }
 
     [HttpPost("vehicles/{id:long}/remove-bay")]
+    [HttpPost("~/api/admin/vehicles/{id:long}/bay-removals")]
     public async Task<IActionResult> RemoveBay(long id, [FromBody] RemoveBayRequest request)
     {
         var exists = await _context.Vehicles.AsNoTracking().AnyAsync(v => v.Id == id && v.IsDeleted != true);

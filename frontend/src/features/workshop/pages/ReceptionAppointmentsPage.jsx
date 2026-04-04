@@ -5,6 +5,8 @@ import "react-calendar/dist/Calendar.css";
 import {
   getBranchAppointments,
   getAppointmentDetail,
+  confirmAppointment,
+  checkInAppointment,
   cancelAppointment,
   getAllStandardServices,
 } from "@features/appointments/api/appointmentApi";
@@ -112,9 +114,18 @@ function getApptStatusBadge(status) {
   return "badge-inactive";
 }
 
+function canConfirmAppointment(status) {
+  const normalized = normalizeStatus(status);
+  return normalized === "PENDING" || normalized === "LATE";
+}
+
+function canCheckInAppointment(status) {
+  return normalizeStatus(status) === "CONFIRMED";
+}
+
 function canCancelAppointment(status) {
   const normalized = normalizeStatus(status);
-  return normalized === "PENDING" || normalized === "CONFIRMED";
+  return normalized === "PENDING" || normalized === "CONFIRMED" || normalized === "LATE";
 }
 
 function canEditAppointment(status) {
@@ -160,10 +171,10 @@ export default function ReceptionAppointmentsPage() {
   const [apptStatusFilter, setApptStatusFilter] = useState("ALL");
   const [apptSortBy, setApptSortBy] = useState("NEWEST");
   const [apptViewMode, setApptViewMode] = useState("SINGLE");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [draftDateFrom, setDraftDateFrom] = useState("");
-  const [draftDateTo, setDraftDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => toDateText(new Date()));
+  const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
+  const [draftDateFrom, setDraftDateFrom] = useState(() => toDateText(new Date()));
+  const [draftDateTo, setDraftDateTo] = useState(() => toDateText(new Date()));
   const [apptsPage, setApptsPage] = useState(1);
   const [apptsPageSize, setApptsPageSize] = useState(10);
 
@@ -365,17 +376,36 @@ export default function ReceptionAppointmentsPage() {
     filteredSingleAppts.length,
   ]);
 
-  const handleApptAction = useCallback(async (id) => {
+  const handleApptAction = useCallback(async (appt, action) => {
+    const appointment = normalizeAppointmentItem(appt);
+    const id = Number(appointment?.id || 0);
+    if (!id) return;
+
+    const canConfirm = canConfirmAppointment(appointment.status);
+    const canCheckIn = canCheckInAppointment(appointment.status);
+    const canCancel = canCancelAppointment(appointment.status);
+
+    if (action === "confirm" && !canConfirm) return;
+    if (action === "checkin" && !canCheckIn) return;
+    if (action === "cancel" && !canCancel) return;
+
     setActingAppt(id);
     try {
-      const reasonInput = window.prompt("Lý do hủy lịch:", "Nhân viên hủy");
-      if (reasonInput === null) return;
-      const reason = String(reasonInput || "").trim();
-      if (!reason) {
-        alert("Vui lòng nhập lý do hủy.");
-        return;
+      if (action === "confirm") {
+        await confirmAppointment(id);
+      } else if (action === "checkin") {
+        await checkInAppointment(id, { arrivedAt: new Date().toISOString() });
+      } else if (action === "cancel") {
+        const reasonInput = window.prompt("Lý do hủy lịch:", "Nhân viên hủy");
+        if (reasonInput === null) return;
+        const reason = String(reasonInput || "").trim();
+        if (!reason) {
+          alert("Vui lòng nhập lý do hủy.");
+          return;
+        }
+        await cancelAppointment(id, reason);
       }
-      await cancelAppointment(id, reason);
+
       await fetchAppointmentsSilent();
     } catch (err) {
       setError(`Thao tác lịch hẹn thất bại: ${err?.message || "Không rõ lỗi"}`);
@@ -527,13 +557,6 @@ export default function ReceptionAppointmentsPage() {
     setModal(null);
   }, [draftDateFrom, draftDateTo]);
 
-  const clearDateRange = useCallback(() => {
-    setDateFrom("");
-    setDateTo("");
-    setDraftDateFrom("");
-    setDraftDateTo("");
-  }, []);
-
   const quickSetDateRange = useCallback((days) => {
     const now = new Date();
     const to = now.toISOString().slice(0, 10);
@@ -543,6 +566,20 @@ export default function ReceptionAppointmentsPage() {
     setDraftDateFrom(from);
     setDraftDateTo(to);
   }, []);
+
+  const defaultDateFilter = useMemo(() => toDateText(new Date()), []);
+  const isDefaultTodayDateFilter = dateFrom === defaultDateFilter && dateTo === defaultDateFilter;
+  const dateFilterButtonLabel = isDefaultTodayDateFilter ? "Hôm nay" : "Chọn khoảng ngày";
+  const canResetToolbarFilters = apptStatusFilter !== "ALL" || apptSortBy !== "NEWEST" || !isDefaultTodayDateFilter;
+
+  const resetToolbarFilters = useCallback(() => {
+    setApptStatusFilter("ALL");
+    setApptSortBy("NEWEST");
+    setDateFrom(defaultDateFilter);
+    setDateTo(defaultDateFilter);
+    setDraftDateFrom(defaultDateFilter);
+    setDraftDateTo(defaultDateFilter);
+  }, [defaultDateFilter]);
 
   const handleRangeDayClick = useCallback((dateObj) => {
     const picked = toDateText(dateObj);
@@ -584,9 +621,9 @@ export default function ReceptionAppointmentsPage() {
         apptSortBy={apptSortBy}
         setApptSortBy={setApptSortBy}
         openDateRangePicker={openDateRangePicker}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        clearDateRange={clearDateRange}
+        dateFilterButtonLabel={dateFilterButtonLabel}
+        canResetToolbarFilters={canResetToolbarFilters}
+        onResetToolbarFilters={resetToolbarFilters}
         apptViewMode={apptViewMode}
         setApptViewMode={setApptViewMode}
         filteredSingleAppts={filteredSingleAppts}

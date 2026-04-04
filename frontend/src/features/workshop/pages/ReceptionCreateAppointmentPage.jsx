@@ -5,8 +5,8 @@ import {
   getAllCustomerVehicles,
   getAllVehicles,
 } from "@features/admin/api/customerApi";
-import { getAllStandardServices } from "@features/appointments/api/appointmentApi";
-import AppointmentForm from "@features/workshop/components/AppointmentForm";
+import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
+import ReceptionCreateAppointmentForm from "@features/workshop/components/ReceptionCreateAppointmentForm";
 import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
@@ -62,6 +62,7 @@ export default function ReceptionCreateAppointmentPage() {
   const [vehicles, setVehicles] = useState([]);
   const [customerVehicles, setCustomerVehicles] = useState([]);
   const [services, setServices] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,16 +79,18 @@ export default function ReceptionCreateAppointmentPage() {
     setLoading(true);
     setError("");
     try {
-      const [customerRes, vehicleRes, customerVehicleRes, serviceRes] = await Promise.all([
+      const [customerRes, vehicleRes, customerVehicleRes, serviceRes, serviceCategoryRes] = await Promise.all([
         getAllCustomers(effectiveBranchId || undefined),
         getAllVehicles(),
         getAllCustomerVehicles(),
         getAllStandardServices(),
+        getAllServiceCategories(),
       ]);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setCustomerVehicles(Array.isArray(customerVehicleRes) ? customerVehicleRes : []);
       setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setServiceCategories(Array.isArray(serviceCategoryRes) ? serviceCategoryRes : []);
     } catch (err) {
       setError(err?.message || TEXT.loadError);
     } finally {
@@ -205,11 +208,12 @@ export default function ReceptionCreateAppointmentPage() {
         <section className="form-section reception-create-appointment-form">
           <h3 className="section-title">{TEXT.infoTitle}</h3>
           <p className="reception-create-appointment-note">{TEXT.infoNote}</p>
-          <AppointmentForm
+          <ReceptionCreateAppointmentForm
             key={formKey}
             customers={customers}
             vehicles={vehicles}
             customerVehicles={customerVehicles}
+            serviceCategories={serviceCategories}
             services={services}
             onSubmit={handleSubmit}
             onCancel={handleGoBack}

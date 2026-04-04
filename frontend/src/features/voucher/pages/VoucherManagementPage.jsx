@@ -836,11 +836,34 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       ) : null}
 
       {isSettings ? (
-        <div className="voucher-card-grid"><div className="voucher-panel-card"><h3>Chính sách</h3>
-          <label className="voucher-toggle-item"><span>Bắt buộc trần giảm cho voucher phần trểm</span><input type="checkbox" checked={policy.requireCapPercent} onChange={(e) => setPolicy((p) => ({ ...p, requireCapPercent: e.target.checked }))} /></label>
-          <label className="voucher-toggle-item"><span>Chặn cộng dôn theo mặc định</span><input type="checkbox" checked={policy.blockStacking} onChange={(e) => setPolicy((p) => ({ ...p, blockStacking: e.target.checked }))} /></label>
-          <div className="form-actions voucher-form-actions-left"><button className="btn-primary" onClick={() => localStorage.setItem("voucher_admin_policy", JSON.stringify(policy))}>Lưu chính sách</button></div>
-        </div></div>
+        <div className="voucher-card-grid">
+          <div className="voucher-panel-card">
+            <h3>Chính sách</h3>
+            <div className="voucher-settings-policy-grid">
+              <label className="voucher-toggle-item voucher-settings-policy-item">
+                <span>Bắt buộc trần giảm cho voucher phần trểm</span>
+                <input
+                  type="checkbox"
+                  checked={policy.requireCapPercent}
+                  onChange={(e) => setPolicy((p) => ({ ...p, requireCapPercent: e.target.checked }))}
+                />
+              </label>
+              <label className="voucher-toggle-item voucher-settings-policy-item">
+                <span>Chặn cộng dồn theo mặc định</span>
+                <input
+                  type="checkbox"
+                  checked={policy.blockStacking}
+                  onChange={(e) => setPolicy((p) => ({ ...p, blockStacking: e.target.checked }))}
+                />
+              </label>
+            </div>
+            <div className="form-actions voucher-form-actions-left">
+              <button className="btn-primary" onClick={() => localStorage.setItem("voucher_admin_policy", JSON.stringify(policy))}>
+                Lưu chính sách
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {modalOpen ? (

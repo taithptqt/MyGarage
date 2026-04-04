@@ -1,9 +1,8 @@
 using MyGarage.Models;
 
-namespace MyGarage.Interfaces.Repositories
+namespace MyGarage.Interfaces
 {
     public interface IInventoryRepository : IGenericRepository<Inventory>
     {
     }
 }
-

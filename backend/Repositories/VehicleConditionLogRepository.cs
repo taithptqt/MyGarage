@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 using MyGarage.Data;
 using MyGarage.Models;
@@ -8,7 +8,7 @@ namespace MyGarage.Repositories
 {
     public class VehicleConditionLogRepository : GenericRepository<VehicleConditionLog>, IVehicleConditionLogRepository
     {
-        public VehicleConditionLogRepository(GarageContext context) : base(context)
+        public VehicleConditionLogRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -26,3 +26,4 @@ namespace MyGarage.Repositories
         }
     }
 }
+

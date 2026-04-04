@@ -14,31 +14,31 @@ function normalizeFinanceRequestType(requestType) {
 }
 
 export async function getInvoices() {
-  const data = await request({ url: "/api/Invoice", method: "GET" });
+  const data = await request({ url: "/api/invoices", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function updateInvoice(id, payload) {
   return request({
-    url: `/api/Invoice/${id}`,
+    url: `/api/invoices/${id}`,
     method: "PUT",
     data: payload
   });
 }
 
 export async function getInvoiceDetails() {
-  const data = await request({ url: "/api/InvoiceDetail", method: "GET" });
+  const data = await request({ url: "/api/invoice-details", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getPayments() {
-  const data = await request({ url: "/api/Payment", method: "GET" });
+  const data = await request({ url: "/api/payments", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function updatePayment(id, payload) {
   return request({
-    url: `/api/Payment/${id}`,
+    url: `/api/payments/${id}`,
     method: "PUT",
     data: payload
   });
@@ -46,30 +46,30 @@ export async function updatePayment(id, payload) {
 
 export async function transitionPaymentStatus(id, payload) {
   return request({
-    url: `/api/Payment/${id}/transition-status`,
+    url: `/api/payments/${id}/transition-status`,
     method: "POST",
     data: payload
   });
 }
 
 export async function getPaymentMethods() {
-  const data = await request({ url: "/api/PaymentMethod", method: "GET" });
+  const data = await request({ url: "/api/payment-methods", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getRevenueSnapshots() {
-  const data = await request({ url: "/api/RevenueSnapshot", method: "GET" });
+  const data = await request({ url: "/api/revenue-snapshots", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getBranches() {
-  const data = await request({ url: "/api/Branch", method: "GET" });
+  const data = await request({ url: "/api/branches", method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getAuditLogs(params = {}) {
   const data = await request({
-    url: "/api/AuditLog/admin-changes",
+    url: "/api/audit-logs/admin-changes",
     method: "GET",
     params
   });
@@ -86,7 +86,7 @@ export async function fetchOptionalCollection(url) {
 
 export async function createAccountingTableRow(tableKey, payload) {
   return request({
-    url: `/api/Accounting/table/${tableKey}`,
+    url: `/api/accounting/table/${tableKey}`,
     method: "POST",
     data: payload
   });
@@ -94,54 +94,54 @@ export async function createAccountingTableRow(tableKey, payload) {
 
 export async function updateAccountingTableRow(tableKey, id, payload) {
   return request({
-    url: `/api/Accounting/table/${tableKey}/${id}`,
+    url: `/api/accounting/table/${tableKey}/${id}`,
     method: "PUT",
     data: payload
   });
 }
 
 export async function getAccountsPayable() {
-  return fetchOptionalCollection("/api/Accounting/table/accounts-payable");
+  return fetchOptionalCollection("/api/accounting/table/accounts-payable");
 }
 
 export async function getSupplierInvoices() {
-  return fetchOptionalCollection("/api/Accounting/table/supplier-invoices");
+  return fetchOptionalCollection("/api/accounting/table/supplier-invoices");
 }
 
 export async function getSupplierPayments() {
-  return fetchOptionalCollection("/api/Accounting/table/supplier-payments");
+  return fetchOptionalCollection("/api/accounting/table/supplier-payments");
 }
 
 export async function getAccountingPeriods() {
-  return fetchOptionalCollection("/api/Accounting/table/accounting-periods");
+  return fetchOptionalCollection("/api/accounting/table/accounting-periods");
 }
 
 export async function getChartOfAccounts() {
-  return fetchOptionalCollection("/api/Accounting/table/chart-of-accounts");
+  return fetchOptionalCollection("/api/accounting/table/chart-of-accounts");
 }
 
 export async function getJournalEntries() {
-  return fetchOptionalCollection("/api/Accounting/table/journal-entries");
+  return fetchOptionalCollection("/api/accounting/table/journal-entries");
 }
 
 export async function getJournalEntryLines() {
-  return fetchOptionalCollection("/api/Accounting/table/journal-entry-lines");
+  return fetchOptionalCollection("/api/accounting/table/journal-entry-lines");
 }
 
 export async function getPayrollRuns() {
-  return fetchOptionalCollection("/api/Accounting/table/payroll-runs");
+  return fetchOptionalCollection("/api/accounting/table/payroll-runs");
 }
 
 export async function getPayrollPeriods() {
-  return fetchOptionalCollection("/api/Accounting/table/payroll-periods");
+  return fetchOptionalCollection("/api/accounting/table/payroll-periods");
 }
 
 export async function getPayrollItems() {
-  return fetchOptionalCollection("/api/Accounting/table/payroll-items");
+  return fetchOptionalCollection("/api/accounting/table/payroll-items");
 }
 
 export async function getPayslips() {
-  return fetchOptionalCollection("/api/Accounting/table/payslips");
+  return fetchOptionalCollection("/api/accounting/table/payslips");
 }
 
 export async function createPayrollPeriod(payload) {
@@ -161,31 +161,31 @@ export async function createPayslip(payload) {
 }
 
 export async function getTaxFilings() {
-  return fetchOptionalCollection("/api/Accounting/table/tax-filings");
+  return fetchOptionalCollection("/api/accounting/table/tax-filings");
 }
 
 export async function getLegalDocuments() {
-  return fetchOptionalCollection("/api/Accounting/table/legal-documents");
+  return fetchOptionalCollection("/api/accounting/table/legal-documents");
 }
 
 export async function getDocumentAttachments() {
-  return fetchOptionalCollection("/api/Accounting/table/document-attachments");
+  return fetchOptionalCollection("/api/accounting/table/document-attachments");
 }
 
 export async function getTrialBalanceReport() {
-  return fetchOptionalCollection("/api/Accounting/reports/trial-balance");
+  return fetchOptionalCollection("/api/accounting/reports/trial-balance");
 }
 
 export async function getSupplierPayableSummaryReport() {
-  return fetchOptionalCollection("/api/Accounting/reports/supplier-payable-summary");
+  return fetchOptionalCollection("/api/accounting/reports/supplier-payable-summary");
 }
 
 export async function getPayrollRunSummaryReport() {
-  return fetchOptionalCollection("/api/Accounting/reports/payroll-run-summary");
+  return fetchOptionalCollection("/api/accounting/reports/payroll-run-summary");
 }
 
 export async function getFinanceApprovalRequests() {
-  const primary = await fetchOptionalCollection("/api/Accounting/table/finance-approval-requests");
+  const primary = await fetchOptionalCollection("/api/accounting/table/finance-approval-requests");
   return { ...primary, source: "finance_approval_requests" };
 }
 
@@ -196,7 +196,7 @@ export async function createFinanceApprovalRequest(payload) {
   };
 
   const primary = await requestSafe({
-    url: "/api/Accounting/table/finance-approval-requests",
+    url: "/api/accounting/table/finance-approval-requests",
     method: "POST",
     data: normalizedPayload
   });
@@ -209,7 +209,7 @@ export async function createFinanceApprovalRequest(payload) {
 
 export async function updateFinanceApprovalRequest(id, payload) {
   const primary = await requestSafe({
-    url: `/api/Accounting/table/finance-approval-requests/${id}`,
+    url: `/api/accounting/table/finance-approval-requests/${id}`,
     method: "PUT",
     data: payload
   });
@@ -222,7 +222,7 @@ export async function updateFinanceApprovalRequest(id, payload) {
 
 export async function decideFinanceApproval(id, payload) {
   return request({
-    url: `/api/Accounting/finance-approvals/${id}/decision`,
+    url: `/api/accounting/finance-approvals/${id}/decision`,
     method: "POST",
     data: payload
   });
@@ -230,7 +230,7 @@ export async function decideFinanceApproval(id, payload) {
 
 export async function postJournalEntry(id, postedBy) {
   return request({
-    url: `/api/Accounting/journal-entries/${id}/post`,
+    url: `/api/accounting/journal-entries/${id}/post`,
     method: "POST",
     data: { postedBy }
   });
@@ -238,7 +238,7 @@ export async function postJournalEntry(id, postedBy) {
 
 export async function approvePayrollRun(id, approvedBy) {
   return request({
-    url: `/api/Accounting/payroll-runs/${id}/approve`,
+    url: `/api/accounting/payroll-runs/${id}/approve`,
     method: "POST",
     data: { approvedBy }
   });
@@ -246,7 +246,7 @@ export async function approvePayrollRun(id, approvedBy) {
 
 export async function markPayrollRunPaid(id, paidBy) {
   return request({
-    url: `/api/Accounting/payroll-runs/${id}/mark-paid`,
+    url: `/api/accounting/payroll-runs/${id}/mark-paid`,
     method: "POST",
     data: { paidBy }
   });
@@ -256,7 +256,7 @@ export async function getStaffSalaryCoefficient(staffId, asOfDate) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
   return request({
-    url: `/api/Accounting/staff-salary/${staffId}/coefficient`,
+    url: `/api/accounting/staff-salary/${staffId}/coefficient`,
     method: "GET",
     params
   });
@@ -266,7 +266,7 @@ export async function getStaffBaseSalary(staffId, asOfDate) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
   return request({
-    url: `/api/Accounting/staff-salary/${staffId}/base`,
+    url: `/api/accounting/staff-salary/${staffId}/base`,
     method: "GET",
     params
   });
@@ -274,7 +274,7 @@ export async function getStaffBaseSalary(staffId, asOfDate) {
 
 export async function createInitialSalaryRequest(staffId, payload) {
   return request({
-    url: `/api/Accounting/staff-salary/${staffId}/request-initial`,
+    url: `/api/accounting/staff-salary/${staffId}/request-initial`,
     method: "POST",
     data: payload
   });
@@ -282,8 +282,9 @@ export async function createInitialSalaryRequest(staffId, payload) {
 
 export async function calculatePayrollForAllStaff(payload = {}) {
   return request({
-    url: "/api/Accounting/payroll-runs/calculate-all",
+    url: "/api/accounting/payroll-runs/calculate-all",
     method: "POST",
     data: payload
   });
 }
+

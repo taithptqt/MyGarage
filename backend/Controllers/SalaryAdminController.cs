@@ -5,19 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Services;
 
 namespace MyGarage.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/salary-admin")]
 [ApiController]
 [Authorize(Roles = "Staff")]
 public class SalaryAdminController : ControllerBase
 {
-    private readonly AccountingCrudService _crud;
-    private readonly GarageContext _db;
+    private readonly IAccountingCrudService _crud;
+    private readonly IGarageContext _db;
 
-    public SalaryAdminController(AccountingCrudService crud, GarageContext db)
+    public SalaryAdminController(IAccountingCrudService crud, IGarageContext db)
     {
         _crud = crud;
         _db = db;
@@ -520,7 +521,7 @@ public class SalaryAdminController : ControllerBase
         return string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
                || roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
                || roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase)
-               || roleNameUpper.Contains("Káº¾ TOÃN", StringComparison.OrdinalIgnoreCase);
+               || roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool CanViewSalaryModule()

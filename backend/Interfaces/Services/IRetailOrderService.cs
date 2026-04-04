@@ -1,9 +1,8 @@
 using MyGarage.Models;
 
-namespace MyGarage.Interfaces.Services
+namespace MyGarage.Interfaces
 {
     public interface IRetailOrderService : IGenericService<RetailOrder>
     {
     }
 }
-

@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Services;
 
@@ -15,15 +15,21 @@ using PayOS;
 namespace MyGarage.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/orders")]
 public class OrderController(
     [FromKeyedServices("OrderClient")] PayOSClient client,
-    GarageContext db,
-    PaymentConfirmationService paymentConfirmationService) : ControllerBase
+    IGarageContext db,
+    IPaymentConfirmationService paymentConfirmationService,
+    IOrderStore orderStore,
+    IOrderTransactionStore orderTransactionStore,
+    IOrderInvoiceStore orderInvoiceStore) : ControllerBase
 {
     private readonly PayOSClient _client = client;
-    private readonly GarageContext _db = db;
-    private readonly PaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
+    private readonly IGarageContext _db = db;
+    private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
+    private readonly IOrderStore _orderStore = orderStore;
+    private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
+    private readonly IOrderInvoiceStore _orderInvoiceStore = orderInvoiceStore;
 
     private static bool IsInflowRequiresInvoiceConstraintViolation(Exception ex)
     {
@@ -164,7 +170,7 @@ public class OrderController(
     [HttpGet("{id}")]
     public async Task<ActionResult<Order>> Get(int id)
     {
-        var order = OrderService.GetOrderById(id);
+        var order = _orderStore.GetOrderById(id);
         if (order == null || string.IsNullOrEmpty(order.PaymentLinkId))
         {
             return NotFound();
@@ -184,7 +190,7 @@ public class OrderController(
 
             if (paymentLink.Transactions != null && paymentLink.Transactions.Count > 0)
             {
-                OrderTransactionService.DeleteTransactionsByOrderId(order.Id);
+                _orderTransactionStore.DeleteTransactionsByOrderId(order.Id);
 
                 var transactions = paymentLink.Transactions.Select(t => new OrderTransaction
                 {
@@ -204,11 +210,11 @@ public class OrderController(
                     CounterAccountNumber = t.CounterAccountNumber
                 }).ToList();
 
-                OrderTransactionService.CreateTransactions(transactions);
+                _orderTransactionStore.CreateTransactions(transactions);
                 order.LastTransactionUpdate = DateTimeOffset.Now;
             }
 
-            OrderService.UpdateOrder(order.Id, order);
+            _orderStore.UpdateOrder(order.Id, order);
 
             var payment = await ResolvePaymentAsync(order);
             if (payment is not null)
@@ -380,7 +386,7 @@ public class OrderController(
                 }
             }
 
-            OrderService.CreateOrder(order);
+            _orderStore.CreateOrder(order);
             return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
         }
         catch (Exception ex)
@@ -391,9 +397,10 @@ public class OrderController(
 
     [Authorize]
     [HttpPost("{orderId}/cancel")]
+    [HttpPatch("{orderId}/status")]
     public async Task<ActionResult<PaymentLink>> CancelPayment(int orderId, string cancellationReason)
     {
-        var order = OrderService.GetOrderById(orderId);
+        var order = _orderStore.GetOrderById(orderId);
         if (order == null || string.IsNullOrEmpty(order.PaymentLinkId))
         {
             return NotFound();
@@ -413,7 +420,7 @@ public class OrderController(
 
             if (paymentLink.Transactions != null && paymentLink.Transactions.Count > 0)
             {
-                OrderTransactionService.DeleteTransactionsByOrderId(order.Id);
+                _orderTransactionStore.DeleteTransactionsByOrderId(order.Id);
 
                 var transactions = paymentLink.Transactions.Select(t => new OrderTransaction
                 {
@@ -433,11 +440,11 @@ public class OrderController(
                     CounterAccountNumber = t.CounterAccountNumber
                 }).ToList();
 
-                OrderTransactionService.CreateTransactions(transactions);
+                _orderTransactionStore.CreateTransactions(transactions);
                 order.LastTransactionUpdate = DateTimeOffset.Now;
             }
 
-            OrderService.UpdateOrder(order.Id, order);
+            _orderStore.UpdateOrder(order.Id, order);
             var payment = await ResolvePaymentAsync(order);
             if (payment is not null)
             {
@@ -460,7 +467,7 @@ public class OrderController(
     [HttpGet("{orderId}/invoices")]
     public async Task<ActionResult<OrderInvoicesInfo>> GetInvoices(int orderId)
     {
-        var order = OrderService.GetOrderById(orderId);
+        var order = _orderStore.GetOrderById(orderId);
         if (order == null || string.IsNullOrEmpty(order.PaymentLinkId))
         {
             return NotFound();
@@ -469,7 +476,7 @@ public class OrderController(
         {
             var invoices = await _client.PaymentRequests.Invoices.GetAsync(order.PaymentLinkId);
 
-            OrderInvoiceService.DeleteInvoicesByOrderId(order.Id);
+            _orderInvoiceStore.DeleteInvoicesByOrderId(order.Id);
 
             var orderInvoices = invoices.Invoices.Select(i => new OrderInvoice
             {
@@ -485,7 +492,7 @@ public class OrderController(
                 CodeOfTax = i.CodeOfTax
             }).ToList();
 
-            OrderInvoiceService.CreateInvoices(orderInvoices);
+            _orderInvoiceStore.CreateInvoices(orderInvoices);
 
             var orderInvoicesInfo = new OrderInvoicesInfo
             {
@@ -502,15 +509,16 @@ public class OrderController(
 
     [Authorize]
     [HttpGet("{orderId}/invoices/{invoiceId}/download")]
+    [HttpGet("{orderId}/invoices/{invoiceId}")]
     public async Task<ActionResult> DownloadInvoice(int orderId, string invoiceId)
     {
-        var order = OrderService.GetOrderById(orderId);
+        var order = _orderStore.GetOrderById(orderId);
         if (order == null || string.IsNullOrEmpty(order.PaymentLinkId))
         {
             return NotFound();
         }
 
-        var invoice = OrderInvoiceService.GetInvoicesByOrderId(orderId)
+        var invoice = _orderInvoiceStore.GetInvoicesByOrderId(orderId)
             .FirstOrDefault(i => i.InvoiceId == invoiceId);
         if (invoice == null)
         {

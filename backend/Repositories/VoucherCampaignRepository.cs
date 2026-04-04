@@ -11,7 +11,7 @@ namespace MyGarage.Repositories
 {
     public class VoucherCampaignRepository : GenericRepository<VoucherCampaign>, IVoucherCampaignRepository
     {
-        public VoucherCampaignRepository(GarageContext context) : base(context)
+        public VoucherCampaignRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -81,6 +81,7 @@ namespace MyGarage.Repositories
         }
     }
 }
+
 
 
 

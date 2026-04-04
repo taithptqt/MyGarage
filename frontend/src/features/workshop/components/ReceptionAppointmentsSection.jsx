@@ -20,9 +20,64 @@ function buildRowInteraction(appt, onAppointmentClick) {
   };
 }
 
+function canConfirmAppointment(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  return normalized === "PENDING" || normalized === "LATE";
+}
+
+function canCheckInAppointment(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  return normalized === "CONFIRMED";
+}
+
 function canCancelAppointment(status) {
   const normalized = String(status || "").trim().toUpperCase();
-  return normalized === "PENDING" || normalized === "CONFIRMED";
+  return normalized === "PENDING" || normalized === "CONFIRMED" || normalized === "LATE";
+}
+
+function AppointmentActionButtons({ appointment, actingAppt, handleApptAction }) {
+  const isActing = actingAppt === appointment.id;
+  const canConfirm = canConfirmAppointment(appointment.status);
+  const canCheckIn = canCheckInAppointment(appointment.status);
+  const canCancel = canCancelAppointment(appointment.status);
+
+  return (
+    <div className="appt-action-row">
+      <button
+        className={`btn-icon btn-action-pill btn-action-confirm ${(!canConfirm || isActing) ? "is-disabled-action" : ""}`}
+        title="Xác nhận"
+        disabled={isActing || !canConfirm}
+        onClick={(event) => {
+          event.stopPropagation();
+          handleApptAction(appointment, "confirm");
+        }}
+      >
+        Xác nhận
+      </button>
+      <button
+        className={`btn-icon btn-action-pill btn-action-checkin ${(!canCheckIn || isActing) ? "is-disabled-action" : ""}`}
+        title="Check-in"
+        disabled={isActing || !canCheckIn}
+        onClick={(event) => {
+          event.stopPropagation();
+          handleApptAction(appointment, "checkin");
+        }}
+      >
+        Check-in
+      </button>
+      <button
+        className={`btn-icon btn-action-pill btn-action-cancel ${(!canCancel || isActing) ? "is-disabled-action" : ""}`}
+        title="Hủy lịch hẹn"
+        disabled={isActing || !canCancel}
+        onClick={(event) => {
+          event.stopPropagation();
+          handleApptAction(appointment, "cancel");
+        }}
+      >
+        Hủy
+      </button>
+    </div>
+  );
 }
 
 function GroupBlock({
@@ -71,31 +126,17 @@ function GroupBlock({
           >
             {getStatusLabelVi(group.status || "PENDING", "Chờ xác nhận")}
           </span>
-          {group.hasCancelableAppointments && (
-            <button
-              className={`btn-icon btn-action-danger ${actingGroup === group.id ? "faded" : ""}`}
-              title="Hủy nhóm"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleGroupCancel(group);
-              }}
-              disabled={actingGroup === group.id}
-              style={{
-                width: "auto",
-                height: 30,
-                whiteSpace: "nowrap",
-                padding: "0 12px",
-                minWidth: 56,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                lineHeight: 1,
-                margin: 0,
-              }}
-            >
-              Hủy
-            </button>
-          )}
+          <button
+            className={`btn-icon btn-action-pill btn-action-cancel ${(actingGroup === group.id || !group.hasCancelableAppointments) ? "is-disabled-action" : ""}`}
+            title="Hủy nhóm"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleGroupCancel(group);
+            }}
+            disabled={actingGroup === group.id || !group.hasCancelableAppointments}
+          >
+            Hủy nhóm
+          </button>
         </div>
       </header>
 
@@ -114,7 +155,7 @@ function GroupBlock({
               <th>Giờ</th>
               <th>Xe</th>
               <th className="th-center">Trạng thái</th>
-              <th className="col-actions">Thao tác</th>
+              <th className="col-actions col-actions-wide th-center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -128,33 +169,8 @@ function GroupBlock({
                   <td className="th-center">
                     <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
                   </td>
-                  <td className="col-actions">
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 30 }}>
-                      {canCancelAppointment(appt.status) && (
-                        <button
-                          className={`btn-icon btn-action-danger ${actingAppt === appt.id ? "faded" : ""}`}
-                          title="Hủy lịch hẹn"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleApptAction(appt.id);
-                          }}
-                          disabled={actingAppt === appt.id}
-                          style={{
-                            width: "auto",
-                            height: 30,
-                            minWidth: 56,
-                            padding: "0 12px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            lineHeight: 1,
-                            margin: 0,
-                          }}
-                        >
-                          Hủy
-                        </button>
-                      )}
-                    </div>
+                  <td className="col-actions col-actions-wide th-center">
+                    <AppointmentActionButtons appointment={appt} actingAppt={actingAppt} handleApptAction={handleApptAction} />
                   </td>
                 </tr>
               );
@@ -174,9 +190,9 @@ export default function ReceptionAppointmentsSection({
   apptSortBy,
   setApptSortBy,
   openDateRangePicker,
-  dateFrom,
-  dateTo,
-  clearDateRange,
+  dateFilterButtonLabel,
+  canResetToolbarFilters,
+  onResetToolbarFilters,
   apptViewMode,
   setApptViewMode,
   filteredSingleAppts,
@@ -233,13 +249,11 @@ export default function ReceptionAppointmentsSection({
           />
 
           <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
-            Chọn khoảng ngày
+            {dateFilterButtonLabel || "Chọn khoảng ngày"}
           </button>
-          {(dateFrom || dateTo) && (
-            <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={clearDateRange}>
-              Xóa lọc
-            </button>
-          )}
+          <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={onResetToolbarFilters} disabled={!canResetToolbarFilters}>
+            Xóa lọc
+          </button>
         </div>
         <span className="result-count">
           {isGroupMode ? `${totalGroups} nhóm lịch` : `${totalSingle} lịch thường`}
@@ -326,7 +340,7 @@ export default function ReceptionAppointmentsSection({
                 <th>Giờ</th>
                 <th>Xe</th>
                 <th className="th-center">Trạng thái</th>
-                <th className="col-actions">Thao tác</th>
+                <th className="col-actions col-actions-wide th-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -349,33 +363,8 @@ export default function ReceptionAppointmentsSection({
                       <td className="th-center">
                         <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
                       </td>
-                      <td className="col-actions">
-                        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 30 }}>
-                          {canCancelAppointment(appt.status) && (
-                            <button
-                              className={`btn-icon btn-action-danger ${actingAppt === appt.id ? "faded" : ""}`}
-                              title="Hủy lịch hẹn"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleApptAction(appt.id);
-                              }}
-                              disabled={actingAppt === appt.id}
-                              style={{
-                                width: "auto",
-                                height: 30,
-                                minWidth: 56,
-                                padding: "0 12px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                lineHeight: 1,
-                                margin: 0,
-                              }}
-                            >
-                              Hủy
-                            </button>
-                          )}
-                        </div>
+                      <td className="col-actions col-actions-wide th-center">
+                        <AppointmentActionButtons appointment={appt} actingAppt={actingAppt} handleApptAction={handleApptAction} />
                       </td>
                     </tr>
                   );

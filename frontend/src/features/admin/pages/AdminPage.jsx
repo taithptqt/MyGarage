@@ -494,8 +494,8 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
       <div className="form-group">
         <label>Upload Logo</label>
         <input type="file" accept="image/*" onChange={handleImageUpload} />
-        {uploadingImage ? <small>Dang tai anh...</small> : null}
-        {cropSource ? <small>Vui long cat anh truoc khi luu.</small> : null}
+        {uploadingImage ? <small>Đang tải ảnh...</small> : null}
+        {cropSource ? <small>Vui lòng cắt ảnh trước khi lưu.</small> : null}
         {form.logoUrl ? (
           <img
             src={form.logoUrl}
@@ -780,7 +780,7 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Khong the doc file anh."));
+    reader.onerror = () => reject(new Error("Không thể đọc file ảnh."));
     reader.readAsDataURL(file);
   });
 }
@@ -789,7 +789,7 @@ function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Khong the xu ly anh da cat."));
+    reader.onerror = () => reject(new Error("Không thể xử lý ảnh đã cắt."));
     reader.readAsDataURL(blob);
   });
 }
@@ -1208,7 +1208,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
           String(formData.licensePlate || "").trim() || Number(formData.modelId)
         );
         if (hasVehicleInput && !formData.modelId) {
-          throw new Error("Vui long chon dong xe khi nhap thong tin xe.");
+          throw new Error("Vui lòng chọn dòng xe khi nhập thông tin xe.");
         }
 
         let savedCustomer = null;

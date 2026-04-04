@@ -11,7 +11,7 @@ namespace MyGarage.Repositories
 {
     public class VoucherRedemptionRepository : GenericRepository<VoucherRedemption>, IVoucherRedemptionRepository
     {
-        public VoucherRedemptionRepository(GarageContext context) : base(context)
+        public VoucherRedemptionRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -49,4 +49,5 @@ namespace MyGarage.Repositories
         }
     }
 }
+
 

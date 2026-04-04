@@ -27,6 +27,7 @@ builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddSingleton<ISlotHoldService, SlotHoldService>();
 builder.Services.AddDbContext<GarageContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
+builder.Services.AddScoped<IGarageContext>(provider => provider.GetRequiredService<GarageContext>());
 
 
 builder.Services.AddCors(options =>
@@ -44,8 +45,12 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped(typeof(IGenericService<>), typeof(GenericService<>));
-builder.Services.AddScoped<AccountingCrudService>();
-builder.Services.AddScoped<PayrollBatchCalculationService>();
+builder.Services.AddScoped<IAccountingCrudService, AccountingCrudService>();
+builder.Services.AddScoped<IPayrollBatchCalculationService, PayrollBatchCalculationService>();
+builder.Services.AddSingleton<IOrderStore, OrderService>();
+builder.Services.AddSingleton<IOrderTransactionStore, OrderTransactionService>();
+builder.Services.AddSingleton<IOrderInvoiceStore, OrderInvoiceService>();
+builder.Services.AddSingleton<ITransferStore, TransferService>();
 
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -298,7 +303,7 @@ builder.Services.AddScoped<IWorkSlotService, WorkSlotService>();
 // Authentication & JWT Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<PaymentConfirmationService>();
+builder.Services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 builder.Services.AddHttpClient();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretKeyForMyGarageBackendThatIsLongEnoughToWork";

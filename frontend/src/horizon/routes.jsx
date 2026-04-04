@@ -33,6 +33,7 @@ import AppointmentManagementPage from "@features/appointments/pages/AppointmentM
 import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
 import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
+import BayManagementPage from "@features/storage/pages/BayManagementPage";
 
 const inventoryItems = [
   {
@@ -128,6 +129,51 @@ const vehicleItems = [
     icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
     path: '/models',
     component: <AdminPage embedded initialSection="models" />,
+  },
+];
+
+const bayItems = [
+  {
+    name: 'Danh sách khoang',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/bays/list',
+    component: <BayManagementPage section="list" />,
+  },
+  {
+    name: 'Xe trong khoang',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/bays/vehicles',
+    component: <BayManagementPage section="vehicles" />,
+  },
+  {
+    name: 'Theo dõi sử dụng',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/bays/usage',
+    component: <BayManagementPage section="usage" />,
+  },
+  {
+    name: 'Sơ đồ và điều phối',
+    layout: '/admin',
+    icon: <Icon as={MdSwapHoriz} width="20px" height="20px" color="inherit" />,
+    path: '/bays/layout',
+    component: <BayManagementPage section="layout" />,
+  },
+  {
+    name: 'Cảnh báo',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/bays/alerts',
+    component: <BayManagementPage section="alerts" />,
+  },
+  {
+    name: 'Thống kê',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/bays/stats',
+    component: <BayManagementPage section="stats" />,
   },
 ];
 
@@ -255,6 +301,12 @@ const routes = [
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     collapse: true,
     items: vehicleItems,
+  },
+  {
+    name: 'Khoang',
+    icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: bayItems,
   },
   {
     name: 'Dịch vụ',

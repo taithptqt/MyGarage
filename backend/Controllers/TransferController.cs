@@ -8,22 +8,26 @@ using PayOS.Models.V1.Payouts.Batch;
 using PayOS.Models.V1.PayoutsAccount;
 
 using MyGarage.Models;
+using MyGarage.Interfaces;
 using MyGarage.Services;
 
 namespace MyGarage.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-public class TransferController([FromKeyedServices("TransferClient")] PayOSClient client) : ControllerBase
+[Route("api/transfers")]
+public class TransferController(
+    [FromKeyedServices("TransferClient")] PayOSClient client,
+    ITransferStore transferStore) : ControllerBase
 {
     private readonly PayOSClient _client = client;
+    private readonly ITransferStore _transferStore = transferStore;
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Transfer>> Get(string id)
     {
         try
         {
-            var transfer = TransferService.GetTransferById(id);
+            var transfer = _transferStore.GetTransferById(id);
             Payout payout;
             if (transfer == null)
             {
@@ -42,7 +46,7 @@ public class TransferController([FromKeyedServices("TransferClient")] PayOSClien
             {
                 payout = await _client.Payouts.GetAsync(transfer.PayoutId);
             }
-            TransferService.UpdateTransfer(id, MapPayoutToTransfer(payout));
+            _transferStore.UpdateTransfer(id, MapPayoutToTransfer(payout));
             return Ok(transfer);
         }
         catch (Exception ex)
@@ -61,7 +65,7 @@ public class TransferController([FromKeyedServices("TransferClient")] PayOSClien
             var transfers = page.Data.Select(MapPayoutToTransfer).ToList();
             foreach (Transfer transfer in transfers)
             {
-                TransferService.UpdateTransfer(transfer.Id, transfer);
+                _transferStore.UpdateTransfer(transfer.Id, transfer);
             }
             return Ok(transfers);
         }
@@ -100,7 +104,7 @@ public class TransferController([FromKeyedServices("TransferClient")] PayOSClien
 
             var transfer = MapPayoutToTransfer(payoutResponse);
 
-            TransferService.CreateTransfer(transfer);
+            _transferStore.CreateTransfer(transfer);
 
             return CreatedAtAction(nameof(Get), new { id = transfer.Id }, transfer);
         }
@@ -143,7 +147,7 @@ public class TransferController([FromKeyedServices("TransferClient")] PayOSClien
 
             var batchTransfer = MapPayoutToTransfer(payoutResponse);
 
-            TransferService.CreateTransfer(batchTransfer);
+            _transferStore.CreateTransfer(batchTransfer);
 
             return CreatedAtAction(nameof(Get), new { id = batchTransfer.Id }, batchTransfer);
         }

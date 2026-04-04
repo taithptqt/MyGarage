@@ -1,4 +1,4 @@
-using MyGarage.Data;
+﻿using MyGarage.Data;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +7,7 @@ namespace MyGarage.Repositories
 {
     public class SalaryCoefficientRepository : GenericRepository<SalaryCoefficient>, ISalaryCoefficientRepository
     {
-        public SalaryCoefficientRepository(GarageContext context) : base(context)
+        public SalaryCoefficientRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -40,3 +40,4 @@ namespace MyGarage.Repositories
         }
     }
 }
+

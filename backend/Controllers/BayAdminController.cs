@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Data;
+using MyGarage.Interfaces;
 using MyGarage.Models;
 
 namespace MyGarage.Controllers;
@@ -23,16 +23,17 @@ public class BayAdminController : ControllerBase
         WriteIndented = true
     };
 
-    private readonly GarageContext _context;
+    private readonly IGarageContext _context;
     private readonly IWebHostEnvironment _environment;
 
-    public BayAdminController(GarageContext context, IWebHostEnvironment environment)
+    public BayAdminController(IGarageContext context, IWebHostEnvironment environment)
     {
         _context = context;
         _environment = environment;
     }
 
     [HttpGet("lookups")]
+    [HttpGet("~/api/admin/bays/lookups")]
     public async Task<IActionResult> GetLookups([FromQuery] int takeVehicles = 500)
     {
         takeVehicles = Math.Clamp(takeVehicles, 50, 5000);
@@ -90,6 +91,8 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("list")]
+    [HttpGet("bays")]
+    [HttpGet("~/api/admin/bays")]
     public async Task<IActionResult> GetList(
         [FromQuery] long? branchId,
         [FromQuery] string? search,
@@ -153,7 +156,22 @@ public class BayAdminController : ControllerBase
         });
     }
 
+    [HttpGet("bays/{id:long}")]
+    [HttpGet("~/api/admin/bays/{id:long}")]
+    public async Task<IActionResult> GetById(long id)
+    {
+        var rows = await BuildBayRowsAsync(includeHidden: true);
+        var bay = rows.FirstOrDefault(x => x.Id == id);
+        if (bay == null)
+        {
+            return NotFound(new { message = "Khoang khong ton tai." });
+        }
+
+        return Ok(MapBayListItem(bay));
+    }
+
     [HttpGet("summary")]
+    [HttpGet("~/api/admin/bays/summary")]
     public async Task<IActionResult> GetSummary([FromQuery] long? branchId)
     {
         var rows = await BuildBayRowsAsync(includeHidden: true);
@@ -252,6 +270,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("usage")]
+    [HttpGet("~/api/admin/bays/usage")]
     public async Task<IActionResult> GetUsage([FromQuery] long? branchId)
     {
         var rows = await BuildBayRowsAsync(includeHidden: false);
@@ -295,6 +314,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("layout")]
+    [HttpGet("~/api/admin/bays/layout")]
     public async Task<IActionResult> GetLayout([FromQuery] long? branchId)
     {
         var rows = await BuildBayRowsAsync(includeHidden: false);
@@ -352,6 +372,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("alerts")]
+    [HttpGet("~/api/admin/bays/alerts")]
     public async Task<IActionResult> GetAlerts([FromQuery] long? branchId)
     {
         var now = DateTime.UtcNow;
@@ -465,6 +486,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("bays/{id:long}/vehicles")]
+    [HttpGet("~/api/admin/bays/{id:long}/vehicles")]
     public async Task<IActionResult> GetBayVehicles(long id)
     {
         var settings = await ReadSettingsAsync();
@@ -492,6 +514,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("bays/{id:long}/history")]
+    [HttpGet("~/api/admin/bays/{id:long}/history")]
     public async Task<IActionResult> GetBayHistory(long id, [FromQuery] int take = 200)
     {
         take = Math.Clamp(take, 20, 2000);
@@ -540,6 +563,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpGet("suggestions")]
+    [HttpGet("~/api/admin/bays/suggestions")]
     public async Task<IActionResult> GetSuggestions(
         [FromQuery] long? vehicleId,
         [FromQuery] long? branchId,
@@ -665,6 +689,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays")]
+    [HttpPost("~/api/admin/bays")]
     public async Task<IActionResult> CreateBay([FromBody] BayUpsertRequest request)
     {
         if (request == null) return BadRequest(new { message = "Payload is required." });
@@ -721,6 +746,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPut("bays/{id:long}")]
+    [HttpPut("~/api/admin/bays/{id:long}")]
     public async Task<IActionResult> UpdateBay(long id, [FromBody] BayUpsertRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -763,6 +789,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/hide")]
+    [HttpDelete("~/api/admin/bays/{id:long}")]
     public async Task<IActionResult> HideBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -784,6 +811,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/lock")]
+    [HttpPut("~/api/admin/bays/{id:long}/locks")]
     public async Task<IActionResult> LockBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -798,6 +826,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/unlock")]
+    [HttpDelete("~/api/admin/bays/{id:long}/locks")]
     public async Task<IActionResult> UnlockBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -812,6 +841,8 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/status")]
+    [HttpPatch("bays/{id:long}/status")]
+    [HttpPatch("~/api/admin/bays/{id:long}/status")]
     public async Task<IActionResult> UpdateBayStatus(long id, [FromBody] UpdateBayStatusRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -845,6 +876,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/assign-vehicle")]
+    [HttpPost("~/api/admin/bays/{id:long}/vehicle-assignments")]
     public async Task<IActionResult> AssignVehicle(long id, [FromBody] AssignVehicleRequest request)
     {
         if (request.VehicleId <= 0) return BadRequest(new { message = "VehicleId is required." });
@@ -929,6 +961,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("bays/{id:long}/remove-vehicle")]
+    [HttpPost("~/api/admin/bays/{id:long}/vehicle-removals")]
     public async Task<IActionResult> RemoveVehicleFromBay(long id, [FromBody] RemoveVehicleRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
@@ -990,6 +1023,7 @@ public class BayAdminController : ControllerBase
     }
 
     [HttpPost("move-vehicle")]
+    [HttpPost("~/api/admin/bay-transfers")]
     public async Task<IActionResult> MoveVehicle([FromBody] MoveVehicleRequest request)
     {
         if (request.VehicleId <= 0) return BadRequest(new { message = "VehicleId is required." });

@@ -11,7 +11,7 @@ namespace MyGarage.Repositories
 {
     public class VoucherApprovalRequestRepository : GenericRepository<VoucherApprovalRequest>, IVoucherApprovalRequestRepository
     {
-        public VoucherApprovalRequestRepository(GarageContext context) : base(context)
+        public VoucherApprovalRequestRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -43,4 +43,5 @@ namespace MyGarage.Repositories
         }
     }
 }
+
 

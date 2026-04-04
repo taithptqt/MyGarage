@@ -8,7 +8,7 @@ using MyGarage.Interfaces;
 
 namespace MyGarage.Data;
 
-public partial class GarageContext : DbContext
+public partial class GarageContext : DbContext, IGarageContext
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
 

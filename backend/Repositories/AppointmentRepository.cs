@@ -12,7 +12,7 @@ namespace MyGarage.Repositories
 {
     public class AppointmentRepository : GenericRepository<Appointment>, IAppointmentRepository
     {
-        public AppointmentRepository(GarageContext context) : base(context)
+        public AppointmentRepository(IGarageContext context) : base(context)
         {
         }
 
@@ -27,10 +27,7 @@ namespace MyGarage.Repositories
                 .Include(a => a.BookingGroup)
                 .AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                query = query.Where(a => string.Equals(a.Status, status, StringComparison.OrdinalIgnoreCase));
-            }
+            query = ApplyStatusFilter(query, status);
 
             return await query
                 .OrderByDescending(a => a.StartTime)
@@ -45,7 +42,9 @@ namespace MyGarage.Repositories
                 .Where(a => a.BranchId == branchId
                          && a.StartTime >= dayStart
                          && a.StartTime < dayEnd
-                         && !string.Equals(a.Status, AppointmentStatuses.Canceled, StringComparison.OrdinalIgnoreCase))
+                         && (a.Status == null
+                             || (a.Status.ToUpper() != AppointmentStatuses.Canceled
+                                 && a.Status.ToUpper() != AppointmentStatuses.CancelledLegacy)))
                 .ToListAsync();
         }
 
@@ -72,12 +71,30 @@ namespace MyGarage.Repositories
                         .ThenInclude(m => m.Brand)
                 .Where(a => a.BranchId == branchId);
 
-            if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(a => string.Equals(a.Status, status, StringComparison.OrdinalIgnoreCase));
+            query = ApplyStatusFilter(query, status);
 
             return await query
                 .OrderByDescending(a => a.StartTime)
                 .ToListAsync();
+        }
+
+        private static IQueryable<Appointment> ApplyStatusFilter(IQueryable<Appointment> query, string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return query;
+            }
+
+            var normalized = status.Trim().ToUpperInvariant();
+            if (normalized == AppointmentStatuses.Canceled || normalized == AppointmentStatuses.CancelledLegacy)
+            {
+                return query.Where(a =>
+                    a.Status != null &&
+                    (a.Status.ToUpper() == AppointmentStatuses.Canceled ||
+                     a.Status.ToUpper() == AppointmentStatuses.CancelledLegacy));
+            }
+
+            return query.Where(a => a.Status != null && a.Status.ToUpper() == normalized);
         }
 
         public async Task<Appointment?> GetDetailedByIdAsync(long id)
@@ -93,3 +110,4 @@ namespace MyGarage.Repositories
         }
     }
 }
+

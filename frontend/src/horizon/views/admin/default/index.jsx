@@ -24,11 +24,14 @@
 import {
   Avatar,
   Box,
+  Button,
   Flex,
   FormLabel,
+  HStack,
   Icon,
   Select,
   SimpleGrid,
+  Text,
   useColorModeValue,
 } from "@chakra-ui/react";
 // Assets
@@ -57,13 +60,51 @@ import {
 } from "@horizon/views/admin/default/variables/columnsData";
 import tableDataCheck from "@horizon/views/admin/default/variables/tableDataCheck.json";
 import tableDataComplex from "@horizon/views/admin/default/variables/tableDataComplex.json";
+import { Link as RouterLink } from "react-router-dom";
 
 export default function UserReports() {
   // Chakra Color Mode
   const brandColor = useColorModeValue("brand.500", "white");
   const boxBg = useColorModeValue("secondaryGray.300", "whiteAlpha.100");
+  const quickCardBg = useColorModeValue("white", "navy.700");
+  const quickCardBorder = useColorModeValue("gray.100", "whiteAlpha.100");
+  const quickText = useColorModeValue("secondaryGray.700", "secondaryGray.300");
   return (
     <Box pt={{ base: "130px", md: "80px", xl: "80px" }}>
+      <Box
+        mb='20px'
+        p='20px'
+        bg={quickCardBg}
+        borderRadius='20px'
+        border='1px solid'
+        borderColor={quickCardBorder}>
+        <Flex
+          direction={{ base: "column", md: "row" }}
+          align={{ base: "start", md: "center" }}
+          justify='space-between'
+          gap='14px'>
+          <Box>
+            <Text fontSize='sm' color={quickText}>
+              Điều phối vận hành
+            </Text>
+            <Text fontSize='xl' fontWeight='700'>
+              Quản lý khoang
+            </Text>
+          </Box>
+          <HStack spacing='10px' flexWrap='wrap'>
+            <Button as={RouterLink} to='/admin/bays/list' size='sm' colorScheme='blue'>
+              Danh sách
+            </Button>
+            <Button as={RouterLink} to='/admin/bays/layout' size='sm' variant='outline'>
+              Sơ đồ
+            </Button>
+            <Button as={RouterLink} to='/admin/bays/alerts' size='sm' variant='outline'>
+              Cảnh báo
+            </Button>
+          </HStack>
+        </Flex>
+      </Box>
+
       <SimpleGrid
         columns={{ base: 1, md: 2, lg: 3, "2xl": 6 }}
         gap='20px'

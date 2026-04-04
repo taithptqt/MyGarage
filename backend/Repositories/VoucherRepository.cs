@@ -7,8 +7,9 @@ namespace MyGarage.Repositories
 {
     public class VoucherRepository : GenericRepository<Voucher>, IVoucherRepository
     {
-        public VoucherRepository(GarageContext context) : base(context)
+        public VoucherRepository(IGarageContext context) : base(context)
         {
         }
     }
 }
+

@@ -29,11 +29,11 @@ export async function confirmAppointment(id) {
   });
 }
 
-export async function checkInAppointment(id) {
+export async function checkInAppointment(id, payload) {
   return request({
     url: APPOINTMENTS_ROUTES.status(id),
     method: "PATCH",
-    data: { status: "CHECKED_IN" },
+    data: { status: "CHECKED_IN", arrivedAt: payload?.arrivedAt },
   });
 }
 

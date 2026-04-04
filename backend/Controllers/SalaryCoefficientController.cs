@@ -12,7 +12,7 @@ using MyGarage.Models;
 namespace MyGarage.Controllers
 {
     [Authorize(Roles = "Staff")]
-    [Route("api/[controller]")]
+    [Route("api/salary-coefficients")]
     [ApiController]
     public class SalaryCoefficientController : ControllerBase
     {

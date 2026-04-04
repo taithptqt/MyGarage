@@ -5,21 +5,20 @@ using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
-using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 
 namespace MyGarage.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/audit-logs")]
     [ApiController]
     public class AuditLogController : ControllerBase
     {
         private readonly IAuditLogService _auditLogService;
-        private readonly GarageContext _context;
+        private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
-        public AuditLogController(IAuditLogService auditLogService, GarageContext context, IMapper mapper)
+        public AuditLogController(IAuditLogService auditLogService, IGarageContext context, IMapper mapper)
         {
             _auditLogService = auditLogService;
             _context = context;
@@ -27,6 +26,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("admin-changes")]
+        [HttpGet("entries")]
         public async Task<IActionResult> GetAdminChanges(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
