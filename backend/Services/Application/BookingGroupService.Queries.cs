@@ -20,11 +20,11 @@ namespace MyGarage.Services
                 .AsNoTracking()
                 .Include(a => a.Branch)
                 .Include(a => a.Customer)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.Vehicle)
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)
-                .Where(a => a.BookingGroupId == group.Id)
+                .Where(a => a.GroupSessionId == group.Id)
                 .OrderBy(a => a.StartTime)
                 .ToListAsync();
 

@@ -355,7 +355,7 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Appointm__3214EC0762F6D2AE");
 
-            entity.HasIndex(e => e.BookingGroupId, "IX_Appointments_BookingGroupId");
+            entity.HasIndex(e => e.GroupSessionId, "IX_Appointments_BookingGroupId");
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
@@ -371,8 +371,8 @@ public partial class GarageContext : DbContext, IGarageContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Appointme__Branc__1B29035F");
 
-            entity.HasOne(d => d.BookingGroup).WithMany(p => p.Appointments)
-                .HasForeignKey(d => d.BookingGroupId)
+            entity.HasOne(d => d.GroupSession).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.GroupSessionId)
                 .HasConstraintName("FK_Appointments_BookingGroupId");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Appointments)
@@ -403,7 +403,9 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_BookingGroups_Status_CreatedAt");
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
-            entity.Property(e => e.ConfirmedAppointments).HasDefaultValue(0);
+            entity.Property(e => e.ConfirmedAppointments)
+                .HasDefaultValue(0)
+                .HasColumnName("ConfirmedItems");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.GroupCode)
                 .HasMaxLength(50)
@@ -412,14 +414,18 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasMaxLength(30)
                 .IsUnicode(false)
                 .HasDefaultValue("PENDING");
-            entity.Property(e => e.TotalAppointments).HasDefaultValue(0);
-            entity.Property(e => e.CanceledAppointments).HasDefaultValue(0);
+            entity.Property(e => e.TotalAppointments)
+                .HasDefaultValue(0)
+                .HasColumnName("TotalItems");
+            entity.Property(e => e.CanceledAppointments)
+                .HasDefaultValue(0)
+                .HasColumnName("CanceledItems");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
-            entity.ToTable(tb =>
+            entity.ToTable("GroupSessions", tb =>
             {
                 tb.HasCheckConstraint("CK_BookingGroups_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
-                tb.HasCheckConstraint("CK_BookingGroups_AppointmentCounters", "[TotalAppointments] >= 0 AND [ConfirmedAppointments] >= 0 AND [CanceledAppointments] >= 0 AND [ConfirmedAppointments] + [CanceledAppointments] <= [TotalAppointments]");
+                tb.HasCheckConstraint("CK_GroupSessions_ItemCounters", "[TotalItems] >= 0 AND [ConfirmedItems] >= 0 AND [CanceledItems] >= 0 AND [ConfirmedItems] + [CanceledItems] <= [TotalItems]");
             });
 
             entity.HasOne(d => d.Branch).WithMany(p => p.BookingGroups)
@@ -2058,6 +2064,8 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__ServiceO__3214EC07A6BCD573");
 
+            entity.HasIndex(e => e.GroupSessionId, "IX_ServiceOrders_GroupSessionId");
+
             entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_ServiceOrders_Status_CreatedAt");
 
             entity.HasIndex(e => e.Code, "UQ__ServiceO__A25C5AA7FBF72344").IsUnique();
@@ -2122,6 +2130,10 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.Appointment).WithMany(p => p.ServiceOrders)
                 .HasForeignKey(d => d.AppointmentId)
                 .HasConstraintName("FK__ServiceOr__Appoi__53385258");
+
+            entity.HasOne(d => d.GroupSession).WithMany(p => p.ServiceOrders)
+                .HasForeignKey(d => d.GroupSessionId)
+                .HasConstraintName("FK_ServiceOrders_GroupSessionId");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.ServiceOrderCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
@@ -2460,6 +2472,9 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.FullName).HasMaxLength(255);
+            entity.Property(e => e.GoogleId)
+                .HasMaxLength(255)
+                .IsUnicode(false);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.IsLockedOut).HasDefaultValue(false);
             entity.Property(e => e.PasswordHash)

@@ -52,7 +52,7 @@ namespace MyGarage.Services
             }
 
             var appointments = await _context.Appointments
-                .Where(a => a.BookingGroupId == bookingGroupId)
+                .Where(a => a.GroupSessionId == bookingGroupId)
                 .Include(a => a.Vehicle)
                 .OrderBy(a => a.StartTime)
                 .ToListAsync();

@@ -18,7 +18,7 @@ namespace MyGarage.Services
         {
             ApplyUpdateAudit(appointment, actorStaffId);
             var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
+            await _bookingGroupService.SyncCountersAsync(updated?.GroupSessionId, actorStaffId);
             return updated;
         }
     }

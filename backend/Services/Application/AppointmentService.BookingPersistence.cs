@@ -40,7 +40,7 @@ namespace MyGarage.Services
                     BranchId = dto.BranchId,
                     CustomerId = actualCustomerId,
                     VehicleId = vehicleId,
-                    BookingGroupId = bookingGroupId,
+                    GroupSessionId = bookingGroupId,
                     CreatedBy = actorStaffId,
                     StartTime = requestedStartAt,
                     EndTime = requestedEndAt,

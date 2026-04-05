@@ -31,8 +31,7 @@ const TEXT = {
   backToList: "V\u1ec1 danh s\u00e1ch l\u1ecbch h\u1eb9n",
   createAnother: "T\u1ea1o l\u1ecbch h\u1eb9n kh\u00e1c",
   infoTitle: "Th\u00f4ng tin \u0111\u1eb7t l\u1ecbch",
-  infoNote:
-    "\u0110i\u1ec1n \u0111\u1ea7y \u0111\u1ee7 th\u00f4ng tin kh\u00e1ch h\u00e0ng, xe v\u00e0 d\u1ecbch v\u1ee5 \u0111\u1ec3 t\u1ea1o l\u1ecbch h\u1eb9n theo \u0111\u00fang lu\u1ed3ng \u0111\u1eb7t l\u1ecbch c\u1ee7a kh\u00e1ch h\u00e0ng.",
+  infoNote: "",
   submit: "X\u00e1c nh\u1eadn \u0111\u1eb7t l\u1ecbch",
 };
 
@@ -80,7 +79,7 @@ export default function ReceptionCreateAppointmentPage() {
     setError("");
     try {
       const [customerRes, vehicleRes, customerVehicleRes, serviceRes, serviceCategoryRes] = await Promise.all([
-        getAllCustomers(effectiveBranchId || undefined),
+        getAllCustomers(),
         getAllVehicles(),
         getAllCustomerVehicles(),
         getAllStandardServices(),
@@ -152,11 +151,14 @@ export default function ReceptionCreateAppointmentPage() {
 
   return (
     <div className="create-order-page reception-create-appointment-page">
-      <div className="page-header-actions">
+      <div className="page-header-actions reception-create-header">
         <button className="btn-back" type="button" onClick={handleGoBack}>
           {TEXT.back}
         </button>
-        <h2 className="page-title">{TEXT.pageTitle}</h2>
+        <div className="reception-create-header-copy">
+          <h2 className="page-title">{TEXT.pageTitle}</h2>
+          {TEXT.infoNote ? <p className="reception-create-header-note">{TEXT.infoNote}</p> : null}
+        </div>
       </div>
 
       {!canSubmit && <div className="validation-summary">{TEXT.needBranch}</div>}
@@ -206,8 +208,6 @@ export default function ReceptionCreateAppointmentPage() {
         </section>
       ) : (
         <section className="form-section reception-create-appointment-form">
-          <h3 className="section-title">{TEXT.infoTitle}</h3>
-          <p className="reception-create-appointment-note">{TEXT.infoNote}</p>
           <ReceptionCreateAppointmentForm
             key={formKey}
             customers={customers}
@@ -215,6 +215,7 @@ export default function ReceptionCreateAppointmentPage() {
             customerVehicles={customerVehicles}
             serviceCategories={serviceCategories}
             services={services}
+            branchId={effectiveBranchId}
             onSubmit={handleSubmit}
             onCancel={handleGoBack}
             loading={saving}

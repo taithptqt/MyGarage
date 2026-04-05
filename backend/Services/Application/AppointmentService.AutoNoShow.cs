@@ -109,9 +109,9 @@ namespace MyGarage.Services
                     autoNoShowAppointments.Add(appointment);
                     AddNoShowDelta(customerNoShowDeltas, appointment.CustomerId);
 
-                    if (appointment.BookingGroupId.HasValue)
+                    if (appointment.GroupSessionId.HasValue)
                     {
-                        groupIds.Add(appointment.BookingGroupId.Value);
+                        groupIds.Add(appointment.GroupSessionId.Value);
                     }
 
                     hasAuxiliaryChanges |= TryQueueLifecycleNotification(
@@ -139,9 +139,9 @@ namespace MyGarage.Services
 
                     hasStatusChanges = true;
 
-                    if (appointment.BookingGroupId.HasValue)
+                    if (appointment.GroupSessionId.HasValue)
                     {
-                        groupIds.Add(appointment.BookingGroupId.Value);
+                        groupIds.Add(appointment.GroupSessionId.Value);
                     }
                 }
             }

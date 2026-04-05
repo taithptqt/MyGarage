@@ -23,6 +23,10 @@ const DateTimePicker = ({
   placeholder = "Chọn ngày và giờ",
   minDate,
   showTime = true,
+  buttonMinH = "45px",
+  buttonMaxW = "360px",
+  iconColor = "#c5a059",
+  iconSize = "20px",
 }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState("08");
@@ -100,8 +104,8 @@ const DateTimePicker = ({
         <Button
           type="button"
           w="100%"
-          maxW="360px"
-          minH="45px"
+          maxW={buttonMaxW}
+          minH={buttonMinH}
           p="0 13px"
           bg="#ffffff"
           border="1px solid rgba(29, 42, 38, 0.2)"
@@ -136,7 +140,7 @@ const DateTimePicker = ({
           >
             {formatDisplay() || placeholder}
           </Text>
-          <Icon as={MdEvent} boxSize="20px" color="#c5a059" />
+          <Icon as={MdEvent} boxSize={iconSize} color={iconColor} />
         </Button>
       </PopoverTrigger>
 

@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Requests.Service
         public long VehicleId { get; set; }
         public long ExecuteBranchId { get; set; }
         public long? AppointmentId { get; set; }
+        public long? GroupSessionId { get; set; }
         public string? CustomerNotes { get; set; }
         public string? OrderCategory { get; set; } // e.g., Maintenance, Repair, Warranty
     }

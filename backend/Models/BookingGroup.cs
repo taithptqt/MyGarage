@@ -39,6 +39,8 @@ public partial class BookingGroup
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<ServiceOrder> ServiceOrders { get; set; } = new List<ServiceOrder>();
+
     public virtual Branch Branch { get; set; } = null!;
 
     public virtual Staff? CreatedByNavigation { get; set; }

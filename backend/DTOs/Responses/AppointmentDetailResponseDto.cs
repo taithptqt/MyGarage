@@ -14,6 +14,7 @@ namespace MyGarage.DTOs.Responses
         public long? VehicleId { get; set; }
         public string? VehicleLicensePlate { get; set; }
         public string? VehicleModelName { get; set; }
+        public long? GroupSessionId { get; set; }
         public long? BookingGroupId { get; set; }
         public string? BookingGroupCode { get; set; }
         public string? BookingGroupStatus { get; set; }

@@ -25,6 +25,13 @@ const AUTH_HIGHLIGHTS = [
   },
 ];
 
+const PHONE_REQUEST_CODE = "PHONE_REQUEST";
+const PHONE_REQUEST_STAFF_CODE = `${PHONE_REQUEST_CODE}:STAFF`;
+const GOOGLE_PHONE_ROLE = {
+  CUSTOMER: "CUSTOMER",
+  STAFF: "STAFF",
+};
+
 function AuthPage() {
   const phoneRegex = /^(0\d{9,10}|\+84\d{9,10})$/;
   const navigate = useNavigate();
@@ -51,8 +58,10 @@ function AuthPage() {
   const [pendingGoogleToken, setPendingGoogleToken] = useState("");
   const [needGooglePhone, setNeedGooglePhone] = useState(false);
   const [googlePhone, setGooglePhone] = useState("");
+  const [pendingGoogleRole, setPendingGoogleRole] = useState(GOOGLE_PHONE_ROLE.CUSTOMER);
   const [locationDenied, setLocationDenied] = useState(false);
   const requestedPath = location?.state?.from?.pathname || "";
+  const isStaffPhoneRequest = pendingGoogleRole === GOOGLE_PHONE_ROLE.STAFF;
 
   useEffect(() => {
     document.title = mode === "login" ? "Đăng nhập | MyGarage" : "Đăng ký | MyGarage";
@@ -183,14 +192,21 @@ function AuthPage() {
       setNeedGooglePhone(false);
       setPendingGoogleToken("");
       setGooglePhone("");
+      setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
       const msg = apiError?.message || "Đăng nhập Google thất bại.";
-      if (String(msg).includes("PHONE_REQUIRED")) {
+      const normalizedMessage = String(msg).toUpperCase();
+      if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
         setNeedGooglePhone(true);
         setPendingGoogleToken(idToken);
-        setError("Chào mừng! Vui lòng nhập số điện thoại để chúng tôi tìm lịch sử sửa xe của bạn.");
+        setPendingGoogleRole(
+          normalizedMessage.includes(PHONE_REQUEST_STAFF_CODE)
+            ? GOOGLE_PHONE_ROLE.STAFF
+            : GOOGLE_PHONE_ROLE.CUSTOMER
+        );
+        setError("");
       } else {
         setNeedGooglePhone(false);
         setError(msg);
@@ -220,10 +236,24 @@ function AuthPage() {
       setNeedGooglePhone(false);
       setPendingGoogleToken("");
       setGooglePhone("");
+      setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
-      setError(apiError?.message || "Liên kết số điện thoại thất bại.");
+      const msg = apiError?.message || "Liên kết số điện thoại thất bại.";
+      const normalizedMessage = String(msg).toUpperCase();
+      if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
+        setNeedGooglePhone(true);
+        setPendingGoogleRole(
+          normalizedMessage.includes(PHONE_REQUEST_STAFF_CODE)
+            ? GOOGLE_PHONE_ROLE.STAFF
+            : GOOGLE_PHONE_ROLE.CUSTOMER
+        );
+        setError("");
+      } else {
+        setNeedGooglePhone(false);
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -234,6 +264,7 @@ function AuthPage() {
     setNeedGooglePhone(false);
     setPendingGoogleToken("");
     setGooglePhone("");
+    setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
     setError("");
   };
 
@@ -361,10 +392,16 @@ function AuthPage() {
       {needGooglePhone && (
         <div className="phone-modal-backdrop" onClick={closeGooglePhoneModal}>
           <div className="phone-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Liên kết số điện thoại</h3>
-            <p>Chào mừng! Vui lòng nhập số điện thoại để chúng tôi tìm lịch sử sửa xe của bạn.</p>
+            <h3>{isStaffPhoneRequest ? "Cập nhật số điện thoại nhân viên" : "Liên kết số điện thoại"}</h3>
+            <p>
+              {isStaffPhoneRequest
+                ? "Tài khoản nhân viên của bạn chưa có số điện thoại. Vui lòng nhập để hoàn tất đăng nhập Google."
+                : "Chào mừng! Vui lòng nhập số điện thoại để chúng tôi tìm lịch sử sửa xe của bạn."}
+            </p>
             <form onSubmit={handleGooglePhoneConfirm} className="form">
-              <label htmlFor="google-phone">Số điện thoại</label>
+              <label htmlFor="google-phone">
+                {isStaffPhoneRequest ? "Số điện thoại nhân viên" : "Số điện thoại"}
+              </label>
               <input
                 id="google-phone"
                 type="tel"
@@ -381,7 +418,7 @@ function AuthPage() {
                   Hủy
                 </button>
                 <button type="submit" disabled={loading || !googlePhone.trim()}>
-                  {loading ? "Đang xử lý..." : "Xác nhận"}
+                  {loading ? "Đang xử lý..." : isStaffPhoneRequest ? "Cập nhật" : "Xác nhận"}
                 </button>
               </div>
             </form>

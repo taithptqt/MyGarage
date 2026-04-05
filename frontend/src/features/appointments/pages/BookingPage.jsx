@@ -1518,7 +1518,7 @@ export default function BookingPage() {
               <div className="booking-card">
                 <header className="booking-card-head"><h2>Bước 2: Phân loại dịch vụ</h2></header>
                 {multi.vehicles.length > 1 ? <div className="booking-scope-switch"><button type="button" className={!step2VehicleKey ? "active" : ""} onClick={() => { setStep2VehicleKey(""); dispatch({ type: "SET_SERVICE_MODE", payload: SERVICE_MODE.SHARED }); }}>Dùng chung tất cả xe</button><button type="button" className={step2VehicleKey ? "active" : ""} onClick={() => { if (!step2VehicleKey && multi.vehicles[0]) setStep2VehicleKey(multi.vehicles[0].key); dispatch({ type: "SET_SERVICE_MODE", payload: SERVICE_MODE.SHARED }); }}>Tùy chỉnh theo từng xe</button></div> : null}
-                {multi.vehicles.length > 1 ? <div className="selected-category-tabs vehicle-tabs step2-vehicle-tabs">{multi.vehicles.map((vehicle) => <div key={`step2-${vehicle.key}`} className={`selected-category-tab ${step2Vehicle?.key === vehicle.key ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setStep2VehicleKey(vehicle.key)}>{vehicle.displayLabel}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); handleRemoveVehicle(vehicle.key); }}>x</button></div>)}</div> : null}
+                {multi.vehicles.length > 1 ? <div className="selected-category-tabs vehicle-tabs step2-vehicle-tabs">{multi.vehicles.map((vehicle) => <div key={`step2-${vehicle.key}`} className={`selected-category-tab ${step2Vehicle?.key === vehicle.key ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setStep2VehicleKey(vehicle.key)}>{vehicle.displayLabel}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); handleRemoveVehicle(vehicle.key); }}>Xóa</button></div>)}</div> : null}
                 <div className="category-grid">{categories.map((item) => { const id = Number(extractField(item, ["id", "Id"])); const selected = step2Vehicle ? getEffectiveCategoryIds(step2Vehicle).includes(id) : multi.sharedCategoryIds.includes(id); return <button key={id} type="button" className={`category-card ${selected ? "selected" : ""}`} onClick={() => { if (step2Vehicle) toggleVehicleCategory(step2Vehicle, id); else toggleSharedCategory(id); }}><span className="category-icon">{iconByIndex(id || 0)}</span><h3>{extractField(item, ["name", "Name"], "")}</h3></button>; })}</div>
               </div>
             ) : null}
@@ -1528,7 +1528,7 @@ export default function BookingPage() {
                 <header className="booking-card-head"><h2>Bước 3: Chi tiết dịch vụ</h2></header>
                 <>
                   {multi.vehicles.length > 1 ? <div className="booking-scope-switch"><button type="button" className={!step3VehicleKey ? "active" : ""} onClick={() => setStep3VehicleKey("")}>Dùng chung tất cả xe</button><button type="button" className={step3VehicleKey ? "active" : ""} onClick={() => { if (!step3VehicleKey && multi.vehicles[0]) setStep3VehicleKey(multi.vehicles[0].key); }}>Tùy chỉnh theo từng xe</button></div> : null}
-                  {multi.vehicles.length > 1 ? <div className="selected-category-tabs vehicle-tabs step3-vehicle-tabs">{multi.vehicles.map((vehicle) => <div key={`step3-${vehicle.key}`} className={`selected-category-tab ${step3Vehicle?.key === vehicle.key ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setStep3VehicleKey(vehicle.key)}>{vehicle.displayLabel}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); handleRemoveVehicle(vehicle.key); }}>x</button></div>)}</div> : null}
+                  {multi.vehicles.length > 1 ? <div className="selected-category-tabs vehicle-tabs step3-vehicle-tabs">{multi.vehicles.map((vehicle) => <div key={`step3-${vehicle.key}`} className={`selected-category-tab ${step3Vehicle?.key === vehicle.key ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setStep3VehicleKey(vehicle.key)}>{vehicle.displayLabel}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); handleRemoveVehicle(vehicle.key); }}>Xóa</button></div>)}</div> : null}
                   <div className="selected-category-tabs">{step3CategoryIds.map((id) => <div key={`cat-${id}`} className={`selected-category-tab ${String(activeCategoryId) === String(id) ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setActiveCategoryId(String(id))}>{extractField(categories.find((item) => Number(extractField(item, ["id", "Id"])) === Number(id)), ["name", "Name"], "") || `Nhóm ${id}`}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); if (step3Vehicle) toggleVehicleCategory(step3Vehicle, id); else toggleSharedCategory(id); }}>x</button></div>)}</div>
                   <div className="service-list">{servicesByCategory.map((service) => { const id = Number(extractField(service, ["id", "Id"])); const selected = step3Vehicle ? getEffectiveServiceIds(step3Vehicle).includes(id) : multi.sharedServiceIds.includes(id); const minutes = Number(extractField(service, ["standardMinutes", "StandardMinutes"], 0) || 0); return <button key={id} type="button" className={`service-card ${selected ? "selected" : ""}`} onClick={() => toggleService(id)}><span className="service-icon">{iconByIndex(id || 0)}</span><div className="service-card-body"><h3>{extractField(service, ["name", "Name"], "")}</h3><small>{minutes > 0 ? `${minutes} phút` : "Chưa có thời lượng"}</small></div><aside className="service-card-side"><strong>{formatVnd(extractField(service, ["basePrice", "BasePrice"], 0))}</strong></aside></button>; })}</div>
                 </>
@@ -1549,6 +1549,9 @@ export default function BookingPage() {
                       value={effectiveSelectedDate ? `${effectiveSelectedDate}T08:00:00` : ""}
                       minDate={new Date()}
                       showTime={false}
+                      buttonMinH="40px"
+                      iconColor="#2f6bd8"
+                      iconSize="18px"
                       onChange={(value) => {
                         const nextDate = String(value || "").slice(0, 10);
                         if (multi.slotMode === SLOT_MODE.INDIVIDUAL && activeVehicle?.key) {
@@ -1568,7 +1571,7 @@ export default function BookingPage() {
                     slotsLoading ? <div className="booking-empty">Đang tải khung giờ...</div> : (
                       <>
                         <div className="session-tabs">{SESSION_TABS.map((tab) => <button key={tab.key} type="button" className={`session-tab ${activeSession === tab.key ? "active" : ""}`} onClick={() => setActiveSession(tab.key)}><strong>{tab.label}</strong><small>{tab.hint}</small></button>)}</div>
-                        {(slotsBySession[activeSession] || []).length > 0 ? <div className="slot-actions"><button type="button" className="slot-expand-toggle" onClick={() => toggleOddSlotsForSession(activeSession)}>{showOddSlots[activeSession] ? "Ẩn giờ lẻ" : "Xem thêm giờ lẻ"}</button></div> : null}
+                        {(slotsBySession[activeSession] || []).length > 0 ? <div className="slot-actions"><button type="button" className="slot-expand-toggle" onClick={() => toggleOddSlotsForSession(activeSession)}>{showOddSlots[activeSession] ? "Ẩn" : "Xem thêm"}</button></div> : null}
                         <div className="slot-grid">{displayedSlots.map((slot) => {
                           const start = extractField(slot, ["startTime", "StartTime"]);
                           const end = extractField(slot, ["endTime", "EndTime"]);
@@ -1730,6 +1733,7 @@ export default function BookingPage() {
     </div>
   );
 }
+
 
 
 

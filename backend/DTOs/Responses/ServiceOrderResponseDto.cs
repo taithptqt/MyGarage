@@ -11,6 +11,7 @@ namespace MyGarage.DTOs.Responses
         public string? GuestPhone { get; set; }
         public string? GuestVehicleInfo { get; set; }
         public long? AppointmentId { get; set; }
+        public long? GroupSessionId { get; set; }
         public long OriginBranchId { get; set; }
         public long ExecuteBranchId { get; set; }
         public long? OriginalServiceOrderId { get; set; }

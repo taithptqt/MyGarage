@@ -640,76 +640,60 @@ label,
 
 .booking-scope-switch {
   margin-top: 10px;
-  display: inline-flex;
-  border: 1px solid rgba(29, 42, 38, 0.2);
-  border-radius: 999px;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(8px);
-  gap: 0;
-  align-items: stretch;
-  overflow: hidden;
-  height: 42px;
+  margin-bottom: 10px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #d3e0f1;
+  border-radius: 10px;
+  background: #edf3fb;
+  width: fit-content;
 }
 
 .booking-scope-switch button {
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
-  color: rgba(29, 42, 38, 0.72);
-  padding: 0 22px;
-  font-size: 16px;
+  color: #446286;
+  padding: 5px 10px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  border-radius: 0;
-  transition: transform 0.14s ease, background-color 0.14s ease, color 0.14s ease;
-  display: flex;
+  border-radius: 7px;
+  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  height: 100%;
+  min-width: 132px;
+  min-height: 33px;
   white-space: nowrap;
-  line-height: 1.1;
+  line-height: 1.15;
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   appearance: none;
   -webkit-appearance: none;
-  transform-origin: center center;
-  margin: 0;
-  position: relative;
-  top: 0;
-  vertical-align: top;
-}
-
-.booking-scope-switch button:first-child {
-  border-top-left-radius: 999px;
-  border-bottom-left-radius: 999px;
-}
-
-.booking-scope-switch button:last-child {
-  border-top-right-radius: 999px;
-  border-bottom-right-radius: 999px;
 }
 
 .booking-scope-switch button:hover:not(.active) {
-  color: rgba(29, 42, 38, 0.72);
-  background: transparent;
+  color: #2f4f78;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .booking-scope-switch button.active {
-  background: #f2ede3;
-  color: #8a6a2e;
-  box-shadow: none;
-  font-weight: 800;
-  font-size: 17px;
-  transform: none;
-  top: 0;
-  height: 100%;
+  border-color: #c3d4ed;
+  background: #ffffff;
+  color: #173c73;
+  box-shadow: 0 3px 10px rgba(23, 60, 115, 0.12);
 }
 
 .booking-scope-switch button:active,
 .booking-scope-switch button:focus,
 .booking-scope-switch button:focus-visible {
   outline: none;
-  box-shadow: none;
+}
+
+.booking-scope-switch button:focus-visible {
+  border-color: #9eb9de;
+  box-shadow: 0 0 0 2px rgba(119, 160, 223, 0.25);
 }
 
 .vehicle-batch-note {
@@ -1002,6 +986,90 @@ label,
   padding: 10px 16px;
 }
 
+.vehicle-new-form-grid {
+  margin-top: 10px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.vehicle-new-field {
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #566d90;
+}
+
+.vehicle-new-field span {
+  color: #566d90;
+}
+
+.vehicle-new-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vehicle-new-label em {
+  font-style: normal;
+}
+
+.vehicle-new-form-grid input,
+.vehicle-new-form-grid select {
+  min-height: 46px;
+  border-color: #c9d2e0;
+  background: #f7f9fc;
+}
+
+.vehicle-new-form-grid input::placeholder {
+  color: #7a8faa;
+}
+
+.vehicle-new-form-grid select:disabled {
+  color: #98a9c1;
+  background: #f1f5fa;
+  cursor: not-allowed;
+}
+
+.vehicle-new-field-plate {
+  grid-column: 1 / -1;
+}
+
+.vehicle-new-field-brand {
+  grid-column: span 6;
+}
+
+.vehicle-new-field-model {
+  grid-column: span 6;
+}
+
+.vehicle-new-row-bottom {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 3.2fr) minmax(0, 3.8fr) minmax(0, 5fr);
+  gap: 14px 12px;
+  align-items: start;
+}
+
+.vehicle-new-row-bottom .vehicle-new-field-color,
+.vehicle-new-row-bottom .vehicle-new-field-year,
+.vehicle-new-row-bottom .vehicle-new-field-vin {
+  grid-column: auto;
+  min-width: 0;
+}
+
+.vehicle-new-row-bottom .vehicle-new-field-year {
+  white-space: nowrap;
+}
+
+.vehicle-new-row-bottom .vehicle-new-field-year select {
+  width: 100%;
+  max-width: 100%;
+}
+
+.vehicle-new-row-bottom .vehicle-new-field-vin input {
+  width: 100%;
+}
+
 .vehicle-custom-grid {
   margin-top: 12px;
   display: grid;
@@ -1029,13 +1097,17 @@ label,
 .step2-vehicle-tabs {
   margin-top: 10px;
   margin-bottom: 6px;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .step3-vehicle-tabs {
   margin-top: 10px;
   margin-bottom: 6px;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 
@@ -1043,31 +1115,41 @@ label,
 .step3-vehicle-tabs .selected-category-tab {
   border: 1px solid rgba(29, 42, 38, 0.2);
   background: rgba(243, 248, 255, 0.92);
-  border-radius: 999px;
-  padding: 0;
-  min-height: 40px;
-  display: inline-flex;
+  border-radius: 14px;
+  min-height: 52px;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 0;
+  gap: 10px;
+  padding: 6px 10px;
 }
 
 .step2-vehicle-tabs .selected-category-tab-main,
 .step3-vehicle-tabs .selected-category-tab-main {
-  padding: 8px 14px 8px 14px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  justify-content: flex-start;
+  padding: 6px 8px;
   font-size: 16px;
   font-weight: 700;
   color: #1d2a26;
-  line-height: 1.1;
+  line-height: 1.25;
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .step2-vehicle-tabs .selected-category-tab-remove,
 .step3-vehicle-tabs .selected-category-tab-remove {
-  width: 21px;
-  height: 21px;
-  margin-right: 2px;
+  width: auto;
+  height: 30px;
+  margin-right: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  transform: none;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .step2-vehicle-tabs .selected-category-tab.active,
@@ -1946,6 +2028,30 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     grid-template-columns: 1fr;
   }
 
+  .vehicle-new-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vehicle-new-row-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vehicle-new-row-bottom .vehicle-new-field-vin {
+    grid-column: 1 / -1;
+  }
+
+  .vehicle-new-field-plate,
+  .vehicle-new-field-vin {
+    grid-column: 1 / -1;
+  }
+
+  .vehicle-new-field-brand,
+  .vehicle-new-field-model,
+  .vehicle-new-field-color,
+  .vehicle-new-field-year {
+    grid-column: span 1;
+  }
+
   .session-tabs {
     grid-template-columns: 1fr;
   }
@@ -1977,6 +2083,25 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
   .summary-card-large .summary-total {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .vehicle-new-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-new-row-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-new-field-plate,
+  .vehicle-new-field-brand,
+  .vehicle-new-field-model,
+  .vehicle-new-field-color,
+  .vehicle-new-field-year,
+  .vehicle-new-field-vin {
+    grid-column: 1 / -1;
   }
 }
 

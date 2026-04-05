@@ -32,4 +32,5 @@ export const INITIAL_NEW_VEHICLE_FORM = {
   licensePlate: "",
   vin: "",
   color: "",
+  manufactureYear: "",
 };

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { extractField, formatStoredVehicleLabel } from "@features/appointments/utils/bookingCommon";
 
 export default function VehicleActionPanel({
@@ -16,6 +16,7 @@ export default function VehicleActionPanel({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isNewVehicleFormVisible, setIsNewVehicleFormVisible] = useState(false);
+  const savedVehiclePopupRef = useRef(null);
 
   const selectedExistingKeys = useMemo(
     () => new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
@@ -37,6 +38,32 @@ export default function VehicleActionPanel({
       ),
     [draftVehicle.brandId, models]
   );
+  const manufactureYearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= 1980; year -= 1) {
+      years.push(year);
+    }
+    return years;
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    function handleOutsidePointerDown(event) {
+      if (!savedVehiclePopupRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsidePointerDown);
+    document.addEventListener("touchstart", handleOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsidePointerDown);
+      document.removeEventListener("touchstart", handleOutsidePointerDown);
+    };
+  }, [isOpen]);
 
   function handleOpenNewVehicleForm() {
     setIsNewVehicleFormVisible(true);
@@ -116,7 +143,7 @@ export default function VehicleActionPanel({
 
       {isOpen ? (
         <div className="vehicle-popup-backdrop" onClick={() => setIsOpen(false)}>
-          <div className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
+          <div ref={savedVehiclePopupRef} className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
             <div className="vehicle-popup-head">
               <div className="vehicle-popup-head-text">
                 <h5>Chọn xe đã lưu lại</h5>
@@ -160,17 +187,17 @@ export default function VehicleActionPanel({
 
       {isNewVehicleFormVisible ? (
         <>
-          <div className="form-grid step4-form-grid">
-            <label>
-              Biển số xe <span>*</span>
+          <div className="form-grid step4-form-grid vehicle-new-form-grid">
+            <label className="vehicle-new-field vehicle-new-field-plate">
+              Biển số xe mới <span>*</span>
               <input
                 type="text"
                 value={draftVehicle.licensePlate}
                 onChange={(e) => onDraftChange("licensePlate", e.target.value)}
-                placeholder="Nhập biển số xe"
+                placeholder="VD: 30A-12345"
               />
             </label>
-            <label>
+            <label className="vehicle-new-field vehicle-new-field-brand">
               Hãng xe <span>*</span>
               <select
                 value={draftVehicle.brandId}
@@ -179,7 +206,7 @@ export default function VehicleActionPanel({
                   onDraftChange("modelId", "");
                 }}
               >
-                <option value="">Chọn hãng xe</option>
+                <option value="">-- Chọn hãng --</option>
                 {(brands || []).map((brand) => (
                   <option key={extractField(brand, ["id", "Id"])} value={extractField(brand, ["id", "Id"])}>
                     {extractField(brand, ["name", "Name"], "")}
@@ -187,14 +214,14 @@ export default function VehicleActionPanel({
                 ))}
               </select>
             </label>
-            <label>
+            <label className="vehicle-new-field vehicle-new-field-model">
               Dòng xe <span>*</span>
               <select
                 value={draftVehicle.modelId}
                 disabled={!draftVehicle.brandId}
                 onChange={(e) => onDraftChange("modelId", e.target.value)}
               >
-                <option value="">Chọn dòng xe</option>
+                <option value="">-- Chọn dòng xe --</option>
                 {modelOptions.map((model) => (
                   <option key={extractField(model, ["id", "Id"])} value={extractField(model, ["id", "Id"])}>
                     {extractField(model, ["modelName", "ModelName"], "")}
@@ -202,15 +229,38 @@ export default function VehicleActionPanel({
                 ))}
               </select>
             </label>
-            <label>
-              Số VIN <span>*</span>
-              <input
-                type="text"
-                value={draftVehicle.vin}
-                onChange={(e) => onDraftChange("vin", e.target.value)}
-                placeholder="Nhập số VIN"
-              />
-            </label>
+            <div className="vehicle-new-row-bottom">
+              <label className="vehicle-new-field vehicle-new-field-color">
+                Màu sắc
+                <input
+                  type="text"
+                  value={draftVehicle.color || ""}
+                  onChange={(e) => onDraftChange("color", e.target.value)}
+                />
+              </label>
+              <label className="vehicle-new-field vehicle-new-field-year">
+                Năm sản xuất (tùy chọn)
+                <select
+                  value={draftVehicle.manufactureYear || ""}
+                  onChange={(e) => onDraftChange("manufactureYear", e.target.value)}
+                >
+                  <option value="">-- Chọn năm --</option>
+                  {manufactureYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="vehicle-new-field vehicle-new-field-vin">
+                <span className="vehicle-new-label">VIN <em>*</em></span>
+                <input
+                  type="text"
+                  value={draftVehicle.vin}
+                  onChange={(e) => onDraftChange("vin", e.target.value)}
+                />
+              </label>
+            </div>
           </div>
 
           <div className="vehicle-action-toolbar">
@@ -248,3 +298,4 @@ export default function VehicleActionPanel({
     </section>
   );
 }
+

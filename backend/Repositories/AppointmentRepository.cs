@@ -24,7 +24,7 @@ namespace MyGarage.Repositories
                 .Include(a => a.Vehicle)
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .AsQueryable();
 
             query = ApplyStatusFilter(query, status);
@@ -52,7 +52,7 @@ namespace MyGarage.Repositories
         {
             return await _dbSet
                 .Include(a => a.Branch)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.Vehicle)
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)
@@ -65,7 +65,7 @@ namespace MyGarage.Repositories
         {
             var query = _dbSet
                 .Include(a => a.Customer)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.Vehicle)
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)
@@ -102,7 +102,7 @@ namespace MyGarage.Repositories
             return await _dbSet
                 .Include(a => a.Branch)
                 .Include(a => a.Customer)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.Vehicle)
                     .ThenInclude(v => v!.Model)
                         .ThenInclude(m => m.Brand)

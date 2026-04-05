@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Requests
         public string? Code { get; set; }
         public long? CustomerId { get; set; }
         public long? VehicleId { get; set; }
+        public long? GroupSessionId { get; set; }
         public long? OriginBranchId { get; set; }
         public long? ExecuteBranchId { get; set; }
         public string? OrderCategory { get; set; }

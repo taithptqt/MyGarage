@@ -48,7 +48,7 @@ namespace MyGarage.Services
 
             var statuses = await _context.Appointments
                 .AsNoTracking()
-                .Where(x => x.BookingGroupId == bookingGroupId.Value)
+                .Where(x => x.GroupSessionId == bookingGroupId.Value)
                 .Select(x => x.Status)
                 .ToListAsync();
 

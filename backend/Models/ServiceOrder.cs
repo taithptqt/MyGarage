@@ -15,6 +15,8 @@ public partial class ServiceOrder
 
     public long? AppointmentId { get; set; }
 
+    public long? GroupSessionId { get; set; }
+
     public long OriginBranchId { get; set; }
 
     public long ExecuteBranchId { get; set; }
@@ -84,6 +86,8 @@ public partial class ServiceOrder
     public long? UpdatedBy { get; set; }
 
     public virtual Appointment? Appointment { get; set; }
+
+    public virtual BookingGroup? GroupSession { get; set; }
 
     public virtual ICollection<CommissionTransaction> CommissionTransactions { get; set; } = new List<CommissionTransaction>();
 

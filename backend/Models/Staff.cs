@@ -9,9 +9,11 @@ public partial class Staff
 
     public string FullName { get; set; } = null!;
 
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
 
     public string? Email { get; set; }
+
+    public string? GoogleId { get; set; }
 
     public string PasswordHash { get; set; } = null!;
 
