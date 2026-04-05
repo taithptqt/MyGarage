@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
+using System.Threading;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Enums;
@@ -25,12 +26,31 @@ public class OrderController(
     IOrderTransactionStore orderTransactionStore,
     IOrderInvoiceStore orderInvoiceStore) : ControllerBase
 {
+    private static long _orderCodeSeed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
     private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
     private readonly IOrderStore _orderStore = orderStore;
     private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
     private readonly IOrderInvoiceStore _orderInvoiceStore = orderInvoiceStore;
+
+    private static long GenerateOrderCode()
+    {
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        while (true)
+        {
+            var current = Interlocked.Read(ref _orderCodeSeed);
+            var next = nowMs > current ? nowMs : current + 1;
+            var original = Interlocked.CompareExchange(ref _orderCodeSeed, next, current);
+
+            if (original == current)
+            {
+                return next;
+            }
+        }
+    }
 
     private static bool IsInflowRequiresInvoiceConstraintViolation(Exception ex)
     {
@@ -267,7 +287,7 @@ public class OrderController(
             });
         }
 
-        var orderCode = DateTimeOffset.Now.ToUnixTimeSeconds();
+        var orderCode = GenerateOrderCode();
         var returnUrl = request.ReturnUrl ?? "https://your-domain.com/success";
         var cancelUrl = request.CancelUrl ?? "https://your-domain.com/cancel";
         var payOsDescription = BuildPayOsDescription(request.Description, orderCode);

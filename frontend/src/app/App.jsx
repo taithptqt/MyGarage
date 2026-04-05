@@ -32,6 +32,8 @@ import PaymentSuccessPage from "@features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
+import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
+import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import AccountingMain from "@horizon/AccountingMain";
 
 function CustomerRoute({ children }) {
@@ -173,6 +175,7 @@ function App() {
           } 
         >
           <Route path="reception" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionOrdersSection /></ProtectedRoute>} />
+          <Route path="reception/chat" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionChatPage /></ProtectedRoute>} />
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
           <Route path="reception/appointments" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionAppointmentsPage /></ProtectedRoute>} />
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
@@ -193,6 +196,7 @@ function App() {
         <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
+      <CustomerMessengerWidget />
     </BranchProvider>
   );
 }

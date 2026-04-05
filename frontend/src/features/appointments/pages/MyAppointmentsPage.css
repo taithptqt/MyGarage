@@ -284,6 +284,11 @@
   gap: 16px;
 }
 
+.my-appt-card--focus {
+  border-color: #3a7bff;
+  box-shadow: 0 0 0 3px rgba(58, 123, 255, 0.2), 0 8px 28px rgba(20, 42, 71, 0.12);
+}
+
 .my-appt-card-in-group {
   box-shadow: none;
 }

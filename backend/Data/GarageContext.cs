@@ -56,6 +56,12 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<ChatMessage> ChatMessages { get; set; }
 
+    public virtual DbSet<ChatMessageAttachment> ChatMessageAttachments { get; set; }
+
+    public virtual DbSet<ConversationCustomerRead> ConversationCustomerReads { get; set; }
+
+    public virtual DbSet<ConversationStaffRead> ConversationStaffReads { get; set; }
+
     public virtual DbSet<CommissionRule> CommissionRules { get; set; }
 
     public virtual DbSet<CommissionTransaction> CommissionTransactions { get; set; }
@@ -666,18 +672,66 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__ChatMess__3214EC07A1C55ACB");
 
+            entity.HasIndex(e => e.ClientMessageId, "UX_ChatMessages_ClientMessageId")
+                .IsUnique()
+                .HasFilter("[ClientMessageId] IS NOT NULL");
+
+            entity.HasIndex(e => new { e.ConversationId, e.Id }, "IX_ChatMessages_ConversationId_Id");
+
             entity.Property(e => e.AttachmentUrl)
                 .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.MessageType)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue(nameof(ChatMessageType.TEXT));
             entity.Property(e => e.SenderType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+
+            entity.ToTable(tb =>
+            {
+                tb.HasCheckConstraint(
+                    "CK_ChatMessages_SenderType",
+                    $"[SenderType] IN ('{nameof(ChatSenderType.CUSTOMER)}','{nameof(ChatSenderType.STAFF)}','{nameof(ChatSenderType.SYSTEM)}')");
+                tb.HasCheckConstraint(
+                    "CK_ChatMessages_MessageType",
+                    $"[MessageType] IN ('{nameof(ChatMessageType.TEXT)}','{nameof(ChatMessageType.IMAGE)}','{nameof(ChatMessageType.SYSTEM)}')");
+            });
 
             entity.HasOne(d => d.Conversation).WithMany(p => p.ChatMessages)
                 .HasForeignKey(d => d.ConversationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__ChatMessa__Conve__35DCF99B");
+        });
+
+        modelBuilder.Entity<ChatMessageAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_ChatMessageAttachments");
+
+            entity.HasIndex(e => new { e.MessageId, e.SortOrder, e.Id }, "IX_ChatMessageAttachments_MessageId_SortOrder_Id");
+            entity.HasIndex(e => e.CreatedAt, "IX_ChatMessageAttachments_CreatedAt");
+
+            entity.Property(e => e.AttachmentUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.SortOrder).HasDefaultValue(1);
+
+            entity.ToTable(tb =>
+            {
+                tb.HasCheckConstraint("CK_ChatMessageAttachments_SortOrder", "[SortOrder] >= (1)");
+            });
+
+            entity.HasOne(d => d.Message).WithMany(p => p.ChatMessageAttachments)
+                .HasForeignKey(d => d.MessageId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ChatMessageAttachments_MessageId");
         });
 
         modelBuilder.Entity<CommissionRule>(entity =>
@@ -783,20 +837,104 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Conversa__3214EC073AA82895");
 
+            entity.HasIndex(e => new { e.BranchId, e.Status, e.LastMessageAt }, "IX_Conversations_Branch_Status_LastMessageAt");
+            entity.HasIndex(e => new { e.CustomerId, e.LastMessageAt }, "IX_Conversations_Customer_LastMessageAt");
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.LastMessageAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue(nameof(CommonStatusCode.OPEN));
+                .HasDefaultValue(nameof(ConversationStatus.OPEN));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+
+            entity.ToTable(tb =>
+            {
+                tb.HasCheckConstraint(
+                    "CK_Conversations_Status",
+                    $"[Status] IN ('{nameof(ConversationStatus.OPEN)}','{nameof(ConversationStatus.WAITING_FOR_STAFF)}','{nameof(ConversationStatus.WAITING_FOR_CUSTOMER)}','{nameof(ConversationStatus.CLOSED)}')");
+            });
+
+            entity.HasOne(d => d.Appointment).WithMany()
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("FK_Conversations_AppointmentId");
+
+            entity.HasOne(d => d.AssignedStaff).WithMany()
+                .HasForeignKey(d => d.AssignedStaffId)
+                .HasConstraintName("FK_Conversations_AssignedStaffId");
+
+            entity.HasOne(d => d.Branch).WithMany()
+                .HasForeignKey(d => d.BranchId)
+                .HasConstraintName("FK_Conversations_BranchId");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Conversations)
                 .HasForeignKey(d => d.CustomerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Conversat__Custo__442B18F2");
 
+            entity.HasOne(d => d.LastMessageNavigation).WithMany()
+                .HasForeignKey(d => d.LastMessageId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Conversations_LastMessageId");
+
+            entity.HasOne(d => d.ServiceOrder).WithMany()
+                .HasForeignKey(d => d.ServiceOrderId)
+                .HasConstraintName("FK_Conversations_ServiceOrderId");
+
             entity.HasOne(d => d.Staff).WithMany(p => p.Conversations)
                 .HasForeignKey(d => d.StaffId)
                 .HasConstraintName("FK__Conversat__Staff__4336F4B9");
+
+            entity.HasOne(d => d.Vehicle).WithMany()
+                .HasForeignKey(d => d.VehicleId)
+                .HasConstraintName("FK_Conversations_VehicleId");
+        });
+
+        modelBuilder.Entity<ConversationCustomerRead>(entity =>
+        {
+            entity.HasKey(e => e.ConversationId).HasName("PK_ConversationCustomerReads");
+
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.ConversationCustomerReads)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ConversationCustomerReads_ConversationId");
+
+            entity.HasOne(d => d.Customer).WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ConversationCustomerReads_CustomerId");
+
+            entity.HasOne(d => d.LastReadMessage).WithMany(p => p.ConversationCustomerReads)
+                .HasForeignKey(d => d.LastReadMessageId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_ConversationCustomerReads_LastReadMessageId");
+        });
+
+        modelBuilder.Entity<ConversationStaffRead>(entity =>
+        {
+            entity.HasKey(e => new { e.ConversationId, e.StaffId }).HasName("PK_ConversationStaffReads");
+
+            entity.HasIndex(e => e.StaffId, "IX_ConversationStaffReads_StaffId");
+
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.ConversationStaffReads)
+                .HasForeignKey(d => d.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ConversationStaffReads_ConversationId");
+
+            entity.HasOne(d => d.LastReadMessage).WithMany(p => p.ConversationStaffReads)
+                .HasForeignKey(d => d.LastReadMessageId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_ConversationStaffReads_LastReadMessageId");
+
+            entity.HasOne(d => d.Staff).WithMany()
+                .HasForeignKey(d => d.StaffId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ConversationStaffReads_StaffId");
         });
 
         modelBuilder.Entity<Customer>(entity =>

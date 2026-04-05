@@ -74,12 +74,23 @@ namespace MyGarage.Controllers
         [HttpGet("{id:long}")]
         public async Task<ActionResult<RetailOrderResponseDto>> GetById(long id)
         {
-            var item = await _retailOrderService.GetByIdAsync(id);
+            var item = await _db.RetailOrders
+                .AsNoTracking()
+                .Include(order => order.RetailOrderItems)
+                    .ThenInclude(orderItem => orderItem.Product)
+                .FirstOrDefaultAsync(order => order.Id == id);
+
             if (item == null)
             {
                 return NotFound();
             }
+
             var dto = _mapper.Map<RetailOrderResponseDto>(item);
+            dto.Items = _mapper.Map<List<RetailOrderItemResponseDto>>(
+                item.RetailOrderItems
+                    .OrderByDescending(orderItem => orderItem.Id)
+                    .ToList());
+
             return Ok(dto);
         }
 

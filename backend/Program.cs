@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Hubs;
 using MyGarage.Interfaces;
 using MyGarage.Repositories;
 using MyGarage.Services;
@@ -176,6 +177,7 @@ builder.Services.AddScoped<ICommissionTransactionService, CommissionTransactionS
 
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<IChatV2Service, ChatV2Service>();
 
 builder.Services.AddScoped<ICustomerFeedbackRepository, CustomerFeedbackRepository>();
 builder.Services.AddScoped<ICustomerFeedbackService, CustomerFeedbackService>();
@@ -357,6 +359,23 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         ClockSkew = TimeSpan.Zero
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrWhiteSpace(accessToken) &&
+                path.StartsWithSegments("/hubs/chat"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization(options =>
@@ -410,6 +429,7 @@ builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -473,6 +493,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 if (hasFrontendBuild)
 {

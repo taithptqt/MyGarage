@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { createPayosOrder } from "@features/payment/api/payosApi";
 import {
   checkoutRetailOrder,
   getBranches,
@@ -26,15 +27,33 @@ const SHOP_HIGHLIGHTS = [
   { value: "Minh bạch", label: "Xem rõ SKU, chi nhánh nhận hàng và ghi chú đơn bán lẻ" },
 ];
 
-function buildPaymentQuery({ amount, orderCode, retailOrderId }) {
-  const params = new URLSearchParams({
-    amount: String(Math.max(0, Math.floor(Number(amount || 0)))),
-    description: `TT ${String(orderCode || `RO-${retailOrderId}`).slice(0, 22)}`,
-    retailOrderId: String(retailOrderId),
-    autoPay: "1",
-  });
+function toSafeAmount(value) {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
 
-  return `/payment?${params.toString()}`;
+  if (value == null) return 0;
+
+  const normalizedDigits = String(value).replace(/[^\d]/g, "");
+  const fallback = Number(normalizedDigits);
+  return Number.isFinite(fallback) && fallback > 0 ? Math.floor(fallback) : 0;
+}
+
+function buildFrontendUrl(pathname) {
+  if (typeof window === "undefined") return pathname;
+  return `${window.location.origin}${pathname}`;
+}
+
+function openPayosPopupWindow() {
+  if (typeof window === "undefined") return null;
+
+  const popup = window.open("", "mygarage_payos_checkout", "width=980,height=760");
+  if (!popup) return null;
+
+  popup.document.write(
+    "<!doctype html><html><head><title>MyGarage PayOS</title></head><body style='font-family:Segoe UI,Arial,sans-serif;padding:20px;color:#0f172a;background:#f8fafc'><h3 style='margin:0 0 8px'>MyGarage</h3><p style='margin:0'>Dang khoi tao cong thanh toan PayOS...</p></body></html>"
+  );
+  popup.document.close();
+  return popup;
 }
 
 export default function PartsSalesPage() {
@@ -52,6 +71,8 @@ export default function PartsSalesPage() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [payingOrder, setPayingOrder] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState(null);
   const [bannerMessage, setBannerMessage] = useState("");
   const {
     cart,
@@ -174,6 +195,26 @@ export default function PartsSalesPage() {
     [branches.length, categories.length, products.length]
   );
 
+  useEffect(() => {
+    function handlePaymentMessage(event) {
+      if (event.origin !== window.location.origin) return;
+
+      const data = event.data;
+      if (!data || data.type !== "MYGARAGE_RETAIL_PAYMENT_COMPLETED") return;
+
+      const paidOrderId = Number(data.orderId);
+      setBannerMessage("Thanh toán thành công. Đang chuyển đến đơn phụ tùng.");
+      navigate(
+        Number.isFinite(paidOrderId) && paidOrderId > 0
+          ? `/my-retail-orders?orderId=${paidOrderId}`
+          : "/my-retail-orders"
+      );
+    }
+
+    window.addEventListener("message", handlePaymentMessage);
+    return () => window.removeEventListener("message", handlePaymentMessage);
+  }, [navigate]);
+
   async function handleCheckout() {
     setBannerMessage("");
     setError("");
@@ -208,22 +249,116 @@ export default function PartsSalesPage() {
       }
 
       const orderCode = createdOrder?.orderCode || `RO-${retailOrderId}`;
-      const finalAmount = Number(createdOrder?.finalAmount || subtotal || 0);
+      const subTotalAmount =
+        toSafeAmount(createdOrder?.subTotal) ||
+        toSafeAmount(createdOrder?.subTotalAmount) ||
+        toSafeAmount(subtotal);
+      const taxAmount = toSafeAmount(createdOrder?.taxAmount);
+      const finalAmount =
+        toSafeAmount(createdOrder?.finalAmount) || toSafeAmount(subTotalAmount + taxAmount);
+      const branchLabel = selectedBranch
+        ? getBranchLabel(selectedBranch)
+        : `Chi nhánh #${branchId}`;
+
+      if (finalAmount <= 0) {
+        throw new Error("Không xác định được tổng thanh toán cho đơn hàng.");
+      }
 
       clearCart();
       setNotes("");
-      setBannerMessage(`Đã tạo đơn phụ tùng ${orderCode}. Đang chuyển sang bước thanh toán.`);
-      navigate(
-        buildPaymentQuery({
-          amount: finalAmount,
-          orderCode,
-          retailOrderId,
-        })
-      );
+      setPendingOrder({
+        id: retailOrderId,
+        orderCode,
+        branchLabel,
+        customerNotes: createdOrder?.customerNotes || payload.customerNotes || "",
+        subTotal: subTotalAmount,
+        taxAmount,
+        finalAmount,
+      });
+      setBannerMessage(`Đã tạo đơn ${orderCode}. Vui lòng kiểm tra popup chi tiết trước khi thanh toán.`);
     } catch (checkoutError) {
       setError(checkoutError?.message || "Không thể tạo đơn phụ tùng lúc này.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleConfirmPendingOrderPayment() {
+    if (!pendingOrder) return;
+
+    setError("");
+    setPayingOrder(true);
+    let popupWindow = null;
+
+    try {
+      if (pendingOrder.finalAmount < 1000) {
+        throw new Error("Tổng thanh toán tối thiểu là 1,000đ để tạo liên kết PayOS.");
+      }
+
+      popupWindow = openPayosPopupWindow();
+      if (!popupWindow) {
+        throw new Error("Trình duyệt đang chặn popup. Hãy cho phép popup và thử lại.");
+      }
+
+      const payosDescription = `TT ${String(pendingOrder.orderCode).slice(0, 22)}`.slice(0, 25);
+      const paymentResult = await createPayosOrder({
+        totalAmount: pendingOrder.finalAmount,
+        description: payosDescription,
+        payerType: "CUSTOMER",
+        payerId: user?.id || null,
+        retailOrderId: pendingOrder.id,
+        paymentType: "PAYMENT",
+        returnUrl: buildFrontendUrl("/payment/success"),
+        cancelUrl: buildFrontendUrl("/payment/cancel"),
+        items: [
+          {
+            name: "Don phu tung MyGarage",
+            quantity: 1,
+            price: pendingOrder.finalAmount,
+          },
+        ],
+      });
+
+      if (!paymentResult?.ok) {
+        throw new Error(paymentResult?.data?.message || "Không tạo được link thanh toán PayOS.");
+      }
+
+      const paymentOrder = paymentResult.data;
+      if (!paymentOrder?.checkoutUrl) {
+        throw new Error("Không nhận được checkoutUrl từ PayOS.");
+      }
+
+      const retryParams = new URLSearchParams({
+        amount: String(pendingOrder.finalAmount),
+        description: payosDescription,
+        retailOrderId: String(pendingOrder.id),
+      });
+
+      localStorage.setItem("payos_last_payment_search", `?${retryParams.toString()}`);
+      localStorage.setItem("payos_last_checkout_kind", "RETAIL");
+      localStorage.setItem("payos_last_retail_order_id", String(pendingOrder.id));
+
+      if (paymentOrder?.paymentRecordId) {
+        localStorage.setItem("payos_last_payment_id", String(paymentOrder.paymentRecordId));
+      } else {
+        localStorage.removeItem("payos_last_payment_id");
+      }
+
+      if (paymentOrder?.id) {
+        localStorage.setItem("payos_last_order_id", String(paymentOrder.id));
+      }
+
+      popupWindow.location.href = paymentOrder.checkoutUrl;
+      popupWindow.focus();
+      setBannerMessage(`Đã mở popup PayOS cho đơn ${pendingOrder.orderCode}.`);
+      setPendingOrder(null);
+    } catch (paymentError) {
+      if (popupWindow && !popupWindow.closed) {
+        popupWindow.close();
+      }
+      setError(paymentError?.message || "Không thể tạo liên kết thanh toán PayOS.");
+    } finally {
+      setPayingOrder(false);
     }
   }
 
@@ -538,14 +673,93 @@ export default function PartsSalesPage() {
             <button
               type="button"
               className="parts-shop-btn parts-shop-btn-primary parts-shop-checkout-btn"
-              disabled={submitting || !cart.length || !branchId}
+              disabled={submitting || payingOrder || !cart.length || !branchId}
               onClick={handleCheckout}
             >
-              {submitting ? "Đang tạo đơn..." : "Tạo đơn và thanh toán"}
+              {submitting ? "Đang tạo đơn..." : payingOrder ? "Đang mở PayOS..." : "Tạo đơn và thanh toán"}
             </button>
           </aside>
         </div>
       </div>
+
+      {pendingOrder ? (
+        <div
+          className="parts-shop-modal-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target !== event.currentTarget || payingOrder) return;
+            setPendingOrder(null);
+          }}
+        >
+          <section
+            className="parts-shop-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="parts-shop-modal-title"
+          >
+            <div className="parts-shop-modal-head">
+              <span className="parts-shop-section-kicker">Chi tiết đơn vừa tạo</span>
+              <h3 id="parts-shop-modal-title">Xác nhận trước khi mở PayOS</h3>
+              <p>
+                Đơn {pendingOrder.orderCode} đã tạo thành công. Kiểm tra tổng tiền và thuế trước
+                khi chuyển đến cổng thanh toán.
+              </p>
+            </div>
+
+            <div className="parts-shop-modal-summary">
+              <div className="parts-shop-modal-row">
+                <span>Mã đơn</span>
+                <strong>{pendingOrder.orderCode}</strong>
+              </div>
+              <div className="parts-shop-modal-row">
+                <span>Chi nhánh</span>
+                <strong>{pendingOrder.branchLabel}</strong>
+              </div>
+              <div className="parts-shop-modal-row">
+                <span>Tạm tính</span>
+                <strong>{formatVnd(pendingOrder.subTotal)}</strong>
+              </div>
+              <div className="parts-shop-modal-row">
+                <span>Thuế VAT</span>
+                <strong>{formatVnd(pendingOrder.taxAmount)}</strong>
+              </div>
+              <div className="parts-shop-modal-row parts-shop-modal-row-total">
+                <span>Tổng thanh toán</span>
+                <strong>{formatVnd(pendingOrder.finalAmount)}</strong>
+              </div>
+            </div>
+
+            {pendingOrder.customerNotes ? (
+              <div className="parts-shop-modal-note">
+                <span>Ghi chú đơn</span>
+                <p>{pendingOrder.customerNotes}</p>
+              </div>
+            ) : null}
+
+            <div className="parts-shop-modal-actions">
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-primary"
+                onClick={handleConfirmPendingOrderPayment}
+                disabled={payingOrder}
+              >
+                {payingOrder ? "Đang tạo link PayOS..." : "Xác nhận và thanh toán"}
+              </button>
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-ghost"
+                onClick={() => setPendingOrder(null)}
+                disabled={payingOrder}
+              >
+                Đóng
+              </button>
+              <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
+                Xem đơn của tôi
+              </Link>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <Footer />
     </div>

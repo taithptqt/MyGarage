@@ -28,4 +28,8 @@ export async function getMyRetailOrders() {
   return request({ url: "/api/retail-orders/customers/current", method: "GET" });
 }
 
+export async function getRetailOrderById(retailOrderId) {
+  return request({ url: `/api/retail-orders/${retailOrderId}`, method: "GET" });
+}
+
 

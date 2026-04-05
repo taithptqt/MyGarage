@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 namespace MyGarage.DTOs.Responses
 {
     public class RetailOrderResponseDto
@@ -20,5 +21,6 @@ namespace MyGarage.DTOs.Responses
         public long? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
+        public List<RetailOrderItemResponseDto>? Items { get; set; }
     }
 }

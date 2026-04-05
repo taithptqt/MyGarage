@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
 using AutoMapper;
@@ -11,6 +12,7 @@ namespace MyGarage.Controllers
 {
     [Route("api/conversations")]
     [ApiController]
+    [Authorize(Policy = "AdminStaffOnly")]
     public class ConversationController : ControllerBase
     {
         private readonly IConversationService _conversationService;

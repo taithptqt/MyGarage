@@ -28,6 +28,9 @@ namespace MyGarage.Interfaces
         DbSet<BranchOperatingHour> BranchOperatingHours { get; }
         DbSet<Category> Categories { get; }
         DbSet<ChatMessage> ChatMessages { get; }
+        DbSet<ChatMessageAttachment> ChatMessageAttachments { get; }
+        DbSet<ConversationCustomerRead> ConversationCustomerReads { get; }
+        DbSet<ConversationStaffRead> ConversationStaffReads { get; }
         DbSet<CommissionRule> CommissionRules { get; }
         DbSet<CommissionTransaction> CommissionTransactions { get; }
         DbSet<Conversation> Conversations { get; }

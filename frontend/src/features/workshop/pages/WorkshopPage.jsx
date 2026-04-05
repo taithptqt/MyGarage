@@ -256,13 +256,20 @@ export default function WorkshopPage() {
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
   const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
+  const shouldHideWorkflowTimeline = location.pathname.startsWith("/workshop/reception/chat");
   const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
     ? "appointments"
-    : "orders";
+    : location.pathname.startsWith("/workshop/reception/chat")
+      ? "chat"
+      : "orders";
 
   const goReceptionTab = useCallback((tab) => {
     if (tab === "appointments") {
       navigate("/workshop/reception/appointments");
+      return;
+    }
+    if (tab === "chat") {
+      navigate("/workshop/reception/chat");
       return;
     }
     navigate("/workshop/reception");
@@ -313,6 +320,13 @@ export default function WorkshopPage() {
                   onClick={() => goReceptionTab("appointments")}
                 >
                   Lịch đặt trước
+                </button>
+                <button
+                  type="button"
+                  className={`role-sub-item ${receptionTab === "chat" ? "active" : ""}`}
+                  onClick={() => goReceptionTab("chat")}
+                >
+                  Chat khách hàng
                 </button>
               </div>
             )}
@@ -452,7 +466,7 @@ export default function WorkshopPage() {
           </header>
 
           <section className="workshop-content">
-            <WorkflowTimeline currentStatus={timelineStatus} />
+            {!shouldHideWorkflowTimeline ? <WorkflowTimeline currentStatus={timelineStatus} /> : null}
             <Outlet />
           </section>
         </main>

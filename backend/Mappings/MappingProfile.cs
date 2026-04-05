@@ -213,7 +213,9 @@ namespace MyGarage.Mappings
             CreateMap<RetailOrderCreateDto, RetailOrder>();
             CreateMap<RetailOrderUpdateDto, RetailOrder>();
             // RetailOrderItem Mappings
-            CreateMap<RetailOrderItem, RetailOrderItemResponseDto>();
+            CreateMap<RetailOrderItem, RetailOrderItemResponseDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
+                .ForMember(dest => dest.ProductSku, opt => opt.MapFrom(src => src.Product != null ? src.Product.Sku : null));
             CreateMap<RetailOrderItemCreateDto, RetailOrderItem>();
             CreateMap<RetailOrderItemUpdateDto, RetailOrderItem>();
             // RetailReturn Mappings

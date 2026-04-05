@@ -38,6 +38,12 @@ export default defineConfig({
         target: "https://localhost:7009",
         changeOrigin: true,
         secure: false
+      },
+      "/hubs": {
+        target: "https://localhost:7009",
+        changeOrigin: true,
+        secure: false,
+        ws: true
       }
     }
   },
