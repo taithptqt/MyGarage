@@ -4,23 +4,24 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import { bookingAssetUrl } from "@shared/utils/bookingAssets";
 import "./BookingIntroPage.css";
 
 const showcaseServices = [
   {
     title: "Bảo dưỡng định kỳ chuẩn hãng",
     desc: "Kiểm tra 82 hạng mục quan trọng, tối ưu vận hành và kéo dài tuổi thọ động cơ.",
-    image: "/assets/booking/showcase-1.jpg",
+    image: bookingAssetUrl("/assets/booking/showcase-1.jpg"),
   },
   {
     title: "Chẩn đoán lỗi bằng máy chuyên dụng",
     desc: "Đọc lỗi điện tử nhanh, minh bạch báo cáo trước khi thực hiện sửa chữa.",
-    image: "/assets/booking/showcase-2.jpg",
+    image: bookingAssetUrl("/assets/booking/showcase-2.jpg"),
   },
   {
     title: "Chăm sóc xe cao cấp",
     desc: "Đánh bóng, phủ bảo vệ bề mặt và chăm sóc nội thất theo tiêu chuẩn showroom.",
-    image: "/assets/booking/hero.jpg",
+    image: bookingAssetUrl("/assets/booking/hero.jpg"),
   },
 ];
 
@@ -316,7 +317,7 @@ export default function BookingIntroPage() {
         <Header overlay />
         <img
           className="booking-intro-hero-image"
-          src="/assets/booking/hero.jpg"
+          src={bookingAssetUrl("/assets/booking/hero.jpg")}
           alt="Không gian kỹ thuật gara chuyên nghiệp"
         />
         <div className="booking-intro-hero-content">
@@ -420,7 +421,7 @@ export default function BookingIntroPage() {
         </div>
         <div className="booking-intro-process-media">
           <img
-            src="/assets/booking/showcase-2.jpg"
+            src={bookingAssetUrl("/assets/booking/showcase-2.jpg")}
             alt="Kỹ thuật viên đang kiểm tra động cơ xe"
           />
         </div>

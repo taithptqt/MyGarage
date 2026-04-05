@@ -32,6 +32,7 @@ import PaymentSuccessPage from "@features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
+import ProductDetailPage from "@features/retail/pages/ProductDetailPage";
 import AccountingMain from "@horizon/AccountingMain";
 
 function CustomerRoute({ children }) {
@@ -88,6 +89,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><PartsSalesPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parts-shop/products/:productId"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><ProductDetailPage /></CustomerRoute>
             </ProtectedRoute>
           }
         />

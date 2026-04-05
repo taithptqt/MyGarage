@@ -4,6 +4,14 @@ export async function getProducts() {
   return request({ url: "/api/products", method: "GET" });
 }
 
+export async function getProductById(productId) {
+  return request({ url: `/api/products/${productId}`, method: "GET" });
+}
+
+export async function getProductImages() {
+  return request({ url: "/api/product-images", method: "GET" });
+}
+
 export async function getCategories() {
   return request({ url: "/api/categories", method: "GET" });
 }

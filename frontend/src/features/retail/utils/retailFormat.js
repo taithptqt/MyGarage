@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "@features/auth/api/authApi";
+import { bookingAssetUrl } from "@shared/utils/bookingAssets";
 
 export const RETAIL_CART_STORAGE_KEY = "mygarage_retail_cart";
 
@@ -85,7 +86,42 @@ export function resolveProductImage(product) {
     product?.photoUrl ||
     product?.photo;
 
-  return resolveMediaUrl(candidate) || "/assets/booking/showcase-2.jpg";
+  return resolveMediaUrl(candidate) || bookingAssetUrl("/assets/booking/showcase-2.jpg");
+}
+
+export function resolveProductGallery(product, productImages = []) {
+  const sortedImages = [...productImages]
+    .filter((image) => Number(image?.productId) === Number(product?.id))
+    .sort((left, right) => {
+      const mainDelta = Number(Boolean(right?.isMain)) - Number(Boolean(left?.isMain));
+      if (mainDelta !== 0) return mainDelta;
+
+      const orderDelta = Number(left?.sortOrder ?? Number.MAX_SAFE_INTEGER) -
+        Number(right?.sortOrder ?? Number.MAX_SAFE_INTEGER);
+      if (orderDelta !== 0) return orderDelta;
+
+      return Number(left?.id ?? 0) - Number(right?.id ?? 0);
+    })
+    .map((image) => ({
+      id: image?.id ?? image?.imageUrl ?? `image-${product?.id ?? "product"}`,
+      src: resolveMediaUrl(image?.imageUrl),
+      alt: image?.description || product?.name || "Phụ tùng MyGarage",
+      caption: image?.description || "",
+    }))
+    .filter((image) => image.src);
+
+  if (sortedImages.length > 0) {
+    return sortedImages;
+  }
+
+  return [
+    {
+      id: `fallback-${product?.id ?? "product"}`,
+      src: resolveProductImage(product),
+      alt: product?.name || "Phụ tùng MyGarage",
+      caption: "",
+    },
+  ];
 }
 
 export function getBranchLabel(branch) {

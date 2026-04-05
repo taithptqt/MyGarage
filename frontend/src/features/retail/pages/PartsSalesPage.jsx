@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import ProductCard from "@features/retail/components/ProductCard";
+import ProductPagination from "@features/retail/components/ProductPagination";
+import ProductQuantitySelector from "@features/retail/components/ProductQuantitySelector";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   checkoutRetailOrder,
@@ -9,13 +12,16 @@ import {
   getCategories,
   getProducts,
 } from "@features/retail/api/retailApi";
+import useProductPagination, {
+  DEFAULT_PARTS_PAGE_SIZE,
+} from "@features/retail/hooks/useProductPagination";
+import usePartsShopScroll from "@features/retail/hooks/usePartsShopScroll";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
   formatVnd,
   getBranchLabel,
   getCategoryLabel,
   normalizeText,
-  resolveProductImage,
   toPositiveInt,
 } from "@features/retail/utils/retailFormat";
 import "./PartsSalesPage.css";
@@ -61,7 +67,6 @@ export default function PartsSalesPage() {
     clearCart,
     removeFromCart,
     setItemQuantity,
-    updateCartQty,
   } = useRetailCart();
 
   useEffect(() => {
@@ -159,6 +164,21 @@ export default function PartsSalesPage() {
 
     return rows;
   }, [catFilter, categoriesById, products, search, sortBy]);
+
+  const {
+    currentPage,
+    paginatedItems: pagedProducts,
+    totalItems: pagedTotalItems,
+    totalPages,
+    setCurrentPage,
+  } = useProductPagination(filteredProducts, {
+    pageSize: DEFAULT_PARTS_PAGE_SIZE,
+    resetKeys: [search, catFilter, sortBy],
+  });
+  const { catalogRef, handlePageChange } = usePartsShopScroll({
+    currentPage,
+    setCurrentPage,
+  });
 
   const selectedBranch = useMemo(
     () => branches.find((item) => String(item.id) === String(branchId)) || null,
@@ -289,7 +309,7 @@ export default function PartsSalesPage() {
         ) : null}
 
         <div className="parts-shop-layout" id="parts-shop-catalog">
-          <section className="parts-shop-card parts-shop-product-panel">
+          <section ref={catalogRef} className="parts-shop-card parts-shop-product-panel">
             <div className="parts-shop-panel-head">
               <div>
                 <span className="parts-shop-section-kicker">Catalog tuyển chọn</span>
@@ -299,8 +319,11 @@ export default function PartsSalesPage() {
                 </p>
               </div>
               <div className="parts-shop-results-meta">
-                <strong>{filteredProducts.length}</strong>
-                <span>sản phẩm đang hiển thị</span>
+                <strong>{pagedTotalItems}</strong>
+                <span>
+                  {DEFAULT_PARTS_PAGE_SIZE} sản phẩm / trang
+                  {totalPages > 1 ? ` • trang ${currentPage}/${totalPages}` : ""}
+                </span>
               </div>
             </div>
 
@@ -351,85 +374,36 @@ export default function PartsSalesPage() {
                 Không có phụ tùng nào khớp bộ lọc hiện tại. Hãy thử đổi từ khóa hoặc danh mục.
               </div>
             ) : (
-              <div className="parts-shop-list">
-                {filteredProducts.map((product) => {
-                  const category = categoriesById.get(String(product?.categoryId));
-                  const qty = draftQty[product.id] || 1;
+              <>
+                <div className="parts-shop-gallery-grid">
+                  {pagedProducts.map((product) => {
+                    const category = categoriesById.get(String(product?.categoryId));
+                    const qty = draftQty[product.id] || 1;
 
-                  return (
-                    <article className="parts-shop-item" key={product.id}>
-                      <div className="parts-shop-item-media">
-                        <img src={resolveProductImage(product)} alt={product.name} />
-                      </div>
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        categoryLabel={getCategoryLabel(category)}
+                        quantity={qty}
+                        onQuantityChange={(nextQuantity) =>
+                          setDraftQty((previous) => ({
+                            ...previous,
+                            [product.id]: toPositiveInt(nextQuantity, 1),
+                          }))
+                        }
+                        onAddToCart={addToCart}
+                      />
+                    );
+                  })}
+                </div>
 
-                      <div className="parts-shop-item-head">
-                        <div>
-                          <span className="parts-shop-tag">{getCategoryLabel(category)}</span>
-                          <h4>{product.name}</h4>
-                          <div className="parts-shop-meta">
-                            SKU: {product.sku || "Chưa cập nhật"} · ID: #{product.id}
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="parts-shop-item-desc">
-                        {product.description ||
-                          "Phụ tùng đang được đồng bộ theo danh mục sản phẩm hiện có của hệ thống."}
-                      </p>
-
-                      <div className="parts-shop-price">{formatVnd(product.retailPrice)}</div>
-
-                      <div className="parts-shop-actions">
-                        <div className="parts-shop-qty">
-                          <button
-                            type="button"
-                            className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Math.max(1, Number(previous[product.id] || 1) - 1),
-                              }))
-                            }
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={qty}
-                            onChange={(event) =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: toPositiveInt(event.target.value, 1),
-                              }))
-                            }
-                          />
-                          <button
-                            type="button"
-                            className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Number(previous[product.id] || 1) + 1,
-                              }))
-                            }
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="parts-shop-btn parts-shop-btn-primary"
-                          onClick={() => addToCart(product, qty)}
-                        >
-                          Thêm vào giỏ
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+                <ProductPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </>
             )}
           </section>
 
@@ -460,27 +434,13 @@ export default function PartsSalesPage() {
                       </small>
                     </div>
                     <div className="parts-shop-cart-actions">
-                      <button
-                        type="button"
-                        className="parts-shop-btn parts-shop-btn-ghost"
-                        onClick={() => updateCartQty(item.id, -1)}
-                      >
-                        -
-                      </button>
-                      <input
-                        className="parts-shop-cart-qty-input"
-                        type="number"
-                        min="1"
+                      <ProductQuantitySelector
                         value={item.qty}
-                        onChange={(event) => setItemQuantity(item.id, event.target.value)}
+                        onChange={(nextQuantity) => setItemQuantity(item.id, nextQuantity)}
+                        size="cart"
+                        label={`Số lượng ${item.name}`}
+                        showLabel={false}
                       />
-                      <button
-                        type="button"
-                        className="parts-shop-btn parts-shop-btn-ghost"
-                        onClick={() => updateCartQty(item.id, 1)}
-                      >
-                        +
-                      </button>
                       <button
                         type="button"
                         className="parts-shop-btn parts-shop-btn-ghost"
