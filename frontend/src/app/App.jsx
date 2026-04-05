@@ -83,7 +83,14 @@ function App() {
           } 
         />
 
-        <Route path="/parts-shop" element={<CustomerRoute><PartsSalesPage /></CustomerRoute>} />
+        <Route
+          path="/parts-shop"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><PartsSalesPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/my-retail-orders"
           element={

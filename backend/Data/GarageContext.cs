@@ -1584,6 +1584,11 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Type)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.Direction)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .IsRequired()
+                .HasDefaultValue("INFLOW");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Cashier).WithMany(p => p.PaymentCashiers)

@@ -86,7 +86,7 @@
 
 .mg-header-side {
   display: flex;
-  gap: 48px;
+  gap: clamp(18px, 2.2vw, 38px);
   flex-wrap: wrap;
   justify-content: flex-end;
   margin-top: 112px;
@@ -99,7 +99,7 @@
 .mg-header-side a {
   color: var(--mg-header-white);
   text-decoration: none;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;

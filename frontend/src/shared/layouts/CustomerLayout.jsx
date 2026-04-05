@@ -8,7 +8,9 @@ export default function CustomerLayout({ children }) {
   const { user, logout } = useAuth();
   const hideDefaultNavbar =
     location.pathname.startsWith("/booking") ||
-    location.pathname.startsWith("/my-appointments");
+    location.pathname.startsWith("/my-appointments") ||
+    location.pathname.startsWith("/parts-shop") ||
+    location.pathname.startsWith("/my-retail-orders");
 
   function handleLogout() {
     logout();
@@ -26,17 +28,23 @@ export default function CustomerLayout({ children }) {
 
             <nav className="customer-nav-links">
               <NavLink to="/booking" className={({ isActive }) => isActive ? "active" : ""}>
-                Dat lich
+                Đặt lịch
+              </NavLink>
+              <NavLink to="/parts-shop" className={({ isActive }) => isActive ? "active" : ""}>
+                Part Shop
               </NavLink>
               <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
-                Lich cua toi
+                Lịch hẹn
+              </NavLink>
+              <NavLink to="/my-retail-orders" className={({ isActive }) => isActive ? "active" : ""}>
+                Đơn phụ tùng
               </NavLink>
             </nav>
 
             <div className="customer-nav-user">
-              <span className="customer-nav-name">{user?.fullName || "User"}</span>
+              <span className="customer-nav-name">{user?.fullName || "Khách hàng"}</span>
               <button onClick={handleLogout} className="customer-nav-logout">
-                Dang xuat
+                Đăng xuất
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { request } from "../../../app/apiClient";
+import { request } from "@app/apiClient";
 
 export async function getProducts() {
   return request({ url: "/api/products", method: "GET" });
@@ -25,7 +25,7 @@ export async function checkoutRetailOrder(payload) {
 }
 
 export async function getMyRetailOrders() {
-  return request({ url: "/api/retail-orders/mine", method: "GET" });
+  return request({ url: "/api/retail-orders/customers/current", method: "GET" });
 }
 
 
