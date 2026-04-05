@@ -10,8 +10,32 @@ using Microsoft.IdentityModel.Tokens;
 using PayOS;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+static string ResolvePayOsCredential(
+    IConfiguration config,
+    IHostEnvironment env,
+    string configurationKey,
+    string environmentVariableName,
+    string developmentPlaceholder)
+{
+    var value = config[configurationKey] ?? Environment.GetEnvironmentVariable(environmentVariableName);
+    if (!string.IsNullOrWhiteSpace(value))
+    {
+        return value.Trim();
+    }
+
+    if (env.IsDevelopment())
+    {
+        return developmentPlaceholder;
+    }
+
+    throw new InvalidOperationException(
+        $"PayOS: missing {configurationKey} (or env {environmentVariableName}). " +
+        "Set values in appsettings, user secrets, or environment variables.");
+}
 
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
 const string AdminStaffOnlyPolicy = "AdminStaffOnly";
@@ -360,11 +384,12 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    var env = sp.GetRequiredService<IHostEnvironment>();
     return new PayOSClient(new PayOSOptions
     {
-        ClientId = config["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"),
-        ApiKey = config["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY"),
-        ChecksumKey = config["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"),
+        ClientId = ResolvePayOsCredential(config, env, "PayOS:ClientId", "PAYOS_CLIENT_ID", "dev-local-order-client-id"),
+        ApiKey = ResolvePayOsCredential(config, env, "PayOS:ApiKey", "PAYOS_API_KEY", "dev-local-order-api-key"),
+        ChecksumKey = ResolvePayOsCredential(config, env, "PayOS:ChecksumKey", "PAYOS_CHECKSUM_KEY", "dev-local-order-checksum-key"),
         LogLevel = LogLevel.Debug,
     });
 });
@@ -372,11 +397,12 @@ builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    var env = sp.GetRequiredService<IHostEnvironment>();
     return new PayOSClient(new PayOSOptions
     {
-        ClientId = config["PayOS:PayoutClientId"],
-        ApiKey = config["PayOS:PayoutApiKey"],
-        ChecksumKey = config["PayOS:PayoutChecksumKey"],
+        ClientId = ResolvePayOsCredential(config, env, "PayOS:PayoutClientId", "PAYOS_PAYOUT_CLIENT_ID", "dev-local-payout-client-id"),
+        ApiKey = ResolvePayOsCredential(config, env, "PayOS:PayoutApiKey", "PAYOS_PAYOUT_API_KEY", "dev-local-payout-api-key"),
+        ChecksumKey = ResolvePayOsCredential(config, env, "PayOS:PayoutChecksumKey", "PAYOS_PAYOUT_CHECKSUM_KEY", "dev-local-payout-checksum-key"),
         LogLevel = LogLevel.Debug,
     });
 });

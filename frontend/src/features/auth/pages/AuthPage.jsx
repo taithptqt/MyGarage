@@ -53,6 +53,11 @@ function AuthPage() {
   const [googlePhone, setGooglePhone] = useState("");
   const [locationDenied, setLocationDenied] = useState(false);
   const requestedPath = location?.state?.from?.pathname || "";
+  const shouldReturnToRequestedCustomerPath = (code) =>
+    code === "CUSTOMER" &&
+    ["/booking", "/parts-shop", "/my-retail-orders", "/payment"].some((prefix) =>
+      requestedPath.startsWith(prefix)
+    );
 
   useEffect(() => {
     document.title = mode === "login" ? "Đăng nhập | MyGarage" : "Đăng ký | MyGarage";
@@ -98,8 +103,8 @@ function AuthPage() {
     const roleName = String(data?.role || "").toLowerCase();
     let destination = "/home";
 
-    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
-      destination = "/booking/form";
+    if (shouldReturnToRequestedCustomerPath(code)) {
+      destination = requestedPath;
     } else if (code === "ADMIN" || roleName === "admin") {
       destination = "/admin";
     } else if (code === "ACCOUNTANT") {
@@ -243,8 +248,8 @@ function AuthPage() {
     const roleName = String(savedUser?.role || "").toLowerCase();
     let dest = "/home";
 
-    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
-      dest = "/booking/form";
+    if (shouldReturnToRequestedCustomerPath(code)) {
+      dest = requestedPath;
     } else if (code === "ADMIN" || roleName === "admin") {
       dest = "/admin";
     } else if (code === "ACCOUNTANT") {

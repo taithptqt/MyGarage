@@ -1,4 +1,4 @@
-import { requestSafe } from "../../../app/apiClient";
+import { requestSafe } from "@app/apiClient";
 
 export async function createPayosOrder(payload) {
   return requestSafe({

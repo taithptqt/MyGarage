@@ -346,6 +346,9 @@ public class OrderController(
                 })]
             };
 
+            // DB: INFLOW requires InvoiceId; retail PayOS without invoice must be OUTFLOW (CHK_Payments_InflowRequiresInvoice).
+            var paymentDirection = resolvedInvoiceId is > 0 ? "INFLOW" : "OUTFLOW";
+
             var payment = new Payment
             {
                 ServiceOrderId = request.ServiceOrderId,
@@ -358,6 +361,7 @@ public class OrderController(
                 TransactionCode = paymentResponse.PaymentLinkId,
                 Type = normalizedPaymentType,
                 Status = nameof(PaymentStatusCode.PENDING),
+                Direction = paymentDirection,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
