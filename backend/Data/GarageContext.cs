@@ -363,6 +363,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.HasIndex(e => e.BookingGroupId, "IX_Appointments_BookingGroupId");
 
+            entity.Property(e => e.BookingGroupId).HasColumnName("GroupSessionId");
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.IsReminderSent).HasDefaultValue(false);
@@ -401,6 +402,13 @@ public partial class GarageContext : DbContext, IGarageContext
         modelBuilder.Entity<BookingGroup>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__BookingG__3214EC077B6FE4D1");
+            entity.ToTable("GroupSessions", tb =>
+            {
+                tb.HasCheckConstraint(
+                    "CK_BookingGroups_Status",
+                    $"[Status] IN ('{nameof(BookingGroupStatus.PENDING)}','{nameof(BookingGroupStatus.CONFIRMED)}','{nameof(BookingGroupStatus.PARTIAL_CONFIRMED)}','{nameof(BookingGroupStatus.CANCELED)}','{nameof(BookingGroupStatus.COMPLETED)}')");
+                tb.HasCheckConstraint("CK_GroupSessions_ItemCounters", "[TotalItems] >= 0 AND [ConfirmedItems] >= 0 AND [CanceledItems] >= 0 AND [ConfirmedItems] + [CanceledItems] <= [TotalItems]");
+            });
 
             entity.HasIndex(e => e.GroupCode, "UQ_BookingGroups_GroupCode").IsUnique();
 
@@ -409,7 +417,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_BookingGroups_Status_CreatedAt");
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
-            entity.Property(e => e.ConfirmedAppointments).HasDefaultValue(0);
+            entity.Property(e => e.ConfirmedAppointments).HasColumnName("ConfirmedItems").HasDefaultValue(0);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.GroupCode)
                 .HasMaxLength(50)
@@ -418,17 +426,9 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasMaxLength(30)
                 .IsUnicode(false)
                 .HasDefaultValue(nameof(BookingGroupStatus.PENDING));
-            entity.Property(e => e.TotalAppointments).HasDefaultValue(0);
-            entity.Property(e => e.CanceledAppointments).HasDefaultValue(0);
+            entity.Property(e => e.TotalAppointments).HasColumnName("TotalItems").HasDefaultValue(0);
+            entity.Property(e => e.CanceledAppointments).HasColumnName("CanceledItems").HasDefaultValue(0);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
-
-            entity.ToTable(tb =>
-            {
-                tb.HasCheckConstraint(
-                    "CK_BookingGroups_Status",
-                    $"[Status] IN ('{nameof(BookingGroupStatus.PENDING)}','{nameof(BookingGroupStatus.CONFIRMED)}','{nameof(BookingGroupStatus.PARTIAL_CONFIRMED)}','{nameof(BookingGroupStatus.CANCELED)}','{nameof(BookingGroupStatus.COMPLETED)}')");
-                tb.HasCheckConstraint("CK_BookingGroups_AppointmentCounters", "[TotalAppointments] >= 0 AND [ConfirmedAppointments] >= 0 AND [CanceledAppointments] >= 0 AND [ConfirmedAppointments] + [CanceledAppointments] <= [TotalAppointments]");
-            });
 
             entity.HasOne(d => d.Branch).WithMany(p => p.BookingGroups)
                 .HasForeignKey(d => d.BranchId)

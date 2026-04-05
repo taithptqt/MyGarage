@@ -296,10 +296,10 @@ CREATE TABLE MyGarage.dbo.Appointments (
 	CancelReason nvarchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	UpdatedAt datetime2 DEFAULT getdate() NULL,
 	UpdatedBy bigint NULL,
-	BookingGroupId bigint NULL,
+	GroupSessionId bigint NULL,
 	CONSTRAINT PK__Appointm__3214EC0762F6D2AE PRIMARY KEY (Id)
 );
- CREATE NONCLUSTERED INDEX IX_Appointments_BookingGroupId ON MyGarage.dbo.Appointments (  BookingGroupId ASC  )  
+ CREATE NONCLUSTERED INDEX IX_Appointments_BookingGroupId ON MyGarage.dbo.Appointments (  GroupSessionId ASC  )  
 	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
 	 ON [PRIMARY ] ;
 ALTER TABLE MyGarage.dbo.Appointments WITH NOCHECK ADD CONSTRAINT CK_Appointments_Status CHECK ((upper(ltrim(rtrim([Status])))='COMPLETED' OR upper(ltrim(rtrim([Status])))='NO_SHOW' OR upper(ltrim(rtrim([Status])))='CANCELLED' OR upper(ltrim(rtrim([Status])))='CANCELED' OR upper(ltrim(rtrim([Status])))='ARRIVED_LATE' OR upper(ltrim(rtrim([Status])))='ARRIVED' OR upper(ltrim(rtrim([Status])))='CONFIRMED' OR upper(ltrim(rtrim([Status])))='LATE' OR upper(ltrim(rtrim([Status])))='PENDING'));
@@ -388,44 +388,6 @@ CREATE TABLE MyGarage.dbo.Bays (
 ALTER TABLE MyGarage.dbo.Bays WITH NOCHECK ADD CONSTRAINT CK_Bays_ServiceArea CHECK (([ServiceArea]='REPAIR' OR [ServiceArea]='QUICK'));
 ALTER TABLE MyGarage.dbo.Bays WITH NOCHECK ADD CONSTRAINT CK__Bays__Operationa__2724C5F0 CHECK (([OperationalStatus]='BROKEN' OR [OperationalStatus]='UNDER_MAINTENANCE' OR [OperationalStatus]='ACTIVE'));
 ALTER TABLE MyGarage.dbo.Bays WITH NOCHECK ADD CONSTRAINT CK_BayType CHECK (([BayType]='QUICK_FLAT' OR [BayType]='QUICK_LIFT' OR [BayType]='WASH_DELIVERY' OR [BayType]='BODY_PAINT' OR [BayType]='DIAGNOSE' OR [BayType]='ELECTRICAL' OR [BayType]='UNDERCARRIAGE' OR [BayType]='GENERAL_LIFT'));
-
-
--- MyGarage.dbo.BookingGroups definition
-
--- Drop table
-
--- DROP TABLE MyGarage.dbo.BookingGroups;
-
-CREATE TABLE MyGarage.dbo.BookingGroups (
-	Id bigint IDENTITY(1,1) NOT NULL,
-	GroupCode varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	CustomerId bigint NOT NULL,
-	BranchId bigint NOT NULL,
-	Status varchar(30) COLLATE SQL_Latin1_General_CP1_CI_AS DEFAULT 'PENDING' NOT NULL,
-	TotalAppointments int DEFAULT 0 NOT NULL,
-	ConfirmedAppointments int DEFAULT 0 NOT NULL,
-	CanceledAppointments int DEFAULT 0 NOT NULL,
-	ConfirmedAt datetime NULL,
-	CanceledAt datetime NULL,
-	CancelReason nvarchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	CustomerNote nvarchar(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	CreatedAt datetime DEFAULT getdate() NULL,
-	CreatedBy bigint NULL,
-	UpdatedAt datetime DEFAULT getdate() NULL,
-	UpdatedBy bigint NULL,
-	CONSTRAINT PK_BookingGroups PRIMARY KEY (Id)
-);
- CREATE NONCLUSTERED INDEX IX_BookingGroups_CustomerId_CreatedAt ON MyGarage.dbo.BookingGroups (  CustomerId ASC  , CreatedAt DESC  )  
-	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
-	 ON [PRIMARY ] ;
- CREATE NONCLUSTERED INDEX IX_BookingGroups_Status_CreatedAt ON MyGarage.dbo.BookingGroups (  Status ASC  , CreatedAt DESC  )  
-	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
-	 ON [PRIMARY ] ;
- CREATE UNIQUE NONCLUSTERED INDEX UQ_BookingGroups_GroupCode ON MyGarage.dbo.BookingGroups (  GroupCode ASC  )  
-	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
-	 ON [PRIMARY ] ;
-ALTER TABLE MyGarage.dbo.BookingGroups WITH NOCHECK ADD CONSTRAINT CK_BookingGroups_Status CHECK (([Status]='COMPLETED' OR [Status]='CANCELED' OR [Status]='PARTIAL_CONFIRMED' OR [Status]='CONFIRMED' OR [Status]='PENDING'));
-ALTER TABLE MyGarage.dbo.BookingGroups WITH NOCHECK ADD CONSTRAINT CK_BookingGroups_AppointmentCounters CHECK (([TotalAppointments]>=(0) AND [ConfirmedAppointments]>=(0) AND [CanceledAppointments]>=(0) AND ([ConfirmedAppointments]+[CanceledAppointments])<=[TotalAppointments]));
 
 
 -- MyGarage.dbo.BranchExceptions definition
@@ -528,6 +490,31 @@ CREATE TABLE MyGarage.dbo.Categories (
 );
 
 
+-- MyGarage.dbo.ChatMessageAttachments definition
+
+-- Drop table
+
+-- DROP TABLE MyGarage.dbo.ChatMessageAttachments;
+
+CREATE TABLE MyGarage.dbo.ChatMessageAttachments (
+	Id bigint IDENTITY(1,1) NOT NULL,
+	MessageId bigint NOT NULL,
+	AttachmentUrl varchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	ContentType varchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	FileSize bigint NULL,
+	SortOrder int DEFAULT 1 NOT NULL,
+	CreatedAt datetime2 DEFAULT sysutcdatetime() NOT NULL,
+	CONSTRAINT PK_ChatMessageAttachments PRIMARY KEY (Id)
+);
+ CREATE NONCLUSTERED INDEX IX_ChatMessageAttachments_CreatedAt ON MyGarage.dbo.ChatMessageAttachments (  CreatedAt DESC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ CREATE NONCLUSTERED INDEX IX_ChatMessageAttachments_MessageId_SortOrder_Id ON MyGarage.dbo.ChatMessageAttachments (  MessageId ASC  , SortOrder ASC  , Id ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ALTER TABLE MyGarage.dbo.ChatMessageAttachments WITH NOCHECK ADD CONSTRAINT CK_ChatMessageAttachments_SortOrder CHECK (([SortOrder]>=(1)));
+
+
 -- MyGarage.dbo.ChatMessages definition
 
 -- Drop table
@@ -542,9 +529,21 @@ CREATE TABLE MyGarage.dbo.ChatMessages (
 	Content nvarchar(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	AttachmentUrl varchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	CreatedAt datetime2 DEFAULT getdate() NULL,
+	ClientMessageId uniqueidentifier NULL,
+	MessageType varchar(20) COLLATE SQL_Latin1_General_CP1_CI_AS DEFAULT 'TEXT' NOT NULL,
+	IsDeleted bit DEFAULT 0 NOT NULL,
+	DeletedAt datetime2 NULL,
 	CONSTRAINT PK__ChatMess__3214EC07A1C55ACB PRIMARY KEY (Id)
 );
-ALTER TABLE MyGarage.dbo.ChatMessages WITH NOCHECK ADD CONSTRAINT CK__ChatMessa__Sende__2A01329B CHECK (([SenderType]='AI' OR [SenderType]='SYSTEM' OR [SenderType]='STAFF' OR [SenderType]='CUSTOMER'));
+ CREATE NONCLUSTERED INDEX IX_ChatMessages_ConversationId_Id ON MyGarage.dbo.ChatMessages (  ConversationId ASC  , Id ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ CREATE UNIQUE NONCLUSTERED INDEX UX_ChatMessages_ClientMessageId ON MyGarage.dbo.ChatMessages (  ClientMessageId ASC  )  
+	 WHERE  ([ClientMessageId] IS NOT NULL)
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ALTER TABLE MyGarage.dbo.ChatMessages WITH NOCHECK ADD CONSTRAINT CK_ChatMessages_SenderType CHECK (([SenderType]='SYSTEM' OR [SenderType]='STAFF' OR [SenderType]='CUSTOMER'));
+ALTER TABLE MyGarage.dbo.ChatMessages WITH NOCHECK ADD CONSTRAINT CK_ChatMessages_MessageType CHECK (([MessageType]='SYSTEM' OR [MessageType]='IMAGE' OR [MessageType]='TEXT'));
 
 
 -- MyGarage.dbo.CommissionRules definition
@@ -613,6 +612,41 @@ ALTER TABLE MyGarage.dbo.CommissionTransactions WITH NOCHECK ADD CONSTRAINT CK__
 ALTER TABLE MyGarage.dbo.CommissionTransactions WITH NOCHECK ADD CONSTRAINT CHK_CommTrans_Clawback CHECK (([LogType]='EARNED' AND [OriginalCommissionId] IS NULL AND [ServiceRefundId] IS NULL AND [RetailReturnId] IS NULL OR [LogType]='CLAWBACK' AND ([OriginalCommissionId] IS NOT NULL OR [ServiceRefundId] IS NOT NULL OR [RetailReturnId] IS NOT NULL)));
 
 
+-- MyGarage.dbo.ConversationCustomerReads definition
+
+-- Drop table
+
+-- DROP TABLE MyGarage.dbo.ConversationCustomerReads;
+
+CREATE TABLE MyGarage.dbo.ConversationCustomerReads (
+	ConversationId bigint NOT NULL,
+	CustomerId bigint NOT NULL,
+	LastReadMessageId bigint NULL,
+	LastReadAt datetime2 NULL,
+	UpdatedAt datetime2 DEFAULT sysutcdatetime() NOT NULL,
+	CONSTRAINT PK_ConversationCustomerReads PRIMARY KEY (ConversationId)
+);
+
+
+-- MyGarage.dbo.ConversationStaffReads definition
+
+-- Drop table
+
+-- DROP TABLE MyGarage.dbo.ConversationStaffReads;
+
+CREATE TABLE MyGarage.dbo.ConversationStaffReads (
+	ConversationId bigint NOT NULL,
+	StaffId bigint NOT NULL,
+	LastReadMessageId bigint NULL,
+	LastReadAt datetime2 NULL,
+	UpdatedAt datetime2 DEFAULT sysutcdatetime() NOT NULL,
+	CONSTRAINT PK_ConversationStaffReads PRIMARY KEY (ConversationId,StaffId)
+);
+ CREATE NONCLUSTERED INDEX IX_ConversationStaffReads_StaffId ON MyGarage.dbo.ConversationStaffReads (  StaffId ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+
+
 -- MyGarage.dbo.Conversations definition
 
 -- Drop table
@@ -627,9 +661,24 @@ CREATE TABLE MyGarage.dbo.Conversations (
 	LastSenderId bigint NULL,
 	UpdatedAt datetime2 DEFAULT getdate() NULL,
 	Status varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS DEFAULT 'OPEN' NULL,
+	BranchId bigint NOT NULL,
+	AppointmentId bigint NULL,
+	ServiceOrderId bigint NULL,
+	VehicleId bigint NULL,
+	AssignedStaffId bigint NULL,
+	LastMessageId bigint NULL,
+	LastMessageAt datetime2 DEFAULT sysutcdatetime() NULL,
+	CreatedAt datetime2 DEFAULT sysutcdatetime() NULL,
+	RowVersion timestamp NOT NULL,
 	CONSTRAINT PK__Conversa__3214EC073AA82895 PRIMARY KEY (Id)
 );
-ALTER TABLE MyGarage.dbo.Conversations WITH NOCHECK ADD CONSTRAINT CK__Conversat__Statu__30AE302A CHECK (([Status]='CLOSED' OR [Status]='OPEN'));
+ CREATE NONCLUSTERED INDEX IX_Conversations_Branch_Status_LastMessageAt ON MyGarage.dbo.Conversations (  BranchId ASC  , Status ASC  , LastMessageAt DESC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ CREATE NONCLUSTERED INDEX IX_Conversations_Customer_LastMessageAt ON MyGarage.dbo.Conversations (  CustomerId ASC  , LastMessageAt DESC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ALTER TABLE MyGarage.dbo.Conversations WITH NOCHECK ADD CONSTRAINT CK_Conversations_Status CHECK (([Status]='CLOSED' OR [Status]='WAITING_FOR_CUSTOMER' OR [Status]='WAITING_FOR_STAFF' OR [Status]='OPEN'));
 
 
 -- MyGarage.dbo.CustomerFeedbacks definition
@@ -888,6 +937,44 @@ CREATE TABLE MyGarage.dbo.GatePass (
 );
 ALTER TABLE MyGarage.dbo.GatePass WITH NOCHECK ADD CONSTRAINT CK__GatePass__Cleara__384F51F2 CHECK (([ClearanceType]='TEST_DRIVE' OR [ClearanceType]='WARRANTY_RELEASE' OR [ClearanceType]='MANAGER_APPROVED_DEBT' OR [ClearanceType]='POSTPAID_CONTRACT' OR [ClearanceType]='FULLY_PAID'));
 ALTER TABLE MyGarage.dbo.GatePass WITH NOCHECK ADD CONSTRAINT CK__GatePass__Status__3943762B CHECK (([Status]='CANCELED' OR [Status]='SCANNED' OR [Status]='ISSUED'));
+
+
+-- MyGarage.dbo.GroupSessions definition
+
+-- Drop table
+
+-- DROP TABLE MyGarage.dbo.GroupSessions;
+
+CREATE TABLE MyGarage.dbo.GroupSessions (
+	Id bigint IDENTITY(1,1) NOT NULL,
+	GroupCode varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	CustomerId bigint NOT NULL,
+	BranchId bigint NOT NULL,
+	Status varchar(30) COLLATE SQL_Latin1_General_CP1_CI_AS DEFAULT 'PENDING' NOT NULL,
+	TotalItems int DEFAULT 0 NOT NULL,
+	ConfirmedItems int DEFAULT 0 NOT NULL,
+	CanceledItems int DEFAULT 0 NOT NULL,
+	ConfirmedAt datetime NULL,
+	CanceledAt datetime NULL,
+	CancelReason nvarchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	CustomerNote nvarchar(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	CreatedAt datetime DEFAULT getdate() NULL,
+	CreatedBy bigint NULL,
+	UpdatedAt datetime DEFAULT getdate() NULL,
+	UpdatedBy bigint NULL,
+	CONSTRAINT PK_BookingGroups PRIMARY KEY (Id)
+);
+ CREATE NONCLUSTERED INDEX IX_BookingGroups_CustomerId_CreatedAt ON MyGarage.dbo.GroupSessions (  CustomerId ASC  , CreatedAt DESC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ CREATE NONCLUSTERED INDEX IX_BookingGroups_Status_CreatedAt ON MyGarage.dbo.GroupSessions (  Status ASC  , CreatedAt DESC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ CREATE UNIQUE NONCLUSTERED INDEX UQ_BookingGroups_GroupCode ON MyGarage.dbo.GroupSessions (  GroupCode ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+ALTER TABLE MyGarage.dbo.GroupSessions WITH NOCHECK ADD CONSTRAINT CK_BookingGroups_Status CHECK (([Status]='COMPLETED' OR [Status]='CANCELED' OR [Status]='PARTIAL_CONFIRMED' OR [Status]='CONFIRMED' OR [Status]='PENDING'));
+ALTER TABLE MyGarage.dbo.GroupSessions WITH NOCHECK ADD CONSTRAINT CK_GroupSessions_ItemCounters CHECK (([TotalItems]>=(0) AND [ConfirmedItems]>=(0) AND [CanceledItems]>=(0) AND ([ConfirmedItems]+[CanceledItems])<=[TotalItems]));
 
 
 -- MyGarage.dbo.InsuranceCompanies definition
@@ -1731,18 +1818,22 @@ CREATE TABLE MyGarage.dbo.ServiceOrders (
 	UpdatedBy bigint NULL,
 	CurrentBayId bigint NULL,
 	CurrentParkingSlotId bigint NULL,
+	GroupSessionId bigint NULL,
 	CONSTRAINT PK__ServiceO__3214EC07A6BCD573 PRIMARY KEY (Id),
 	CONSTRAINT UQ__ServiceO__A25C5AA7FBF72344 UNIQUE (Code)
 );
  CREATE NONCLUSTERED INDEX IX_ServiceOrders_CurrentLocation ON MyGarage.dbo.ServiceOrders (  CurrentBayId ASC  , CurrentParkingSlotId ASC  )  
 	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
 	 ON [PRIMARY ] ;
+ CREATE NONCLUSTERED INDEX IX_ServiceOrders_GroupSessionId ON MyGarage.dbo.ServiceOrders (  GroupSessionId ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
  CREATE NONCLUSTERED INDEX IX_ServiceOrders_Status_CreatedAt ON MyGarage.dbo.ServiceOrders (  Status ASC  , CreatedAt ASC  )  
 	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
 	 ON [PRIMARY ] ;
+ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK_ServiceOrders_Status CHECK ((upper(ltrim(rtrim([Status])))='COMPLETED' OR upper(ltrim(rtrim([Status])))='QC_PENDING' OR upper(ltrim(rtrim([Status])))='REPAIRING' OR upper(ltrim(rtrim([Status])))='DIAGNOSING' OR upper(ltrim(rtrim([Status])))='RECEPTION' OR upper(ltrim(rtrim([Status])))='CANCELLED' OR upper(ltrim(rtrim([Status])))='CANCELED' OR upper(ltrim(rtrim([Status])))='CLOSED' OR upper(ltrim(rtrim([Status])))='READY' OR upper(ltrim(rtrim([Status])))='WAITING_PAYMENT' OR upper(ltrim(rtrim([Status])))='QC' OR upper(ltrim(rtrim([Status])))='IN_PROGRESS' OR upper(ltrim(rtrim([Status])))='APPROVED' OR upper(ltrim(rtrim([Status])))='WAITING_APPROVAL' OR upper(ltrim(rtrim([Status])))='QUOTING' OR upper(ltrim(rtrim([Status])))='INSPECTING' OR upper(ltrim(rtrim([Status])))='WAITING' OR upper(ltrim(rtrim([Status])))='CHECKED_IN' OR upper(ltrim(rtrim([Status])))='NEW'));
 ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__Order__55DFB4D9 CHECK (([OrderCategory]='QUICK_SERVICE' OR [OrderCategory]='GENERAL_REPAIR' OR [OrderCategory]='DIAGNOSIS' OR [OrderCategory]='WARRANTY' OR [OrderCategory]='MAINTENANCE'));
 ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__Depos__56D3D912 CHECK (([DepositStatus]='REFUNDED' OR [DepositStatus]='PAID' OR [DepositStatus]='PARTIAL' OR [DepositStatus]='PENDING' OR [DepositStatus]='NOT_REQUIRED'));
-ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__Statu__57C7FD4B CHECK (([Status]='CANCELED' OR [Status]='CLOSED' OR [Status]='READY' OR [Status]='WAITING_PAYMENT' OR [Status]='QC' OR [Status]='IN_PROGRESS' OR [Status]='APPROVED' OR [Status]='WAITING_APPROVAL' OR [Status]='QUOTING' OR [Status]='INSPECTING' OR [Status]='NEW'));
 ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__QCSta__58BC2184 CHECK (([QCStatus]='FAILED' OR [QCStatus]='PASSED' OR [QCStatus]='PENDING'));
 ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__OldPa__59B045BD CHECK (([OldPartsReturnOption]='CUSTOM' OR [OldPartsReturnOption]='DISPOSE_ALL' OR [OldPartsReturnOption]='RETURN_ALL'));
 ALTER TABLE MyGarage.dbo.ServiceOrders WITH NOCHECK ADD CONSTRAINT CK__ServiceOr__Payme__5AA469F6 CHECK (([PaymentStatus]='PAID' OR [PaymentStatus]='PARTIAL' OR [PaymentStatus]='UNPAID'));
@@ -2519,7 +2610,7 @@ CREATE TABLE MyGarage.dbo.WorkSlots (
 	Notes nvarchar(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	CONSTRAINT PK__WorkSlot__3214EC0774196CAC PRIMARY KEY (Id)
 );
-ALTER TABLE MyGarage.dbo.WorkSlots WITH NOCHECK ADD CONSTRAINT CK_WorkSlots_SlotType CHECK (([SlotType]='OVERNIGHT_LOCK ' OR [SlotType]='WALK_IN' OR [SlotType]='APPOINTMENT'));
+ALTER TABLE MyGarage.dbo.WorkSlots WITH NOCHECK ADD CONSTRAINT CK_WorkSlots_SlotType CHECK ((upper(ltrim(rtrim([SlotType])))='OVERNIGHT_LOCK' OR upper(ltrim(rtrim([SlotType])))='APPOINTMENT' OR upper(ltrim(rtrim([SlotType])))='WALK_IN'));
 ALTER TABLE MyGarage.dbo.WorkSlots WITH NOCHECK ADD CONSTRAINT CK__WorkSlots__Statu__66161CA2 CHECK (([Status]='CANCELED' OR [Status]='COMPLETED' OR [Status]='OVERNIGHT_HOLD' OR [Status]='NO_SHOW' OR [Status]='CHECKED_IN' OR [Status]='BOOKED' OR [Status]='LOCKED' OR [Status]='AVAILABLE'));
 
 
@@ -3249,7 +3340,7 @@ ALTER TABLE MyGarage.dbo.AI_TechnicalAssistant ADD CONSTRAINT FK__AI_Techni__Rel
 
 -- MyGarage.dbo.Appointments foreign keys
 
-ALTER TABLE MyGarage.dbo.Appointments ADD CONSTRAINT FK_Appointments_BookingGroupId FOREIGN KEY (BookingGroupId) REFERENCES MyGarage.dbo.BookingGroups(Id);
+ALTER TABLE MyGarage.dbo.Appointments ADD CONSTRAINT FK_Appointments_BookingGroupId FOREIGN KEY (GroupSessionId) REFERENCES MyGarage.dbo.GroupSessions(Id);
 ALTER TABLE MyGarage.dbo.Appointments ADD CONSTRAINT FK__Appointme__Branc__1B29035F FOREIGN KEY (BranchId) REFERENCES MyGarage.dbo.Branches(Id);
 ALTER TABLE MyGarage.dbo.Appointments ADD CONSTRAINT FK__Appointme__Creat__1E05700A FOREIGN KEY (CreatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 ALTER TABLE MyGarage.dbo.Appointments ADD CONSTRAINT FK__Appointme__Custo__1C1D2798 FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
@@ -3277,14 +3368,6 @@ ALTER TABLE MyGarage.dbo.Bays ADD CONSTRAINT FK__Bays__CreatedBy__269AB60B FOREI
 ALTER TABLE MyGarage.dbo.Bays ADD CONSTRAINT FK__Bays__CurrentOcc__25A691D2 FOREIGN KEY (CurrentOccupiedVehicleId) REFERENCES MyGarage.dbo.Vehicles(Id);
 ALTER TABLE MyGarage.dbo.Bays ADD CONSTRAINT FK__Bays__DeletedBy__2882FE7D FOREIGN KEY (DeletedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 ALTER TABLE MyGarage.dbo.Bays ADD CONSTRAINT FK__Bays__UpdatedBy__278EDA44 FOREIGN KEY (UpdatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
-
-
--- MyGarage.dbo.BookingGroups foreign keys
-
-ALTER TABLE MyGarage.dbo.BookingGroups ADD CONSTRAINT FK_BookingGroups_BranchId FOREIGN KEY (BranchId) REFERENCES MyGarage.dbo.Branches(Id);
-ALTER TABLE MyGarage.dbo.BookingGroups ADD CONSTRAINT FK_BookingGroups_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
-ALTER TABLE MyGarage.dbo.BookingGroups ADD CONSTRAINT FK_BookingGroups_CustomerId FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
-ALTER TABLE MyGarage.dbo.BookingGroups ADD CONSTRAINT FK_BookingGroups_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 
 
 -- MyGarage.dbo.BranchExceptions foreign keys
@@ -3316,6 +3399,11 @@ ALTER TABLE MyGarage.dbo.Categories ADD CONSTRAINT FK__Categorie__Paren__320C68B
 ALTER TABLE MyGarage.dbo.Categories ADD CONSTRAINT FK__Categorie__Updat__33F4B129 FOREIGN KEY (UpdatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 
 
+-- MyGarage.dbo.ChatMessageAttachments foreign keys
+
+ALTER TABLE MyGarage.dbo.ChatMessageAttachments ADD CONSTRAINT FK_ChatMessageAttachments_MessageId FOREIGN KEY (MessageId) REFERENCES MyGarage.dbo.ChatMessages(Id) ON DELETE CASCADE;
+
+
 -- MyGarage.dbo.ChatMessages foreign keys
 
 ALTER TABLE MyGarage.dbo.ChatMessages ADD CONSTRAINT FK__ChatMessa__Conve__35DCF99B FOREIGN KEY (ConversationId) REFERENCES MyGarage.dbo.Conversations(Id);
@@ -3342,8 +3430,28 @@ ALTER TABLE MyGarage.dbo.CommissionTransactions ADD CONSTRAINT FK__Commissio__St
 ALTER TABLE MyGarage.dbo.CommissionTransactions ADD CONSTRAINT FK__Commissio__Updat__3F6663D5 FOREIGN KEY (UpdatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 
 
+-- MyGarage.dbo.ConversationCustomerReads foreign keys
+
+ALTER TABLE MyGarage.dbo.ConversationCustomerReads ADD CONSTRAINT FK_ConversationCustomerReads_ConversationId FOREIGN KEY (ConversationId) REFERENCES MyGarage.dbo.Conversations(Id) ON DELETE CASCADE;
+ALTER TABLE MyGarage.dbo.ConversationCustomerReads ADD CONSTRAINT FK_ConversationCustomerReads_CustomerId FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
+ALTER TABLE MyGarage.dbo.ConversationCustomerReads ADD CONSTRAINT FK_ConversationCustomerReads_LastReadMessageId FOREIGN KEY (LastReadMessageId) REFERENCES MyGarage.dbo.ChatMessages(Id) ON DELETE SET NULL;
+
+
+-- MyGarage.dbo.ConversationStaffReads foreign keys
+
+ALTER TABLE MyGarage.dbo.ConversationStaffReads ADD CONSTRAINT FK_ConversationStaffReads_ConversationId FOREIGN KEY (ConversationId) REFERENCES MyGarage.dbo.Conversations(Id) ON DELETE CASCADE;
+ALTER TABLE MyGarage.dbo.ConversationStaffReads ADD CONSTRAINT FK_ConversationStaffReads_LastReadMessageId FOREIGN KEY (LastReadMessageId) REFERENCES MyGarage.dbo.ChatMessages(Id) ON DELETE SET NULL;
+ALTER TABLE MyGarage.dbo.ConversationStaffReads ADD CONSTRAINT FK_ConversationStaffReads_StaffId FOREIGN KEY (StaffId) REFERENCES MyGarage.dbo.Staffs(Id);
+
+
 -- MyGarage.dbo.Conversations foreign keys
 
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_AppointmentId FOREIGN KEY (AppointmentId) REFERENCES MyGarage.dbo.Appointments(Id);
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_AssignedStaffId FOREIGN KEY (AssignedStaffId) REFERENCES MyGarage.dbo.Staffs(Id);
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_BranchId FOREIGN KEY (BranchId) REFERENCES MyGarage.dbo.Branches(Id);
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_LastMessageId FOREIGN KEY (LastMessageId) REFERENCES MyGarage.dbo.ChatMessages(Id) ON DELETE SET NULL;
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_ServiceOrderId FOREIGN KEY (ServiceOrderId) REFERENCES MyGarage.dbo.ServiceOrders(Id);
+ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK_Conversations_VehicleId FOREIGN KEY (VehicleId) REFERENCES MyGarage.dbo.Vehicles(Id);
 ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK__Conversat__Custo__442B18F2 FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
 ALTER TABLE MyGarage.dbo.Conversations ADD CONSTRAINT FK__Conversat__Staff__4336F4B9 FOREIGN KEY (StaffId) REFERENCES MyGarage.dbo.Staffs(Id);
 
@@ -3426,6 +3534,14 @@ ALTER TABLE MyGarage.dbo.GatePass ADD CONSTRAINT FK__GatePass__Approv__695C9DA1 
 ALTER TABLE MyGarage.dbo.GatePass ADD CONSTRAINT FK__GatePass__Issued__68687968 FOREIGN KEY (IssuedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 ALTER TABLE MyGarage.dbo.GatePass ADD CONSTRAINT FK__GatePass__Scanne__6A50C1DA FOREIGN KEY (ScannedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 ALTER TABLE MyGarage.dbo.GatePass ADD CONSTRAINT FK__GatePass__Servic__6774552F FOREIGN KEY (ServiceOrderId) REFERENCES MyGarage.dbo.ServiceOrders(Id);
+
+
+-- MyGarage.dbo.GroupSessions foreign keys
+
+ALTER TABLE MyGarage.dbo.GroupSessions ADD CONSTRAINT FK_BookingGroups_BranchId FOREIGN KEY (BranchId) REFERENCES MyGarage.dbo.Branches(Id);
+ALTER TABLE MyGarage.dbo.GroupSessions ADD CONSTRAINT FK_BookingGroups_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
+ALTER TABLE MyGarage.dbo.GroupSessions ADD CONSTRAINT FK_BookingGroups_CustomerId FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
+ALTER TABLE MyGarage.dbo.GroupSessions ADD CONSTRAINT FK_BookingGroups_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 
 
 -- MyGarage.dbo.InsuranceCompanies foreign keys
@@ -3664,6 +3780,7 @@ ALTER TABLE MyGarage.dbo.ServiceOrderSnapshots ADD CONSTRAINT FK__ServiceOr__Ser
 -- MyGarage.dbo.ServiceOrders foreign keys
 
 ALTER TABLE MyGarage.dbo.ServiceOrders ADD CONSTRAINT FK_ServiceOrders_Bay FOREIGN KEY (CurrentBayId) REFERENCES MyGarage.dbo.Bays(Id);
+ALTER TABLE MyGarage.dbo.ServiceOrders ADD CONSTRAINT FK_ServiceOrders_GroupSessionId FOREIGN KEY (GroupSessionId) REFERENCES MyGarage.dbo.GroupSessions(Id);
 ALTER TABLE MyGarage.dbo.ServiceOrders ADD CONSTRAINT FK_ServiceOrders_ParkingSlot FOREIGN KEY (CurrentParkingSlotId) REFERENCES MyGarage.dbo.ParkingSlots(Id);
 ALTER TABLE MyGarage.dbo.ServiceOrders ADD CONSTRAINT FK__ServiceOr__Creat__59E54FE7 FOREIGN KEY (CreatedBy) REFERENCES MyGarage.dbo.Staffs(Id);
 ALTER TABLE MyGarage.dbo.ServiceOrders ADD CONSTRAINT FK__ServiceOr__Custo__515009E6 FOREIGN KEY (CustomerId) REFERENCES MyGarage.dbo.Customers(Id);
@@ -4121,262 +4238,3 @@ ALTER   VIEW dbo.vw_supplier_payable_summary AS
               ap.updated_at
           FROM dbo.accounts_payable ap
           INNER JOIN dbo.Suppliers s ON s.Id = ap.supplier_id;
-
-
--- =============================================================================
--- SEED DATA: Part Shop (cửa hàng phụ tùng)
--- Chạy sau khi schema + FK đã áp dụng và đã có ít nhất 1 dòng trong dbo.Branches.
--- Script idempotent: dựa trên SKU sản phẩm, mã kho WH-PARTSHOP-SELL-01, tên NCC/danh mục.
--- =============================================================================
-
-SET NOCOUNT ON;
-
-DECLARE @BranchId bigint =
-(
-    SELECT TOP (1) b.Id
-    FROM dbo.Branches AS b
-    WHERE ISNULL(b.IsDeleted, 0) = 0
-    ORDER BY b.Id
-);
-
-IF @BranchId IS NULL
-BEGIN
-    THROW 50001, N'Part Shop seed: chưa có chi nhánh nào trong Branches. Thêm chi nhánh trước.', 1;
-END;
-
-/* --- Danh mục phụ tùng (Categories) --- */
-IF NOT EXISTS
-(
-    SELECT 1
-    FROM dbo.Categories
-    WHERE CategoryName = N'Phụ tùng xe (Part Shop)'
-          AND ParentId IS NULL
-          AND ISNULL(IsDeleted, 0) = 0
-)
-    INSERT INTO dbo.Categories (CategoryName, ParentId, IsDepositRequired, Description, CreatedAt, IsDeleted)
-    VALUES (N'Phụ tùng xe (Part Shop)', NULL, 0, N'Danh mục gốc — cửa hàng phụ tùng / retail', SYSUTCDATETIME(), 0);
-
-DECLARE @CatPartRoot bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.CategoryName = N'Phụ tùng xe (Part Shop)'
-          AND c.ParentId IS NULL
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-
-DECLARE @tCat TABLE
-(
-    CategoryName nvarchar(255) NOT NULL PRIMARY KEY
-);
-
-INSERT INTO @tCat (CategoryName)
-VALUES
-    (N'Dầu nhớt & dầu hộp số'),
-    (N'Lọc gió (dầu / nhiên liệu / cabin)'),
-    (N'Hệ thống phanh'),
-    (N'Ắc quy & điện'),
-    (N'Gạt mưa & chất lỏng'),
-    (N'Phụ kiện ngoại thất');
-
-INSERT INTO dbo.Categories (CategoryName, ParentId, IsDepositRequired, Description, CreatedAt, IsDeleted)
-SELECT tc.CategoryName,
-       @CatPartRoot,
-       0,
-       N'Nhóm phụ tùng — Part Shop',
-       SYSUTCDATETIME(),
-       0
-FROM @tCat AS tc
-WHERE NOT EXISTS
-(
-    SELECT 1
-    FROM dbo.Categories AS c
-    WHERE c.CategoryName = tc.CategoryName
-          AND c.ParentId = @CatPartRoot
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-
-/* --- Nhà cung cấp (Suppliers) --- */
-IF NOT EXISTS (SELECT 1 FROM dbo.Suppliers WHERE SupplierName = N'Phụ tùng Ô tô Miền Nam' AND ISNULL(IsDeleted, 0) = 0)
-    INSERT INTO dbo.Suppliers (SupplierName, ContactName, Phone, Address, CurrentDebt, TaxCode, CreatedAt, IsDeleted)
-    VALUES (N'Phụ tùng Ô tô Miền Nam', N'Nguyễn Văn A', N'02839112233', N'Quận 12, TP.HCM', 0, N'0312345678', SYSUTCDATETIME(), 0);
-
-IF NOT EXISTS (SELECT 1 FROM dbo.Suppliers WHERE SupplierName = N'GParts Import Việt Nam' AND ISNULL(IsDeleted, 0) = 0)
-    INSERT INTO dbo.Suppliers (SupplierName, ContactName, Phone, Address, CurrentDebt, TaxCode, CreatedAt, IsDeleted)
-    VALUES (N'GParts Import Việt Nam', N'Trần Thị B', N'02437889900', N'Nam Từ Liêm, Hà Nội', 0, N'0109887766', SYSUTCDATETIME(), 0);
-
-IF NOT EXISTS (SELECT 1 FROM dbo.Suppliers WHERE SupplierName = N'Battery & Electrical VN' AND ISNULL(IsDeleted, 0) = 0)
-    INSERT INTO dbo.Suppliers (SupplierName, ContactName, Phone, Address, CurrentDebt, TaxCode, CreatedAt, IsDeleted)
-    VALUES (N'Battery & Electrical VN', N'Lê C', N'0234567890', N'Hải Phòng', 0, N'0201122334', SYSUTCDATETIME(), 0);
-
-/* --- Kho bán lẻ (Warehouses.Type = SELLABLE) --- */
-DECLARE @WhId bigint;
-
-IF NOT EXISTS (SELECT 1 FROM dbo.Warehouses WHERE Code = N'WH-PARTSHOP-SELL-01' AND ISNULL(IsDeleted, 0) = 0)
-BEGIN
-    INSERT INTO dbo.Warehouses (BranchId, Code, Name, Type, ManagerId, IsActive, CreatedAt, IsDeleted)
-    VALUES (@BranchId, N'WH-PARTSHOP-SELL-01', N'Kho bán lẻ phụ tùng (Part Shop)', N'SELLABLE', NULL, 1, SYSUTCDATETIME(), 0);
-
-    SET @WhId = SCOPE_IDENTITY();
-END
-ELSE
-    SELECT @WhId = w.Id
-    FROM dbo.Warehouses AS w
-    WHERE w.Code = N'WH-PARTSHOP-SELL-01'
-          AND ISNULL(w.IsDeleted, 0) = 0;
-
-/* Helper: lấy Id danh mục con theo tên */
-DECLARE @CatOil bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Dầu nhớt & dầu hộp số'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-DECLARE @CatFilter bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Lọc gió (dầu / nhiên liệu / cabin)'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-DECLARE @CatBrake bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Hệ thống phanh'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-DECLARE @CatBattery bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Ắc quy & điện'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-DECLARE @CatWiper bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Gạt mưa & chất lỏng'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-DECLARE @CatExt bigint =
-(
-    SELECT c.Id
-    FROM dbo.Categories AS c
-    WHERE c.ParentId = @CatPartRoot
-          AND c.CategoryName = N'Phụ kiện ngoại thất'
-          AND ISNULL(c.IsDeleted, 0) = 0
-);
-
-/* --- Sản phẩm (Products) — SKU unique --- */
-DECLARE @p TABLE
-(
-    SKU varchar(50) NOT NULL PRIMARY KEY,
-    Name nvarchar(255) NOT NULL,
-    Unit nvarchar(50) NOT NULL,
-    CategoryId bigint NOT NULL,
-    CostPrice decimal(18, 2) NOT NULL,
-    RetailPrice decimal(18, 2) NOT NULL,
-    TaxRate decimal(5, 2) NOT NULL,
-    WarrantyMonths int NOT NULL
-);
-
-INSERT INTO @p
-VALUES
-    (N'PT-OIL-5W30-SN-1L', N'Dầu động cơ 5W-30 SN 1L (tổng hợp)', N'Chai', @CatOil, 185000, 259000, 10.00, 0),
-    (N'PT-OIL-10W40-SL-4L', N'Dầu động cơ 10W-40 SL 4L (khoáng)', N'Can', @CatOil, 520000, 729000, 10.00, 0),
-    (N'PT-ATF-DEX3-1L', N'Dầu hộp số tự động ATF Dexron III 1L', N'Chai', @CatOil, 95000, 139000, 10.00, 0),
-    (N'PT-FLT-OIL-001', N'Lọc dầu động cơ (phổ thông)', N'Cái', @CatFilter, 85000, 129000, 10.00, 6),
-    (N'PT-FLT-AIR-001', N'Lọc gió động cơ (phổ thông)', N'Cái', @CatFilter, 120000, 189000, 10.00, 6),
-    (N'PT-FLT-CAB-001', N'Lọc gió cabin', N'Cái', @CatFilter, 95000, 149000, 10.00, 6),
-    (N'PT-BRK-PAD-F', N'Má phanh trước (bộ)', N'Bộ', @CatBrake, 420000, 599000, 10.00, 12),
-    (N'PT-BRK-DISC-F', N'Đĩa phanh trước (cái)', N'Cái', @CatBrake, 890000, 1249000, 10.00, 12),
-    (N'PT-BAT-12V-45AH', N'Ắc quy 12V 45Ah (khô)', N'Cái', @CatBattery, 1150000, 1590000, 10.00, 12),
-    (N'PT-BAT-12V-60AH', N'Ắc quy 12V 60Ah (khô)', N'Cái', @CatBattery, 1480000, 1990000, 10.00, 18),
-    (N'PT-WIP-18-UHOOK', N'Cần gạt mưa 18 inch (U-hook)', N'Cái', @CatWiper, 78000, 119000, 10.00, 6),
-    (N'PT-WIP-24-UHOOK', N'Cần gạt mưa 24 inch (U-hook)', N'Cái', @CatWiper, 92000, 139000, 10.00, 6),
-    (N'PT-COOL-1L-RED', N'Nước làm mát đỏ 1L', N'Chai', @CatWiper, 65000, 99000, 10.00, 0),
-    (N'PT-MAT-RUBBER-4P', N'Thảm cao su lót sàn 4 món (universal)', N'Bộ', @CatExt, 280000, 399000, 10.00, 3),
-    (N'PT-COVER-SUV-M', N'Bạt phủ xe SUV size M', N'Cái', @CatExt, 350000, 489000, 10.00, 6);
-
-INSERT INTO dbo.Products (SKU, Name, Unit, CategoryId, CostPrice, RetailPrice, ServicePrice, TaxRate, WarrantyMonths,
-                        IsStrictCapacityControl, RequireEmptyReturn, IsActive, CreatedAt, IsDeleted)
-SELECT x.SKU,
-       x.Name,
-       x.Unit,
-       x.CategoryId,
-       x.CostPrice,
-       x.RetailPrice,
-       NULL,
-       x.TaxRate,
-       x.WarrantyMonths,
-       0,
-       0,
-       1,
-       SYSUTCDATETIME(),
-       0
-FROM @p AS x
-WHERE NOT EXISTS (SELECT 1 FROM dbo.Products AS p WHERE p.SKU = x.SKU AND ISNULL(p.IsDeleted, 0) = 0);
-
-/* --- Tồn kho (Inventories) --- */
-INSERT INTO dbo.Inventories (WarehouseId, ProductId, Quantity, MinStockLevel, MaxStockLevel, LocationBin, ReservedQuantity,
-                             Current_MAC_Price, TotalInventoryValue)
-SELECT @WhId,
-       pr.Id,
-       q.Qty,
-       q.MinL,
-       q.MaxL,
-       q.Bin,
-       0,
-       pr.CostPrice,
-       q.Qty * pr.CostPrice
-FROM dbo.Products AS pr
-INNER JOIN
-(
-    VALUES
-        (N'PT-OIL-5W30-SN-1L', 80.000, 15.000, 200.000, N'A-01-01'),
-        (N'PT-OIL-10W40-SL-4L', 40.000, 8.000, 120.000, N'A-01-02'),
-        (N'PT-ATF-DEX3-1L', 60.000, 12.000, 150.000, N'A-01-03'),
-        (N'PT-FLT-OIL-001', 120.000, 24.000, 300.000, N'B-02-01'),
-        (N'PT-FLT-AIR-001', 90.000, 18.000, 250.000, N'B-02-02'),
-        (N'PT-FLT-CAB-001', 70.000, 14.000, 200.000, N'B-02-03'),
-        (N'PT-BRK-PAD-F', 25.000, 5.000, 80.000, N'C-03-01'),
-        (N'PT-BRK-DISC-F', 12.000, 4.000, 40.000, N'C-03-02'),
-        (N'PT-BAT-12V-45AH', 18.000, 4.000, 50.000, N'D-04-01'),
-        (N'PT-BAT-12V-60AH', 14.000, 3.000, 40.000, N'D-04-02'),
-        (N'PT-WIP-18-UHOOK', 100.000, 20.000, 300.000, N'E-05-01'),
-        (N'PT-WIP-24-UHOOK', 100.000, 20.000, 300.000, N'E-05-02'),
-        (N'PT-COOL-1L-RED', 72.000, 16.000, 200.000, N'E-05-03'),
-        (N'PT-MAT-RUBBER-4P', 30.000, 6.000, 100.000, N'F-06-01'),
-        (N'PT-COVER-SUV-M', 15.000, 3.000, 50.000, N'F-06-02')
-) AS q (SKU, Qty, MinL, MaxL, Bin)
-    ON pr.SKU = q.SKU
-WHERE ISNULL(pr.IsDeleted, 0) = 0
-      AND NOT EXISTS
-      (
-          SELECT 1
-          FROM dbo.Inventories AS i
-          WHERE i.WarehouseId = @WhId
-                AND i.ProductId = pr.Id
-      );
-
-/* --- Ảnh minh họa (ProductImages) — URL giả lập --- */
-INSERT INTO dbo.ProductImages (ProductId, ImageUrl, IsMain, SortOrder, Description)
-SELECT pr.Id,
-       N'https://example.com/partshop/' + pr.SKU + N'.jpg',
-       1,
-       0,
-       N'Ảnh catalog Part Shop'
-FROM dbo.Products AS pr
-WHERE pr.SKU LIKE N'PT-%'
-      AND ISNULL(pr.IsDeleted, 0) = 0
-      AND NOT EXISTS (SELECT 1 FROM dbo.ProductImages AS pi WHERE pi.ProductId = pr.Id);
-
-PRINT N'Part Shop seed: hoàn tất (chi nhánh Id=' + CAST(@BranchId AS varchar(20)) + N', kho Id=' + CAST(@WhId AS varchar(20)) + N').';
