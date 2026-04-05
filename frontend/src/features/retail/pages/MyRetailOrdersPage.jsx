@@ -3,11 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import RetailOrderStatusBadge from "@features/retail/components/RetailOrderStatusBadge";
+import { createPayosOrder } from "@features/payment/api/payosApi";
 import {
   getBranches,
   getMyRetailOrders,
   getRetailOrderById,
 } from "@features/retail/api/retailApi";
+import { useAuth } from "@shared/core/context/AuthContext";
 import {
   formatVnd,
   getBranchLabel,
@@ -35,14 +37,9 @@ function toSafeAmount(value) {
   return Number.isFinite(fallback) && fallback > 0 ? Math.floor(fallback) : 0;
 }
 
-function buildRepayLink(order) {
-  const params = new URLSearchParams({
-    amount: String(toSafeAmount(order?.finalAmount)),
-    description: `TT ${String(order?.orderCode || `RO-${order?.id || ""}`).slice(0, 22)}`,
-    retailOrderId: String(order?.id || ""),
-  });
-
-  return `/payment?${params.toString()}`;
+function buildFrontendUrl(pathname) {
+  if (typeof window === "undefined") return pathname;
+  return `${window.location.origin}${pathname}`;
 }
 
 function getOrderItems(payload) {
@@ -72,6 +69,7 @@ function formatRate(value) {
 }
 
 export default function MyRetailOrdersPage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -81,6 +79,7 @@ export default function MyRetailOrdersPage() {
   const [detailOrder, setDetailOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [payingOrderId, setPayingOrderId] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -175,7 +174,7 @@ export default function MyRetailOrdersPage() {
   }, [loading, orders, searchParams, setSearchParams]);
 
   const closeOrderDetail = () => {
-    if (detailLoading) return;
+    if (detailLoading || payingOrderId != null) return;
     setDetailOrder(null);
     setDetailError("");
   };
@@ -274,6 +273,92 @@ export default function MyRetailOrdersPage() {
       setDetailError(loadDetailError?.message || "Không tải được chi tiết đơn phụ tùng.");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handlePayRetailOrder = async (order) => {
+    const retailOrderId = Number(order?.id);
+    const totalAmount = toSafeAmount(order?.finalAmount);
+    const orderCode = order?.orderCode || `RO-${retailOrderId || ""}`;
+    const payosDescription = `TT ${String(orderCode).slice(0, 22)}`.slice(0, 25);
+
+    if (!Number.isFinite(retailOrderId) || retailOrderId <= 0) {
+      const message = "Khong xac dinh duoc ma don retail de thanh toan.";
+      setError(message);
+      setDetailError(message);
+      return;
+    }
+
+    if (totalAmount < 1000) {
+      const message = "Tong thanh toan toi thieu la 1,000d de tao lien ket PayOS.";
+      setError(message);
+      setDetailError(message);
+      return;
+    }
+
+    setError("");
+    setDetailError("");
+    setPayingOrderId(retailOrderId);
+
+    try {
+      const paymentResult = await createPayosOrder({
+        totalAmount,
+        description: payosDescription,
+        payerType: "CUSTOMER",
+        payerId: user?.id || null,
+        retailOrderId,
+        paymentType: "PAYMENT",
+        returnUrl: buildFrontendUrl("/payment/success"),
+        cancelUrl: buildFrontendUrl("/payment/cancel"),
+        items: [
+          {
+            name: "Don phu tung MyGarage",
+            quantity: 1,
+            price: totalAmount,
+          },
+        ],
+      });
+
+      if (!paymentResult?.ok) {
+        throw new Error(paymentResult?.data?.message || "Khong tao duoc link thanh toan PayOS.");
+      }
+
+      const paymentOrder = paymentResult?.data;
+      if (!paymentOrder?.checkoutUrl) {
+        throw new Error("Khong nhan duoc checkoutUrl tu PayOS.");
+      }
+
+      const retryParams = new URLSearchParams({
+        amount: String(totalAmount),
+        description: payosDescription,
+        retailOrderId: String(retailOrderId),
+      });
+
+      localStorage.setItem("payos_last_payment_search", `?${retryParams.toString()}`);
+      localStorage.setItem("payos_last_checkout_kind", "RETAIL");
+      localStorage.setItem("payos_last_retail_order_id", String(retailOrderId));
+
+      if (paymentOrder?.paymentRecordId) {
+        localStorage.setItem("payos_last_payment_id", String(paymentOrder.paymentRecordId));
+      } else {
+        localStorage.removeItem("payos_last_payment_id");
+      }
+
+      if (paymentOrder?.id) {
+        localStorage.setItem("payos_last_order_id", String(paymentOrder.id));
+      } else {
+        localStorage.removeItem("payos_last_order_id");
+      }
+
+      window.location.href = paymentOrder.checkoutUrl;
+    } catch (paymentError) {
+      const message = paymentError?.message || "Khong the tao lien ket thanh toan PayOS.";
+      setError(message);
+      if (Number(detailOrder?.id) === retailOrderId) {
+        setDetailError(message);
+      }
+    } finally {
+      setPayingOrderId(null);
     }
   };
 
@@ -405,12 +490,14 @@ export default function MyRetailOrdersPage() {
                         Mua thêm phụ tùng
                       </Link>
                       {canRetryPayment ? (
-                        <Link
-                          to={buildRepayLink(order)}
+                        <button
+                          type="button"
                           className="parts-shop-btn parts-shop-btn-primary"
+                          onClick={() => handlePayRetailOrder(order)}
+                          disabled={payingOrderId != null}
                         >
                           Thanh toán đơn này
-                        </Link>
+                        </button>
                       ) : null}
                     </div>
                   </article>
@@ -526,15 +613,20 @@ export default function MyRetailOrdersPage() {
             <div className="parts-shop-modal-actions">
               {String(detailOrder?.status || "").toUpperCase() === "DRAFT" &&
               Number(detailOrder?.finalAmount || 0) >= 1000 ? (
-                <Link to={buildRepayLink(detailOrder)} className="parts-shop-btn parts-shop-btn-primary">
+                <button
+                  type="button"
+                  className="parts-shop-btn parts-shop-btn-primary"
+                  onClick={() => handlePayRetailOrder(detailOrder)}
+                  disabled={payingOrderId != null}
+                >
                   Thanh toán đơn này
-                </Link>
+                </button>
               ) : null}
               <button
                 type="button"
                 className="parts-shop-btn parts-shop-btn-ghost"
                 onClick={closeOrderDetail}
-                disabled={detailLoading}
+                disabled={detailLoading || payingOrderId != null}
               >
                 Đóng
               </button>
