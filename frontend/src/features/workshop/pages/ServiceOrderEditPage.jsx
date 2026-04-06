@@ -4,6 +4,7 @@ import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { useBranch } from "@shared/core/context/BranchContext";
+import { useAuth } from "@shared/core/context/AuthContext";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
 import "./Workshop.css";
 
@@ -11,6 +12,15 @@ export default function ServiceOrderEditPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { selectedBranchId } = useBranch();
+  const { user } = useAuth();
+
+  const contextBranchId = Number.isFinite(Number(selectedBranchId)) && Number(selectedBranchId) > 0
+    ? Number(selectedBranchId)
+    : 0;
+  const userBranchId = Number.isFinite(Number(user?.branchId ?? user?.BranchId)) && Number(user?.branchId ?? user?.BranchId) > 0
+    ? Number(user?.branchId ?? user?.BranchId)
+    : 0;
+  const effectiveBranchId = contextBranchId || userBranchId;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,7 +85,8 @@ export default function ServiceOrderEditPage() {
       const filteredStaff = sRes.filter((s) => {
         const role = rRes.find((r) => r.id === s.roleId);
         const isMatchedRole = role && (role.roleCode === "RECEPTIONIST" || role.roleCode === "MANAGER");
-        const isMatchedBranch = !selectedBranchId || s.branchId === Number(selectedBranchId);
+        const staffBranchId = Number(s.branchId ?? s.BranchId ?? 0);
+        const isMatchedBranch = !effectiveBranchId || staffBranchId === effectiveBranchId;
         return isMatchedRole && isMatchedBranch;
       });
       setStaff(filteredStaff);
@@ -118,7 +129,7 @@ export default function ServiceOrderEditPage() {
     } finally {
       setLoading(false);
     }
-  }, [orderId, selectedBranchId]);
+  }, [effectiveBranchId, orderId]);
 
   useEffect(() => {
     fetchData();

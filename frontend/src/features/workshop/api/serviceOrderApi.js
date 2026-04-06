@@ -11,6 +11,7 @@ export const serviceOrderApi = {
   getById: (id) => request({ url: `/api/service-orders/${id}`, method: "GET" }),
   create: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshop: (data) => request({ url: "/api/service-orders", method: "POST", data }),
+  createGroupSession: (data) => request({ url: "/api/group-sessions/service-orders", method: "POST", data }),
   update: (id, data) => request({ url: `/api/service-orders/${id}`, method: "PUT", data }),
   delete: (id) => request({ url: `/api/service-orders/${id}`, method: "DELETE" }),
 

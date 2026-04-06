@@ -291,8 +291,21 @@ export default function ServiceOrderDiagnosisPage() {
           return type === "CHECK_IN" && signature.length > 0;
         });
         
-      if (!signedCheckInExists && isTechnician) { // Receptions can still view
-        setError("Khách chưa ký check-in. Chưa thể truy cập màn hình chuẩn đoán.");
+      if (!signedCheckInExists) {
+        const message = "Khách chưa ký check-in. Vui lòng hoàn tất Nhật ký xe trước khi vào chuẩn đoán.";
+        if (isTechnician) {
+          setError(message);
+          return;
+        }
+
+        toast({
+          title: "Chưa hoàn tất check-in",
+          description: message,
+          status: "warning",
+          duration: 4500,
+          isClosable: true,
+        });
+        navigate(`/workshop/reception/orders/${id}/vehicleconditionlogs`, { replace: true });
         return;
       }
 

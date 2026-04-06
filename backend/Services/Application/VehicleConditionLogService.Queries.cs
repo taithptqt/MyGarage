@@ -25,6 +25,14 @@ namespace MyGarage.Services
         public async Task<IReadOnlyList<VehicleConditionLog>> GetActiveRequestsAsync(string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .Where(x => x.LogType == normalizedType)
+                    .Where(x => x.CustomerSignatureUrl == null || x.CustomerSignatureUrl == string.Empty)
+                    .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                    .ToListAsync();
+            }
 
             return await _context.VehicleConditionLogs
                 .Where(x => x.LogType == normalizedType)
@@ -36,6 +44,14 @@ namespace MyGarage.Services
         public async Task<VehicleConditionLog?> GetActiveRequestAsync(long serviceOrderId, string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .Where(x => x.ServiceOrderId == serviceOrderId && x.LogType == normalizedType)
+                    .Where(x => x.CustomerSignatureUrl == null || x.CustomerSignatureUrl == string.Empty)
+                    .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                    .FirstOrDefaultAsync();
+            }
 
             return await _context.VehicleConditionLogs
                 .Where(x => x.ServiceOrderId == serviceOrderId && x.LogType == normalizedType)
@@ -47,6 +63,15 @@ namespace MyGarage.Services
         public async Task<bool> HasCompletedLogAsync(long serviceOrderId, string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .AnyAsync(x =>
+                        x.ServiceOrderId == serviceOrderId &&
+                        x.LogType == normalizedType &&
+                        x.CustomerSignatureUrl != null &&
+                        x.CustomerSignatureUrl != "");
+            }
 
             return await _context.VehicleConditionLogs
                 .AnyAsync(x =>

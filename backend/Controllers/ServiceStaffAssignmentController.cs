@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
@@ -24,11 +25,19 @@ namespace MyGarage.Controllers
         };
 
         private readonly IServiceStaffAssignmentService _serviceStaffAssignmentService;
+        private readonly IVehicleConditionLogService _vehicleConditionLogService;
+        private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
-        public ServiceStaffAssignmentController(IServiceStaffAssignmentService serviceStaffAssignmentService, IMapper mapper)
+        public ServiceStaffAssignmentController(
+            IServiceStaffAssignmentService serviceStaffAssignmentService,
+            IVehicleConditionLogService vehicleConditionLogService,
+            IGarageContext context,
+            IMapper mapper)
         {
             _serviceStaffAssignmentService = serviceStaffAssignmentService;
+            _vehicleConditionLogService = vehicleConditionLogService;
+            _context = context;
             _mapper = mapper;
         }
 
@@ -61,6 +70,12 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = statusError });
             }
 
+            var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
+            if (!string.IsNullOrWhiteSpace(checkInValidationError))
+            {
+                return BadRequest(new { message = checkInValidationError });
+            }
+
             var entity = _mapper.Map<ServiceStaffAssignment>(itemDto);
             var createdItem = await _serviceStaffAssignmentService.AddAsync(entity);
             var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(createdItem);
@@ -80,6 +95,12 @@ namespace MyGarage.Controllers
             if (!string.IsNullOrWhiteSpace(statusError))
             {
                 return BadRequest(new { message = statusError });
+            }
+
+            var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
+            if (!string.IsNullOrWhiteSpace(checkInValidationError))
+            {
+                return BadRequest(new { message = checkInValidationError });
             }
 
             _mapper.Map(itemDto, existingItem);
@@ -160,6 +181,33 @@ namespace MyGarage.Controllers
 
         private static string NormalizeStatus(string? status)
             => string.IsNullOrWhiteSpace(status) ? string.Empty : status.Trim().ToUpperInvariant();
+
+        private async Task<string?> ValidateSignedCheckInBeforeAssignmentAsync(long serviceOrderDetailId)
+        {
+            if (serviceOrderDetailId <= 0)
+            {
+                return "Thiếu ServiceOrderDetailId để phân công kỹ thuật viên.";
+            }
+
+            var serviceOrderId = await _context.ServiceOrderDetails
+                .AsNoTracking()
+                .Where(x => x.Id == serviceOrderDetailId)
+                .Select(x => x.ServiceOrderId)
+                .FirstOrDefaultAsync();
+
+            if (serviceOrderId <= 0)
+            {
+                return "Không tìm thấy hạng mục dịch vụ của lệnh sửa chữa.";
+            }
+
+            var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(serviceOrderId);
+            if (!hasSignedCheckIn)
+            {
+                return "Xe chưa hoàn tất check-in có chữ ký khách hàng. Vui lòng vào Nhật ký xe để hoàn tất trước khi giao việc cho thợ.";
+            }
+
+            return null;
+        }
     }
 }
 

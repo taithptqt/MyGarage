@@ -71,7 +71,8 @@ namespace MyGarage.Services
                         effectiveRequestedServiceIds,
                         AppointmentBookingFlows.Fixed,
                         effectiveVehicleCount,
-                        isParallel))
+                        isParallel,
+                        ignoreMinLeadTime: true))
                     .ToList();
 
                 if (slots.Count == 0)

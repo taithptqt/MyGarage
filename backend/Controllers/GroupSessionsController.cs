@@ -65,6 +65,32 @@ namespace MyGarage.Controllers
             return Ok(groups);
         }
 
+        [HttpPost("service-orders")]
+        public async Task<ActionResult<GroupSessionResponseDto>> CreateForServiceOrders([FromBody] ServiceOrderGroupSessionCreateDto dto)
+        {
+            var actorUserId = this.GetCurrentUserId();
+            if (!actorUserId.HasValue)
+            {
+                return Unauthorized();
+            }
+
+            if (dto == null || dto.CustomerId <= 0 || dto.BranchId <= 0)
+            {
+                return BadRequest(new { message = "CustomerId va BranchId phai lon hon 0 de tao GroupSession cho lenh nhom." });
+            }
+
+            var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId.Value);
+            var created = await _groupSessionService.CreateAsync(dto.CustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
+            var result = await _groupSessionService.GetByBranchAndIdAsync(dto.BranchId, created.Id);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Da tao GroupSession nhung khong tai duoc thong tin chi tiet." });
+            }
+
+            return CreatedAtAction(nameof(GetByBranchDetail), new { branchId = dto.BranchId, id = result.Id }, result);
+        }
+
         [HttpGet("customers/current/{id:long}")]
         public async Task<ActionResult<GroupSessionResponseDto>> GetMyGroupDetail(long id)
         {

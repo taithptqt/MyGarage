@@ -32,8 +32,6 @@ import {
 } from "react-icons/md";
 import { request } from "@app/apiClient";
 
-const TAB_CHECKIN = "CHECKIN";
-const TAB_CHECKOUT = "CHECKOUT";
 const TAB_DIAGNOSIS = "DIAGNOSIS";
 const TAB_REPAIR = "REPAIR";
 const INTERNAL_ASSIGNMENT_STATUS_REJECTED = "REJECTED";
@@ -52,16 +50,12 @@ export default function TechnicianDashboard() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState(TAB_CHECKIN);
+  const [activeTab, setActiveTab] = useState(TAB_DIAGNOSIS);
 
   const [staffId, setStaffId] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [diagnosisRequests, setDiagnosisRequests] = useState([]);
-  const [checkInRequests, setCheckInRequests] = useState([]);
-  const [checkOutRequests, setCheckOutRequests] = useState([]);
   const [dismissedRequestIds, setDismissedRequestIds] = useState([]);
-  const [dismissedCheckInIds, setDismissedCheckInIds] = useState([]);
-  const [dismissedCheckOutIds, setDismissedCheckOutIds] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -75,14 +69,12 @@ export default function TechnicianDashboard() {
     setLoading(true);
     setError("");
     try {
-      const [oRes, sRes, assignmentsRes, detailsRes, diagnosisRes, checkinRes, checkoutRes] = await Promise.all([
+      const [oRes, sRes, assignmentsRes, detailsRes, diagnosisRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllStaff(),
         request({ url: "/api/service-staff-assignments", method: "GET" }),
         request({ url: "/api/service-order-details", method: "GET" }),
         serviceOrderApi.getDiagnosisRequests(),
-        serviceOrderApi.getCheckInRequests(),
-        serviceOrderApi.getCheckOutRequests(),
       ]);
 
       const orders = Array.isArray(oRes) ? oRes : [];
@@ -90,8 +82,6 @@ export default function TechnicianDashboard() {
       const allAssignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
       const allDetails = Array.isArray(detailsRes) ? detailsRes : [];
       const allDiagnosis = Array.isArray(diagnosisRes) ? diagnosisRes : [];
-      const allCheckin = Array.isArray(checkinRes) ? checkinRes : [];
-      const allCheckout = Array.isArray(checkoutRes) ? checkoutRes : [];
 
       const currentStaff = allStaff.find(
         (s) => s.email === user.email || s.fullName === user.fullName
@@ -100,8 +90,6 @@ export default function TechnicianDashboard() {
       if (!currentStaff) {
         setAssignments([]);
         setDiagnosisRequests([]);
-        setCheckInRequests([]);
-        setCheckOutRequests([]);
         return;
       }
 
@@ -148,40 +136,6 @@ export default function TechnicianDashboard() {
         .filter(Boolean);
 
       setDiagnosisRequests(diagRequests);
-
-      const checkinRequestsMapped = allCheckin
-        .filter((x) => ["PENDING", "ASSIGNED"].includes(String(x.dashboardWarningLights || "").toUpperCase()))
-        .map((x) => {
-          const order = orders.find((o) => Number(o.id) === Number(x.serviceOrderId));
-          const status = String(x.dashboardWarningLights || "").toUpperCase();
-          return {
-            request: x,
-            order,
-            status,
-            isAssignedToMe: Number(x.inspectorId) === Number(currentStaff.id),
-            isAssignedToOther: status === "ASSIGNED" && Number(x.inspectorId) !== Number(currentStaff.id),
-          };
-        })
-        .filter((x) => x.order);
-
-      setCheckInRequests(checkinRequestsMapped);
-
-      const checkoutRequestsMapped = allCheckout
-        .filter((x) => ["PENDING", "ASSIGNED"].includes(String(x.dashboardWarningLights || "").toUpperCase()))
-        .map((x) => {
-          const order = orders.find((o) => Number(o.id) === Number(x.serviceOrderId));
-          const status = String(x.dashboardWarningLights || "").toUpperCase();
-          return {
-            request: x,
-            order,
-            status,
-            isAssignedToMe: Number(x.inspectorId) === Number(currentStaff.id),
-            isAssignedToOther: status === "ASSIGNED" && Number(x.inspectorId) !== Number(currentStaff.id),
-          };
-        })
-        .filter((x) => x.order);
-
-      setCheckOutRequests(checkoutRequestsMapped);
     } catch (err) {
       setError("Không thể tải dữ liệu kỹ thuật viên: " + err.message);
     } finally {
@@ -242,26 +196,6 @@ export default function TechnicianDashboard() {
     }
   };
 
-  const handleAcceptCheckIn = async (requestItem) => {
-    try {
-      await serviceOrderApi.acceptCheckInRequest(requestItem.order.id, staffId);
-      toast({ title: "Đã nhận yêu cầu check-in", status: "success", duration: 2500 });
-      await fetchData();
-    } catch (err) {
-      toast({ title: "Không thể nhận yêu cầu check-in", description: err.message, status: "error" });
-    }
-  };
-
-  const handleAcceptCheckOut = async (requestItem) => {
-    try {
-      await serviceOrderApi.acceptCheckOutRequest(requestItem.order.id, staffId);
-      toast({ title: "Đã nhận yêu cầu checkout", status: "success", duration: 2500 });
-      await fetchData();
-    } catch (err) {
-      toast({ title: "Không thể nhận yêu cầu checkout", description: err.message, status: "error" });
-    }
-  };
-
 
 
   const filteredAssignments = useMemo(() => {
@@ -289,34 +223,6 @@ export default function TechnicianDashboard() {
       });
   }, [diagnosisRequests, dismissedRequestIds, searchQuery]);
 
-  const filteredCheckInRequests = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    return checkInRequests
-      .filter((x) => !dismissedCheckInIds.includes(x.request.id))
-      .filter((x) => {
-        if (!query) return true;
-        return (
-          (x.order?.code || "").toLowerCase().includes(query) ||
-          (x.order?.vehicleLicensePlate || "").toLowerCase().includes(query) ||
-          (x.order?.customerName || "").toLowerCase().includes(query)
-        );
-      });
-  }, [checkInRequests, dismissedCheckInIds, searchQuery]);
-
-  const filteredCheckOutRequests = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    return checkOutRequests
-      .filter((x) => !dismissedCheckOutIds.includes(x.request.id))
-      .filter((x) => {
-        if (!query) return true;
-        return (
-          (x.order?.code || "").toLowerCase().includes(query) ||
-          (x.order?.vehicleLicensePlate || "").toLowerCase().includes(query) ||
-          (x.order?.customerName || "").toLowerCase().includes(query)
-        );
-      });
-  }, [checkOutRequests, dismissedCheckOutIds, searchQuery]);
-
   const newAssignments = filteredAssignments.filter(
     (a) => !a.status || String(a.status).toUpperCase() === "PENDING"
   );
@@ -332,12 +238,6 @@ export default function TechnicianDashboard() {
         </Box>
 
         <HStack spacing={3} align="center" flexWrap="wrap" sx={{ "& > button": { h: "44px", minH: "44px", px: 6, borderRadius: "full", display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: "1", fontWeight: 700, mt: 0, mb: 0 } }}>
-          <Button variant={activeTab === TAB_CHECKIN ? "solid" : "outline"} colorScheme="blue" onClick={() => setActiveTab(TAB_CHECKIN)}>
-            Check-in ({filteredCheckInRequests.length})
-          </Button>
-          <Button variant={activeTab === TAB_CHECKOUT ? "solid" : "outline"} colorScheme="orange" onClick={() => setActiveTab(TAB_CHECKOUT)}>
-            Check-out ({filteredCheckOutRequests.length})
-          </Button>
           <Button variant={activeTab === TAB_DIAGNOSIS ? "solid" : "outline"} colorScheme="purple" onClick={() => setActiveTab(TAB_DIAGNOSIS)}>
             Chuẩn đoán ({filteredDiagnosisRequests.length})
           </Button>
@@ -352,138 +252,6 @@ export default function TechnicianDashboard() {
           <Box bg="red.50" p={4} borderRadius="lg"><Text color="red.500">{error}</Text></Box>
         ) : (
           <>
-            {activeTab === TAB_CHECKIN && (
-              <Box>
-                <HStack mb={4}><Icon as={MdInfo} color="blue.400" /><Heading size="md" color="#2b3674">Yêu cầu check-in</Heading></HStack>
-                {filteredCheckInRequests.length === 0 ? (
-                  <Box bg="white" p={10} textAlign="center" borderRadius="2xl" border="2px dashed" borderColor="gray.100"><Text color="gray.400">Không có yêu cầu check-in.</Text></Box>
-                ) : (
-                  <VStack align="stretch" spacing={3}>
-                    {filteredCheckInRequests.map((item) => (
-                      <HStack
-                        key={item.request.id}
-                        bg="white"
-                        p={4}
-                        borderRadius="2xl"
-                        border="1px solid"
-                        borderColor="gray.200"
-                        boxShadow="sm"
-                        _hover={item.isAssignedToMe ? { borderColor: "blue.200", boxShadow: "0 8px 24px rgba(43,54,116,0.08)" } : undefined}
-                        transition="all 0.2s ease"
-                        justify="space-between"
-                        align="center"
-                        flexWrap="wrap"
-                        gap={3}
-                        cursor={item.isAssignedToMe ? "pointer" : "default"}
-                        onClick={() => {
-                          if (item.isAssignedToMe) {
-                            navigate(`/workshop/technician/orders/${item.order.id}/condition?phase=CHECK_IN`);
-                          }
-                        }}
-                      >
-                        <HStack spacing={6} flex="1" minW={0} align="center" flexWrap="wrap">
-                          <Box minW="170px">
-                            <Text fontSize="xs" color="gray.500" mb={0.5}>Mã lệnh</Text>
-                            <Text fontWeight="bold" color="#2b3674">{item.order?.code}</Text>
-                          </Box>
-                          <HStack spacing={2} minW="190px" align="start">
-                            <Icon as={MdDirectionsCar} color="gray.500" />
-                            <Box>
-                              <Text fontSize="xs" color="gray.500" mb={0.5}>Biển số</Text>
-                              <Text fontWeight="bold">{item.order?.vehicleLicensePlate || "N/A"}</Text>
-                            </Box>
-                          </HStack>
-                          <HStack spacing={2} minW="220px" flex="1" minH="32px" align="start">
-                            <Icon as={MdPerson} color="gray.500" />
-                            <Box minW={0}>
-                              <Text fontSize="xs" color="gray.500" mb={0.5}>Khách hàng</Text>
-                              <Text noOfLines={1}>{item.order?.customerName || "-"}</Text>
-                            </Box>
-                          </HStack>
-                        </HStack>
-
-                        <HStack spacing={2} minW={{ base: "100%", md: "150px" }} justify={{ base: "flex-start", md: "flex-end" }} onClick={(e) => e.stopPropagation()}>
-                          {item.status === "PENDING" ? (
-                            <Button colorScheme="green" size="sm" minW="132px" onClick={() => handleAcceptCheckIn(item)}>Nhận yêu cầu</Button>
-                          ) : item.isAssignedToMe ? (
-                            <Text fontSize="sm" color="blue.500" fontWeight="700">Nhấn vào dòng để check-in</Text>
-                          ) : (
-                            <Button size="sm" isDisabled>Đã có thợ khác nhận</Button>
-                          )}
-                        </HStack>
-                      </HStack>
-                    ))}
-                  </VStack>
-                )}
-              </Box>
-            )}
-
-            {activeTab === TAB_CHECKOUT && (
-              <Box>
-                <HStack mb={4}><Icon as={MdInfo} color="orange.400" /><Heading size="md" color="#2b3674">Yêu cầu checkout</Heading></HStack>
-                {filteredCheckOutRequests.length === 0 ? (
-                  <Box bg="white" p={10} textAlign="center" borderRadius="2xl" border="2px dashed" borderColor="gray.100"><Text color="gray.400">Không có yêu cầu checkout.</Text></Box>
-                ) : (
-                  <VStack align="stretch" spacing={3}>
-                    {filteredCheckOutRequests.map((item) => (
-                      <HStack
-                        key={item.request.id}
-                        bg="white"
-                        p={4}
-                        borderRadius="2xl"
-                        border="1px solid"
-                        borderColor="gray.200"
-                        boxShadow="sm"
-                        _hover={item.isAssignedToMe ? { borderColor: "orange.200", boxShadow: "0 8px 24px rgba(43,54,116,0.08)" } : undefined}
-                        transition="all 0.2s ease"
-                        justify="space-between"
-                        align="center"
-                        flexWrap="wrap"
-                        gap={3}
-                        cursor={item.isAssignedToMe ? "pointer" : "default"}
-                        onClick={() => {
-                          if (item.isAssignedToMe) {
-                            navigate(`/workshop/technician/orders/${item.order.id}/condition?phase=CHECK_OUT`);
-                          }
-                        }}
-                      >
-                        <HStack spacing={6} flex="1" minW={0} align="center" flexWrap="wrap">
-                          <Box minW="170px">
-                            <Text fontSize="xs" color="gray.500" mb={0.5}>Mã lệnh</Text>
-                            <Text fontWeight="bold" color="#2b3674">{item.order?.code}</Text>
-                          </Box>
-                          <HStack spacing={2} minW="190px" align="start">
-                            <Icon as={MdDirectionsCar} color="gray.500" />
-                            <Box>
-                              <Text fontSize="xs" color="gray.500" mb={0.5}>Biển số</Text>
-                              <Text fontWeight="bold">{item.order?.vehicleLicensePlate || "N/A"}</Text>
-                            </Box>
-                          </HStack>
-                          <HStack spacing={2} minW="220px" flex="1" minH="32px" align="start">
-                            <Icon as={MdPerson} color="gray.500" />
-                            <Box minW={0}>
-                              <Text fontSize="xs" color="gray.500" mb={0.5}>Khách hàng</Text>
-                              <Text noOfLines={1}>{item.order?.customerName || "-"}</Text>
-                            </Box>
-                          </HStack>
-                        </HStack>
-
-                        <HStack spacing={2} minW={{ base: "100%", md: "150px" }} justify={{ base: "flex-start", md: "flex-end" }} onClick={(e) => e.stopPropagation()}>
-                          {item.status === "PENDING" ? (
-                            <Button colorScheme="green" size="sm" minW="132px" onClick={() => handleAcceptCheckOut(item)}>Nhận yêu cầu</Button>
-                          ) : item.isAssignedToMe ? (
-                            <Text fontSize="sm" color="orange.500" fontWeight="700">Nhấn vào dòng để checkout</Text>
-                          ) : (
-                            <Button size="sm" isDisabled>Đã có thợ khác nhận</Button>
-                          )}
-                        </HStack>
-                      </HStack>
-                    ))}
-                  </VStack>
-                )}
-              </Box>
-            )}
-
             {activeTab === TAB_DIAGNOSIS && (
               <Box>
                 <HStack mb={4}><Icon as={MdInfo} color="purple.400" /><Heading size="md" color="#2b3674">Yêu cầu chuẩn đoán</Heading></HStack>
@@ -589,7 +357,13 @@ export default function TechnicianDashboard() {
                   ) : (
                     <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
                       {activeAssignments.map((a) => (
-                        <AssignmentCard key={a.id} assignment={a} isActive onDiagnosis={(orderId) => navigate(`/workshop/technician/orders/${orderId}/condition`)} onFinish={() => handleFinishRepair(a)} />
+                        <AssignmentCard
+                          key={a.id}
+                          assignment={a}
+                          isActive
+                          onOpenDiagnosis={(currentOrderId) => navigate(`/workshop/technician/orders/${currentOrderId}/diagnosis`)}
+                          onFinish={() => handleFinishRepair(a)}
+                        />
                       ))}
                     </SimpleGrid>
                   )}
@@ -630,7 +404,7 @@ export default function TechnicianDashboard() {
   );
 }
 
-const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onDiagnosis, onFinish }) => {
+const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagnosis, onFinish }) => {
   const { order, detail } = assignment;
   const isDiagnosing = order?.status === "DIAGNOSING";
 
@@ -664,7 +438,9 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onDiagnosis
         ) : (
           <>
             {isDiagnosing ? (
-              <Button colorScheme="blue" color="white" size="sm" onClick={() => onDiagnosis(order.id)}>Kiểm tra tình trạng xe</Button>
+              <Button colorScheme="blue" color="white" size="sm" onClick={() => onOpenDiagnosis?.(order.id)}>
+                Mở màn hình chuẩn đoán
+              </Button>
             ) : (
               <Button colorScheme="green" size="sm" onClick={onFinish}>Hoàn thành hạng mục</Button>
             )}

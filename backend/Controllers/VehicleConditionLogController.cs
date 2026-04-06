@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Http;
@@ -16,6 +20,9 @@ namespace MyGarage.Controllers
     [ApiController]
     public class VehicleConditionLogController : ControllerBase
     {
+        private const string LogTypeCheckIn = "CHECK_IN";
+        private const string LogTypeCheckOut = "CHECK_OUT";
+
         public sealed record ConditionRequestCreateDto
         {
             public long ServiceOrderId { get; init; }
@@ -123,8 +130,8 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
             }
 
-            var logType = (itemDto.LogType ?? string.Empty).Trim().ToUpperInvariant();
-            if (logType == "CHECK_OUT")
+            var logType = NormalizeLogType(itemDto.LogType);
+            if (logType == LogTypeCheckOut)
             {
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
                 if (!hasSignedCheckIn)
@@ -132,17 +139,31 @@ namespace MyGarage.Controllers
                     return BadRequest(new { message = "Chỉ được tạo CHECK_OUT sau khi khách đã ký CHECK_IN." });
                 }
             }
+            else if (logType == LogTypeCheckIn)
+            {
+                var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
+                if (hasSignedCheckIn)
+                {
+                    return BadRequest(new { message = "CHECK_IN đã được khách hàng ký xác nhận, không thể tạo mới." });
+                }
+
+                if (!string.IsNullOrWhiteSpace(itemDto.CustomerSignatureUrl) &&
+                    !HasRequiredCornerImages(itemDto.DefectsAndImages))
+                {
+                    return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
+                }
+            }
 
             var entity = _mapper.Map<VehicleConditionLog>(itemDto);
             var createdItem = await _vehicleConditionLogService.AddAsync(entity);
 
-            if (string.Equals(itemDto.LogType, "CHECK_IN", StringComparison.OrdinalIgnoreCase))
+            if (logType == LogTypeCheckIn)
             {
-                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, "CHECK_IN");
+                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, LogTypeCheckIn);
             }
-            else if (string.Equals(itemDto.LogType, "CHECK_OUT", StringComparison.OrdinalIgnoreCase))
+            else if (logType == LogTypeCheckOut)
             {
-                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, "CHECK_OUT");
+                await _vehicleConditionLogService.MarkActiveRequestCompletedAsync(itemDto.ServiceOrderId, LogTypeCheckOut);
             }
 
             var responseDto = _mapper.Map<VehicleConditionLogResponseDto>(createdItem);
@@ -156,6 +177,47 @@ namespace MyGarage.Controllers
             if (existingItem == null)
             {
                 return NotFound();
+            }
+
+            if (itemDto == null)
+            {
+                return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
+            }
+
+            var existingType = NormalizeLogType(existingItem.LogType);
+            if (existingType == LogTypeCheckIn && !string.IsNullOrWhiteSpace(existingItem.CustomerSignatureUrl))
+            {
+                return BadRequest(new { message = "CHECK_IN đã được khách ký, không thể chỉnh sửa." });
+            }
+
+            var targetType = NormalizeLogType(itemDto?.LogType);
+            if (string.IsNullOrWhiteSpace(targetType))
+            {
+                targetType = existingType;
+            }
+
+            if (targetType == LogTypeCheckOut)
+            {
+                var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
+                if (!hasSignedCheckIn)
+                {
+                    return BadRequest(new { message = "Chỉ được cập nhật CHECK_OUT sau khi khách đã ký CHECK_IN." });
+                }
+            }
+
+            var effectiveSignature = string.IsNullOrWhiteSpace(itemDto.CustomerSignatureUrl)
+                ? existingItem.CustomerSignatureUrl
+                : itemDto.CustomerSignatureUrl;
+
+            var effectiveDefects = string.IsNullOrWhiteSpace(itemDto.DefectsAndImages)
+                ? existingItem.DefectsAndImages
+                : itemDto.DefectsAndImages;
+
+            if (targetType == LogTypeCheckIn &&
+                !string.IsNullOrWhiteSpace(effectiveSignature) &&
+                !HasRequiredCornerImages(effectiveDefects))
+            {
+                return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
             }
 
             _mapper.Map(itemDto, existingItem);
@@ -279,46 +341,230 @@ namespace MyGarage.Controllers
 
         private async Task<ActionResult<VehicleConditionLogResponseDto>> AssignRequestByTypeAsync(long serviceOrderId, string requestType, long technicianId)
         {
-            if (technicianId <= 0)
+            _ = serviceOrderId;
+            _ = requestType;
+            _ = technicianId;
+            return BadRequest(new { message = "Yêu cầu CHECK_IN/CHECK_OUT do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên." });
+        }
+
+        private static string NormalizeLogType(string? logType)
+        {
+            return (logType ?? string.Empty).Trim().ToUpperInvariant();
+        }
+
+        private static bool HasRequiredCornerImages(string? defectsAndImages)
+        {
+            if (string.IsNullOrWhiteSpace(defectsAndImages))
             {
-                return BadRequest(new { message = "Thiếu kỹ thuật viên nhận yêu cầu." });
+                return false;
             }
 
-            var requestLog = await _vehicleConditionLogService.GetActiveRequestAsync(serviceOrderId, requestType);
-            if (requestLog == null)
+            try
             {
-                var message = requestType == "CHECK_IN"
-                    ? "Không tìm thấy yêu cầu check-in."
-                    : "Không tìm thấy yêu cầu checkout.";
-                return NotFound(new { message });
+                using var document = JsonDocument.Parse(defectsAndImages);
+                var root = document.RootElement;
+
+                if (TryValidateCornerImagesObject(root))
+                {
+                    return true;
+                }
+
+                var items = ExtractDefectItems(root);
+                if (items.Count == 0)
+                {
+                    return false;
+                }
+
+                var hasFrontLeft = false;
+                var hasFrontRight = false;
+                var hasRearLeft = false;
+                var hasRearRight = false;
+
+                foreach (var item in items)
+                {
+                    if (!TryGetStringProperty(item, "part", out var partText))
+                    {
+                        continue;
+                    }
+
+                    if (!TryGetProperty(item, "images", out var imagesElement) || !HasAnyImage(imagesElement))
+                    {
+                        continue;
+                    }
+
+                    var normalizedPart = NormalizeSearchText(partText);
+                    if (!hasFrontLeft && ContainsAny(normalizedPart, "goc truoc trai", "truoc trai", "front left"))
+                    {
+                        hasFrontLeft = true;
+                    }
+                    else if (!hasFrontRight && ContainsAny(normalizedPart, "goc truoc phai", "truoc phai", "front right"))
+                    {
+                        hasFrontRight = true;
+                    }
+                    else if (!hasRearLeft && ContainsAny(normalizedPart, "goc sau trai", "sau trai", "rear left", "back left"))
+                    {
+                        hasRearLeft = true;
+                    }
+                    else if (!hasRearRight && ContainsAny(normalizedPart, "goc sau phai", "sau phai", "rear right", "back right"))
+                    {
+                        hasRearRight = true;
+                    }
+                }
+
+                return hasFrontLeft && hasFrontRight && hasRearLeft && hasRearRight;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryValidateCornerImagesObject(JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return false;
             }
 
-            if (requestLog.DashboardWarningLights == "COMPLETED")
+            if (!TryGetProperty(root, "cornerImages", out var cornerImages) || cornerImages.ValueKind != JsonValueKind.Object)
             {
-                var message = requestType == "CHECK_IN"
-                    ? "Yêu cầu check-in đã hoàn tất."
-                    : "Yêu cầu checkout đã hoàn tất.";
-                return BadRequest(new { message });
+                return false;
             }
 
-            if (requestLog.DashboardWarningLights == "ASSIGNED" &&
-                requestLog.InspectorId.HasValue &&
-                requestLog.InspectorId.Value != technicianId)
+            return HasCornerImage(cornerImages, "frontLeft")
+                && HasCornerImage(cornerImages, "frontRight")
+                && HasCornerImage(cornerImages, "rearLeft")
+                && HasCornerImage(cornerImages, "rearRight");
+        }
+
+        private static bool HasCornerImage(JsonElement cornerImages, string key)
+        {
+            return TryGetProperty(cornerImages, key, out var imageElement) && HasAnyImage(imageElement);
+        }
+
+        private static List<JsonElement> ExtractDefectItems(JsonElement root)
+        {
+            if (root.ValueKind == JsonValueKind.Array)
             {
-                var message = requestType == "CHECK_IN"
-                    ? "Yêu cầu check-in đã được kỹ thuật viên khác nhận."
-                    : "Yêu cầu checkout đã được kỹ thuật viên khác nhận.";
-                return Conflict(new { message });
+                return root.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
             }
 
-            var techExists = await _vehicleConditionLogService.TechnicianExistsAsync(technicianId);
-            if (!techExists)
+            if (root.ValueKind == JsonValueKind.Object)
             {
-                return BadRequest(new { message = "Kỹ thuật viên không tồn tại." });
+                if (TryGetProperty(root, "defectItems", out var defectItems) && defectItems.ValueKind == JsonValueKind.Array)
+                {
+                    return defectItems.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
+                }
+
+                if (TryGetProperty(root, "items", out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    return items.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object).ToList();
+                }
             }
 
-            await _vehicleConditionLogService.MarkRequestAssignedAsync(requestLog, technicianId);
-            return Ok(_mapper.Map<VehicleConditionLogResponseDto>(requestLog));
+            return new List<JsonElement>();
+        }
+
+        private static bool HasAnyImage(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                return !string.IsNullOrWhiteSpace(element.GetString());
+            }
+
+            if (element.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var item in element.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                {
+                    return true;
+                }
+
+                if (item.ValueKind == JsonValueKind.Object &&
+                    TryGetProperty(item, "url", out var urlElement) &&
+                    urlElement.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(urlElement.GetString()))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryGetStringProperty(JsonElement element, string propertyName, out string value)
+        {
+            value = string.Empty;
+            if (!TryGetProperty(element, propertyName, out var propertyElement))
+            {
+                return false;
+            }
+
+            if (propertyElement.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            value = propertyElement.GetString() ?? string.Empty;
+            return true;
+        }
+
+        private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement propertyValue)
+        {
+            propertyValue = default;
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    propertyValue = property.Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsAny(string source, params string[] tokens)
+        {
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                return false;
+            }
+
+            return tokens.Any(token => source.Contains(token, StringComparison.Ordinal));
+        }
+
+        private static string NormalizeSearchText(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return string.Empty;
+            }
+
+            var normalized = input.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+            foreach (var ch in normalized)
+            {
+                var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (category != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(ch);
+                }
+            }
+
+            return builder.ToString()
+                .Normalize(NormalizationForm.FormC)
+                .Replace('đ', 'd')
+                .Replace('Đ', 'd');
         }
     }
 }

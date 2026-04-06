@@ -16,7 +16,8 @@ namespace MyGarage.Services
             string? requestedServiceIds = null,
             string? bookingFlow = null,
             int vehicleCount = 1,
-            bool isParallel = true)
+            bool isParallel = true,
+            bool ignoreMinLeadTime = false)
         {
             if (date < _clock.LocalToday)
             {
@@ -74,7 +75,8 @@ namespace MyGarage.Services
                 slotStepMinutes,
                 effectiveRequestedServiceIds,
                 requiredDuration,
-                effectiveVehicleCount);
+                effectiveVehicleCount,
+                ignoreMinLeadTime);
 
             if (!slots.Any() &&
                 useParallel &&
@@ -94,7 +96,8 @@ namespace MyGarage.Services
                     slotStepMinutes,
                     effectiveRequestedServiceIds,
                     requiredDuration,
-                    effectiveVehicleCount);
+                    effectiveVehicleCount,
+                    ignoreMinLeadTime);
                         }
 
             var dynamicNotice = flow == BookingFlowType.Flexible

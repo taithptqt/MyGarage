@@ -14,7 +14,6 @@ import ServiceOrderDiagnosisPage from "@features/workshop/pages/ServiceOrderDiag
 import ServiceOrderItemsPage from "@features/workshop/pages/ServiceOrderItemsPage";
 import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePage";
 import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
-import TechnicianConditionLogPage from "@features/workshop/pages/TechnicianConditionLogPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
 import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
@@ -177,7 +176,6 @@ function App() {
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
-          <Route path="technician/orders/:orderId/condition" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianConditionLogPage /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />
           

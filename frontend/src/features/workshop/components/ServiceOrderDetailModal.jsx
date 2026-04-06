@@ -1,32 +1,75 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "@features/admin/components/AdminModals";
-import {
-  Badge,
-  Box,
-  Button,
-  Divider,
-  Grid,
-  GridItem,
-  Heading,
-  HStack,
-  Icon,
-  Text,
-  VStack,
-} from "@chakra-ui/react";
-import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdHistory, MdPerson, MdEdit } from "react-icons/md";
+import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdEdit, MdHistory, MdPerson } from "react-icons/md";
 import { formatOrderDateTime, parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
 
-export default function ServiceOrderDetailModal({ order, onClose, onRefresh, customers = [], vehicles = [], staff = [] }) {
+const STATUS_LABELS = {
+  NEW: "Mới tiếp nhận",
+  RECEPTION: "Lễ tân tiếp nhận",
+  INSPECTING: "Đang chuẩn đoán",
+  WAITING_APPROVAL: "Chờ duyệt",
+  REPAIRING: "Đang sửa chữa",
+  QC_PENDING: "Chờ kiểm tra chất lượng",
+  READY: "Sẵn sàng giao xe",
+  COMPLETED: "Hoàn tất",
+  CANCELED: "Đã hủy",
+  CANCELLED: "Đã hủy",
+};
+
+const ORDER_CATEGORY_LABELS = {
+  MAINTENANCE: "Bảo dưỡng",
+  WARRANTLY: "Bảo hành",
+  WARRANTY: "Bảo hành",
+  QUICK_SERVICE: "Dịch vụ nhanh",
+  INSURANCE_REPAIR: "Sửa chữa bảo hiểm",
+  GENERAL_REPAIR: "Sửa chữa chung",
+  REWORK: "Sửa chữa lại",
+  REPAIR: "Sửa chữa",
+};
+
+function formatStatusLabel(status) {
+  const key = String(status || "").toUpperCase();
+  return STATUS_LABELS[key] || key || "Không xác định";
+}
+
+function formatOrderCategoryLabel(orderCategory) {
+  const key = String(orderCategory || "").toUpperCase();
+  if (!key) return "Sửa chữa";
+  return ORDER_CATEGORY_LABELS[key] || key.replace(/_/g, " ");
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function formatMoney(amount) {
+  const value = Number(amount || 0);
+  return `${value.toLocaleString("vi-VN")}đ`;
+}
+
+export default function ServiceOrderDetailModal({
+  order,
+  onClose,
+  onRefresh,
+  customers = [],
+  vehicles = [],
+  staff = [],
+}) {
   const navigate = useNavigate();
 
-  const customer = customers.find((c) => c.id === order.customerId);
-  const vehicle = vehicles.find((v) => v.id === order.vehicleId);
-  const advisor = staff.find((s) => s.id === order.serviceAdvisorId);
+  const customer = customers.find((item) => Number(item?.id) === Number(order?.customerId));
+  const vehicle = vehicles.find((item) => Number(item?.id) === Number(order?.vehicleId));
+  const advisor = staff.find((item) => Number(item?.id) === Number(order?.serviceAdvisorId));
+
   const parsedNotes = parseCustomerNotes(order?.customerNotes);
-  const symptomNoteItems = (() => {
+  const symptomNoteItems = useMemo(() => {
     try {
       const parsed = JSON.parse(String(order?.customerNotes || "").trim());
       const list = Array.isArray(parsed)
@@ -34,475 +77,356 @@ export default function ServiceOrderDetailModal({ order, onClose, onRefresh, cus
         : Array.isArray(parsed?.symptoms)
           ? parsed.symptoms
           : [];
-      return list.map((x) => String(x || "").trim()).filter(Boolean);
+      return list.map((item) => String(item || "").trim()).filter(Boolean);
     } catch {
       return [];
     }
-  })();
+  }, [order?.customerNotes]);
+
+  const [orderDetails, setOrderDetails] = useState([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [diagnoses, setDiagnoses] = useState([]);
+  const [hasSignedCheckIn, setHasSignedCheckIn] = useState(false);
+
+  const customerChosenDetails = useMemo(() => {
+    const isLaborOrService = (detail) => {
+      const itemType = String(detail?.itemType || "").toUpperCase();
+      return itemType === "LABOR" || itemType === "SERVICE";
+    };
+
+    const candidates = (orderDetails || []).filter(
+      (detail) => isLaborOrService(detail) && !detail?.diagnoseRecommendationId
+    );
+
+    const uniqueMap = new Map();
+    candidates.forEach((detail) => {
+      const key = detail?.standardServiceId
+        ? `std-${detail.standardServiceId}`
+        : detail?.itemId
+          ? `item-${detail.itemId}`
+          : `name-${String(detail?.itemName || "").trim().toLowerCase()}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, detail);
+      }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, [orderDetails]);
+
+  useEffect(() => {
+    const fetchDetailData = async () => {
+      if (!order?.id) return;
+      setLoadingDetails(true);
+      try {
+        const [detailsRes, diagnosesRes, conditionLogsRes] = await Promise.all([
+          serviceOrderApi.getDetails(order.id),
+          serviceOrderApi.getDiagnoses(order.id),
+          vehicleConditionLogApi.getByServiceOrderId(order.id),
+        ]);
+
+        setOrderDetails(Array.isArray(detailsRes) ? detailsRes : []);
+        setDiagnoses(Array.isArray(diagnosesRes) ? diagnosesRes : []);
+
+        const signedCheckInExists = Array.isArray(conditionLogsRes) && conditionLogsRes.some((log) => {
+          const logType = String(log?.logType || log?.LogType || "").toUpperCase();
+          const signatureUrl = String(log?.customerSignatureUrl || log?.CustomerSignatureUrl || "").trim();
+          return logType === "CHECK_IN" && signatureUrl.length > 0;
+        });
+        setHasSignedCheckIn(signedCheckInExists);
+      } catch (error) {
+        console.error("Lỗi tải chi tiết lệnh sửa chữa:", error);
+        setHasSignedCheckIn(false);
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    void fetchDetailData();
+  }, [order?.id]);
+
+  const latestDiagnosis = useMemo(() => {
+    return [...diagnoses]
+      .sort((a, b) => {
+        const timeA = new Date(a?.createdAt || a?.updatedAt || 0).getTime();
+        const timeB = new Date(b?.createdAt || b?.updatedAt || 0).getTime();
+        return timeB - timeA;
+      })[0] || null;
+  }, [diagnoses]);
+
+  const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
+  const isDiagnosisRequested = diagnosisStatus === "PENDING" || diagnosisStatus === "ASSIGNED";
+  const isDiagnosisAssigned = diagnosisStatus === "ASSIGNED";
+  const isDiagnosisCompleted = diagnosisStatus === "COMPLETED";
+
+  const isFromAppointment = Boolean(order?.appointmentId);
+  const isGuest = !order?.appointmentId && customer && customer.isRegistered === false;
+
+  const sourceMeta = useMemo(() => {
+    if (isFromAppointment) {
+      return {
+        text: "Từ lịch hẹn trước",
+        tone: "source-appt",
+        Icon: MdHistory,
+      };
+    }
+    if (isGuest) {
+      return {
+        text: "Khách vãng lai (tạo nhanh)",
+        tone: "source-guest",
+        Icon: MdPerson,
+      };
+    }
+    return {
+      text: "Lễ tân tiếp nhận trực tiếp",
+      tone: "source-reception",
+      Icon: MdAssignment,
+    };
+  }, [isFromAppointment, isGuest]);
+
+  const customerName = firstText(order?.customerName, customer?.fullName, "-");
+  const customerPhone = firstText(order?.customerPhone, customer?.phone, "-");
+  const vehiclePlate = firstText(order?.vehicleLicensePlate, vehicle?.licensePlate, "N/A");
+  const vehicleModel = firstText(order?.vehicleModelName, vehicle?.modelName, "Chưa rõ dòng xe");
+  const vehicleColor = firstText(order?.vehicleColor, vehicle?.color);
+  const vehicleVin = firstText(order?.vehicleVin, vehicle?.vin);
+  const advisorName = firstText(advisor?.fullName, "-");
+
+  const statusLabel = formatStatusLabel(order?.status);
+  const categoryLabel = formatOrderCategoryLabel(order?.orderCategory);
 
   const handleOpenPage = (path) => {
     onClose?.();
     navigate(path);
   };
 
+  const refreshAfterDiagnosisChange = async () => {
+    if (onRefresh) await onRefresh();
+    const diagnosisRes = await serviceOrderApi.getDiagnoses(order.id);
+    setDiagnoses(Array.isArray(diagnosisRes) ? diagnosisRes : []);
+  };
+
+  const openVehicleLogPage = () => {
+    handleOpenPage(`/workshop/reception/orders/${order.id}/vehicleconditionlogs`);
+  };
+
   const handleRequestDiagnosis = async () => {
-    if (!window.confirm(`Gửi yêu cầu chuẩn đoán cho phương tiện ${vehicle?.licensePlate || "N/A"} tơi Kỹ thuật viên?`)) return;
+    if (!hasSignedCheckIn) {
+      try {
+        await serviceOrderApi.createCheckInRequest(order.id);
+      } catch {
+        // Ignore duplicated marker creation and continue redirecting.
+      }
+
+      alert("Vui lòng hoàn tất Nhật ký xe và ký CHECK-IN trước khi gửi yêu cầu chuẩn đoán.");
+      openVehicleLogPage();
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Gửi yêu cầu chuẩn đoán cho phương tiện ${vehiclePlate} tới kỹ thuật viên?`
+    );
+    if (!confirmed) return;
     try {
       await serviceOrderApi.requestDiagnosis(order.id);
-      if (onRefresh) await onRefresh();
-      const diagRes = await serviceOrderApi.getDiagnoses(order.id);
-      setDiagnoses(Array.isArray(diagRes) ? diagRes : []);
-    } catch (err) {
-      alert("Lđ-i khi yêu cầu chuẩn đoán: " + err.message);
+      await refreshAfterDiagnosisChange();
+    } catch (error) {
+      alert(`Lỗi khi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
     }
   };
 
   const handleRecallDiagnosis = async () => {
-    if (!window.confirm("Thu hôi yêu cầu chuẩn đoán?")) return;
+    const confirmed = window.confirm("Thu hồi yêu cầu chuẩn đoán?");
+    if (!confirmed) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
-      if (onRefresh) await onRefresh();
-      const diagRes = await serviceOrderApi.getDiagnoses(order.id);
-      setDiagnoses(Array.isArray(diagRes) ? diagRes : []);
-    } catch (err) {
-      alert("Lđ-i khi thu hôi yêu cầu chuẩn đoán: " + err.message);
+      await refreshAfterDiagnosisChange();
+    } catch (error) {
+      alert(`Lỗi khi thu hồi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
     }
   };
 
-  const [orderDetails, setOrderDetails] = useState([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [diagnoses, setDiagnoses] = useState([]);
-  const [hasSignedCheckIn, setHasSignedCheckIn] = useState(false);
-  const customerChosenDetails = useMemo(() => {
-    const isLaborOrService = (d) => {
-      const t = String(d?.itemType || "").toUpperCase();
-      return t === "LABOR" || t === "SERVICE";
-    };
-    const candidates = (orderDetails || []).filter(
-      (d) => isLaborOrService(d) && !d?.diagnoseRecommendationId
-    );
-
-    const uniqueMap = new Map();
-    candidates.forEach((d) => {
-      const key =
-        d?.standardServiceId ? `std-${d.standardServiceId}` :
-        d?.itemId ? `item-${d.itemId}` :
-        `name-${String(d?.itemName || "").trim().toLowerCase()}`;
-      if (!uniqueMap.has(key)) uniqueMap.set(key, d);
-    });
-    return Array.from(uniqueMap.values());
-  }, [orderDetails]);
-
-  useEffect(() => {
-    const fetchDetails = async () => {
-      setLoadingDetails(true);
-      try {
-        const [details, diagRes, conditionLogs] = await Promise.all([
-          serviceOrderApi.getDetails(order.id),
-          serviceOrderApi.getDiagnoses(order.id),
-          vehicleConditionLogApi.getByServiceOrderId(order.id),
-        ]);
-        setOrderDetails(details || []);
-        setDiagnoses(Array.isArray(diagRes) ? diagRes : []);
-        const signedCheckInExists = Array.isArray(conditionLogs) && conditionLogs.some((log) => {
-          const type = String(log?.logType || log?.LogType || "").toUpperCase();
-          const signature = String(log?.customerSignatureUrl || log?.CustomerSignatureUrl || "").trim();
-          return type === "CHECK_IN" && signature.length > 0;
-        });
-        setHasSignedCheckIn(signedCheckInExists);
-      } catch (err) {
-        console.error("Lđ-i tải chi tiết lệnh:", err);
-        setHasSignedCheckIn(false);
-      } finally {
-        setLoadingDetails(false);
-      }
-    };
-    if (order?.id) fetchDetails();
-  }, [order?.id]);
-
-  const isFromAppt = !!order.appointmentId;
-  const isGuest = !order.appointmentId && customer && customer.isRegistered === false;
-  const isReception = !order.appointmentId && (!customer || customer.isRegistered !== false);
-
-  const latestDiagnosis = [...diagnoses].sort((a, b) => {
-    const at = new Date(a?.createdAt || a?.updatedAt || 0).getTime();
-    const bt = new Date(b?.createdAt || b?.updatedAt || 0).getTime();
-    return bt - at;
-  })[0] || null;
-  const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
-  const isDiagnosisRequested = diagnosisStatus === "PENDING" || diagnosisStatus === "ASSIGNED";
-  const isDiagnosisAssigned = diagnosisStatus === "ASSIGNED";
-  const isDiagnosisCompleted = diagnosisStatus === "COMPLETED";
-  let sourceText = "Không xác định";
-  let sourceColor = "gray";
-  let sourceIcon = MdAssignment;
-
-  if (isFromAppt) {
-    sourceText = "Từ Lịch hẹn trươc";
-    sourceColor = "blue";
-    sourceIcon = MdHistory;
-  } else if (isGuest) {
-    sourceText = "Khách vãng lai (Tạo nhanh)";
-    sourceColor = "orange";
-    sourceIcon = MdPerson;
-  } else if (isReception) {
-    sourceText = "Lễ tân tiếp nhận trực tiếp";
-    sourceColor = "teal";
-    sourceIcon = MdAssignment;
-  }
+  const diagnosisHint = useMemo(() => {
+    if (isDiagnosisAssigned) return "Kỹ thuật viên đang thực hiện chuẩn đoán.";
+    if (!hasSignedCheckIn && !isDiagnosisCompleted && !isDiagnosisRequested) {
+      return "Cần hoàn tất Nhật ký xe và chữ ký CHECK-IN trước khi gửi yêu cầu chuẩn đoán.";
+    }
+    return "";
+  }, [hasSignedCheckIn, isDiagnosisAssigned, isDiagnosisCompleted, isDiagnosisRequested]);
 
   return (
     <Modal
-      title={
-        <HStack spacing={4} align="center">
-          <Text>{`Chi tiết lệnh sửa chữa: ${order.code}`}</Text>
-          <Button
-            size="sm"
-            fontSize="sm"
-            leftIcon={<MdEdit />}
-            colorScheme="yellow"
-            variant="solid"
+      title={(
+        <div className="so-detail-title-wrap">
+          <span className="so-detail-title-text">{`Chi tiết lệnh sửa chữa: ${order?.code || ""}`}</span>
+          <button
+            type="button"
+            className="so-detail-edit-btn"
             onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/edit`)}
-            px={4}
-            boxShadow="0 4px 12px rgba(0,0,0,0.1)"
           >
-            Chệnh sửa
-          </Button>
-        </HStack>
-      }
+            <MdEdit aria-hidden="true" />
+            <span>Chỉnh sửa</span>
+          </button>
+        </div>
+      )}
       onClose={onClose}
-      className="modal-lg always-dark"
+      className="modal-lg service-order-detail-modal"
     >
-      <VStack align="stretch" spacing={6} px={8} pb={8} pt={2}>
-        <HStack justify="space-between" bg="whiteAlpha.100" p={5} borderRadius="2xl" border="1px solid" borderColor="whiteAlpha.200">
-          <VStack align="start" spacing={1}>
-            <Text fontSize="sm" color="whiteAlpha.600" fontWeight="bold" textTransform="uppercase" letterSpacing="wider">
-              Trạng thái hiện tại
-            </Text>
-            <Badge
-              colorScheme={
-                order.status === "NEW" || order.status === "RECEPTION"
-                  ? "gray"
-                  : order.status === "INSPECTING"
-                    ? "purple"
-                    : order.status === "WAITING_APPROVAL"
-                      ? "orange"
-                      : order.status === "REPAIRING"
-                        ? "blue"
-                        : order.status === "QC_PENDING"
-                          ? "teal"
-                          : order.status === "READY" || order.status === "COMPLETED"
-                            ? "green"
-                            : order.status === "CANCELLED"
-                              ? "red"
-                              : "blue"
-              }
-              variant="solid"
-              fontSize="md"
-              px={4}
-              py={1.5}
-              boxShadow="0 4px 12px rgba(0,0,0,0.1)"
-            >
-              {order.status}
-            </Badge>
-          </VStack>
-          <VStack align="end" spacing={1}>
-            <Text fontSize="sm" color="whiteAlpha.600" fontWeight="bold" textTransform="uppercase" letterSpacing="wider">
-              Loại dịch vụ
-            </Text>
-            <Text fontWeight="extrabold" fontSize="lg" color="blue.300">
-              {order.orderCategory || "REPAIR"}
-            </Text>
-          </VStack>
-        </HStack>
+      <div className="so-detail-shell">
+        <section className="so-detail-overview-card">
+          <div className="so-detail-chip-row">
+            <span className="so-detail-chip so-detail-chip-status">{statusLabel}</span>
+            <span className={`so-detail-chip ${sourceMeta.tone}`}>
+              <sourceMeta.Icon aria-hidden="true" />
+              {sourceMeta.text}
+            </span>
+            <span className="so-detail-chip so-detail-chip-category">{categoryLabel}</span>
+          </div>
 
-        <Grid templateColumns="repeat(2, 1fr)" gap={6}>
-          <GridItem>
-            <VStack align="start" spacing={4}>
-              <HStack color="blue.300">
-                <Icon as={MdPerson} boxSize={5} />
-                <Heading size="md" letterSpacing="tight">Thông tin khách hàng</Heading>
-              </HStack>
-              <Box pl={9}>
-                <Text fontWeight="bold" fontSize="lg" color="white">
-                  {order.customerName || customer?.fullName || "-"}
-                </Text>
-                <Text color="whiteAlpha.700" fontSize="md">
-                  {order.customerPhone || customer?.phone || "-"}
-                </Text>
-              </Box>
-            </VStack>
-          </GridItem>
+          <div className="so-detail-party-grid">
+            <article className="so-detail-party-card">
+              <p className="so-detail-card-label">Khách hàng</p>
+              <h4>{customerName}</h4>
+              <p>{customerPhone}</p>
+            </article>
 
-          <GridItem>
-            <VStack align="start" spacing={4}>
-              <HStack color="blue.300">
-                <Icon as={MdDirectionsCar} boxSize={5} />
-                <Heading size="md" letterSpacing="tight">Thông tin phương tiện</Heading>
-              </HStack>
-              <Box pl={9}>
-                <HStack spacing={3} align="center" flexWrap="wrap">
-                  <Text fontWeight="bold" fontSize="lg" color="white" textTransform="uppercase">
-                    {order.vehicleLicensePlate || vehicle?.licensePlate || "N/A"}
-                  </Text>
-                  <Button
-                    size="sm"
-                    fontSize="sm"
-                    colorScheme="cyan"
-                    onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/vehicleconditionlogs`)}
-                  >
-                    Nhật ký xe
-                  </Button>
-                </HStack>
-                <Text color="whiteAlpha.700" fontSize="md">
-                  {vehicle?.modelName || "-"} {vehicle?.color ? `- ${vehicle.color}` : ""}
-                </Text>
-                {vehicle?.vin ? <Text fontSize="xs" color="whiteAlpha.500" mt={1}>VIN: {vehicle.vin}</Text> : null}
-              </Box>
-            </VStack>
-          </GridItem>
-        </Grid>
-
-        <Divider />
-
-        <Grid templateColumns="repeat(4, 1fr)" gap={8} py={2}>
-          <VStack align="start" spacing={2}>
-            <HStack color="whiteAlpha.500" fontSize="xs" fontWeight="bold" letterSpacing="widest">
-              <Icon as={MdHistory} />
-              <Text textTransform="uppercase">Thời điểm vào</Text>
-            </HStack>
-            <Text fontSize="md" color="white" fontWeight="medium">{formatOrderDateTime(order.checkInTime)}</Text>
-          </VStack>
-          <VStack align="start" spacing={2}>
-            <HStack color="whiteAlpha.500" fontSize="xs" fontWeight="bold" letterSpacing="widest">
-              <Icon as={MdHistory} />
-              <Text textTransform="uppercase">Hẹn trả xe</Text>
-            </HStack>
-            <Text fontSize="md" color={order.promisedHandoverTime ? "blue.300" : "whiteAlpha.400"} fontWeight="medium">
-              {formatOrderDateTime(order.promisedHandoverTime)}
-            </Text>
-          </VStack>
-          <VStack align="start" spacing={2}>
-            <HStack color="whiteAlpha.500" fontSize="xs" fontWeight="bold" letterSpacing="widest">
-              <Icon as={MdHistory} />
-              <Text textTransform="uppercase">Dự kiến hoàn thành</Text>
-            </HStack>
-            <Text fontSize="md" color={order.estimatedHandover ? "blue.300" : "whiteAlpha.400"} fontWeight="medium">
-              {formatOrderDateTime(order.estimatedHandover)}
-            </Text>
-          </VStack>
-          <VStack align="start" spacing={2}>
-            <HStack color="whiteAlpha.500" fontSize="xs" fontWeight="bold" letterSpacing="widest">
-              <Icon as={MdCheckCircle} />
-              <Text textTransform="uppercase">Cđ vấn dịch vụ</Text>
-            </HStack>
-            <Text fontSize="md" color="white" fontWeight="medium">{advisor?.fullName || "-"}</Text>
-          </VStack>
-        </Grid>
-
-        <Divider />
-
-        <VStack align="start" spacing={4}>
-          <HStack color="blue.300">
-            <Icon as={MdAssignment} boxSize={5} />
-            <Heading size="md" letterSpacing="tight">Ghi chú & Nguôn gđc tiếp nhận</Heading>
-          </HStack>
-          <Box w="100%" pl={9}>
-            <VStack align="stretch" spacing={3}>
-
-              {/* Nguôn Gđc Lệnh */}
-              <HStack
-                bg={`${sourceColor}.900`}
-                p={2}
-                px={3}
-                borderRadius="lg"
-                border="1px solid"
-                borderColor={`${sourceColor}.400`}
-                w="fit-content"
-              >
-                <Icon as={sourceIcon} color={`${sourceColor}.300`} />
-                <Text fontSize="xs" color={`${sourceColor}.100`} fontWeight="bold">
-                  {sourceText.toUpperCase()}
-                </Text>
-              </HStack>
-
-              {/* Dịch vụ cụ thể (Service Details) */}
-              <Box p={4} bg="whiteAlpha.50" borderRadius="xl" borderLeft="4px solid" borderColor="purple.400">
-                <Text fontSize="xs" color="whiteAlpha.500" fontWeight="bold" mb={2} letterSpacing="wider">
-                  DỊCH VỤ CỤ THỂ KHÁCH ĐÃ CHỌN:
-                </Text>
-                {loadingDetails ? (
-                  <Text fontSize="sm" color="whiteAlpha.400" fontStyle="italic">Đang tải...</Text>
-                ) : customerChosenDetails.length > 0 ? (
-                  <VStack align="start" spacing={2}>
-                    {customerChosenDetails.map((d) => (
-                      <HStack key={d.id} bg="whiteAlpha.100" px={3} py={1} borderRadius="md" w="100%" justify="space-between">
-                        <Text fontSize="md" color="white" fontWeight="medium">{d.itemName}</Text>
-                        <Text fontSize="sm" color="whiteAlpha.700" fontWeight="bold">
-                          {(d.finalAmount || d.unitPriceAtTime || 0).toLocaleString()}đ
-                        </Text>
-                      </HStack>
-                    ))}
-                  </VStack>
-                ) : parsedNotes.requestedServices ? (
-                  <Text fontSize="md" color="white" fontWeight="medium">{parsedNotes.requestedServices}</Text>
-                ) : (
-                  <Text fontSize="sm" color="whiteAlpha.400" fontStyle="italic">Chưa có dịch vụ cụ thể nào được chọn.</Text>
-                )}
-              </Box>
-
-              {/* Ghi chú vển bản */}
-              <Box p={4} bg="whiteAlpha.50" borderRadius="xl" borderLeft="4px solid" borderColor="blue.400">
-                <Text fontSize="xs" color="whiteAlpha.500" fontWeight="bold" mb={2} letterSpacing="wider">
-                  GHI CHđs / YđSU CẦU THđSM:
-                </Text>
-                {symptomNoteItems.length > 0 ? (
-                  <VStack align="start" spacing={1} pl={2}>
-                    {symptomNoteItems.map((item, index) => (
-                      <Text key={`${item}-${index}`} fontSize="md" color="white">
-                        ệđ {item}
-                      </Text>
-                    ))}
-                  </VStack>
-                ) : (
-                  <Text fontSize="md" fontStyle="italic" color="white">
-                    {String(parsedNotes.mainNotes || "").toLowerCase().includes("không có")
-                      ? "Không có ghi chú gì"
-                      : `ệđ ${parsedNotes.mainNotes}`}
-                  </Text>
-                )}
-              </Box>
-
-            </VStack>
-          </Box>
-        </VStack>
-
-        <Divider />
-
-        <VStack align="start" spacing={4}>
-          <HStack color="blue.300">
-            <Icon as={MdAssignment} boxSize={5} />
-            <Heading size="md" letterSpacing="tight">Xem chi tiết theo từng mục</Heading>
-          </HStack>
-          <Box w="100%" pl={9}>
-            <Text fontSize="sm" color="whiteAlpha.700" mb={4}>
-              Chọn mục cần xem để mở trang chi tiết tương ứng.
-            </Text>
-            <HStack
-              spacing={2}
-              align="center"
-              flexWrap="wrap"
-              sx={{
-                "& button": {
-                  h: "34px",
-                  minH: "34px",
-                  maxH: "34px",
-                  px: 4,
-                  borderRadius: "full",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: "1",
-                  fontSize: "sm",
-                  mt: 0,
-                  mb: 0,
-                  py: 0
-                }
-              }}
-            >
-              {isDiagnosisCompleted ? (
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/diagnosis`)}
-                  whiteSpace="nowrap"
+            <article className="so-detail-party-card">
+              <div className="so-detail-party-head">
+                <p className="so-detail-card-label">Phương tiện</p>
+                <button
+                  type="button"
+                  className="so-detail-link-btn"
+                  onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/vehicleconditionlogs`)}
                 >
-                  Xem chuẩn đoán
-                </Button>
-              ) : isDiagnosisRequested || order.status === "INSPECTING" ? (
-                <Box position="relative" display="inline-flex" alignItems="center">
-                  <Button
-                    size="sm"
-                    colorScheme="orange"
-                    variant="outline"
-                    onClick={handleRecallDiagnosis}
-                    whiteSpace="nowrap"
-                  >
-                    Thu hôi yêu cầu
-                  </Button>
-                  {isDiagnosisAssigned ? (
-                    <Text
-                      fontSize="xs"
-                      color="orange.300"
-                      textAlign="center"
-                      position="absolute"
-                      top="calc(100% + 2px)"
-                      left="50%"
-                      transform="translateX(-50%)"
-                      whiteSpace="nowrap"
-                    >
-                      Đang chuẩn đoán
-                    </Text>
-                  ) : null}
-                </Box>
+                  Nhật ký xe
+                </button>
+              </div>
+              <h4>{vehiclePlate}</h4>
+              <p>{vehicleColor ? `${vehicleModel} - ${vehicleColor}` : vehicleModel}</p>
+              {vehicleVin ? <p className="so-detail-vin">VIN: {vehicleVin}</p> : null}
+            </article>
+          </div>
+        </section>
+
+        <section className="so-detail-time-grid">
+          <article className="so-detail-time-item">
+            <p>Thời điểm vào</p>
+            <strong>{formatOrderDateTime(order?.checkInTime)}</strong>
+          </article>
+          <article className="so-detail-time-item">
+            <p>Hẹn trả xe</p>
+            <strong>{formatOrderDateTime(order?.promisedHandoverTime)}</strong>
+          </article>
+          <article className="so-detail-time-item">
+            <p>Dự kiến hoàn thành</p>
+            <strong>{formatOrderDateTime(order?.estimatedHandover)}</strong>
+          </article>
+          <article className="so-detail-time-item">
+            <p>Cố vấn dịch vụ</p>
+            <strong>{advisorName}</strong>
+          </article>
+        </section>
+
+        <section className="so-detail-section">
+          <h3 className="so-detail-section-title">
+            <MdAssignment aria-hidden="true" />
+            <span>Ghi chú & nguồn gốc tiếp nhận</span>
+          </h3>
+
+          <div className="so-detail-note-grid">
+            <article className="so-detail-panel">
+              <p className="so-detail-panel-title">Dịch vụ cụ thể khách đã chọn</p>
+              {loadingDetails ? (
+                <p className="so-detail-empty">Đang tải dữ liệu dịch vụ...</p>
+              ) : customerChosenDetails.length > 0 ? (
+                <div className="so-detail-service-list">
+                  {customerChosenDetails.map((detail) => (
+                    <div key={detail.id} className="so-detail-service-row">
+                      <span>{detail.itemName}</span>
+                      <strong>{formatMoney(detail.finalAmount || detail.unitPriceAtTime || 0)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : parsedNotes.requestedServices ? (
+                <p className="so-detail-body-text">{parsedNotes.requestedServices}</p>
               ) : (
-                <Button
-                  size="sm"
-                  colorScheme="purple"
-                  onClick={handleRequestDiagnosis}
-                  isDisabled={!hasSignedCheckIn}
-                  title={!hasSignedCheckIn ? "Cần khách ký check-in trươc khi yêu cầu chuẩn đoán." : ""}
-                  whiteSpace="nowrap"
-                >
-                  Yêu cầu chuẩn đoán
-                </Button>
+                <p className="so-detail-empty">Chưa có dịch vụ cụ thể nào được chọn.</p>
               )}
+            </article>
 
-              <Button
-                size="sm"
-                colorScheme="teal"
-                onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/items`)}
-                whiteSpace="nowrap"
+            <article className="so-detail-panel">
+              <p className="so-detail-panel-title">Ghi chú / Yêu cầu thêm</p>
+              {symptomNoteItems.length > 0 ? (
+                <ul className="so-detail-note-list">
+                  {symptomNoteItems.map((item, index) => (
+                    <li key={`${item}-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="so-detail-body-text">
+                  {String(parsedNotes.mainNotes || "").toLowerCase().includes("không có")
+                    ? "Không có ghi chú gì"
+                    : parsedNotes.mainNotes || "Không có ghi chú gì"}
+                </p>
+              )}
+            </article>
+          </div>
+        </section>
+
+        <section className="so-detail-section">
+          <h3 className="so-detail-section-title">
+            <MdCheckCircle aria-hidden="true" />
+            <span>Xem chi tiết theo từng mục</span>
+          </h3>
+          <p className="so-detail-section-note">Chọn mục cần xem để mở trang chi tiết tương ứng.</p>
+
+          <div className="so-detail-action-row">
+            {isDiagnosisCompleted ? (
+              <button
+                type="button"
+                className="so-detail-action-btn so-detail-action-primary"
+                onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/diagnosis`)}
               >
-                Xem hạng mục & phụ tùng
-              </Button>
-              <Button
-                size="sm"
-                colorScheme="purple"
-                onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/quote`)}
-                whiteSpace="nowrap"
+                Xem chuẩn đoán
+              </button>
+            ) : isDiagnosisRequested || String(order?.status || "").toUpperCase() === "INSPECTING" ? (
+              <button
+                type="button"
+                className="so-detail-action-btn so-detail-action-warn"
+                onClick={handleRecallDiagnosis}
               >
-                Xem báo giá
-              </Button>
-            </HStack>
-          </Box>
-        </VStack>
-      </VStack>
+                Thu hồi yêu cầu
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="so-detail-action-btn so-detail-action-ghost"
+                onClick={handleRequestDiagnosis}
+                title={!hasSignedCheckIn ? "Cần vào Nhật ký xe để hoàn tất CHECK-IN trước." : ""}
+              >
+                Yêu cầu chuẩn đoán
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="so-detail-action-btn so-detail-action-teal"
+              onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/items`)}
+            >
+              Xem hạng mục & phụ tùng
+            </button>
+
+            <button
+              type="button"
+              className="so-detail-action-btn so-detail-action-purple"
+              onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/quote`)}
+            >
+              Xem báo giá
+            </button>
+          </div>
+
+          {diagnosisHint ? <p className="so-detail-diagnosis-hint">{diagnosisHint}</p> : null}
+        </section>
+      </div>
     </Modal>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

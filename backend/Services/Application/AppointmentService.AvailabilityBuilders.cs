@@ -18,7 +18,8 @@ namespace MyGarage.Services
             int slotStepMinutes,
             string? effectiveRequestedServiceIds,
             int requiredDurationMinutes,
-            int vehicleCount = 1)
+            int vehicleCount = 1,
+            bool ignoreMinLeadTime = false)
         {
             var activeBays = await _context.Bays
                 .AsNoTracking()
@@ -40,7 +41,7 @@ namespace MyGarage.Services
             var slots = new List<AvailableSlotResponseDto>();
             var current = date.ToDateTime(openTime);
             var lastStart = date.ToDateTime(closeTime).AddMinutes(-requiredDurationMinutes);
-            var minLeadMinutes = Math.Max(15, slotStepMinutes);
+            var minLeadMinutes = ignoreMinLeadTime ? 0 : Math.Max(15, slotStepMinutes);
             while (current <= lastStart)
             {
                 if (ShouldSkipByLeadTime(date, current, minLeadMinutes))

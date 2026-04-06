@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using MyGarage.Models;
 using AutoMapper;
-using MyGarage.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
@@ -61,6 +61,16 @@ namespace MyGarage.Controllers
             "FAILED",
         };
 
+        private static readonly HashSet<string> AllowedOrderCategories = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "QUICK_SERVICE",
+            "GENERAL_REPAIR",
+            "MAINTENANCE",
+            "INSURANCE_REPAIR",
+            "REWORK",
+            "WARRANTLY",
+        };
+
         private readonly IServiceOrderService _serviceOrderService;
         private readonly IMapper _mapper;
 
@@ -86,6 +96,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
             var dto = _mapper.Map<ServiceOrderResponseDto>(item);
             return Ok(dto);
         }
@@ -93,10 +104,10 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceOrderResponseDto>> Create([FromBody] ServiceOrderCreateDto itemDto)
         {
-            var statusValidationError = NormalizeAndValidateStatusFields(itemDto);
-            if (!string.IsNullOrWhiteSpace(statusValidationError))
+            var validationError = NormalizeAndValidateFields(itemDto);
+            if (!string.IsNullOrWhiteSpace(validationError))
             {
-                return BadRequest(new { message = statusValidationError });
+                return BadRequest(new { message = validationError });
             }
 
             var entity = _mapper.Map<ServiceOrder>(itemDto);
@@ -114,19 +125,19 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            var statusValidationError = NormalizeAndValidateStatusFields(itemDto);
-            if (!string.IsNullOrWhiteSpace(statusValidationError))
+            var validationError = NormalizeAndValidateFields(itemDto);
+            if (!string.IsNullOrWhiteSpace(validationError))
             {
-                return BadRequest(new { message = statusValidationError });
+                return BadRequest(new { message = validationError });
             }
 
             _mapper.Map(itemDto, existingItem);
             var updatedItem = await _serviceOrderService.UpdateAsync(id, existingItem);
-            
             if (updatedItem == null)
             {
                 return NotFound();
             }
+
             var responseDto = _mapper.Map<ServiceOrderResponseDto>(updatedItem);
             return Ok(responseDto);
         }
@@ -139,17 +150,22 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
             return NoContent();
         }
 
-        private static string? NormalizeAndValidateStatusFields(ServiceOrderCreateDto dto)
+        private static string? NormalizeAndValidateFields(ServiceOrderCreateDto dto)
         {
             if (dto == null)
             {
-                return "Dữ liệu Service Order không hợp lệ.";
+                return "Du lieu Service Order khong hop le.";
             }
 
-            var error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
+            var error = TryNormalizeOrderCategory(dto.OrderCategory, out var normalizedOrderCategory);
+            if (error != null) return error;
+            if (normalizedOrderCategory != null) dto.OrderCategory = normalizedOrderCategory;
+
+            error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
             if (error != null) return error;
             if (normalizedStatus != null) dto.Status = normalizedStatus;
 
@@ -168,14 +184,18 @@ namespace MyGarage.Controllers
             return null;
         }
 
-        private static string? NormalizeAndValidateStatusFields(ServiceOrderUpdateDto dto)
+        private static string? NormalizeAndValidateFields(ServiceOrderUpdateDto dto)
         {
             if (dto == null)
             {
-                return "Dữ liệu Service Order không hợp lệ.";
+                return "Du lieu Service Order khong hop le.";
             }
 
-            var error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
+            var error = TryNormalizeOrderCategory(dto.OrderCategory, out var normalizedOrderCategory);
+            if (error != null) return error;
+            if (normalizedOrderCategory != null) dto.OrderCategory = normalizedOrderCategory;
+
+            error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
             if (error != null) return error;
             if (normalizedStatus != null) dto.Status = normalizedStatus;
 
@@ -207,21 +227,43 @@ namespace MyGarage.Controllers
                 return null;
             }
 
-            var token = rawValue.Trim().ToUpperInvariant();
+            var token = NormalizeToken(rawValue);
             if (!allowedValues.Contains(token))
             {
                 var allowed = string.Join(", ", allowedValues.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-                return $"Giá trị {fieldName} không hợp lệ: {rawValue}. Chấp nhận: {allowed}.";
+                return $"Gia tri {fieldName} khong hop le: {rawValue}. Chap nhan: {allowed}.";
             }
 
             normalizedValue = token;
             return null;
         }
+
+        private static string? TryNormalizeOrderCategory(string? rawValue, out string? normalizedValue)
+        {
+            normalizedValue = null;
+
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return null;
+            }
+
+            var token = NormalizeToken(rawValue);
+            if (!AllowedOrderCategories.Contains(token))
+            {
+                var allowed = string.Join(", ", AllowedOrderCategories.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                return $"Gia tri orderCategory khong hop le: {rawValue}. Chap nhan: {allowed}.";
+            }
+
+            normalizedValue = token;
+            return null;
+        }
+
+        private static string NormalizeToken(string value)
+        {
+            return value.Trim()
+                .ToUpperInvariant()
+                .Replace("-", "_")
+                .Replace(" ", "_");
+        }
     }
 }
-
-
-
-
-
-

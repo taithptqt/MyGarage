@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
@@ -45,7 +45,7 @@ const EMPTY_FORM_DATA = {
   guestVehicleVin: "",
   guestVehicleYear: "",
   serviceAdvisorId: "",
-  orderCategory: "REPAIR",
+  orderCategory: "GENERAL_REPAIR",
   oldPartsReturnOption: "DISPOSE_ALL",
   requiredDepositAmount: 0,
   checkInTime: "",
@@ -287,6 +287,16 @@ function formatSlotTime(value) {
   });
 }
 
+function toDateKey(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function buildCheckInTimeWindowMap(now, rangeMinutes = 30) {
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);
@@ -370,12 +380,26 @@ export default function CreateServiceOrderPage() {
   const [nearestSlotSuggestion, setNearestSlotSuggestion] = useState(null);
   const [nearestSlotLoading, setNearestSlotLoading] = useState(false);
   const [nearestSlotError, setNearestSlotError] = useState("");
-  const skipNextNearestSlotSuggestionFetchRef = useRef(false);
+  const [selectedSuggestedSlotStart, setSelectedSuggestedSlotStart] = useState("");
+  const [successOrderSummary, setSuccessOrderSummary] = useState(null);
+
+  const scrollToPageTop = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCheckInNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!successOrderSummary) return undefined;
+    const timeoutId = setTimeout(() => {
+      navigate("/workshop/reception", { replace: true });
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [navigate, successOrderSummary]);
 
   const checkInDayStart = useMemo(() => {
     const date = new Date(checkInNow);
@@ -642,28 +666,21 @@ export default function CreateServiceOrderPage() {
     [services]
   );
 
-  const normalizedServicesForOrder = useMemo(() => {
-    const selectedCategoryId = Number(selectedOrderCategoryOption?.id || 0);
-    if (!selectedCategoryId) return normalizedServices;
-    const matched = normalizedServices.filter((service) => Number(service.categoryId) === selectedCategoryId);
-    return matched.length > 0 ? matched : normalizedServices;
-  }, [normalizedServices, selectedOrderCategoryOption]);
-
   const serviceById = useMemo(() => {
     const map = new Map();
-    normalizedServicesForOrder.forEach((service) => map.set(Number(service.id), service));
+    normalizedServices.forEach((service) => map.set(Number(service.id), service));
     return map;
-  }, [normalizedServicesForOrder]);
+  }, [normalizedServices]);
 
   const serviceCategoryMap = useMemo(() => {
     const map = new Map();
-    normalizedServicesForOrder.forEach((service) => map.set(Number(service.id), Number(service.categoryId)));
+    normalizedServices.forEach((service) => map.set(Number(service.id), Number(service.categoryId)));
     return map;
-  }, [normalizedServicesForOrder]);
+  }, [normalizedServices]);
 
   const inspectionExclusiveTypeByServiceId = useMemo(() => {
     const map = new Map();
-    normalizedServicesForOrder.forEach((service) => {
+    normalizedServices.forEach((service) => {
       const normalizedName = normalizeSearchText(service.name);
       if (normalizedName.includes("kiem tra nhanh")) {
         map.set(Number(service.id), "quick");
@@ -674,7 +691,7 @@ export default function CreateServiceOrderPage() {
       }
     });
     return map;
-  }, [normalizedServicesForOrder]);
+  }, [normalizedServices]);
 
   const getOppositeInspectionServiceIds = useCallback(
     (serviceIds, targetServiceId) => {
@@ -691,8 +708,8 @@ export default function CreateServiceOrderPage() {
   );
 
   const categoryOptions = useMemo(
-    () => buildCategoryOptions(orderCategories, normalizedServicesForOrder),
-    [orderCategories, normalizedServicesForOrder]
+    () => buildCategoryOptions(orderCategories, normalizedServices),
+    [orderCategories, normalizedServices]
   );
 
   const categoryNameById = useMemo(() => {
@@ -790,12 +807,12 @@ export default function CreateServiceOrderPage() {
     const selectedCategories = new Set(activePlan.categoryIds || []);
     if (selectedCategories.size === 0) return [];
 
-    return normalizedServicesForOrder
+    return normalizedServices
       .filter((service) => selectedCategories.has(Number(service.categoryId)))
       .filter((service) => (!activeCategoryId ? true : String(service.categoryId) === String(activeCategoryId)))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
-  }, [activePlan.categoryIds, activeCategoryId, normalizedServicesForOrder, serviceSearch]);
+  }, [activePlan.categoryIds, activeCategoryId, normalizedServices, serviceSearch]);
 
   const plansByVehicleKey = useMemo(() => {
     const map = new Map();
@@ -875,19 +892,27 @@ export default function CreateServiceOrderPage() {
     };
   }, []);
 
+  const calculationStartTime = useMemo(
+    () => selectedSuggestedSlotStart || formData.checkInTime || "",
+    [formData.checkInTime, selectedSuggestedSlotStart]
+  );
+
   const planSummaries = useMemo(() => {
     return selectedVehicleKeys.map((vehicleKey) => {
       const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
       const categoryIds = toNumberList(plan.categoryIds);
       const serviceIds = toNumberList(plan.serviceIds);
       const selectedServices = serviceIds.map((serviceId) => serviceById.get(Number(serviceId))).filter(Boolean);
+      const hasInspectionService = selectedServices.some((service) =>
+        normalizeSearchText(String(service?.name || "")).includes("kiem tra")
+      );
       const serviceMinutes = selectedServices.reduce((sum, service) => sum + Number(service?.minutes || 0), 0);
       const executionMinutes = serviceMinutes > 0
         ? serviceMinutes + CHECK_IN_SETUP_MINUTES + EXECUTION_BUFFER_MINUTES
         : 0;
       const totalPrice = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
       const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `Nhóm ${id}`);
-      const { finishText, finishIso } = calculateEstimatedFinish(formData.checkInTime, executionMinutes);
+      const { finishText, finishIso } = calculateEstimatedFinish(calculationStartTime, executionMinutes);
 
       return {
         vehicleKey,
@@ -896,16 +921,17 @@ export default function CreateServiceOrderPage() {
         serviceNames: selectedServices.map((service) => String(service?.name || "").trim()).filter(Boolean),
         categoryIds,
         categoryNames,
-        startTimeLabel: formData.checkInTime ? formatTimeWithDateInBrackets(formData.checkInTime) : "Chưa chọn",
+        startTimeLabel: calculationStartTime ? formatTimeWithDateInBrackets(calculationStartTime) : "Chưa chọn",
         endTimeLabel: finishText || "Chưa chọn",
         endTimeIso: finishIso || "",
         completionWarningTimeLabel: formatCompletionWarningTime(finishIso),
+        hasInspectionService,
         serviceMinutes,
         executionMinutes,
         totalPrice,
       };
     });
-  }, [calculateEstimatedFinish, categoryNameById, formData.checkInTime, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
+  }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
 
   const totalServiceMinutes = useMemo(
     () => planSummaries.reduce((sum, plan) => sum + Number(plan.serviceMinutes || 0), 0),
@@ -925,8 +951,8 @@ export default function CreateServiceOrderPage() {
   );
 
   const suggestedFinish = useMemo(
-    () => calculateEstimatedFinish(formData.checkInTime, completionMinutes),
-    [calculateEstimatedFinish, completionMinutes, formData.checkInTime]
+    () => calculateEstimatedFinish(calculationStartTime, completionMinutes),
+    [calculateEstimatedFinish, calculationStartTime, completionMinutes]
   );
 
   const requestedServiceIdsForSlotSuggestion = useMemo(() => {
@@ -940,27 +966,23 @@ export default function CreateServiceOrderPage() {
   }, [planSummaries]);
 
   useEffect(() => {
-    if (!effectiveBranchId || !formData.checkInTime) {
+    if (!effectiveBranchId) {
       setNearestSlotSuggestion(null);
       setNearestSlotError("");
       setNearestSlotLoading(false);
       return undefined;
     }
 
-    if (skipNextNearestSlotSuggestionFetchRef.current) {
-      skipNextNearestSlotSuggestionFetchRef.current = false;
-      return undefined;
-    }
-
     let cancelled = false;
-    setNearestSlotLoading(true);
     setNearestSlotError("");
 
     const timer = setTimeout(async () => {
+      if (cancelled) return;
+      setNearestSlotLoading(true);
       try {
         const suggestion = await getNearestSlotSuggestion(
           effectiveBranchId,
-          formData.checkInTime,
+          toLocalDateTimeValue(checkInNow),
           {
             requestedServiceIds: requestedServiceIdsForSlotSuggestion || undefined,
             vehicleCount: Math.max(1, selectedVehicleKeys.length),
@@ -988,8 +1010,8 @@ export default function CreateServiceOrderPage() {
       clearTimeout(timer);
     };
   }, [
+    checkInNow,
     effectiveBranchId,
-    formData.checkInTime,
     requestedServiceIdsForSlotSuggestion,
     selectedVehicleKeys.length,
   ]);
@@ -1116,7 +1138,7 @@ export default function CreateServiceOrderPage() {
       return [];
     }
 
-    return nearestSlotSuggestion.alternatives
+    const normalizedSlots = nearestSlotSuggestion.alternatives
       .filter((slot) => {
         const slotStart = readField(slot, ["startTime", "StartTime"], null);
         return slot && slotStart;
@@ -1125,24 +1147,48 @@ export default function CreateServiceOrderPage() {
         const firstStart = readField(a, ["startTime", "StartTime"], null);
         const secondStart = readField(b, ["startTime", "StartTime"], null);
         return new Date(firstStart).getTime() - new Date(secondStart).getTime();
-      })
-      .slice(0, 5);
-  }, [nearestSlotSuggestion]);
+      });
 
-  const selectedCheckInMinute = useMemo(() => toMinuteEpoch(formData.checkInTime), [formData.checkInTime]);
+    const baselineDateKey = toDateKey(checkInNow);
+    const sameDaySlots = baselineDateKey
+      ? normalizedSlots.filter((slot) => toDateKey(readField(slot, ["startTime", "StartTime"], null)) === baselineDateKey)
+      : [];
+
+    const source = sameDaySlots.length > 0 ? sameDaySlots : normalizedSlots;
+    return source.slice(0, 5);
+  }, [checkInNow, nearestSlotSuggestion]);
+
+  const hasSameDaySuggestedSlots = useMemo(() => {
+    const baselineDateKey = toDateKey(checkInNow);
+    if (!baselineDateKey || suggestedAlternativeSlots.length === 0) return true;
+    return suggestedAlternativeSlots.some(
+      (slot) => toDateKey(readField(slot, ["startTime", "StartTime"], null)) === baselineDateKey
+    );
+  }, [checkInNow, suggestedAlternativeSlots]);
+
   const suggestedTopPickMinute = useMemo(
     () => toMinuteEpoch(nearestSlotSuggestion?.suggestedStartTime),
     [nearestSlotSuggestion?.suggestedStartTime]
   );
+
+  useEffect(() => {
+    if (!selectedSuggestedSlotStart) return;
+    const stillExists = suggestedAlternativeSlots.some((slot) => {
+      const slotStart = readField(slot, ["startTime", "StartTime"], null);
+      return toLocalDateTimeValue(slotStart) === selectedSuggestedSlotStart;
+    });
+    if (!stillExists) {
+      setSelectedSuggestedSlotStart("");
+    }
+  }, [selectedSuggestedSlotStart, suggestedAlternativeSlots]);
 
   const handleApplySuggestedSlot = useCallback((slot) => {
     const slotStart = readField(slot, ["startTime", "StartTime"], null);
     if (!slotStart) return;
     const normalizedStartTime = toLocalDateTimeValue(slotStart);
     if (!normalizedStartTime) return;
-    skipNextNearestSlotSuggestionFetchRef.current = true;
-    handleFieldValueChange("checkInTime", normalizedStartTime);
-  }, [handleFieldValueChange]);
+    setSelectedSuggestedSlotStart(normalizedStartTime);
+  }, []);
 
   const handlePlateBlur = useCallback((event) => {
     const { name, value } = event.target;
@@ -1575,19 +1621,25 @@ export default function CreateServiceOrderPage() {
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) {
         setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
+        scrollToPageTop();
         return;
       }
 
       setSaving(true);
       setError("");
+      const shouldCreateGroupSession =
+        hasMultipleSelectedVehicles &&
+        !formData.isQuickOrder &&
+        !formData.isNewVehicle;
 
       const basePayload = {
         customerId: formData.customerId ? Number(formData.customerId) : null,
         serviceAdvisorId: formData.serviceAdvisorId ? Number(formData.serviceAdvisorId) : null,
         orderCategory: formData.orderCategory || null,
+        groupSessionId: null,
         oldPartsReturnOption: formData.oldPartsReturnOption || "DISPOSE_ALL",
         requiredDepositAmount: Number(formData.requiredDepositAmount || 0),
-        checkInTime: formData.checkInTime || new Date().toISOString(),
+        checkInTime: formData.checkInTime || toLocalDateTimeValue(new Date()),
         estimatedHandover: formData.estimatedHandover || suggestedFinish.finishIso || null,
         promisedHandoverTime: formData.promisedHandoverTime || null,
         status: "NEW",
@@ -1611,7 +1663,6 @@ export default function CreateServiceOrderPage() {
         const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
         const payload = {
           ...basePayload,
-          code: serviceOrderApi.generateCode(),
           serviceIds: toNumberList(plan.serviceIds),
           customerNotes: buildCustomerNotes(vehicleNotesByKey[vehicleKey]),
         };
@@ -1656,11 +1707,44 @@ export default function CreateServiceOrderPage() {
 
       let createdCount = 0;
       try {
+        if (shouldCreateGroupSession) {
+          const customerId = Number(formData.customerId || 0);
+          const branchId = Number(effectiveBranchId || 0);
+          if (!customerId || !branchId) {
+            throw new Error("Khong the tao GroupSession vi thieu customerId hoac branchId hop le.");
+          }
+
+          const groupSessionResponse = await serviceOrderApi.createGroupSession({
+            customerId,
+            branchId,
+            customerNote: null,
+          });
+
+          const parsedGroupSessionId = Number(
+            groupSessionResponse?.id ??
+            groupSessionResponse?.Id ??
+            groupSessionResponse?.groupSessionId ??
+            groupSessionResponse?.GroupSessionId ??
+            0
+          );
+
+          if (!Number.isFinite(parsedGroupSessionId) || parsedGroupSessionId <= 0) {
+            throw new Error("Tao GroupSession thanh cong nhung khong nhan duoc GroupSessionId.");
+          }
+
+          createTargets.forEach((payload) => {
+            payload.groupSessionId = parsedGroupSessionId;
+          });
+        }
+
         for (const payload of createTargets) {
           await serviceOrderApi.createWorkshop(payload);
           createdCount += 1;
         }
-        navigate("/workshop/reception");
+        setSuccessOrderSummary({
+          count: createdCount,
+          isGroup: createTargets.length > 1,
+        });
       } catch (err) {
         const message = getApiErrorMessage(err);
         if (createdCount > 0) {
@@ -1668,6 +1752,7 @@ export default function CreateServiceOrderPage() {
         } else {
           setError(message);
         }
+        scrollToPageTop();
       } finally {
         setSaving(false);
       }
@@ -1681,6 +1766,7 @@ export default function CreateServiceOrderPage() {
       saving,
       selectedVehicleKeys,
       suggestedFinish.finishIso,
+      scrollToPageTop,
       validateForm,
       vehicleNotesByKey,
     ]
@@ -2348,22 +2434,24 @@ export default function CreateServiceOrderPage() {
                     availableTimeMap={checkInAvailableTimeMap}
                     autoSelectNowOnOpen
                   />
-                  {showError("checkInTime") ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                   {suggestedAlternativeSlots.length > 0 ? (
                     <div className="reception-slot-picker">
                       <div className="reception-muted-note" style={{ marginTop: 0 }}>
-                        Chọn 1 trong 5 khung giờ gần nhất:
+                        Chọn 1 trong 5 khung giờ khả dụng:
                       </div>
+                      {!hasSameDaySuggestedSlots ? (
+                        <div className="reception-muted-note" style={{ marginTop: 6 }}>
+                          Hôm nay không còn khung giờ phù hợp, đang hiển thị các khung giờ khả dụng tiếp theo.
+                        </div>
+                      ) : null}
                       <div className="reception-slot-grid" aria-busy={nearestSlotLoading ? "true" : "false"}>
                         {suggestedAlternativeSlots.map((slot) => {
                           const slotStart = readField(slot, ["startTime", "StartTime"], null);
                           const slotEnd = readField(slot, ["endTime", "EndTime"], null);
+                          const normalizedSlotStart = toLocalDateTimeValue(slotStart);
                           const slotRemaining = Number(readField(slot, ["remainingCapacity", "RemainingCapacity"], 0));
                           const slotMinute = toMinuteEpoch(slotStart);
-                          const isSelected =
-                            selectedCheckInMinute !== null &&
-                            slotMinute !== null &&
-                            slotMinute === selectedCheckInMinute;
+                          const isSelected = Boolean(normalizedSlotStart && selectedSuggestedSlotStart && normalizedSlotStart === selectedSuggestedSlotStart);
                           const isTopPick =
                             suggestedTopPickMinute !== null &&
                             slotMinute !== null &&
@@ -2525,7 +2613,7 @@ export default function CreateServiceOrderPage() {
                         </div>
                       </div>
 
-                      {plan.executionMinutes > 0 && plan.endTimeIso ? (
+                      {plan.hasInspectionService && plan.executionMinutes > 0 && plan.endTimeIso ? (
                         <p className="reception-plan-summary-warning">
                           {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.completionWarningTimeLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
                         </p>
@@ -2552,6 +2640,24 @@ export default function CreateServiceOrderPage() {
           </button>
         </div>
       </form>
+
+      {successOrderSummary ? (
+        <div className="reception-create-success-backdrop" role="status" aria-live="polite">
+          <div className="reception-create-success-popup">
+            <span className="reception-create-success-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M9.2 16.3 4.9 12l1.4-1.4 2.9 2.9 8.5-8.5 1.4 1.4z" />
+              </svg>
+            </span>
+            <h3>Tạo lệnh thành công</h3>
+            <p>
+              {successOrderSummary?.isGroup
+                ? `Đã tạo ${successOrderSummary.count} lệnh sửa chữa.`
+                : "Đã tạo lệnh sửa chữa thành công."}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
