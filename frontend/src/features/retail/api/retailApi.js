@@ -4,12 +4,25 @@ export async function getProducts() {
   return request({ url: "/api/products", method: "GET" });
 }
 
+export async function getProductById(productId) {
+  return request({ url: `/api/products/${productId}`, method: "GET" });
+}
+
 export async function getCategories() {
   return request({ url: "/api/categories", method: "GET" });
 }
 
 export async function getBranches() {
   return request({ url: "/api/branches", method: "GET" });
+}
+
+export async function getProductImages(options = {}) {
+  const query = {};
+  if (options?.productId != null && options.productId !== "") {
+    query.productId = options.productId;
+  }
+
+  return request({ url: "/api/product-images", method: "GET", params: query });
 }
 
 export async function createRetailOrder(payload) {
