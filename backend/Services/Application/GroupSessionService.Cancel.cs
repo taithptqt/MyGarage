@@ -13,18 +13,18 @@ namespace MyGarage.Services
     {
         private static readonly HashSet<string> GroupCancelableAppointmentStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            AppointmentStatuses.Pending,
-            AppointmentStatuses.Late,
-            AppointmentStatuses.Confirmed,
-            AppointmentStatuses.Arrived,
-            AppointmentStatuses.ArrivedLate
+            nameof(AppointmentStatus.PENDING),
+            nameof(AppointmentStatus.LATE),
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.ARRIVED),
+            nameof(AppointmentStatus.ARRIVED_LATE)
         };
 
         private static readonly HashSet<string> ConfirmedLikeAppointmentStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            AppointmentStatuses.Confirmed,
-            AppointmentStatuses.Arrived,
-            AppointmentStatuses.ArrivedLate
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.ARRIVED),
+            nameof(AppointmentStatus.ARRIVED_LATE)
         };
 
         private static readonly HashSet<string> NotStartedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -121,7 +121,7 @@ namespace MyGarage.Services
                     continue;
                 }
 
-                appointment.Status = AppointmentStatuses.Canceled;
+                appointment.Status = nameof(AppointmentStatus.CANCELED);
                 appointment.CancelReason = trimmedReason;
                 appointment.UpdatedAt = nowUtc;
                 if (actorStaffId.HasValue)

@@ -30,6 +30,13 @@ const ORDER_CATEGORY_LABELS = {
   REPAIR: "Sửa chữa",
 };
 
+const DISPATCH_TAG_OPTIONS = [
+  { value: "ENGINE_CHASSIS", label: "Máy - Gầm" },
+  { value: "ELECTRICAL_AC", label: "Điện - Máy lạnh" },
+  { value: "BODY_PAINT", label: "Đồng sơn - Chăm sóc xe" },
+  { value: "MAINTENANCE", label: "Bảo dưỡng nhanh" },
+];
+
 function formatStatusLabel(status) {
   const key = String(status || "").toUpperCase();
   return STATUS_LABELS[key] || key || "Không xác định";
@@ -87,6 +94,7 @@ export default function ServiceOrderDetailModal({
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [diagnoses, setDiagnoses] = useState([]);
   const [hasSignedCheckIn, setHasSignedCheckIn] = useState(false);
+  const [selectedDispatchTag, setSelectedDispatchTag] = useState("ENGINE_CHASSIS");
 
   const customerChosenDetails = useMemo(() => {
     const isLaborOrService = (detail) => {
@@ -153,6 +161,15 @@ export default function ServiceOrderDetailModal({
       })[0] || null;
   }, [diagnoses]);
 
+  useEffect(() => {
+    const normalizedTag = String(latestDiagnosis?.dispatchTag || "").trim().toUpperCase();
+    if (normalizedTag && DISPATCH_TAG_OPTIONS.some((item) => item.value === normalizedTag)) {
+      setSelectedDispatchTag(normalizedTag);
+      return;
+    }
+    setSelectedDispatchTag("ENGINE_CHASSIS");
+  }, [order?.id, latestDiagnosis?.dispatchTag]);
+
   const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
   const isDiagnosisRequested = diagnosisStatus === "PENDING" || diagnosisStatus === "ASSIGNED";
   const isDiagnosisAssigned = diagnosisStatus === "ASSIGNED";
@@ -193,6 +210,10 @@ export default function ServiceOrderDetailModal({
 
   const statusLabel = formatStatusLabel(order?.status);
   const categoryLabel = formatOrderCategoryLabel(order?.orderCategory);
+  const selectedDispatchTagLabel = useMemo(() => {
+    const found = DISPATCH_TAG_OPTIONS.find((item) => item.value === selectedDispatchTag);
+    return found?.label || "Chưa chọn";
+  }, [selectedDispatchTag]);
 
   const handleOpenPage = (path) => {
     onClose?.();
@@ -223,11 +244,11 @@ export default function ServiceOrderDetailModal({
     }
 
     const confirmed = window.confirm(
-      `Gửi yêu cầu chuẩn đoán cho phương tiện ${vehiclePlate} tới kỹ thuật viên?`
+      `Gửi yêu cầu chuẩn đoán cho phương tiện ${vehiclePlate} theo chuyên môn "${selectedDispatchTagLabel}"?`
     );
     if (!confirmed) return;
     try {
-      await serviceOrderApi.requestDiagnosis(order.id);
+      await serviceOrderApi.requestDiagnosis(order.id, selectedDispatchTag || null);
       await refreshAfterDiagnosisChange();
     } catch (error) {
       alert(`Lỗi khi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
@@ -250,8 +271,11 @@ export default function ServiceOrderDetailModal({
     if (!hasSignedCheckIn && !isDiagnosisCompleted && !isDiagnosisRequested) {
       return "Cần hoàn tất Nhật ký xe và chữ ký CHECK-IN trước khi gửi yêu cầu chuẩn đoán.";
     }
+    if (!isDiagnosisCompleted && !isDiagnosisRequested) {
+      return `Luồng điều phối hiện tại sẽ gửi tới nhóm: ${selectedDispatchTagLabel}.`;
+    }
     return "";
-  }, [hasSignedCheckIn, isDiagnosisAssigned, isDiagnosisCompleted, isDiagnosisRequested]);
+  }, [hasSignedCheckIn, isDiagnosisAssigned, isDiagnosisCompleted, isDiagnosisRequested, selectedDispatchTagLabel]);
 
   return (
     <Modal
@@ -378,6 +402,45 @@ export default function ServiceOrderDetailModal({
             <span>Xem chi tiết theo từng mục</span>
           </h3>
           <p className="so-detail-section-note">Chọn mục cần xem để mở trang chi tiết tương ứng.</p>
+
+          {!isDiagnosisRequested && !isDiagnosisCompleted ? (
+            <div
+              style={{
+                display: "grid",
+                gap: "6px",
+                maxWidth: "340px",
+                padding: "10px 12px",
+                border: "1px solid #dce6f8",
+                borderRadius: "12px",
+                background: "#f8fbff",
+              }}
+            >
+              <label className="so-detail-panel-title" htmlFor={`dispatch-tag-${order?.id || "new"}`}>
+                Chuyên môn điều phối
+              </label>
+              <select
+                id={`dispatch-tag-${order?.id || "new"}`}
+                value={selectedDispatchTag}
+                onChange={(event) => setSelectedDispatchTag(event.target.value)}
+                style={{
+                  border: "1px solid #cad7ee",
+                  borderRadius: "10px",
+                  minHeight: "34px",
+                  padding: "0 10px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: "#244071",
+                  background: "#ffffff",
+                }}
+              >
+                {DISPATCH_TAG_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="so-detail-action-row">
             {isDiagnosisCompleted ? (

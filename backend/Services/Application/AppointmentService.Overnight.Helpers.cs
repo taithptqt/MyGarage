@@ -19,7 +19,7 @@ namespace MyGarage.Services
                     && s.SlotType != nameof(WorkSlotType.OVERNIGHT_LOCK)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != AppointmentStatuses.CancelledLegacy
+                    && s.Status != nameof(AppointmentStatus.CANCELLED)
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > closingTime))
                 .ToListAsync();
         }

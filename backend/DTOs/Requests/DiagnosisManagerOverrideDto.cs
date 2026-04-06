@@ -4,6 +4,8 @@ namespace MyGarage.DTOs.Requests
     {
         public long ManagerId { get; set; }
         public long TechnicianId { get; set; }
+        public long? AssistantTechnicianId { get; set; }
+        public long? BayId { get; set; }
         public long? TeamId { get; set; }
         public string? Reason { get; set; }
     }

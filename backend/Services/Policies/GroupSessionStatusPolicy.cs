@@ -13,23 +13,23 @@ namespace MyGarage.Services
         {
             var total = statuses.Count;
             var canceled = statuses.Count(x =>
-                string.Equals(x, AppointmentStatuses.Canceled, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, AppointmentStatuses.NoShow, StringComparison.OrdinalIgnoreCase));
+                string.Equals(x, nameof(AppointmentStatus.CANCELED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, nameof(AppointmentStatus.NO_SHOW), StringComparison.OrdinalIgnoreCase));
             var confirmed = statuses.Count(x =>
-                string.Equals(x, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, AppointmentStatuses.Arrived, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, AppointmentStatuses.ArrivedLate, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, AppointmentStatuses.Completed, StringComparison.OrdinalIgnoreCase));
-            var completed = statuses.Count(x => string.Equals(x, AppointmentStatuses.Completed, StringComparison.OrdinalIgnoreCase));
+                string.Equals(x, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, nameof(AppointmentStatus.ARRIVED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, nameof(AppointmentStatus.ARRIVED_LATE), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, nameof(AppointmentStatus.COMPLETED), StringComparison.OrdinalIgnoreCase));
+            var completed = statuses.Count(x => string.Equals(x, nameof(AppointmentStatus.COMPLETED), StringComparison.OrdinalIgnoreCase));
 
             if (total > 0 && completed == total)
             {
                 return new GroupSessionStatusEvaluation(
-                    GroupSessionStatuses.Completed,
+                    nameof(BookingGroupStatus.COMPLETED),
                     total,
                     confirmed,
                     canceled,
-                    ShouldSetConfirmedAt(previousStatus, GroupSessionStatuses.Completed),
+                    ShouldSetConfirmedAt(previousStatus, nameof(BookingGroupStatus.COMPLETED)),
                     false,
                     false,
                     true);
@@ -38,7 +38,7 @@ namespace MyGarage.Services
             if (total > 0 && canceled == total)
             {
                 return new GroupSessionStatusEvaluation(
-                    GroupSessionStatuses.Canceled,
+                    nameof(BookingGroupStatus.CANCELED),
                     total,
                     confirmed,
                     canceled,
@@ -51,11 +51,11 @@ namespace MyGarage.Services
             if (total > 0 && confirmed == total)
             {
                 return new GroupSessionStatusEvaluation(
-                    GroupSessionStatuses.Confirmed,
+                    nameof(BookingGroupStatus.CONFIRMED),
                     total,
                     confirmed,
                     canceled,
-                    ShouldSetConfirmedAt(previousStatus, GroupSessionStatuses.Confirmed),
+                    ShouldSetConfirmedAt(previousStatus, nameof(BookingGroupStatus.CONFIRMED)),
                     false,
                     false,
                     true);
@@ -64,18 +64,18 @@ namespace MyGarage.Services
             if (confirmed > 0 || canceled > 0)
             {
                 return new GroupSessionStatusEvaluation(
-                    GroupSessionStatuses.PartialConfirmed,
+                    nameof(BookingGroupStatus.PARTIAL_CONFIRMED),
                     total,
                     confirmed,
                     canceled,
-                    ShouldSetConfirmedAt(previousStatus, GroupSessionStatuses.PartialConfirmed),
+                    ShouldSetConfirmedAt(previousStatus, nameof(BookingGroupStatus.PARTIAL_CONFIRMED)),
                     false,
                     false,
                     true);
             }
 
             return new GroupSessionStatusEvaluation(
-                GroupSessionStatuses.Pending,
+                nameof(BookingGroupStatus.PENDING),
                 total,
                 confirmed,
                 canceled,
@@ -92,9 +92,9 @@ namespace MyGarage.Services
                 return true;
             }
 
-            if (string.Equals(previousStatus, GroupSessionStatuses.Confirmed, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(previousStatus, GroupSessionStatuses.PartialConfirmed, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(previousStatus, GroupSessionStatuses.Completed, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(previousStatus, nameof(BookingGroupStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(previousStatus, nameof(BookingGroupStatus.PARTIAL_CONFIRMED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(previousStatus, nameof(BookingGroupStatus.COMPLETED), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -104,7 +104,7 @@ namespace MyGarage.Services
 
         private static bool ShouldSetCanceledAt(string? previousStatus)
         {
-            return !string.Equals(previousStatus, GroupSessionStatuses.Canceled, StringComparison.OrdinalIgnoreCase);
+            return !string.Equals(previousStatus, nameof(BookingGroupStatus.CANCELED), StringComparison.OrdinalIgnoreCase);
         }
     }
 }

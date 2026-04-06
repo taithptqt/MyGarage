@@ -36,7 +36,7 @@ namespace MyGarage.Services
                     && s.StartTime < dayEnd
                     && s.EndTime > dayStart
                     && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != AppointmentStatuses.CancelledLegacy)
+                    && s.Status != nameof(AppointmentStatus.CANCELLED))
                 .ToListAsync();
         }
 

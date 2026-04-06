@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using MyGarage.Constants;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -11,8 +11,8 @@ namespace MyGarage.Services
 
         public void EnsureCanConfirm(Appointment appointment)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Pending, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Late, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.LATE), StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Chi co the xac nhan lich hen cho trang thai PENDING/LATE. Hien tai: {appointment.Status}");
             }
@@ -28,8 +28,8 @@ namespace MyGarage.Services
 
         public void EnsureCanCheckIn(Appointment appointment)
         {
-            if (!string.Equals(appointment.Status, AppointmentStatuses.Confirmed, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, AppointmentStatuses.Late, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.LATE), StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Chi co the check-in lich o trang thai CONFIRMED/LATE. Hien tai: {appointment.Status}");
             }

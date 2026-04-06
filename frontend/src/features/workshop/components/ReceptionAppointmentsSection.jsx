@@ -128,14 +128,24 @@ function GroupBlock({
           </span>
           <button
             className={`btn-icon btn-action-pill btn-action-cancel ${(actingGroup === group.id || !group.hasCancelableAppointments) ? "is-disabled-action" : ""}`}
-            title="Hủy nhóm"
+            title={"Hủy"}
+            style={{
+              height: 30,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              lineHeight: 1,
+              margin: 0,
+              width: "auto",
+              minWidth: 64,
+            }}
             onClick={(event) => {
               event.stopPropagation();
               handleGroupCancel(group);
             }}
             disabled={actingGroup === group.id || !group.hasCancelableAppointments}
           >
-            Hủy nhóm
+            {"Hủy"}
           </button>
         </div>
       </header>

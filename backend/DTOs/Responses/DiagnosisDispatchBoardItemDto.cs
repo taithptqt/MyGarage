@@ -17,12 +17,21 @@ namespace MyGarage.DTOs.Responses
         public string? TeamName { get; set; }
         public long? TechnicianId { get; set; }
         public string? TechnicianName { get; set; }
+        public long? AssistantTechnicianId { get; set; }
+        public string? AssistantTechnicianName { get; set; }
+        public long? AssignedBayId { get; set; }
+        public string? AssignedBayCode { get; set; }
         public DateTime? RequestedAt { get; set; }
         public DateTime? AssignedAt { get; set; }
+        public DateTime? StartedAt { get; set; }
         public int PendingMinutes { get; set; }
         public int AssignedMinutes { get; set; }
         public bool IsSupportRequested { get; set; }
         public bool IsCancelPendingApproval { get; set; }
         public string? CancelReason { get; set; }
+        public long? TechnicalApprovedByTeamLeaderId { get; set; }
+        public DateTime? TechnicalApprovedAt { get; set; }
+        public long? FinalApprovedByManagerId { get; set; }
+        public DateTime? FinalApprovedAt { get; set; }
     }
 }

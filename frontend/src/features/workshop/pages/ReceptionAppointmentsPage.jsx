@@ -90,9 +90,9 @@ function normalizeAppointmentItem(item) {
       : [],
     customerNotes: text(pick("customerNotes", "CustomerNotes")),
     cancelReason: text(pick("cancelReason", "CancelReason")),
-    GroupSessionId: numeric(pick("GroupSessionId", "GroupSessionId")),
-    GroupSessionCode: text(pick("GroupSessionCode", "GroupSessionCode")),
-    GroupSessionStatus: text(pick("GroupSessionStatus", "GroupSessionStatus")),
+    GroupSessionId: numeric(pick("groupSessionId", "GroupSessionId")),
+    GroupSessionCode: text(pick("groupSessionCode", "GroupSessionCode")),
+    GroupSessionStatus: text(pick("groupSessionStatus", "GroupSessionStatus")),
   };
 }
 
@@ -304,12 +304,19 @@ export default function ReceptionAppointmentsPage() {
     const grouped = new Map();
     filteredAppts.forEach((appt) => {
       const gid = Number(appt.GroupSessionId || 0);
-      if (!gid) return;
+      const groupCode = String(appt.GroupSessionCode || "").trim();
+      const hasGroupId = gid > 0;
+      const hasGroupCode = Boolean(groupCode);
+      if (!hasGroupId && !hasGroupCode) return;
 
-      if (!grouped.has(gid)) {
-        grouped.set(gid, {
-          id: gid,
-          groupCode: appt.GroupSessionCode || `BG-${gid}`,
+      const groupKey = hasGroupId ? `id:${gid}` : `code:${groupCode}`;
+
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, {
+          key: groupKey,
+          id: groupKey,
+          groupSessionId: hasGroupId ? gid : 0,
+          groupCode: groupCode || `BG-${gid || groupKey}`,
           status: appt.GroupSessionStatus || "PENDING",
           customerName: appt.customerName || "",
           customerPhone: appt.customerPhone || "",
@@ -317,7 +324,11 @@ export default function ReceptionAppointmentsPage() {
         });
       }
 
-      grouped.get(gid).appointments.push(appt);
+      const group = grouped.get(groupKey);
+      if (!group.status && appt.GroupSessionStatus) group.status = appt.GroupSessionStatus;
+      if (!group.customerName && appt.customerName) group.customerName = appt.customerName;
+      if (!group.customerPhone && appt.customerPhone) group.customerPhone = appt.customerPhone;
+      group.appointments.push(appt);
     });
 
     return Array.from(grouped.values())
@@ -339,7 +350,12 @@ export default function ReceptionAppointmentsPage() {
   }, [filteredAppts, apptSortBy]);
 
   const filteredSingleAppts = useMemo(
-    () => filteredAppts.filter((appt) => !Number(appt.GroupSessionId || 0)),
+    () =>
+      filteredAppts.filter((appt) => {
+        const hasGroupId = Number(appt.GroupSessionId || 0) > 0;
+        const hasGroupCode = Boolean(String(appt.GroupSessionCode || "").trim());
+        return !(hasGroupId || hasGroupCode);
+      }),
     [filteredAppts],
   );
 
@@ -406,8 +422,6 @@ export default function ReceptionAppointmentsPage() {
   }, [fetchAppointmentsSilent]);
 
   const handleGroupCancel = useCallback(async (group) => {
-    if (!group?.id) return;
-
     const cancelableAppointments = (group.appointments || []).filter((appt) => canCancelAppointment(appt.status));
     if (cancelableAppointments.length === 0) return;
 
@@ -433,9 +447,16 @@ export default function ReceptionAppointmentsPage() {
       return;
     }
 
+    const groupSessionId = Number(group?.groupSessionId || 0);
     setActingGroup(group.id);
     try {
-      await cancelGroupSessionAll(group.id, reason);
+      if (groupSessionId > 0) {
+        await cancelGroupSessionAll(groupSessionId, reason);
+      } else {
+        await Promise.allSettled(
+          cancelableAppointments.map((appt) => cancelAppointment(appt.id, reason)),
+        );
+      }
     } catch {
       await Promise.allSettled(
         cancelableAppointments.map((appt) => cancelAppointment(appt.id, reason)),

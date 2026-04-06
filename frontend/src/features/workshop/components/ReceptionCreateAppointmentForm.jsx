@@ -284,6 +284,43 @@ function clonePlan(plan) {
   };
 }
 
+function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById) {
+  return (planSummaries || [])
+    .map((plan) => {
+      const categoryIds = toNumberList(plan?.categoryIds || []);
+      if (categoryIds.length === 0) return null;
+
+      const coveredCategoryIds = new Set(
+        toNumberList(plan?.serviceIds || [])
+          .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
+          .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
+      );
+
+      const missingCategoryNames = categoryIds
+        .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
+        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
+
+      if (missingCategoryNames.length === 0) return null;
+
+      return {
+        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
+        missingCategoryNames
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildMissingSpecificServiceMessage(missingByVehicle) {
+  if (!Array.isArray(missingByVehicle) || missingByVehicle.length === 0) return "";
+
+  const details = missingByVehicle.map((item) => {
+    const categories = (item.missingCategoryNames || []).map((name) => `'${name}'`).join(", ");
+    return `${item.vehicleLabel}: ${categories}`;
+  });
+
+  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
+}
+
 export default function ReceptionCreateAppointmentForm({
   customers = [],
   vehicles = [],
@@ -1088,6 +1125,16 @@ export default function ReceptionCreateAppointmentForm({
     selectedSlotsByVehicle
   ]);
 
+  const missingSpecificServiceByVehicle = useMemo(
+    () => getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById),
+    [categoryNameById, planSummaries, serviceCategoryMap]
+  );
+
+  const missingSpecificServiceMessage = useMemo(
+    () => buildMissingSpecificServiceMessage(missingSpecificServiceByVehicle),
+    [missingSpecificServiceByVehicle]
+  );
+
   const totalMinutes = useMemo(
     () => planSummaries.reduce((sum, item) => sum + Number(item.totalMinutes || 0), 0),
     [planSummaries]
@@ -1316,20 +1363,12 @@ export default function ReceptionCreateAppointmentForm({
     }
 
     const groups = selectedVehicleKeys.map((vehicleKey) => serviceIdsByVehicleKey.get(vehicleKey) || []);
-    if (slotMode === SLOT_MODE.PARALLEL) {
-      if (groups.some((group) => group.length === 0)) {
-        setSlots([]);
-        return;
-      }
-    } else if (!activeSlotVehicleKey || (serviceIdsByVehicleKey.get(activeSlotVehicleKey) || []).length === 0) {
-      setSlots([]);
-      return;
-    }
+    const effectiveActiveSlotVehicleKey = activeSlotVehicleKey || selectedVehicleKeys[0] || "";
 
     const requestedServiceIds =
       slotMode === SLOT_MODE.PARALLEL
         ? groups.map((group) => group.join(",")).join("|")
-        : (serviceIdsByVehicleKey.get(activeSlotVehicleKey) || []).join(",");
+        : (serviceIdsByVehicleKey.get(effectiveActiveSlotVehicleKey) || []).join(",");
 
     setSlotsLoading(true);
     setSlots([]);
@@ -1454,6 +1493,11 @@ export default function ReceptionCreateAppointmentForm({
     const effectiveBranchId = Number(branchId || 0);
     if (!Number.isFinite(effectiveBranchId) || effectiveBranchId <= 0) {
       setErrorText("Vui lòng chọn đúng chi nhánh làm việc trước khi chọn khung giờ.");
+      return;
+    }
+
+    if (missingSpecificServiceByVehicle.length > 0) {
+      setErrorText(missingSpecificServiceMessage);
       return;
     }
 
@@ -1717,6 +1761,10 @@ export default function ReceptionCreateAppointmentForm({
       }
     }
 
+    if (missingSpecificServiceByVehicle.length > 0) {
+      return missingSpecificServiceMessage;
+    }
+
     return "";
   };
 
@@ -1802,6 +1850,7 @@ export default function ReceptionCreateAppointmentForm({
 
   return (
     <form ref={formRef} className="admin-form reception-appt-form" onSubmit={handleSubmit}>
+      {errorText ? <div className="reception-error-banner">{errorText}</div> : null}
       <div className="reception-appt-layout">
         <div className="reception-appt-left-column">
           <section className="reception-appt-section">
@@ -2394,6 +2443,13 @@ export default function ReceptionCreateAppointmentForm({
                 minDate={new Date()}
                 showTime={false}
                 iconColor="#2f6bd8"
+                onOpenRequest={() => {
+                  if (missingSpecificServiceByVehicle.length > 0) {
+                    setErrorText(missingSpecificServiceMessage);
+                    return false;
+                  }
+                  return true;
+                }}
                 placeholder="Chọn ngày..."
               />
               {appointmentSummary ? <div className="reception-muted-note">{appointmentSummary}</div> : null}
@@ -2600,10 +2656,6 @@ export default function ReceptionCreateAppointmentForm({
           </section>
         </div>
       </div>
-
-      {errorText ? (
-        <div className="reception-error-banner">{errorText}</div>
-      ) : null}
 
       <div className="form-actions reception-form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>

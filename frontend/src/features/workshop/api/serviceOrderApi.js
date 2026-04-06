@@ -25,21 +25,13 @@ export const serviceOrderApi = {
   getCheckInRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_IN" } }),
   createCheckInRequest: (serviceOrderId) =>
     request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_IN" } }),
-  acceptCheckInRequest: (serviceOrderId, technicianId) =>
-    request({
-      url: `/api/vehicle-condition-logs/condition-jobs/${serviceOrderId}`,
-      method: "PATCH",
-      data: { requestType: "CHECK_IN", technicianId },
-    }),
+  acceptCheckInRequest: () =>
+    Promise.reject(new Error("CHECK-IN do le tan xu ly truc tiep, khong phan cong cho ky thuat vien.")),
   getCheckOutRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_OUT" } }),
   createCheckOutRequest: (serviceOrderId) =>
     request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_OUT" } }),
-  acceptCheckOutRequest: (serviceOrderId, technicianId) =>
-    request({
-      url: `/api/vehicle-condition-logs/condition-jobs/${serviceOrderId}`,
-      method: "PATCH",
-      data: { requestType: "CHECK_OUT", technicianId },
-    }),
+  acceptCheckOutRequest: () =>
+    Promise.reject(new Error("CHECK-OUT do le tan xu ly truc tiep, khong phan cong cho ky thuat vien.")),
 
   // --- Diagnosis ---
   getDiagnoses: (orderId) => request({ url: "/api/diagnoses", method: "GET", params: orderId ? { serviceOrderId: orderId } : undefined }),
@@ -88,11 +80,35 @@ export const serviceOrderApi = {
       method: "GET",
       params,
     }),
+  getDiagnosisDispatchSuggestion: (serviceOrderId, params) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/dispatch-suggestions`,
+      method: "GET",
+      params,
+    }),
   acceptDiagnosisRequest: (serviceOrderId, technicianId, options = {}) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
       method: "PATCH",
       data: { technicianId, ...options },
+    }),
+  startDiagnosis: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/start`,
+      method: "POST",
+      data,
+    }),
+  approveDiagnosisTechnical: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/technical-approval`,
+      method: "POST",
+      data,
+    }),
+  approveDiagnosisFinal: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/final-approval`,
+      method: "POST",
+      data,
     }),
   requestDiagnosisSupport: (serviceOrderId, data) =>
     request({
@@ -137,6 +153,7 @@ export const serviceOrderApi = {
 
   // --- Teams ---
   getTeams: (params) => request({ url: "/api/teams", method: "GET", params }),
+  getBays: () => request({ url: "/api/bays", method: "GET" }),
 
   // --- Helpers ---
   generateCode: () => `SO-${new Date().getTime().toString().slice(-6)}`,

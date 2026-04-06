@@ -37,7 +37,7 @@ export function getUnauthorizedRedirectPath(user) {
   if (roleCode === "ADMIN") {
     return "/admin/default";
   }
-  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(roleCode)) {
+  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode)) {
     return "/workshop";
   }
   if (roleCode === "CUSTOMER") {

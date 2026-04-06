@@ -15,7 +15,7 @@ namespace MyGarage.Services
             var (appointment, actorStaffId) = state.Value;
             _appointmentStatusPolicy.EnsureCanConfirm(appointment);
 
-            appointment.Status = AppointmentStatuses.Confirmed;
+            appointment.Status = nameof(AppointmentStatus.CONFIRMED);
             return await PersistStatusChangeAsync(id, appointment, actorStaffId);
         }
 
@@ -28,7 +28,7 @@ namespace MyGarage.Services
 
             var effectiveReason = _appointmentStatusPolicy.BuildCancelReason(appointment, reason, _clock.LocalNow);
 
-            appointment.Status = AppointmentStatuses.Canceled;
+            appointment.Status = nameof(AppointmentStatus.CANCELED);
             appointment.CancelReason = effectiveReason;
             return await PersistStatusChangeAsync(id, appointment, actorStaffId);
         }
@@ -72,7 +72,7 @@ namespace MyGarage.Services
 
             if (arriveTime >= appointment.StartTime.AddMinutes(cancelAfterMinutes))
             {
-                appointment.Status = AppointmentStatuses.NoShow;
+                appointment.Status = nameof(AppointmentStatus.NO_SHOW);
                 appointment.CancelReason = AppointmentCancelReasons.AutoNoShowLateArrival;
                 await IncrementNoShowCountAsync(appointment.CustomerId);
                 return;
@@ -92,7 +92,7 @@ namespace MyGarage.Services
                 return;
             }
 
-            appointment.Status = AppointmentStatuses.Arrived;
+            appointment.Status = nameof(AppointmentStatus.ARRIVED);
             appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "ON_TIME_ARRIVAL");
         }
     }

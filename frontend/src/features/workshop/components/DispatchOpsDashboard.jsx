@@ -1,5 +1,4 @@
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   AlertIcon,
@@ -27,118 +26,137 @@ import {
   VStack,
   useToast,
 } from "@chakra-ui/react";
+import { RepeatIcon } from "@chakra-ui/icons";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
-import FilterDropdown from "@shared/components/FilterDropdown";
+import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { useSearch } from "@shared/core/context/SearchContext";
 
+const COLUMN_ORDER = ["WHITE", "YELLOW", "RED", "GREEN"];
+
 const COLOR_META = {
   WHITE: {
-    label: "WHITE - Chờ tiếp nhận",
-    helper: "Xe mới đang chờ tổ trưởng nhận",
-    badge: "gray",
-    borderColor: "#94a3b8",
-  },
-  YELLOW: {
-    label: "YELLOW - Đang chẩn đoán",
-    helper: "Đã có tổ nhận và đang xử lý",
-    badge: "yellow",
-    borderColor: "#d69e2e",
-  },
-  RED: {
-    label: "RED - Cảnh báo",
-    helper: "Cần can thiệp quản đốc / hỗ trợ kỹ thuật",
-    badge: "red",
-    borderColor: "#e53e3e",
-  },
-  GREEN: {
-    label: "GREEN - Đã chẩn đoán",
-    helper: "Đã có kết quả chẩn đoán",
-    badge: "green",
-    borderColor: "#38a169",
-  },
-};
-
-const STATUS_TONE = {
-  WHITE: {
-    tabBg: "gray.100",
-    tabBorder: "gray.300",
-    tabText: "gray.700",
-    activeBg: "#1f2937",
+    label: "Mới tiếp nhận",
+    description: "Chờ tổ trưởng nhận xe và phân công",
+    tabBg: "#f8fafc",
+    tabBorder: "#cbd5e1",
+    tabText: "#334155",
+    activeBg: "#0f172a",
     activeText: "white",
-    rowBg: "gray.50",
-    rowHover: "gray.100",
+    cardAccent: "#94a3b8",
+    cardBg: "white",
   },
   YELLOW: {
-    tabBg: "#fff7db",
+    label: "Đang chuẩn đoán",
+    description: "Đã có tổ nhận và đang xử lý",
+    tabBg: "#fff8db",
     tabBorder: "#f6d365",
-    tabText: "#7b5d00",
+    tabText: "#8a6a00",
     activeBg: "#d69e2e",
     activeText: "white",
-    rowBg: "#fffbeb",
-    rowHover: "#fef3c7",
+    cardAccent: "#d69e2e",
+    cardBg: "#fffdf3",
   },
   RED: {
+    label: "Cần can thiệp",
+    description: "Có cảnh báo hỗ trợ, hủy lệnh hoặc quá SLA",
     tabBg: "#fff1f2",
     tabBorder: "#fca5a5",
     tabText: "#b91c1c",
     activeBg: "#e53e3e",
     activeText: "white",
-    rowBg: "#fff5f5",
-    rowHover: "#fee2e2",
+    cardAccent: "#ef4444",
+    cardBg: "#fff7f7",
   },
   GREEN: {
+    label: "Đã chuẩn đoán",
+    description: "Đã có kết quả kỹ thuật để duyệt",
     tabBg: "#ecfdf3",
     tabBorder: "#86efac",
     tabText: "#166534",
-    activeBg: "#38a169",
+    activeBg: "#16a34a",
     activeText: "white",
-    rowBg: "#f0fdf4",
-    rowHover: "#dcfce7",
+    cardAccent: "#22c55e",
+    cardBg: "#f3fff8",
   },
 };
 
-const COLUMN_ORDER = ["WHITE", "YELLOW", "RED", "GREEN"];
-const DEFAULT_CANCEL_REASON = "Sai chuyên môn";
+const STATUS_TAB_META = {
+  WHITE: {
+    label: "Mới tiếp nhận",
+    description: "Chờ tổ trưởng nhận xe và phân công",
+    tabBg: COLOR_META.WHITE.tabBg,
+    tabBorder: COLOR_META.WHITE.tabBorder,
+    tabText: COLOR_META.WHITE.tabText,
+    activeBg: COLOR_META.WHITE.activeBg,
+    activeText: COLOR_META.WHITE.activeText,
+  },
+  IN_PROGRESS: {
+    label: "Đang xử lý",
+    description: "Gộp Đang chuẩn đoán và Cần can thiệp",
+    tabBg: "#fff6e8",
+    tabBorder: "#f6ad55",
+    tabText: "#9c4221",
+    activeBg: "#dd6b20",
+    activeText: "white",
+  },
+  GREEN: {
+    label: "Đã chuẩn đoán",
+    description: "Đã có kết quả kỹ thuật để duyệt",
+    tabBg: COLOR_META.GREEN.tabBg,
+    tabBorder: COLOR_META.GREEN.tabBorder,
+    tabText: COLOR_META.GREEN.tabText,
+    activeBg: COLOR_META.GREEN.activeBg,
+    activeText: COLOR_META.GREEN.activeText,
+  },
+};
+
+const STATUS_TAB_ORDER = ["WHITE", "IN_PROGRESS", "GREEN"];
+
+const DISPATCH_TAG_OPTIONS = [
+  { value: "ENGINE_CHASSIS", label: "Máy - Gầm" },
+  { value: "ELECTRICAL_AC", label: "Điện - Máy lạnh" },
+  { value: "BODY_PAINT", label: "Đồng sơn - Chăm sóc xe" },
+  { value: "MAINTENANCE", label: "Bảo dưỡng nhanh" },
+];
+
+const DISPATCH_TAG_LABELS = DISPATCH_TAG_OPTIONS.reduce((acc, item) => {
+  acc[item.value] = item.label;
+  return acc;
+}, {});
+
 const CANCEL_REASONS = ["Sai chuyên môn", "Quá tải cầu", "Thiếu thiết bị", "Khác"];
-const DISPATCH_TAG_LABELS = {
-  BODY_PAINT: "Đồng sơn / Chăm sóc xe",
-  ELECTRICAL_AC: "Điện - Máy lạnh",
-  ENGINE_CHASSIS: "Máy - Gầm",
-  MAINTENANCE: "Bảo dưỡng nhanh",
-};
-const SHARED_SELECT_PROPS = {
-  size: "sm",
-  bg: "white",
-  borderColor: "gray.200",
-  borderRadius: "xl",
-  focusBorderColor: "blue.400",
-  iconColor: "gray.500",
-  _hover: { borderColor: "blue.300" },
-};
+
+const EMPTY_NOTE_TOKENS = new Set([
+  "khong",
+  "khong co",
+  "khong co ghi chu",
+  "khong co thong tin",
+  "none",
+  "n/a",
+  "na",
+  "null",
+  "undefined",
+  "-",
+  "--",
+]);
+
+const TEAM_LEADER_ROLE_CODES = new Set(["TEAM_LEADER"]);
+const TECHNICIAN_ROLE_CODES = new Set(["TECH", "TECHNICIAN", "TEAM_LEADER", "FOREMAN"]);
+
+function toText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
 
 function readValue(source, ...keys) {
   for (const key of keys) {
     const value = source?.[key];
-    if (value !== undefined && value !== null) return value;
+    if (value !== null && value !== undefined) return value;
   }
   return null;
-}
-function toText(value) {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
-}
-
-function normalizeCode(value) {
-  return toText(value).toUpperCase();
-}
-
-function getDispatchTagLabel(tag) {
-  const normalized = normalizeCode(tag);
-  if (!normalized) return "Chưa phân loại";
-  return DISPATCH_TAG_LABELS[normalized] || normalized;
 }
 
 function toPositiveNumber(value) {
@@ -146,16 +164,29 @@ function toPositiveNumber(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function parseDate(input) {
-  if (!input) return null;
-  const date = new Date(input);
-  return Number.isNaN(date.getTime()) ? null : date;
+function normalizeCode(value) {
+  return toText(value).toUpperCase();
 }
 
-function formatDateTime(input) {
-  const date = parseDate(input);
-  if (!date) return "--";
-  return date.toLocaleString("vi-VN", {
+function normalizeNoteText(value) {
+  return toText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isEmptyNote(value) {
+  const normalized = normalizeNoteText(value);
+  return !normalized || EMPTY_NOTE_TOKENS.has(normalized);
+}
+
+function formatDateTime(value) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--";
+  return parsed.toLocaleString("vi-VN", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -164,29 +195,71 @@ function formatDateTime(input) {
   });
 }
 
-function formatMinutes(minutes) {
-  const value = Number(minutes);
-  if (!Number.isFinite(value) || value <= 0) return "0 phút";
-  if (value < 60) return `${Math.floor(value)} phút`;
-  const hours = Math.floor(value / 60);
-  const rest = Math.floor(value % 60);
-  return rest > 0 ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
+function formatMinutes(value) {
+  const minutes = Number(value || 0);
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 phút";
+  if (minutes < 60) return `${Math.floor(minutes)} phút`;
+  const hours = Math.floor(minutes / 60);
+  const remain = Math.floor(minutes % 60);
+  return remain > 0 ? `${hours} giờ ${remain} phút` : `${hours} giờ`;
 }
 
-function isTechnicianRole(role) {
-  const roleCode = normalizeCode(readValue(role, "roleCode", "RoleCode"));
-  const roleName = toText(readValue(role, "roleName", "RoleName")).toLowerCase();
-  return (
-    roleCode === "TECH" ||
-    roleCode === "TECHNICIAN" ||
-    roleCode === "TECH_LEAD" ||
-    roleCode === "FOREMAN" ||
-    roleName.includes("tech") ||
-    roleName.includes("ky thuat") ||
-    roleName.includes("kỹ thuật") ||
-    roleName.includes("to truong") ||
-    roleName.includes("tổ trưởng")
-  );
+function getDispatchTagLabel(tag) {
+  const code = normalizeCode(tag);
+  if (!code) return "Chưa phân loại";
+  return DISPATCH_TAG_LABELS[code] || code;
+}
+
+function resolveApiErrorMessage(error, fallback = "Đã có lỗi xảy ra") {
+  const message = toText(readValue(error, "response")?.data?.message);
+  if (message) return message;
+  const raw = toText(error?.message);
+  if (raw) return raw;
+  return fallback;
+}
+
+function isOperationalBayAvailable(operationalStatus) {
+  const normalized = normalizeCode(operationalStatus);
+  if (!normalized) return true;
+  return !["IN_USE", "BROKEN", "UNDER_MAINTENANCE", "MAINTENANCE", "SUSPENDED"].includes(normalized);
+}
+
+function getStaffRoleCode(staff, roleById) {
+  const directRoleCode = normalizeCode(readValue(staff, "roleCode", "RoleCode"));
+  if (directRoleCode) return directRoleCode;
+
+  const roleId = toPositiveNumber(readValue(staff, "roleId", "RoleId"));
+  if (!roleId) return "";
+
+  const role = roleById.get(roleId);
+  return normalizeCode(readValue(role, "roleCode", "RoleCode"));
+}
+function isTechnicianCandidate(staff, roleById) {
+  const roleCode = getStaffRoleCode(staff, roleById);
+  const roleName = toText(readValue(staff, "roleName", "RoleName")).toLowerCase();
+
+  if (TECHNICIAN_ROLE_CODES.has(roleCode)) return true;
+  return roleName.includes("kỹ thuật") || roleName.includes("ky thuat") || roleName.includes("tổ trưởng") || roleName.includes("to truong");
+}
+
+function isTeamLeader(staff, roleById) {
+  const roleCode = getStaffRoleCode(staff, roleById);
+  return TEAM_LEADER_ROLE_CODES.has(roleCode);
+}
+
+function isStaffActive(staff) {
+  if (readValue(staff, "isDeleted", "IsDeleted") === true) return false;
+  const status = normalizeCode(readValue(staff, "status", "Status"));
+  if (!status) return true;
+  return status !== "INACTIVE";
+}
+
+function sortStaffByName(list) {
+  return [...list].sort((a, b) => {
+    const aName = toText(readValue(a, "fullName", "FullName"));
+    const bName = toText(readValue(b, "fullName", "FullName"));
+    return aName.localeCompare(bName, "vi");
+  });
 }
 
 function resolveCurrentStaff(staffs, user) {
@@ -204,12 +277,6 @@ function resolveCurrentStaff(staffs, user) {
     if (byEmail) return byEmail;
   }
 
-  const userPhone = toText(readValue(user, "phone", "Phone")).replace(/\s+/g, "");
-  if (userPhone) {
-    const byPhone = staffs.find((item) => toText(readValue(item, "phone", "Phone")).replace(/\s+/g, "") === userPhone);
-    if (byPhone) return byPhone;
-  }
-
   const userName = toText(readValue(user, "fullName", "FullName")).toLowerCase();
   if (userName) {
     const byName = staffs.find((item) => toText(readValue(item, "fullName", "FullName")).toLowerCase() === userName);
@@ -219,16 +286,86 @@ function resolveCurrentStaff(staffs, user) {
   return null;
 }
 
+function resolveCustomerName(raw, order, customerMap) {
+  const boardName = toText(readValue(raw, "customerName", "CustomerName"));
+  if (boardName) return boardName;
+
+  const orderName = toText(readValue(order, "customerName", "CustomerName")) || toText(readValue(order, "guestName", "GuestName"));
+  if (orderName) return orderName;
+
+  const customerId = toPositiveNumber(readValue(order, "customerId", "CustomerId"));
+  if (!customerId) return "";
+
+  const customer = customerMap.get(customerId);
+  return toText(readValue(customer, "fullName", "FullName", "name", "Name"));
+}
+
+function resolveVehiclePlate(raw, order, vehicleMap) {
+  const boardPlate = toText(readValue(raw, "vehicleLicensePlate", "VehicleLicensePlate"));
+  if (boardPlate) return boardPlate;
+
+  const orderPlate = toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) || toText(readValue(order, "guestVehicleInfo", "GuestVehicleInfo"));
+  if (orderPlate) return orderPlate;
+
+  const vehicleId = toPositiveNumber(readValue(order, "vehicleId", "VehicleId"));
+  if (!vehicleId) return "";
+
+  const vehicle = vehicleMap.get(vehicleId);
+  return toText(readValue(vehicle, "licensePlate", "LicensePlate", "plateNumber", "PlateNumber"));
+}
+
+function formatAdditionalDescription(value) {
+  const raw = toText(value);
+  if (!raw) return "Không có";
+
+  const collected = [];
+  const collect = (source) => {
+    if (source === null || source === undefined) return;
+
+    if (Array.isArray(source)) {
+      source.forEach((item) => collect(item));
+      return;
+    }
+
+    if (typeof source === "object") {
+      ["additionalDescription", "additionalNote", "description", "note", "notes", "customerNotes", "symptom", "symptoms", "message", "text"].forEach((key) => {
+        collect(source[key]);
+      });
+      return;
+    }
+
+    const text = toText(source);
+    if (text) collected.push(text);
+  };
+
+  try {
+    collect(JSON.parse(raw));
+  } catch {
+    collect(raw);
+  }
+
+  const unique = [];
+  const seen = new Set();
+  collected.forEach((item) => {
+    const key = normalizeNoteText(item);
+    if (!key || isEmptyNote(key) || seen.has(key)) return;
+    seen.add(key);
+    unique.push(item);
+  });
+
+  return unique.length > 0 ? unique.join(", ") : "Không có";
+}
+
 function extractAlertReasons(item) {
   const reasons = [];
   if (!item) return reasons;
 
   if (item.isSupportRequested) {
-    reasons.push("Tổ trưởng đã bấm hỗ trợ/hội chẩn");
+    reasons.push("Có yêu cầu hỗ trợ hội chẩn từ cầu nâng");
   }
 
   if (item.isCancelPendingApproval) {
-    reasons.push("Đang chờ quản đốc duyệt hủy lệnh");
+    reasons.push("Đang chờ quản đốc duyệt hủy/phân lại");
   }
 
   if (item.queueColor === "RED" && !item.technicianId && item.pendingMinutes >= 10) {
@@ -236,49 +373,23 @@ function extractAlertReasons(item) {
   }
 
   if (item.queueColor === "RED" && item.technicianId && item.assignedMinutes >= 45) {
-    reasons.push("Chẩn đoán quá 45 phút chưa xong");
+    reasons.push("Chuẩn đoán đang vượt SLA 45 phút");
   }
 
   return reasons;
 }
 
-function safeSortByName(list) {
-  return [...list].sort((a, b) => {
-    const aName = toText(readValue(a, "fullName", "FullName"));
-    const bName = toText(readValue(b, "fullName", "FullName"));
-    return aName.localeCompare(bName, "vi");
-  });
-}
-
-function resolveApiErrorMessage(err, fallbackMessage) {
-  const statusCode = Number(err?.response?.status || 0);
-  if (statusCode === 404) {
-    return "Không tìm thấy API tương ứng (404). Vui lòng kiểm tra backend đã cập nhật route mới.";
-  }
-
-  const backendMessage = toText(err?.response?.data?.message);
-  if (backendMessage) return backendMessage;
-
-  const clientMessage = toText(err?.message);
-  if (clientMessage) return clientMessage;
-
-  return fallbackMessage;
-}
-
-function normalizeBoardItem(raw, orderMap) {
+function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap) {
   const serviceOrderId = toPositiveNumber(readValue(raw, "serviceOrderId", "ServiceOrderId")) || 0;
   const order = orderMap.get(serviceOrderId) || null;
-  const serviceOrderCode =
-    toText(readValue(raw, "serviceOrderCode", "ServiceOrderCode")) ||
-    toText(readValue(order, "code", "Code")) ||
-    `SO-${serviceOrderId}`;
 
   return {
     serviceOrderId,
-    serviceOrderCode,
-    serviceOrderStatus:
-      toText(readValue(raw, "serviceOrderStatus", "ServiceOrderStatus")) ||
-      toText(readValue(order, "status", "Status")),
+    serviceOrderCode:
+      toText(readValue(raw, "serviceOrderCode", "ServiceOrderCode")) ||
+      toText(readValue(order, "code", "Code")) ||
+      `SO-${serviceOrderId}`,
+    serviceOrderStatus: toText(readValue(raw, "serviceOrderStatus", "ServiceOrderStatus")) || toText(readValue(order, "status", "Status")),
     queueColor: normalizeCode(readValue(raw, "queueColor", "QueueColor")) || "WHITE",
     queueState: toText(readValue(raw, "queueState", "QueueState")),
     dispatchTag: normalizeCode(readValue(raw, "dispatchTag", "DispatchTag")),
@@ -286,104 +397,139 @@ function normalizeBoardItem(raw, orderMap) {
     teamName: toText(readValue(raw, "teamName", "TeamName")),
     technicianId: toPositiveNumber(readValue(raw, "technicianId", "TechnicianId")),
     technicianName: toText(readValue(raw, "technicianName", "TechnicianName")),
+    assistantTechnicianId: toPositiveNumber(readValue(raw, "assistantTechnicianId", "AssistantTechnicianId")),
+    assistantTechnicianName: toText(readValue(raw, "assistantTechnicianName", "AssistantTechnicianName")),
+    assignedBayId: toPositiveNumber(readValue(raw, "assignedBayId", "AssignedBayId")),
+    assignedBayCode: toText(readValue(raw, "assignedBayCode", "AssignedBayCode")),
     requestedAt: readValue(raw, "requestedAt", "RequestedAt"),
     assignedAt: readValue(raw, "assignedAt", "AssignedAt"),
+    startedAt: readValue(raw, "startedAt", "StartedAt"),
     pendingMinutes: Number(readValue(raw, "pendingMinutes", "PendingMinutes") || 0),
     assignedMinutes: Number(readValue(raw, "assignedMinutes", "AssignedMinutes") || 0),
     isSupportRequested: Boolean(readValue(raw, "isSupportRequested", "IsSupportRequested")),
     isCancelPendingApproval: Boolean(readValue(raw, "isCancelPendingApproval", "IsCancelPendingApproval")),
     cancelReason: toText(readValue(raw, "cancelReason", "CancelReason")),
-    customerName: toText(readValue(order, "customerName", "CustomerName")),
-    vehicleLicensePlate: toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")),
+    technicalApprovedByTeamLeaderId: toPositiveNumber(readValue(raw, "technicalApprovedByTeamLeaderId", "TechnicalApprovedByTeamLeaderId")),
+    technicalApprovedAt: readValue(raw, "technicalApprovedAt", "TechnicalApprovedAt"),
+    finalApprovedByManagerId: toPositiveNumber(readValue(raw, "finalApprovedByManagerId", "FinalApprovedByManagerId")),
+    finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt"),
+    customerName: resolveCustomerName(raw, order, customerMap),
+    vehicleLicensePlate: resolveVehiclePlate(raw, order, vehicleMap),
     customerNotes: toText(readValue(order, "customerNotes", "CustomerNotes")),
   };
 }
-function DispatchRow({ color, item, selectedServiceOrderId, onSelect }) {
-  const meta = COLOR_META[color] || COLOR_META.WHITE;
-  const tone = STATUS_TONE[color] || STATUS_TONE.WHITE;
-  const reasons = extractAlertReasons(item);
-  const isSelected = Number(item.serviceOrderId) === Number(selectedServiceOrderId);
+function DispatchQueueCard({ item, isSelected, onSelect }) {
+  const meta = COLOR_META[item.queueColor] || COLOR_META.WHITE;
+  const alerts = extractAlertReasons(item);
 
   return (
     <Box
-      mx={3}
-      my={2}
       border="1px solid"
       borderColor={isSelected ? "blue.300" : "gray.100"}
       borderLeftWidth="4px"
-      borderLeftColor={meta.borderColor}
+      borderLeftColor={meta.cardAccent}
       borderRadius="xl"
-      bg={isSelected ? tone.rowBg : "white"}
-      boxShadow={isSelected ? "0 8px 22px rgba(30, 64, 175, 0.12)" : "0 2px 10px rgba(15, 23, 42, 0.04)"}
+      bg={isSelected ? "#eef4ff" : meta.cardBg}
+      p={3}
       cursor="pointer"
       transition="all 0.18s ease"
-      _hover={{ bg: tone.rowHover, borderColor: "blue.200", transform: "translateY(-1px)" }}
+      boxShadow={isSelected ? "0 10px 24px rgba(45, 76, 138, 0.14)" : "0 3px 10px rgba(15,23,42,0.05)"}
+      _hover={{ borderColor: "blue.200", transform: "translateY(-1px)" }}
       onClick={() => onSelect(item.serviceOrderId)}
     >
-      <Grid
-        templateColumns={{ base: "1fr", md: "1.2fr 1.2fr", xl: "1.2fr 1.2fr 1fr 0.9fr 1fr" }}
-        gap={3}
-        alignItems="start"
-        px={{ base: 3, md: 4 }}
-        py={3}
-      >
-        <Box minW={0}>
-          <HStack spacing={2} mb={1} flexWrap="wrap">
-            <Text fontWeight="800" color="gray.800" noOfLines={1}>
-              {item.serviceOrderCode}
+      <Stack spacing={2}>
+        <HStack justify="space-between" align="start" spacing={3}>
+          <Box minW={0}>
+            <HStack spacing={2} flexWrap="wrap">
+              <Text fontWeight="800" color="gray.800" noOfLines={1}>
+                {item.serviceOrderCode}
+              </Text>
+              <Badge colorScheme="purple" borderRadius="full" px={2}>
+                {getDispatchTagLabel(item.dispatchTag)}
+              </Badge>
+              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2}>
+                {item.queueState || "--"}
+              </Badge>
+            </HStack>
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              {item.customerName || "Khách hàng chưa rõ"} - {item.vehicleLicensePlate || "--"}
             </Text>
-            <Badge variant="subtle" colorScheme="purple" borderRadius="full" px={2.5} py={1} fontSize="10px">
-              {getDispatchTagLabel(item.dispatchTag)}
+          </Box>
+
+          <VStack align="end" spacing={1} minW="130px">
+            <Badge colorScheme="gray" borderRadius="full" px={2.5}>
+              Chờ: {formatMinutes(item.pendingMinutes)}
             </Badge>
-          </HStack>
-          <Text fontSize="xs" color="gray.500" noOfLines={1}>
-            Trạng thái: {item.queueState || "--"}
-          </Text>
-        </Box>
+            <Badge colorScheme="orange" borderRadius="full" px={2.5}>
+              Xử lý: {formatMinutes(item.assignedMinutes)}
+            </Badge>
+          </VStack>
+        </HStack>
 
-        <Box minW={0}>
-          <Text fontSize="sm" color="gray.700" fontWeight="700" noOfLines={1}>
-            {item.customerName || "Khách hàng chưa rõ"}
-          </Text>
-          <Text fontSize="xs" color="gray.500" noOfLines={1}>
-            Biển số: {item.vehicleLicensePlate || "--"}
-          </Text>
-        </Box>
-
-        <Box minW={0}>
-          <Text fontSize="xs" color="gray.500" noOfLines={1}>
+        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
+          <Text fontSize="sm" color="gray.600" noOfLines={1}>
             Tổ: {item.teamName || "Chưa giao tổ"}
           </Text>
-          <Text fontSize="xs" color="gray.500" noOfLines={1}>
-            Thợ: {item.technicianName || "Chưa nhận"}
+          <Text fontSize="sm" color="gray.600" noOfLines={1}>
+            Cầu nâng: {item.assignedBayCode || "Chưa chỉ định"}
           </Text>
-        </Box>
+          <Text fontSize="sm" color="gray.600" noOfLines={1}>
+            Thợ chính: {item.technicianName || "Chưa phân công"}
+          </Text>
+          <Text fontSize="sm" color="gray.600" noOfLines={1}>
+            Thợ phụ: {item.assistantTechnicianName || "--"}
+          </Text>
+        </Grid>
 
-        <VStack align="start" spacing={1}>
-          <Badge variant="outline" colorScheme="gray" borderRadius="full" px={2.5}>
-            Chờ: {formatMinutes(item.pendingMinutes)}
-          </Badge>
-          <Badge variant="outline" colorScheme="orange" borderRadius="full" px={2.5}>
-            Xử lý: {formatMinutes(item.assignedMinutes)}
-          </Badge>
-        </VStack>
+        {alerts.length > 0 ? (
+          <VStack align="start" spacing={1}>
+            {alerts.slice(0, 2).map((reason) => (
+              <Text key={`${item.serviceOrderId}-${reason}`} fontSize="sm" color="red.500" noOfLines={2}>
+                - {reason}
+              </Text>
+            ))}
+          </VStack>
+        ) : (
+          <Text fontSize="sm" color="gray.400">
+            Không có cảnh báo
+          </Text>
+        )}
+      </Stack>
+    </Box>
+  );
+}
 
-        <Box minW={0}>
-          {reasons.length > 0 ? (
-            <VStack align="stretch" spacing={1}>
-              {reasons.slice(0, 2).map((reason) => (
-                <Text key={`${item.serviceOrderId}-${reason}`} fontSize="xs" color="red.500" noOfLines={2}>
-                  • {reason}
-                </Text>
-              ))}
-            </VStack>
-          ) : (
-            <Text fontSize="xs" color="gray.400">
-              Không có cảnh báo
-            </Text>
-          )}
+function SuggestionPreview({ suggestion }) {
+  if (!suggestion) return null;
+
+  const loads = Array.isArray(suggestion.technicianLoads) ? suggestion.technicianLoads : [];
+  return (
+    <Box border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff" p={3}>
+      <Text fontSize="sm" fontWeight="700" color="blue.700" mb={2}>
+        Gợi ý phân công tự động
+      </Text>
+      <Stack spacing={1} fontSize="sm" color="gray.700">
+        <Text>Thợ chính gợi ý: {suggestion.suggestedLeadTechnicianName || "--"}</Text>
+        <Text>Thợ phụ gợi ý: {suggestion.suggestedAssistantTechnicianName || "--"}</Text>
+        <Text>Cầu nâng gợi ý: {suggestion.suggestedBayCode || "--"}</Text>
+      </Stack>
+      {loads.length > 0 && (
+        <Box mt={3}>
+          <Text fontSize="xs" color="gray.500" mb={1}>
+            Tải hiện tại theo tổ
+          </Text>
+          <VStack align="stretch" spacing={1}>
+            {loads.slice(0, 5).map((row) => (
+              <HStack key={row.technicianId} justify="space-between" fontSize="xs" color="gray.600">
+                <Text noOfLines={1}>{row.technicianName || `KTV #${row.technicianId}`}</Text>
+                <Badge colorScheme="gray" borderRadius="full">
+                  {row.activeDiagnosisCount || 0} ca
+                </Badge>
+              </HStack>
+            ))}
+          </VStack>
         </Box>
-      </Grid>
+      )}
     </Box>
   );
 }
@@ -394,11 +540,13 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const { selectedBranchId } = useBranch();
   const { searchQuery } = useSearch();
 
+  const isTeamLeaderMode = mode === "team_leader";
+
   const [boardItems, setBoardItems] = useState([]);
-  const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
   const [staffs, setStaffs] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [bays, setBays] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -407,1005 +555,1152 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const [includeCompleted, setIncludeCompleted] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [dispatchTagFilter, setDispatchTagFilter] = useState("");
-  const [activeColorTab, setActiveColorTab] = useState(COLUMN_ORDER[0]);
+  const [activeColorTab, setActiveColorTab] = useState("WHITE");
   const [selectedServiceOrderId, setSelectedServiceOrderId] = useState(null);
 
-  const [foremanTechnicianId, setForemanTechnicianId] = useState("");
-  const [supportNote, setSupportNote] = useState("");
-  const [cancelReason, setCancelReason] = useState(DEFAULT_CANCEL_REASON);
-  const [cancelNote, setCancelNote] = useState("");
+  const [leaderTeamId, setLeaderTeamId] = useState("");
+  const [leaderLeadTechnicianId, setLeaderLeadTechnicianId] = useState("");
+  const [leaderAssistantTechnicianId, setLeaderAssistantTechnicianId] = useState("");
+  const [leaderBayId, setLeaderBayId] = useState("");
+  const [leaderSupportNote, setLeaderSupportNote] = useState("");
+  const [leaderCancelReason, setLeaderCancelReason] = useState(CANCEL_REASONS[0]);
+  const [leaderCancelNote, setLeaderCancelNote] = useState("");
+  const [leaderTechnicalApprovalNote, setLeaderTechnicalApprovalNote] = useState("");
 
   const [managerTeamId, setManagerTeamId] = useState("");
-  const [managerTechnicianId, setManagerTechnicianId] = useState("");
-  const [overrideReason, setOverrideReason] = useState("");
-  const [decisionNote, setDecisionNote] = useState("");
+  const [managerLeadTechnicianId, setManagerLeadTechnicianId] = useState("");
+  const [managerAssistantTechnicianId, setManagerAssistantTechnicianId] = useState("");
+  const [managerBayId, setManagerBayId] = useState("");
+  const [managerOverrideReason, setManagerOverrideReason] = useState("");
+  const [managerDecisionNote, setManagerDecisionNote] = useState("");
+  const [managerFinalApprovalNote, setManagerFinalApprovalNote] = useState("");
 
-  const contextBranchId = toPositiveNumber(selectedBranchId);
+  const [suggestion, setSuggestion] = useState(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+
+  const selectedBranchRaw = Number(selectedBranchId);
+  const isAllBranchesSelected = Number.isFinite(selectedBranchRaw) && selectedBranchRaw === 0;
+  const selectedBranch = toPositiveNumber(selectedBranchRaw);
   const userBranchId = toPositiveNumber(readValue(user, "branchId", "BranchId"));
-  const branchId = contextBranchId || userBranchId;
-
-  const activeTeams = useMemo(() => {
-    return [...(Array.isArray(teams) ? teams : [])]
-      .filter((team) => {
-        const isDeleted = readValue(team, "isDeleted", "IsDeleted");
-        if (isDeleted === true) return false;
-        if (branchId) {
-          return toPositiveNumber(readValue(team, "branchId", "BranchId")) === branchId;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        const nameA = toText(readValue(a, "name", "Name"));
-        const nameB = toText(readValue(b, "name", "Name"));
-        return nameA.localeCompare(nameB, "vi");
-      });
-  }, [teams, branchId]);
+  const branchId = isAllBranchesSelected ? null : selectedBranch || userBranchId;
 
   const roleById = useMemo(() => {
     const map = new Map();
     (roles || []).forEach((role) => {
-      const roleId = toPositiveNumber(readValue(role, "id", "Id"));
-      if (roleId) map.set(roleId, role);
+      const id = toPositiveNumber(readValue(role, "id", "Id"));
+      if (id) map.set(id, role);
     });
     return map;
   }, [roles]);
 
-  const activeStaffs = useMemo(() => {
-    return (Array.isArray(staffs) ? staffs : []).filter((staff) => {
-      const isDeleted = readValue(staff, "isDeleted", "IsDeleted");
-      if (isDeleted === true) return false;
-      const status = normalizeCode(readValue(staff, "status", "Status"));
-      if (status === "INACTIVE" || status === "TERMINATED") return false;
-      if (branchId) {
-        return toPositiveNumber(readValue(staff, "branchId", "BranchId")) === branchId;
-      }
-      return true;
+  const currentStaff = useMemo(() => resolveCurrentStaff(staffs, user), [staffs, user]);
+  const currentStaffId = toPositiveNumber(readValue(currentStaff, "id", "Id")) || toPositiveNumber(readValue(user, "id", "Id"));
+  const currentStaffTeamId = toPositiveNumber(readValue(currentStaff, "teamId", "TeamId"));
+
+  const activeTeams = useMemo(() => {
+    const list = (Array.isArray(teams) ? teams : []).filter((team) => {
+      if (readValue(team, "isDeleted", "IsDeleted") === true) return false;
+      const teamBranchId = toPositiveNumber(readValue(team, "branchId", "BranchId"));
+      if (!branchId) return true;
+      return teamBranchId === branchId;
     });
-  }, [staffs, branchId]);
 
-  const currentStaff = useMemo(() => resolveCurrentStaff(activeStaffs, user), [activeStaffs, user]);
-  const currentStaffId = toPositiveNumber(readValue(currentStaff, "id", "Id"));
-  const foremanTeamId = toPositiveNumber(readValue(currentStaff, "teamId", "TeamId"));
+    return [...list].sort((a, b) => {
+      const aName = toText(readValue(a, "name", "Name"));
+      const bName = toText(readValue(b, "name", "Name"));
+      return aName.localeCompare(bName, "vi");
+    });
+  }, [teams, branchId]);
+  const currentTeam = useMemo(() => {
+    if (!currentStaffTeamId) return null;
+    return activeTeams.find((team) => toPositiveNumber(readValue(team, "id", "Id")) === currentStaffTeamId) || null;
+  }, [activeTeams, currentStaffTeamId]);
 
-  const technicians = useMemo(() => {
-    return safeSortByName(
-      activeStaffs.filter((staff) => {
-        const roleId = toPositiveNumber(readValue(staff, "roleId", "RoleId"));
-        const role = roleId ? roleById.get(roleId) : null;
-        return isTechnicianRole(role);
+  const currentTeamSpecialty = normalizeCode(readValue(currentTeam, "specialtyTag", "SpecialtyTag"));
+
+  const activeTechnicians = useMemo(() => {
+    const filtered = (Array.isArray(staffs) ? staffs : []).filter((staff) => {
+      if (!isStaffActive(staff)) return false;
+      if (!isTechnicianCandidate(staff, roleById)) return false;
+
+      const staffBranchId = toPositiveNumber(readValue(staff, "branchId", "BranchId"));
+      if (!branchId) return true;
+      return staffBranchId === branchId;
+    });
+
+    return sortStaffByName(filtered);
+  }, [staffs, roleById, branchId]);
+
+  const availableBays = useMemo(() => {
+    const sorted = (Array.isArray(bays) ? bays : [])
+      .filter((bay) => {
+        if (readValue(bay, "isDeleted", "IsDeleted") === true) return false;
+
+        const isActive = readValue(bay, "isActive", "IsActive");
+        if (isActive === false) return false;
+
+        const bayBranchId = toPositiveNumber(readValue(bay, "branchId", "BranchId"));
+        if (!branchId) return true;
+        return bayBranchId === branchId;
       })
-    );
-  }, [activeStaffs, roleById]);
+      .sort((a, b) => {
+        const aOccupied = Boolean(readValue(a, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
+        const bOccupied = Boolean(readValue(b, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
+        if (aOccupied !== bOccupied) return Number(aOccupied) - Number(bOccupied);
 
-  const techniciansByTeam = useMemo(() => {
-    const map = new Map();
-    technicians.forEach((staff) => {
-      const teamId = toPositiveNumber(readValue(staff, "teamId", "TeamId")) || 0;
-      if (!map.has(teamId)) map.set(teamId, []);
-      map.get(teamId).push(staff);
-    });
-    map.forEach((list, key) => {
-      map.set(key, safeSortByName(list));
-    });
-    return map;
-  }, [technicians]);
+        const aCode = toText(readValue(a, "code", "Code", "name", "Name"));
+        const bCode = toText(readValue(b, "code", "Code", "name", "Name"));
+        return aCode.localeCompare(bCode, "vi");
+      });
+
+    return sorted;
+  }, [bays, branchId]);
+
+  const getTechniciansByTeam = useCallback(
+    (targetTeamId) => {
+      const parsedTeamId = toPositiveNumber(targetTeamId);
+      if (!parsedTeamId) return activeTechnicians;
+      return activeTechnicians.filter((staff) => toPositiveNumber(readValue(staff, "teamId", "TeamId")) === parsedTeamId);
+    },
+    [activeTechnicians]
+  );
+
+  const leaderTechnicianOptions = useMemo(() => getTechniciansByTeam(leaderTeamId), [getTechniciansByTeam, leaderTeamId]);
+  const managerTechnicianOptions = useMemo(() => getTechniciansByTeam(managerTeamId), [getTechniciansByTeam, managerTeamId]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
+
+    const boardParams = { includeCompleted };
+    const teamFilterId = toPositiveNumber(teamFilter);
+    if (branchId) {
+      boardParams.branchId = branchId;
+    }
+    if (teamFilterId) {
+      boardParams.teamId = teamFilterId;
+    }
+
     try {
-      const branchQueryId = branchId || undefined;
-      const [teamRes, staffRes, roleRes, orderRes] = await Promise.all([
-        serviceOrderApi.getTeams({ branchId: branchQueryId, status: "ACTIVE" }).catch(() => serviceOrderApi.getTeams({ branchId: branchQueryId })),
-        getAllStaff(branchQueryId),
-        getAllRoles(),
+      const [
+        boardRes,
+        ordersRes,
+        customersRes,
+        vehiclesRes,
+        teamsRes,
+        staffsRes,
+        rolesRes,
+        baysRes,
+      ] = await Promise.all([
+        serviceOrderApi.getDiagnosisDispatchBoard(boardParams),
         serviceOrderApi.getAll(),
+        getAllCustomers(branchId || undefined),
+        getAllVehicles(),
+        serviceOrderApi.getTeams(),
+        getAllStaff(branchId || undefined),
+        getAllRoles(),
+        serviceOrderApi.getBays(),
       ]);
 
-      const nextTeams = Array.isArray(teamRes) ? teamRes : [];
-      const nextStaffs = Array.isArray(staffRes) ? staffRes : [];
-      const nextRoles = Array.isArray(roleRes) ? roleRes : [];
-      const nextOrders = Array.isArray(orderRes) ? orderRes : [];
+      const orderList = Array.isArray(ordersRes) ? ordersRes : [];
+      const customerList = Array.isArray(customersRes) ? customersRes : [];
+      const vehicleList = Array.isArray(vehiclesRes) ? vehiclesRes : [];
 
-      setTeams(nextTeams);
-      setStaffs(nextStaffs);
-      setRoles(nextRoles);
-      setOrders(nextOrders);
+      setTeams(Array.isArray(teamsRes) ? teamsRes : []);
+      setStaffs(Array.isArray(staffsRes) ? staffsRes : []);
+      setRoles(Array.isArray(rolesRes) ? rolesRes : []);
+      setBays(Array.isArray(baysRes) ? baysRes : []);
 
-      const staffInContext = resolveCurrentStaff(nextStaffs, user);
-      const staffTeamId = toPositiveNumber(readValue(staffInContext, "teamId", "TeamId"));
-      if (mode === "foreman" && !staffTeamId) {
-        setBoardItems([]);
-        return;
-      }
+      const orderMap = new Map(orderList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const customerMap = new Map(customerList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const vehicleMap = new Map(vehicleList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
 
-      const boardParams = {
-        includeCompleted: mode === "manager" ? includeCompleted : false,
-      };
+      const normalized = (Array.isArray(boardRes) ? boardRes : [])
+        .map((item) => normalizeBoardItem(item, orderMap, customerMap, vehicleMap))
+        .filter((item) => item.serviceOrderId > 0);
 
-      if (branchQueryId) {
-        boardParams.branchId = branchQueryId;
-      }
-
-      if (mode === "foreman" && staffTeamId) {
-        boardParams.teamId = staffTeamId;
-      }
-
-      if (mode === "manager") {
-        const selectedTeam = toPositiveNumber(teamFilter);
-        if (selectedTeam) {
-          boardParams.teamId = selectedTeam;
-        }
-      }
-
-      const boardRes = await serviceOrderApi.getDiagnosisDispatchBoard(boardParams);
-      setBoardItems(Array.isArray(boardRes) ? boardRes : []);
+      setBoardItems(normalized);
     } catch (err) {
-      setError(resolveApiErrorMessage(err, "Không thể tải dữ liệu điều phối."));
+      setError(resolveApiErrorMessage(err, "Không thể tải bảng điều phối."));
     } finally {
       setLoading(false);
     }
-  }, [branchId, includeCompleted, mode, teamFilter, user]);
+  }, [branchId, includeCompleted, teamFilter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const orderById = useMemo(() => {
-    const map = new Map();
-    (orders || []).forEach((order) => {
-      const id = toPositiveNumber(readValue(order, "id", "Id"));
-      if (id) map.set(id, order);
-    });
-    return map;
-  }, [orders]);
+  useEffect(() => {
+    if (!isTeamLeaderMode) return;
+    if (!currentStaffTeamId) return;
+    if (!toPositiveNumber(teamFilter)) {
+      setTeamFilter(String(currentStaffTeamId));
+    }
+    if (!toPositiveNumber(leaderTeamId)) {
+      setLeaderTeamId(String(currentStaffTeamId));
+    }
+  }, [isTeamLeaderMode, currentStaffTeamId, teamFilter, leaderTeamId]);
 
-  const normalizedItems = useMemo(() => {
-    return (Array.isArray(boardItems) ? boardItems : [])
-      .map((item) => normalizeBoardItem(item, orderById))
-      .filter((item) => item.serviceOrderId > 0);
-  }, [boardItems, orderById]);
-
-  const dispatchTagOptions = useMemo(() => {
-    const set = new Set();
-    activeTeams.forEach((team) => {
-      const tag = normalizeCode(readValue(team, "specialtyTag", "SpecialtyTag"));
-      if (tag) set.add(tag);
-    });
-    normalizedItems.forEach((item) => {
-      if (item.dispatchTag) set.add(item.dispatchTag);
-    });
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [activeTeams, normalizedItems]);
-
-  const teamFilterOptions = useMemo(() => {
-    const base = [{ value: "", label: "Tất cả tổ" }];
-    const dynamic = activeTeams.map((team) => {
-      const id = toPositiveNumber(readValue(team, "id", "Id"));
-      const name = toText(readValue(team, "name", "Name"));
-      const tag = toText(readValue(team, "specialtyTag", "SpecialtyTag"));
-      return {
-        value: id ? String(id) : "",
-        label: `${name || `Tổ #${id}`}${tag ? ` (${getDispatchTagLabel(tag)})` : ""}`,
-      };
-    });
-    return [...base, ...dynamic];
-  }, [activeTeams]);
-
-  const dispatchTagFilterOptions = useMemo(() => {
-    const base = [{ value: "", label: "Tất cả chuyên môn" }];
-    const dynamic = dispatchTagOptions.map((tag) => ({
-      value: tag,
-      label: getDispatchTagLabel(tag),
-    }));
-    return [...base, ...dynamic];
-  }, [dispatchTagOptions]);
-
-  const filteredItems = useMemo(() => {
+  const visibleItems = useMemo(() => {
     const query = toText(searchQuery).toLowerCase();
-    const tag = normalizeCode(dispatchTagFilter);
+    const tagFilterCode = normalizeCode(dispatchTagFilter);
 
-    return normalizedItems.filter((item) => {
-      if (tag && item.dispatchTag !== tag) return false;
+    return boardItems.filter((item) => {
+      if (tagFilterCode && normalizeCode(item.dispatchTag) !== tagFilterCode) return false;
+
+      if (isTeamLeaderMode && currentStaffTeamId) {
+        if (item.teamId === currentStaffTeamId) {
+          // pass
+        } else if (!item.teamId) {
+          if (item.queueColor !== "WHITE" && item.queueColor !== "RED") return false;
+          if (currentTeamSpecialty && item.dispatchTag && normalizeCode(item.dispatchTag) !== currentTeamSpecialty) return false;
+        } else {
+          return false;
+        }
+      }
 
       if (!query) return true;
+
       const haystack = [
         item.serviceOrderCode,
         item.customerName,
         item.vehicleLicensePlate,
         item.teamName,
         item.technicianName,
-        item.queueState,
-        item.dispatchTag,
+        item.assistantTechnicianName,
         getDispatchTagLabel(item.dispatchTag),
       ]
         .map((value) => toText(value).toLowerCase())
         .join(" ");
+
       return haystack.includes(query);
     });
-  }, [dispatchTagFilter, normalizedItems, searchQuery]);
+  }, [boardItems, searchQuery, dispatchTagFilter, isTeamLeaderMode, currentStaffTeamId, currentTeamSpecialty]);
 
-  const groupedByColor = useMemo(() => {
-    const groups = {
-      WHITE: [],
-      YELLOW: [],
-      RED: [],
-      GREEN: [],
-    };
-
-    filteredItems.forEach((item) => {
+  const boardByColor = useMemo(() => {
+    const grouped = { WHITE: [], YELLOW: [], RED: [], GREEN: [] };
+    visibleItems.forEach((item) => {
       const color = COLUMN_ORDER.includes(item.queueColor) ? item.queueColor : "WHITE";
-      groups[color].push(item);
+      grouped[color].push(item);
     });
+    return grouped;
+  }, [visibleItems]);
 
-    COLUMN_ORDER.forEach((color) => {
-      groups[color].sort((a, b) => {
-        const urgencyB = (Number(b.pendingMinutes) || 0) + (Number(b.assignedMinutes) || 0);
-        const urgencyA = (Number(a.pendingMinutes) || 0) + (Number(a.assignedMinutes) || 0);
-        if (urgencyB !== urgencyA) return urgencyB - urgencyA;
-        const bDate = parseDate(b.requestedAt) || parseDate(b.assignedAt);
-        const aDate = parseDate(a.requestedAt) || parseDate(a.assignedAt);
-        return (bDate?.getTime() || 0) - (aDate?.getTime() || 0);
-      });
-    });
+  const totalStats = useMemo(
+    () => ({
+      WHITE: boardByColor.WHITE.length,
+      YELLOW: boardByColor.YELLOW.length,
+      RED: boardByColor.RED.length,
+      GREEN: boardByColor.GREEN.length,
+      total: visibleItems.length,
+    }),
+    [boardByColor, visibleItems.length]
+  );
 
-    return groups;
-  }, [filteredItems]);
+  const tabCounts = useMemo(
+    () => ({
+      WHITE: boardByColor.WHITE.length,
+      IN_PROGRESS: boardByColor.YELLOW.length + boardByColor.RED.length,
+      GREEN: boardByColor.GREEN.length,
+    }),
+    [boardByColor]
+  );
 
-  useEffect(() => {
-    if (!filteredItems.length) {
-      setSelectedServiceOrderId(null);
-      return;
+  const activeTabItems = useMemo(() => {
+    if (activeColorTab === "IN_PROGRESS") {
+      return [...boardByColor.RED, ...boardByColor.YELLOW];
     }
-
-    const tabItems = groupedByColor[activeColorTab] || [];
-    if (!tabItems.length) {
-      setSelectedServiceOrderId(null);
-      return;
-    }
-
-    const stillExists = tabItems.some((item) => Number(item.serviceOrderId) === Number(selectedServiceOrderId));
-    if (!stillExists) {
-      setSelectedServiceOrderId(tabItems[0].serviceOrderId);
-    }
-  }, [activeColorTab, filteredItems, groupedByColor, selectedServiceOrderId]);
+    return boardByColor[activeColorTab] || [];
+  }, [activeColorTab, boardByColor]);
 
   const selectedItem = useMemo(() => {
-    if (!selectedServiceOrderId) return null;
-    return filteredItems.find((item) => Number(item.serviceOrderId) === Number(selectedServiceOrderId)) || null;
-  }, [filteredItems, selectedServiceOrderId]);
+    const targetId = toPositiveNumber(selectedServiceOrderId);
+    if (!targetId) return null;
+    return visibleItems.find((item) => item.serviceOrderId === targetId) || null;
+  }, [visibleItems, selectedServiceOrderId]);
 
   useEffect(() => {
+    if (activeTabItems.length === 0) {
+      setSelectedServiceOrderId(null);
+      return;
+    }
+
     if (!selectedItem) {
-      setForemanTechnicianId("");
-      setManagerTeamId("");
-      setManagerTechnicianId("");
-      return;
+      setSelectedServiceOrderId(activeTabItems[0].serviceOrderId);
     }
-
-    setSupportNote("");
-    setCancelReason(DEFAULT_CANCEL_REASON);
-    setCancelNote("");
-    setOverrideReason("");
-    setDecisionNote("");
-
-    const selectedTeamId = toPositiveNumber(selectedItem.teamId);
-
-    if (mode === "foreman") {
-      const currentTeam = foremanTeamId || selectedTeamId;
-      const options = currentTeam ? techniciansByTeam.get(currentTeam) || [] : technicians;
-      const assignedTech = toPositiveNumber(selectedItem.technicianId);
-      if (assignedTech && options.some((staff) => toPositiveNumber(readValue(staff, "id", "Id")) === assignedTech)) {
-        setForemanTechnicianId(String(assignedTech));
-      } else if (options.length > 0) {
-        const defaultTechId = toPositiveNumber(readValue(options[0], "id", "Id"));
-        setForemanTechnicianId(defaultTechId ? String(defaultTechId) : "");
-      } else {
-        setForemanTechnicianId("");
-      }
+  }, [activeTabItems, selectedItem]);
+  useEffect(() => {
+    if (activeTabItems.length > 0) return;
+    const firstAvailable = STATUS_TAB_ORDER.find((tabKey) => (tabCounts[tabKey] || 0) > 0);
+    if (firstAvailable) {
+      setActiveColorTab(firstAvailable);
     }
+  }, [activeTabItems.length, tabCounts]);
 
-    if (mode === "manager") {
-      const teamId = selectedTeamId;
-      if (teamId) {
-        setManagerTeamId(String(teamId));
-        const options = techniciansByTeam.get(teamId) || [];
-        const assignedTech = toPositiveNumber(selectedItem.technicianId);
-        if (assignedTech && options.some((staff) => toPositiveNumber(readValue(staff, "id", "Id")) === assignedTech)) {
-          setManagerTechnicianId(String(assignedTech));
-        } else if (options.length > 0) {
-          const firstId = toPositiveNumber(readValue(options[0], "id", "Id"));
-          setManagerTechnicianId(firstId ? String(firstId) : "");
-        } else {
-          setManagerTechnicianId("");
-        }
-      } else {
-        setManagerTeamId("");
-        const assignedTech = toPositiveNumber(selectedItem.technicianId);
-        setManagerTechnicianId(assignedTech ? String(assignedTech) : "");
-      }
-    }
-  }, [selectedItem, mode, foremanTeamId, techniciansByTeam, technicians]);
-
-  const managerTechnicianOptions = useMemo(() => {
-    const selectedTeam = toPositiveNumber(managerTeamId);
-    if (selectedTeam) {
-      return techniciansByTeam.get(selectedTeam) || [];
-    }
-    return technicians;
-  }, [managerTeamId, techniciansByTeam, technicians]);
-
-  const foremanTechnicianOptions = useMemo(() => {
-    const teamId = foremanTeamId || toPositiveNumber(selectedItem?.teamId);
-    if (teamId) {
-      return techniciansByTeam.get(teamId) || [];
-    }
-    return technicians;
-  }, [foremanTeamId, selectedItem, techniciansByTeam, technicians]);
-
-  const counts = useMemo(() => {
-    return COLUMN_ORDER.reduce((acc, color) => {
-      acc[color] = groupedByColor[color]?.length || 0;
-      return acc;
-    }, {});
-  }, [groupedByColor]);
-
-  const activeTabItems = useMemo(() => groupedByColor[activeColorTab] || [], [activeColorTab, groupedByColor]);
-  const activeTabMeta = COLOR_META[activeColorTab] || COLOR_META.WHITE;
-
-  const runAction = useCallback(
-    async (runner, successMessage) => {
-      setSaving(true);
-      try {
-        await runner();
-        toast({ title: successMessage, status: "success", duration: 3000, isClosable: true });
-        await fetchData();
-      } catch (err) {
-        toast({
-          title: "Thao tác thất bại",
-          description: resolveApiErrorMessage(err, "Không thể xử lý yêu cầu."),
-          status: "error",
-          duration: 4500,
-          isClosable: true,
-        });
-      } finally {
-        setSaving(false);
-      }
-    },
-    [fetchData, toast]
-  );
-  const handleForemanReceive = useCallback(async () => {
+  useEffect(() => {
     if (!selectedItem) return;
-    if (!currentStaffId) {
-      toast({ title: "Không xác định được staff hiện tại", status: "warning", duration: 3000 });
+
+    if (isTeamLeaderMode) {
+      const nextTeamId = toPositiveNumber(selectedItem.teamId) || currentStaffTeamId || toPositiveNumber(leaderTeamId);
+      setLeaderTeamId(nextTeamId ? String(nextTeamId) : "");
+      setLeaderLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
+      setLeaderAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
+      setLeaderBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
       return;
     }
 
-    const technicianId = toPositiveNumber(foremanTechnicianId);
-    if (!technicianId) {
-      toast({ title: "Cần chọn thợ phụ trách", status: "warning", duration: 2500 });
-      return;
-    }
+    setManagerTeamId(selectedItem.teamId ? String(selectedItem.teamId) : "");
+    setManagerLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
+    setManagerAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
+    setManagerBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
+  }, [selectedItem?.serviceOrderId]);
 
-    const teamId = foremanTeamId || toPositiveNumber(selectedItem.teamId);
+  const loadDispatchSuggestion = useCallback(
+    async (targetMode) => {
+      if (!selectedItem) {
+        toast({ title: "Chưa chọn lệnh", status: "warning", duration: 2500, isClosable: true });
+        return;
+      }
 
-    await runAction(
-      () =>
-        serviceOrderApi.acceptDiagnosisRequest(selectedItem.serviceOrderId, technicianId, {
-          teamId: teamId || undefined,
-          teamLeaderId: currentStaffId,
-          isManagerOverride: false,
-        }),
-      "Đã nhận xe và phân công thợ"
-    );
-  }, [selectedItem, currentStaffId, foremanTechnicianId, foremanTeamId, runAction, toast]);
+      const teamId = targetMode === "team_leader" ? toPositiveNumber(leaderTeamId) : toPositiveNumber(managerTeamId);
+      if (!teamId) {
+        toast({ title: "Vui lòng chọn tổ trước khi lấy gợi ý", status: "warning", duration: 2600, isClosable: true });
+        return;
+      }
 
-  const handleForemanSupport = useCallback(async () => {
-    if (!selectedItem || !currentStaffId) return;
+      setSuggestionLoading(true);
+      try {
+        const response = await serviceOrderApi.getDiagnosisDispatchSuggestion(selectedItem.serviceOrderId, { teamId });
+        setSuggestion(response || null);
 
-    await runAction(
-      () =>
-        serviceOrderApi.requestDiagnosisSupport(selectedItem.serviceOrderId, {
-          requestedByStaffId: currentStaffId,
-          note: toText(supportNote) || null,
-        }),
-      "Đã gửi yêu cầu hỗ trợ"
-    );
-  }, [selectedItem, currentStaffId, supportNote, runAction]);
+        if (targetMode === "team_leader") {
+          setLeaderLeadTechnicianId(toPositiveNumber(response?.suggestedLeadTechnicianId) ? String(response.suggestedLeadTechnicianId) : "");
+          setLeaderAssistantTechnicianId(toPositiveNumber(response?.suggestedAssistantTechnicianId) ? String(response.suggestedAssistantTechnicianId) : "");
+          setLeaderBayId(toPositiveNumber(response?.suggestedBayId) ? String(response.suggestedBayId) : "");
+        } else {
+          setManagerLeadTechnicianId(toPositiveNumber(response?.suggestedLeadTechnicianId) ? String(response.suggestedLeadTechnicianId) : "");
+          setManagerAssistantTechnicianId(toPositiveNumber(response?.suggestedAssistantTechnicianId) ? String(response.suggestedAssistantTechnicianId) : "");
+          setManagerBayId(toPositiveNumber(response?.suggestedBayId) ? String(response.suggestedBayId) : "");
+        }
 
-  const cancelReasonPayload = useMemo(() => {
-    const selectedReason = toText(cancelReason);
-    const note = toText(cancelNote);
-    if (selectedReason === "Khác") {
-      return note;
-    }
-    return note ? `${selectedReason}: ${note}` : selectedReason;
-  }, [cancelReason, cancelNote]);
-
-  const handleForemanCancelRequest = useCallback(async () => {
-    if (!selectedItem || !currentStaffId) return;
-
-    const reason = toText(cancelReasonPayload);
-    if (!reason) {
-      toast({ title: "Cần nhập lý do hủy", status: "warning", duration: 2500 });
-      return;
-    }
-
-    await runAction(
-      () =>
-        serviceOrderApi.requestDiagnosisCancel(selectedItem.serviceOrderId, {
-          requestedByStaffId: currentStaffId,
-          reason,
-        }),
-      "Đã gửi hủy lệnh cho quản đốc duyệt"
-    );
-  }, [selectedItem, currentStaffId, cancelReasonPayload, runAction, toast]);
-
-  const handleManagerOverride = useCallback(async () => {
-    if (!selectedItem || !currentStaffId) return;
-
-    const technicianId = toPositiveNumber(managerTechnicianId);
-    if (!technicianId) {
-      toast({ title: "Cần chọn kỹ thuật viên", status: "warning", duration: 2500 });
-      return;
-    }
-
-    const teamId = toPositiveNumber(managerTeamId);
-
-    await runAction(
-      () =>
-        serviceOrderApi.overrideDiagnosisAssignment(selectedItem.serviceOrderId, {
-          managerId: currentStaffId,
-          technicianId,
-          teamId: teamId || undefined,
-          reason: toText(overrideReason) || null,
-        }),
-      "Đã override phân công"
-    );
-  }, [selectedItem, currentStaffId, managerTechnicianId, managerTeamId, overrideReason, runAction, toast]);
-
-  const handleManagerCancelDecision = useCallback(
-    async (approve) => {
-      if (!selectedItem || !currentStaffId) return;
-
-      await runAction(
-        () =>
-          serviceOrderApi.decideDiagnosisCancel(selectedItem.serviceOrderId, {
-            managerId: currentStaffId,
-            approve,
-            note: toText(decisionNote) || null,
-          }),
-        approve ? "Đã đồng ý hủy lệnh" : "Đã từ chối hủy lệnh"
-      );
+        toast({ title: "Đã áp dụng gợi ý phân công", status: "success", duration: 2200, isClosable: true });
+      } catch (err) {
+        toast({ title: "Không thể lấy gợi ý", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      } finally {
+        setSuggestionLoading(false);
+      }
     },
-    [selectedItem, currentStaffId, decisionNote, runAction]
+    [selectedItem, leaderTeamId, managerTeamId, toast]
   );
 
-  const showForemanWarning = mode === "foreman" && !foremanTeamId;
-  const canForemanReceive = Boolean(selectedItem) && !saving;
-  const canForemanSupport = Boolean(selectedItem?.technicianId) && !saving;
-  const canForemanCancel = Boolean(selectedItem?.technicianId) && !selectedItem?.isCancelPendingApproval && !saving;
-  const canManagerOverride = Boolean(selectedItem) && !saving;
-  const canManagerDecide = Boolean(selectedItem?.isCancelPendingApproval) && !saving;
+  const handleLeaderAssign = async () => {
+    if (!selectedItem) return;
 
-  const isCancelWindowOver = Number(selectedItem?.assignedMinutes || 0) > 10;
+    const leadId = toPositiveNumber(leaderLeadTechnicianId);
+    const assistantId = toPositiveNumber(leaderAssistantTechnicianId);
+    const teamId = toPositiveNumber(leaderTeamId) || currentStaffTeamId;
+    const bayId = toPositiveNumber(leaderBayId);
 
+    if (!leadId || !teamId) {
+      toast({ title: "Vui lòng chọn tổ và thợ chính", status: "warning", duration: 2600, isClosable: true });
+      return;
+    }
+
+    if (assistantId && assistantId === leadId) {
+      toast({ title: "Thợ phụ không được trùng thợ chính", status: "warning", duration: 2600, isClosable: true });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.acceptDiagnosisRequest(selectedItem.serviceOrderId, leadId, {
+        teamId,
+        teamLeaderId: currentStaffId,
+        assistantTechnicianId: assistantId || null,
+        bayId: bayId || null,
+      });
+
+      toast({ title: "Đã nhận xe và phân công ca chuẩn đoán", status: "success", duration: 2500, isClosable: true });
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể phân công", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLeaderSupport = async () => {
+    if (!selectedItem || !currentStaffId) return;
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.requestDiagnosisSupport(selectedItem.serviceOrderId, {
+        requestedByStaffId: currentStaffId,
+        note: toText(leaderSupportNote) || null,
+      });
+
+      toast({ title: "Đã gửi yêu cầu hỗ trợ hội chẩn", status: "success", duration: 2500, isClosable: true });
+      setLeaderSupportNote("");
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể gửi hỗ trợ", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLeaderCancelRequest = async () => {
+    if (!selectedItem || !currentStaffId) return;
+
+    const reason = toText(leaderCancelReason);
+    const note = toText(leaderCancelNote);
+    const payloadReason = note ? `${reason}: ${note}` : reason;
+
+    if (!payloadReason) {
+      toast({ title: "Vui lòng nhập lý do hủy", status: "warning", duration: 2600, isClosable: true });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.requestDiagnosisCancel(selectedItem.serviceOrderId, {
+        requestedByStaffId: currentStaffId,
+        reason: payloadReason,
+      });
+
+      toast({ title: "Đã gửi yêu cầu hủy lệnh", status: "success", duration: 2500, isClosable: true });
+      setLeaderCancelNote("");
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể gửi yêu cầu hủy", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLeaderTechnicalApproval = async () => {
+    if (!selectedItem || !currentStaffId) return;
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.approveDiagnosisTechnical(selectedItem.serviceOrderId, {
+        teamLeaderId: currentStaffId,
+        note: toText(leaderTechnicalApprovalNote) || null,
+      });
+
+      toast({ title: "Đã duyệt báo cáo kỹ thuật", status: "success", duration: 2500, isClosable: true });
+      setLeaderTechnicalApprovalNote("");
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể duyệt kỹ thuật", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleManagerOverride = async () => {
+    if (!selectedItem || !currentStaffId) return;
+
+    const leadId = toPositiveNumber(managerLeadTechnicianId);
+    const assistantId = toPositiveNumber(managerAssistantTechnicianId);
+    const teamId = toPositiveNumber(managerTeamId);
+    const bayId = toPositiveNumber(managerBayId);
+
+    if (!leadId) {
+      toast({ title: "Vui lòng chọn thợ chính", status: "warning", duration: 2500, isClosable: true });
+      return;
+    }
+
+    if (assistantId && assistantId === leadId) {
+      toast({ title: "Thợ phụ không được trùng thợ chính", status: "warning", duration: 2500, isClosable: true });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.overrideDiagnosisAssignment(selectedItem.serviceOrderId, {
+        managerId: currentStaffId,
+        technicianId: leadId,
+        assistantTechnicianId: assistantId || null,
+        teamId: teamId || null,
+        bayId: bayId || null,
+        reason: toText(managerOverrideReason) || null,
+      });
+
+      toast({ title: "Đã override phân công thành công", status: "success", duration: 2500, isClosable: true });
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể override", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleManagerCancelDecision = async (approve) => {
+    if (!selectedItem || !currentStaffId) return;
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.decideDiagnosisCancel(selectedItem.serviceOrderId, {
+        managerId: currentStaffId,
+        approve,
+        note: toText(managerDecisionNote) || null,
+      });
+
+      toast({
+        title: approve ? "Đã duyệt hủy lệnh" : "Đã từ chối hủy lệnh",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+      setManagerDecisionNote("");
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể xử lý yêu cầu hủy", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleManagerFinalApproval = async () => {
+    if (!selectedItem || !currentStaffId) return;
+
+    setSaving(true);
+    try {
+      await serviceOrderApi.approveDiagnosisFinal(selectedItem.serviceOrderId, {
+        managerId: currentStaffId,
+        note: toText(managerFinalApprovalNote) || null,
+      });
+
+      toast({ title: "Đã duyệt báo giá cuối cùng", status: "success", duration: 2500, isClosable: true });
+      setManagerFinalApprovalNote("");
+      await fetchData();
+      setSelectedServiceOrderId(selectedItem.serviceOrderId);
+    } catch (err) {
+      toast({ title: "Không thể duyệt cuối", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canLeaderAssign = Boolean(selectedItem) && !selectedItem?.finalApprovedByManagerId;
+  const canLeaderSupport = Boolean(selectedItem?.technicianId) && !selectedItem?.finalApprovedByManagerId;
+  const canLeaderCancel = Boolean(selectedItem?.technicianId) && !selectedItem?.isCancelPendingApproval;
+  const canLeaderTechnicalApprove = Boolean(selectedItem) && !selectedItem?.technicalApprovedByTeamLeaderId;
+
+  const canManagerOverride = Boolean(selectedItem);
+  const canManagerCancelDecision = Boolean(selectedItem?.isCancelPendingApproval);
+  const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.finalApprovedByManagerId;
   return (
-    <Box>
-      <VStack align="stretch" spacing={6}>
-        <Box
-          bg="linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)"
-          border="1px solid"
-          borderColor="blue.50"
-          borderRadius="2xl"
-          p={{ base: 4, md: 5 }}
-          boxShadow="0 12px 32px rgba(15, 23, 42, 0.06)"
-        >
-          <HStack justify="space-between" align="start" spacing={6} flexWrap="wrap">
-            <Box>
-              <Heading size="md" color="gray.700">
-                Điều phối chẩn đoán - {mode === "manager" ? "Quản đốc" : "Tổ trưởng"}
-              </Heading>
-              <Text mt={1} fontSize="sm" color="gray.500">
-                Bảng vận hành theo màu White/Yellow/Red/Green và SOP 5 bước.
-              </Text>
-            </Box>
-            <HStack spacing={3} align="end" flexWrap="wrap" bg="whiteAlpha.700" px={3} py={2} borderRadius="xl">
-              {mode === "manager" && (
-                <FilterDropdown
-                  id="dispatch-team-filter"
-                  label="Lọc theo tổ"
-                  value={teamFilter}
-                  options={teamFilterOptions}
-                  onChange={setTeamFilter}
-                  minWidth={220}
-                />
-              )}
-
-              <FilterDropdown
-                id="dispatch-specialty-filter"
-                label="Lọc theo chuyên môn"
-                value={dispatchTagFilter}
-                options={dispatchTagFilterOptions}
-                onChange={setDispatchTagFilter}
-                minWidth={220}
-              />
-
-              {mode === "manager" && (
-                <FormControl display="flex" alignItems="center" maxW="190px">
-                  <FormLabel htmlFor="dispatch-include-completed" mb="0" fontSize="xs" color="gray.500">
-                    Hiển thị đã xong
-                  </FormLabel>
-                  <Switch
-                    id="dispatch-include-completed"
-                    isChecked={includeCompleted}
-                    onChange={(e) => setIncludeCompleted(e.target.checked)}
-                  />
-                </FormControl>
-              )}
-
-            </HStack>
-          </HStack>
-
-          {showForemanWarning && (
-            <Alert status="warning" mt={4} borderRadius="md">
-              <AlertIcon />
-              Tài khoản tổ trưởng chưa được gán TeamId trong bảng staff. Cần cập nhật TeamId để nhận lệnh.
-            </Alert>
-          )}
-
-          {error && (
-            <Alert status="error" mt={4} borderRadius="md">
-              <AlertIcon />
-              {error}
-            </Alert>
-          )}
-        </Box>
-
-        <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={4}>
-          {COLUMN_ORDER.map((color) => {
-            const count = counts[color] || 0;
-            const meta = COLOR_META[color] || COLOR_META.WHITE;
-            const tone = STATUS_TONE[color] || STATUS_TONE.WHITE;
-            const isActive = color === activeColorTab;
-            return (
-              <Box
-                key={`stat-${color}`}
-                bg={isActive ? tone.rowBg : "white"}
-                border="1px solid"
-                borderColor={isActive ? meta.borderColor : "gray.100"}
-                borderRadius="xl"
-                p={4}
-                position="relative"
-                overflow="hidden"
-                boxShadow={isActive ? "0 10px 28px rgba(30, 64, 175, 0.14)" : "0 8px 24px rgba(15, 23, 42, 0.05)"}
-                cursor="pointer"
-                transition="all 0.18s ease"
-                _hover={{ transform: "translateY(-2px)", borderColor: meta.borderColor }}
-                onClick={() => setActiveColorTab(color)}
-              >
-                <Box position="absolute" left="0" top="0" right="0" h="3px" bg={meta.borderColor} />
-                <Stat>
-                  <StatLabel fontSize="xs" color="gray.500">
-                    {meta.label}
-                  </StatLabel>
-                  <StatNumber fontSize="2xl" color="gray.800" mb={1}>
-                    {count}
-                  </StatNumber>
-                  <Text fontSize="xs" color={tone.tabText} noOfLines={1}>
-                    {meta.helper}
-                  </Text>
-                </Stat>
-              </Box>
-            );
-          })}
-        </SimpleGrid>
-
-        {loading ? (
-          <Box
-            bg="white"
-            border="1px solid"
-            borderColor="gray.100"
-            borderRadius="2xl"
-            p={10}
-            textAlign="center"
-            boxShadow="0 10px 24px rgba(15, 23, 42, 0.05)"
-          >
-            <Spinner size="lg" color="blue.500" />
-            <Text mt={3} color="gray.500">
-              Đang tải bảng điều phối...
+    <Box
+      p={{ base: 4, md: 6 }}
+      minH="100vh"
+      bg="linear-gradient(180deg, #f4f7ff 0%, #eef4ff 100%)"
+    >
+      <VStack align="stretch" spacing={5}>
+        <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={3}>
+          <Box>
+            <Heading size="lg" color="#1b2559">
+              {isTeamLeaderMode ? "Điều phối chuẩn đoán - Tổ trưởng" : "Điều phối chuẩn đoán - Quản đốc"}
+            </Heading>
+            <Text color="gray.600" mt={1}>
+              Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá.
             </Text>
           </Box>
-        ) : (
-          <Grid templateColumns={{ base: "1fr", "2xl": "1.8fr 1fr" }} gap={5} alignItems="start">
-            <GridItem>
-              <Box
-                bg="white"
-                border="1px solid"
-                borderColor="gray.100"
-                borderRadius="2xl"
-                overflow="hidden"
-                boxShadow="0 14px 34px rgba(15, 23, 42, 0.06)"
-              >
-                <Box px={4} py={3} bg="white" borderBottom="1px solid" borderColor="gray.100">
-                  <Text fontSize="xs" fontWeight="700" color="gray.700">
-                    {activeTabMeta.label}
-                  </Text>
-                  <Text fontSize="xs" color="gray.500">
-                    {activeTabMeta.helper}
-                  </Text>
-                </Box>
 
-                <Box display={{ base: "none", lg: "block" }} bg="gray.50" borderBottom="1px solid" borderColor="gray.100">
-                  <Grid templateColumns="1.2fr 1.2fr 1fr 0.9fr 1fr" gap={3} px={4} py={2}>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600">
-                      Lệnh
-                    </Text>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600">
-                      Khách hàng / Biển số
-                    </Text>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600">
-                      Tổ / Thợ
-                    </Text>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600">
-                      Thời gian
-                    </Text>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600">
-                      Cảnh báo
-                    </Text>
-                  </Grid>
-                </Box>
+          <Button
+            leftIcon={<RepeatIcon />}
+            colorScheme="blue"
+            variant="outline"
+            onClick={fetchData}
+            isLoading={loading}
+          >
+            Làm mới bảng
+          </Button>
+        </HStack>
 
-                {activeTabItems.length === 0 ? (
-                  <Box p={10} textAlign="center" bg="linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)">
-                    <Text fontSize="sm" color="gray.400">
-                      Không có lệnh trong nhóm này
-                    </Text>
-                  </Box>
-                ) : (
-                  <VStack align="stretch" spacing={0}>
-                    {activeTabItems.map((item) => (
-                      <DispatchRow
-                        key={`row-${item.serviceOrderId}`}
-                        color={activeColorTab}
-                        item={item}
-                        selectedServiceOrderId={selectedServiceOrderId}
-                        onSelect={setSelectedServiceOrderId}
-                      />
-                    ))}
-                  </VStack>
-                )}
+        <SimpleGrid columns={{ base: 2, lg: 5 }} spacing={3}>
+          <Stat bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={3}>
+            <StatLabel color="gray.500">Tổng lệnh</StatLabel>
+            <StatNumber color="#1b2559">{totalStats.total}</StatNumber>
+          </Stat>
+          {COLUMN_ORDER.map((color) => (
+            <Stat key={color} bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={3}>
+              <StatLabel color="gray.500">{COLOR_META[color].label}</StatLabel>
+              <StatNumber color="#1b2559">{totalStats[color]}</StatNumber>
+            </Stat>
+          ))}
+        </SimpleGrid>
+
+        <Grid templateColumns={{ base: "1fr", xl: "1fr auto auto" }} gap={3} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" p={3}>
+          <FormControl maxW={{ base: "100%", xl: "300px" }}>
+            <FormLabel fontSize="sm" mb={1} color="gray.600">Lọc theo tổ</FormLabel>
+            <Select
+              size="sm"
+              borderRadius="xl"
+              value={teamFilter}
+              onChange={(event) => setTeamFilter(event.target.value)}
+              isDisabled={isTeamLeaderMode && !!currentStaffTeamId}
+            >
+              <option value="">Tất cả tổ</option>
+              {activeTeams.map((team) => {
+                const id = toPositiveNumber(readValue(team, "id", "Id"));
+                const name = toText(readValue(team, "name", "Name"));
+                const specialty = getDispatchTagLabel(readValue(team, "specialtyTag", "SpecialtyTag"));
+                return (
+                  <option key={`team-filter-${id}`} value={id || ""}>
+                    {name || `Tổ #${id}`} - {specialty}
+                  </option>
+                );
+              })}
+            </Select>
+          </FormControl>
+
+          <FormControl maxW={{ base: "100%", xl: "280px" }}>
+            <FormLabel fontSize="sm" mb={1} color="gray.600">Lọc theo chuyên môn</FormLabel>
+            <Select
+              size="sm"
+              borderRadius="xl"
+              value={dispatchTagFilter}
+              onChange={(event) => setDispatchTagFilter(event.target.value)}
+            >
+              <option value="">Tất cả chuyên môn</option>
+              {DISPATCH_TAG_OPTIONS.map((item) => (
+                <option key={`tag-filter-${item.value}`} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl display="flex" alignItems="center" gap={2} justifyContent={{ base: "start", xl: "end" }}>
+            <FormLabel mb="0" fontSize="sm" color="gray.600">Hiển thị cả GREEN</FormLabel>
+            <Switch colorScheme="green" isChecked={includeCompleted} onChange={(event) => setIncludeCompleted(event.target.checked)} />
+          </FormControl>
+        </Grid>
+
+        {error && (
+          <Alert status="error" borderRadius="xl">
+            <AlertIcon />
+            {error}
+          </Alert>
+        )}
+
+        <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={4} alignItems="start">
+          <GridItem>
+            <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" overflow="hidden" boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+              <HStack spacing={2} p={3} overflowX="auto" bg="gray.50" borderBottom="1px solid" borderColor="gray.100">
+                {STATUS_TAB_ORDER.map((tabKey) => {
+                  const meta = STATUS_TAB_META[tabKey];
+                  const isActive = activeColorTab === tabKey;
+                  const count = tabCounts[tabKey] || 0;
+                  return (
+                    <Button
+                      key={`tab-${tabKey}`}
+                      size="sm"
+                      borderRadius="full"
+                      border="1px solid"
+                      borderColor={meta.tabBorder}
+                      bg={isActive ? meta.activeBg : meta.tabBg}
+                      color={isActive ? meta.activeText : meta.tabText}
+                      _hover={{ filter: "brightness(0.98)" }}
+                      onClick={() => setActiveColorTab(tabKey)}
+                    >
+                      {meta.label} ({count})
+                    </Button>
+                  );
+                })}
+              </HStack>
+
+              <Box px={4} py={2} borderBottom="1px solid" borderColor="gray.100" bg="white">
+                <Text fontSize="sm" fontWeight="700" color="gray.700">
+                  {(STATUS_TAB_META[activeColorTab] || STATUS_TAB_META.WHITE).label}
+                </Text>
+                <Text fontSize="sm" color="gray.500">
+                  {(STATUS_TAB_META[activeColorTab] || STATUS_TAB_META.WHITE).description}
+                </Text>
               </Box>
-            </GridItem>
 
-            <GridItem>
-              <Box
-                bg="white"
-                border="1px solid"
-                borderColor="gray.100"
-                borderRadius="2xl"
-                p={4}
-                position={{ xl: "sticky" }}
-                top={{ xl: "16px" }}
-                boxShadow="0 14px 34px rgba(15, 23, 42, 0.06)"
-              >
-                {!selectedItem ? (
-                  <Box border="1px dashed" borderColor="gray.200" borderRadius="xl" p={8} textAlign="center" bg="gray.50">
-                    <Text color="gray.500" fontSize="sm">
-                      Chọn một lệnh để xem chi tiết và thao tác.
-                    </Text>
+              {loading ? (
+                <VStack py={12} spacing={3}>
+                  <Spinner color="blue.500" />
+                  <Text color="gray.500">Đang tải dữ liệu điều phối...</Text>
+                </VStack>
+              ) : activeTabItems.length === 0 ? (
+                <Box py={12} textAlign="center" color="gray.400">
+                  Không có lệnh trong nhóm này
+                </Box>
+              ) : (
+                <VStack align="stretch" spacing={2} p={3}>
+                  {activeTabItems.map((item) => (
+                    <DispatchQueueCard
+                      key={`dispatch-${item.serviceOrderId}`}
+                      item={item}
+                      isSelected={item.serviceOrderId === selectedItem?.serviceOrderId}
+                      onSelect={setSelectedServiceOrderId}
+                    />
+                  ))}
+                </VStack>
+              )}
+            </Box>
+          </GridItem>
+
+          <GridItem>
+            <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+              {!selectedItem ? (
+                <Box border="1px dashed" borderColor="gray.200" borderRadius="xl" p={8} textAlign="center" color="gray.500">
+                  Chọn một lệnh ở bên trái để xem chi tiết và thao tác.
+                </Box>
+              ) : (
+                <VStack align="stretch" spacing={4}>
+                  <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50">
+                    <Text fontSize="xs" color="gray.500" mb={1}>LỆNH SỬA CHỮA</Text>
+                    <Heading size="md" color="#1b2559">{selectedItem.serviceOrderCode}</Heading>
+                    <HStack mt={2} spacing={2} flexWrap="wrap">
+                      <Badge colorScheme={(selectedItem.queueColor === "RED" ? "red" : selectedItem.queueColor === "YELLOW" ? "yellow" : selectedItem.queueColor === "GREEN" ? "green" : "gray")} borderRadius="full">
+                        {selectedItem.queueColor}
+                      </Badge>
+                      <Badge colorScheme="purple" borderRadius="full">{getDispatchTagLabel(selectedItem.dispatchTag)}</Badge>
+                      <Badge colorScheme="blue" borderRadius="full">{selectedItem.queueState || "--"}</Badge>
+                    </HStack>
                   </Box>
-                ) : (
-                  <VStack align="stretch" spacing={4}>
-                    <Box bg="gray.50" borderRadius="xl" p={3} border="1px solid" borderColor="gray.100">
-                      <Text fontSize="xs" color="gray.500" mb={1}>
-                        LỆNH SỬA CHỮA
-                      </Text>
-                      <Heading size="md" color="gray.700">
-                        {selectedItem.serviceOrderCode}
-                      </Heading>
-                      <HStack mt={2} spacing={2} flexWrap="wrap">
-                        <Badge colorScheme={(COLOR_META[selectedItem.queueColor] || COLOR_META.WHITE).badge} borderRadius="full">
-                          {selectedItem.queueColor}
-                        </Badge>
-                        <Badge colorScheme="purple" borderRadius="full">
-                          {getDispatchTagLabel(selectedItem.dispatchTag)}
-                        </Badge>
-                        <Badge colorScheme="blue" borderRadius="full">
-                          {selectedItem.queueState || "--"}
-                        </Badge>
+
+                  <Stack spacing={2} fontSize="sm" color="gray.700">
+                    <Text><strong>Khách hàng:</strong> {selectedItem.customerName || "--"}</Text>
+                    <Text><strong>Biển số:</strong> {selectedItem.vehicleLicensePlate || "--"}</Text>
+                    <Text><strong>Tổ phụ trách:</strong> {selectedItem.teamName || "Chưa giao tổ"}</Text>
+                    <Text><strong>Thợ chính:</strong> {selectedItem.technicianName || "Chưa phân công"}</Text>
+                    <Text><strong>Thợ phụ:</strong> {selectedItem.assistantTechnicianName || "--"}</Text>
+                    <Text><strong>Cầu nâng:</strong> {selectedItem.assignedBayCode || "Chưa chỉ định"}</Text>
+                    <Text><strong>Ghi chú khách:</strong> {formatAdditionalDescription(selectedItem.customerNotes)}</Text>
+                  </Stack>
+
+                  <Box p={3} border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff">
+                    <Text fontSize="sm" color="gray.600">Yêu cầu lúc: {formatDateTime(selectedItem.requestedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Nhận ca lúc: {formatDateTime(selectedItem.assignedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Bắt đầu lúc: {formatDateTime(selectedItem.startedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Chờ nhận: {formatMinutes(selectedItem.pendingMinutes)}</Text>
+                    <Text fontSize="sm" color="gray.600">Đang xử lý: {formatMinutes(selectedItem.assignedMinutes)}</Text>
+                    <Text fontSize="sm" color="gray.600">Duyệt kỹ thuật: {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "Chưa duyệt"}</Text>
+                    <Text fontSize="sm" color="gray.600">Duyệt cuối: {selectedItem.finalApprovedAt ? formatDateTime(selectedItem.finalApprovedAt) : "Chưa duyệt"}</Text>
+                  </Box>
+
+                  {extractAlertReasons(selectedItem).length > 0 && (
+                    <Alert status="error" borderRadius="xl" flexDirection="column" alignItems="start" gap={1}>
+                      <HStack>
+                        <AlertIcon />
+                        <Text fontWeight="700">Cảnh báo cần xử lý</Text>
                       </HStack>
-                    </Box>
+                      {extractAlertReasons(selectedItem).map((reason) => (
+                        <Text key={`alert-${reason}`} fontSize="sm">- {reason}</Text>
+                      ))}
+                    </Alert>
+                  )}
+                  {isTeamLeaderMode ? (
+                    <VStack align="stretch" spacing={4}>
+                      <Divider />
 
-                    <Divider />
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và phân công cặp thợ</Text>
 
-                    <Stack spacing={2} bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={3}>
-                      <Text fontSize="sm" color="gray.700">
-                        <strong>Khách hàng:</strong> {selectedItem.customerName || "--"}
-                      </Text>
-                      <Text fontSize="sm" color="gray.700">
-                        <strong>Biển số:</strong> {selectedItem.vehicleLicensePlate || "--"}
-                      </Text>
-                      <Text fontSize="sm" color="gray.700">
-                        <strong>Tổ:</strong> {selectedItem.teamName || "Chưa giao tổ"}
-                      </Text>
-                      <Text fontSize="sm" color="gray.700">
-                        <strong>Thợ:</strong> {selectedItem.technicianName || "Chưa nhận"}
-                      </Text>
-                      <Text fontSize="sm" color="gray.700">
-                        <strong>Yêu cầu:</strong> {selectedItem.customerNotes || "Không có"}
-                      </Text>
-                    </Stack>
+                        <FormControl>
+                          <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={leaderTeamId}
+                            onChange={(event) => setLeaderTeamId(event.target.value)}
+                            isDisabled={Boolean(currentStaffTeamId)}
+                          >
+                            <option value="">-- Chọn tổ --</option>
+                            {activeTeams.map((team) => {
+                              const id = toPositiveNumber(readValue(team, "id", "Id"));
+                              const name = toText(readValue(team, "name", "Name"));
+                              return (
+                                <option key={`leader-team-${id}`} value={id || ""}>
+                                  {name || `Tổ #${id}`}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                    <Box bg="linear-gradient(180deg, #f8fbff 0%, #f1f5ff 100%)" borderRadius="xl" border="1px solid" borderColor="blue.100" p={3}>
-                      <Text fontSize="xs" color="gray.500">
-                        Thời điểm tạo: {formatDateTime(selectedItem.requestedAt)}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        Thời điểm nhận: {formatDateTime(selectedItem.assignedAt)}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        Chờ: {formatMinutes(selectedItem.pendingMinutes)}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        Đang xử lý: {formatMinutes(selectedItem.assignedMinutes)}
-                      </Text>
-                    </Box>
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={leaderLeadTechnicianId}
+                            onChange={(event) => setLeaderLeadTechnicianId(event.target.value)}
+                          >
+                            <option value="">-- Chọn thợ chính --</option>
+                            {leaderTechnicianOptions.map((staff) => {
+                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
+                              const name = toText(readValue(staff, "fullName", "FullName"));
+                              return (
+                                <option key={`leader-main-${id}`} value={id || ""}>
+                                  {name || `Nhân sự #${id}`}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                    {extractAlertReasons(selectedItem).length > 0 && (
-                      <Alert status="error" borderRadius="xl" flexDirection="column" alignItems="flex-start" gap={1}>
-                        <HStack>
-                          <AlertIcon />
-                          <Text fontWeight="700" fontSize="sm">
-                            Có cảnh báo
-                          </Text>
-                        </HStack>
-                        {extractAlertReasons(selectedItem).map((reason) => (
-                          <Text key={`reason-${reason}`} fontSize="xs">
-                            - {reason}
-                          </Text>
-                        ))}
-                      </Alert>
-                    )}
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={leaderAssistantTechnicianId}
+                            onChange={(event) => setLeaderAssistantTechnicianId(event.target.value)}
+                          >
+                            <option value="">-- Không chọn --</option>
+                            {leaderTechnicianOptions.map((staff) => {
+                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
+                              const name = toText(readValue(staff, "fullName", "FullName"));
+                              return (
+                                <option key={`leader-assistant-${id}`} value={id || ""}>
+                                  {name || `Nhân sự #${id}`}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                    {selectedItem.isCancelPendingApproval && (
-                      <Box bg="orange.50" border="1px solid" borderColor="orange.200" borderRadius="xl" p={3}>
-                        <Text fontSize="xs" color="orange.700" fontWeight="700">
-                          Yêu cầu hủy đang chờ duyệt
-                        </Text>
-                        <Text fontSize="xs" color="orange.700" mt={1}>
-                          Lý do: {selectedItem.cancelReason || "--"}
-                        </Text>
-                      </Box>
-                    )}
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={leaderBayId}
+                            onChange={(event) => setLeaderBayId(event.target.value)}
+                          >
+                            <option value="">-- Chưa chỉ định cầu --</option>
+                            {availableBays.map((bay) => {
+                              const id = toPositiveNumber(readValue(bay, "id", "Id"));
+                              const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
+                              const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
+                              const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
+                              const disabled = occupied || !operational;
+                              const statusText = disabled ? "(Đang bận)" : "(Trống)";
+                              return (
+                                <option key={`leader-bay-${id}`} value={id || ""} disabled={disabled}>
+                                  {code} {statusText}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                    {mode === "foreman" && (
-                      <VStack align="stretch" spacing={4}>
-                        <Divider />
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50" p={3}>
-                          <Text fontWeight="700" color="gray.700" mb={2}>
-                            1) Nhận xe và phân công thợ
-                          </Text>
-                          <FormControl>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Kỹ thuật viên phụ trách
-                            </FormLabel>
-                            <Select
-                              {...SHARED_SELECT_PROPS}
-                              value={foremanTechnicianId}
-                              onChange={(e) => setForemanTechnicianId(e.target.value)}
-                            >
-                              <option value="">-- Chọn kỹ thuật viên --</option>
-                              {foremanTechnicianOptions.map((staff) => {
-                                const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                                const name = toText(readValue(staff, "fullName", "FullName"));
-                                return (
-                                  <option key={`foreman-tech-${id}`} value={id || ""}>
-                                    {name || `Staff #${id}`}
-                                  </option>
-                                );
-                              })}
-                            </Select>
-                          </FormControl>
+                        <HStack mt={3} spacing={2}>
                           <Button
-                            mt={3}
                             size="sm"
                             colorScheme="blue"
-                            onClick={handleForemanReceive}
-                            isLoading={saving}
-                            isDisabled={!canForemanReceive || !foremanTechnicianId || showForemanWarning}
+                            variant="outline"
+                            onClick={() => loadDispatchSuggestion("team_leader")}
+                            isLoading={suggestionLoading}
+                            isDisabled={!selectedItem || !toPositiveNumber(leaderTeamId)}
                           >
-                            Nhận xe
+                            Gợi ý tự động
                           </Button>
-                        </Box>
+                          <Button
+                            size="sm"
+                            colorScheme="blue"
+                            onClick={handleLeaderAssign}
+                            isLoading={saving}
+                            isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
+                          >
+                            Nhận xe và giao ca
+                          </Button>
+                        </HStack>
 
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50" p={3}>
-                          <Text fontWeight="700" color="gray.700" mb={2}>
-                            2) Hỗ trợ / Hội chẩn
-                          </Text>
+                        <Box mt={3}>
+                          <SuggestionPreview suggestion={suggestion} />
+                        </Box>
+                      </Box>
+
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>2) Yêu cầu hỗ trợ hội chẩn</Text>
+                        <Textarea
+                          size="sm"
+                          value={leaderSupportNote}
+                          onChange={(event) => setLeaderSupportNote(event.target.value)}
+                          placeholder="Mô tả vấn đề cần quản đốc hỗ trợ..."
+                        />
+                        <Button
+                          mt={3}
+                          size="sm"
+                          colorScheme="orange"
+                          variant="outline"
+                          onClick={handleLeaderSupport}
+                          isLoading={saving}
+                          isDisabled={!canLeaderSupport}
+                        >
+                          Gửi hỗ trợ
+                        </Button>
+                      </Box>
+
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
+                        <FormControl>
+                          <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={leaderCancelReason}
+                            onChange={(event) => setLeaderCancelReason(event.target.value)}
+                          >
+                            {CANCEL_REASONS.map((reason) => (
+                              <option key={`cancel-reason-${reason}`} value={reason}>{reason}</option>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
                           <Textarea
                             size="sm"
-                            value={supportNote}
-                            onChange={(e) => setSupportNote(e.target.value)}
-                            placeholder="Mô tả vấn đề cần quản đốc hỗ trợ..."
+                            value={leaderCancelNote}
+                            onChange={(event) => setLeaderCancelNote(event.target.value)}
+                            placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
                           />
-                          <Button
-                            mt={3}
-                            size="sm"
-                            colorScheme="orange"
-                            variant="outline"
-                            onClick={handleForemanSupport}
-                            isLoading={saving}
-                            isDisabled={!canForemanSupport || showForemanWarning}
-                          >
-                            Gửi hỗ trợ
-                          </Button>
-                        </Box>
+                        </FormControl>
+                        <Button
+                          mt={3}
+                          size="sm"
+                          colorScheme="red"
+                          variant="outline"
+                          onClick={handleLeaderCancelRequest}
+                          isLoading={saving}
+                          isDisabled={!canLeaderCancel}
+                        >
+                          Gửi yêu cầu hủy
+                        </Button>
+                      </Box>
 
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50" p={3}>
-                          <Text fontWeight="700" color="gray.700" mb={2}>
-                            3) Gửi hủy lệnh (chờ duyệt)
-                          </Text>
-                          <FormControl>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Lý do bắt buộc
-                            </FormLabel>
-                            <Select {...SHARED_SELECT_PROPS} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
-                              {CANCEL_REASONS.map((reason) => (
-                                <option key={`cancel-reason-${reason}`} value={reason}>
-                                  {reason}
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>4) Duyệt báo cáo kỹ thuật</Text>
+                        <Textarea
+                          size="sm"
+                          value={leaderTechnicalApprovalNote}
+                          onChange={(event) => setLeaderTechnicalApprovalNote(event.target.value)}
+                          placeholder="Nhận xét kỹ thuật (nếu có)..."
+                        />
+                        <Button
+                          mt={3}
+                          size="sm"
+                          colorScheme="green"
+                          onClick={handleLeaderTechnicalApproval}
+                          isLoading={saving}
+                          isDisabled={!canLeaderTechnicalApprove}
+                        >
+                          Duyệt kỹ thuật
+                        </Button>
+                      </Box>
+                    </VStack>
+                  ) : (
+                    <VStack align="stretch" spacing={4}>
+                      <Divider />
+
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>1) Override phân công</Text>
+
+                        <FormControl>
+                          <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={managerTeamId}
+                            onChange={(event) => setManagerTeamId(event.target.value)}
+                          >
+                            <option value="">-- Chọn tổ --</option>
+                            {activeTeams.map((team) => {
+                              const id = toPositiveNumber(readValue(team, "id", "Id"));
+                              const name = toText(readValue(team, "name", "Name"));
+                              const specialty = getDispatchTagLabel(readValue(team, "specialtyTag", "SpecialtyTag"));
+                              return (
+                                <option key={`manager-team-${id}`} value={id || ""}>
+                                  {name || `Tổ #${id}`} - {specialty}
                                 </option>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <FormControl mt={2}>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Ghi chú bổ sung
-                            </FormLabel>
-                            <Textarea
-                              size="sm"
-                              value={cancelNote}
-                              onChange={(e) => setCancelNote(e.target.value)}
-                              placeholder="Thêm chi tiết để quản đốc phê duyệt..."
-                            />
-                          </FormControl>
-                          <Button
-                            mt={3}
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
+
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
+                          <Select
                             size="sm"
-                            colorScheme="red"
-                            variant="outline"
-                            onClick={handleForemanCancelRequest}
-                            isLoading={saving}
-                            isDisabled={!canForemanCancel || !cancelReasonPayload || showForemanWarning}
+                            borderRadius="xl"
+                            value={managerLeadTechnicianId}
+                            onChange={(event) => setManagerLeadTechnicianId(event.target.value)}
                           >
-                            Gửi hủy lệnh
-                          </Button>
-                          {isCancelWindowOver && (
-                            <Text mt={2} fontSize="xs" color="red.500">
-                              Lưu ý: Đã quá 10 phút từ lúc nhận xe. Backend có thể từ chối yêu cầu hủy.
-                            </Text>
-                          )}
-                        </Box>
-                      </VStack>
-                    )}
-                    {mode === "manager" && (
-                      <VStack align="stretch" spacing={4}>
-                        <Divider />
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50" p={3}>
-                          <Text fontWeight="700" color="gray.700" mb={2}>
-                            Override phân công
-                          </Text>
-                          <FormControl>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Tổ thực hiện
-                            </FormLabel>
-                            <Select {...SHARED_SELECT_PROPS} value={managerTeamId} onChange={(e) => setManagerTeamId(e.target.value)}>
-                              <option value="">-- Chọn tổ --</option>
-                              {activeTeams.map((team) => {
-                                const id = toPositiveNumber(readValue(team, "id", "Id"));
-                                const name = toText(readValue(team, "name", "Name"));
-                                const tag = toText(readValue(team, "specialtyTag", "SpecialtyTag"));
-                                return (
-                                  <option key={`override-team-${id}`} value={id || ""}>
-                                    {name || `Tổ #${id}`} {tag ? `(${getDispatchTagLabel(tag)})` : ""}
-                                  </option>
-                                );
-                              })}
-                            </Select>
-                          </FormControl>
+                            <option value="">-- Chọn thợ chính --</option>
+                            {managerTechnicianOptions.map((staff) => {
+                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
+                              const name = toText(readValue(staff, "fullName", "FullName"));
+                              return (
+                                <option key={`manager-main-${id}`} value={id || ""}>
+                                  {name || `Nhân sự #${id}`}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                          <FormControl mt={2}>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Kỹ thuật viên
-                            </FormLabel>
-                            <Select
-                              {...SHARED_SELECT_PROPS}
-                              value={managerTechnicianId}
-                              onChange={(e) => setManagerTechnicianId(e.target.value)}
-                            >
-                              <option value="">-- Chọn kỹ thuật viên --</option>
-                              {managerTechnicianOptions.map((staff) => {
-                                const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                                const name = toText(readValue(staff, "fullName", "FullName"));
-                                return (
-                                  <option key={`override-tech-${id}`} value={id || ""}>
-                                    {name || `Staff #${id}`}
-                                  </option>
-                                );
-                              })}
-                            </Select>
-                          </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={managerAssistantTechnicianId}
+                            onChange={(event) => setManagerAssistantTechnicianId(event.target.value)}
+                          >
+                            <option value="">-- Không chọn --</option>
+                            {managerTechnicianOptions.map((staff) => {
+                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
+                              const name = toText(readValue(staff, "fullName", "FullName"));
+                              return (
+                                <option key={`manager-assistant-${id}`} value={id || ""}>
+                                  {name || `Nhân sự #${id}`}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
-                          <FormControl mt={2}>
-                            <FormLabel fontSize="xs" mb={1} color="gray.500">
-                              Lý do override
-                            </FormLabel>
-                            <Input
-                              size="sm"
-                              value={overrideReason}
-                              onChange={(e) => setOverrideReason(e.target.value)}
-                              placeholder="Ví dụ: xe chờ quá 10 phút, cần điều tải..."
-                            />
-                          </FormControl>
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
+                          <Select
+                            size="sm"
+                            borderRadius="xl"
+                            value={managerBayId}
+                            onChange={(event) => setManagerBayId(event.target.value)}
+                          >
+                            <option value="">-- Chưa chỉ định cầu --</option>
+                            {availableBays.map((bay) => {
+                              const id = toPositiveNumber(readValue(bay, "id", "Id"));
+                              const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
+                              const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
+                              const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
+                              const disabled = occupied || !operational;
+                              return (
+                                <option key={`manager-bay-${id}`} value={id || ""} disabled={disabled}>
+                                  {code} {disabled ? "(Đang bận)" : "(Trống)"}
+                                </option>
+                              );
+                            })}
+                          </Select>
+                        </FormControl>
 
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Lý do override</FormLabel>
+                          <Input
+                            size="sm"
+                            borderRadius="xl"
+                            value={managerOverrideReason}
+                            onChange={(event) => setManagerOverrideReason(event.target.value)}
+                            placeholder="Ví dụ: xe chờ quá 10 phút, cần điều tải..."
+                          />
+                        </FormControl>
+
+                        <HStack mt={3} spacing={2}>
                           <Button
-                            mt={3}
+                            size="sm"
+                            colorScheme="blue"
+                            variant="outline"
+                            onClick={() => loadDispatchSuggestion("manager")}
+                            isLoading={suggestionLoading}
+                            isDisabled={!selectedItem || !toPositiveNumber(managerTeamId)}
+                          >
+                            Gợi ý tự động
+                          </Button>
+                          <Button
                             size="sm"
                             colorScheme="blue"
                             onClick={handleManagerOverride}
                             isLoading={saving}
-                            isDisabled={!canManagerOverride || !managerTechnicianId}
+                            isDisabled={!canManagerOverride || !toPositiveNumber(managerLeadTechnicianId)}
                           >
                             Giao lại ngay
                           </Button>
-                        </Box>
+                        </HStack>
 
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50" p={3}>
-                          <Text fontWeight="700" color="gray.700" mb={2}>
-                            Duyệt hủy lệnh
-                          </Text>
-                          <Textarea
-                            size="sm"
-                            value={decisionNote}
-                            onChange={(e) => setDecisionNote(e.target.value)}
-                            placeholder="Ghi chú phê duyệt/từ chối (nếu cần)..."
-                          />
-                          <HStack mt={3} spacing={2}>
-                            <Button
-                              size="sm"
-                              colorScheme="green"
-                              onClick={() => handleManagerCancelDecision(true)}
-                              isLoading={saving}
-                              isDisabled={!canManagerDecide}
-                            >
-                              Đồng ý hủy
-                            </Button>
-                            <Button
-                              size="sm"
-                              colorScheme="red"
-                              variant="outline"
-                              onClick={() => handleManagerCancelDecision(false)}
-                              isLoading={saving}
-                              isDisabled={!canManagerDecide}
-                            >
-                              Từ chối hủy
-                            </Button>
-                          </HStack>
-                          {!selectedItem.isCancelPendingApproval && (
-                            <Text mt={2} fontSize="xs" color="gray.500">
-                              Không có yêu cầu hủy đang chờ duyệt.
-                            </Text>
-                          )}
+                        <Box mt={3}>
+                          <SuggestionPreview suggestion={suggestion} />
                         </Box>
-                      </VStack>
-                    )}
-                  </VStack>
-                )}
-              </Box>
-            </GridItem>
-          </Grid>
-        )}
+                      </Box>
+
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>2) Duyệt/Từ chối yêu cầu hủy</Text>
+                        <Textarea
+                          size="sm"
+                          value={managerDecisionNote}
+                          onChange={(event) => setManagerDecisionNote(event.target.value)}
+                          placeholder="Ghi chú cho quyết định của quản đốc..."
+                        />
+                        <HStack mt={3} spacing={2}>
+                          <Button
+                            size="sm"
+                            colorScheme="green"
+                            onClick={() => handleManagerCancelDecision(true)}
+                            isLoading={saving}
+                            isDisabled={!canManagerCancelDecision}
+                          >
+                            Đồng ý hủy
+                          </Button>
+                          <Button
+                            size="sm"
+                            colorScheme="red"
+                            variant="outline"
+                            onClick={() => handleManagerCancelDecision(false)}
+                            isLoading={saving}
+                            isDisabled={!canManagerCancelDecision}
+                          >
+                            Từ chối hủy
+                          </Button>
+                        </HStack>
+                        {!selectedItem.isCancelPendingApproval && (
+                          <Text mt={2} fontSize="sm" color="gray.500">Không có yêu cầu hủy chờ duyệt.</Text>
+                        )}
+                      </Box>
+
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>3) Duyệt báo giá cuối cùng</Text>
+                        <Textarea
+                          size="sm"
+                          value={managerFinalApprovalNote}
+                          onChange={(event) => setManagerFinalApprovalNote(event.target.value)}
+                          placeholder="Ghi chú duyệt cuối (ca lớn / yêu cầu đặc biệt)..."
+                        />
+                        <Button
+                          mt={3}
+                          size="sm"
+                          colorScheme="green"
+                          onClick={handleManagerFinalApproval}
+                          isLoading={saving}
+                          isDisabled={!canManagerFinalApprove}
+                        >
+                          Duyệt báo giá cuối
+                        </Button>
+                        {selectedItem.finalApprovedAt && (
+                          <Text mt={2} fontSize="sm" color="green.600">Lệnh này đã được duyệt cuối lúc {formatDateTime(selectedItem.finalApprovedAt)}.</Text>
+                        )}
+                      </Box>
+                    </VStack>
+                  )}
+                </VStack>
+              )}
+            </Box>
+          </GridItem>
+        </Grid>
       </VStack>
     </Box>
   );
 }
-

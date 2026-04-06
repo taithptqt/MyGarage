@@ -17,7 +17,8 @@ import initialTheme from "@horizon/theme/theme";
 const ROLES_META = {
   RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📝", description: "Tiếp nhận, Báo giá & Thanh toán" },
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
-  FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  FOREMAN: { path: "foreman", label: "Quản đốc", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  TEAM_LEADER: { path: "team-leader", label: "Tổ trưởng", icon: "🧭", description: "Điều phối chẩn đoán theo tổ" },
   TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
   QUALITY_CONTROL: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
 };

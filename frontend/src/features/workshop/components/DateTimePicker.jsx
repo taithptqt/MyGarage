@@ -50,7 +50,8 @@ const DateTimePicker = ({
   availableTimeMap = null,
   loadingTimeOptions = false,
   noTimeOptionsText = "Không có khung giờ khả dụng cho ngày đã chọn.",
-  autoSelectNowOnOpen = false
+  autoSelectNowOnOpen = false,
+  onOpenRequest = null
 }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState("08");
@@ -251,11 +252,18 @@ const DateTimePicker = ({
   };
 
   const hasNoTimeOptions = showTime && hasExternalTimeMap && hours.length === 0 && !loadingTimeOptions;
+  const handlePopoverOpen = () => {
+    if (typeof onOpenRequest === "function") {
+      const shouldOpen = onOpenRequest();
+      if (shouldOpen === false) return;
+    }
+    onOpen();
+  };
 
   return (
     <Popover
       isOpen={isOpen}
-      onOpen={onOpen}
+      onOpen={handlePopoverOpen}
       onClose={onClose}
       placement="bottom-start"
       closeOnBlur

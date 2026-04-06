@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
@@ -114,6 +114,43 @@ function clonePlan(plan) {
     excludedSharedCategoryIds: [...(plan?.excludedSharedCategoryIds || [])],
     excludedSharedServiceIds: [...(plan?.excludedSharedServiceIds || [])],
   };
+}
+
+function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById) {
+  return (planSummaries || [])
+    .map((plan) => {
+      const categoryIds = toNumberList(plan?.categoryIds || []);
+      if (categoryIds.length === 0) return null;
+
+      const coveredCategoryIds = new Set(
+        toNumberList(plan?.serviceIds || [])
+          .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
+          .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
+      );
+
+      const missingCategoryNames = categoryIds
+        .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
+        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
+
+      if (missingCategoryNames.length === 0) return null;
+
+      return {
+        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
+        missingCategoryNames,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildMissingSpecificServiceMessage(missingByVehicle) {
+  if (!Array.isArray(missingByVehicle) || missingByVehicle.length === 0) return "";
+
+  const details = missingByVehicle.map((item) => {
+    const categories = (item.missingCategoryNames || []).map((name) => `'${name}'`).join(", ");
+    return `${item.vehicleLabel}: ${categories}`;
+  });
+
+  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
 }
 
 function normalizeService(service) {
@@ -328,6 +365,11 @@ function buildCheckInTimeWindowMap(now, rangeMinutes = 30) {
   return timeMap;
 }
 
+function hasPlanCompletionWarning(plan) {
+  if (!plan) return false;
+  return Boolean(plan.hasInspectionService && Number(plan.executionMinutes || 0) > 0 && plan.endTimeIso);
+}
+
 export default function CreateServiceOrderPage() {
   const navigate = useNavigate();
   const { selectedBranchId } = useBranch();
@@ -382,6 +424,7 @@ export default function CreateServiceOrderPage() {
   const [nearestSlotError, setNearestSlotError] = useState("");
   const [selectedSuggestedSlotStart, setSelectedSuggestedSlotStart] = useState("");
   const [successOrderSummary, setSuccessOrderSummary] = useState(null);
+  const lastAutoScrolledSlotStartRef = useRef("");
 
   const scrollToPageTop = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -893,8 +936,8 @@ export default function CreateServiceOrderPage() {
   }, []);
 
   const calculationStartTime = useMemo(
-    () => selectedSuggestedSlotStart || formData.checkInTime || "",
-    [formData.checkInTime, selectedSuggestedSlotStart]
+    () => selectedSuggestedSlotStart || "",
+    [selectedSuggestedSlotStart]
   );
 
   const planSummaries = useMemo(() => {
@@ -933,6 +976,24 @@ export default function CreateServiceOrderPage() {
     });
   }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
 
+  const missingSpecificServiceByVehicle = useMemo(
+    () => getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById),
+    [categoryNameById, planSummaries, serviceCategoryMap]
+  );
+
+  const missingSpecificServiceMessage = useMemo(
+    () => buildMissingSpecificServiceMessage(missingSpecificServiceByVehicle),
+    [missingSpecificServiceByVehicle]
+  );
+  const hasCheckInInput = useMemo(
+    () => Boolean(String(formData.checkInTime || "").trim()),
+    [formData.checkInTime]
+  );
+  const slotSuggestionBaseTime = useMemo(() => {
+    if (!hasCheckInInput) return "";
+    return toLocalDateTimeValue(formData.checkInTime);
+  }, [formData.checkInTime, hasCheckInInput]);
+
   const totalServiceMinutes = useMemo(
     () => planSummaries.reduce((sum, plan) => sum + Number(plan.serviceMinutes || 0), 0),
     [planSummaries]
@@ -966,7 +1027,7 @@ export default function CreateServiceOrderPage() {
   }, [planSummaries]);
 
   useEffect(() => {
-    if (!effectiveBranchId) {
+    if (!effectiveBranchId || !slotSuggestionBaseTime) {
       setNearestSlotSuggestion(null);
       setNearestSlotError("");
       setNearestSlotLoading(false);
@@ -982,7 +1043,7 @@ export default function CreateServiceOrderPage() {
       try {
         const suggestion = await getNearestSlotSuggestion(
           effectiveBranchId,
-          toLocalDateTimeValue(checkInNow),
+          slotSuggestionBaseTime,
           {
             requestedServiceIds: requestedServiceIdsForSlotSuggestion || undefined,
             vehicleCount: Math.max(1, selectedVehicleKeys.length),
@@ -1010,10 +1071,10 @@ export default function CreateServiceOrderPage() {
       clearTimeout(timer);
     };
   }, [
-    checkInNow,
     effectiveBranchId,
     requestedServiceIdsForSlotSuggestion,
     selectedVehicleKeys.length,
+    slotSuggestionBaseTime,
   ]);
 
   const activeNoteKey = useMemo(
@@ -1107,12 +1168,39 @@ export default function CreateServiceOrderPage() {
             selectedVehicleKeys.length === 1
               ? "Vui lòng chọn loại dịch vụ và ít nhất một dịch vụ."
               : "Mỗi xe cần có loại dịch vụ và ít nhất một dịch vụ trước khi tạo lệnh.";
+        } else {
+          const missingSpecificByVehicle = getMissingSpecificServiceByVehicle(
+            selectedVehicleKeys.map((vehicleKey) => {
+              const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+              return {
+                vehicleKey,
+                vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
+                categoryIds: toNumberList(plan.categoryIds),
+                serviceIds: toNumberList(plan.serviceIds),
+              };
+            }),
+            serviceCategoryMap,
+            categoryNameById
+          );
+
+          if (missingSpecificByVehicle.length > 0) {
+            errors.serviceIds = buildMissingSpecificServiceMessage(missingSpecificByVehicle);
+          }
         }
       }
 
       return errors;
     },
-    [effectiveBranchId, guestSelectedBrandId, plansByVehicleKey, selectedBrandId, selectedVehicleKeys]
+    [
+      categoryNameById,
+      effectiveBranchId,
+      guestSelectedBrandId,
+      plansByVehicleKey,
+      selectedBrandId,
+      selectedVehicleKeys,
+      serviceCategoryMap,
+      vehicleLabelByKey,
+    ]
   );
 
   useEffect(() => {
@@ -1149,22 +1237,22 @@ export default function CreateServiceOrderPage() {
         return new Date(firstStart).getTime() - new Date(secondStart).getTime();
       });
 
-    const baselineDateKey = toDateKey(checkInNow);
+    const baselineDateKey = toDateKey(slotSuggestionBaseTime);
     const sameDaySlots = baselineDateKey
       ? normalizedSlots.filter((slot) => toDateKey(readField(slot, ["startTime", "StartTime"], null)) === baselineDateKey)
       : [];
 
     const source = sameDaySlots.length > 0 ? sameDaySlots : normalizedSlots;
     return source.slice(0, 5);
-  }, [checkInNow, nearestSlotSuggestion]);
+  }, [nearestSlotSuggestion, slotSuggestionBaseTime]);
 
   const hasSameDaySuggestedSlots = useMemo(() => {
-    const baselineDateKey = toDateKey(checkInNow);
+    const baselineDateKey = toDateKey(slotSuggestionBaseTime);
     if (!baselineDateKey || suggestedAlternativeSlots.length === 0) return true;
     return suggestedAlternativeSlots.some(
       (slot) => toDateKey(readField(slot, ["startTime", "StartTime"], null)) === baselineDateKey
     );
-  }, [checkInNow, suggestedAlternativeSlots]);
+  }, [slotSuggestionBaseTime, suggestedAlternativeSlots]);
 
   const suggestedTopPickMinute = useMemo(
     () => toMinuteEpoch(nearestSlotSuggestion?.suggestedStartTime),
@@ -1183,12 +1271,35 @@ export default function CreateServiceOrderPage() {
   }, [selectedSuggestedSlotStart, suggestedAlternativeSlots]);
 
   const handleApplySuggestedSlot = useCallback((slot) => {
+    if (missingSpecificServiceByVehicle.length > 0) {
+      setError(missingSpecificServiceMessage);
+      return;
+    }
+
     const slotStart = readField(slot, ["startTime", "StartTime"], null);
     if (!slotStart) return;
     const normalizedStartTime = toLocalDateTimeValue(slotStart);
     if (!normalizedStartTime) return;
     setSelectedSuggestedSlotStart(normalizedStartTime);
-  }, []);
+    // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chế độ tự tính theo khung giờ.
+    setFormData((prev) => ({ ...prev, estimatedHandover: "" }));
+  }, [missingSpecificServiceByVehicle.length, missingSpecificServiceMessage]);
+
+  useEffect(() => {
+    if (!selectedSuggestedSlotStart) return;
+    if (lastAutoScrolledSlotStartRef.current === selectedSuggestedSlotStart) return;
+    lastAutoScrolledSlotStartRef.current = selectedSuggestedSlotStart;
+
+    if (!planSummaries.some(hasPlanCompletionWarning)) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      const firstWarning = document.querySelector(".reception-plan-summary-warning");
+      if (firstWarning && typeof firstWarning.scrollIntoView === "function") {
+        firstWarning.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }, [planSummaries, selectedSuggestedSlotStart]);
 
   const handlePlateBlur = useCallback((event) => {
     const { name, value } = event.target;
@@ -1794,7 +1905,11 @@ export default function CreateServiceOrderPage() {
           </p>
         </div>
       </div>
-      {error ? <div className="alert alert-danger">{error}</div> : null}
+      {error ? (
+        <div className="reception-error-banner" role="alert">
+          {error}
+        </div>
+      ) : null}
       {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
         <div className="validation-summary" role="alert">
           <strong>Vui lòng xử lý các lỗi sau:</strong>
@@ -2432,9 +2547,16 @@ export default function CreateServiceOrderPage() {
                     minDate={checkInDayStart}
                     maxDate={checkInDayEnd}
                     availableTimeMap={checkInAvailableTimeMap}
+                    onOpenRequest={() => {
+                      if (missingSpecificServiceByVehicle.length > 0) {
+                        setError(missingSpecificServiceMessage);
+                        return false;
+                      }
+                      return true;
+                    }}
                     autoSelectNowOnOpen
                   />
-                  {suggestedAlternativeSlots.length > 0 ? (
+                  {hasCheckInInput && suggestedAlternativeSlots.length > 0 ? (
                     <div className="reception-slot-picker">
                       <div className="reception-muted-note" style={{ marginTop: 0 }}>
                         Chọn 1 trong 5 khung giờ khả dụng:
@@ -2613,7 +2735,7 @@ export default function CreateServiceOrderPage() {
                         </div>
                       </div>
 
-                      {plan.hasInspectionService && plan.executionMinutes > 0 && plan.endTimeIso ? (
+                      {hasPlanCompletionWarning(plan) ? (
                         <p className="reception-plan-summary-warning">
                           {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.completionWarningTimeLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
                         </p>

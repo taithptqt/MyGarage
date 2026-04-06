@@ -23,14 +23,25 @@ namespace MyGarage.Interfaces
         Task<long?> ResolveTeamIdForTechnicianAsync(long technicianId);
         Task<bool> IsTechnicianInTeamAsync(long technicianId, long teamId);
         Task<bool> IsDispatchTagCompatibleAsync(string? dispatchTag, long? teamId);
-        Task AssignDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? teamId, bool managerOverride);
+        Task<bool> IsBayInBranchAsync(long bayId, long branchId);
+        Task AssignDiagnosesAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long technicianId,
+            long? assistantTechnicianId,
+            long? teamId,
+            long? bayId,
+            bool managerOverride);
+        Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId);
         Task MarkSupportRequestedAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string? note);
         Task RequestCancellationAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string reason);
         Task ApplyCancellationDecisionAsync(ServiceOrder serviceOrder, IEnumerable<Diagnosis> diagnoses, bool approve, long managerId, string? note);
         Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted);
+        Task<DiagnosisDispatchSuggestionDto> BuildDispatchSuggestionAsync(long serviceOrderId, long teamId);
         Task RecallDiagnosesAsync(ServiceOrder serviceOrder, IReadOnlyList<Diagnosis> activeDiagnoses);
         Task<Diagnosis?> GetDiagnosisEntityAsync(long id);
         Task CompleteDiagnosisAsync(Diagnosis diagnosis);
+        Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note);
+        Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long managerId, string? note);
         Task<bool> AreAllDiagnosesCompletedAsync(long serviceOrderId);
     }
 }

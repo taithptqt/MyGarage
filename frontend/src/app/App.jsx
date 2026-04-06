@@ -7,6 +7,7 @@ import WorkshopPage from "@features/workshop/pages/WorkshopPage";
 import ReceptionOrdersSection from "@features/workshop/components/ReceptionOrdersSection";
 import ManagerDashboard from "@features/workshop/components/ManagerDashboard";
 import ForemanDashboard from "@features/workshop/components/ForemanDashboard";
+import TeamLeaderDashboard from "@features/workshop/components/TeamLeaderDashboard";
 import TechnicianDashboard from "@features/workshop/components/TechnicianDashboard";
 import QCDashboard from "@features/workshop/components/QCDashboard";
 import CreateServiceOrderPage from "@features/workshop/pages/CreateServiceOrderPage";
@@ -159,7 +160,7 @@ function App() {
         <Route 
           path="/workshop" 
           element={
-            <ProtectedRoute allowedRoles={["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"]}>
+            <ProtectedRoute allowedRoles={["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"]}>
               <WorkshopPage />
             </ProtectedRoute>
           } 
@@ -175,6 +176,7 @@ function App() {
           <Route path="reception/orders/:orderId/edit" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderEditPage /></ProtectedRoute>} />
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
+          <Route path="team-leader" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />

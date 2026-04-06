@@ -146,7 +146,15 @@ namespace MyGarage.Services
                     .ToDictionaryAsync(x => x.Id, x => x.Name ?? string.Empty);
 
             var technicianIds = diagnoses
-                .Select(x => x.TechnicianId)
+                .SelectMany(x => new long?[]
+                {
+                    x.TechnicianId,
+                    x.AssistantTechnicianId,
+                    x.ApprovedByForemanId,
+                    x.FinalApprovedByManagerId,
+                })
+                .Where(x => x.HasValue && x.Value > 0)
+                .Select(x => x!.Value)
                 .Distinct()
                 .ToList();
             var technicianNameMap = technicianIds.Count == 0
@@ -155,6 +163,18 @@ namespace MyGarage.Services
                     .Where(x => technicianIds.Contains(x.Id))
                     .Select(x => new { x.Id, x.FullName })
                     .ToDictionaryAsync(x => x.Id, x => x.FullName ?? string.Empty);
+
+            var bayIds = diagnoses
+                .Where(x => x.AssignedBayId.HasValue && x.AssignedBayId.Value > 0)
+                .Select(x => x.AssignedBayId!.Value)
+                .Distinct()
+                .ToList();
+            var bayCodeMap = bayIds.Count == 0
+                ? new Dictionary<long, string>()
+                : await _context.Bays.AsNoTracking()
+                    .Where(x => bayIds.Contains(x.Id))
+                    .Select(x => new { x.Id, x.Code, x.Name })
+                    .ToDictionaryAsync(x => x.Id, x => string.IsNullOrWhiteSpace(x.Code) ? (x.Name ?? string.Empty) : x.Code);
 
             var orderMap = orderRows.ToDictionary(x => x.Id, x => x);
             var now = DateTime.UtcNow;
@@ -225,6 +245,37 @@ namespace MyGarage.Services
 
                     var teamIdValue = assignedDiagnosis?.AssignedTeamId ?? latest.AssignedTeamId;
                     var technicianId = assignedDiagnosis?.TechnicianId ?? latest.TechnicianId;
+                    var assistantTechnicianId = assignedDiagnosis?.AssistantTechnicianId ?? latest.AssistantTechnicianId;
+                    var assignedBayId = assignedDiagnosis?.AssignedBayId ?? latest.AssignedBayId;
+                    var startedAt = list
+                        .Select(x => x.StartedAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderBy(x => x)
+                        .FirstOrDefault();
+
+                    var technicalApprovedEntries = list
+                        .Where(x => x.ApprovedByForemanId.HasValue)
+                        .ToList();
+                    var technicalApprovedAt = technicalApprovedEntries
+                        .Select(x => x.UpdatedAt ?? x.DiagnosedAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderByDescending(x => x)
+                        .FirstOrDefault();
+                    var technicalApprovedBy = technicalApprovedEntries
+                        .Select(x => x.ApprovedByForemanId)
+                        .FirstOrDefault(x => x.HasValue);
+
+                    var finalApprovedAt = list
+                        .Select(x => x.FinalApprovedAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderByDescending(x => x)
+                        .FirstOrDefault();
+                    var finalApprovedBy = list
+                        .Select(x => x.FinalApprovedByManagerId)
+                        .FirstOrDefault(x => x.HasValue);
                     var cancelReason = list
                         .Select(x => x.CancellationReason)
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
@@ -243,13 +294,22 @@ namespace MyGarage.Services
                         TeamName = teamIdValue.HasValue && teamNameMap.TryGetValue(teamIdValue.Value, out var teamName) ? teamName : null,
                         TechnicianId = technicianId > 0 ? technicianId : null,
                         TechnicianName = technicianNameMap.TryGetValue(technicianId, out var technicianName) ? technicianName : null,
+                        AssistantTechnicianId = assistantTechnicianId,
+                        AssistantTechnicianName = assistantTechnicianId.HasValue && technicianNameMap.TryGetValue(assistantTechnicianId.Value, out var assistantName) ? assistantName : null,
+                        AssignedBayId = assignedBayId,
+                        AssignedBayCode = assignedBayId.HasValue && bayCodeMap.TryGetValue(assignedBayId.Value, out var bayCode) ? bayCode : null,
                         RequestedAt = pendingSince == default ? latest.CreatedAt : pendingSince,
                         AssignedAt = assignedSince == default ? latest.AssignedAt : assignedSince,
+                        StartedAt = startedAt == default ? null : startedAt,
                         PendingMinutes = Math.Max(0, pendingMinutes),
                         AssignedMinutes = Math.Max(0, assignedMinutes),
                         IsSupportRequested = hasSupport,
                         IsCancelPendingApproval = hasCancelPending,
-                        CancelReason = cancelReason
+                        CancelReason = cancelReason,
+                        TechnicalApprovedByTeamLeaderId = technicalApprovedBy,
+                        TechnicalApprovedAt = technicalApprovedAt == default ? null : technicalApprovedAt,
+                        FinalApprovedByManagerId = finalApprovedBy,
+                        FinalApprovedAt = finalApprovedAt == default ? null : finalApprovedAt,
                     };
                 })
                 .OrderByDescending(x => x.QueueColor == "RED")

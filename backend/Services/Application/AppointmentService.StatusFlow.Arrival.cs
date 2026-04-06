@@ -12,12 +12,12 @@ namespace MyGarage.Services
         {
             if (arriveTime >= appointment.EndTime.AddMinutes(NoShowMinutes))
             {
-                appointment.Status = AppointmentStatuses.Pending;
+                appointment.Status = nameof(AppointmentStatus.PENDING);
                 appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "WINDOW_MISSED_REPRIORITIZED");
                 return;
             }
 
-            appointment.Status = AppointmentStatuses.Arrived;
+            appointment.Status = nameof(AppointmentStatus.ARRIVED);
         }
 
         private async Task ApplyEarlyFixedArrivalAsync(Appointment appointment, DateTime arriveTime)
@@ -35,7 +35,7 @@ namespace MyGarage.Services
 
             if (candidates.Count == 0)
             {
-                appointment.Status = AppointmentStatuses.Arrived;
+                appointment.Status = nameof(AppointmentStatus.ARRIVED);
                 appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "EARLY_WAIT_BOOKED_SLOT");
                 return;
             }
@@ -43,7 +43,7 @@ namespace MyGarage.Services
             var preferred = candidates[0];
             appointment.StartTime = preferred.StartTime;
             appointment.EndTime = preferred.EndTime;
-            appointment.Status = AppointmentStatuses.Arrived;
+            appointment.Status = nameof(AppointmentStatus.ARRIVED);
             appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "EARLY_BROUGHT_FORWARD");
         }
 
@@ -76,13 +76,13 @@ namespace MyGarage.Services
             var next = candidates[0];
             appointment.StartTime = next.StartTime;
             appointment.EndTime = next.EndTime;
-            appointment.Status = AppointmentStatuses.ArrivedLate;
+            appointment.Status = nameof(AppointmentStatus.ARRIVED_LATE);
             appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_RESCHEDULED");
         }
 
         private void ApplyLateSwitchToFlexibleQueue(Appointment appointment)
         {
-            appointment.Status = AppointmentStatuses.Pending;
+            appointment.Status = nameof(AppointmentStatus.PENDING);
             appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "LATE_SWITCHED_TO_FLEX_QUEUE");
         }
     }

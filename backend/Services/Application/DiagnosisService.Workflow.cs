@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.DTOs.Responses;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -20,6 +21,7 @@ namespace MyGarage.Services
 
         private const string ServiceOrderStatusInspecting = "INSPECTING";
         private const string ServiceOrderStatusNew = "NEW";
+        private const string ServiceOrderStatusWaitingApproval = "WAITING_APPROVAL";
 
         private const int UnclaimedEscalationMinutes = 10;
         private const int GoldenCancelWindowMinutes = 10;
@@ -99,11 +101,14 @@ namespace MyGarage.Services
                 {
                     ServiceOrderId = serviceOrderId,
                     TechnicianId = technicianId,
+                    AssistantTechnicianId = null,
+                    AssignedBayId = null,
                     Symptom = symptom,
                     Status = DiagnosisStatusPending,
                     DispatchTag = normalizedDispatchTag,
                     AssignedTeamId = null,
                     AssignedAt = null,
+                    StartedAt = null,
                     SupportRequestedAt = null,
                     SupportRequestedBy = null,
                     SupportRequestNote = null,
@@ -114,6 +119,9 @@ namespace MyGarage.Services
                     CancellationDecisionAt = null,
                     CancellationDecisionBy = null,
                     CancellationDecisionNote = null,
+                    FinalApprovedByManagerId = null,
+                    FinalApprovedAt = null,
+                    FinalApprovalNote = null,
                     CreatedAt = now,
                     UpdatedAt = now
                 })
@@ -168,6 +176,12 @@ namespace MyGarage.Services
             return await _context.Staffs.AsNoTracking().AnyAsync(x => x.Id == technicianId && x.TeamId == teamId);
         }
 
+        public async Task<bool> IsBayInBranchAsync(long bayId, long branchId)
+        {
+            return await _context.Bays.AsNoTracking()
+                .AnyAsync(x => x.Id == bayId && x.BranchId == branchId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false));
+        }
+
         public async Task<bool> IsDispatchTagCompatibleAsync(string? dispatchTag, long? teamId)
         {
             if (!teamId.HasValue)
@@ -194,7 +208,13 @@ namespace MyGarage.Services
             return string.Equals(normalizedDispatchTag, teamSpecialtyTag, StringComparison.OrdinalIgnoreCase);
         }
 
-        public async Task AssignDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? teamId, bool managerOverride)
+        public async Task AssignDiagnosesAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long technicianId,
+            long? assistantTechnicianId,
+            long? teamId,
+            long? bayId,
+            bool managerOverride)
         {
             var now = DateTime.UtcNow;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -208,9 +228,17 @@ namespace MyGarage.Services
             foreach (var diagnosis in list)
             {
                 diagnosis.TechnicianId = technicianId;
+                diagnosis.AssistantTechnicianId = assistantTechnicianId;
                 diagnosis.Status = DiagnosisStatusAssigned;
                 diagnosis.AssignedTeamId = resolvedTeamId;
+                diagnosis.AssignedBayId = bayId;
                 diagnosis.AssignedAt ??= now;
+                diagnosis.StartedAt = null;
+
+                diagnosis.ApprovedByForemanId = null;
+                diagnosis.FinalApprovedByManagerId = null;
+                diagnosis.FinalApprovedAt = null;
+                diagnosis.FinalApprovalNote = null;
 
                 diagnosis.CancellationStatus = CancellationStatusNone;
                 diagnosis.CancellationReason = null;
@@ -232,6 +260,145 @@ namespace MyGarage.Services
 
             _context.Diagnoses.UpdateRange(list);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId)
+        {
+            var now = DateTime.UtcNow;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var diagnosis in list)
+            {
+                if (diagnosis.Status == DiagnosisStatusCompleted)
+                {
+                    continue;
+                }
+
+                diagnosis.Status = DiagnosisStatusAssigned;
+                diagnosis.StartedAt ??= now;
+                diagnosis.AssignedAt ??= now;
+                diagnosis.AssignedBayId = bayId ?? diagnosis.AssignedBayId;
+                diagnosis.UpdatedBy = technicianId;
+                diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<DiagnosisDispatchSuggestionDto> BuildDispatchSuggestionAsync(long serviceOrderId, long teamId)
+        {
+            var team = await _context.Teams.AsNoTracking()
+                .Where(x => x.Id == teamId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
+                .Select(x => new { x.Id, x.Name, x.BranchId })
+                .FirstOrDefaultAsync();
+
+            if (team == null)
+            {
+                throw new InvalidOperationException("Khong tim thay to ky thuat duoc chon.");
+            }
+
+            var technicians = await _context.Staffs.AsNoTracking()
+                .Where(x => x.TeamId == teamId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => string.IsNullOrEmpty(x.Status) || !string.Equals(x.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+                .Select(x => new { x.Id, x.FullName, x.SkillLevel })
+                .ToListAsync();
+
+            var technicianIds = technicians.Select(x => x.Id).Distinct().ToList();
+            var loads = new Dictionary<long, int>();
+
+            if (technicianIds.Count > 0)
+            {
+                var loadRows = await _context.Diagnoses.AsNoTracking()
+                    .Where(x => x.Status == DiagnosisStatusAssigned)
+                    .Where(x => technicianIds.Contains(x.TechnicianId) || (x.AssistantTechnicianId.HasValue && technicianIds.Contains(x.AssistantTechnicianId.Value)))
+                    .Select(x => new
+                    {
+                        x.ServiceOrderId,
+                        x.TechnicianId,
+                        x.AssistantTechnicianId
+                    })
+                    .ToListAsync();
+
+                var loadBuckets = new Dictionary<long, HashSet<long>>();
+                foreach (var techId in technicianIds)
+                {
+                    loadBuckets[techId] = new HashSet<long>();
+                }
+
+                foreach (var row in loadRows)
+                {
+                    if (loadBuckets.TryGetValue(row.TechnicianId, out var leadOrders))
+                    {
+                        leadOrders.Add(row.ServiceOrderId);
+                    }
+
+                    if (row.AssistantTechnicianId.HasValue && loadBuckets.TryGetValue(row.AssistantTechnicianId.Value, out var assistantOrders))
+                    {
+                        assistantOrders.Add(row.ServiceOrderId);
+                    }
+                }
+
+                foreach (var bucket in loadBuckets)
+                {
+                    loads[bucket.Key] = bucket.Value.Count;
+                }
+            }
+
+            var sortedTechnicians = technicians
+                .Select(x => new DiagnosisTechnicianLoadDto
+                {
+                    TechnicianId = x.Id,
+                    TechnicianName = x.FullName,
+                    SkillLevel = x.SkillLevel,
+                    ActiveDiagnosisCount = loads.TryGetValue(x.Id, out var count) ? count : 0
+                })
+                .OrderBy(x => x.ActiveDiagnosisCount)
+                .ThenByDescending(x => x.SkillLevel ?? 0)
+                .ThenBy(x => x.TechnicianName ?? string.Empty)
+                .ToList();
+
+            var suggestedLead = sortedTechnicians.FirstOrDefault();
+            var suggestedAssistant = sortedTechnicians.Skip(1).FirstOrDefault();
+
+            var suggestedBay = await _context.Bays.AsNoTracking()
+                .Where(x => x.BranchId == team.BranchId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .OrderBy(x => x.CurrentOccupiedVehicleId.HasValue ? 1 : 0)
+                .ThenBy(x => x.Code)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
+                    x.Name,
+                    x.CurrentOccupiedVehicleId,
+                    x.OperationalStatus
+                })
+                .ToListAsync();
+
+            var freeBay = suggestedBay
+                .Where(x => !x.CurrentOccupiedVehicleId.HasValue && IsOperationalBayAvailable(x.OperationalStatus))
+                .OrderBy(x => x.Code ?? x.Name ?? string.Empty)
+                .FirstOrDefault();
+
+            return new DiagnosisDispatchSuggestionDto
+            {
+                ServiceOrderId = serviceOrderId,
+                TeamId = team.Id,
+                TeamName = team.Name,
+                SuggestedLeadTechnicianId = suggestedLead?.TechnicianId,
+                SuggestedLeadTechnicianName = suggestedLead?.TechnicianName,
+                SuggestedAssistantTechnicianId = suggestedAssistant?.TechnicianId,
+                SuggestedAssistantTechnicianName = suggestedAssistant?.TechnicianName,
+                SuggestedBayId = freeBay?.Id,
+                SuggestedBayCode = freeBay?.Code ?? freeBay?.Name,
+                TechnicianLoads = sortedTechnicians
+            };
         }
 
         public async Task MarkSupportRequestedAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string? note)
@@ -316,11 +483,18 @@ namespace MyGarage.Services
                     var placeholderTechnicianId = await ResolvePlaceholderTechnicianIdAsync(serviceOrder, diagnosis.DispatchTag);
                     diagnosis.Status = DiagnosisStatusPending;
                     diagnosis.TechnicianId = placeholderTechnicianId;
+                    diagnosis.AssistantTechnicianId = null;
                     diagnosis.AssignedTeamId = null;
+                    diagnosis.AssignedBayId = null;
                     diagnosis.AssignedAt = null;
+                    diagnosis.StartedAt = null;
                     diagnosis.SupportRequestedAt = null;
                     diagnosis.SupportRequestedBy = null;
                     diagnosis.SupportRequestNote = null;
+                    diagnosis.ApprovedByForemanId = null;
+                    diagnosis.FinalApprovedByManagerId = null;
+                    diagnosis.FinalApprovedAt = null;
+                    diagnosis.FinalApprovalNote = null;
                     diagnosis.CancellationStatus = CancellationStatusApproved;
                 }
                 else
@@ -342,6 +516,61 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note)
+        {
+            var now = DateTime.UtcNow;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var diagnosis in list)
+            {
+                diagnosis.ApprovedByForemanId = teamLeaderId;
+                diagnosis.UpdatedBy = teamLeaderId;
+                diagnosis.UpdatedAt = now;
+
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    diagnosis.SupportRequestNote = note.Trim();
+                }
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long managerId, string? note)
+        {
+            var now = DateTime.UtcNow;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var diagnosis in list)
+            {
+                diagnosis.FinalApprovedByManagerId = managerId;
+                diagnosis.FinalApprovedAt = now;
+                diagnosis.FinalApprovalNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+                diagnosis.UpdatedBy = managerId;
+                diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            var serviceOrderId = list[0].ServiceOrderId;
+            var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
+            if (order != null)
+            {
+                order.Status = ServiceOrderStatusWaitingApproval;
+                order.UpdatedAt = now;
+                _context.ServiceOrders.Update(order);
+            }
             await _context.SaveChangesAsync();
         }
 
@@ -383,6 +612,25 @@ namespace MyGarage.Services
                 .Select(x => x.Status)
                 .ToListAsync();
             return allStatus.Count > 0 && allStatus.All(s => s == DiagnosisStatusCompleted);
+        }
+
+        private static bool IsOperationalBayAvailable(string? operationalStatus)
+        {
+            var normalized = (operationalStatus ?? string.Empty).Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return true;
+            }
+
+            return normalized switch
+            {
+                "IN_USE" => false,
+                "BROKEN" => false,
+                "UNDER_MAINTENANCE" => false,
+                "MAINTENANCE" => false,
+                "SUSPENDED" => false,
+                _ => true,
+            };
         }
 
         private static bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)

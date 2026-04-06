@@ -359,8 +359,15 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.so-detail-edit-btn span {
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .so-detail-edit-btn:hover {
@@ -2138,6 +2145,36 @@
 
 .reception-dashboard .admin-table th.col-actions-wide {
   text-align: center !important;
+}
+
+.reception-dashboard .reception-group-orders-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 980px;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-order-code {
+  width: 26%;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-plate {
+  width: 13%;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-checkin {
+  width: 16%;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-handover {
+  width: 16%;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-status {
+  width: 14%;
+}
+
+.reception-dashboard .reception-group-orders-table col.col-actions {
+  width: 15%;
 }
 
 .btn-icon {
@@ -4238,7 +4275,7 @@
 .reception-create-success-popup h3 {
   margin: 0;
   color: #203f76;
-  font-size: clamp(28px, 2.6vw, 40px);
+  font-size: clamp(22px, 2vw, 30px);
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.01em;

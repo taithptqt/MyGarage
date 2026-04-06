@@ -75,7 +75,7 @@ namespace MyGarage.Services
                         EndTime = hold.EndTime,
                         RequestedServiceIds = hold.RequestedServiceIds,
                         CustomerNotes = null,
-                        Status = AppointmentStatuses.Pending
+                        Status = nameof(AppointmentStatus.PENDING)
                     });
                 }
             }

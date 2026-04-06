@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
@@ -184,11 +183,7 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Status is required." });
             }
 
-            if (requested != AppointmentStatuses.Confirmed &&
-                requested != AppointmentStatuses.Canceled &&
-                requested != AppointmentStatuses.CancelledLegacy &&
-                requested != AppointmentStatuses.Arrived &&
-                requested != "CHECKED_IN")
+            if (!Enum.TryParse<AppointmentPatchAction>(requested, ignoreCase: true, out var action))
             {
                 return BadRequest(new { message = "Unsupported status transition." });
             }
@@ -196,13 +191,12 @@ namespace MyGarage.Controllers
             try
             {
                 var actorUserId = this.GetCurrentUserId();
-                global::MyGarage.Models.Appointment? appointment = requested switch
+                global::MyGarage.Models.Appointment? appointment = action switch
                 {
-                    AppointmentStatuses.Confirmed => await _appointmentService.ConfirmAsync(id, actorUserId),
-                    AppointmentStatuses.Canceled => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
-                    AppointmentStatuses.CancelledLegacy => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
-                    "CHECKED_IN" => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
-                    AppointmentStatuses.Arrived => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
+                    AppointmentPatchAction.CONFIRMED => await _appointmentService.ConfirmAsync(id, actorUserId),
+                    AppointmentPatchAction.CANCELED => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
+                    AppointmentPatchAction.CHECKED_IN => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
+                    AppointmentPatchAction.ARRIVED => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
                     _ => null
                 };
 

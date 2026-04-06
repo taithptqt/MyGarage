@@ -16,7 +16,7 @@ namespace MyGarage.Services
                 GroupCode = GenerateGroupSessionCode(),
                 CustomerId = customerId,
                 BranchId = branchId,
-                Status = GroupSessionStatuses.Pending,
+                Status = nameof(BookingGroupStatus.PENDING),
                 TotalAppointments = 0,
                 ConfirmedAppointments = 0,
                 CanceledAppointments = 0,

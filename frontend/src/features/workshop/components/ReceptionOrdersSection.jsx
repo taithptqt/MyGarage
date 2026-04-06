@@ -138,6 +138,7 @@ export default function ReceptionOrdersSection() {
   const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
+  const [actingGroup, setActingGroup] = useState(null);
 
   const contextBranchId = parseBranchId(selectedBranchId);
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
@@ -368,6 +369,41 @@ export default function ReceptionOrdersSection() {
     }
   }, [fetchData]);
 
+  const handleCancelGroupOrders = useCallback(async (group) => {
+    const cancellableOrders = (group?.orders || []).filter((order) => statusPermitUpdate(order?.status));
+    if (cancellableOrders.length === 0) return;
+
+    const warningMessage = cancellableOrders.length === (group?.orders || []).length
+      ? "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y to\u00e0n b\u1ed9 nh\u00f3m l\u1ec7nh n\u00e0y kh\u00f4ng?"
+      : "Nh\u00f3m n\u00e0y c\u00f3 m\u1ed9t s\u1ed1 l\u1ec7nh kh\u00f4ng th\u1ec3 h\u1ee7y theo tr\u1ea1ng th\u00e1i hi\u1ec7n t\u1ea1i. B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y c\u00e1c l\u1ec7nh c\u00f2n l\u1ea1i kh\u00f4ng?";
+    if (!window.confirm(warningMessage)) return;
+
+    const reasonInput = window.prompt(
+      "Nh\u1eadp l\u00fd do h\u1ee7y (b\u1eaft bu\u1ed9c):",
+      "Kh\u00e1ch h\u00e0ng y\u00eau c\u1ea7u h\u1ee7y",
+    );
+    if (reasonInput === null) return;
+    const reason = String(reasonInput || "").trim();
+    if (!reason) {
+      alert("L\u00fd do h\u1ee7y l\u00e0 b\u1eaft bu\u1ed9c.");
+      return;
+    }
+
+    setActingGroup(group.id);
+    setSaving(true);
+    try {
+      await Promise.all(
+        cancellableOrders.map((order) => serviceOrderApi.update(order.id, { ...order, status: "CANCELLED", cancelReason: reason })),
+      );
+      await fetchData();
+    } catch (err) {
+      setError("L\u1ed7i khi h\u1ee7y nh\u00f3m l\u1ec7nh: " + (err?.message || "Kh\u00f4ng r\u00f5 l\u1ed7i"));
+    } finally {
+      setActingGroup(null);
+      setSaving(false);
+    }
+  }, [fetchData, statusPermitUpdate]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const viewOrderId = Number(params.get("viewOrderId") || 0);
@@ -464,6 +500,8 @@ export default function ReceptionOrdersSection() {
         statusPermitUpdate={statusPermitUpdate}
         handleCompleteOrder={handleCompleteOrder}
         handleCancelOrder={handleCancelOrder}
+        handleCancelGroupOrders={handleCancelGroupOrders}
+        actingGroup={actingGroup}
         ordersPage={ordersPage}
         ordersPageSize={ordersPageSize}
         ordersTotalItems={ordersTotalItems}
@@ -523,6 +561,8 @@ function OrdersTableContent({
   statusPermitUpdate,
   handleCompleteOrder,
   handleCancelOrder,
+  handleCancelGroupOrders,
+  actingGroup,
   ordersPage,
   ordersPageSize,
   ordersTotalItems,
@@ -573,27 +613,19 @@ function OrdersTableContent({
       {statusPermitUpdate(order.status) ? (
         <button
           type="button"
+          className="btn-icon btn-action-pill btn-action-cancel"
           style={{
-            color: "#ee5d50",
-            border: "none",
-            background: "transparent",
-            padding: "0 6px",
+            width: "auto",
+            minWidth: 74,
             margin: 0,
-            height: 30,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            lineHeight: 1,
-            fontWeight: 700,
-            cursor: "pointer",
           }}
-          title="Hủy lệnh"
+          title={"H\u1ee7y l\u1ec7nh"}
           onClick={(event) => {
             event.stopPropagation();
             handleCancelOrder(order);
           }}
         >
-          Hủy
+          {"H\u1ee7y"}
         </button>
       ) : null}
     </div>
@@ -696,92 +728,125 @@ function OrdersTableContent({
             <div style={{ textAlign: "center", padding: 40, color: "#a3aed0" }}>Không có lệnh nhóm nào.</div>
           ) : (
             <div style={{ display: "grid", gap: 16, padding: 14 }}>
-              {pagedGroupedOrders.map((group) => (
-                <article
-                  key={group.id}
-                  style={{
-                    border: "2px solid #c3d6f2",
-                    borderRadius: 14,
-                    background: "#f5f9ff",
-                    boxShadow: "0 6px 20px rgba(23, 60, 115, 0.08)",
-                    padding: 14,
-                  }}
-                >
-                  <header
+              {pagedGroupedOrders.map((group) => {
+                const hasCancelableOrders = (group.orders || []).some((order) => statusPermitUpdate(order.status));
+                const groupActionDisabled = actingGroup === group.id || !hasCancelableOrders;
+                return (
+                  <article
+                    key={group.id}
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 12,
-                      marginBottom: 12,
-                      paddingBottom: 10,
-                      borderBottom: "1px solid #d9e6fb",
-                      flexWrap: "wrap",
+                      border: "2px solid #c3d6f2",
+                      borderRadius: 14,
+                      background: "#f5f9ff",
+                      boxShadow: "0 6px 20px rgba(23, 60, 115, 0.08)",
+                      padding: 14,
                     }}
                   >
-                    <div>
-                      <h4 style={{ margin: 0, color: "#17325b" }}>{group.groupCode || `GS-${group.id}`}</h4>
-                      <p style={{ margin: "4px 0 0", fontSize: 13, color: "#5b6f8c" }}>
-                        {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.orders.length} lệnh
-                      </p>
-                    </div>
-                    <span className={`badge ${getStatusBadge(group.status)}`} style={{ height: 30, display: "inline-flex", alignItems: "center" }}>
-                      {getStatusLabelVi(group.status, group.status)}
-                    </span>
-                  </header>
+                    <header
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                        marginBottom: 12,
+                        paddingBottom: 10,
+                        borderBottom: "1px solid #d9e6fb",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <h4 style={{ margin: 0, color: "#17325b" }}>{group.groupCode || `GS-${group.id}`}</h4>
+                        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#5b6f8c" }}>
+                          {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.orders.length} lệnh
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 10 }}>
+                        <span className={`badge ${getStatusBadge(group.status)}`} style={{ height: 30, display: "inline-flex", alignItems: "center" }}>
+                          {getStatusLabelVi(group.status, group.status)}
+                        </span>
+                        <button
+                          className={`btn-icon btn-action-pill btn-action-cancel ${groupActionDisabled ? "is-disabled-action" : ""}`}
+                          title={"H\u1ee7y nh\u00f3m l\u1ec7nh"}
+                          style={{
+                            height: 30,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                            margin: 0,
+                          }}
+                          disabled={groupActionDisabled}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCancelGroupOrders(group);
+                          }}
+                        >
+                          {"Hủy"}
+                        </button>
+                      </div>
+                    </header>
 
-                  <div
-                    style={{
-                      overflowX: "auto",
-                      border: "1px solid #dbe7f8",
-                      borderRadius: 12,
-                      background: "#ffffff",
-                    }}
-                  >
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Mã lệnh</th>
-                          <th>Biển số</th>
-                          <th>Thời điểm vào</th>
-                          <th>Hẹn trả</th>
-                          <th className="th-center">Trạng thái</th>
-                          <th className="col-actions col-actions-wide th-center">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.orders.map((order) => {
-                          const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
-                          return (
-                            <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
-                              <td className="td-id">{order.code}</td>
-                              <td>{getOrderVehiclePlate(order)}</td>
-                              <td>
-                                {order.checkInTime
-                                  ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
-                                  : "-"}
-                              </td>
-                              <td>
-                                {order.estimatedHandover
-                                  ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
-                                  : "Chưa hẹn"}
-                              </td>
-                              <td className="th-center">
-                                <span className={`badge ${getStatusBadge(order.status)}`}>
-                                  {getStatusLabelVi(order.status, order.status)}
-                                </span>
-                              </td>
-                              <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
-                                {renderOrderActionButtons(order)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
-              ))}
+                    <div
+                      style={{
+                        overflowX: "auto",
+                        border: "1px solid #dbe7f8",
+                        borderRadius: 12,
+                        background: "#ffffff",
+                      }}
+                    >
+                      <table className="admin-table reception-group-orders-table">
+                        <colgroup>
+                          <col className="col-order-code" />
+                          <col className="col-plate" />
+                          <col className="col-checkin" />
+                          <col className="col-handover" />
+                          <col className="col-status" />
+                          <col className="col-actions" />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Mã lệnh</th>
+                            <th>Biển số</th>
+                            <th>Thời điểm vào</th>
+                            <th>Hẹn trả</th>
+                            <th className="th-center">Trạng thái</th>
+                            <th className="col-actions col-actions-wide th-center">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.orders.map((order) => {
+                            const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
+                            return (
+                              <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
+                                <td className="td-id">{order.code}</td>
+                                <td>{getOrderVehiclePlate(order)}</td>
+                                <td>
+                                  {order.checkInTime
+                                    ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
+                                    : "-"}
+                                </td>
+                                <td>
+                                  {order.estimatedHandover
+                                    ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
+                                    : "Chưa hẹn"}
+                                </td>
+                                <td className="th-center">
+                                  <span className={`badge ${getStatusBadge(order.status)}`}>
+                                    {getStatusLabelVi(order.status, order.status)}
+                                  </span>
+                                </td>
+                                <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
+                                  {renderOrderActionButtons(order)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )
         ) : (
