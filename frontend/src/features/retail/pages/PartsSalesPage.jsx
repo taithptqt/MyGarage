@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { createPayosOrder } from "@features/payment/api/payosApi";
+import RetailImage from "@features/retail/components/RetailImage";
 import {
   checkoutRetailOrder,
   getBranches,
   getCategories,
+  getProductImages,
   getProducts,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
@@ -15,10 +17,15 @@ import {
   formatVnd,
   getBranchLabel,
   getCategoryLabel,
+  getProductDescription,
+  getProductImageAlt,
+  getProductName,
   normalizeText,
   resolveProductImage,
+  sortProductImages,
   toPositiveInt,
 } from "@features/retail/utils/retailFormat";
+import "./RetailShared.css";
 import "./PartsSalesPage.css";
 
 const SHOP_HIGHLIGHTS = [
@@ -26,6 +33,52 @@ const SHOP_HIGHLIGHTS = [
   { value: "1 lần", label: "Tạo đơn và chuyển sang thanh toán ngay trên cùng flow khách hàng" },
   { value: "Minh bạch", label: "Xem rõ SKU, chi nhánh nhận hàng và ghi chú đơn bán lẻ" },
 ];
+const PRODUCTS_PER_PAGE = 9;
+
+function CatalogPagination({ currentPage, totalPages, onPageChange }) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <nav className="parts-shop-pagination" aria-label="Phân trang phụ tùng">
+      <button
+        type="button"
+        className="parts-shop-page-button"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage <= 1}
+      >
+        Trước
+      </button>
+
+      <div className="parts-shop-page-numbers">
+        {Array.from({ length: totalPages }, (_, index) => {
+          const page = index + 1;
+          return (
+            <button
+              type="button"
+              key={page}
+              className={`parts-shop-page-button ${page === currentPage ? "active" : ""}`}
+              aria-current={page === currentPage ? "page" : undefined}
+              onClick={() => onPageChange(page)}
+            >
+              {page}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        className="parts-shop-page-button"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage >= totalPages}
+      >
+        Sau
+      </button>
+    </nav>
+  );
+}
 
 function toSafeAmount(value) {
   const parsed = Number(value);
@@ -50,7 +103,7 @@ function openPayosPopupWindow() {
   if (!popup) return null;
 
   popup.document.write(
-    "<!doctype html><html><head><title>MyGarage PayOS</title></head><body style='font-family:Segoe UI,Arial,sans-serif;padding:20px;color:#0f172a;background:#f8fafc'><h3 style='margin:0 0 8px'>MyGarage</h3><p style='margin:0'>Dang khoi tao cong thanh toan PayOS...</p></body></html>"
+    "<!doctype html><html><head><meta charset='utf-8' /><title>MyGarage PayOS</title></head><body style='font-family:Segoe UI,Arial,sans-serif;padding:20px;color:#0f172a;background:#f8fafc'><h3 style='margin:0 0 8px'>MyGarage</h3><p style='margin:0'>Đang khởi tạo cổng thanh toán PayOS...</p></body></html>"
   );
   popup.document.close();
   return popup;
@@ -59,7 +112,10 @@ function openPayosPopupWindow() {
 export default function PartsSalesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const catalogPanelRef = useRef(null);
+  const pendingScrollPageRef = useRef(null);
   const [products, setProducts] = useState([]);
+  const [productImages, setProductImages] = useState([]);
   const [categories, setCategories] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +123,7 @@ export default function PartsSalesPage() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name-asc");
+  const [currentPage, setCurrentPage] = useState(1);
   const [draftQty, setDraftQty] = useState({});
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
@@ -93,8 +150,9 @@ export default function PartsSalesPage() {
       setError("");
 
       try {
-        const [productData, categoryData, branchData] = await Promise.all([
+        const [productData, productImageData, categoryData, branchData] = await Promise.all([
           getProducts(),
+          getProductImages(),
           getCategories(),
           getBranches(),
         ]);
@@ -104,6 +162,7 @@ export default function PartsSalesPage() {
         const nextProducts = Array.isArray(productData)
           ? productData.filter((item) => item?.isActive !== false)
           : [];
+        const nextProductImages = Array.isArray(productImageData) ? productImageData : [];
         const nextCategories = Array.isArray(categoryData)
           ? categoryData.filter((item) => item?.isDeleted !== true)
           : [];
@@ -112,6 +171,7 @@ export default function PartsSalesPage() {
           : [];
 
         setProducts(nextProducts);
+        setProductImages(nextProductImages);
         setCategories(nextCategories);
         setBranches(nextBranches);
 
@@ -122,6 +182,7 @@ export default function PartsSalesPage() {
         if (!ignore) {
           setError(loadError?.message || "Không thể tải danh sách phụ tùng lúc này.");
           setProducts([]);
+          setProductImages([]);
           setCategories([]);
           setBranches([]);
         }
@@ -139,14 +200,57 @@ export default function PartsSalesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (currentPage !== 1) {
+      pendingScrollPageRef.current = 1;
+      setCurrentPage(1);
+    }
+  }, [search, catFilter, sortBy]);
+
+  function scrollCatalogIntoView() {
+    if (typeof window === "undefined") return;
+
+    const container = catalogPanelRef.current;
+    if (!container) return;
+
+    const { top } = container.getBoundingClientRect();
+    if (top >= -40 && top <= 80) {
+      return;
+    }
+
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const categoriesById = useMemo(
     () => new Map(categories.map((item) => [String(item.id), item])),
     [categories]
   );
 
+  const productImagesByProductId = useMemo(() => {
+    const groupedImages = new Map();
+
+    productImages.forEach((item) => {
+      const key = String(item?.productId ?? "");
+      if (!key) return;
+
+      if (!groupedImages.has(key)) {
+        groupedImages.set(key, []);
+      }
+
+      groupedImages.get(key).push(item);
+    });
+
+    groupedImages.forEach((items, key) => {
+      groupedImages.set(key, sortProductImages(items));
+    });
+
+    return groupedImages;
+  }, [productImages]);
+
   const filteredProducts = useMemo(() => {
     const normalizedQuery = normalizeText(search);
     const rows = products.filter((product) => {
+      const relatedImages = productImagesByProductId.get(String(product?.id)) || [];
       const matchesCategory =
         catFilter === "all" || String(product?.categoryId) === String(catFilter);
 
@@ -156,7 +260,7 @@ export default function PartsSalesPage() {
       const haystack = [
         product?.name,
         product?.sku,
-        product?.description,
+        getProductDescription(product, relatedImages, { fallback: false }),
         categoriesById.get(String(product?.categoryId))?.categoryName,
       ]
         .map(normalizeText)
@@ -173,13 +277,79 @@ export default function PartsSalesPage() {
         return Number(right?.retailPrice || 0) - Number(left?.retailPrice || 0);
       }
       if (sortBy === "name-desc") {
-        return String(right?.name || "").localeCompare(String(left?.name || ""), "vi");
+        return getProductName(right).localeCompare(getProductName(left), "vi");
       }
-      return String(left?.name || "").localeCompare(String(right?.name || ""), "vi");
+      return getProductName(left).localeCompare(getProductName(right), "vi");
     });
 
     return rows;
-  }, [catFilter, categoriesById, products, search, sortBy]);
+  }, [catFilter, categoriesById, productImagesByProductId, products, search, sortBy]);
+
+  const totalPages = useMemo(
+    () => Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE),
+    [filteredProducts.length]
+  );
+  const safeCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    if (totalPages === 0) {
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+      return;
+    }
+
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (pendingScrollPageRef.current == null) {
+      return undefined;
+    }
+
+    if (Number(currentPage) !== Number(pendingScrollPageRef.current)) {
+      return undefined;
+    }
+
+    pendingScrollPageRef.current = null;
+
+    const frameId = window.requestAnimationFrame(() => {
+      scrollCatalogIntoView();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentPage]);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, safeCurrentPage]);
+
+  const paginationSummary = useMemo(() => {
+    if (!filteredProducts.length) {
+      return "";
+    }
+
+    const start = (safeCurrentPage - 1) * PRODUCTS_PER_PAGE + 1;
+    const end = Math.min(filteredProducts.length, safeCurrentPage * PRODUCTS_PER_PAGE);
+    return `Hiển thị ${start}-${end} trên ${filteredProducts.length} phụ tùng`;
+  }, [filteredProducts.length, safeCurrentPage]);
+
+  function handlePageChange(nextPage) {
+    const normalizedPage = Math.min(
+      Math.max(1, Number(nextPage) || 1),
+      Math.max(totalPages, 1)
+    );
+
+    if (normalizedPage === safeCurrentPage) {
+      return;
+    }
+
+    pendingScrollPageRef.current = normalizedPage;
+    setCurrentPage(normalizedPage);
+  }
 
   const selectedBranch = useMemo(
     () => branches.find((item) => String(item.id) === String(branchId)) || null,
@@ -312,7 +482,7 @@ export default function PartsSalesPage() {
         cancelUrl: buildFrontendUrl("/payment/cancel"),
         items: [
           {
-            name: "Don phu tung MyGarage",
+            name: "Đơn phụ tùng MyGarage",
             quantity: 1,
             price: pendingOrder.finalAmount,
           },
@@ -424,7 +594,10 @@ export default function PartsSalesPage() {
         ) : null}
 
         <div className="parts-shop-layout" id="parts-shop-catalog">
-          <section className="parts-shop-card parts-shop-product-panel">
+          <section
+            ref={catalogPanelRef}
+            className="parts-shop-card parts-shop-product-panel"
+          >
             <div className="parts-shop-panel-head">
               <div>
                 <span className="parts-shop-section-kicker">Catalog tuyển chọn</span>
@@ -436,6 +609,9 @@ export default function PartsSalesPage() {
               <div className="parts-shop-results-meta">
                 <strong>{filteredProducts.length}</strong>
                 <span>sản phẩm đang hiển thị</span>
+                {paginationSummary ? (
+                  <small className="parts-shop-results-range">{paginationSummary}</small>
+                ) : null}
               </div>
             </div>
 
@@ -486,88 +662,110 @@ export default function PartsSalesPage() {
                 Không có phụ tùng nào khớp bộ lọc hiện tại. Hãy thử đổi từ khóa hoặc danh mục.
               </div>
             ) : (
-              <div className="parts-shop-list">
-                {filteredProducts.map((product) => {
-                  const category = categoriesById.get(String(product?.categoryId));
-                  const qty = draftQty[product.id] || 1;
+              <>
+                <div className="parts-shop-list">
+                  {paginatedProducts.map((product) => {
+                    const category = categoriesById.get(String(product?.categoryId));
+                    const relatedImages = productImagesByProductId.get(String(product?.id)) || [];
+                    const qty = draftQty[product.id] || 1;
+                    const productDetailPath = `/parts-shop/products/${product.id}`;
+                    const productDescription = getProductDescription(product, relatedImages);
+                    const productName = getProductName(product);
 
-                  return (
-                    <article className="parts-shop-item" key={product.id}>
-                      <div className="parts-shop-item-media">
-                        <img src={resolveProductImage(product)} alt={product.name} />
-                      </div>
-
-                      <div className="parts-shop-item-head">
-                        <div>
-                          <span className="parts-shop-tag">{getCategoryLabel(category)}</span>
-                          <h4>{product.name}</h4>
-                          <div className="parts-shop-meta">
-                            SKU: {product.sku || "Chưa cập nhật"} · ID: #{product.id}
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="parts-shop-item-desc">
-                        {product.description ||
-                          "Phụ tùng đang được đồng bộ theo danh mục sản phẩm hiện có của hệ thống."}
-                      </p>
-
-                      <div className="parts-shop-price">{formatVnd(product.retailPrice)}</div>
-
-                      <div className="parts-shop-actions">
-                        <div className="parts-shop-qty">
-                          <button
-                            type="button"
-                            className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Math.max(1, Number(previous[product.id] || 1) - 1),
-                              }))
-                            }
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={qty}
-                            onChange={(event) =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: toPositiveInt(event.target.value, 1),
-                              }))
-                            }
-                          />
-                          <button
-                            type="button"
-                            className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Number(previous[product.id] || 1) + 1,
-                              }))
-                            }
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="parts-shop-btn parts-shop-btn-primary"
-                          onClick={() => addToCart(product, qty)}
+                    return (
+                      <article className="parts-shop-item" key={product.id}>
+                        <Link
+                          to={productDetailPath}
+                          className="parts-shop-item-link"
+                          aria-label={`Xem chi tiết phụ tùng ${productName}`}
                         >
-                          Thêm vào giỏ
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+                          <div className="parts-shop-item-media">
+                            <RetailImage
+                              src={resolveProductImage(product, relatedImages)}
+                              alt={getProductImageAlt(product, relatedImages[0])}
+                              className="parts-shop-item-image"
+                              fallbackClassName="parts-shop-item-media-fallback"
+                              fallbackLabel="Ảnh phụ tùng đang cập nhật"
+                            />
+                          </div>
+
+                          <div className="parts-shop-item-copy">
+                            <div className="parts-shop-item-head">
+                              <div>
+                                <span className="parts-shop-tag">{getCategoryLabel(category)}</span>
+                                <h4 className="parts-shop-item-title">{productName}</h4>
+                                <div className="parts-shop-meta">
+                                  SKU: {product.sku || "Chưa cập nhật"} · ID: #{product.id}
+                                </div>
+                              </div>
+                            </div>
+
+                            <p className="parts-shop-item-desc">{productDescription}</p>
+
+                            <div className="parts-shop-price">{formatVnd(product.retailPrice)}</div>
+                          </div>
+                        </Link>
+
+                        <div className="parts-shop-actions">
+                          <div className="parts-shop-qty">
+                            <button
+                              type="button"
+                              className="parts-shop-btn parts-shop-btn-ghost"
+                              onClick={() =>
+                                setDraftQty((previous) => ({
+                                  ...previous,
+                                  [product.id]: Math.max(1, Number(previous[product.id] || 1) - 1),
+                                }))
+                              }
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={qty}
+                              onChange={(event) =>
+                                setDraftQty((previous) => ({
+                                  ...previous,
+                                  [product.id]: toPositiveInt(event.target.value, 1),
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="parts-shop-btn parts-shop-btn-ghost"
+                              onClick={() =>
+                                setDraftQty((previous) => ({
+                                  ...previous,
+                                  [product.id]: Number(previous[product.id] || 1) + 1,
+                                }))
+                              }
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="parts-shop-btn parts-shop-btn-primary parts-shop-action-button"
+                            onClick={() => addToCart(product, qty)}
+                          >
+                            Thêm vào giỏ
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <CatalogPagination
+                  currentPage={safeCurrentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </>
             )}
           </section>
-
           <aside className="parts-shop-card parts-shop-sidebar">
             <div className="parts-shop-cart-head">
               <div>
@@ -575,7 +773,10 @@ export default function PartsSalesPage() {
                 <h3>Giỏ phụ tùng</h3>
                 <p>{totalItems} sản phẩm trong đơn bán lẻ hiện tại</p>
               </div>
-              <Link to="/my-retail-orders" className="parts-shop-link-button">
+              <Link
+                to="/my-retail-orders"
+                className="parts-shop-btn parts-shop-btn-ghost parts-shop-btn-inline parts-shop-sidebar-link"
+              >
                 Đơn đã tạo
               </Link>
             </div>
@@ -589,7 +790,7 @@ export default function PartsSalesPage() {
                 {cart.map((item) => (
                   <div className="parts-shop-cart-row" key={item.id}>
                     <div>
-                      <div className="parts-shop-cart-name">{item.name}</div>
+                      <div className="parts-shop-cart-name">{getProductName(item)}</div>
                       <small>
                         {item.sku ? `SKU ${item.sku}` : "Phụ tùng bán lẻ"} · {formatVnd(item.retailPrice)}
                       </small>

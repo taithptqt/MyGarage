@@ -13,9 +13,11 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import {
   formatVnd,
   getBranchLabel,
+  getDisplayText,
   getRetailOrderStatusMeta,
 } from "@features/retail/utils/retailFormat";
-import "./PartsSalesPage.css";
+import "./RetailShared.css";
+import "./MyRetailOrdersPage.css";
 
 function formatDateTime(value) {
   if (!value) return "Chưa có";
@@ -227,8 +229,8 @@ export default function MyRetailOrdersPage() {
       const normalizedItems = detailItems.map((item, index) => ({
         id: item?.id ?? item?.Id ?? `${order.id}-${index}`,
         productId: item?.productId ?? item?.ProductId ?? null,
-        productName: String(item?.productName ?? item?.ProductName ?? "").trim(),
-        productSku: String(item?.productSku ?? item?.ProductSku ?? "").trim(),
+        productName: getDisplayText(item?.productName ?? item?.ProductName),
+        productSku: getDisplayText(item?.productSku ?? item?.ProductSku),
         quantity: Number(item?.quantity ?? item?.Quantity ?? 0),
         unitPriceAtTime: Number(item?.unitPriceAtTime ?? item?.UnitPriceAtTime ?? 0),
         subTotal: Number(item?.subTotal ?? item?.SubTotal ?? 0),
@@ -283,14 +285,14 @@ export default function MyRetailOrdersPage() {
     const payosDescription = `TT ${String(orderCode).slice(0, 22)}`.slice(0, 25);
 
     if (!Number.isFinite(retailOrderId) || retailOrderId <= 0) {
-      const message = "Khong xac dinh duoc ma don retail de thanh toan.";
+      const message = "Không xác định được mã đơn retail để thanh toán.";
       setError(message);
       setDetailError(message);
       return;
     }
 
     if (totalAmount < 1000) {
-      const message = "Tong thanh toan toi thieu la 1,000d de tao lien ket PayOS.";
+      const message = "Tổng thanh toán tối thiểu là 1,000đ để tạo liên kết PayOS.";
       setError(message);
       setDetailError(message);
       return;
@@ -312,7 +314,7 @@ export default function MyRetailOrdersPage() {
         cancelUrl: buildFrontendUrl("/payment/cancel"),
         items: [
           {
-            name: "Don phu tung MyGarage",
+            name: "Đơn phụ tùng MyGarage",
             quantity: 1,
             price: totalAmount,
           },
@@ -320,12 +322,12 @@ export default function MyRetailOrdersPage() {
       });
 
       if (!paymentResult?.ok) {
-        throw new Error(paymentResult?.data?.message || "Khong tao duoc link thanh toan PayOS.");
+        throw new Error(paymentResult?.data?.message || "Không tạo được link thanh toán PayOS.");
       }
 
       const paymentOrder = paymentResult?.data;
       if (!paymentOrder?.checkoutUrl) {
-        throw new Error("Khong nhan duoc checkoutUrl tu PayOS.");
+        throw new Error("Không nhận được checkoutUrl từ PayOS.");
       }
 
       const retryParams = new URLSearchParams({
@@ -352,7 +354,7 @@ export default function MyRetailOrdersPage() {
 
       window.location.href = paymentOrder.checkoutUrl;
     } catch (paymentError) {
-      const message = paymentError?.message || "Khong the tao lien ket thanh toan PayOS.";
+      const message = paymentError?.message || "Không thể tạo liên kết thanh toán PayOS.";
       setError(message);
       if (Number(detailOrder?.id) === retailOrderId) {
         setDetailError(message);
@@ -365,7 +367,7 @@ export default function MyRetailOrdersPage() {
   const detailStatusMeta = detailOrder ? getRetailOrderStatusMeta(detailOrder.status) : null;
 
   return (
-    <div className="parts-shop-page">
+    <div className="parts-shop-page retail-orders-page">
       <section className="parts-shop-hero parts-shop-hero--orders">
         <img
           className="parts-shop-hero-image"
@@ -579,7 +581,7 @@ export default function MyRetailOrdersPage() {
                       {detailOrder.items.map((item) => (
                         <article key={item.id} className="parts-shop-modal-item">
                           <div className="parts-shop-modal-item-main">
-                            <strong>{item.productName || `San pham #${item.productId ?? "?"}`}</strong>
+                            <strong>{item.productName || `Sản phẩm #${item.productId ?? "?"}`}</strong>
                             <small>{item.productSku ? `SKU ${item.productSku}` : `ID ${item.productId ?? "?"}`}</small>
                           </div>
                           <div className="parts-shop-modal-item-metrics">

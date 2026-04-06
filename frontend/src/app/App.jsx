@@ -31,6 +31,7 @@ import PayosCheckoutPage from "@features/payment/pages/PayosCheckoutPage";
 import PaymentSuccessPage from "@features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
+import PartProductDetailPage from "@features/retail/pages/PartProductDetailPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
@@ -90,6 +91,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><PartsSalesPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parts-shop/products/:productId"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><PartProductDetailPage /></CustomerRoute>
             </ProtectedRoute>
           }
         />

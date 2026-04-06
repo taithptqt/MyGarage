@@ -3,6 +3,11 @@ import { getApiBaseUrl } from "@features/auth/api/authApi";
 export const RETAIL_CART_STORAGE_KEY = "mygarage_retail_cart";
 
 const moneyFormatter = new Intl.NumberFormat("vi-VN");
+const mojibakePattern =
+  /(?:Ã.|Â.|Ä‘|Æ°|Æ¡|áº|á»|â€|Ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿]|ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿])/u;
+const mojibakePatternGlobal =
+  /(?:Ã.|Â.|Ä‘|Æ°|Æ¡|áº|á»|â€|Ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿]|ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿])/gu;
+const utf8RepairDecoder = typeof TextDecoder !== "undefined" ? new TextDecoder("utf-8") : null;
 
 const RETAIL_ORDER_STATUS_META = {
   DRAFT: {
@@ -22,6 +27,62 @@ export function formatVnd(value) {
   return `${moneyFormatter.format(Number.isFinite(amount) ? Math.round(amount) : 0)}đ`;
 }
 
+function countMojibakeMatches(value) {
+  return [...String(value || "").matchAll(mojibakePatternGlobal)].length;
+}
+
+function decodeLatin1AsUtf8(value) {
+  if (!utf8RepairDecoder || !value) {
+    return String(value || "");
+  }
+
+  try {
+    const bytes = Uint8Array.from(
+      Array.from(String(value), (character) => character.charCodeAt(0) & 0xff)
+    );
+
+    return utf8RepairDecoder.decode(bytes);
+  } catch {
+    return String(value || "");
+  }
+}
+
+export function repairMojibakeText(value) {
+  const raw = typeof value === "string" ? value : String(value ?? "");
+  if (!raw) return "";
+
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (!mojibakePattern.test(trimmed)) {
+    return trimmed;
+  }
+
+  const repaired = decodeLatin1AsUtf8(trimmed).trim();
+  if (!repaired || repaired.includes("\uFFFD")) {
+    return trimmed;
+  }
+
+  return countMojibakeMatches(repaired) < countMojibakeMatches(trimmed)
+    ? repaired
+    : trimmed;
+}
+
+export function getDisplayText(value, fallback = "") {
+  const repaired = repairMojibakeText(value);
+  return repaired || fallback;
+}
+
+export function getProductName(product, fallback) {
+  const resolvedFallback =
+    fallback ?? `Phụ tùng #${product?.id ?? product?.productId ?? product?.ProductId ?? "?"}`;
+
+  return getDisplayText(product?.name ?? product?.productName ?? product?.ProductName, resolvedFallback);
+}
+
+export function getProductUnitLabel(product, fallback = "Chưa cập nhật") {
+  return getDisplayText(product?.unit ?? product?.Unit, fallback);
+}
+
 export function toPositiveInt(value, fallback = 1) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -31,7 +92,7 @@ export function toPositiveInt(value, fallback = 1) {
 }
 
 export function normalizeText(value) {
-  return String(value || "")
+  return repairMojibakeText(value)
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -40,7 +101,7 @@ export function normalizeText(value) {
 
 export function getCategoryLabel(category) {
   const raw = category?.categoryName || category?.name || "";
-  const text = String(raw).trim();
+  const text = getDisplayText(raw);
   return text || `Danh mục #${category?.id ?? "?"}`;
 }
 
@@ -76,8 +137,65 @@ export function resolveMediaUrl(value) {
   return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
 }
 
-export function resolveProductImage(product) {
+export function sortProductImages(images) {
+  return [...(Array.isArray(images) ? images : [])].sort((left, right) => {
+    const leftMain = left?.isMain === true ? 1 : 0;
+    const rightMain = right?.isMain === true ? 1 : 0;
+
+    if (leftMain !== rightMain) {
+      return rightMain - leftMain;
+    }
+
+    const leftSort = Number.isFinite(Number(left?.sortOrder)) ? Number(left.sortOrder) : Number.MAX_SAFE_INTEGER;
+    const rightSort = Number.isFinite(Number(right?.sortOrder)) ? Number(right.sortOrder) : Number.MAX_SAFE_INTEGER;
+    if (leftSort !== rightSort) {
+      return leftSort - rightSort;
+    }
+
+    return Number(left?.id || 0) - Number(right?.id || 0);
+  });
+}
+
+export function getProductDescription(product, productImages = [], options = {}) {
+  const shouldUseFallback = options?.fallback !== false;
+  const directDescription = [product?.description, product?.Description].find(
+    (value) => typeof value === "string" && getDisplayText(value)
+  );
+
+  if (directDescription) {
+    return getDisplayText(directDescription);
+  }
+
+  const imageDescription = sortProductImages(productImages).find(
+    (item) => typeof item?.description === "string" && getDisplayText(item.description)
+  );
+
+  if (imageDescription?.description) {
+    return getDisplayText(imageDescription.description);
+  }
+
+  if (!shouldUseFallback) {
+    return "";
+  }
+
+  return "Thông tin mô tả phụ tùng đang được cập nhật từ dữ liệu sản phẩm hiện có của MyGarage.";
+}
+
+export function getProductImageAlt(product, productImage, imageIndex = 0) {
+  const productName = getProductName(product, "Phụ tùng MyGarage");
+  const imageDescription = getDisplayText(productImage?.description);
+
+  if (imageDescription) {
+    return `${productName} - ${imageDescription}`;
+  }
+
+  return imageIndex > 0 ? `${productName} - ảnh ${imageIndex + 1}` : productName;
+}
+
+export function resolveProductImage(product, productImages = []) {
+  const normalizedImages = sortProductImages(productImages);
   const candidate =
+    normalizedImages[0]?.imageUrl ||
     product?.imageUrl ||
     product?.thumbnailUrl ||
     product?.imagePath ||
@@ -95,6 +213,6 @@ export function getBranchLabel(branch) {
     branch?.branchCode ||
     branch?.code;
 
-  if (branchName) return String(branchName).trim();
+  if (branchName) return getDisplayText(branchName);
   return `Chi nhánh #${branch?.id ?? "?"}`;
 }
