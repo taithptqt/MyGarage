@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -87,7 +87,7 @@ public partial class ServiceOrder
 
     public virtual Appointment? Appointment { get; set; }
 
-    public virtual BookingGroup? GroupSession { get; set; }
+    public virtual GroupSession? GroupSession { get; set; }
 
     public virtual ICollection<CommissionTransaction> CommissionTransactions { get; set; } = new List<CommissionTransaction>();
 

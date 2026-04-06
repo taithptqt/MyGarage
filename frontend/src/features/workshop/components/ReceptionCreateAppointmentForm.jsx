@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSlotHold, getAvailableSlots, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW, INITIAL_ODD_SLOT_VISIBILITY, SESSION_TABS } from "@features/appointments/constants/bookingConstants";
 import { releaseBookingSlotHold } from "@features/appointments/api/bookingFormApi";
@@ -24,7 +24,9 @@ const SLOT_MODE = {
 
 const EMPTY_PLAN = {
   categoryIds: [],
-  serviceIds: []
+  serviceIds: [],
+  excludedSharedCategoryIds: [],
+  excludedSharedServiceIds: []
 };
 
 const EMPTY_FORM_DATA = {
@@ -126,7 +128,9 @@ function readField(obj, keys, fallback = null) {
 function normalizePlan(plan) {
   const categoryIds = toNumberList(plan?.categoryIds || []);
   const serviceIds = toNumberList(plan?.serviceIds || []);
-  return { categoryIds, serviceIds };
+  const excludedSharedCategoryIds = toNumberList(plan?.excludedSharedCategoryIds || []);
+  const excludedSharedServiceIds = toNumberList(plan?.excludedSharedServiceIds || []);
+  return { categoryIds, serviceIds, excludedSharedCategoryIds, excludedSharedServiceIds };
 }
 
 function normalizeService(service) {
@@ -174,6 +178,28 @@ function toTimeValue(value) {
   return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
 }
 
+function formatDateTimeWithFullDate(value) {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "Chưa chọn";
+
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  const day = String(parsed.getDate());
+  const month = String(parsed.getMonth() + 1);
+  const year = String(parsed.getFullYear());
+  return `${hour}:${minute} (${day}/${month}/${year})`;
+}
+
+function formatInspectionEta(value, durationMinutes) {
+  if (!value) return "";
+  const parsedStart = new Date(value);
+  if (Number.isNaN(parsedStart.getTime())) return "";
+
+  const safeDuration = Math.max(0, Number(durationMinutes || 0));
+  const expected = new Date(parsedStart.getTime() + safeDuration * 60 * 1000);
+  return formatDateTimeWithFullDate(expected);
+}
+
 function normalizeSlotSelection(slot) {
   if (!slot) {
     return {
@@ -217,7 +243,12 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
 }
 
 function clonePlan(plan) {
-  return { categoryIds: [...(plan?.categoryIds || [])], serviceIds: [...(plan?.serviceIds || [])] };
+  return {
+    categoryIds: [...(plan?.categoryIds || [])],
+    serviceIds: [...(plan?.serviceIds || [])],
+    excludedSharedCategoryIds: [...(plan?.excludedSharedCategoryIds || [])],
+    excludedSharedServiceIds: [...(plan?.excludedSharedServiceIds || [])]
+  };
 }
 
 export default function ReceptionCreateAppointmentForm({
@@ -262,6 +293,7 @@ export default function ReceptionCreateAppointmentForm({
   const [slotHoldTokens, setSlotHoldTokens] = useState({});
   const [selectedDatesByVehicle, setSelectedDatesByVehicle] = useState({});
   const [showOddSlots, setShowOddSlots] = useState({ ...INITIAL_ODD_SLOT_VISIBILITY });
+  const formRef = useRef(null);
 
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -295,6 +327,37 @@ export default function ReceptionCreateAppointmentForm({
     normalizedServices.forEach((service) => map.set(service.id, service.categoryId));
     return map;
   }, [normalizedServices]);
+
+  const inspectionExclusiveTypeByServiceId = useMemo(() => {
+    const map = new Map();
+    normalizedServices.forEach((service) => {
+      const id = Number(service.id);
+      if (!Number.isFinite(id)) return;
+      const normalizedName = normalizeSearchText(service.name);
+      if (normalizedName.includes("kiem tra nhanh")) {
+        map.set(id, "quick");
+        return;
+      }
+      if (normalizedName.includes("kiem tra tong quat")) {
+        map.set(id, "general");
+      }
+    });
+    return map;
+  }, [normalizedServices]);
+
+  const getOppositeInspectionServiceIds = useCallback(
+    (serviceIds, targetServiceId) => {
+      const targetType = inspectionExclusiveTypeByServiceId.get(Number(targetServiceId));
+      if (!targetType) return [];
+      const oppositeType = targetType === "quick" ? "general" : "quick";
+      return toNumberList(
+        (serviceIds || []).filter(
+          (serviceId) => inspectionExclusiveTypeByServiceId.get(Number(serviceId)) === oppositeType
+        )
+      );
+    },
+    [inspectionExclusiveTypeByServiceId]
+  );
 
   const categoryOptions = useMemo(
     () => buildCategoryOptions(serviceCategories, normalizedServices),
@@ -402,6 +465,7 @@ export default function ReceptionCreateAppointmentForm({
   }, [formData.isQuickOrder, formData.isNewVehicle, formData.selectedVehicleIds]);
 
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
+  const showServiceModeSwitch = selectedVehicleKeys.length > 0 && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
 
   const vehicleLabelByKey = useMemo(() => {
@@ -422,7 +486,7 @@ export default function ReceptionCreateAppointmentForm({
     setVehiclePlans((prev) => {
       const next = {};
       selectedVehicleKeys.forEach((key) => {
-        next[key] = normalizePlan(prev[key] || clonePlan(sharedPlan));
+        next[key] = normalizePlan(prev[key] || EMPTY_PLAN);
       });
       return next;
     });
@@ -499,7 +563,7 @@ export default function ReceptionCreateAppointmentForm({
       });
       return next;
     });
-  }, [selectedVehicleKeys, sharedPlan, formData.appointmentDate, formData.customerNotes]);
+  }, [selectedVehicleKeys, formData.appointmentDate, formData.customerNotes]);
 
   useEffect(() => {
     if (!formData.customerId || formData.isNewVehicle || formData.isQuickOrder) {
@@ -512,11 +576,11 @@ export default function ReceptionCreateAppointmentForm({
     setVehiclePlans((prev) => {
       const next = { ...prev };
       selectedVehicleKeys.forEach((key) => {
-        if (!next[key]) next[key] = clonePlan(sharedPlan);
+        if (!next[key]) next[key] = clonePlan(EMPTY_PLAN);
       });
       return next;
     });
-  }, [effectiveServiceMode, selectedVehicleKeys, sharedPlan]);
+  }, [effectiveServiceMode, selectedVehicleKeys]);
 
   useEffect(() => {
     if (slotMode !== SLOT_MODE.INDIVIDUAL || !activeSlotVehicleKey) return;
@@ -532,10 +596,69 @@ export default function ReceptionCreateAppointmentForm({
     return activePlanVehicleKey || selectedVehicleKeys[0] || "";
   }, [effectiveServiceMode, activePlanVehicleKey, selectedVehicleKeys]);
 
+  const resolveEffectivePlan = useCallback(
+    (rawVehiclePlan, sharedSource = sharedPlan) => {
+      const sharedNormalized = normalizePlan(sharedSource || EMPTY_PLAN);
+      const raw = normalizePlan(rawVehiclePlan || EMPTY_PLAN);
+
+      const excludedCategorySet = new Set(raw.excludedSharedCategoryIds || []);
+      const excludedServiceSet = new Set(raw.excludedSharedServiceIds || []);
+
+      const sharedCategoryIds = sharedNormalized.categoryIds.filter((id) => !excludedCategorySet.has(id));
+      const nextCategoryIds = toNumberList([...sharedCategoryIds, ...(raw.categoryIds || [])]);
+
+      const sharedServiceIds = sharedNormalized.serviceIds.filter((id) => !excludedServiceSet.has(id));
+      const nextServiceIds = toNumberList([...sharedServiceIds, ...(raw.serviceIds || [])]).filter((serviceId) => {
+        const categoryId = Number(serviceCategoryMap.get(serviceId) || 0);
+        return nextCategoryIds.includes(categoryId);
+      });
+
+      return normalizePlan({
+        categoryIds: nextCategoryIds,
+        serviceIds: nextServiceIds,
+        excludedSharedCategoryIds: (raw.excludedSharedCategoryIds || []).filter((id) => sharedNormalized.categoryIds.includes(id)),
+        excludedSharedServiceIds: (raw.excludedSharedServiceIds || []).filter((id) => sharedNormalized.serviceIds.includes(id))
+      });
+    },
+    [serviceCategoryMap, sharedPlan]
+  );
+
+  const deriveRawVehiclePlanFromEffective = useCallback(
+    (effectivePlan, sharedSource = sharedPlan) => {
+      const sharedNormalized = normalizePlan(sharedSource || EMPTY_PLAN);
+      const effective = normalizePlan(effectivePlan || EMPTY_PLAN);
+      const sharedCategorySet = new Set(sharedNormalized.categoryIds || []);
+      const sharedServiceSet = new Set(sharedNormalized.serviceIds || []);
+
+      const rawCategoryIds = (effective.categoryIds || []).filter((id) => !sharedCategorySet.has(id));
+      const excludedSharedCategoryIds = (sharedNormalized.categoryIds || []).filter(
+        (id) => !effective.categoryIds.includes(id)
+      );
+
+      const rawServiceIds = (effective.serviceIds || [])
+        .filter((id) => !sharedServiceSet.has(id))
+        .filter((serviceId) => {
+          const categoryId = Number(serviceCategoryMap.get(serviceId) || 0);
+          return effective.categoryIds.includes(categoryId);
+        });
+      const excludedSharedServiceIds = (sharedNormalized.serviceIds || []).filter(
+        (id) => !effective.serviceIds.includes(id)
+      );
+
+      return normalizePlan({
+        categoryIds: rawCategoryIds,
+        serviceIds: rawServiceIds,
+        excludedSharedCategoryIds,
+        excludedSharedServiceIds
+      });
+    },
+    [serviceCategoryMap, sharedPlan]
+  );
+
   const activePlan = useMemo(() => {
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return normalizePlan(sharedPlan);
-    return normalizePlan(vehiclePlans[activePlanKey] || EMPTY_PLAN);
-  }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey]);
+    return resolveEffectivePlan(vehiclePlans[activePlanKey] || EMPTY_PLAN, sharedPlan);
+  }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey, resolveEffectivePlan]);
 
   useEffect(() => {
     const selectedCategories = activePlan.categoryIds || [];
@@ -548,21 +671,89 @@ export default function ReceptionCreateAppointmentForm({
     }
   }, [activeCategoryId, activePlan.categoryIds]);
 
+  const handleServiceModeChange = useCallback(
+    (nextMode) => {
+      if (nextMode === SERVICE_MODE.CUSTOM && serviceMode !== SERVICE_MODE.CUSTOM) {
+        setVehiclePlans((prev) => {
+          const next = { ...prev };
+          selectedVehicleKeys.forEach((key) => {
+            const existing = normalizePlan(prev[key] || EMPTY_PLAN);
+            next[key] = existing;
+          });
+          return next;
+        });
+      }
+      setServiceMode(nextMode);
+    },
+    [selectedVehicleKeys, serviceMode]
+  );
+
   const applyPlanUpdate = (updater) => {
     if (effectiveServiceMode === SERVICE_MODE.SHARED) {
       setSharedPlan((prev) => normalizePlan(updater(normalizePlan(prev))));
       return;
     }
     if (!activePlanKey) return;
-    setVehiclePlans((prev) => ({
-      ...prev,
-      [activePlanKey]: normalizePlan(updater(normalizePlan(prev[activePlanKey] || EMPTY_PLAN)))
-    }));
+    setVehiclePlans((prev) => {
+      const currentRaw = normalizePlan(prev[activePlanKey] || EMPTY_PLAN);
+      const currentEffective = resolveEffectivePlan(currentRaw, sharedPlan);
+      const nextEffective = normalizePlan(updater(currentEffective));
+      return {
+        ...prev,
+        [activePlanKey]: deriveRawVehiclePlanFromEffective(nextEffective, sharedPlan)
+      };
+    });
   };
 
   const toggleCategory = (categoryId) => {
     const id = Number(categoryId);
     if (!Number.isFinite(id) || id <= 0) return;
+    setErrorText("");
+
+    const isDifferentCategory = (serviceId) => Number(serviceCategoryMap.get(serviceId)) !== id;
+
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+      const has = (sharedPlan.categoryIds || []).includes(id);
+      setSharedPlan((prev) => {
+        const normalized = normalizePlan(prev);
+        const nextCategoryIds = has
+          ? normalized.categoryIds.filter((item) => Number(item) !== id)
+          : toNumberList([...(normalized.categoryIds || []), id]);
+        const nextServiceIds = has
+          ? (normalized.serviceIds || []).filter(isDifferentCategory)
+          : normalized.serviceIds;
+        return normalizePlan({
+          ...normalized,
+          categoryIds: nextCategoryIds,
+          serviceIds: nextServiceIds
+        });
+      });
+
+      if (has) {
+        setVehiclePlans((prev) => {
+          const next = { ...prev };
+          selectedVehicleKeys.forEach((vehicleKey) => {
+            const vehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
+            next[vehicleKey] = normalizePlan({
+              ...vehiclePlan,
+              categoryIds: (vehiclePlan.categoryIds || []).filter((item) => Number(item) !== id),
+              serviceIds: (vehiclePlan.serviceIds || []).filter(isDifferentCategory),
+              excludedSharedCategoryIds: (vehiclePlan.excludedSharedCategoryIds || []).filter(
+                (item) => Number(item) !== id
+              ),
+              excludedSharedServiceIds: (vehiclePlan.excludedSharedServiceIds || []).filter(isDifferentCategory)
+            });
+          });
+          return next;
+        });
+      }
+      return;
+    }
+
+    if ((sharedPlan.categoryIds || []).includes(id)) {
+      setErrorText('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
+      return;
+    }
 
     applyPlanUpdate((plan) => {
       const categorySet = new Set(plan.categoryIds || []);
@@ -588,25 +779,155 @@ export default function ReceptionCreateAppointmentForm({
     const numericId = Number(serviceId);
     const categoryId = Number(serviceCategoryMap.get(numericId) || 0);
     if (!numericId || !categoryId) return;
+    setErrorText("");
     let shouldCollapseAfterSelect = false;
 
-    applyPlanUpdate((plan) => {
-      const categorySet = new Set(plan.categoryIds || []);
-      categorySet.add(categoryId);
-
-      const serviceSet = new Set(plan.serviceIds || []);
-      if (serviceSet.has(numericId)) {
-        serviceSet.delete(numericId);
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+      const has = (sharedPlan.serviceIds || []).includes(numericId);
+      if (has) {
+        setSharedPlan((prev) => {
+          const normalized = normalizePlan(prev);
+          return normalizePlan({
+            ...normalized,
+            serviceIds: (normalized.serviceIds || []).filter((item) => Number(item) !== numericId)
+          });
+        });
       } else {
-        serviceSet.add(numericId);
+        const oppositeSharedIds = getOppositeInspectionServiceIds(sharedPlan.serviceIds, numericId);
+        setSharedPlan((prev) => {
+          const normalized = normalizePlan(prev);
+          const nextServiceIds = toNumberList([
+            ...(normalized.serviceIds || []).filter((item) => !oppositeSharedIds.includes(Number(item))),
+            numericId
+          ]);
+          const nextCategoryIds = toNumberList([...(normalized.categoryIds || []), categoryId]);
+          return normalizePlan({
+            ...normalized,
+            categoryIds: nextCategoryIds,
+            serviceIds: nextServiceIds
+          });
+        });
+
+        setVehiclePlans((prev) => {
+          const next = { ...prev };
+          let hasAnyPatch = false;
+          selectedVehicleKeys.forEach((vehicleKey) => {
+            const rawVehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
+            const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
+            const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+            if (oppositeServiceIds.length === 0) return;
+
+            const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
+              (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+            );
+            const nextExcludedSharedServiceIds = (rawVehiclePlan.excludedSharedServiceIds || []).filter(
+              (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+            );
+
+            const shouldPatchServices = nextVehicleServiceIds.length !== (rawVehiclePlan.serviceIds || []).length;
+            const shouldPatchExcluded =
+              nextExcludedSharedServiceIds.length !== (rawVehiclePlan.excludedSharedServiceIds || []).length;
+            if (!shouldPatchServices && !shouldPatchExcluded) return;
+
+            next[vehicleKey] = normalizePlan({
+              ...rawVehiclePlan,
+              serviceIds: nextVehicleServiceIds,
+              excludedSharedServiceIds: nextExcludedSharedServiceIds
+            });
+            hasAnyPatch = true;
+          });
+          return hasAnyPatch ? next : prev;
+        });
+
         shouldCollapseAfterSelect = true;
       }
+    } else if (activePlanKey) {
+      setVehiclePlans((prev) => {
+        const rawVehiclePlan = normalizePlan(prev[activePlanKey] || EMPTY_PLAN);
+        const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
+        const sharedServiceIds = toNumberList(sharedPlan.serviceIds);
+        const sharedServiceSet = new Set(sharedServiceIds);
+        const sharedCategorySet = new Set(toNumberList(sharedPlan.categoryIds));
+        const nextRawCategorySet = new Set(rawVehiclePlan.categoryIds || []);
 
-      return {
-        categoryIds: Array.from(categorySet),
-        serviceIds: Array.from(serviceSet)
-      };
-    });
+        if (!sharedCategorySet.has(categoryId)) {
+          nextRawCategorySet.add(categoryId);
+        }
+
+        if (sharedServiceSet.has(numericId)) {
+          const hasEx = (rawVehiclePlan.excludedSharedServiceIds || []).includes(numericId);
+          if (!hasEx) {
+            return {
+              ...prev,
+              [activePlanKey]: normalizePlan({
+                ...rawVehiclePlan,
+                categoryIds: Array.from(nextRawCategorySet),
+                serviceIds: (rawVehiclePlan.serviceIds || []).filter((item) => Number(item) !== numericId),
+                excludedSharedServiceIds: [...(rawVehiclePlan.excludedSharedServiceIds || []), numericId]
+              })
+            };
+          }
+
+          const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+          const nextExcludedSet = new Set(
+            (rawVehiclePlan.excludedSharedServiceIds || []).filter((item) => Number(item) !== numericId).map(Number)
+          );
+          const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
+            (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+          );
+
+          oppositeServiceIds
+            .filter((serviceItemId) => sharedServiceSet.has(Number(serviceItemId)))
+            .forEach((serviceItemId) => nextExcludedSet.add(Number(serviceItemId)));
+
+          shouldCollapseAfterSelect = true;
+          return {
+            ...prev,
+            [activePlanKey]: normalizePlan({
+              ...rawVehiclePlan,
+              categoryIds: Array.from(nextRawCategorySet),
+              serviceIds: nextVehicleServiceIds,
+              excludedSharedServiceIds: Array.from(nextExcludedSet)
+            })
+          };
+        }
+
+        const has = (rawVehiclePlan.serviceIds || []).includes(numericId);
+        if (has) {
+          return {
+            ...prev,
+            [activePlanKey]: normalizePlan({
+              ...rawVehiclePlan,
+              categoryIds: Array.from(nextRawCategorySet),
+              serviceIds: (rawVehiclePlan.serviceIds || []).filter((item) => Number(item) !== numericId)
+            })
+          };
+        }
+
+        const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+        const nextVehicleServiceIds = toNumberList([
+          ...(rawVehiclePlan.serviceIds || []).filter(
+            (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+          ),
+          numericId
+        ]);
+        const nextExcludedSet = new Set((rawVehiclePlan.excludedSharedServiceIds || []).map(Number));
+        oppositeServiceIds
+          .filter((serviceItemId) => sharedServiceSet.has(Number(serviceItemId)))
+          .forEach((serviceItemId) => nextExcludedSet.add(Number(serviceItemId)));
+
+        shouldCollapseAfterSelect = true;
+        return {
+          ...prev,
+          [activePlanKey]: normalizePlan({
+            ...rawVehiclePlan,
+            categoryIds: Array.from(nextRawCategorySet),
+            serviceIds: nextVehicleServiceIds,
+            excludedSharedServiceIds: Array.from(nextExcludedSet)
+          })
+        };
+      });
+    }
 
     if (shouldCollapseAfterSelect) {
       setIsServicePickerCollapsed(true);
@@ -631,17 +952,18 @@ export default function ReceptionCreateAppointmentForm({
       if (effectiveServiceMode === SERVICE_MODE.SHARED) {
         map.set(key, normalizePlan(sharedPlan));
       } else {
-        map.set(key, normalizePlan(vehiclePlans[key] || EMPTY_PLAN));
+        map.set(key, resolveEffectivePlan(vehiclePlans[key] || EMPTY_PLAN, sharedPlan));
       }
     });
     return map;
-  }, [selectedVehicleKeys, effectiveServiceMode, sharedPlan, vehiclePlans]);
+  }, [selectedVehicleKeys, effectiveServiceMode, sharedPlan, vehiclePlans, resolveEffectivePlan]);
 
   const planSummaries = useMemo(() => {
     return selectedVehicleKeys.map((vehicleKey) => {
       const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
       const categoryIds = toNumberList(plan.categoryIds);
-      const selectedServices = toNumberList(plan.serviceIds)
+      const serviceIds = toNumberList(plan.serviceIds);
+      const selectedServices = serviceIds
         .map((id) => serviceById.get(id))
         .filter(Boolean);
       const minutes = selectedServices.reduce((sum, item) => sum + Number(item.minutes || 0), 0);
@@ -649,8 +971,25 @@ export default function ReceptionCreateAppointmentForm({
       const slot = slotMode === SLOT_MODE.PARALLEL ? parallelSlot : selectedSlotsByVehicle[vehicleKey];
       const startRaw = readField(slot, ["startTime", "StartTime"], "");
       const endRaw = readField(slot, ["endTime", "EndTime"], "");
-      const startTimeLabel = startRaw ? timeLabel(startRaw) : "Chưa chọn";
-      const endTimeLabel = endRaw ? timeLabel(endRaw) : "Chưa chọn";
+      const parsedStart = startRaw ? new Date(startRaw) : null;
+      const parsedSlotEnd = endRaw ? new Date(endRaw) : null;
+      const hasValidStart = Boolean(parsedStart) && !Number.isNaN(parsedStart.getTime());
+      const durationMinutes = Math.max(0, Number(minutes || 0));
+      const computedEnd = hasValidStart
+        ? new Date(parsedStart.getTime() + durationMinutes * 60 * 1000)
+        : null;
+      const hasInspectionService = serviceIds.some((id) =>
+        Boolean(inspectionExclusiveTypeByServiceId.get(Number(id)))
+      );
+      const inspectionEtaLabel = hasInspectionService
+        ? formatInspectionEta(startRaw, Math.max(Number(minutes || 0), 30))
+        : "";
+      const startTimeLabel = hasValidStart ? formatDateTimeWithFullDate(parsedStart) : "Chưa chọn";
+      const endTimeLabel = computedEnd
+        ? formatDateTimeWithFullDate(computedEnd)
+        : (endRaw ? formatDateTimeWithFullDate(endRaw) : "Chưa chọn");
+      const endAtMs = computedEnd && !Number.isNaN(computedEnd.getTime()) ? computedEnd.getTime() : null;
+      const slotEndAtMs = parsedSlotEnd && !Number.isNaN(parsedSlotEnd.getTime()) ? parsedSlotEnd.getTime() : null;
 
       return {
         vehicleKey,
@@ -658,10 +997,14 @@ export default function ReceptionCreateAppointmentForm({
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
         categoryIds,
         categoryNames: categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`),
-        serviceIds: toNumberList(plan.serviceIds),
+        serviceIds,
         serviceNames: selectedServices.map((item) => item.name),
         startTimeLabel,
         endTimeLabel,
+        endAtMs,
+        slotEndAtMs,
+        hasInspectionService,
+        inspectionEtaLabel,
         totalMinutes: minutes,
         totalPrice: price
       };
@@ -670,6 +1013,7 @@ export default function ReceptionCreateAppointmentForm({
     plansByVehicleKey,
     selectedVehicleKeys,
     serviceById,
+    inspectionExclusiveTypeByServiceId,
     vehicleLabelByKey,
     categoryNameById,
     slotMode,
@@ -689,14 +1033,23 @@ export default function ReceptionCreateAppointmentForm({
     () => Math.max(...planSummaries.map((item) => Number(item.totalMinutes || 0)), 0),
     [planSummaries]
   );
+  const fleetCompletionDateTimeLabel = useMemo(() => {
+    if (!Array.isArray(planSummaries) || planSummaries.length === 0) return "Chưa chọn";
+    const endTimes = planSummaries
+      .map((item) => Number(item.slotEndAtMs))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (endTimes.length !== planSummaries.length) return "Chưa chọn";
+    return formatDateTimeWithFullDate(new Date(Math.max(...endTimes)));
+  }, [planSummaries]);
 
   const serviceIdsByVehicleKey = useMemo(() => {
     const map = new Map();
-    planSummaries.forEach((plan) => {
-      map.set(plan.vehicleKey, toNumberList(plan.serviceIds));
+    selectedVehicleKeys.forEach((vehicleKey) => {
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      map.set(vehicleKey, toNumberList(plan.serviceIds));
     });
     return map;
-  }, [planSummaries]);
+  }, [selectedVehicleKeys, plansByVehicleKey]);
 
   const effectiveSelectedDate = useMemo(() => {
     if (slotMode === SLOT_MODE.INDIVIDUAL && activeSlotVehicleKey) {
@@ -792,11 +1145,6 @@ export default function ReceptionCreateAppointmentForm({
     [planSummaries]
   );
 
-  const selectedServicesForActivePlan = useMemo(() => {
-    const ids = toNumberList(activePlan.serviceIds);
-    return ids.map((id) => serviceById.get(id)).filter(Boolean);
-  }, [activePlan.serviceIds, serviceById]);
-
   const activeNoteKey = useMemo(
     () => activeNoteVehicleKey || selectedVehicleKeys[0] || "",
     [activeNoteVehicleKey, selectedVehicleKeys]
@@ -849,6 +1197,21 @@ export default function ReceptionCreateAppointmentForm({
   useEffect(() => {
     setActiveSession(resolveFirstActiveSession(SESSION_TABS, slotsBySession));
   }, [slotsBySession]);
+
+  useEffect(() => {
+    if (!errorText) return;
+
+    const formEl = formRef.current;
+    if (formEl && typeof formEl.scrollTo === "function") {
+      formEl.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (formEl && typeof formEl.scrollIntoView === "function") {
+      formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [errorText]);
 
   useEffect(() => {
     setShowOddSlots((prev) => getAutoExpandOddStateForFixedFlow(SESSION_TABS, slotsBySession, prev));
@@ -1364,7 +1727,7 @@ export default function ReceptionCreateAppointmentForm({
   const selectedVehicleCount = selectedVehicleKeys.length;
 
   return (
-    <form className="admin-form reception-appt-form" onSubmit={handleSubmit}>
+    <form ref={formRef} className="admin-form reception-appt-form" onSubmit={handleSubmit}>
       <div className="reception-appt-layout">
         <div className="reception-appt-left-column">
           <section className="reception-appt-section">
@@ -1430,8 +1793,6 @@ export default function ReceptionCreateAppointmentForm({
                     <label>Xe của khách (có thể chọn nhiều xe)</label>
                     {!formData.customerId ? (
                       <div className="reception-muted-note">Hãy chọn khách hàng trước.</div>
-                    ) : customerVehiclesFiltered.length === 0 ? (
-                      <div className="reception-muted-note">Khách hàng chưa có xe đã lưu.</div>
                     ) : (
                       <>
                         <div className="reception-vehicle-popup-toolbar">
@@ -1439,6 +1800,7 @@ export default function ReceptionCreateAppointmentForm({
                             type="button"
                             className="reception-open-vehicle-popup-btn"
                             onClick={() => setIsSavedVehiclePopupOpen(true)}
+                            disabled={customerVehiclesFiltered.length === 0}
                           >
                             Chọn xe đã lưu
                           </button>
@@ -1450,88 +1812,91 @@ export default function ReceptionCreateAppointmentForm({
                             Thêm xe mới
                           </button>
                         </div>
-
-                        {selectedCustomerVehicles.length > 0 ? (
-                          <div className="reception-selected-vehicle-list">
-                            {selectedCustomerVehicles.map((vehicle) => {
-                              const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-                              return (
-                                <button
-                                  key={`selected-vehicle-${vehicle.id}`}
-                                  type="button"
-                                  className="reception-selected-vehicle-chip"
-                                  onClick={() => toggleVehicleSelection(vehicle.id)}
-                                >
-                                  <span className="reception-selected-vehicle-chip-main">
-                                    <strong>{plate}</strong>
-                                    <small>{formatSavedVehicleDescriptor(vehicle)}</small>
-                                  </span>
-                                  <span className="reception-selected-vehicle-chip-remove">Xóa</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-
-                        {isSavedVehiclePopupOpen ? (
-                          <div
-                            className="reception-vehicle-popup-backdrop"
-                            onClick={() => setIsSavedVehiclePopupOpen(false)}
-                          >
-                            <div
-                              className="reception-vehicle-popup-card"
-                              role="dialog"
-                              aria-modal="true"
-                              aria-label="Chọn xe đã lưu"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <div className="reception-vehicle-popup-head">
-                                <div className="reception-vehicle-popup-head-copy">
-                                  <h5>Chọn xe đã lưu lại</h5>
-                                  <p>Chỉ hiển thị các xe chưa chọn.</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="reception-vehicle-popup-close-btn"
-                                  onClick={() => setIsSavedVehiclePopupOpen(false)}
-                                >
-                                  Đóng
-                                </button>
+                        {customerVehiclesFiltered.length === 0 ? (
+                          <div className="reception-muted-note">Khách hàng chưa có xe đã lưu.</div>
+                        ) : (
+                          <>
+                            {selectedCustomerVehicles.length > 0 ? (
+                              <div className="reception-selected-vehicle-list">
+                                {selectedCustomerVehicles.map((vehicle) => {
+                                  const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+                                  return (
+                                    <button
+                                      key={`selected-vehicle-${vehicle.id}`}
+                                      type="button"
+                                      className="reception-selected-vehicle-chip"
+                                      onClick={() => toggleVehicleSelection(vehicle.id)}
+                                    >
+                                      <span className="reception-selected-vehicle-chip-main">
+                                        <strong>{plate}</strong>
+                                        <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                      </span>
+                                      <span className="reception-selected-vehicle-chip-remove">Xóa</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
+                            ) : null}
 
-                              <div className="reception-vehicle-popup-list">
-                                {customerVehiclesFiltered.length === 0 ? (
-                                  <div className="reception-muted-note">Chưa có xe đã lưu để chọn.</div>
-                                ) : selectableCustomerVehicles.length === 0 ? (
-                                  <div className="reception-muted-note">
-                                    Bạn đã chọn hết xe đã lưu. Bỏ xe ở danh sách đã chọn để chọn lại.
+                            {isSavedVehiclePopupOpen ? (
+                              <div
+                                className="reception-vehicle-popup-backdrop"
+                                onClick={() => setIsSavedVehiclePopupOpen(false)}
+                              >
+                                <div
+                                  className="reception-vehicle-popup-card"
+                                  role="dialog"
+                                  aria-modal="true"
+                                  aria-label="Chọn xe đã lưu"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <div className="reception-vehicle-popup-head">
+                                    <div className="reception-vehicle-popup-head-copy">
+                                      <h5>Chọn xe đã lưu lại</h5>
+                                      <p>Chỉ hiển thị các xe chưa chọn.</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="reception-vehicle-popup-close-btn"
+                                      onClick={() => setIsSavedVehiclePopupOpen(false)}
+                                    >
+                                      Đóng
+                                    </button>
                                   </div>
-                                ) : (
-                                  selectableCustomerVehicles.map((vehicle) => {
-                                    const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-                                    return (
-                                      <button
-                                        key={`popup-vehicle-${vehicle.id}`}
-                                        type="button"
-                                        className="reception-vehicle-popup-item"
-                                        onClick={() => addExistingVehicle(vehicle.id)}
-                                      >
-                                        <span className="reception-vehicle-popup-item-mark" aria-hidden="true">
-                                          +
-                                        </span>
-                                        <span className="reception-vehicle-popup-item-copy">
-                                          <strong>{plate}</strong>
-                                          <small>{formatSavedVehicleDescriptor(vehicle)}</small>
-                                        </span>
-                                        <span className="reception-vehicle-popup-item-action">Thêm xe</span>
-                                      </button>
-                                    );
-                                  })
-                                )}
+
+                                  <div className="reception-vehicle-popup-list">
+                                    {selectableCustomerVehicles.length === 0 ? (
+                                      <div className="reception-muted-note">
+                                        Bạn đã chọn hết xe đã lưu. Bỏ xe ở danh sách đã chọn để chọn lại.
+                                      </div>
+                                    ) : (
+                                      selectableCustomerVehicles.map((vehicle) => {
+                                        const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+                                        return (
+                                          <button
+                                            key={`popup-vehicle-${vehicle.id}`}
+                                            type="button"
+                                            className="reception-vehicle-popup-item"
+                                            onClick={() => addExistingVehicle(vehicle.id)}
+                                          >
+                                            <span className="reception-vehicle-popup-item-mark" aria-hidden="true">
+                                              +
+                                            </span>
+                                            <span className="reception-vehicle-popup-item-copy">
+                                              <strong>{plate}</strong>
+                                              <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                            </span>
+                                            <span className="reception-vehicle-popup-item-action">Thêm xe</span>
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ) : null}
+                            ) : null}
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1699,60 +2064,88 @@ export default function ReceptionCreateAppointmentForm({
           <section className="reception-appt-section">
             <div className="reception-appt-step-head reception-appt-step-head-service">
               <span className="reception-step-badge">BƯỚC 2</span>
-              <button
-                type="button"
-                className="reception-section-collapse-btn"
-                aria-expanded={!isServicePickerCollapsed}
-                aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
-                onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
-              >
-                <span aria-hidden="true">{isServicePickerCollapsed ? "\u25BE" : "\u25B4"}</span>
-              </button>
             </div>
             <h4 className="reception-appt-section-title reception-appt-section-title-service">
               Loại dịch vụ và dịch vụ cụ thể
             </h4>
 
-            {hasMultipleSelectedVehicles ? (
+            {showServiceModeSwitch ? (
               <div className="reception-scope-switch">
                 <button
                   type="button"
                   className={effectiveServiceMode === SERVICE_MODE.SHARED ? "active" : ""}
-                  onClick={() => setServiceMode(SERVICE_MODE.SHARED)}
+                  onClick={() => handleServiceModeChange(SERVICE_MODE.SHARED)}
                 >
                   Dùng chung tất cả xe
                 </button>
                 <button
                   type="button"
                   className={effectiveServiceMode === SERVICE_MODE.CUSTOM ? "active" : ""}
-                  onClick={() => setServiceMode(SERVICE_MODE.CUSTOM)}
+                  onClick={() => handleServiceModeChange(SERVICE_MODE.CUSTOM)}
+                  disabled={!hasMultipleSelectedVehicles}
+                  title={!hasMultipleSelectedVehicles ? "Cần chọn từ 2 xe trở lên để tùy chỉnh riêng" : undefined}
                 >
                   Tùy chỉnh theo từng xe
                 </button>
               </div>
             ) : null}
 
-            {!isServicePickerCollapsed ? (
-              <>
-                {effectiveServiceMode === SERVICE_MODE.CUSTOM && selectedVehicleKeys.length > 1 ? (
-                  <div className="reception-selected-tabs reception-vehicle-tabs-layout">
-                    {selectedVehicleKeys.map((vehicleKey) => (
-                      <div
-                        key={vehicleKey}
-                        className={`reception-selected-tab ${activePlanVehicleKey === vehicleKey ? "active" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          className="reception-selected-tab-main"
-                          onClick={() => setActivePlanVehicleKey(vehicleKey)}
-                        >
-                          {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
-                        </button>
-                      </div>
-                    ))}
+            {selectedVehicleKeys.length > 1 ? (
+              <div className="reception-selected-tabs reception-vehicle-tabs-layout">
+                {selectedVehicleKeys.map((vehicleKey) => (
+                  <div
+                    key={vehicleKey}
+                    className={`reception-selected-tab ${
+                      effectiveServiceMode === SERVICE_MODE.CUSTOM && activePlanVehicleKey === vehicleKey
+                        ? "active"
+                        : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="reception-selected-tab-main"
+                      onClick={() => {
+                        setActivePlanVehicleKey(vehicleKey);
+                        if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+                          handleServiceModeChange(SERVICE_MODE.CUSTOM);
+                        }
+                      }}
+                    >
+                      {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                    </button>
+                    <button
+                      type="button"
+                      className="reception-selected-tab-remove"
+                      aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const vehicleId = getVehicleIdFromKey(vehicleKey);
+                        if (vehicleId > 0) {
+                          toggleVehicleSelection(vehicleId);
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
-                ) : null}
+                ))}
+              </div>
+            ) : null}
 
+            <div className="reception-service-subsection reception-service-type-subsection">
+              <h5 className="reception-service-subtitle">Loại dịch vụ</h5>
+              <button
+                type="button"
+                className={`reception-section-collapse-btn reception-section-collapse-btn-corner ${
+                  isServicePickerCollapsed ? "is-collapsed" : "is-expanded"
+                }`}
+                aria-expanded={!isServicePickerCollapsed}
+                aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
+                onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
+              >
+                <span className="reception-section-collapse-glyph" aria-hidden="true" />
+              </button>
+              {!isServicePickerCollapsed ? (
                 <div className="reception-category-grid">
                   {categoryOptions.map((category) => {
                     const selected = activePlan.categoryIds.includes(Number(category.id));
@@ -1768,102 +2161,90 @@ export default function ReceptionCreateAppointmentForm({
                     );
                   })}
                 </div>
+              ) : (
+                <div className="reception-service-collapsed-card">
+                  <span className="reception-service-collapsed-label">Loại dịch vụ</span>
+                  <span className="reception-service-collapsed-value">
+                    {activePlan.categoryIds.length > 0
+                      ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
+                      : "Chưa chọn loại dịch vụ"}
+                  </span>
+                </div>
+              )}
+            </div>
 
-                {activePlan.categoryIds.length > 0 ? (
-                  <>
-                    <div className="reception-selected-tabs reception-category-tabs-layout">
-                      {activePlan.categoryIds.map((categoryId) => (
-                        <div
-                          key={`cat-${categoryId}`}
-                          className={`reception-selected-tab ${String(activeCategoryId) === String(categoryId) ? "active" : ""}`}
+            <div className="reception-service-subsection reception-service-detail-subsection">
+              <h5 className="reception-service-subtitle">Dịch vụ cụ thể</h5>
+              {activePlan.categoryIds.length > 0 ? (
+                <>
+                  <div className="reception-selected-tabs reception-category-tabs-layout">
+                    {activePlan.categoryIds.map((categoryId) => (
+                      <div
+                        key={`cat-${categoryId}`}
+                        className={`reception-selected-tab ${String(activeCategoryId) === String(categoryId) ? "active" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          className="reception-selected-tab-main"
+                          onClick={() => setActiveCategoryId(String(categoryId))}
                         >
+                          {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
+                        </button>
+                        <button
+                          type="button"
+                          className="reception-selected-tab-remove"
+                          aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleCategory(categoryId);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Tìm dịch vụ</label>
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên dịch vụ..."
+                      value={serviceSearch}
+                      onChange={(event) => setServiceSearch(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="reception-service-list">
+                    {filteredServices.length === 0 ? (
+                      <div className="reception-muted-note">
+                        Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.
+                      </div>
+                    ) : (
+                      filteredServices.map((service) => {
+                        const selected = activePlan.serviceIds.includes(service.id);
+                        return (
                           <button
+                            key={service.id}
                             type="button"
-                            className="reception-selected-tab-main"
-                            onClick={() => setActiveCategoryId(String(categoryId))}
+                            className={`reception-service-card ${selected ? "selected" : ""}`}
+                            onClick={() => toggleService(service.id)}
                           >
-                            {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
+                            <div className="reception-service-card-main">
+                              <strong>{service.name}</strong>
+                              <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
+                            </div>
+                            <span>{formatCurrency(service.price)}</span>
                           </button>
-                          <button
-                            type="button"
-                            className="reception-selected-tab-remove"
-                            aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleCategory(categoryId);
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="form-group">
-                      <label>Tìm dịch vụ</label>
-                      <input
-                        type="text"
-                        placeholder="Tìm theo tên dịch vụ..."
-                        value={serviceSearch}
-                        onChange={(event) => setServiceSearch(event.target.value)}
-                      />
-                    </div>
-
-                    <div className="reception-service-list">
-                      {filteredServices.length === 0 ? (
-                        <div className="reception-muted-note">
-                          Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.
-                        </div>
-                      ) : (
-                        filteredServices.map((service) => {
-                          const selected = activePlan.serviceIds.includes(service.id);
-                          return (
-                            <button
-                              key={service.id}
-                              type="button"
-                              className={`reception-service-card ${selected ? "selected" : ""}`}
-                              onClick={() => toggleService(service.id)}
-                            >
-                              <div className="reception-service-card-main">
-                                <strong>{service.name}</strong>
-                                <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
-                              </div>
-                              <span>{formatCurrency(service.price)}</span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
-                )}
-              </>
-            ) : (
-              <div className="reception-service-collapsed-card">
-                <span className="reception-service-collapsed-label">Loại dịch vụ</span>
-                <span className="reception-service-collapsed-value">
-                  {activePlan.categoryIds.length > 0
-                    ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
-                    : "Chưa chọn loại dịch vụ"}
-                </span>
-              </div>
-            )}
-
-            {selectedServicesForActivePlan.length > 0 ? (
-              <div className="reception-selected-services">
-                {selectedServicesForActivePlan.map((service) => (
-                  <button
-                    key={`selected-${service.id}`}
-                    type="button"
-                    className="reception-selected-service-chip"
-                    onClick={() => toggleService(service.id)}
-                  >
-                    {service.name} ×
-                  </button>
-                ))}
-              </div>
-            ) : null}
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
+              )}
+            </div>
           </section>
         </div>
 
@@ -1926,6 +2307,7 @@ export default function ReceptionCreateAppointmentForm({
                 }}
                 minDate={new Date()}
                 showTime={false}
+                iconColor="#2f6bd8"
                 placeholder="Chọn ngày..."
               />
               {appointmentSummary ? <div className="reception-muted-note">{appointmentSummary}</div> : null}
@@ -1985,7 +2367,6 @@ export default function ReceptionCreateAppointmentForm({
                           key={`${start}-${end}`}
                           type="button"
                           className={`slot-card ${isSelected ? "selected" : ""}`}
-                          disabled={selectingSlot}
                           onClick={() => {
                             void handleSelectSlot(slot);
                           }}
@@ -2016,7 +2397,7 @@ export default function ReceptionCreateAppointmentForm({
               {selectedVehicleKeys.length > 0 ? (
                 <div className="reception-note-editor">
                   {selectedVehicleKeys.length > 1 ? (
-                    <div className="reception-selected-tabs reception-note-vehicle-tabs">
+                    <div className="reception-selected-tabs reception-vehicle-tabs-layout reception-note-vehicle-tabs">
                       {selectedVehicleKeys.map((vehicleKey) => (
                         <div
                           key={`note-tab-${vehicleKey}`}
@@ -2029,14 +2410,25 @@ export default function ReceptionCreateAppointmentForm({
                           >
                             {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
                           </button>
+                          <button
+                            type="button"
+                            className="reception-selected-tab-remove"
+                            aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const vehicleId = getVehicleIdFromKey(vehicleKey);
+                              if (vehicleId > 0) {
+                                toggleVehicleSelection(vehicleId);
+                              }
+                            }}
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                     </div>
                   ) : null}
 
-                  <p className="reception-note-vehicle-title">
-                    {vehicleLabelByKey.get(activeNoteKey) || "Xe đang thao tác"}
-                  </p>
                   <div className="reception-note-list">
                     {activeNoteVehicleLines.map((noteValue, index) => (
                       <textarea
@@ -2060,12 +2452,8 @@ export default function ReceptionCreateAppointmentForm({
 
             <div className="reception-summary-inline" role="status" aria-live="polite">
               <div className="reception-summary-inline-row">
-                <span>Tổng thời gian</span>
-                <strong>{totalMinutes} phút</strong>
-              </div>
-              <div className="reception-summary-inline-row">
-                <span>Thời gian hoàn tất dự kiến</span>
-                <strong>{Math.max(completionMinutes, 30)} phút</strong>
+                <span>Thời gian hoàn tất toàn bộ xe</span>
+                <strong>{fleetCompletionDateTimeLabel}</strong>
               </div>
               <div className="reception-summary-inline-row">
                 <span>Tổng giá ước tính</span>
@@ -2079,7 +2467,7 @@ export default function ReceptionCreateAppointmentForm({
               </div>
             </div>
 
-            {planSummaries.length > 1 ? (
+            {planSummaries.length > 0 ? (
               <div className="reception-plan-summary-grid">
                 {planSummaries.map((plan) => (
                   <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
@@ -2092,32 +2480,16 @@ export default function ReceptionCreateAppointmentForm({
 
                     <div className="reception-plan-summary-block">
                       <p className="reception-plan-summary-block-label">LOẠI DỊCH VỤ</p>
-                      <div className="reception-plan-summary-chip-row">
-                        {plan.categoryNames.length > 0 ? (
-                          plan.categoryNames.map((categoryName) => (
-                            <span key={`${plan.vehicleKey}-cat-${categoryName}`} className="reception-plan-summary-chip">
-                              {categoryName}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="reception-plan-summary-chip is-empty">Chưa chọn</span>
-                        )}
-                      </div>
+                      <p className="reception-plan-summary-text">
+                        {plan.categoryNames.length > 0 ? plan.categoryNames.join(", ") : "Chưa chọn"}
+                      </p>
                     </div>
 
                     <div className="reception-plan-summary-block">
                       <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                      <div className="reception-plan-summary-chip-row">
-                        {plan.serviceNames.length > 0 ? (
-                          plan.serviceNames.map((serviceName) => (
-                            <span key={`${plan.vehicleKey}-svc-${serviceName}`} className="reception-plan-summary-chip">
-                              {serviceName}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="reception-plan-summary-chip is-empty">Chưa có dịch vụ</span>
-                        )}
-                      </div>
+                      <p className="reception-plan-summary-text">
+                        {plan.serviceNames.length > 0 ? plan.serviceNames.join(", ") : "Chưa có dịch vụ"}
+                      </p>
                     </div>
 
                     <div className="reception-plan-summary-block">
@@ -2131,6 +2503,12 @@ export default function ReceptionCreateAppointmentForm({
                         <strong>{plan.endTimeLabel}</strong>
                       </div>
                     </div>
+
+                    {plan.hasInspectionService && plan.inspectionEtaLabel ? (
+                      <p className="reception-plan-summary-warning">
+                        {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.inspectionEtaLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
+                      </p>
+                    ) : null}
 
                     <div className="reception-plan-summary-footer">
                       <span>{`${plan.totalMinutes} phút`}</span>
@@ -2159,3 +2537,5 @@ export default function ReceptionCreateAppointmentForm({
     </form>
   );
 }
+
+

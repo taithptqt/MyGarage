@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -53,7 +53,7 @@ public partial class Branch
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
-    public virtual ICollection<BookingGroup> BookingGroups { get; set; } = new List<BookingGroup>();
+    public virtual ICollection<GroupSession> GroupSessions { get; set; } = new List<GroupSession>();
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 

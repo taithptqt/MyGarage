@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using MyGarage.Constants;
-using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -79,13 +78,22 @@ namespace MyGarage.Services
                 return;
             }
 
-            if (arriveTime > appointment.StartTime.AddMinutes(GraceArrivalMinutes))
+            var arrivalOffsetMinutes = (arriveTime - appointment.StartTime).TotalMinutes;
+
+            if (arrivalOffsetMinutes < -GraceArrivalMinutes)
+            {
+                await ApplyEarlyFixedArrivalAsync(appointment, arriveTime);
+                return;
+            }
+
+            if (arrivalOffsetMinutes > GraceArrivalMinutes)
             {
                 await ApplyLateFixedArrivalAsync(appointment, arriveTime);
                 return;
             }
 
             appointment.Status = AppointmentStatuses.Arrived;
+            appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "ON_TIME_ARRIVAL");
         }
     }
 }

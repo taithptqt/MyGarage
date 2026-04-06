@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import { Modal } from "@features/admin/components/AdminModals";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
@@ -28,11 +28,39 @@ function normalizeDisplayText(value) {
 }
 
 function parseSymptomItems(customerNotes) {
-  const items = String(customerNotes || "")
+  const raw = String(customerNotes || "").trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    const directSymptoms = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.symptoms)
+        ? parsed.symptoms
+        : [];
+    const normalizedDirect = directSymptoms.map((entry) => normalizeDisplayText(entry)).filter(Boolean);
+    if (normalizedDirect.length > 0) return normalizedDirect;
+
+    const groupedSymptoms = Array.isArray(parsed?.symptomsByVehicle) ? parsed.symptomsByVehicle : [];
+    const normalizedGrouped = groupedSymptoms
+      .map((group) => {
+        const vehicleLabel = normalizeDisplayText(group?.vehicle);
+        const symptoms = Array.isArray(group?.symptoms)
+          ? group.symptoms.map((entry) => normalizeDisplayText(entry)).filter(Boolean)
+          : [];
+        if (symptoms.length === 0) return "";
+        return vehicleLabel ? `${vehicleLabel}: ${symptoms.join(" | ")}` : symptoms.join(" | ");
+      })
+      .filter(Boolean);
+    if (normalizedGrouped.length > 0) return normalizedGrouped;
+  } catch {
+    // Continue with legacy plain-text parsing below.
+  }
+
+  return raw
     .split(/\r?\n|;/g)
     .map((entry) => normalizeDisplayText(entry))
     .filter(Boolean);
-  return items;
 }
 
 function DetailField({ label, value }) {
@@ -65,7 +93,7 @@ export default function AppointmentDetailModal({
   const vehiclePlate = appointment.vehicleLicensePlate || appointment.VehicleLicensePlate || "--";
   const vehicleModel = appointment.vehicleModelName || appointment.VehicleModelName || "--";
   const branchName = appointment.branchName || appointment.BranchName || "--";
-  const bookingGroupCode = appointment.bookingGroupCode || appointment.BookingGroupCode || "";
+  const GroupSessionCode = appointment.GroupSessionCode || appointment.GroupSessionCode || "";
   const customerNotes = appointment.customerNotes || appointment.CustomerNotes || "";
   const cancelReason = appointment.cancelReason || appointment.CancelReason || "";
   const symptomItems = useMemo(() => parseSymptomItems(customerNotes), [customerNotes]);
@@ -85,8 +113,8 @@ export default function AppointmentDetailModal({
           </div>
           <div className="appt-detail-hero-side">
             <span className={`badge ${getApptStatusBadge(statusText)}`}>{statusLabel}</span>
-            {bookingGroupCode ? (
-              <span className="appt-detail-group-chip">{bookingGroupCode}</span>
+            {GroupSessionCode ? (
+              <span className="appt-detail-group-chip">{GroupSessionCode}</span>
             ) : (
               <span className="appt-detail-group-chip muted">Lịch thường</span>
             )}

@@ -1,4 +1,4 @@
-﻿export const APPOINTMENTS_BASE = "/api/appointments";
+export const APPOINTMENTS_BASE = "/api/appointments";
 
 export const APPOINTMENTS_ROUTES = {
   base: APPOINTMENTS_BASE,
@@ -10,6 +10,7 @@ export const APPOINTMENTS_ROUTES = {
   branches: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}`,
   detail: (id) => `${APPOINTMENTS_BASE}/${id}`,
   status: (id) => `${APPOINTMENTS_BASE}/${id}`,
+  nearestSlot: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/nearest-slot`,
   autoNoShow: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/no-show-cycles`,
   bookingHealth: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/health-metrics`,
   dispatchDashboard: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/allocation-metrics`,

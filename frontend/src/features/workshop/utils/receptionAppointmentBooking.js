@@ -3,8 +3,9 @@ import {
   createCustomerVehicle,
   createVehicle
 } from "@features/admin/api/customerApi";
-import { createBookingGroup } from "@features/appointments/api/bookingGroupApi";
+import { createGroupSession } from "@features/appointments/api/groupSessionApi";
 import { bookAppointment, cancelAppointment } from "@features/appointments/api/appointmentApi";
+import { buildCustomerNotesPayload } from "@features/appointments/utils/bookingCommon";
 
 const ERRORS = {
   invalidBranch: "Chi nhánh hiện tại không hợp lệ.",
@@ -48,6 +49,13 @@ function findVehicleByPlate(vehicles, plate) {
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + Math.max(Number(minutes || 0), 0) * 60 * 1000);
+}
+
+function splitCustomerNotesInput(value) {
+  return String(value || "")
+    .split(/\r?\n|;/g)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
 }
 
 function normalizeServiceLookup(services) {
@@ -104,91 +112,6 @@ function resolveVehiclePlan({ vehicleKey, vehicleId, defaultServiceIds, defaultD
   return { serviceIds, requestedServiceIds, totalMinutes };
 }
 
-function parseDateTime(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) return parsed;
-
-  const normalized = String(value || "").trim();
-  if (!normalized) return null;
-  const fallback = new Date(normalized.replace(" ", "T"));
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
-}
-
-function normalizeVehicleSlotMaps(vehicleSlotSelections) {
-  const byVehicleKey = new Map();
-  const byVehicleId = new Map();
-
-  (Array.isArray(vehicleSlotSelections) ? vehicleSlotSelections : []).forEach((item) => {
-    const vehicleKey = String(item?.vehicleKey || "").trim();
-    const vehicleId = Number(item?.vehicleId);
-    const startAt = parseDateTime(item?.startTime);
-    const endAt = parseDateTime(item?.endTime);
-    if (!startAt || !endAt || endAt <= startAt) return;
-
-    const normalized = {
-      startAt,
-      endAt,
-      slotHoldToken: String(item?.slotHoldToken || "").trim() || null
-    };
-
-    if (vehicleKey) byVehicleKey.set(vehicleKey, normalized);
-    if (Number.isFinite(vehicleId) && vehicleId > 0) byVehicleId.set(vehicleId, normalized);
-  });
-
-  return { byVehicleKey, byVehicleId };
-}
-
-function resolveVehicleSchedule({ vehicleKey, vehicleId, defaultStartAt, totalMinutes, slotMaps }) {
-  const byKey = vehicleKey ? slotMaps.byVehicleKey.get(vehicleKey) : null;
-  const byId = Number.isFinite(vehicleId) && vehicleId > 0 ? slotMaps.byVehicleId.get(vehicleId) : null;
-  const selected = byKey || byId;
-  if (selected?.startAt && selected?.endAt && selected.endAt > selected.startAt) {
-    return {
-      startAt: selected.startAt,
-      endAt: selected.endAt,
-      slotHoldToken: selected.slotHoldToken
-    };
-  }
-
-  return {
-    startAt: defaultStartAt,
-    endAt: addMinutes(defaultStartAt, totalMinutes),
-    slotHoldToken: null
-  };
-}
-
-function normalizeVehicleNotePlanMaps(vehicleNotePlans) {
-  const byVehicleKey = new Map();
-  const byVehicleId = new Map();
-
-  (Array.isArray(vehicleNotePlans) ? vehicleNotePlans : []).forEach((item) => {
-    const vehicleKey = String(item?.vehicleKey || "").trim();
-    const vehicleId = Number(item?.vehicleId);
-    const customerNotes =
-      typeof item?.customerNotes === "string"
-        ? (String(item.customerNotes).trim() || null)
-        : null;
-
-    if (vehicleKey) byVehicleKey.set(vehicleKey, customerNotes);
-    if (Number.isFinite(vehicleId) && vehicleId > 0) byVehicleId.set(vehicleId, customerNotes);
-  });
-
-  return { byVehicleKey, byVehicleId };
-}
-
-function resolveVehicleCustomerNotes({ vehicleKey, vehicleId, noteMaps, fallbackCustomerNotes }) {
-  if (vehicleKey && noteMaps.byVehicleKey.has(vehicleKey)) {
-    return noteMaps.byVehicleKey.get(vehicleKey) ?? null;
-  }
-
-  if (Number.isFinite(vehicleId) && vehicleId > 0 && noteMaps.byVehicleId.has(vehicleId)) {
-    return noteMaps.byVehicleId.get(vehicleId) ?? null;
-  }
-
-  return fallbackCustomerNotes;
-}
-
 function buildAppointmentBasePayload({
   effectiveBranchId,
   customerId,
@@ -225,27 +148,16 @@ export async function saveReceptionAppointment({
 }) {
   if (!effectiveBranchId) throw new Error(ERRORS.invalidBranch);
 
-  const slotMaps = normalizeVehicleSlotMaps(formData.vehicleSlotSelections);
-  let startAt = parseDateTime(
-    formData.appointmentDate && formData.startTime ? `${formData.appointmentDate}T${formData.startTime}` : null
-  );
-
-  if (!startAt) {
-    const firstSelection = (Array.isArray(formData.vehicleSlotSelections) ? formData.vehicleSlotSelections : [])
-      .map((item) => parseDateTime(item?.startTime))
-      .find(Boolean);
-    startAt = firstSelection || null;
-  }
-
-  if (!startAt || Number.isNaN(startAt.getTime())) throw new Error(ERRORS.invalidDateTime);
+  const startAt = new Date(`${formData.appointmentDate}T${formData.startTime}`);
+  if (Number.isNaN(startAt.getTime())) throw new Error(ERRORS.invalidDateTime);
 
   const serviceLookup = normalizeServiceLookup(services);
   const fallbackServiceIds = toNumberList(formData.serviceIds);
   const fallbackDuration = Math.max(Number(formData.totalMinutes || 0), 30);
-  const customerNotes = String(formData.customerNotes || "").trim() || null;
-  const groupCustomerNotes = String(formData.groupCustomerNotes || "").trim() || null;
+  const splitCustomerNotes = splitCustomerNotesInput(formData.customerNotes);
+  const customerNotes =
+    buildCustomerNotesPayload(splitCustomerNotes) || String(formData.customerNotes || "").trim() || null;
   const planMaps = normalizeVehicleServicePlanMaps(formData.vehicleServicePlans, serviceLookup);
-  const noteMaps = normalizeVehicleNotePlanMaps(formData.vehicleNotePlans);
   const selectedServiceIdsUnion = toNumberList([
     ...fallbackServiceIds,
     ...(Array.isArray(formData.vehicleServicePlans)
@@ -305,19 +217,7 @@ export async function saveReceptionAppointment({
       defaultDuration: fallbackDuration,
       planMaps
     });
-    const schedule = resolveVehicleSchedule({
-      vehicleKey: "guest",
-      vehicleId: Number(vehicle.id),
-      defaultStartAt: startAt,
-      totalMinutes: plan.totalMinutes,
-      slotMaps
-    });
-    const vehicleCustomerNotes = resolveVehicleCustomerNotes({
-      vehicleKey: "guest",
-      vehicleId: Number(vehicle.id),
-      noteMaps,
-      fallbackCustomerNotes: customerNotes
-    });
+    const endAt = addMinutes(startAt, plan.totalMinutes);
 
     const payload = {
       ...buildAppointmentBasePayload({
@@ -325,12 +225,11 @@ export async function saveReceptionAppointment({
         customerId: Number(customer.id),
         customerFullName: formData.guestName,
         customerPhone: formData.guestPhone,
-        startAt: schedule.startAt,
-        endAt: schedule.endAt,
+        startAt,
+        endAt,
         requestedServiceIds: plan.requestedServiceIds,
-        customerNotes: vehicleCustomerNotes
+        customerNotes
       }),
-      slotHoldToken: schedule.slotHoldToken,
       vehicleId: Number(vehicle.id),
       vehicleModelId: modelId,
       licensePlate: formData.guestVehiclePlate,
@@ -372,19 +271,7 @@ export async function saveReceptionAppointment({
         defaultDuration: fallbackDuration,
         planMaps
       });
-      const schedule = resolveVehicleSchedule({
-        vehicleKey: "new-customer",
-        vehicleId: Number(newVehicle.id),
-        defaultStartAt: startAt,
-        totalMinutes: plan.totalMinutes,
-        slotMaps
-      });
-      const vehicleCustomerNotes = resolveVehicleCustomerNotes({
-        vehicleKey: "new-customer",
-        vehicleId: Number(newVehicle.id),
-        noteMaps,
-        fallbackCustomerNotes: customerNotes
-      });
+      const endAt = addMinutes(startAt, plan.totalMinutes);
 
       const payload = {
         ...buildAppointmentBasePayload({
@@ -392,12 +279,11 @@ export async function saveReceptionAppointment({
           customerId,
           customerFullName: customer.fullName || formData.customerName,
           customerPhone: customer.phone || formData.customerPhone,
-          startAt: schedule.startAt,
-          endAt: schedule.endAt,
+          startAt,
+          endAt,
           requestedServiceIds: plan.requestedServiceIds,
-          customerNotes: vehicleCustomerNotes
+          customerNotes
         }),
-        slotHoldToken: schedule.slotHoldToken,
         vehicleId: Number(newVehicle.id),
         vehicleModelId: modelId,
         licensePlate: formData.vehicleLicensePlate,
@@ -422,19 +308,7 @@ export async function saveReceptionAppointment({
           defaultDuration: fallbackDuration,
           planMaps
         });
-        const schedule = resolveVehicleSchedule({
-          vehicleKey: `existing-${selectedVehicleIds[0]}`,
-          vehicleId: selectedVehicleIds[0],
-          defaultStartAt: startAt,
-          totalMinutes: plan.totalMinutes,
-          slotMaps
-        });
-        const vehicleCustomerNotes = resolveVehicleCustomerNotes({
-          vehicleKey: `existing-${selectedVehicleIds[0]}`,
-          vehicleId: selectedVehicleIds[0],
-          noteMaps,
-          fallbackCustomerNotes: customerNotes
-        });
+        const endAt = addMinutes(startAt, plan.totalMinutes);
 
         const payload = {
           ...buildAppointmentBasePayload({
@@ -442,12 +316,11 @@ export async function saveReceptionAppointment({
             customerId,
             customerFullName: customer.fullName || formData.customerName,
             customerPhone: customer.phone || formData.customerPhone,
-            startAt: schedule.startAt,
-            endAt: schedule.endAt,
+            startAt,
+            endAt,
             requestedServiceIds: plan.requestedServiceIds,
-            customerNotes: vehicleCustomerNotes
+            customerNotes
           }),
-          slotHoldToken: schedule.slotHoldToken,
           vehicleId: Number(vehicle.id)
         };
 
@@ -463,19 +336,7 @@ export async function saveReceptionAppointment({
             defaultDuration: fallbackDuration,
             planMaps
           });
-          const schedule = resolveVehicleSchedule({
-            vehicleKey: `existing-${vehicleId}`,
-            vehicleId,
-            defaultStartAt: startAt,
-            totalMinutes: plan.totalMinutes,
-            slotMaps
-          });
-          const vehicleCustomerNotes = resolveVehicleCustomerNotes({
-            vehicleKey: `existing-${vehicleId}`,
-            vehicleId,
-            noteMaps,
-            fallbackCustomerNotes: customerNotes
-          });
+          const endAt = addMinutes(startAt, plan.totalMinutes);
 
           return {
             ...buildAppointmentBasePayload({
@@ -483,12 +344,11 @@ export async function saveReceptionAppointment({
               customerId,
               customerFullName: customer.fullName || formData.customerName,
               customerPhone: customer.phone || formData.customerPhone,
-              startAt: schedule.startAt,
-              endAt: schedule.endAt,
+              startAt,
+              endAt,
               requestedServiceIds: plan.requestedServiceIds,
-              customerNotes: vehicleCustomerNotes
+              customerNotes
             }),
-            slotHoldToken: schedule.slotHoldToken,
             vehicleId,
             licensePlate: vehicle?.licensePlate || null,
             vehicleModelId: vehicle?.modelId ? Number(vehicle.modelId) : null,
@@ -497,10 +357,10 @@ export async function saveReceptionAppointment({
           };
         });
 
-        const grouped = await createBookingGroup({
+        const grouped = await createGroupSession({
           branchId: effectiveBranchId,
           customerId,
-          customerNote: groupCustomerNotes || customerNotes,
+          customerNote: customerNotes,
           items
         });
 

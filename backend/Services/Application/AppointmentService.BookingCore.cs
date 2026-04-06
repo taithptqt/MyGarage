@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,10 +15,10 @@ namespace MyGarage.Services
         private async Task<Appointment> BookCoreAsync(
             long authUserId,
             BookAppointmentRequestDto dto,
-            long? bookingGroupId,
+            long? groupSessionId,
             IDbContextTransaction? externalTransaction)
         {
-            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
+            var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
             var requestedServiceIdList = ParseServiceIds(dto.RequestedServiceIds).Distinct().ToList();
             var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds);
             var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
@@ -65,7 +65,7 @@ namespace MyGarage.Services
                 actorStaffId,
                 dto,
                 actualCustomerId,
-                bookingGroupId,
+                groupSessionId,
                 requestedStartAt,
                 requestedEndAt,
                 flow,

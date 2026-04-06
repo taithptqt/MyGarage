@@ -4,15 +4,13 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Enums;
+using MyGarage.Constants;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
-    public partial class AppointmentService
+        public partial class AppointmentService
     {
-        private const int FlexibleBufferMinutes = 15;
-
         private async Task<BookingFlowType> ResolveFlowAsync(string? bookingFlow, string? requestedServiceIds)
         {
             var explicitFlow = ParseExplicitFlow(bookingFlow);
@@ -72,10 +70,15 @@ namespace MyGarage.Services
             return fallbackDiagnostic?.Id;
         }
 
-        private static string BuildFlexibleDynamicNotice(int estimatedMinutes)
+        private static string BuildFlexibleDynamicNotice(
+            int serviceMinutes,
+            int setupMinutes,
+            int bufferMinutes,
+            int estimatedMinutes)
         {
-            return $"D\u1EF1a tr\u00EAn c\u00E1c h\u1EA1ng m\u1EE5c b\u1EA1n ch\u1ECDn, th\u1EDDi gian d\u1EF1 ki\u1EBFn ho\u00E0n t\u1EA5t l\u00E0 {estimatedMinutes} ph\u00FAt. " +
-                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ki\u1EC3m tra xong.";
+            return $"T\u1ED5ng th\u1EDDi gian d\u1EF1 ki\u1EBFn {estimatedMinutes} ph\u00FAt " +
+                   $"(s\u1EEDa ch\u1EEFa {serviceMinutes}p + ti\u1EBFp nh\u1EADn/ch\u1EE5p \u1EA3nh {setupMinutes}p + buffer {bufferMinutes}p). " +
+                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ho\u00E0n t\u1EA5t b\u01B0\u1EDBc ki\u1EC3m tra ban \u0111\u1EA7u.";
         }
 
         private async Task<List<StandardService>> LoadRequestedServicesAsync(string? requestedServiceIds)

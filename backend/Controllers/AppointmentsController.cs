@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
@@ -36,8 +37,35 @@ namespace MyGarage.Controllers
             [FromQuery] int vehicleCount = 1,
             [FromQuery] bool isParallel = true)
         {
-            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, bookingFlow, vehicleCount, isParallel);
+                    var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, bookingFlow, vehicleCount, isParallel);
             return Ok(slots);
+        }
+
+        [Authorize]
+        [HttpGet("branches/{branchId:long}/nearest-slot")]
+        public async Task<ActionResult<NearestSlotSuggestionResponseDto>> GetNearestSlot(
+            long branchId,
+            [FromQuery] DateTime checkInAt,
+            [FromQuery] string? requestedServiceIds = null,
+            [FromQuery] int vehicleCount = 1,
+            [FromQuery] bool isParallel = false,
+            [FromQuery] int searchDays = 3)
+        {
+            try
+            {
+                var suggestion = await _appointmentService.SuggestNearestSlotAsync(
+                    branchId,
+                    checkInAt,
+                    requestedServiceIds,
+                    vehicleCount,
+                    isParallel,
+                    searchDays);
+                return Ok(suggestion);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [Authorize]
@@ -130,7 +158,7 @@ namespace MyGarage.Controllers
         {
             if (!dto.CustomerId.HasValue)
             {
-                return BadRequest(new { message = "Vui long cung cap CustomerId cho luong guest." });
+                return BadRequest(new { message = "Vui lòng cung cấp CustomerId cho luồng guest." });
             }
 
             try
@@ -156,26 +184,31 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Status is required." });
             }
 
+            if (requested != AppointmentStatuses.Confirmed &&
+                requested != AppointmentStatuses.Canceled &&
+                requested != AppointmentStatuses.CancelledLegacy &&
+                requested != AppointmentStatuses.Arrived &&
+                requested != "CHECKED_IN")
+            {
+                return BadRequest(new { message = "Unsupported status transition." });
+            }
+
             try
             {
                 var actorUserId = this.GetCurrentUserId();
                 global::MyGarage.Models.Appointment? appointment = requested switch
                 {
-                    "CONFIRMED" => await _appointmentService.ConfirmAsync(id, actorUserId),
-                    "CANCELED" => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
+                    AppointmentStatuses.Confirmed => await _appointmentService.ConfirmAsync(id, actorUserId),
+                    AppointmentStatuses.Canceled => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
+                    AppointmentStatuses.CancelledLegacy => await _appointmentService.CancelAsync(id, dto?.Reason, actorUserId),
                     "CHECKED_IN" => await _appointmentService.CheckInAsync(id, dto?.ArrivedAt, actorUserId),
-                    "ARRIVED" => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
+                    AppointmentStatuses.Arrived => await _appointmentService.ArriveAsync(id, dto?.ArrivedAt, actorUserId),
                     _ => null
                 };
 
                 if (appointment == null)
                 {
-                    if (requested is "CONFIRMED" or "CANCELED" or "CHECKED_IN" or "ARRIVED")
-                    {
-                        return NotFound();
-                    }
-
-                    return BadRequest(new { message = "Unsupported status transition." });
+                    return NotFound();
                 }
 
                 var detail = await _appointmentService.GetDetailedAsync(id);

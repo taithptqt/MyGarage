@@ -73,8 +73,8 @@ builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAppointmentStatusPolicy, AppointmentStatusPolicy>();
 builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembler>();
-builder.Services.AddScoped<IBookingGroupStatusPolicy, BookingGroupStatusPolicy>();
-builder.Services.AddScoped<IBookingGroupService, BookingGroupService>();
+builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
+builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -20,18 +20,18 @@ namespace MyGarage.Services
             return await BookCoreAsync(authUserId, dto, null, null);
         }
 
-        public async Task<BookingGroupResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
+        public async Task<GroupSessionResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
         {
             return await BookBatchForCustomerAsync(authUserId, authUserId, dto);
         }
 
-        public async Task<BookingGroupResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto)
+        public async Task<GroupSessionResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto)
         {
             if (dto.Items == null || dto.Items.Count == 0)
-                throw new InvalidOperationException("Danh sach lich hen khong duoc de trong.");
+                throw new InvalidOperationException("Danh sách lịch hẹn không được để trống.");
 
             if (targetCustomerId <= 0)
-                throw new InvalidOperationException("Khach hang dat lich khong hop le.");
+                throw new InvalidOperationException("Khách hàng đặt lịch không hợp lệ.");
 
             var fixedLeadViolations = new List<string>();
             foreach (var item in dto.Items)
@@ -55,8 +55,8 @@ namespace MyGarage.Services
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
-                var group = await _bookingGroupService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
+                var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
+                var group = await _groupSessionService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
 
                 var createdAppointmentIds = new List<long>();
                 foreach (var item in dto.Items)
@@ -68,10 +68,10 @@ namespace MyGarage.Services
                     createdAppointmentIds.Add(created.Id);
                 }
 
-                await _bookingGroupService.SyncCountersAsync(group.Id, actorStaffId);
+                await _groupSessionService.SyncCountersAsync(group.Id, actorStaffId);
                 await tx.CommitAsync();
 
-                var response = await _bookingGroupService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
+                var response = await _groupSessionService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
                 if (response != null)
                 {
                     response.Appointments = response.Appointments
@@ -80,7 +80,7 @@ namespace MyGarage.Services
                     return response;
                 }
 
-                throw new InvalidOperationException("Khong the tai thong tin nhom lich hen sau khi tao.");
+                throw new InvalidOperationException("Không thể tải thông tin nhóm lịch hẹn sau khi tạo.");
             }
             catch
             {

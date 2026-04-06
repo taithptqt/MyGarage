@@ -16,7 +16,7 @@ namespace MyGarage.Services
             long? actorStaffId,
             BookAppointmentRequestDto dto,
             long actualCustomerId,
-            long? bookingGroupId,
+            long? groupSessionId,
             DateTime requestedStartAt,
             DateTime requestedEndAt,
             BookingFlowType flow,
@@ -40,7 +40,7 @@ namespace MyGarage.Services
                     BranchId = dto.BranchId,
                     CustomerId = actualCustomerId,
                     VehicleId = vehicleId,
-                    GroupSessionId = bookingGroupId,
+                    GroupSessionId = groupSessionId,
                     CreatedBy = actorStaffId,
                     StartTime = requestedStartAt,
                     EndTime = requestedEndAt,
@@ -54,8 +54,8 @@ namespace MyGarage.Services
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
 
-                if (bookingGroupId.HasValue)
-                    await _bookingGroupService.SyncCountersAsync(bookingGroupId.Value, actorStaffId);
+                if (groupSessionId.HasValue)
+                    await _groupSessionService.SyncCountersAsync(groupSessionId.Value, actorStaffId);
 
                 if (ownTransaction && tx != null)
                     await tx.CommitAsync();

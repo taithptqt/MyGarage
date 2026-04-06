@@ -14,8 +14,8 @@ namespace MyGarage.Interfaces
         Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto);
         Task<bool> ReleaseSlotHoldAsync(string holdToken);
         Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto);
-        Task<BookingGroupResponseDto> BookBatchAsync(long customerId, BookAppointmentBatchRequestDto dto);
-        Task<BookingGroupResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto);
+        Task<GroupSessionResponseDto> BookBatchAsync(long customerId, BookAppointmentBatchRequestDto dto);
+        Task<GroupSessionResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto);
         Task<Appointment?> ConfirmAsync(long id, long? actorUserId = null);
         Task<Appointment?> CancelAsync(long id, string? reason, long? actorUserId = null);
         Task<Appointment?> CheckInAsync(long id, DateTime? arrivedAt = null, long? actorUserId = null);
@@ -26,6 +26,13 @@ namespace MyGarage.Interfaces
         Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null);
         Task<DispatchCycleResponseDto> RunDispatchCycleAsync(long branchId, DateTime? at = null);
         Task<OvernightLockResponseDto> LockOvernightSlotsAsync(long branchId, DateOnly? businessDate = null);
+        Task<NearestSlotSuggestionResponseDto> SuggestNearestSlotAsync(
+            long branchId,
+            DateTime requestedCheckInAt,
+            string? requestedServiceIds = null,
+            int vehicleCount = 1,
+            bool isParallel = false,
+            int searchDays = 3);
         Task<IEnumerable<AppointmentDetailResponseDto>> GetCustomerAppointmentsAsync(long customerId);
         Task<IEnumerable<AppointmentDetailResponseDto>> GetBranchAppointmentsAsync(long branchId, string? status = null);
         Task<AppointmentDetailResponseDto?> GetDetailedAsync(long id);

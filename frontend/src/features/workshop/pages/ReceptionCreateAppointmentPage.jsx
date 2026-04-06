@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getAllCustomers,
@@ -21,16 +21,7 @@ const TEXT = {
   pageTitle: "T\u1ea1o l\u1ecbch h\u1eb9n m\u1edbi (L\u1ec5 t\u00e2n)",
   back: "<- Quay l\u1ea1i l\u1ecbch h\u1eb9n",
   successTitle: "\u0110\u1eb7t l\u1ecbch th\u00e0nh c\u00f4ng",
-  customer: "Kh\u00e1ch h\u00e0ng",
-  plate: "Bi\u1ec3n s\u1ed1 xe",
-  appointmentType: "Lo\u1ea1i l\u1ecbch",
-  groupType: "L\u1ecbch nh\u00f3m",
-  receiveAt: "Th\u1eddi gian nh\u1eadn xe",
-  services: "D\u1ecbch v\u1ee5 y\u00eau c\u1ea7u",
-  nonePreset: "Ch\u01b0a \u0111\u1ecbnh tr\u01b0\u1edbc",
-  backToList: "V\u1ec1 danh s\u00e1ch l\u1ecbch h\u1eb9n",
-  createAnother: "T\u1ea1o l\u1ecbch h\u1eb9n kh\u00e1c",
-  infoTitle: "Th\u00f4ng tin \u0111\u1eb7t l\u1ecbch",
+  successMessage: "L\u1ecbch h\u1eb9n \u0111\u00e3 \u0111\u01b0\u1ee3c t\u1ea1o th\u00e0nh c\u00f4ng.",
   infoNote: "",
   submit: "X\u00e1c nh\u1eadn \u0111\u1eb7t l\u1ecbch",
 };
@@ -38,18 +29,6 @@ const TEXT = {
 function parseBranchId(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function formatAppointmentDate(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) return "--/--/----";
-  return date.toLocaleDateString("vi-VN");
-}
-
-function formatAppointmentTime(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) return "--:--";
-  return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function ReceptionCreateAppointmentPage() {
@@ -67,11 +46,10 @@ export default function ReceptionCreateAppointmentPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successAppt, setSuccessAppt] = useState(null);
-  const [formKey, setFormKey] = useState(0);
 
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
   const contextBranchId = parseBranchId(selectedBranchId);
-  const effectiveBranchId = userBranchId || contextBranchId;
+  const effectiveBranchId = contextBranchId || userBranchId;
   const canSubmit = effectiveBranchId > 0;
 
   const fetchReferenceData = useCallback(async () => {
@@ -105,11 +83,21 @@ export default function ReceptionCreateAppointmentPage() {
     navigate("/workshop/reception/appointments");
   }, [navigate]);
 
-  const handleCreateAnother = useCallback(() => {
-    setSuccessAppt(null);
-    setError("");
-    setFormKey((prev) => prev + 1);
-  }, []);
+  useEffect(() => {
+    if (!successAppt) return undefined;
+    const timeoutId = setTimeout(() => {
+      navigate("/workshop/reception/appointments", { replace: true });
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [successAppt, navigate]);
+
+  useEffect(() => {
+    if (!error && canSubmit) return;
+
+    if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [error, canSubmit]);
 
   const handleSubmit = useCallback(
     async (formData) => {
@@ -131,22 +119,13 @@ export default function ReceptionCreateAppointmentPage() {
           services,
         });
         setSuccessAppt(summary);
-        await fetchReferenceData();
       } catch (err) {
         setError(err?.message || TEXT.createError);
       } finally {
         setSaving(false);
       }
     },
-    [canSubmit, effectiveBranchId, customers, vehicles, customerVehicles, services, fetchReferenceData],
-  );
-
-  const successServiceNames = useMemo(
-    () =>
-      Array.isArray(successAppt?.services)
-        ? successAppt.services.map((service) => service?.Name || service?.name).filter(Boolean)
-        : [],
-    [successAppt],
+    [canSubmit, effectiveBranchId, customers, vehicles, customerVehicles, services],
   );
 
   return (
@@ -171,45 +150,9 @@ export default function ReceptionCreateAppointmentPage() {
             <p>{TEXT.loadingData}</p>
           </div>
         </div>
-      ) : successAppt ? (
-        <section className="form-section reception-create-appointment-success">
-          <h3 className="section-title">{TEXT.successTitle}</h3>
-          <div className="appointment-success-summary-card">
-            <p>
-              <strong>{`${TEXT.customer}:`}</strong> {successAppt.customerName} - {successAppt.customerPhone}
-            </p>
-            <p>
-              <strong>{`${TEXT.plate}:`}</strong>{" "}
-              <span className="appointment-success-plate">{successAppt.vehicleLicensePlate}</span>
-            </p>
-            {Number(successAppt.groupVehicleCount || 0) > 1 && (
-              <p>
-                <strong>{`${TEXT.appointmentType}:`}</strong>{" "}
-                {`${TEXT.groupType} (${successAppt.groupVehicleCount} xe)`}
-              </p>
-            )}
-            <p>
-              <strong>{`${TEXT.receiveAt}:`}</strong>{" "}
-              {`${formatAppointmentTime(successAppt.startTime)} ng\u00e0y ${formatAppointmentDate(successAppt.startTime)}`}
-            </p>
-            <p>
-              <strong>{`${TEXT.services}:`}</strong>{" "}
-              {successServiceNames.length > 0 ? successServiceNames.join(", ") : TEXT.nonePreset}
-            </p>
-          </div>
-          <div className="form-footer">
-            <button type="button" className="btn-secondary-outline" onClick={handleGoBack}>
-              {TEXT.backToList}
-            </button>
-            <button type="button" className="btn-primary-large" onClick={handleCreateAnother}>
-              {TEXT.createAnother}
-            </button>
-          </div>
-        </section>
       ) : (
         <section className="form-section reception-create-appointment-form">
           <ReceptionCreateAppointmentForm
-            key={formKey}
             customers={customers}
             vehicles={vehicles}
             customerVehicles={customerVehicles}
@@ -223,6 +166,20 @@ export default function ReceptionCreateAppointmentPage() {
           />
         </section>
       )}
+
+      {successAppt ? (
+        <div className="reception-create-success-backdrop" role="status" aria-live="polite">
+          <div className="reception-create-success-popup">
+            <span className="reception-create-success-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M9.2 16.3 4.9 12l1.4-1.4 2.9 2.9 8.5-8.5 1.4 1.4z" />
+              </svg>
+            </span>
+            <h3>{TEXT.successTitle}</h3>
+            <p>{TEXT.successMessage}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

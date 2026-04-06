@@ -8,7 +8,7 @@ import {
   cancelAppointment,
   getAllStandardServices,
 } from "@features/appointments/api/appointmentApi";
-import { cancelBookingGroupAll } from "@features/appointments/api/bookingGroupApi";
+import { cancelGroupSessionAll } from "@features/appointments/api/groupSessionApi";
 import {
   getAllCustomers,
   getAllVehicles,
@@ -90,9 +90,9 @@ function normalizeAppointmentItem(item) {
       : [],
     customerNotes: text(pick("customerNotes", "CustomerNotes")),
     cancelReason: text(pick("cancelReason", "CancelReason")),
-    bookingGroupId: numeric(pick("bookingGroupId", "BookingGroupId")),
-    bookingGroupCode: text(pick("bookingGroupCode", "BookingGroupCode")),
-    bookingGroupStatus: text(pick("bookingGroupStatus", "BookingGroupStatus")),
+    GroupSessionId: numeric(pick("GroupSessionId", "GroupSessionId")),
+    GroupSessionCode: text(pick("GroupSessionCode", "GroupSessionCode")),
+    GroupSessionStatus: text(pick("GroupSessionStatus", "GroupSessionStatus")),
   };
 }
 
@@ -170,7 +170,7 @@ export default function ReceptionAppointmentsPage() {
 
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
   const contextBranchId = parseBranchId(selectedBranchId);
-  const effectiveBranchId = userBranchId || contextBranchId;
+  const effectiveBranchId = contextBranchId || userBranchId;
 
   const normalizeAppointments = useCallback((payload) => {
     const list = Array.isArray(payload)
@@ -279,7 +279,7 @@ export default function ReceptionAppointmentsPage() {
         !query ||
         String(appt.customerName || "").toLowerCase().includes(query) ||
         String(appt.customerPhone || "").toLowerCase().includes(query) ||
-        String(appt.bookingGroupCode || "").toLowerCase().includes(query) ||
+        String(appt.GroupSessionCode || "").toLowerCase().includes(query) ||
         plate.includes(query) ||
         (queryCompact && plateCompact.includes(queryCompact));
 
@@ -302,14 +302,14 @@ export default function ReceptionAppointmentsPage() {
   const groupedAppts = useMemo(() => {
     const grouped = new Map();
     filteredAppts.forEach((appt) => {
-      const gid = Number(appt.bookingGroupId || 0);
+      const gid = Number(appt.GroupSessionId || 0);
       if (!gid) return;
 
       if (!grouped.has(gid)) {
         grouped.set(gid, {
           id: gid,
-          groupCode: appt.bookingGroupCode || `BG-${gid}`,
-          status: appt.bookingGroupStatus || "PENDING",
+          groupCode: appt.GroupSessionCode || `BG-${gid}`,
+          status: appt.GroupSessionStatus || "PENDING",
           customerName: appt.customerName || "",
           customerPhone: appt.customerPhone || "",
           appointments: [],
@@ -338,7 +338,7 @@ export default function ReceptionAppointmentsPage() {
   }, [filteredAppts, apptSortBy]);
 
   const filteredSingleAppts = useMemo(
-    () => filteredAppts.filter((appt) => !Number(appt.bookingGroupId || 0)),
+    () => filteredAppts.filter((appt) => !Number(appt.GroupSessionId || 0)),
     [filteredAppts],
   );
 
@@ -434,7 +434,7 @@ export default function ReceptionAppointmentsPage() {
 
     setActingGroup(group.id);
     try {
-      await cancelBookingGroupAll(group.id, reason);
+      await cancelGroupSessionAll(group.id, reason);
     } catch {
       await Promise.allSettled(
         cancelableAppointments.map((appt) => cancelAppointment(appt.id, reason)),

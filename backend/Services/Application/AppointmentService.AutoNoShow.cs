@@ -152,7 +152,7 @@ namespace MyGarage.Services
                 await _context.SaveChangesAsync();
                 foreach (var groupId in groupIds)
                 {
-                    await _bookingGroupService.SyncCountersAsync(groupId);
+                    await _groupSessionService.SyncCountersAsync(groupId);
                 }
             }
 

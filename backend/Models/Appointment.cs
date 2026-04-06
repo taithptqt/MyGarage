@@ -41,7 +41,7 @@ public partial class Appointment : IAuditEntity
 
     public virtual Branch Branch { get; set; } = null!;
 
-    public virtual BookingGroup? GroupSession { get; set; }
+    public virtual GroupSession? GroupSession { get; set; }
 
     public virtual Staff? CreatedByNavigation { get; set; }
 

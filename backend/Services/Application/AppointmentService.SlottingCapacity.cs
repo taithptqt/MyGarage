@@ -7,16 +7,36 @@ namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
+        private async Task<(int ServiceMinutes, int SetupMinutes, int BufferMinutes, int TotalMinutes)> ResolveDurationBreakdownAsync(
+            string? requestedServiceIds,
+            int slotStepMinutes,
+            bool isParallel = false)
+        {
+            var normalizedStep = ResolveSlotStepMinutes(slotStepMinutes);
+            var serviceMinutes = await ResolveServiceWorkMinutesAsync(requestedServiceIds, isParallel);
+            var setupMinutes = Math.Max(0, StandardCheckInSetupMinutes);
+            var bufferMinutes = Math.Max(ExecutionBufferMinutes, normalizedStep);
+            var totalMinutes = RoundUpToStep(serviceMinutes + setupMinutes + bufferMinutes, normalizedStep);
+            return (serviceMinutes, setupMinutes, bufferMinutes, totalMinutes);
+        }
+
         private async Task<int> ResolveScheduledDurationAsync(
             string? requestedServiceIds,
             int slotStepMinutes,
             bool isParallel = false)
         {
-            var bufferMinutes = Math.Max(15, slotStepMinutes);
+            var breakdown = await ResolveDurationBreakdownAsync(requestedServiceIds, slotStepMinutes, isParallel);
+            return breakdown.TotalMinutes;
+        }
+
+        private async Task<int> ResolveServiceWorkMinutesAsync(
+            string? requestedServiceIds,
+            bool isParallel)
+        {
             if (string.IsNullOrWhiteSpace(requestedServiceIds))
             {
                 var defaultMinutes = await ResolveDefaultDiagnosticServiceMinutesAsync();
-                return RoundUpToStep(defaultMinutes + bufferMinutes, slotStepMinutes);
+                return Math.Max(30, defaultMinutes);
             }
 
             var serviceGroups = requestedServiceIds.Split('|', StringSplitOptions.RemoveEmptyEntries);
@@ -56,12 +76,12 @@ namespace MyGarage.Services
                 }
             }
 
-            if (aggregateMinutes <= 0)
+                        if (aggregateMinutes <= 0)
             {
                 aggregateMinutes = 60;
             }
 
-            return RoundUpToStep(aggregateMinutes + bufferMinutes, slotStepMinutes);
+            return aggregateMinutes;
         }
 
         private Task<int> ResolveFixedDurationAsync(

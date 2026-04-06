@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -57,9 +57,8 @@ namespace MyGarage.Services
                         ? $"{a.Vehicle.Model.Brand.Name} {a.Vehicle.Model.ModelName}"
                         : null,
                     GroupSessionId = a.GroupSessionId,
-                    BookingGroupId = a.GroupSessionId,
-                    BookingGroupCode = a.GroupSession?.GroupCode,
-                    BookingGroupStatus = a.GroupSession?.Status,
+                    GroupSessionCode = a.GroupSession?.GroupCode,
+                    GroupSessionStatus = a.GroupSession?.Status,
                     CreatedBy = a.CreatedBy,
                     StartTime = a.StartTime,
                     EndTime = a.EndTime,

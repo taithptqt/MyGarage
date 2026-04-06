@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
@@ -38,7 +38,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<Appointment> Appointments { get; set; }
 
-    public virtual DbSet<BookingGroup> BookingGroups { get; set; }
+    public virtual DbSet<GroupSession> GroupSessions { get; set; }
 
     public virtual DbSet<ApprovalRequest> ApprovalRequests { get; set; }
 
@@ -355,7 +355,7 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Appointm__3214EC0762F6D2AE");
 
-            entity.HasIndex(e => e.GroupSessionId, "IX_Appointments_BookingGroupId");
+            entity.HasIndex(e => e.GroupSessionId, "IX_Appointments_GroupSessionId");
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
@@ -373,7 +373,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.HasOne(d => d.GroupSession).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.GroupSessionId)
-                .HasConstraintName("FK_Appointments_BookingGroupId");
+                .HasConstraintName("FK_Appointments_GroupSessionId");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.CreatedBy)
@@ -392,15 +392,15 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__Appointme__Vehic__1D114BD1");
         });
 
-        modelBuilder.Entity<BookingGroup>(entity =>
+        modelBuilder.Entity<GroupSession>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__BookingG__3214EC077B6FE4D1");
 
-            entity.HasIndex(e => e.GroupCode, "UQ_BookingGroups_GroupCode").IsUnique();
+            entity.HasIndex(e => e.GroupCode, "UQ_GroupSessions_GroupCode").IsUnique();
 
-            entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "IX_BookingGroups_CustomerId_CreatedAt");
+            entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "IX_GroupSessions_CustomerId_CreatedAt");
 
-            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_BookingGroups_Status_CreatedAt");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_GroupSessions_Status_CreatedAt");
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.ConfirmedAppointments)
@@ -424,27 +424,27 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.ToTable("GroupSessions", tb =>
             {
-                tb.HasCheckConstraint("CK_BookingGroups_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
+                tb.HasCheckConstraint("CK_GroupSessions_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
                 tb.HasCheckConstraint("CK_GroupSessions_ItemCounters", "[TotalItems] >= 0 AND [ConfirmedItems] >= 0 AND [CanceledItems] >= 0 AND [ConfirmedItems] + [CanceledItems] <= [TotalItems]");
             });
 
-            entity.HasOne(d => d.Branch).WithMany(p => p.BookingGroups)
+            entity.HasOne(d => d.Branch).WithMany(p => p.GroupSessions)
                 .HasForeignKey(d => d.BranchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BookingGroups_BranchId");
+                .HasConstraintName("FK_GroupSessions_BranchId");
 
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.BookingGroupCreatedByNavigations)
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.GroupSessionCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK_BookingGroups_CreatedBy");
+                .HasConstraintName("FK_GroupSessions_CreatedBy");
 
-            entity.HasOne(d => d.Customer).WithMany(p => p.BookingGroups)
+            entity.HasOne(d => d.Customer).WithMany(p => p.GroupSessions)
                 .HasForeignKey(d => d.CustomerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BookingGroups_CustomerId");
+                .HasConstraintName("FK_GroupSessions_CustomerId");
 
-            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.BookingGroupUpdatedByNavigations)
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.GroupSessionUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
-                .HasConstraintName("FK_BookingGroups_UpdatedBy");
+                .HasConstraintName("FK_GroupSessions_UpdatedBy");
         });
 
         modelBuilder.Entity<ApprovalRequest>(entity =>

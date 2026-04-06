@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,7 +12,6 @@ using MyGarage.Models;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 using MyGarage.Constants;
 
 namespace MyGarage.Services
@@ -20,7 +19,7 @@ namespace MyGarage.Services
     public partial class AppointmentService : GenericService<Appointment>, IAppointmentService
     {
         private readonly IAppointmentRepository _appointmentRepository;
-        private readonly IBookingGroupService _bookingGroupService;
+        private readonly IGroupSessionService _groupSessionService;
         private readonly IAppointmentStatusPolicy _appointmentStatusPolicy;
         private readonly IAppointmentDetailAssembler _appointmentDetailAssembler;
         private readonly ISlotHoldService _slotHoldService;
@@ -29,6 +28,8 @@ namespace MyGarage.Services
         private readonly IGarageContext _context;
         private const int GraceArrivalMinutes = 15;
         private const int NoShowMinutes = 30;
+        private const int StandardCheckInSetupMinutes = 10;
+        private const int ExecutionBufferMinutes = 15;
         private const int BookingLockHours = 4;
         private const int ReservedRepairForQuickOverflow = 3;
         private const string DefaultDiagnosticServiceCode = "CDTC-001";
@@ -36,7 +37,7 @@ namespace MyGarage.Services
         public AppointmentService(
             IAppointmentRepository repository,
             IGarageContext context,
-            IBookingGroupService bookingGroupService,
+            IGroupSessionService groupSessionService,
             IAppointmentStatusPolicy appointmentStatusPolicy,
             IAppointmentDetailAssembler appointmentDetailAssembler,
             ISlotHoldService slotHoldService,
@@ -46,7 +47,7 @@ namespace MyGarage.Services
         {
             _appointmentRepository = repository;
             _context = context;
-            _bookingGroupService = bookingGroupService;
+            _groupSessionService = groupSessionService;
             _appointmentStatusPolicy = appointmentStatusPolicy;
             _appointmentDetailAssembler = appointmentDetailAssembler;
             _slotHoldService = slotHoldService;
@@ -56,5 +57,3 @@ namespace MyGarage.Services
 
     }
 }
-
-

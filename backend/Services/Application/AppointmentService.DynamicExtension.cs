@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Constants;
 using MyGarage.Enums;
 using MyGarage.Models;
 
@@ -65,7 +66,7 @@ namespace MyGarage.Services
 
             var slotStepMinutes = await ResolveBranchSlotStepMinutesAsync(slot.BranchId, now);
             var closeAt = await ResolveBranchCloseTimeAsync(slot.BranchId, now);
-            var extensionMinutes = RoundUpToStep(additionalMinutes + FlexibleBufferMinutes, slotStepMinutes);
+            var extensionMinutes = RoundUpToStep(additionalMinutes + ExecutionBufferMinutes, slotStepMinutes);
             var proposedEnd = now.AddMinutes(extensionMinutes);
 
             if (TimeOnly.FromDateTime(now) >= ExtensionLockTime &&

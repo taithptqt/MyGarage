@@ -16,13 +16,24 @@ namespace MyGarage.Services
                 var startAt = dto.CheckInWindowStart ?? dto.StartTime
                     ?? throw new InvalidOperationException("Cần cung cấp khung giờ check-in bắt đầu.");
                 var endAt = dto.CheckInWindowEnd ?? dto.EndTime ?? startAt;
+                startAt = NormalizeRequestDateTimeToLocalClock(startAt);
+                endAt = NormalizeRequestDateTimeToLocalClock(endAt);
                 return (startAt, endAt);
             }
 
             var fixedStartAt = dto.StartTime
                 ?? throw new InvalidOperationException("Cần cung cấp giờ bắt đầu cho lịch có giờ.");
             var fixedEndAt = dto.EndTime ?? fixedStartAt;
+            fixedStartAt = NormalizeRequestDateTimeToLocalClock(fixedStartAt);
+            fixedEndAt = NormalizeRequestDateTimeToLocalClock(fixedEndAt);
             return (fixedStartAt, fixedEndAt);
+        }
+
+        private static DateTime NormalizeRequestDateTimeToLocalClock(DateTime value)
+        {
+            if (value.Kind == DateTimeKind.Utc) return value.ToLocalTime();
+            if (value.Kind == DateTimeKind.Unspecified) return DateTime.SpecifyKind(value, DateTimeKind.Local);
+            return value;
         }
 
         private void ValidateBookingBasics(

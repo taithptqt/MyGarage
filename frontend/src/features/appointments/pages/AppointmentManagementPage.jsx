@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { useSearch } from "@context/SearchContext";
@@ -181,9 +181,9 @@ function normalizeAppointment(item) {
     status: normalizeStatus(pick(item, "status", "Status")),
     cancelReason: pick(item, "cancelReason", "CancelReason") || "",
     createdAt: pick(item, "createdAt", "CreatedAt"),
-    bookingGroupId: pick(item, "bookingGroupId", "BookingGroupId"),
-    bookingGroupCode: pick(item, "bookingGroupCode", "BookingGroupCode") || "",
-    bookingGroupStatus: normalizeStatus(pick(item, "bookingGroupStatus", "BookingGroupStatus")),
+    GroupSessionId: pick(item, "GroupSessionId", "GroupSessionId"),
+    GroupSessionCode: pick(item, "GroupSessionCode", "GroupSessionCode") || "",
+    GroupSessionStatus: normalizeStatus(pick(item, "GroupSessionStatus", "GroupSessionStatus")),
   };
 }
 
@@ -428,7 +428,7 @@ export default function AppointmentManagementPage() {
         a.vehicleLicensePlate,
         a.vehicleModelName,
         a.branchName,
-        a.bookingGroupCode,
+        a.GroupSessionCode,
         Array.isArray(a.serviceNames) ? a.serviceNames.join(" ") : "",
       ].filter(Boolean).join(" ").toLowerCase();
 
@@ -451,20 +451,20 @@ export default function AppointmentManagementPage() {
     const standaloneAppointments = [];
 
     for (const appt of filtered) {
-      const hasGroupId = appt.bookingGroupId !== null && appt.bookingGroupId !== undefined;
-      const hasGroupCode = Boolean(String(appt.bookingGroupCode || "").trim());
+      const hasGroupId = appt.GroupSessionId !== null && appt.GroupSessionId !== undefined;
+      const hasGroupCode = Boolean(String(appt.GroupSessionCode || "").trim());
       if (!hasGroupId && !hasGroupCode) {
         standaloneAppointments.push(appt);
         continue;
       }
 
-      const key = hasGroupId ? `id:${appt.bookingGroupId}` : `code:${String(appt.bookingGroupCode).trim()}`;
+      const key = hasGroupId ? `id:${appt.GroupSessionId}` : `code:${String(appt.GroupSessionCode).trim()}`;
       if (!grouped.has(key)) {
         grouped.set(key, {
           key,
-          bookingGroupId: hasGroupId ? appt.bookingGroupId : null,
-          bookingGroupCode: String(appt.bookingGroupCode || "").trim(),
-          bookingGroupStatus: appt.bookingGroupStatus,
+          GroupSessionId: hasGroupId ? appt.GroupSessionId : null,
+          GroupSessionCode: String(appt.GroupSessionCode || "").trim(),
+          GroupSessionStatus: appt.GroupSessionStatus,
           branchName: appt.branchName || "",
           customerName: appt.customerName || "",
           appointments: [],
@@ -472,8 +472,8 @@ export default function AppointmentManagementPage() {
       }
 
       const group = grouped.get(key);
-      if (!group.bookingGroupCode && appt.bookingGroupCode) group.bookingGroupCode = String(appt.bookingGroupCode).trim();
-      if (!group.bookingGroupStatus && appt.bookingGroupStatus) group.bookingGroupStatus = appt.bookingGroupStatus;
+      if (!group.GroupSessionCode && appt.GroupSessionCode) group.GroupSessionCode = String(appt.GroupSessionCode).trim();
+      if (!group.GroupSessionStatus && appt.GroupSessionStatus) group.GroupSessionStatus = appt.GroupSessionStatus;
       if (!group.branchName && appt.branchName) group.branchName = appt.branchName;
       if (!group.customerName && appt.customerName) group.customerName = appt.customerName;
       group.appointments.push(appt);
@@ -750,8 +750,8 @@ export default function AppointmentManagementPage() {
               <section key={group.key} style={{ border: "1px solid var(--mgmt-table-border, #edf2f7)", borderRadius: 14, overflow: "hidden", background: "var(--mgmt-surface, #fff)" }}>
                 <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--mgmt-table-border, #edf2f7)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <strong>{group.bookingGroupCode || `Nhóm #${group.bookingGroupId || group.key}`}</strong>
-                    <span className={`badge ${groupBadgeClass(group.bookingGroupStatus)}`}>{GROUP_STATUS_LABELS[group.bookingGroupStatus] || group.bookingGroupStatus || "Không rõ"}</span>
+                    <strong>{group.GroupSessionCode || `Nhóm #${group.GroupSessionId || group.key}`}</strong>
+                    <span className={`badge ${groupBadgeClass(group.GroupSessionStatus)}`}>{GROUP_STATUS_LABELS[group.GroupSessionStatus] || group.GroupSessionStatus || "Không rõ"}</span>
                     <span style={{ fontSize: 12, color: "var(--mgmt-text-muted, #718096)" }}>{group.appointments.length} lịch · Đã xác nhận {group.confirmedCount} · Đã hủy {group.canceledCount}</span>
                   </div>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 12, color: "var(--mgmt-text-muted, #718096)" }}>

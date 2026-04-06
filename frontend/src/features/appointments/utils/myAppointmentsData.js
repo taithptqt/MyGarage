@@ -1,5 +1,5 @@
-﻿import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
-import { BOOKING_GROUP_STATUS } from "@features/appointments/constants/bookingGroupStatuses";
+import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
+import { GROUP_SESSION_STATUS } from "@features/appointments/constants/groupSessionStatuses";
 
 export const STATUS_META = {
   [APPOINTMENT_STATUS.PENDING]: { label: "Chờ xác nhận", tone: "pending" },
@@ -10,11 +10,11 @@ export const STATUS_META = {
 };
 
 export const GROUP_STATUS_META = {
-  [BOOKING_GROUP_STATUS.PENDING]: { label: "Đang chờ", tone: "pending" },
-  [BOOKING_GROUP_STATUS.PARTIAL_CONFIRMED]: { label: "Xác nhận một phần", tone: "arrived" },
-  [BOOKING_GROUP_STATUS.CONFIRMED]: { label: "Đã xác nhận", tone: "confirmed" },
-  [BOOKING_GROUP_STATUS.COMPLETED]: { label: "Đã hoàn tất", tone: "confirmed" },
-  [BOOKING_GROUP_STATUS.CANCELED]: { label: "Đã hủy", tone: "canceled" },
+  [GROUP_SESSION_STATUS.PENDING]: { label: "Đang chờ", tone: "pending" },
+  [GROUP_SESSION_STATUS.PARTIAL_CONFIRMED]: { label: "Xác nhận một phần", tone: "arrived" },
+  [GROUP_SESSION_STATUS.CONFIRMED]: { label: "Đã xác nhận", tone: "confirmed" },
+  [GROUP_SESSION_STATUS.COMPLETED]: { label: "Đã hoàn tất", tone: "confirmed" },
+  [GROUP_SESSION_STATUS.CANCELED]: { label: "Đã hủy", tone: "canceled" },
 };
 
 export const FILTERS = [
@@ -70,11 +70,11 @@ export function normalizeAppointmentsResponse(payload) {
   return extractCollection(payload);
 }
 
-export function normalizeBookingGroupsResponse(payload) {
+export function normalizeGroupSessionsResponse(payload) {
   return extractCollection(payload);
 }
 
-export function normalizeBookingGroup(item) {
+export function normalizeGroupSession(item) {
   const appointments = extractCollection(item?.appointments ?? item?.Appointments)
     .map(normalizeAppointment)
     .filter((appointment) => appointment.id !== undefined && appointment.id !== null);

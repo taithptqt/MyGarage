@@ -19,7 +19,7 @@ namespace MyGarage.Interfaces
         DbSet<AiSmartDispatching> AiSmartDispatchings { get; }
         DbSet<AiTechnicalAssistant> AiTechnicalAssistants { get; }
         DbSet<Appointment> Appointments { get; }
-        DbSet<BookingGroup> BookingGroups { get; }
+        DbSet<GroupSession> GroupSessions { get; }
         DbSet<ApprovalRequest> ApprovalRequests { get; }
         DbSet<AuditLog> AuditLogs { get; }
         DbSet<Bay> Bays { get; }

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -61,10 +60,11 @@ namespace MyGarage.Services
             var effectiveVehicleCount = Math.Max(1, vehicleCount);
             var useParallel = isParallel;
 
-            var requiredDuration = await ResolveScheduledDurationAsync(
+            var durationBreakdown = await ResolveDurationBreakdownAsync(
                 effectiveRequestedServiceIds,
                 slotStepMinutes,
                 useParallel);
+            var requiredDuration = durationBreakdown.TotalMinutes;
 
             var slots = await BuildScheduledSlotsAsync(
                 branchId,
@@ -80,10 +80,11 @@ namespace MyGarage.Services
                 useParallel &&
                 HasGroupedRequestedServices(effectiveRequestedServiceIds))
             {
-                requiredDuration = await ResolveScheduledDurationAsync(
+                durationBreakdown = await ResolveDurationBreakdownAsync(
                     effectiveRequestedServiceIds,
                     slotStepMinutes,
                     isParallel: false);
+                requiredDuration = durationBreakdown.TotalMinutes;
 
                 slots = await BuildScheduledSlotsAsync(
                     branchId,
@@ -94,16 +95,23 @@ namespace MyGarage.Services
                     effectiveRequestedServiceIds,
                     requiredDuration,
                     effectiveVehicleCount);
-            }
+                        }
 
             var dynamicNotice = flow == BookingFlowType.Flexible
-                ? BuildFlexibleDynamicNotice(requiredDuration)
+                ? BuildFlexibleDynamicNotice(
+                    durationBreakdown.ServiceMinutes,
+                    durationBreakdown.SetupMinutes,
+                    durationBreakdown.BufferMinutes,
+                    requiredDuration)
                 : null;
 
             foreach (var slot in slots)
             {
                 slot.BookingFlow = AppointmentBookingFlows.Fixed;
                 slot.EstimatedDurationMinutes = requiredDuration;
+                slot.ServiceMinutes = durationBreakdown.ServiceMinutes;
+                slot.SetupMinutes = durationBreakdown.SetupMinutes;
+                slot.BufferMinutes = durationBreakdown.BufferMinutes;
                 slot.DynamicNotice = dynamicNotice;
             }
 
