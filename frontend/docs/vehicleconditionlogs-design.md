@@ -21,7 +21,7 @@
   - Protect garage from post-service disputes about external defects and valuables.
   - Capture both receiving and returning moments (`CHECK_IN` / `CHECK_OUT`).
 
-## Page behavior (v1)
+## Page behavior (v1 hi)
 - Route context by service order: `.../orders/:orderId/vehicleconditionlogs`
 - Fetch all logs and filter by `serviceOrderId` on frontend (current API shape).
 - Group records by `logType`: `CHECK_IN`, `CHECK_OUT`, `OTHER`.
