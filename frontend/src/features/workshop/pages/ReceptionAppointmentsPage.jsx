@@ -112,7 +112,8 @@ function canConfirmAppointment(status) {
 }
 
 function canCheckInAppointment(status) {
-  return normalizeStatus(status) === "CONFIRMED";
+  const normalized = normalizeStatus(status);
+  return normalized === "CONFIRMED" || normalized === "LATE";
 }
 
 function canCancelAppointment(status) {

@@ -27,7 +27,7 @@ function canConfirmAppointment(status) {
 
 function canCheckInAppointment(status) {
   const normalized = String(status || "").trim().toUpperCase();
-  return normalized === "CONFIRMED";
+  return normalized === "CONFIRMED" || normalized === "LATE";
 }
 
 function canCancelAppointment(status) {

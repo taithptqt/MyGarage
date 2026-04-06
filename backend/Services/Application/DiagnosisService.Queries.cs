@@ -1,15 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.DTOs.Responses;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class DiagnosisService
     {
-        public async Task<IReadOnlyList<Diagnosis>> GetAllFilteredAsync(long? serviceOrderId, bool requestOnly)
+        public async Task<IReadOnlyList<Diagnosis>> GetAllFilteredAsync(long? serviceOrderId, bool requestOnly, long? teamId = null)
         {
             var query = _context.Diagnoses.AsNoTracking().AsQueryable();
 
@@ -20,7 +21,27 @@ namespace MyGarage.Services
 
             if (requestOnly)
             {
-                query = query.Where(x => x.Status == "PENDING" || x.Status == "ASSIGNED");
+                query = query.Where(x => x.Status == DiagnosisStatusPending || x.Status == DiagnosisStatusAssigned);
+            }
+
+            if (teamId.HasValue)
+            {
+                var normalizedTeamTag = NormalizeDispatchTag(await _context.Teams
+                    .Where(x => x.Id == teamId.Value)
+                    .Select(x => x.SpecialtyTag)
+                    .FirstOrDefaultAsync());
+
+                query = query.Where(x =>
+                    x.AssignedTeamId == teamId.Value ||
+                    (
+                        x.AssignedTeamId == null &&
+                        x.Status == DiagnosisStatusPending &&
+                        (
+                            normalizedTeamTag == null ||
+                            x.DispatchTag == null ||
+                            x.DispatchTag == normalizedTeamTag
+                        )
+                    ));
             }
 
             return await query
@@ -50,6 +71,196 @@ namespace MyGarage.Services
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted)
+        {
+            var query = _context.Diagnoses.AsNoTracking().AsQueryable();
+
+            if (!includeCompleted)
+            {
+                query = query.Where(x => x.Status != DiagnosisStatusCompleted);
+            }
+
+            if (teamId.HasValue)
+            {
+                var normalizedTeamTag = NormalizeDispatchTag(await _context.Teams
+                    .Where(x => x.Id == teamId.Value)
+                    .Select(x => x.SpecialtyTag)
+                    .FirstOrDefaultAsync());
+
+                query = query.Where(x =>
+                    x.AssignedTeamId == teamId.Value ||
+                    (
+                        x.AssignedTeamId == null &&
+                        x.Status == DiagnosisStatusPending &&
+                        (
+                            normalizedTeamTag == null ||
+                            x.DispatchTag == null ||
+                            x.DispatchTag == normalizedTeamTag
+                        )
+                    ));
+            }
+
+            var diagnoses = await query.ToListAsync();
+            if (diagnoses.Count == 0)
+            {
+                return Array.Empty<DiagnosisDispatchBoardItemDto>();
+            }
+
+            var serviceOrderIds = diagnoses.Select(x => x.ServiceOrderId).Distinct().ToList();
+            var serviceOrderQuery = _context.ServiceOrders.AsNoTracking()
+                .Where(x => serviceOrderIds.Contains(x.Id));
+
+            if (branchId.HasValue)
+            {
+                serviceOrderQuery = serviceOrderQuery.Where(x => x.ExecuteBranchId == branchId.Value);
+            }
+
+            var orderRows = await serviceOrderQuery
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
+                    x.ExecuteBranchId,
+                    x.Status,
+                })
+                .ToListAsync();
+
+            if (orderRows.Count == 0)
+            {
+                return Array.Empty<DiagnosisDispatchBoardItemDto>();
+            }
+
+            var orderIds = orderRows.Select(x => x.Id).ToHashSet();
+            diagnoses = diagnoses.Where(x => orderIds.Contains(x.ServiceOrderId)).ToList();
+
+            var teamIds = diagnoses
+                .Where(x => x.AssignedTeamId.HasValue)
+                .Select(x => x.AssignedTeamId!.Value)
+                .Distinct()
+                .ToList();
+            var teamNameMap = teamIds.Count == 0
+                ? new Dictionary<long, string>()
+                : await _context.Teams.AsNoTracking()
+                    .Where(x => teamIds.Contains(x.Id))
+                    .Select(x => new { x.Id, x.Name })
+                    .ToDictionaryAsync(x => x.Id, x => x.Name ?? string.Empty);
+
+            var technicianIds = diagnoses
+                .Select(x => x.TechnicianId)
+                .Distinct()
+                .ToList();
+            var technicianNameMap = technicianIds.Count == 0
+                ? new Dictionary<long, string>()
+                : await _context.Staffs.AsNoTracking()
+                    .Where(x => technicianIds.Contains(x.Id))
+                    .Select(x => new { x.Id, x.FullName })
+                    .ToDictionaryAsync(x => x.Id, x => x.FullName ?? string.Empty);
+
+            var orderMap = orderRows.ToDictionary(x => x.Id, x => x);
+            var now = DateTime.UtcNow;
+
+            var board = diagnoses
+                .GroupBy(x => x.ServiceOrderId)
+                .Select(group =>
+                {
+                    var order = orderMap[group.Key];
+                    var list = group.ToList();
+                    var latest = list
+                        .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                        .First();
+
+                    var assignedDiagnosis = list
+                        .Where(x => x.Status == DiagnosisStatusAssigned)
+                        .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                        .FirstOrDefault();
+
+                    var pendingSince = list
+                        .Where(x => x.Status == DiagnosisStatusPending)
+                        .Select(x => x.CreatedAt ?? x.UpdatedAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderBy(x => x)
+                        .FirstOrDefault();
+
+                    var assignedSince = list
+                        .Where(x => x.Status == DiagnosisStatusAssigned)
+                        .Select(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderBy(x => x)
+                        .FirstOrDefault();
+
+                    var pendingMinutes = pendingSince == default ? 0 : (int)Math.Floor((now - pendingSince).TotalMinutes);
+                    var assignedMinutes = assignedSince == default ? 0 : (int)Math.Floor((now - assignedSince).TotalMinutes);
+
+                    var allCompleted = list.Count > 0 && list.All(x => x.Status == DiagnosisStatusCompleted);
+                    var hasAssigned = list.Any(x => x.Status == DiagnosisStatusAssigned);
+                    var hasSupport = list.Any(x => x.SupportRequestedAt.HasValue);
+                    var hasCancelPending = list.Any(x => string.Equals(x.CancellationStatus, CancellationStatusPending, StringComparison.OrdinalIgnoreCase));
+                    var isPendingOverdue = pendingMinutes >= UnclaimedEscalationMinutes;
+                    var isAssignedOverdue = assignedMinutes >= DiagnosisSlaMinutes;
+
+                    string queueColor;
+                    string queueState;
+                    if (hasSupport || hasCancelPending || isPendingOverdue || isAssignedOverdue)
+                    {
+                        queueColor = "RED";
+                        queueState = "ALERT";
+                    }
+                    else if (allCompleted)
+                    {
+                        queueColor = "GREEN";
+                        queueState = "DIAGNOSED";
+                    }
+                    else if (hasAssigned)
+                    {
+                        queueColor = "YELLOW";
+                        queueState = "IN_PROGRESS";
+                    }
+                    else
+                    {
+                        queueColor = "WHITE";
+                        queueState = "NEW";
+                    }
+
+                    var teamIdValue = assignedDiagnosis?.AssignedTeamId ?? latest.AssignedTeamId;
+                    var technicianId = assignedDiagnosis?.TechnicianId ?? latest.TechnicianId;
+                    var cancelReason = list
+                        .Select(x => x.CancellationReason)
+                        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+                    return new DiagnosisDispatchBoardItemDto
+                    {
+                        ServiceOrderId = group.Key,
+                        ServiceOrderCode = order.Code,
+                        ExecuteBranchId = order.ExecuteBranchId,
+                        ServiceOrderStatus = order.Status,
+                        DiagnosisIds = list.Select(x => x.Id).OrderBy(x => x).ToArray(),
+                        QueueState = queueState,
+                        QueueColor = queueColor,
+                        DispatchTag = latest.DispatchTag,
+                        TeamId = teamIdValue,
+                        TeamName = teamIdValue.HasValue && teamNameMap.TryGetValue(teamIdValue.Value, out var teamName) ? teamName : null,
+                        TechnicianId = technicianId > 0 ? technicianId : null,
+                        TechnicianName = technicianNameMap.TryGetValue(technicianId, out var technicianName) ? technicianName : null,
+                        RequestedAt = pendingSince == default ? latest.CreatedAt : pendingSince,
+                        AssignedAt = assignedSince == default ? latest.AssignedAt : assignedSince,
+                        PendingMinutes = Math.Max(0, pendingMinutes),
+                        AssignedMinutes = Math.Max(0, assignedMinutes),
+                        IsSupportRequested = hasSupport,
+                        IsCancelPendingApproval = hasCancelPending,
+                        CancelReason = cancelReason
+                    };
+                })
+                .OrderByDescending(x => x.QueueColor == "RED")
+                .ThenByDescending(x => x.QueueColor == "YELLOW")
+                .ThenByDescending(x => x.PendingMinutes)
+                .ThenByDescending(x => x.AssignedMinutes)
+                .ToList();
+
+            return board;
+        }
+
         public async Task RemoveRecommendationsByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds)
         {
             var idList = diagnosisIds?.Distinct().ToList() ?? new List<long>();
@@ -72,7 +283,5 @@ namespace MyGarage.Services
             }
             return Task.CompletedTask;
         }
-
-
     }
 }

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -13,6 +15,14 @@ namespace MyGarage.Controllers
     [ApiController]
     public class ServiceStaffAssignmentController : ControllerBase
     {
+        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PENDING",
+            "IN_PROGRESS",
+            "PAUSED",
+            "COMPLETED",
+        };
+
         private readonly IServiceStaffAssignmentService _serviceStaffAssignmentService;
         private readonly IMapper _mapper;
 
@@ -45,6 +55,12 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceStaffAssignmentResponseDto>> Create([FromBody] ServiceStaffAssignmentCreateDto itemDto)
         {
+            var statusError = NormalizeAndValidateStatus(itemDto, isCreate: true);
+            if (!string.IsNullOrWhiteSpace(statusError))
+            {
+                return BadRequest(new { message = statusError });
+            }
+
             var entity = _mapper.Map<ServiceStaffAssignment>(itemDto);
             var createdItem = await _serviceStaffAssignmentService.AddAsync(entity);
             var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(createdItem);
@@ -58,6 +74,12 @@ namespace MyGarage.Controllers
             if (existingItem == null)
             {
                 return NotFound();
+            }
+
+            var statusError = NormalizeAndValidateStatus(itemDto, isCreate: false);
+            if (!string.IsNullOrWhiteSpace(statusError))
+            {
+                return BadRequest(new { message = statusError });
             }
 
             _mapper.Map(itemDto, existingItem);
@@ -81,6 +103,63 @@ namespace MyGarage.Controllers
             }
             return NoContent();
         }
+
+        private static string? NormalizeAndValidateStatus(ServiceStaffAssignmentCreateDto dto, bool isCreate)
+        {
+            if (dto == null)
+            {
+                return "Dữ liệu phân công kỹ thuật không hợp lệ.";
+            }
+
+            var normalized = NormalizeStatus(dto.Status);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                if (isCreate)
+                {
+                    dto.Status = "PENDING";
+                }
+                return null;
+            }
+
+            if (!AllowedStatuses.Contains(normalized))
+            {
+                var allowed = string.Join(", ", AllowedStatuses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                return $"Giá trị status không hợp lệ: {dto.Status}. Chấp nhận: {allowed}.";
+            }
+
+            dto.Status = normalized;
+            return null;
+        }
+
+        private static string? NormalizeAndValidateStatus(ServiceStaffAssignmentUpdateDto dto, bool isCreate)
+        {
+            if (dto == null)
+            {
+                return "Dữ liệu phân công kỹ thuật không hợp lệ.";
+            }
+
+            var normalized = NormalizeStatus(dto.Status);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                if (isCreate)
+                {
+                    dto.Status = "PENDING";
+                }
+                return null;
+            }
+
+            if (!AllowedStatuses.Contains(normalized))
+            {
+                var allowed = string.Join(", ", AllowedStatuses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                return $"Giá trị status không hợp lệ: {dto.Status}. Chấp nhận: {allowed}.";
+            }
+
+            dto.Status = normalized;
+            return null;
+        }
+
+        private static string NormalizeStatus(string? status)
+            => string.IsNullOrWhiteSpace(status) ? string.Empty : status.Trim().ToUpperInvariant();
     }
 }
 

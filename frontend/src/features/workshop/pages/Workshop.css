@@ -1602,15 +1602,18 @@
   background: #f4f7fe !important;
 }
 
-.reception-create-appointment-form .dropdown-panel {
+.reception-create-appointment-form .dropdown-panel,
+.reception-appt-form .dropdown-panel {
   margin-top: 8px;
   border: 1px solid #d9e1f4;
   border-radius: 12px;
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(67, 24, 255, 0.08);
+  z-index: 1200;
 }
 
-.reception-create-appointment-form .dropdown-panel .dropdown-item {
+.reception-create-appointment-form .dropdown-panel .dropdown-item,
+.reception-appt-form .dropdown-panel .dropdown-item {
   display: block;
   width: 100%;
   padding: 12px 14px;
@@ -1623,11 +1626,13 @@
   background: transparent;
 }
 
-.reception-create-appointment-form .dropdown-panel .dropdown-item + .dropdown-item {
+.reception-create-appointment-form .dropdown-panel .dropdown-item + .dropdown-item,
+.reception-appt-form .dropdown-panel .dropdown-item + .dropdown-item {
   border-top: 1px solid #edf1fa;
 }
 
-.reception-create-appointment-form .dropdown-panel .dropdown-item:hover {
+.reception-create-appointment-form .dropdown-panel .dropdown-item:hover,
+.reception-appt-form .dropdown-panel .dropdown-item:hover {
   background: linear-gradient(90deg, #eef2ff 0%, #f7f9ff 100%) !important;
   color: #1b2559;
 }
@@ -2355,7 +2360,7 @@
   margin-top: 10px;
   display: grid;
   gap: 10px;
-  max-height: min(52vh, 460px);
+  max-height: min(72vh, 680px);
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: none;
@@ -2873,6 +2878,14 @@
   padding: 14px;
 }
 
+.reception-new-vehicle-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
 .reception-grid {
   display: grid;
   gap: 12px;
@@ -3274,7 +3287,17 @@
 .reception-slot-card.selected {
   border-color: #7ea8e8;
   background: #edf5ff;
-  box-shadow: inset 0 0 0 1px rgba(126, 168, 232, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(126, 168, 232, 0.45), 0 8px 16px rgba(77, 118, 188, 0.16);
+}
+
+.reception-slot-card.selected .reception-slot-time {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(57, 92, 161, 0.3);
+  color: #1f3f72;
+}
+
+.reception-slot-card.selected.top-pick {
+  border-color: #7ea8e8;
 }
 
 .reception-slot-card.top-pick {
@@ -4093,6 +4116,11 @@
   gap: 20px;
 }
 
+.timeline-grid-vertical {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
 .form-footer {
   display: flex;
   justify-content: flex-end;
@@ -4212,21 +4240,25 @@
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
-.workshop-page.dark .reception-create-appointment-form .dropdown-panel {
+.workshop-page.dark .reception-create-appointment-form .dropdown-panel,
+.workshop-page.dark .reception-appt-form .dropdown-panel {
   background: #111c44;
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
-.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item {
+.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item,
+.workshop-page.dark .reception-appt-form .dropdown-panel .dropdown-item {
   color: #e0e8ff;
 }
 
-.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item + .dropdown-item {
+.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item + .dropdown-item,
+.workshop-page.dark .reception-appt-form .dropdown-panel .dropdown-item + .dropdown-item {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 
-.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item:hover {
+.workshop-page.dark .reception-create-appointment-form .dropdown-panel .dropdown-item:hover,
+.workshop-page.dark .reception-appt-form .dropdown-panel .dropdown-item:hover {
   background: linear-gradient(90deg, #1f2d63 0%, #22316e 100%) !important;
   color: #ffffff;
 }

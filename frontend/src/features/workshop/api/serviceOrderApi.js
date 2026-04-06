@@ -68,14 +68,54 @@ export const serviceOrderApi = {
       data: payload,
     });
   },
-  requestDiagnosis: (serviceOrderId) => request({ url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`, method: "POST" }),
+  requestDiagnosis: (serviceOrderId, dispatchTag = null) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
+      method: "POST",
+      data: dispatchTag ? { dispatchTag } : undefined,
+    }),
   recallDiagnosisRequest: (serviceOrderId) => request({ url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`, method: "DELETE" }),
-  getDiagnosisRequests: () => request({ url: "/api/diagnoses", method: "GET", params: { requestOnly: true } }),
-  acceptDiagnosisRequest: (serviceOrderId, technicianId) =>
+  getDiagnosisRequests: (teamId = null) =>
+    request({
+      url: "/api/diagnoses",
+      method: "GET",
+      params: { requestOnly: true, ...(teamId ? { teamId } : {}) },
+    }),
+  getDiagnosisDispatchBoard: (params) =>
+    request({
+      url: "/api/diagnoses/dispatch-board",
+      method: "GET",
+      params,
+    }),
+  acceptDiagnosisRequest: (serviceOrderId, technicianId, options = {}) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
       method: "PATCH",
-      data: { technicianId },
+      data: { technicianId, ...options },
+    }),
+  requestDiagnosisSupport: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/support`,
+      method: "POST",
+      data,
+    }),
+  requestDiagnosisCancel: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/cancel-requests`,
+      method: "POST",
+      data,
+    }),
+  decideDiagnosisCancel: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/cancel-requests/decision`,
+      method: "POST",
+      data,
+    }),
+  overrideDiagnosisAssignment: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/manager-override`,
+      method: "POST",
+      data,
     }),
 
   // --- Diagnose Recommendations ---
@@ -93,6 +133,9 @@ export const serviceOrderApi = {
   createAssignment: (data) => request({ url: "/api/service-staff-assignments", method: "POST", data }),
   updateAssignment: (id, data) => request({ url: `/api/service-staff-assignments/${id}`, method: "PUT", data }),
   deleteAssignment: (id) => request({ url: `/api/service-staff-assignments/${id}`, method: "DELETE" }),
+
+  // --- Teams ---
+  getTeams: (params) => request({ url: "/api/teams", method: "GET", params }),
 
   // --- Helpers ---
   generateCode: () => `SO-${new Date().getTime().toString().slice(-6)}`,

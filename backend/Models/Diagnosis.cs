@@ -19,7 +19,33 @@ public partial class Diagnosis
 
     public string? Status { get; set; }
 
+    public string? DispatchTag { get; set; }
+
+    public long? AssignedTeamId { get; set; }
+
+    public DateTime? AssignedAt { get; set; }
+
     public DateTime? DiagnosedAt { get; set; }
+
+    public DateTime? SupportRequestedAt { get; set; }
+
+    public long? SupportRequestedBy { get; set; }
+
+    public string? SupportRequestNote { get; set; }
+
+    public string? CancellationStatus { get; set; }
+
+    public string? CancellationReason { get; set; }
+
+    public DateTime? CancellationRequestedAt { get; set; }
+
+    public long? CancellationRequestedBy { get; set; }
+
+    public DateTime? CancellationDecisionAt { get; set; }
+
+    public long? CancellationDecisionBy { get; set; }
+
+    public string? CancellationDecisionNote { get; set; }
 
     public long? ApprovedByForemanId { get; set; }
 

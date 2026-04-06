@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -13,6 +15,52 @@ namespace MyGarage.Controllers
     [ApiController]
     public class ServiceOrderController : ControllerBase
     {
+        private static readonly HashSet<string> AllowedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "NEW",
+            "CHECKED_IN",
+            "WAITING",
+            "INSPECTING",
+            "DIAGNOSING",
+            "QUOTING",
+            "WAITING_APPROVAL",
+            "APPROVED",
+            "IN_PROGRESS",
+            "REPAIRING",
+            "QC",
+            "QC_PENDING",
+            "READY",
+            "WAITING_PAYMENT",
+            "CLOSED",
+            "CANCELED",
+            "CANCELLED",
+            "RECEPTION",
+            "COMPLETED",
+        };
+
+        private static readonly HashSet<string> AllowedPaymentStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "UNPAID",
+            "PARTIAL",
+            "PAID",
+        };
+
+        private static readonly HashSet<string> AllowedDepositStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "NOT_REQUIRED",
+            "PENDING",
+            "PARTIAL",
+            "PAID",
+            "REFUNDED",
+        };
+
+        private static readonly HashSet<string> AllowedQcStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PENDING",
+            "PASSED",
+            "FAILED",
+        };
+
         private readonly IServiceOrderService _serviceOrderService;
         private readonly IMapper _mapper;
 
@@ -45,6 +93,12 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceOrderResponseDto>> Create([FromBody] ServiceOrderCreateDto itemDto)
         {
+            var statusValidationError = NormalizeAndValidateStatusFields(itemDto);
+            if (!string.IsNullOrWhiteSpace(statusValidationError))
+            {
+                return BadRequest(new { message = statusValidationError });
+            }
+
             var entity = _mapper.Map<ServiceOrder>(itemDto);
             var createdItem = await _serviceOrderService.AddAsync(entity);
             var responseDto = _mapper.Map<ServiceOrderResponseDto>(createdItem);
@@ -58,6 +112,12 @@ namespace MyGarage.Controllers
             if (existingItem == null)
             {
                 return NotFound();
+            }
+
+            var statusValidationError = NormalizeAndValidateStatusFields(itemDto);
+            if (!string.IsNullOrWhiteSpace(statusValidationError))
+            {
+                return BadRequest(new { message = statusValidationError });
             }
 
             _mapper.Map(itemDto, existingItem);
@@ -80,6 +140,82 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
             return NoContent();
+        }
+
+        private static string? NormalizeAndValidateStatusFields(ServiceOrderCreateDto dto)
+        {
+            if (dto == null)
+            {
+                return "Dữ liệu Service Order không hợp lệ.";
+            }
+
+            var error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
+            if (error != null) return error;
+            if (normalizedStatus != null) dto.Status = normalizedStatus;
+
+            error = TryNormalizeChoice(dto.PaymentStatus, AllowedPaymentStatuses, "paymentStatus", out var normalizedPaymentStatus);
+            if (error != null) return error;
+            if (normalizedPaymentStatus != null) dto.PaymentStatus = normalizedPaymentStatus;
+
+            error = TryNormalizeChoice(dto.DepositStatus, AllowedDepositStatuses, "depositStatus", out var normalizedDepositStatus);
+            if (error != null) return error;
+            if (normalizedDepositStatus != null) dto.DepositStatus = normalizedDepositStatus;
+
+            error = TryNormalizeChoice(dto.Qcstatus, AllowedQcStatuses, "qcStatus", out var normalizedQcStatus);
+            if (error != null) return error;
+            if (normalizedQcStatus != null) dto.Qcstatus = normalizedQcStatus;
+
+            return null;
+        }
+
+        private static string? NormalizeAndValidateStatusFields(ServiceOrderUpdateDto dto)
+        {
+            if (dto == null)
+            {
+                return "Dữ liệu Service Order không hợp lệ.";
+            }
+
+            var error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
+            if (error != null) return error;
+            if (normalizedStatus != null) dto.Status = normalizedStatus;
+
+            error = TryNormalizeChoice(dto.PaymentStatus, AllowedPaymentStatuses, "paymentStatus", out var normalizedPaymentStatus);
+            if (error != null) return error;
+            if (normalizedPaymentStatus != null) dto.PaymentStatus = normalizedPaymentStatus;
+
+            error = TryNormalizeChoice(dto.DepositStatus, AllowedDepositStatuses, "depositStatus", out var normalizedDepositStatus);
+            if (error != null) return error;
+            if (normalizedDepositStatus != null) dto.DepositStatus = normalizedDepositStatus;
+
+            error = TryNormalizeChoice(dto.Qcstatus, AllowedQcStatuses, "qcStatus", out var normalizedQcStatus);
+            if (error != null) return error;
+            if (normalizedQcStatus != null) dto.Qcstatus = normalizedQcStatus;
+
+            return null;
+        }
+
+        private static string? TryNormalizeChoice(
+            string? rawValue,
+            HashSet<string> allowedValues,
+            string fieldName,
+            out string? normalizedValue)
+        {
+            normalizedValue = null;
+
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return null;
+            }
+
+            var token = rawValue.Trim().ToUpperInvariant();
+            if (!allowedValues.Contains(token))
+            {
+                var allowed = string.Join(", ", allowedValues.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                return $"Giá trị {fieldName} không hợp lệ: {rawValue}. Chấp nhận: {allowed}.";
+            }
+
+            normalizedValue = token;
+            return null;
         }
     }
 }

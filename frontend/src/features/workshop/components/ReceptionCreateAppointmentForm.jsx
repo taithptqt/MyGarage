@@ -158,10 +158,43 @@ function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
-function formatSavedVehicleDescriptor(vehicle) {
-  const brand = String(vehicle?.brandName || "").trim();
-  const model = String(vehicle?.modelName || "").trim();
-  return `${brand} ${model}`.trim() || "Xe đã liên kết";
+function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelInfoById = new Map()) {
+  const text = (value) => String(value || "").trim();
+
+  const brandObject = readField(vehicle, ["brand", "Brand"], null);
+  const modelObject = readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null);
+
+  const modelId = Number(
+    readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], readField(modelObject, ["id", "Id"], 0))
+  );
+  const brandId = Number(
+    readField(vehicle, ["brandId", "BrandId", "vehicleBrandId", "VehicleBrandId"], readField(brandObject, ["id", "Id"], 0))
+  );
+
+  const modelInfo = modelInfoById.get(modelId) || null;
+  const lookupBrandNameFromModel = modelInfo?.brandId ? text(brandNameById.get(Number(modelInfo.brandId))) : "";
+  const lookupBrandName = text(brandNameById.get(brandId));
+
+  const brandName =
+    [
+      text(readField(vehicle, ["brandName", "BrandName", "vehicleBrandName", "VehicleBrandName"], "")),
+      text(readField(brandObject, ["name", "Name", "brandName", "BrandName"], "")),
+      text(modelInfo?.brandName),
+      lookupBrandNameFromModel,
+      lookupBrandName
+    ].find(Boolean) || "";
+
+  const modelName =
+    [
+      text(readField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "")),
+      text(readField(modelObject, ["modelName", "ModelName", "name", "Name"], "")),
+      text(modelInfo?.name)
+    ].find(Boolean) || "";
+
+  if (brandName && modelName) return `${brandName} ${modelName}`;
+  if (modelName) return modelName;
+  if (brandName) return brandName;
+  return "Chưa rõ hãng - chưa rõ dòng xe";
 }
 
 function toIsoDate(value) {
@@ -369,6 +402,40 @@ export default function ReceptionCreateAppointmentForm({
     categoryOptions.forEach((category) => map.set(category.id, category.name));
     return map;
   }, [categoryOptions]);
+
+  const brandNameById = useMemo(() => {
+    const map = new Map();
+    (brands || []).forEach((brand) => {
+      const id = Number(readField(brand, ["id", "Id"], 0));
+      if (!Number.isFinite(id) || id <= 0) return;
+      const name = String(readField(brand, ["name", "Name", "brandName", "BrandName"], "") || "").trim();
+      if (!name) return;
+      map.set(id, name);
+    });
+    return map;
+  }, [brands]);
+
+  const modelInfoById = useMemo(() => {
+    const map = new Map();
+    (models || []).forEach((model) => {
+      const id = Number(readField(model, ["id", "Id"], 0));
+      if (!Number.isFinite(id) || id <= 0) return;
+      const name = String(readField(model, ["modelName", "ModelName", "name", "Name"], "") || "").trim();
+      const brandId = Number(readField(model, ["brandId", "BrandId"], 0));
+      const brandName = String(readField(model, ["brandName", "BrandName"], "") || "").trim();
+      map.set(id, {
+        name,
+        brandId: Number.isFinite(brandId) && brandId > 0 ? brandId : 0,
+        brandName
+      });
+    });
+    return map;
+  }, [models]);
+
+  const describeSavedVehicle = useCallback(
+    (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
+    [brandNameById, modelInfoById]
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -1569,9 +1636,16 @@ export default function ReceptionCreateAppointmentForm({
     setVehicleNotesByKey({});
     setFormData((prev) => ({
       ...prev,
-      isNewVehicle: true,
-      selectedVehicleIds: []
+      isNewVehicle: true
     }));
+  };
+
+  const confirmNewVehicleMode = () => {
+    setErrorText("");
+  };
+
+  const cancelNewVehicleMode = () => {
+    switchToSavedVehicleMode();
   };
 
   const validateBeforeSubmit = () => {
@@ -1829,7 +1903,7 @@ export default function ReceptionCreateAppointmentForm({
                                     >
                                       <span className="reception-selected-vehicle-chip-main">
                                         <strong>{plate}</strong>
-                                        <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                        <small>{describeSavedVehicle(vehicle)}</small>
                                       </span>
                                       <span className="reception-selected-vehicle-chip-remove">Xóa</span>
                                     </button>
@@ -1884,7 +1958,7 @@ export default function ReceptionCreateAppointmentForm({
                                             </span>
                                             <span className="reception-vehicle-popup-item-copy">
                                               <strong>{plate}</strong>
-                                              <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                              <small>{describeSavedVehicle(vehicle)}</small>
                                             </span>
                                             <span className="reception-vehicle-popup-item-action">Thêm xe</span>
                                           </button>
@@ -1980,6 +2054,18 @@ export default function ReceptionCreateAppointmentForm({
                         <label>VIN *</label>
                         <input name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} />
                       </div>
+                    </div>
+                    <div className="reception-new-vehicle-actions">
+                      <button
+                        type="button"
+                        className="reception-open-vehicle-popup-btn is-active"
+                        onClick={confirmNewVehicleMode}
+                      >
+                        Xác nhận
+                      </button>
+                      <button type="button" className="reception-open-vehicle-popup-btn" onClick={cancelNewVehicleMode}>
+                        Hủy
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2474,15 +2560,8 @@ export default function ReceptionCreateAppointmentForm({
                     <div className="reception-plan-summary-head">
                       <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
                       <span className="reception-plan-summary-badge">
-                        {`${plan.categoryIds.length} loại · ${plan.serviceIds.length} dịch vụ`}
+                        {`${plan.serviceIds.length} dịch vụ`}
                       </span>
-                    </div>
-
-                    <div className="reception-plan-summary-block">
-                      <p className="reception-plan-summary-block-label">LOẠI DỊCH VỤ</p>
-                      <p className="reception-plan-summary-text">
-                        {plan.categoryNames.length > 0 ? plan.categoryNames.join(", ") : "Chưa chọn"}
-                      </p>
                     </div>
 
                     <div className="reception-plan-summary-block">

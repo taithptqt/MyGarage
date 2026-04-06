@@ -77,6 +77,7 @@ namespace MyGarage.Interfaces
         DbSet<Shift> Shifts { get; }
         DbSet<ShiftClosing> ShiftClosings { get; }
         DbSet<Staff> Staffs { get; }
+        DbSet<Team> Teams { get; }
         DbSet<StaffSchedule> StaffSchedules { get; }
         DbSet<StaffTier> StaffTiers { get; }
         DbSet<StandardService> StandardServices { get; }

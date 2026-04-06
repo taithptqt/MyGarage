@@ -36,6 +36,15 @@ const TAB_CHECKIN = "CHECKIN";
 const TAB_CHECKOUT = "CHECKOUT";
 const TAB_DIAGNOSIS = "DIAGNOSIS";
 const TAB_REPAIR = "REPAIR";
+const INTERNAL_ASSIGNMENT_STATUS_REJECTED = "REJECTED";
+
+function mapAssignmentStatusToPersisted(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === INTERNAL_ASSIGNMENT_STATUS_REJECTED) {
+    return "PAUSED";
+  }
+  return normalized;
+}
 
 export default function TechnicianDashboard() {
   const { searchQuery } = useSearch();
@@ -100,7 +109,7 @@ export default function TechnicianDashboard() {
 
       const myAssignedList = allAssignments
         .filter((a) => Number(a.technicianId) === Number(currentStaff.id))
-        .filter((a) => a.status !== "REJECTED" && a.status !== "COMPLETED");
+        .filter((a) => a.status !== "PAUSED" && a.status !== "COMPLETED");
 
       const enrichedAssignments = myAssignedList.map((a) => {
         const detail = allDetails.find((d) => d.id === a.serviceOrderDetailId);
@@ -188,11 +197,15 @@ export default function TechnicianDashboard() {
     try {
       const assignment = assignments.find((a) => a.id === assignmentId);
       if (!assignment) return;
+      const normalizedStatus = String(newStatus || "").trim().toUpperCase();
+      const persistedStatus = mapAssignmentStatusToPersisted(normalizedStatus);
+      const isRejectedInternal = normalizedStatus === INTERNAL_ASSIGNMENT_STATUS_REJECTED;
+      const isPausedPersisted = persistedStatus === "PAUSED";
 
       const payload = {
         ...assignment,
-        status: newStatus,
-        pauseLog: reason || assignment.pauseLog,
+        status: persistedStatus,
+        pauseLog: isPausedPersisted ? (reason || assignment.pauseLog) : assignment.pauseLog,
         updatedBy: staffId,
         updatedAt: new Date().toISOString(),
       };
@@ -203,8 +216,8 @@ export default function TechnicianDashboard() {
       await serviceOrderApi.updateAssignment(assignmentId, payload);
 
       toast({
-        title: newStatus === "REJECTED" ? "Đã từ chối công việc" : "Đã xác nhận công việc",
-        status: newStatus === "REJECTED" ? "warning" : "success",
+        title: isRejectedInternal || isPausedPersisted ? "Đã tạm dừng công việc" : "Đã xác nhận công việc",
+        status: isRejectedInternal || isPausedPersisted ? "warning" : "success",
         duration: 3000,
         isClosable: true,
       });
@@ -305,10 +318,10 @@ export default function TechnicianDashboard() {
   }, [checkOutRequests, dismissedCheckOutIds, searchQuery]);
 
   const newAssignments = filteredAssignments.filter(
-    (a) => !a.status || a.status === "ASSIGNED" || a.status === "NEW"
+    (a) => !a.status || String(a.status).toUpperCase() === "PENDING"
   );
   const activeAssignments = filteredAssignments.filter(
-    (a) => a.status === "IN_PROGRESS" || a.status === "CONFIRMED"
+    (a) => String(a.status).toUpperCase() === "IN_PROGRESS"
   );
 
   return (
@@ -601,7 +614,7 @@ export default function TechnicianDashboard() {
             <HStack justify="flex-end" spacing={3}>
               <Button variant="ghost" onClick={() => setRejectingAssignment(null)}>Hủy</Button>
               <Button colorScheme="red" isDisabled={!rejectReason.trim()} onClick={() => {
-                handleUpdateAssignmentStatus(rejectingAssignment.id, "REJECTED", rejectReason);
+                    handleUpdateAssignmentStatus(rejectingAssignment.id, INTERNAL_ASSIGNMENT_STATUS_REJECTED, rejectReason);
                 setRejectingAssignment(null);
                 setRejectReason("");
               }}>

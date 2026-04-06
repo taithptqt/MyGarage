@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getNearestSlotSuggestion } from "@features/appointments/api/appointmentSlotsApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
@@ -16,8 +17,17 @@ const SERVICE_MODE = {
   CUSTOM: "CUSTOM",
 };
 
+const EMPTY_PLAN = {
+  categoryIds: [],
+  serviceIds: [],
+  excludedSharedCategoryIds: [],
+  excludedSharedServiceIds: [],
+};
+
 const VEHICLE_KEY_GUEST = "guest";
 const VEHICLE_KEY_NEW = "new-customer";
+const CHECK_IN_SETUP_MINUTES = 10;
+const EXECUTION_BUFFER_MINUTES = 15;
 
 const EMPTY_FORM_DATA = {
   customerId: "",
@@ -38,7 +48,7 @@ const EMPTY_FORM_DATA = {
   orderCategory: "REPAIR",
   oldPartsReturnOption: "DISPOSE_ALL",
   requiredDepositAmount: 0,
-  checkInTime: new Date().toISOString().slice(0, 16),
+  checkInTime: "",
   estimatedHandover: "",
   promisedHandoverTime: "",
   isQuickOrder: false,
@@ -54,6 +64,13 @@ function toNumberList(value) {
         .filter((id) => Number.isFinite(id) && id > 0)
     )
   );
+}
+
+function readField(obj, keys, fallback = null) {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
+  }
+  return fallback;
 }
 
 function normalizePhone(phone) {
@@ -82,26 +99,98 @@ function getVehicleIdFromKey(vehicleKey) {
   return match ? Number(match[1]) : null;
 }
 
-function formatSavedVehicleDescriptor(vehicle) {
-  const brand = String(vehicle?.brandName || "").trim();
-  const model = String(vehicle?.modelName || "").trim();
-  return `${brand} ${model}`.trim() || "Xe đã liên kết";
+function normalizePlan(plan) {
+  const categoryIds = toNumberList(plan?.categoryIds || []);
+  const serviceIds = toNumberList(plan?.serviceIds || []);
+  const excludedSharedCategoryIds = toNumberList(plan?.excludedSharedCategoryIds || []);
+  const excludedSharedServiceIds = toNumberList(plan?.excludedSharedServiceIds || []);
+  return { categoryIds, serviceIds, excludedSharedCategoryIds, excludedSharedServiceIds };
+}
+
+function clonePlan(plan) {
+  return {
+    categoryIds: [...(plan?.categoryIds || [])],
+    serviceIds: [...(plan?.serviceIds || [])],
+    excludedSharedCategoryIds: [...(plan?.excludedSharedCategoryIds || [])],
+    excludedSharedServiceIds: [...(plan?.excludedSharedServiceIds || [])],
+  };
+}
+
+function normalizeService(service) {
+  const id = Number(readField(service, ["id", "Id"], 0));
+  const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
+  return {
+    id,
+    categoryId,
+    name: String(readField(service, ["name", "Name"], "") || "").trim(),
+    minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
+    price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0)),
+  };
+}
+
+function buildCategoryOptions(serviceCategories, normalizedServices) {
+  const map = new Map();
+
+  (serviceCategories || []).forEach((category) => {
+    const id = Number(readField(category, ["id", "Id"], 0));
+    if (!Number.isFinite(id) || id <= 0) return;
+    const name = String(readField(category, ["categoryName", "name", "Name"], "") || "").trim();
+    if (!name) return;
+    if (category?.isDeleted === true || category?.isActive === false) return;
+    map.set(id, { id, name });
+  });
+
+  (normalizedServices || []).forEach((service) => {
+    if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
+    if (!map.has(service.categoryId)) {
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelInfoById = new Map()) {
+  const text = (value) => String(value || "").trim();
+
+  const brandObject = readField(vehicle, ["brand", "Brand"], null);
+  const modelObject = readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null);
+
+  const modelId = Number(
+    readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], readField(modelObject, ["id", "Id"], 0))
+  );
+  const brandId = Number(
+    readField(vehicle, ["brandId", "BrandId", "vehicleBrandId", "VehicleBrandId"], readField(brandObject, ["id", "Id"], 0))
+  );
+
+  const modelInfo = modelInfoById.get(modelId) || null;
+  const lookupBrandNameFromModel = modelInfo?.brandId ? text(brandNameById.get(Number(modelInfo.brandId))) : "";
+  const lookupBrandName = text(brandNameById.get(brandId));
+
+  const brandName =
+    [
+      text(readField(vehicle, ["brandName", "BrandName", "vehicleBrandName", "VehicleBrandName"], "")),
+      text(readField(brandObject, ["name", "Name", "brandName", "BrandName"], "")),
+      text(modelInfo?.brandName),
+      lookupBrandNameFromModel,
+      lookupBrandName,
+    ].find(Boolean) || "";
+
+  const modelName =
+    [
+      text(readField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "")),
+      text(readField(modelObject, ["modelName", "ModelName", "name", "Name"], "")),
+      text(modelInfo?.name),
+    ].find(Boolean) || "";
+
+  if (brandName && modelName) return `${brandName} ${modelName}`;
+  if (modelName) return modelName;
+  if (brandName) return brandName;
+  return "Chưa rõ hãng - chưa rõ dòng xe";
 }
 
 function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
-}
-
-function getServiceName(service) {
-  return String(service?.Name || service?.name || "").trim();
-}
-
-function getServiceMinutes(service) {
-  return Math.max(0, Number(service?.StandardMinutes || service?.standardMinutes || 0));
-}
-
-function getServicePrice(service) {
-  return Math.max(0, Number(service?.BasePrice || service?.basePrice || 0));
 }
 
 function normalizeNoteLines(lines) {
@@ -118,6 +207,115 @@ function buildCustomerNotes(lines) {
 function parsePositiveId(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatDateTimeValue(value) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--";
+  return parsed.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatTimeWithDateInBrackets(value) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--";
+
+  const time = parsed.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const date = parsed.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  return `${time} (${date})`;
+}
+
+function formatCompletionWarningTime(value) {
+  if (!value) return "chưa xác định";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "chưa xác định";
+
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = String(parsed.getFullYear());
+  return `${hour} giờ ${minute} phút ngày ${day}/${month}/${year}`;
+}
+
+function toMinuteEpoch(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  parsed.setSeconds(0, 0);
+  return parsed.getTime();
+}
+
+function toLocalDateTimeValue(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
+function formatSlotTime(value) {
+  if (!value) return "--:--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--:--";
+  return parsed.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function buildCheckInTimeWindowMap(now, rangeMinutes = 30) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 0, 0);
+
+  const start = new Date(now);
+  start.setSeconds(0, 0);
+  start.setMinutes(start.getMinutes() - rangeMinutes);
+
+  const end = new Date(now);
+  end.setSeconds(0, 0);
+  end.setMinutes(end.getMinutes() + rangeMinutes);
+
+  if (start < dayStart) start.setTime(dayStart.getTime());
+  if (end > dayEnd) end.setTime(dayEnd.getTime());
+
+  const timeMap = {};
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const hour = String(cursor.getHours()).padStart(2, "0");
+    const minute = String(cursor.getMinutes()).padStart(2, "0");
+    if (!Array.isArray(timeMap[hour])) timeMap[hour] = [];
+    timeMap[hour].push(minute);
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+
+  return timeMap;
 }
 
 export default function CreateServiceOrderPage() {
@@ -152,9 +350,11 @@ export default function CreateServiceOrderPage() {
   }));
 
   const [serviceMode, setServiceMode] = useState(SERVICE_MODE.SHARED);
-  const [sharedServiceIds, setSharedServiceIds] = useState([]);
-  const [vehicleServiceIds, setVehicleServiceIds] = useState({});
+  const [sharedPlan, setSharedPlan] = useState({ ...EMPTY_PLAN });
+  const [vehiclePlans, setVehiclePlans] = useState({});
   const [activePlanVehicleKey, setActivePlanVehicleKey] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState("");
+  const [isServicePickerCollapsed, setIsServicePickerCollapsed] = useState(false);
 
   const [vehicleNotesByKey, setVehicleNotesByKey] = useState({});
   const [activeNoteVehicleKey, setActiveNoteVehicleKey] = useState("");
@@ -165,6 +365,31 @@ export default function CreateServiceOrderPage() {
     for (let year = currentYear; year >= 1980; year -= 1) result.push(year);
     return result;
   }, []);
+
+  const [checkInNow, setCheckInNow] = useState(() => new Date());
+  const [nearestSlotSuggestion, setNearestSlotSuggestion] = useState(null);
+  const [nearestSlotLoading, setNearestSlotLoading] = useState(false);
+  const [nearestSlotError, setNearestSlotError] = useState("");
+  const skipNextNearestSlotSuggestionFetchRef = useRef(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCheckInNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const checkInDayStart = useMemo(() => {
+    const date = new Date(checkInNow);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, [checkInNow]);
+
+  const checkInDayEnd = useMemo(() => {
+    const date = new Date(checkInNow);
+    date.setHours(23, 59, 59, 999);
+    return date;
+  }, [checkInNow]);
+
+  const checkInAvailableTimeMap = useMemo(() => buildCheckInTimeWindowMap(checkInNow, 30), [checkInNow]);
 
   const effectiveBranchId = useMemo(() => {
     const fromContext = parsePositiveId(selectedBranchId);
@@ -244,13 +469,49 @@ export default function CreateServiceOrderPage() {
 
   const resetPlanningState = useCallback(() => {
     setServiceMode(SERVICE_MODE.SHARED);
-    setSharedServiceIds([]);
-    setVehicleServiceIds({});
+    setSharedPlan({ ...EMPTY_PLAN });
+    setVehiclePlans({});
     setActivePlanVehicleKey("");
+    setActiveCategoryId("");
+    setIsServicePickerCollapsed(false);
     setVehicleNotesByKey({});
     setActiveNoteVehicleKey("");
     setServiceSearch("");
   }, []);
+
+  const brandNameById = useMemo(() => {
+    const map = new Map();
+    brands.forEach((brand) => {
+      const id = Number(readField(brand, ["id", "Id"], 0));
+      if (!Number.isFinite(id) || id <= 0) return;
+      const name = String(readField(brand, ["name", "Name", "brandName", "BrandName"], "") || "").trim();
+      if (!name) return;
+      map.set(id, name);
+    });
+    return map;
+  }, [brands]);
+
+  const modelInfoById = useMemo(() => {
+    const map = new Map();
+    models.forEach((model) => {
+      const id = Number(readField(model, ["id", "Id"], 0));
+      if (!Number.isFinite(id) || id <= 0) return;
+      const name = String(readField(model, ["modelName", "ModelName", "name", "Name"], "") || "").trim();
+      const brandId = Number(readField(model, ["brandId", "BrandId"], 0));
+      const brandName = String(readField(model, ["brandName", "BrandName"], "") || "").trim();
+      map.set(id, {
+        name,
+        brandId: Number.isFinite(brandId) && brandId > 0 ? brandId : 0,
+        brandName,
+      });
+    });
+    return map;
+  }, [models]);
+
+  const describeSavedVehicle = useCallback(
+    (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
+    [brandNameById, modelInfoById]
+  );
 
   const filteredCustomers = useMemo(() => {
     const term = normalizeSearchText(search);
@@ -294,7 +555,7 @@ export default function CreateServiceOrderPage() {
   }, [formData.isNewVehicle, formData.isQuickOrder, formData.selectedVehicleIds]);
 
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
-  const showServiceModeSwitch = selectedVehicleKeys.length > 0 && !formData.isQuickOrder && !formData.isNewVehicle;
+  const showServiceModeSwitch = selectedVehicleKeys.length > 0 && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
 
   const vehicleLabelByKey = useMemo(() => {
@@ -317,10 +578,10 @@ export default function CreateServiceOrderPage() {
   }, [customerVehiclesFiltered, formData.guestVehiclePlate, formData.vehicleLicensePlate]);
 
   useEffect(() => {
-    setVehicleServiceIds((prev) => {
+    setVehiclePlans((prev) => {
       const next = {};
       selectedVehicleKeys.forEach((key) => {
-        if (Array.isArray(prev[key])) next[key] = toNumberList(prev[key]);
+        next[key] = normalizePlan(prev[key] || EMPTY_PLAN);
       });
       return next;
     });
@@ -351,63 +612,202 @@ export default function CreateServiceOrderPage() {
     }
   }, [formData.customerId, formData.isNewVehicle, formData.isQuickOrder]);
 
-  const serviceById = useMemo(() => {
-    const map = new Map();
-    services.forEach((service) => map.set(Number(service.id), service));
-    return map;
-  }, [services]);
-
-  const categoryNameById = useMemo(() => {
-    const map = new Map();
-    orderCategories.forEach((category) => map.set(Number(category.id), String(category.name || "").trim()));
-    return map;
-  }, [orderCategories]);
+  useEffect(() => {
+    if (effectiveServiceMode !== SERVICE_MODE.CUSTOM) return;
+    setVehiclePlans((prev) => {
+      const next = { ...prev };
+      selectedVehicleKeys.forEach((key) => {
+        if (!next[key]) next[key] = clonePlan(EMPTY_PLAN);
+      });
+      return next;
+    });
+  }, [effectiveServiceMode, selectedVehicleKeys]);
 
   const selectedOrderCategoryOption = useMemo(
     () => orderCategories.find((category) => String(category.code || category.name) === String(formData.orderCategory)) || null,
     [orderCategories, formData.orderCategory]
   );
 
-  const availableServicesByCategory = useMemo(() => {
-    const categoryId = Number(selectedOrderCategoryOption?.id || 0);
-    return services
-      .filter((service) => {
-        if (!categoryId) return true;
-        const serviceCategoryId = Number(service.categoryId ?? service.CategoryId ?? 0);
-        return serviceCategoryId === categoryId;
-      })
-      .sort((a, b) => getServiceName(a).localeCompare(getServiceName(b), "vi"));
-  }, [selectedOrderCategoryOption, services]);
+  const normalizedServices = useMemo(
+    () =>
+      services
+        .map(normalizeService)
+        .filter(
+          (service) =>
+            Number.isFinite(service.id) &&
+            service.id > 0 &&
+            Number.isFinite(service.categoryId) &&
+            service.categoryId > 0
+        ),
+    [services]
+  );
 
-  const activePlanKey = useMemo(() => activePlanVehicleKey || selectedVehicleKeys[0] || "", [activePlanVehicleKey, selectedVehicleKeys]);
+  const normalizedServicesForOrder = useMemo(() => {
+    const selectedCategoryId = Number(selectedOrderCategoryOption?.id || 0);
+    if (!selectedCategoryId) return normalizedServices;
+    const matched = normalizedServices.filter((service) => Number(service.categoryId) === selectedCategoryId);
+    return matched.length > 0 ? matched : normalizedServices;
+  }, [normalizedServices, selectedOrderCategoryOption]);
 
-  const resolveServiceIdsForVehicleKey = useCallback(
-    (vehicleKey) => {
-      const shared = toNumberList(sharedServiceIds);
-      if (effectiveServiceMode === SERVICE_MODE.SHARED) return shared;
-      const custom = toNumberList(vehicleServiceIds[vehicleKey]);
-      return custom.length > 0 ? custom : shared;
+  const serviceById = useMemo(() => {
+    const map = new Map();
+    normalizedServicesForOrder.forEach((service) => map.set(Number(service.id), service));
+    return map;
+  }, [normalizedServicesForOrder]);
+
+  const serviceCategoryMap = useMemo(() => {
+    const map = new Map();
+    normalizedServicesForOrder.forEach((service) => map.set(Number(service.id), Number(service.categoryId)));
+    return map;
+  }, [normalizedServicesForOrder]);
+
+  const inspectionExclusiveTypeByServiceId = useMemo(() => {
+    const map = new Map();
+    normalizedServicesForOrder.forEach((service) => {
+      const normalizedName = normalizeSearchText(service.name);
+      if (normalizedName.includes("kiem tra nhanh")) {
+        map.set(Number(service.id), "quick");
+        return;
+      }
+      if (normalizedName.includes("kiem tra tong quat")) {
+        map.set(Number(service.id), "general");
+      }
+    });
+    return map;
+  }, [normalizedServicesForOrder]);
+
+  const getOppositeInspectionServiceIds = useCallback(
+    (serviceIds, targetServiceId) => {
+      const targetType = inspectionExclusiveTypeByServiceId.get(Number(targetServiceId));
+      if (!targetType) return [];
+      const oppositeType = targetType === "quick" ? "general" : "quick";
+      return toNumberList(
+        (serviceIds || []).filter(
+          (serviceId) => inspectionExclusiveTypeByServiceId.get(Number(serviceId)) === oppositeType
+        )
+      );
     },
-    [effectiveServiceMode, sharedServiceIds, vehicleServiceIds]
+    [inspectionExclusiveTypeByServiceId]
   );
 
-  const activeServiceIds = useMemo(() => {
-    if (!activePlanKey) return toNumberList(sharedServiceIds);
-    return resolveServiceIdsForVehicleKey(activePlanKey);
-  }, [activePlanKey, resolveServiceIdsForVehicleKey, sharedServiceIds]);
-
-  const selectedServicesForActivePlan = useMemo(
-    () => activeServiceIds.map((id) => serviceById.get(Number(id))).filter(Boolean),
-    [activeServiceIds, serviceById]
+  const categoryOptions = useMemo(
+    () => buildCategoryOptions(orderCategories, normalizedServicesForOrder),
+    [orderCategories, normalizedServicesForOrder]
   );
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map();
+    categoryOptions.forEach((category) => map.set(Number(category.id), String(category.name || "").trim()));
+    return map;
+  }, [categoryOptions]);
+
+  const activePlanKey = useMemo(() => {
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) return "shared";
+    return activePlanVehicleKey || selectedVehicleKeys[0] || "";
+  }, [effectiveServiceMode, activePlanVehicleKey, selectedVehicleKeys]);
+
+  const resolveEffectivePlan = useCallback(
+    (rawVehiclePlan, sharedSource = sharedPlan) => {
+      const sharedNormalized = normalizePlan(sharedSource || EMPTY_PLAN);
+      const raw = normalizePlan(rawVehiclePlan || EMPTY_PLAN);
+
+      const excludedCategorySet = new Set(raw.excludedSharedCategoryIds || []);
+      const excludedServiceSet = new Set(raw.excludedSharedServiceIds || []);
+
+      const sharedCategoryIds = sharedNormalized.categoryIds.filter((id) => !excludedCategorySet.has(id));
+      const nextCategoryIds = toNumberList([...sharedCategoryIds, ...(raw.categoryIds || [])]);
+
+      const sharedServiceIds = sharedNormalized.serviceIds.filter((id) => !excludedServiceSet.has(id));
+      const nextServiceIds = toNumberList([...sharedServiceIds, ...(raw.serviceIds || [])]).filter((serviceId) => {
+        const categoryId = Number(serviceCategoryMap.get(serviceId) || 0);
+        return nextCategoryIds.includes(categoryId);
+      });
+
+      return normalizePlan({
+        categoryIds: nextCategoryIds,
+        serviceIds: nextServiceIds,
+        excludedSharedCategoryIds: (raw.excludedSharedCategoryIds || []).filter((id) =>
+          sharedNormalized.categoryIds.includes(id)
+        ),
+        excludedSharedServiceIds: (raw.excludedSharedServiceIds || []).filter((id) =>
+          sharedNormalized.serviceIds.includes(id)
+        ),
+      });
+    },
+    [serviceCategoryMap, sharedPlan]
+  );
+
+  const deriveRawVehiclePlanFromEffective = useCallback(
+    (effectivePlan, sharedSource = sharedPlan) => {
+      const sharedNormalized = normalizePlan(sharedSource || EMPTY_PLAN);
+      const effective = normalizePlan(effectivePlan || EMPTY_PLAN);
+      const sharedCategorySet = new Set(sharedNormalized.categoryIds || []);
+      const sharedServiceSet = new Set(sharedNormalized.serviceIds || []);
+
+      const rawCategoryIds = (effective.categoryIds || []).filter((id) => !sharedCategorySet.has(id));
+      const excludedSharedCategoryIds = (sharedNormalized.categoryIds || []).filter(
+        (id) => !effective.categoryIds.includes(id)
+      );
+
+      const rawServiceIds = (effective.serviceIds || [])
+        .filter((id) => !sharedServiceSet.has(id))
+        .filter((serviceId) => {
+          const categoryId = Number(serviceCategoryMap.get(serviceId) || 0);
+          return effective.categoryIds.includes(categoryId);
+        });
+      const excludedSharedServiceIds = (sharedNormalized.serviceIds || []).filter(
+        (id) => !effective.serviceIds.includes(id)
+      );
+
+      return normalizePlan({
+        categoryIds: rawCategoryIds,
+        serviceIds: rawServiceIds,
+        excludedSharedCategoryIds,
+        excludedSharedServiceIds,
+      });
+    },
+    [serviceCategoryMap, sharedPlan]
+  );
+
+  const activePlan = useMemo(() => {
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) return normalizePlan(sharedPlan);
+    return resolveEffectivePlan(vehiclePlans[activePlanKey] || EMPTY_PLAN, sharedPlan);
+  }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey, resolveEffectivePlan]);
+
+  useEffect(() => {
+    const selectedCategories = activePlan.categoryIds || [];
+    if (selectedCategories.length === 0) {
+      setActiveCategoryId("");
+      return;
+    }
+    if (!activeCategoryId || !selectedCategories.includes(Number(activeCategoryId))) {
+      setActiveCategoryId(String(selectedCategories[0]));
+    }
+  }, [activeCategoryId, activePlan.categoryIds]);
 
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
-    return availableServicesByCategory.filter((service) => {
-      const serviceName = normalizeSearchText(getServiceName(service));
-      return term ? serviceName.includes(term) : true;
+    const selectedCategories = new Set(activePlan.categoryIds || []);
+    if (selectedCategories.size === 0) return [];
+
+    return normalizedServicesForOrder
+      .filter((service) => selectedCategories.has(Number(service.categoryId)))
+      .filter((service) => (!activeCategoryId ? true : String(service.categoryId) === String(activeCategoryId)))
+      .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
+  }, [activePlan.categoryIds, activeCategoryId, normalizedServicesForOrder, serviceSearch]);
+
+  const plansByVehicleKey = useMemo(() => {
+    const map = new Map();
+    selectedVehicleKeys.forEach((key) => {
+      if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+        map.set(key, normalizePlan(sharedPlan));
+      } else {
+        map.set(key, resolveEffectivePlan(vehiclePlans[key] || EMPTY_PLAN, sharedPlan));
+      }
     });
-  }, [availableServicesByCategory, serviceSearch]);
+    return map;
+  }, [selectedVehicleKeys, effectiveServiceMode, sharedPlan, vehiclePlans, resolveEffectivePlan]);
 
   const calculateEstimatedFinish = useCallback((startText, totalMinutes) => {
     if (!startText || !totalMinutes || totalMinutes <= 0) return { finishText: "", finishIso: "" };
@@ -470,38 +870,49 @@ export default function CreateServiceOrderPage() {
     const yy = cursor.getFullYear();
 
     return {
-      finishText: `${hh}:${mm} - Ngày ${dd}-${mo}`,
+      finishText: formatTimeWithDateInBrackets(cursor),
       finishIso: `${yy}-${mo}-${dd}T${hh}:${mm}:00`,
     };
   }, []);
 
   const planSummaries = useMemo(() => {
     return selectedVehicleKeys.map((vehicleKey) => {
-      const serviceIds = resolveServiceIdsForVehicleKey(vehicleKey);
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      const categoryIds = toNumberList(plan.categoryIds);
+      const serviceIds = toNumberList(plan.serviceIds);
       const selectedServices = serviceIds.map((serviceId) => serviceById.get(Number(serviceId))).filter(Boolean);
-      const totalMinutes = selectedServices.reduce((sum, service) => sum + getServiceMinutes(service), 0);
-      const totalPrice = selectedServices.reduce((sum, service) => sum + getServicePrice(service), 0);
-      const categoryIds = toNumberList(selectedServices.map((service) => Number(service?.categoryId ?? service?.CategoryId ?? 0)));
+      const serviceMinutes = selectedServices.reduce((sum, service) => sum + Number(service?.minutes || 0), 0);
+      const executionMinutes = serviceMinutes > 0
+        ? serviceMinutes + CHECK_IN_SETUP_MINUTES + EXECUTION_BUFFER_MINUTES
+        : 0;
+      const totalPrice = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
       const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `Nhóm ${id}`);
-      const { finishText } = calculateEstimatedFinish(formData.checkInTime, Math.max(totalMinutes, 0));
+      const { finishText, finishIso } = calculateEstimatedFinish(formData.checkInTime, executionMinutes);
 
       return {
         vehicleKey,
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
         serviceIds,
-        serviceNames: selectedServices.map((service) => getServiceName(service)).filter(Boolean),
+        serviceNames: selectedServices.map((service) => String(service?.name || "").trim()).filter(Boolean),
         categoryIds,
         categoryNames,
-        startTimeLabel: formData.checkInTime ? new Date(formData.checkInTime).toLocaleString("vi-VN") : "Chưa chọn",
+        startTimeLabel: formData.checkInTime ? formatTimeWithDateInBrackets(formData.checkInTime) : "Chưa chọn",
         endTimeLabel: finishText || "Chưa chọn",
-        totalMinutes,
+        endTimeIso: finishIso || "",
+        completionWarningTimeLabel: formatCompletionWarningTime(finishIso),
+        serviceMinutes,
+        executionMinutes,
         totalPrice,
       };
     });
-  }, [calculateEstimatedFinish, categoryNameById, formData.checkInTime, resolveServiceIdsForVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
+  }, [calculateEstimatedFinish, categoryNameById, formData.checkInTime, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
 
-  const totalMinutes = useMemo(
-    () => planSummaries.reduce((sum, plan) => sum + Number(plan.totalMinutes || 0), 0),
+  const totalServiceMinutes = useMemo(
+    () => planSummaries.reduce((sum, plan) => sum + Number(plan.serviceMinutes || 0), 0),
+    [planSummaries]
+  );
+  const totalExecutionMinutes = useMemo(
+    () => planSummaries.reduce((sum, plan) => sum + Number(plan.executionMinutes || 0), 0),
     [planSummaries]
   );
   const totalPrice = useMemo(
@@ -509,7 +920,7 @@ export default function CreateServiceOrderPage() {
     [planSummaries]
   );
   const completionMinutes = useMemo(
-    () => Math.max(...planSummaries.map((plan) => Number(plan.totalMinutes || 0)), 0),
+    () => Math.max(...planSummaries.map((plan) => Number(plan.executionMinutes || 0)), 0),
     [planSummaries]
   );
 
@@ -517,6 +928,71 @@ export default function CreateServiceOrderPage() {
     () => calculateEstimatedFinish(formData.checkInTime, completionMinutes),
     [calculateEstimatedFinish, completionMinutes, formData.checkInTime]
   );
+
+  const requestedServiceIdsForSlotSuggestion = useMemo(() => {
+    return Array.from(
+      new Set(
+        planSummaries
+          .flatMap((plan) => toNumberList(plan.serviceIds))
+          .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0)
+      )
+    ).join(",");
+  }, [planSummaries]);
+
+  useEffect(() => {
+    if (!effectiveBranchId || !formData.checkInTime) {
+      setNearestSlotSuggestion(null);
+      setNearestSlotError("");
+      setNearestSlotLoading(false);
+      return undefined;
+    }
+
+    if (skipNextNearestSlotSuggestionFetchRef.current) {
+      skipNextNearestSlotSuggestionFetchRef.current = false;
+      return undefined;
+    }
+
+    let cancelled = false;
+    setNearestSlotLoading(true);
+    setNearestSlotError("");
+
+    const timer = setTimeout(async () => {
+      try {
+        const suggestion = await getNearestSlotSuggestion(
+          effectiveBranchId,
+          formData.checkInTime,
+          {
+            requestedServiceIds: requestedServiceIdsForSlotSuggestion || undefined,
+            vehicleCount: Math.max(1, selectedVehicleKeys.length),
+            isParallel: selectedVehicleKeys.length > 1,
+            searchDays: 3,
+          }
+        );
+
+        if (!cancelled) {
+          setNearestSlotSuggestion(suggestion || null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setNearestSlotError(err?.message || "Khong the goi y khung gio gan nhat.");
+        }
+      } finally {
+        if (!cancelled) {
+          setNearestSlotLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    effectiveBranchId,
+    formData.checkInTime,
+    requestedServiceIdsForSlotSuggestion,
+    selectedVehicleKeys.length,
+  ]);
 
   const activeNoteKey = useMemo(
     () => activeNoteVehicleKey || selectedVehicleKeys[0] || "",
@@ -535,15 +1011,16 @@ export default function CreateServiceOrderPage() {
 
       const now = new Date();
       const checkIn = data.checkInTime ? new Date(data.checkInTime) : null;
-      const maxPastTime = new Date(now.getTime() - 30 * 60 * 1000);
+      const checkInWindowStart = new Date(now.getTime() - 30 * 60 * 1000);
+      const checkInWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
 
       if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
       if (!data.orderCategory) errors.orderCategory = "Vui lòng chọn phân loại lệnh sửa chữa.";
 
       if (!checkIn || Number.isNaN(checkIn.getTime())) {
         errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
-      } else if (checkIn < maxPastTime) {
-        errors.checkInTime = "Thời điểm xe vào xưởng không được quá 30 phút trong quá khứ.";
+      } else if (checkIn < checkInWindowStart || checkIn > checkInWindowEnd) {
+        errors.checkInTime = "Thời điểm xe vào xưởng chỉ được trong khoảng ±30 phút so với hiện tại.";
       }
 
       if (data.estimatedHandover && checkIn) {
@@ -574,7 +1051,7 @@ export default function CreateServiceOrderPage() {
         if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lòng nhập biển số xe.";
         if (!guestSelectedBrandId) errors.guestBrandId = "Vui lòng chọn hãng xe.";
         if (!data.guestVehicleModelId) errors.guestVehicleModelId = "Vui lòng chọn dòng xe.";
-        if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lòng chọn năm sản xuất.";
+        if (!String(data.guestVehicleVin || "").trim()) errors.guestVehicleVin = "Vui lòng nhập số VIN.";
       } else {
         if (!data.customerId) errors.customerId = "Vui lòng chọn khách hàng.";
 
@@ -586,7 +1063,7 @@ export default function CreateServiceOrderPage() {
           if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lòng nhập biển số xe mới.";
           if (!selectedBrandId) errors.brandId = "Vui lòng chọn hãng xe.";
           if (!data.vehicleModelId) errors.vehicleModelId = "Vui lòng chọn dòng xe.";
-          if (!data.vehicleYear) errors.vehicleYear = "Vui lòng chọn năm sản xuất.";
+          if (!String(data.vehicleVin || "").trim()) errors.vehicleVin = "Vui lòng nhập số VIN.";
         }
       }
 
@@ -597,26 +1074,29 @@ export default function CreateServiceOrderPage() {
       if (selectedVehicleKeys.length === 0) {
         errors.selectedVehicleIds = "Vui lòng chọn xe trước khi chọn dịch vụ.";
       } else {
-        const missingServices = selectedVehicleKeys.filter(
-          (vehicleKey) => toNumberList(resolveServiceIdsForVehicleKey(vehicleKey)).length === 0
-        );
-        if (missingServices.length > 0) {
+        const invalidPlans = selectedVehicleKeys.filter((vehicleKey) => {
+          const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+          const categoryCount = toNumberList(plan.categoryIds).length;
+          const serviceCount = toNumberList(plan.serviceIds).length;
+          return categoryCount === 0 || serviceCount === 0;
+        });
+        if (invalidPlans.length > 0) {
           errors.serviceIds =
             selectedVehicleKeys.length === 1
-              ? "Vui lòng chọn ít nhất một dịch vụ."
-              : "Mỗi xe cần có ít nhất một dịch vụ trước khi tạo lệnh.";
+              ? "Vui lòng chọn loại dịch vụ và ít nhất một dịch vụ."
+              : "Mỗi xe cần có loại dịch vụ và ít nhất một dịch vụ trước khi tạo lệnh.";
         }
       }
 
       return errors;
     },
-    [effectiveBranchId, guestSelectedBrandId, resolveServiceIdsForVehicleKey, selectedBrandId, selectedVehicleKeys]
+    [effectiveBranchId, guestSelectedBrandId, plansByVehicleKey, selectedBrandId, selectedVehicleKeys]
   );
 
   useEffect(() => {
     if (!submitAttempted) return;
     setFieldErrors(validateForm(formData));
-  }, [submitAttempted, formData, validateForm, sharedServiceIds, vehicleServiceIds, serviceMode]);
+  }, [submitAttempted, formData, validateForm, sharedPlan, vehiclePlans, serviceMode]);
 
   const showError = useCallback((name) => submitAttempted && fieldErrors[name], [fieldErrors, submitAttempted]);
 
@@ -630,6 +1110,39 @@ export default function CreateServiceOrderPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError("");
   }, []);
+
+  const suggestedAlternativeSlots = useMemo(() => {
+    if (!nearestSlotSuggestion || !Array.isArray(nearestSlotSuggestion.alternatives)) {
+      return [];
+    }
+
+    return nearestSlotSuggestion.alternatives
+      .filter((slot) => {
+        const slotStart = readField(slot, ["startTime", "StartTime"], null);
+        return slot && slotStart;
+      })
+      .sort((a, b) => {
+        const firstStart = readField(a, ["startTime", "StartTime"], null);
+        const secondStart = readField(b, ["startTime", "StartTime"], null);
+        return new Date(firstStart).getTime() - new Date(secondStart).getTime();
+      })
+      .slice(0, 5);
+  }, [nearestSlotSuggestion]);
+
+  const selectedCheckInMinute = useMemo(() => toMinuteEpoch(formData.checkInTime), [formData.checkInTime]);
+  const suggestedTopPickMinute = useMemo(
+    () => toMinuteEpoch(nearestSlotSuggestion?.suggestedStartTime),
+    [nearestSlotSuggestion?.suggestedStartTime]
+  );
+
+  const handleApplySuggestedSlot = useCallback((slot) => {
+    const slotStart = readField(slot, ["startTime", "StartTime"], null);
+    if (!slotStart) return;
+    const normalizedStartTime = toLocalDateTimeValue(slotStart);
+    if (!normalizedStartTime) return;
+    skipNextNearestSlotSuggestionFetchRef.current = true;
+    handleFieldValueChange("checkInTime", normalizedStartTime);
+  }, [handleFieldValueChange]);
 
   const handlePlateBlur = useCallback((event) => {
     const { name, value } = event.target;
@@ -725,7 +1238,6 @@ export default function CreateServiceOrderPage() {
     setFormData((prev) => ({
       ...prev,
       isNewVehicle: false,
-      selectedVehicleIds: [],
       vehicleLicensePlate: "",
       vehicleModelId: "",
       vehicleColor: "",
@@ -742,7 +1254,6 @@ export default function CreateServiceOrderPage() {
     setFormData((prev) => ({
       ...prev,
       isNewVehicle: true,
-      selectedVehicleIds: [],
       vehicleLicensePlate: "",
       vehicleModelId: "",
       vehicleColor: "",
@@ -753,15 +1264,22 @@ export default function CreateServiceOrderPage() {
     setError("");
   }, [resetPlanningState]);
 
+  const confirmNewVehicleMode = useCallback(() => {
+    setError("");
+  }, []);
+
+  const cancelNewVehicleMode = useCallback(() => {
+    switchToSavedVehicleMode();
+  }, [switchToSavedVehicleMode]);
+
   const handleServiceModeChange = useCallback(
     (nextMode) => {
       if (nextMode === SERVICE_MODE.CUSTOM && serviceMode !== SERVICE_MODE.CUSTOM) {
-        setVehicleServiceIds((prev) => {
+        setVehiclePlans((prev) => {
           const next = { ...prev };
-          const shared = toNumberList(sharedServiceIds);
           selectedVehicleKeys.forEach((key) => {
-            const current = toNumberList(next[key]);
-            next[key] = current.length > 0 ? current : shared;
+            const existing = normalizePlan(prev[key] || EMPTY_PLAN);
+            next[key] = existing;
           });
           return next;
         });
@@ -769,34 +1287,270 @@ export default function CreateServiceOrderPage() {
       setServiceMode(nextMode);
       setError("");
     },
-    [serviceMode, sharedServiceIds, selectedVehicleKeys]
+    [selectedVehicleKeys, serviceMode]
   );
 
-  const handleServiceToggle = useCallback(
-    (serviceId) => {
-      const normalizedId = Number(serviceId);
-      if (!Number.isFinite(normalizedId) || normalizedId <= 0) return;
+  const applyPlanUpdate = useCallback(
+    (updater) => {
+      if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+        setSharedPlan((prev) => normalizePlan(updater(normalizePlan(prev))));
+        return;
+      }
+      if (!activePlanKey) return;
+      setVehiclePlans((prev) => {
+        const currentRaw = normalizePlan(prev[activePlanKey] || EMPTY_PLAN);
+        const currentEffective = resolveEffectivePlan(currentRaw, sharedPlan);
+        const nextEffective = normalizePlan(updater(currentEffective));
+        return {
+          ...prev,
+          [activePlanKey]: deriveRawVehiclePlanFromEffective(nextEffective, sharedPlan),
+        };
+      });
+    },
+    [activePlanKey, deriveRawVehiclePlanFromEffective, effectiveServiceMode, resolveEffectivePlan, sharedPlan]
+  );
 
-      const toggle = (list) => {
-        const current = new Set(toNumberList(list));
-        if (current.has(normalizedId)) current.delete(normalizedId);
-        else current.add(normalizedId);
-        return Array.from(current);
-      };
+  const toggleCategory = useCallback(
+    (categoryId) => {
+      const id = Number(categoryId);
+      if (!Number.isFinite(id) || id <= 0) return;
+      setError("");
+
+      const isDifferentCategory = (serviceId) => Number(serviceCategoryMap.get(serviceId)) !== id;
 
       if (effectiveServiceMode === SERVICE_MODE.SHARED) {
-        setSharedServiceIds((prev) => toggle(prev));
+        const has = (sharedPlan.categoryIds || []).includes(id);
+        setSharedPlan((prev) => {
+          const normalized = normalizePlan(prev);
+          const nextCategoryIds = has
+            ? normalized.categoryIds.filter((item) => Number(item) !== id)
+            : toNumberList([...(normalized.categoryIds || []), id]);
+          const nextServiceIds = has
+            ? (normalized.serviceIds || []).filter(isDifferentCategory)
+            : normalized.serviceIds;
+          return normalizePlan({
+            ...normalized,
+            categoryIds: nextCategoryIds,
+            serviceIds: nextServiceIds,
+          });
+        });
+
+        if (has) {
+          setVehiclePlans((prev) => {
+            const next = { ...prev };
+            selectedVehicleKeys.forEach((vehicleKey) => {
+              const vehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
+              next[vehicleKey] = normalizePlan({
+                ...vehiclePlan,
+                categoryIds: (vehiclePlan.categoryIds || []).filter((item) => Number(item) !== id),
+                serviceIds: (vehiclePlan.serviceIds || []).filter(isDifferentCategory),
+                excludedSharedCategoryIds: (vehiclePlan.excludedSharedCategoryIds || []).filter(
+                  (item) => Number(item) !== id
+                ),
+                excludedSharedServiceIds: (vehiclePlan.excludedSharedServiceIds || []).filter(isDifferentCategory),
+              });
+            });
+            return next;
+          });
+        }
+        return;
+      }
+
+      if ((sharedPlan.categoryIds || []).includes(id)) {
+        setError('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
+        return;
+      }
+
+      applyPlanUpdate((plan) => {
+        const categorySet = new Set(plan.categoryIds || []);
+        if (categorySet.has(id)) categorySet.delete(id);
+        else categorySet.add(id);
+
+        const nextCategoryIds = Array.from(categorySet);
+        const nextServiceIds = (plan.serviceIds || []).filter((serviceId) =>
+          nextCategoryIds.includes(Number(serviceCategoryMap.get(serviceId)))
+        );
+
+        return {
+          categoryIds: nextCategoryIds,
+          serviceIds: nextServiceIds,
+        };
+      });
+    },
+    [applyPlanUpdate, effectiveServiceMode, selectedVehicleKeys, serviceCategoryMap, sharedPlan.categoryIds]
+  );
+
+  const toggleService = useCallback(
+    (serviceId) => {
+      const numericId = Number(serviceId);
+      const categoryId = Number(serviceCategoryMap.get(numericId) || 0);
+      if (!numericId || !categoryId) return;
+      setError("");
+      let shouldCollapseAfterSelect = false;
+
+      if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+        const has = (sharedPlan.serviceIds || []).includes(numericId);
+        if (has) {
+          setSharedPlan((prev) => {
+            const normalized = normalizePlan(prev);
+            return normalizePlan({
+              ...normalized,
+              serviceIds: (normalized.serviceIds || []).filter((item) => Number(item) !== numericId),
+            });
+          });
+        } else {
+          const oppositeSharedIds = getOppositeInspectionServiceIds(sharedPlan.serviceIds, numericId);
+          setSharedPlan((prev) => {
+            const normalized = normalizePlan(prev);
+            const nextServiceIds = toNumberList([
+              ...(normalized.serviceIds || []).filter((item) => !oppositeSharedIds.includes(Number(item))),
+              numericId,
+            ]);
+            const nextCategoryIds = toNumberList([...(normalized.categoryIds || []), categoryId]);
+            return normalizePlan({
+              ...normalized,
+              categoryIds: nextCategoryIds,
+              serviceIds: nextServiceIds,
+            });
+          });
+
+          setVehiclePlans((prev) => {
+            const next = { ...prev };
+            let hasAnyPatch = false;
+            selectedVehicleKeys.forEach((vehicleKey) => {
+              const rawVehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
+              const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
+              const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+              if (oppositeServiceIds.length === 0) return;
+
+              const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
+                (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+              );
+              const nextExcludedSharedServiceIds = (rawVehiclePlan.excludedSharedServiceIds || []).filter(
+                (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+              );
+
+              const shouldPatchServices = nextVehicleServiceIds.length !== (rawVehiclePlan.serviceIds || []).length;
+              const shouldPatchExcluded =
+                nextExcludedSharedServiceIds.length !== (rawVehiclePlan.excludedSharedServiceIds || []).length;
+              if (!shouldPatchServices && !shouldPatchExcluded) return;
+
+              next[vehicleKey] = normalizePlan({
+                ...rawVehiclePlan,
+                serviceIds: nextVehicleServiceIds,
+                excludedSharedServiceIds: nextExcludedSharedServiceIds,
+              });
+              hasAnyPatch = true;
+            });
+            return hasAnyPatch ? next : prev;
+          });
+
+          shouldCollapseAfterSelect = true;
+        }
       } else if (activePlanKey) {
-        setVehicleServiceIds((prev) => {
-          const current = toNumberList(prev[activePlanKey]).length > 0 ? prev[activePlanKey] : sharedServiceIds;
-          return { ...prev, [activePlanKey]: toggle(current) };
+        setVehiclePlans((prev) => {
+          const rawVehiclePlan = normalizePlan(prev[activePlanKey] || EMPTY_PLAN);
+          const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
+          const sharedServiceIds = toNumberList(sharedPlan.serviceIds);
+          const sharedServiceSet = new Set(sharedServiceIds);
+          const sharedCategorySet = new Set(toNumberList(sharedPlan.categoryIds));
+          const nextRawCategorySet = new Set(rawVehiclePlan.categoryIds || []);
+
+          if (!sharedCategorySet.has(categoryId)) {
+            nextRawCategorySet.add(categoryId);
+          }
+
+          if (sharedServiceSet.has(numericId)) {
+            const hasExcluded = (rawVehiclePlan.excludedSharedServiceIds || []).includes(numericId);
+            if (!hasExcluded) {
+              return {
+                ...prev,
+                [activePlanKey]: normalizePlan({
+                  ...rawVehiclePlan,
+                  categoryIds: Array.from(nextRawCategorySet),
+                  serviceIds: (rawVehiclePlan.serviceIds || []).filter((item) => Number(item) !== numericId),
+                  excludedSharedServiceIds: [...(rawVehiclePlan.excludedSharedServiceIds || []), numericId],
+                }),
+              };
+            }
+
+            const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+            const nextExcludedSet = new Set(
+              (rawVehiclePlan.excludedSharedServiceIds || [])
+                .filter((item) => Number(item) !== numericId)
+                .map(Number)
+            );
+            const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
+              (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+            );
+
+            oppositeServiceIds
+              .filter((serviceItemId) => sharedServiceSet.has(Number(serviceItemId)))
+              .forEach((serviceItemId) => nextExcludedSet.add(Number(serviceItemId)));
+
+            shouldCollapseAfterSelect = true;
+            return {
+              ...prev,
+              [activePlanKey]: normalizePlan({
+                ...rawVehiclePlan,
+                categoryIds: Array.from(nextRawCategorySet),
+                serviceIds: nextVehicleServiceIds,
+                excludedSharedServiceIds: Array.from(nextExcludedSet),
+              }),
+            };
+          }
+
+          const has = (rawVehiclePlan.serviceIds || []).includes(numericId);
+          if (has) {
+            return {
+              ...prev,
+              [activePlanKey]: normalizePlan({
+                ...rawVehiclePlan,
+                categoryIds: Array.from(nextRawCategorySet),
+                serviceIds: (rawVehiclePlan.serviceIds || []).filter((item) => Number(item) !== numericId),
+              }),
+            };
+          }
+
+          const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+          const nextVehicleServiceIds = toNumberList([
+            ...(rawVehiclePlan.serviceIds || []).filter(
+              (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
+            ),
+            numericId,
+          ]);
+          const nextExcludedSet = new Set((rawVehiclePlan.excludedSharedServiceIds || []).map(Number));
+          oppositeServiceIds
+            .filter((serviceItemId) => sharedServiceSet.has(Number(serviceItemId)))
+            .forEach((serviceItemId) => nextExcludedSet.add(Number(serviceItemId)));
+
+          shouldCollapseAfterSelect = true;
+          return {
+            ...prev,
+            [activePlanKey]: normalizePlan({
+              ...rawVehiclePlan,
+              categoryIds: Array.from(nextRawCategorySet),
+              serviceIds: nextVehicleServiceIds,
+              excludedSharedServiceIds: Array.from(nextExcludedSet),
+            }),
+          };
         });
       }
 
+      if (shouldCollapseAfterSelect) {
+        setIsServicePickerCollapsed(true);
+      }
       setServiceSearch("");
-      setError("");
     },
-    [activePlanKey, effectiveServiceMode, sharedServiceIds]
+    [
+      activePlanKey,
+      effectiveServiceMode,
+      getOppositeInspectionServiceIds,
+      resolveEffectivePlan,
+      selectedVehicleKeys,
+      serviceCategoryMap,
+      sharedPlan,
+    ]
   );
 
   const handleVehicleNoteChange = useCallback((vehicleKey, index, value) => {
@@ -854,10 +1608,11 @@ export default function CreateServiceOrderPage() {
       };
 
       const createTargets = selectedVehicleKeys.map((vehicleKey) => {
+        const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
         const payload = {
           ...basePayload,
           code: serviceOrderApi.generateCode(),
-          serviceIds: resolveServiceIdsForVehicleKey(vehicleKey),
+          serviceIds: toNumberList(plan.serviceIds),
           customerNotes: buildCustomerNotes(vehicleNotesByKey[vehicleKey]),
         };
 
@@ -922,7 +1677,7 @@ export default function CreateServiceOrderPage() {
       formData,
       getApiErrorMessage,
       navigate,
-      resolveServiceIdsForVehicleKey,
+      plansByVehicleKey,
       saving,
       selectedVehicleKeys,
       suggestedFinish.finishIso,
@@ -997,7 +1752,7 @@ export default function CreateServiceOrderPage() {
                         required={!formData.customerId}
                       />
                       {filteredCustomers.length > 0 ? (
-                        <div className="dropdown-panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20 }}>
+                        <div className="dropdown-panel" style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1200 }}>
                           {filteredCustomers.map((customer) => (
                             <div key={customer.id} className="dropdown-item" onClick={() => selectCustomer(customer)}>
                               <strong>{customer.fullName}</strong> - {customer.phone}
@@ -1057,7 +1812,7 @@ export default function CreateServiceOrderPage() {
                                       >
                                         <span className="reception-selected-vehicle-chip-main">
                                           <strong>{plate}</strong>
-                                          <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                          <small>{describeSavedVehicle(vehicle)}</small>
                                         </span>
                                         <span className="reception-selected-vehicle-chip-remove">Xóa</span>
                                       </button>
@@ -1109,7 +1864,7 @@ export default function CreateServiceOrderPage() {
                                               </span>
                                               <span className="reception-vehicle-popup-item-copy">
                                                 <strong>{plate}</strong>
-                                                <small>{formatSavedVehicleDescriptor(vehicle)}</small>
+                                                <small>{describeSavedVehicle(vehicle)}</small>
                                               </span>
                                               <span className="reception-vehicle-popup-item-action">Thêm xe</span>
                                             </button>
@@ -1198,10 +1953,9 @@ export default function CreateServiceOrderPage() {
                           <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
                         </div>
                         <div className="form-group">
-                          <label>Năm sản xuất *</label>
+                          <label>Năm sản xuất</label>
                           <select
                             name="vehicleYear"
-                            className={showError("vehicleYear") ? "input-invalid" : ""}
                             value={formData.vehicleYear}
                             onChange={handleChange}
                           >
@@ -1212,12 +1966,29 @@ export default function CreateServiceOrderPage() {
                               </option>
                             ))}
                           </select>
-                          {showError("vehicleYear") ? <div className="field-error">{fieldErrors.vehicleYear}</div> : null}
                         </div>
                         <div className="form-group">
-                          <label>VIN</label>
-                          <input name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} />
+                          <label>VIN *</label>
+                          <input
+                            name="vehicleVin"
+                            className={showError("vehicleVin") ? "input-invalid" : ""}
+                            value={formData.vehicleVin}
+                            onChange={handleChange}
+                          />
+                          {showError("vehicleVin") ? <div className="field-error">{fieldErrors.vehicleVin}</div> : null}
                         </div>
+                      </div>
+                      <div className="reception-new-vehicle-actions">
+                        <button
+                          type="button"
+                          className="reception-open-vehicle-popup-btn is-active"
+                          onClick={confirmNewVehicleMode}
+                        >
+                          Xác nhận
+                        </button>
+                        <button type="button" className="reception-open-vehicle-popup-btn" onClick={cancelNewVehicleMode}>
+                          Hủy
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1300,33 +2071,37 @@ export default function CreateServiceOrderPage() {
                       {showError("guestVehicleModelId") ? <div className="field-error">{fieldErrors.guestVehicleModelId}</div> : null}
                     </div>
                   </div>
-                  <div className="reception-grid reception-grid-3">
-                    <div className="form-group">
-                      <label>Màu sắc</label>
-                      <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
-                    </div>
-                    <div className="form-group">
-                      <label>Năm sản xuất *</label>
-                      <select
-                        name="guestVehicleYear"
-                        className={showError("guestVehicleYear") ? "input-invalid" : ""}
-                        value={formData.guestVehicleYear}
-                        onChange={handleChange}
-                      >
-                        <option value="">-- Chọn năm --</option>
-                        {years.map((year) => (
+                    <div className="reception-grid reception-grid-3">
+                      <div className="form-group">
+                        <label>Màu sắc</label>
+                        <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
+                      </div>
+                      <div className="form-group">
+                        <label>Năm sản xuất</label>
+                        <select
+                          name="guestVehicleYear"
+                          value={formData.guestVehicleYear}
+                          onChange={handleChange}
+                        >
+                          <option value="">-- Chọn năm --</option>
+                          {years.map((year) => (
                           <option key={year} value={year}>
-                            {year}
-                          </option>
-                        ))}
-                      </select>
-                      {showError("guestVehicleYear") ? <div className="field-error">{fieldErrors.guestVehicleYear}</div> : null}
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>VIN *</label>
+                        <input
+                          name="guestVehicleVin"
+                          className={showError("guestVehicleVin") ? "input-invalid" : ""}
+                          value={formData.guestVehicleVin}
+                          onChange={handleChange}
+                        />
+                        {showError("guestVehicleVin") ? <div className="field-error">{fieldErrors.guestVehicleVin}</div> : null}
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label>VIN</label>
-                      <input name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} />
-                    </div>
-                  </div>
                 </>
               )}
             </section>
@@ -1336,27 +2111,6 @@ export default function CreateServiceOrderPage() {
                 <span className="reception-step-badge">BƯỚC 2</span>
               </div>
               <h4 className="reception-appt-section-title reception-appt-section-title-service">Loại dịch vụ và dịch vụ cụ thể</h4>
-
-              <div className="form-group">
-                <label>Phân loại lệnh sửa chữa *</label>
-                <select
-                  name="orderCategory"
-                  className={showError("orderCategory") ? "input-invalid" : ""}
-                  value={formData.orderCategory}
-                  onChange={(event) => {
-                    handleChange(event);
-                    resetPlanningState();
-                  }}
-                >
-                  <option value="">-- Chọn phân loại --</option>
-                  {orderCategories.map((category) => (
-                    <option key={category.id} value={category.code || category.name}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                {showError("orderCategory") ? <div className="field-error">{fieldErrors.orderCategory}</div> : null}
-              </div>
 
               {showServiceModeSwitch ? (
                 <div className="reception-scope-switch">
@@ -1371,6 +2125,8 @@ export default function CreateServiceOrderPage() {
                     type="button"
                     className={effectiveServiceMode === SERVICE_MODE.CUSTOM ? "active" : ""}
                     onClick={() => handleServiceModeChange(SERVICE_MODE.CUSTOM)}
+                    disabled={!hasMultipleSelectedVehicles}
+                    title={!hasMultipleSelectedVehicles ? "Cần chọn từ 2 xe trở lên để tùy chỉnh riêng" : undefined}
                   >
                     Tùy chỉnh theo từng xe
                   </button>
@@ -1381,7 +2137,7 @@ export default function CreateServiceOrderPage() {
                 <div className="reception-selected-tabs reception-vehicle-tabs-layout">
                   {selectedVehicleKeys.map((vehicleKey) => (
                     <div
-                      key={`plan-vehicle-${vehicleKey}`}
+                      key={vehicleKey}
                       className={`reception-selected-tab ${
                         effectiveServiceMode === SERVICE_MODE.CUSTOM && activePlanVehicleKey === vehicleKey ? "active" : ""
                       }`}
@@ -1417,59 +2173,119 @@ export default function CreateServiceOrderPage() {
                 </div>
               ) : null}
 
-              <div className="form-group reception-service-search">
-                <label>Tìm dịch vụ</label>
-                <input
-                  type="text"
-                  value={serviceSearch}
-                  placeholder="Nhập tên dịch vụ cần thêm..."
-                  onChange={(event) => setServiceSearch(event.target.value)}
-                />
+              <div className="reception-service-subsection reception-service-type-subsection">
+                <h5 className="reception-service-subtitle">Loại dịch vụ</h5>
+                <button
+                  type="button"
+                  className={`reception-section-collapse-btn reception-section-collapse-btn-corner ${
+                    isServicePickerCollapsed ? "is-collapsed" : "is-expanded"
+                  }`}
+                  aria-expanded={!isServicePickerCollapsed}
+                  aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
+                  onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
+                >
+                  <span className="reception-section-collapse-glyph" aria-hidden="true" />
+                </button>
+                {!isServicePickerCollapsed ? (
+                  <div className="reception-category-grid">
+                    {categoryOptions.map((category) => {
+                      const selected = activePlan.categoryIds.includes(Number(category.id));
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          className={`reception-category-chip ${selected ? "selected" : ""}`}
+                          onClick={() => toggleCategory(category.id)}
+                        >
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="reception-service-collapsed-card">
+                    <span className="reception-service-collapsed-label">Loại dịch vụ</span>
+                    <span className="reception-service-collapsed-value">
+                      {activePlan.categoryIds.length > 0
+                        ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
+                        : "Chưa chọn loại dịch vụ"}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="reception-service-list">
-                {selectedVehicleKeys.length === 0 ? (
-                  <div className="reception-muted-note">Vui lòng chọn xe trước khi chọn dịch vụ.</div>
-                ) : filteredServices.length === 0 ? (
-                  <div className="reception-muted-note">Không có dịch vụ phù hợp với điều kiện hiện tại.</div>
-                ) : (
-                  filteredServices.map((service) => {
-                    const serviceId = Number(service.id);
-                    const selected = activeServiceIds.includes(serviceId);
-                    return (
-                      <button
-                        key={`service-${serviceId}`}
-                        type="button"
-                        className={`reception-service-card ${selected ? "selected" : ""}`}
-                        onClick={() => handleServiceToggle(serviceId)}
-                      >
-                        <div className="reception-service-card-main">
-                          <strong>{getServiceName(service)}</strong>
-                          <small>{getServiceMinutes(service)} phút</small>
+              <div className="reception-service-subsection reception-service-detail-subsection">
+                <h5 className="reception-service-subtitle">Dịch vụ cụ thể</h5>
+                {activePlan.categoryIds.length > 0 ? (
+                  <>
+                    <div className="reception-selected-tabs reception-category-tabs-layout">
+                      {activePlan.categoryIds.map((categoryId) => (
+                        <div
+                          key={`cat-${categoryId}`}
+                          className={`reception-selected-tab ${String(activeCategoryId) === String(categoryId) ? "active" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="reception-selected-tab-main"
+                            onClick={() => setActiveCategoryId(String(categoryId))}
+                          >
+                            {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
+                          </button>
+                          <button
+                            type="button"
+                            className="reception-selected-tab-remove"
+                            aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleCategory(categoryId);
+                            }}
+                          >
+                            ×
+                          </button>
                         </div>
-                        <span>{formatCurrency(getServicePrice(service))}</span>
-                      </button>
-                    );
-                  })
+                      ))}
+                    </div>
+
+                    <div className="form-group">
+                      <label>Tìm dịch vụ</label>
+                      <input
+                        type="text"
+                        placeholder="Tìm theo tên dịch vụ..."
+                        value={serviceSearch}
+                        onChange={(event) => setServiceSearch(event.target.value)}
+                      />
+                    </div>
+
+                    <div className="reception-service-list">
+                      {filteredServices.length === 0 ? (
+                        <div className="reception-muted-note">Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.</div>
+                      ) : (
+                        filteredServices.map((service) => {
+                          const selected = activePlan.serviceIds.includes(service.id);
+                          return (
+                            <button
+                              key={service.id}
+                              type="button"
+                              className={`reception-service-card ${selected ? "selected" : ""}`}
+                              onClick={() => toggleService(service.id)}
+                            >
+                              <div className="reception-service-card-main">
+                                <strong>{service.name}</strong>
+                                <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
+                              </div>
+                              <span>{formatCurrency(service.price)}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
                 )}
               </div>
 
               {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
-
-              {selectedServicesForActivePlan.length > 0 ? (
-                <div className="reception-selected-services">
-                  {selectedServicesForActivePlan.map((service) => (
-                    <button
-                      key={`selected-service-${service.id}`}
-                      type="button"
-                      className="reception-selected-service-chip"
-                      onClick={() => handleServiceToggle(service.id)}
-                    >
-                      {getServiceName(service)} ×
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </section>
           </div>
           <div className="reception-appt-right-column">
@@ -1520,15 +2336,63 @@ export default function CreateServiceOrderPage() {
                 {showError("requiredDepositAmount") ? <div className="field-error">{fieldErrors.requiredDepositAmount}</div> : null}
               </div>
 
-              <div className="timeline-grid">
+              <div className="timeline-grid timeline-grid-vertical">
                 <div className="form-group">
                   <label>Thời điểm xe vào xưởng *</label>
                   <DateTimePicker
                     value={formData.checkInTime}
                     onChange={(value) => handleFieldValueChange("checkInTime", value)}
-                    minDate={new Date(new Date().getTime() - 30 * 60 * 1000)}
+                    placeholder="Chọn ngày và giờ..."
+                    minDate={checkInDayStart}
+                    maxDate={checkInDayEnd}
+                    availableTimeMap={checkInAvailableTimeMap}
+                    autoSelectNowOnOpen
                   />
                   {showError("checkInTime") ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
+                  {suggestedAlternativeSlots.length > 0 ? (
+                    <div className="reception-slot-picker">
+                      <div className="reception-muted-note" style={{ marginTop: 0 }}>
+                        Chọn 1 trong 5 khung giờ gần nhất:
+                      </div>
+                      <div className="reception-slot-grid" aria-busy={nearestSlotLoading ? "true" : "false"}>
+                        {suggestedAlternativeSlots.map((slot) => {
+                          const slotStart = readField(slot, ["startTime", "StartTime"], null);
+                          const slotEnd = readField(slot, ["endTime", "EndTime"], null);
+                          const slotRemaining = Number(readField(slot, ["remainingCapacity", "RemainingCapacity"], 0));
+                          const slotMinute = toMinuteEpoch(slotStart);
+                          const isSelected =
+                            selectedCheckInMinute !== null &&
+                            slotMinute !== null &&
+                            slotMinute === selectedCheckInMinute;
+                          const isTopPick =
+                            suggestedTopPickMinute !== null &&
+                            slotMinute !== null &&
+                            slotMinute === suggestedTopPickMinute;
+                          const hasCapacity = Number.isFinite(slotRemaining) ? slotRemaining > 0 : true;
+                          const slotKey = `${slotStart || "na"}-${slotEnd || "na"}`;
+
+                          return (
+                            <button
+                              key={slotKey}
+                              type="button"
+                              className={`reception-slot-card ${isSelected ? "selected" : ""} ${isTopPick ? "top-pick" : ""}`.trim()}
+                              onClick={() => handleApplySuggestedSlot(slot)}
+                            >
+                              <strong className="reception-slot-time">
+                                {formatSlotTime(slotStart)} - {formatSlotTime(slotEnd)}
+                              </strong>
+                              <div className="reception-slot-meta">
+                                <span className={`reception-slot-state-dot ${hasCapacity ? "ok" : "full"}`} />
+                                <span className={`reception-slot-state-text ${hasCapacity ? "ok" : "full"}`}>
+                                  {hasCapacity ? `Còn ${Math.max(0, slotRemaining)} chỗ` : "Đã đầy"}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="form-group">
                   <label>Ngày giờ cam kết trả xe</label>
@@ -1547,10 +2411,6 @@ export default function CreateServiceOrderPage() {
                   {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
                 </div>
               </div>
-              <div className="reception-muted-note">
-                Dự kiến hoàn thành theo tổng thời lượng hiện tại: <strong>{suggestedFinish.finishText || "Chưa có dữ liệu"}</strong>
-              </div>
-
               <div className="form-group" style={{ marginTop: 14 }}>
                 <label>Mô tả thêm theo từng xe</label>
                 {selectedVehicleKeys.length > 0 ? (
@@ -1610,21 +2470,18 @@ export default function CreateServiceOrderPage() {
 
               <div className="reception-summary-inline" role="status" aria-live="polite">
                 <div className="reception-summary-inline-row">
-                  <span>Tổng thời gian</span>
-                  <strong>{totalMinutes} phút</strong>
+                  <span>Thời gian hoàn tất toàn bộ xe</span>
+                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
                 </div>
                 <div className="reception-summary-inline-row">
-                  <span>Thời gian hoàn tất dự kiến</span>
-                  <strong>{Math.max(completionMinutes, 30)} phút</strong>
-                </div>
-                <div className="reception-summary-inline-row">
-                  <span>Tổng giá tạm tính</span>
+                  <span>Tổng giá ước tính</span>
                   <strong>{formatCurrency(totalPrice)}</strong>
                 </div>
                 <div className="reception-summary-inline-row">
                   <span>Số xe</span>
                   <strong>
-                    {selectedVehicleKeys.length} {selectedVehicleKeys.length > 1 ? "(lịch nhóm)" : "(lịch thường)"}
+                    {selectedVehicleKeys.length}
+                    {selectedVehicleKeys.length > 1 ? " (lịch nhóm)" : " (lịch thường)"}
                   </strong>
                 </div>
               </div>
@@ -1668,8 +2525,14 @@ export default function CreateServiceOrderPage() {
                         </div>
                       </div>
 
+                      {plan.executionMinutes > 0 && plan.endTimeIso ? (
+                        <p className="reception-plan-summary-warning">
+                          {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.completionWarningTimeLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
+                        </p>
+                      ) : null}
+
                       <div className="reception-plan-summary-footer">
-                        <span>{`${plan.totalMinutes} phút`}</span>
+                        <span>{`${plan.executionMinutes} phút`}</span>
                         <strong>{formatCurrency(plan.totalPrice)}</strong>
                       </div>
                     </article>
@@ -1692,3 +2555,4 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
+

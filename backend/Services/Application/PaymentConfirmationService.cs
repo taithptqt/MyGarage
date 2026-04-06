@@ -58,7 +58,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
                 invoice.PaidAmount = paidAmount;
                 var invoiceTotal = invoice.TotalAmount ?? 0m;
-                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal ? "COMPLETED" : "PENDING";
+                invoice.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, invoiceTotal);
                 invoice.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -73,7 +73,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
-                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal ? "COMPLETED" : "PENDING";
+                serviceOrder.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, serviceTotal);
                 serviceOrder.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -124,6 +124,26 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         {
             Console.WriteLine($"[PaymentConfirmationService] Failed to send payment email: {ex.Message}");
         }
+    }
+
+    private static string ResolveDocumentPaymentStatus(decimal paidAmount, decimal totalAmount)
+    {
+        if (totalAmount <= 0m)
+        {
+            return "PAID";
+        }
+
+        if (paidAmount <= 0m)
+        {
+            return "UNPAID";
+        }
+
+        if (paidAmount < totalAmount)
+        {
+            return "PARTIAL";
+        }
+
+        return "PAID";
     }
 
     private async Task<(string Email, string FullName)?> ResolveCustomerRecipientAsync(Payment payment)

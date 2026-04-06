@@ -152,6 +152,8 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<Staff> Staffs { get; set; }
 
+    public virtual DbSet<Team> Teams { get; set; }
+
     public virtual DbSet<StaffSchedule> StaffSchedules { get; set; }
 
     public virtual DbSet<StaffTier> StaffTiers { get; set; }
@@ -1034,7 +1036,16 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Diagnose__3214EC071BC3DD6E");
 
+            entity.Property(e => e.CancellationDecisionNote).HasMaxLength(500);
+            entity.Property(e => e.CancellationReason).HasMaxLength(500);
+            entity.Property(e => e.CancellationStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("NONE");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.DispatchTag)
+                .HasMaxLength(100)
+                .IsUnicode(false);
             entity.Property(e => e.Severity)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -1042,6 +1053,7 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasDefaultValue("PENDING");
+            entity.Property(e => e.SupportRequestNote).HasMaxLength(500);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.ApprovedByForeman).WithMany(p => p.DiagnosisApprovedByForemen)
@@ -2456,6 +2468,41 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__ShiftClos__WorkS__664B26CC");
         });
 
+        modelBuilder.Entity<Team>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_Teams");
+            entity.ToTable("Teams");
+
+            entity.HasIndex(e => new { e.BranchId, e.Code }, "UQ_Teams_BranchId_Code")
+                .IsUnique()
+                .HasFilter("[Code] IS NOT NULL");
+
+            entity.Property(e => e.Code)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.Name).HasMaxLength(255);
+            entity.Property(e => e.SpecialtyTag)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("ACTIVE");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.Teams)
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Teams_BranchId");
+
+            entity.HasOne(d => d.Leader).WithMany()
+                .HasForeignKey(d => d.LeaderId)
+                .HasConstraintName("FK_Teams_LeaderId");
+        });
+
         modelBuilder.Entity<Staff>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Staffs__3214EC07674AA95B");
@@ -2511,6 +2558,10 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.StaffTier).WithMany(p => p.Staff)
                 .HasForeignKey(d => d.StaffTierId)
                 .HasConstraintName("FK__Staffs__StaffTie__6C040022");
+
+            entity.HasOne(d => d.Team).WithMany(p => p.Staff)
+                .HasForeignKey(d => d.TeamId)
+                .HasConstraintName("FK_Staffs_TeamId");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.InverseUpdatedByNavigation)
                 .HasForeignKey(d => d.UpdatedBy)

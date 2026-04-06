@@ -70,7 +70,7 @@ namespace MyGarage.Services
             var lane = ResolveLifecycleLane(appointment);
             var cancelAfterMinutes = ResolveCancelAfterMinutes(lifecyclePolicy, lane, appointment.StartTime);
 
-            if (arriveTime > appointment.StartTime.AddMinutes(cancelAfterMinutes))
+            if (arriveTime >= appointment.StartTime.AddMinutes(cancelAfterMinutes))
             {
                 appointment.Status = AppointmentStatuses.NoShow;
                 appointment.CancelReason = AppointmentCancelReasons.AutoNoShowLateArrival;
@@ -88,7 +88,7 @@ namespace MyGarage.Services
 
             if (arrivalOffsetMinutes > GraceArrivalMinutes)
             {
-                await ApplyLateFixedArrivalAsync(appointment, arriveTime);
+                await ApplyLateFixedArrivalAsync(appointment, arriveTime, cancelAfterMinutes);
                 return;
             }
 

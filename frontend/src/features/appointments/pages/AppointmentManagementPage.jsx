@@ -56,7 +56,6 @@ const STATUS_FILTER_OPTIONS = [
   "ARRIVED_LATE",
   "CANCELED",
   "NO_SHOW",
-  "COMPLETED",
 ].map(toStatusOptionVi);
 
 const SORT_OPTIONS = [
@@ -221,7 +220,8 @@ function canConfirmAppointment(status) {
 }
 
 function canCheckInAppointment(status) {
-  return normalizeStatus(status) === "CONFIRMED";
+  const normalized = normalizeStatus(status);
+  return normalized === "CONFIRMED" || normalized === "LATE";
 }
 
 function canCancelAppointment(status) {
@@ -490,7 +490,7 @@ export default function AppointmentManagementPage() {
           startTime: first?.startTime || first?.scheduledDate || null,
           endTime: last?.endTime || last?.startTime || last?.scheduledDate || null,
           customerName: group.customerName || first?.customerName || "",
-          confirmedCount: appts.filter((x) => ["CONFIRMED", "ARRIVED", "CHECKED_IN"].includes(x.status)).length,
+          confirmedCount: appts.filter((x) => ["CONFIRMED", "ARRIVED", "ARRIVED_LATE"].includes(x.status)).length,
           canceledCount: appts.filter((x) => ["CANCELED", "NO_SHOW"].includes(x.status)).length,
         };
       })

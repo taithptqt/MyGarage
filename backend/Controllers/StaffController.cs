@@ -27,12 +27,16 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null)
+        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null, [FromQuery] long? teamId = null)
         {
             var items = await _staffService.GetAllAsync();
             if (branchId.HasValue)
             {
                 items = items.Where(s => s.BranchId == branchId.Value).ToList();
+            }
+            if (teamId.HasValue)
+            {
+                items = items.Where(s => s.TeamId == teamId.Value).ToList();
             }
             var dtos = _mapper.Map<IEnumerable<StaffResponseDto>>(items);
             return Ok(dtos);

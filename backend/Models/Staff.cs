@@ -21,6 +21,8 @@ public partial class Staff
 
     public long? BranchId { get; set; }
 
+    public long? TeamId { get; set; }
+
     public long? StaffTierId { get; set; }
 
     public int? SkillLevel { get; set; }
@@ -355,6 +357,8 @@ public partial class Staff
     public virtual ICollection<StaffSchedule> StaffSchedules { get; set; } = new List<StaffSchedule>();
 
     public virtual StaffTier? StaffTier { get; set; }
+
+    public virtual Team? Team { get; set; }
 
     public virtual ICollection<StaffTier> StaffTierCreatedByNavigations { get; set; } = new List<StaffTier>();
 

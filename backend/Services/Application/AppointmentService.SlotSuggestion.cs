@@ -18,6 +18,8 @@ namespace MyGarage.Services
             bool isParallel = false,
             int searchDays = 3)
         {
+            const int suggestionLimit = 5;
+
             if (branchId <= 0)
             {
                 throw new InvalidOperationException("Chi nh\u00E1nh kh\u00F4ng h\u1EE3p l\u1EC7.");
@@ -91,7 +93,7 @@ namespace MyGarage.Services
                     candidateSlots.Add(slot);
                 }
 
-                if (candidateSlots.Count >= 5)
+                if (candidateSlots.Count >= suggestionLimit)
                 {
                     break;
                 }
@@ -138,7 +140,7 @@ namespace MyGarage.Services
                 SuggestionDeltaMinutes = Math.Max(0, deltaMinutes),
                 IsExactOrEarlier = isExactOrEarlier,
                 Message = message,
-                Alternatives = ordered.Take(3).ToList()
+                Alternatives = ordered.Take(suggestionLimit).ToList()
             };
         }
     }

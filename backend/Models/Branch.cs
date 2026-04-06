@@ -95,6 +95,8 @@ public partial class Branch
 
     public virtual ICollection<Staff> Staff { get; set; } = new List<Staff>();
 
+    public virtual ICollection<Team> Teams { get; set; } = new List<Team>();
+
     public virtual ICollection<StaffSalaryProfile> StaffSalaryProfiles { get; set; } = new List<StaffSalaryProfile>();
 
     public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();

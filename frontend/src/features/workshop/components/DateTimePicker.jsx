@@ -45,10 +45,12 @@ const DateTimePicker = ({
   onChange,
   placeholder = "Chọn ngày và giờ",
   minDate,
+  maxDate,
   showTime = true,
   availableTimeMap = null,
   loadingTimeOptions = false,
-  noTimeOptionsText = "Không có khung giờ khả dụng cho ngày đã chọn."
+  noTimeOptionsText = "Không có khung giờ khả dụng cho ngày đã chọn.",
+  autoSelectNowOnOpen = false
 }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState("08");
@@ -127,6 +129,62 @@ const DateTimePicker = ({
     selectedMinute,
     showTime
   ]);
+
+  useEffect(() => {
+    if (!isOpen || !autoSelectNowOnOpen || selectedDate || value) return;
+
+    const now = new Date();
+    const nowHour = padTime(now.getHours());
+    const nowMinute = padTime(now.getMinutes());
+    setSelectedDate(now);
+
+    if (!showTime) {
+      updateValue(now, "08", "00");
+      return;
+    }
+
+    if (hasExternalTimeMap) {
+      const hourKeys = Object.keys(externalTimeMap || {});
+      if (hourKeys.length === 0) {
+        onChange("");
+        return;
+      }
+
+      let nextHour = hourKeys.includes(nowHour) ? nowHour : hourKeys[0];
+      let minuteOptions = externalTimeMap?.[nextHour] || [];
+      let nextMinute = minuteOptions.includes(nowMinute) ? nowMinute : minuteOptions[0];
+
+      if (!nextMinute) {
+        let closestDiff = Number.POSITIVE_INFINITY;
+        hourKeys.forEach((hour) => {
+          const options = externalTimeMap?.[hour] || [];
+          options.forEach((minute) => {
+            const total = Number(hour) * 60 + Number(minute);
+            const diff = Math.abs(total - (now.getHours() * 60 + now.getMinutes()));
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              nextHour = hour;
+              nextMinute = minute;
+            }
+          });
+        });
+      }
+
+      if (!nextMinute) {
+        onChange("");
+        return;
+      }
+
+      setSelectedHour(nextHour);
+      setSelectedMinute(nextMinute);
+      updateValue(now, nextHour, nextMinute);
+      return;
+    }
+
+    setSelectedHour(nowHour);
+    setSelectedMinute(nowMinute);
+    updateValue(now, nowHour, nowMinute);
+  }, [autoSelectNowOnOpen, externalTimeMap, hasExternalTimeMap, isOpen, onChange, selectedDate, showTime, value]);
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
@@ -268,6 +326,7 @@ const DateTimePicker = ({
                   onChange={handleDateChange}
                   value={selectedDate || new Date()}
                   minDate={minDate || new Date()}
+                  maxDate={maxDate}
                   locale="vi-VN"
                   className="custom-react-calendar"
                 />

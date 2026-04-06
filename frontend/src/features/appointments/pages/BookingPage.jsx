@@ -1636,7 +1636,6 @@ export default function BookingPage() {
                           <article key={`confirm-vehicle-${vehicle.key}`} className="summary-vehicle-card">
                             <strong>{vehicle.label}</strong>
                             <div className="summary-vehicle-content">
-                              <p><span>Loại dịch vụ:</span> {vehicle.categoryNames.length > 0 ? vehicle.categoryNames.join(", ") : "Chưa chọn"}</p>
                               <p><span>Dịch vụ cụ thể:</span> {vehicle.serviceNames.length > 0 ? vehicle.serviceNames.join(", ") : "Chưa chọn"}</p>
                               <p><span>Giờ bắt đầu:</span> {vehicle.slotStartLabel}</p>
                               <p><span>Giờ kết thúc:</span> {vehicle.slotEndLabel}</p>
@@ -1697,7 +1696,6 @@ export default function BookingPage() {
                           <span>Xe {index + 1}</span>
                         </div>
                         <div className="summary-vehicle-content">
-                          <p><span>Loại dịch vụ:</span> {vehicle.categoryNames.length > 0 ? vehicle.categoryNames.join(", ") : "Chưa chọn"}</p>
                           <p><span>Dịch vụ cụ thể:</span> {vehicle.serviceNames.length > 0 ? vehicle.serviceNames.join(", ") : "Chưa chọn"}</p>
                           <p><span>Giờ bắt đầu:</span> {vehicle.slotStartLabel}</p>
                           <p><span>Giờ kết thúc:</span> {vehicle.slotEndLabel}</p>
