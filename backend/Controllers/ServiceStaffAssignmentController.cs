@@ -21,17 +21,20 @@ namespace MyGarage.Controllers
             new(Enum.GetNames<ServiceProgressStatus>(), StringComparer.OrdinalIgnoreCase);
 
         private readonly IServiceStaffAssignmentService _serviceStaffAssignmentService;
+        private readonly IServiceOrderService _serviceOrderService;
         private readonly IVehicleConditionLogService _vehicleConditionLogService;
         private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
         public ServiceStaffAssignmentController(
             IServiceStaffAssignmentService serviceStaffAssignmentService,
+            IServiceOrderService serviceOrderService,
             IVehicleConditionLogService vehicleConditionLogService,
             IGarageContext context,
             IMapper mapper)
         {
             _serviceStaffAssignmentService = serviceStaffAssignmentService;
+            _serviceOrderService = serviceOrderService;
             _vehicleConditionLogService = vehicleConditionLogService;
             _context = context;
             _mapper = mapper;
@@ -60,65 +63,117 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceStaffAssignmentResponseDto>> Create([FromBody] ServiceStaffAssignmentCreateDto itemDto)
         {
-            var statusError = NormalizeAndValidateStatus(itemDto, isCreate: true);
-            if (!string.IsNullOrWhiteSpace(statusError))
+            try
             {
-                return BadRequest(new { message = statusError });
-            }
+                var statusError = NormalizeAndValidateStatus(itemDto, isCreate: true);
+                if (!string.IsNullOrWhiteSpace(statusError))
+                {
+                    return BadRequest(new { message = statusError });
+                }
 
-            var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
-            if (!string.IsNullOrWhiteSpace(checkInValidationError))
+                var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
+                if (!string.IsNullOrWhiteSpace(checkInValidationError))
+                {
+                    return BadRequest(new { message = checkInValidationError });
+                }
+
+                var serviceOrderId = await ResolveServiceOrderIdFromDetailIdAsync(itemDto.ServiceOrderDetailId);
+                if (serviceOrderId <= 0)
+                {
+                    return BadRequest(new { message = "Không tìm thấy service order tương ứng với hạng mục được phân công." });
+                }
+
+                await _serviceOrderService.EnsureAssignmentEditableAsync(serviceOrderId);
+
+                var entity = _mapper.Map<ServiceStaffAssignment>(itemDto);
+                var createdItem = await _serviceStaffAssignmentService.AddAsync(entity);
+                var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(createdItem);
+                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            }
+            catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = checkInValidationError });
+                return BadRequest(new { message = ex.Message });
             }
-
-            var entity = _mapper.Map<ServiceStaffAssignment>(itemDto);
-            var createdItem = await _serviceStaffAssignmentService.AddAsync(entity);
-            var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<ServiceStaffAssignmentResponseDto>> Update(long id, [FromBody] ServiceStaffAssignmentUpdateDto itemDto)
         {
-            var existingItem = await _serviceStaffAssignmentService.GetByIdAsync(id);
-            if (existingItem == null)
+            try
             {
-                return NotFound();
-            }
+                var existingItem = await _serviceStaffAssignmentService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
 
-            var statusError = NormalizeAndValidateStatus(itemDto, isCreate: false);
-            if (!string.IsNullOrWhiteSpace(statusError))
-            {
-                return BadRequest(new { message = statusError });
-            }
+                var statusError = NormalizeAndValidateStatus(itemDto, isCreate: false);
+                if (!string.IsNullOrWhiteSpace(statusError))
+                {
+                    return BadRequest(new { message = statusError });
+                }
 
-            var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
-            if (!string.IsNullOrWhiteSpace(checkInValidationError))
-            {
-                return BadRequest(new { message = checkInValidationError });
-            }
+                var checkInValidationError = await ValidateSignedCheckInBeforeAssignmentAsync(itemDto.ServiceOrderDetailId);
+                if (!string.IsNullOrWhiteSpace(checkInValidationError))
+                {
+                    return BadRequest(new { message = checkInValidationError });
+                }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _serviceStaffAssignmentService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
+                var detailId = itemDto.ServiceOrderDetailId > 0
+                    ? itemDto.ServiceOrderDetailId
+                    : existingItem.ServiceOrderDetailId;
+                var serviceOrderId = await ResolveServiceOrderIdFromDetailIdAsync(detailId);
+                if (serviceOrderId <= 0)
+                {
+                    return BadRequest(new { message = "Không tìm thấy service order tương ứng với hạng mục được phân công." });
+                }
+
+                await _serviceOrderService.EnsureAssignmentEditableAsync(serviceOrderId);
+
+                _mapper.Map(itemDto, existingItem);
+                var updatedItem = await _serviceStaffAssignmentService.UpdateAsync(id, existingItem);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+
+                var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(updatedItem);
+                return Ok(responseDto);
             }
-            var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(updatedItem);
-            return Ok(responseDto);
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _serviceStaffAssignmentService.DeleteAsync(id);
-            if (!result)
+            try
             {
-                return NotFound();
+                var existingItem = await _serviceStaffAssignmentService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                var serviceOrderId = await ResolveServiceOrderIdFromDetailIdAsync(existingItem.ServiceOrderDetailId);
+                if (serviceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsureAssignmentEditableAsync(serviceOrderId);
+                }
+
+                var result = await _serviceStaffAssignmentService.DeleteAsync(id);
+                if (!result)
+                {
+                    return NotFound();
+                }
+                return NoContent();
             }
-            return NoContent();
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         private static string? NormalizeAndValidateStatus(ServiceStaffAssignmentCreateDto dto, bool isCreate)
@@ -203,6 +258,20 @@ namespace MyGarage.Controllers
             }
 
             return null;
+        }
+
+        private async Task<long> ResolveServiceOrderIdFromDetailIdAsync(long serviceOrderDetailId)
+        {
+            if (serviceOrderDetailId <= 0)
+            {
+                return 0;
+            }
+
+            return await _context.ServiceOrderDetails
+                .AsNoTracking()
+                .Where(x => x.Id == serviceOrderDetailId)
+                .Select(x => x.ServiceOrderId)
+                .FirstOrDefaultAsync();
         }
     }
 }

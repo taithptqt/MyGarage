@@ -469,8 +469,7 @@ namespace MyGarage.Services
                 .Where(x => x.AssignedTeamId.HasValue && teamIds.Contains(x.AssignedTeamId.Value))
                 .Where(x =>
                     x.Status == DiagnosisStatusAssigned ||
-                    x.Status == DiagnosisStatusPending ||
-                    x.Status == DiagnosisStatusDraft)
+                    x.Status == DiagnosisStatusPending)
                 .GroupBy(x => x.AssignedTeamId!.Value)
                 .Select(group => new
                 {

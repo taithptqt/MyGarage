@@ -101,9 +101,26 @@ export default function AppointmentDetailModal({
   const createdAt = appointment.createdAt || appointment.CreatedAt;
   const statusText = appointment.status || appointment.Status || "PENDING";
   const statusLabel = getStatusLabelVi(statusText, statusText);
+  const canEditAppointment = Boolean(onEdit);
+  const modalTitle = canEditAppointment ? (
+    <div className="appt-detail-title-wrap">
+      <span className="appt-detail-title-text">Chi tiết lịch hẹn</span>
+      <button
+        type="button"
+        className="btn-primary-large appt-detail-header-edit-btn"
+        onClick={() => onEdit(appointment)}
+        disabled={onEditDisabled}
+        title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
+      >
+        Sửa lịch hẹn
+      </button>
+    </div>
+  ) : (
+    "Chi tiết lịch hẹn"
+  );
 
   return (
-    <Modal title="Chi tiết lịch hẹn" onClose={onClose} className="appt-detail-modal">
+    <Modal title={modalTitle} onClose={onClose} className="appt-detail-modal">
       <div className="appt-detail-shell">
         <section className="appt-detail-hero">
           <div className="appt-detail-hero-content">
@@ -198,17 +215,6 @@ export default function AppointmentDetailModal({
         )}
 
         <div className="appt-detail-actions">
-          {onEdit ? (
-            <button
-              type="button"
-              className="btn-secondary-outline appt-detail-edit-btn"
-              onClick={() => onEdit(appointment)}
-              disabled={onEditDisabled}
-              title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
-            >
-              Sửa lịch hẹn
-            </button>
-          ) : null}
           <button type="button" className="btn-primary" onClick={onClose}>
             Đóng
           </button>
@@ -217,5 +223,3 @@ export default function AppointmentDetailModal({
     </Modal>
   );
 }
-
-

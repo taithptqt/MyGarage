@@ -9,5 +9,10 @@ namespace MyGarage.Interfaces
     {
         Task<ServiceOrderBatchCreateResult> AddWorkshopBatchAsync(long? actorUserId, ServiceOrderBatchCreateRequestDto dto);
         Task<ServiceOrder?> UpdateWorkshopAsync(long id, WorkshopServiceOrderEditRequestDto dto, long? actorUserId = null);
+        Task<ServiceOrderEditCapabilityResponseDto?> GetEditCapabilityAsync(long id);
+        Task EnsureWorkshopEditableAsync(long id);
+        Task EnsureQuoteAndPartsEditableAsync(long id);
+        Task EnsureAssignmentEditableAsync(long id);
+        Task EnsurePartsEditableAsync(long id);
     }
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
@@ -22,7 +22,11 @@ const DEFAULT_FORM_DATA = {
   serviceIds: [],
 };
 
-const EDIT_WINDOW_PASSED_MESSAGE = "Không thể sửa service order vì đã qua khung giờ đã chọn lúc tạo.";
+const EDIT_WINDOW_PASSED_MESSAGE = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
+const REQUEST_EDIT_REASON_REQUIRED = "Vui lòng nhập lý do yêu cầu sửa trước khi gửi.";
+const REQUEST_EDIT_ERROR = "Không thể gửi yêu cầu sửa service order.";
+const REQUEST_EDIT_SUCCESS = "Đã gửi yêu cầu sửa service order đến cấp phê duyệt.";
+const REQUEST_DECISION_ERROR = "Không thể xử lý yêu cầu sửa service order.";
 
 function readField(obj, keys, fallback = null) {
   for (const key of keys) {
@@ -56,6 +60,78 @@ function normalizeSearchText(value) {
     .replace(/đ/g, "d");
 }
 
+function normalizeRoleToken(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, "_")
+    .replace(/\s+/g, "_");
+}
+
+function containsRoleKeyword(roleCode, roleName, keywords) {
+  const normalizedCode = normalizeRoleToken(roleCode);
+  const normalizedName = normalizeRoleToken(roleName);
+  return keywords.some((keyword) => {
+    const token = normalizeRoleToken(keyword);
+    return normalizedCode.includes(token) || normalizedName.includes(token);
+  });
+}
+
+function canApproveServiceOrderSection(roleCode, roleName, section) {
+  const normalizedSection = String(section || "WORKSHOP").trim().toUpperCase();
+  const isAdmin = containsRoleKeyword(roleCode, roleName, ["ADMIN", "OWNER", "DIRECTOR", "CHU_XUONG", "SUPERADMIN", "SUPER_ADMIN"]);
+  const isManager = containsRoleKeyword(roleCode, roleName, ["MANAGER", "SERVICE_MANAGER", "FOREMAN", "TEAM_LEAD", "QUAN_DOC"]);
+  const isWarehouse = containsRoleKeyword(roleCode, roleName, ["WAREHOUSE", "STOREKEEPER", "INVENTORY", "THU_KHO"]);
+  const isAccounting = containsRoleKeyword(roleCode, roleName, ["ACCOUNTANT", "FINANCE", "KE_TOAN", "CHIEF_ACCOUNTANT", "CFO"]);
+
+  if (["PARTS"].includes(normalizedSection)) return isWarehouse || isManager || isAdmin;
+  if (["BILLING", "FINANCE"].includes(normalizedSection)) return isAccounting || isAdmin;
+  if (["CLOSED", "GATE_PASS"].includes(normalizedSection)) return isAdmin;
+  return isManager || isAdmin;
+}
+
+function normalizeServiceOrderEditRequestItem(raw) {
+  const source = raw || {};
+  const read = (...keys) => {
+    for (const key of keys) {
+      const value = source?.[key];
+      if (value !== undefined && value !== null) return value;
+    }
+    return null;
+  };
+
+  const requestId = Number(read("requestId", "RequestId", "id", "Id") || 0);
+  return {
+    requestId: Number.isFinite(requestId) && requestId > 0 ? requestId : 0,
+    section: String(read("section", "Section") || "WORKSHOP").trim().toUpperCase(),
+    reason: String(read("reason", "Reason") || "").trim(),
+    status: String(read("status", "Status") || "PENDING").trim().toUpperCase(),
+    requestedByUserId: Number(read("requestedByUserId", "RequestedByUserId", "userId", "UserId") || 0),
+    requestedAtUtc: read("requestedAtUtc", "RequestedAtUtc", "timestamp", "Timestamp"),
+    decidedByUserId: Number(read("decidedByUserId", "DecidedByUserId") || 0),
+    decidedAtUtc: read("decidedAtUtc", "DecidedAtUtc"),
+    decisionNote: String(read("decisionNote", "DecisionNote") || "").trim(),
+    decidedByRoleCode: String(read("decidedByRoleCode", "DecidedByRoleCode") || "").trim(),
+    overrideUntilUtc: read("overrideUntilUtc", "OverrideUntilUtc"),
+  };
+}
+
+function getRequestStatusLabel(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "APPROVED") return "Đã duyệt";
+  if (normalized === "REJECTED") return "Đã từ chối";
+  return "Chờ duyệt";
+}
+
+function getRequestStatusColor(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "APPROVED") return "#166534";
+  if (normalized === "REJECTED") return "#b91c1c";
+  return "#9a3412";
+}
 function normalizeService(service) {
   const id = Number(readField(service, ["id", "Id"], 0));
   const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
@@ -120,13 +196,46 @@ function toLocalDateTimeValue(value) {
 }
 
 function hasServiceOrderEditWindowPassed(order) {
-  const estimatedEndRaw = readField(order, ["estimatedHandover", "EstimatedHandover"], null);
-  const promisedEndRaw = readField(order, ["promisedHandoverTime", "PromisedHandoverTime"], null);
-  const endRaw = estimatedEndRaw || promisedEndRaw;
-  if (!endRaw) return false;
-  const endTime = new Date(endRaw);
-  if (Number.isNaN(endTime.getTime())) return false;
-  return Date.now() >= endTime.getTime();
+  const normalizedStatus = String(readField(order, ["status", "Status"], "") || "")
+    .trim()
+    .toUpperCase()
+    .replace(/-/g, "_")
+    .replace(/\s+/g, "_");
+  const actualHandoverRaw = readField(order, ["actualHandover", "ActualHandover"], null);
+  const hasActualHandover = Boolean(actualHandoverRaw);
+  return hasActualHandover
+    || ["APPROVED", "IN_PROGRESS", "REPAIRING", "READY", "WAITING_PAYMENT", "CLOSED", "CANCELED", "CANCELLED"].includes(normalizedStatus);
+}
+
+function normalizeServiceOrderEditCapability(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const read = (...keys) => {
+    for (const key of keys) {
+      const value = payload?.[key];
+      if (value !== undefined && value !== null) return value;
+    }
+    return null;
+  };
+
+  return {
+    canEditWorkshop: Boolean(read("canEditWorkshop", "CanEditWorkshop")),
+    isWindowPassed: Boolean(read("isWindowPassed", "IsWindowPassed")),
+    isQuoteLocked: Boolean(read("isQuoteLocked", "IsQuoteLocked")),
+    isAssignmentLocked: Boolean(read("isAssignmentLocked", "IsAssignmentLocked")),
+    isPartsLocked: Boolean(read("isPartsLocked", "IsPartsLocked")),
+    isBillingLocked: Boolean(read("isBillingLocked", "IsBillingLocked")),
+    isClosedLocked: Boolean(read("isClosedLocked", "IsClosedLocked")),
+    isOverrideActive: Boolean(read("isOverrideActive", "IsOverrideActive")),
+    canOverrideWorkshop: Boolean(read("canOverrideWorkshop", "CanOverrideWorkshop")),
+    canOverrideQuote: Boolean(read("canOverrideQuote", "CanOverrideQuote")),
+    canOverrideAssignment: Boolean(read("canOverrideAssignment", "CanOverrideAssignment")),
+    canOverrideParts: Boolean(read("canOverrideParts", "CanOverrideParts")),
+    canOverrideBilling: Boolean(read("canOverrideBilling", "CanOverrideBilling")),
+    canOverrideClosed: Boolean(read("canOverrideClosed", "CanOverrideClosed")),
+    overrideRequestId: Number(read("overrideRequestId", "OverrideRequestId")) > 0 ? Number(read("overrideRequestId", "OverrideRequestId")) : null,
+    overrideUntilUtc: read("overrideUntilUtc", "OverrideUntilUtc"),
+    blockingReason: String(read("blockingReason", "BlockingReason") || "").trim(),
+  };
 }
 
 function parseSymptomNotes(rawCustomerNotes) {
@@ -223,11 +332,19 @@ export default function ServiceOrderEditPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [requestingEdit, setRequestingEdit] = useState(false);
+  const [loadingEditRequests, setLoadingEditRequests] = useState(false);
+  const [decidingRequestId, setDecidingRequestId] = useState(0);
   const [error, setError] = useState("");
+  const [requestEditReason, setRequestEditReason] = useState("");
+  const [requestEditNotice, setRequestEditNotice] = useState("");
+  const [editRequests, setEditRequests] = useState([]);
+  const [decisionNotesByRequestId, setDecisionNotesByRequestId] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [order, setOrder] = useState(null);
+  const [editCapability, setEditCapability] = useState(null);
   const [staff, setStaff] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [services, setServices] = useState([]);
@@ -239,13 +356,24 @@ export default function ServiceOrderEditPage() {
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [symptomInputs, setSymptomInputs] = useState([""]);
   const pickerMinDate = useMemo(() => new Date(2000, 0, 1), []);
+  const roleCode = String(user?.roleCode ?? user?.RoleCode ?? "").trim();
+  const roleName = String(user?.roleName ?? user?.RoleName ?? "").trim();
 
   const effectiveBranchId = useMemo(() => {
     const fromContext = parsePositiveId(selectedBranchId);
     if (fromContext > 0) return fromContext;
     return parsePositiveId(user?.branchId ?? user?.BranchId);
   }, [selectedBranchId, user?.BranchId, user?.branchId]);
-  const isEditWindowPassed = hasServiceOrderEditWindowPassed(order);
+  const fallbackEditWindowPassed = hasServiceOrderEditWindowPassed(order);
+  const isEditLocked = editCapability
+    ? !editCapability.canEditWorkshop
+    : fallbackEditWindowPassed;
+  const editLockedMessage = editCapability?.blockingReason || EDIT_WINDOW_PASSED_MESSAGE;
+  const overrideUntilText = useMemo(() => formatDateTimeValue(editCapability?.overrideUntilUtc), [editCapability?.overrideUntilUtc]);
+  const hasPendingRequest = useMemo(
+    () => editRequests.some((item) => String(item?.status || "").toUpperCase() === "PENDING"),
+    [editRequests]
+  );
 
   const normalizedServices = useMemo(() => {
     return (services || []).map(normalizeService).filter((service) => service.id > 0 && service.name);
@@ -331,10 +459,13 @@ export default function ServiceOrderEditPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadingEditRequests(true);
     setError("");
     try {
-      const [orderRes, staffRes, roleRes, categoryRes, serviceRes, detailsRes, customerRes, vehicleRes] = await Promise.all([
+      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, detailsRes, customerRes, vehicleRes] = await Promise.all([
         serviceOrderApi.getById(orderId),
+        serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
+        serviceOrderApi.getEditRequests(orderId).catch(() => []),
         getAllStaff(),
         getAllRoles(),
         getAllServiceCategories(),
@@ -389,11 +520,17 @@ export default function ServiceOrderEditPage() {
       const normalizedStatus = String(readField(orderRes, ["status", "Status"], "NEW") || "NEW").toUpperCase();
 
       setOrder(orderRes);
+      setEditCapability(normalizeServiceOrderEditCapability(capabilityRes));
       setStaff(filteredStaff);
       setServiceCategories(Array.isArray(categoryRes) ? categoryRes : []);
       setServices(Array.isArray(serviceRes) ? serviceRes : []);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
+      setEditRequests(
+        (Array.isArray(requestRes) ? requestRes : [])
+          .map(normalizeServiceOrderEditRequestItem)
+          .filter((item) => item.requestId > 0)
+      );
 
       setFormData({
         orderCategory: normalizedCategory,
@@ -418,6 +555,7 @@ export default function ServiceOrderEditPage() {
       setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
+      setLoadingEditRequests(false);
     }
   }, [effectiveBranchId, orderId]);
 
@@ -514,7 +652,16 @@ export default function ServiceOrderEditPage() {
     async (event) => {
       event.preventDefault();
       if (saving) return;
-      if (hasServiceOrderEditWindowPassed(order)) {
+
+      const latestCapabilityRaw = await serviceOrderApi.getEditCapabilities(orderId).catch(() => null);
+      const latestCapability = normalizeServiceOrderEditCapability(latestCapabilityRaw);
+      if (latestCapability && !latestCapability.canEditWorkshop) {
+        setEditCapability(latestCapability);
+        setError(latestCapability.blockingReason || EDIT_WINDOW_PASSED_MESSAGE);
+        return;
+      }
+
+      if (!latestCapability && hasServiceOrderEditWindowPassed(order)) {
         setError(EDIT_WINDOW_PASSED_MESSAGE);
         return;
       }
@@ -559,6 +706,96 @@ export default function ServiceOrderEditPage() {
     [formData, navigate, order, orderId, saving, suggestedFinish.finishIso, symptomInputs, validateForm]
   );
 
+
+  const handleRequestEdit = useCallback(async () => {
+    if (!isEditLocked) {
+      return;
+    }
+
+    const reason = String(requestEditReason || "").trim();
+    if (!reason) {
+      setError(REQUEST_EDIT_REASON_REQUIRED);
+      return;
+    }
+
+    setRequestingEdit(true);
+    setError("");
+    setRequestEditNotice("");
+    try {
+      const response = await serviceOrderApi.requestEdit(orderId, {
+        section: "WORKSHOP",
+        reason,
+      });
+      const [latestCapabilityRaw, latestRequestsRaw] = await Promise.all([
+        serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
+        serviceOrderApi.getEditRequests(orderId).catch(() => []),
+      ]);
+      setEditCapability(normalizeServiceOrderEditCapability(latestCapabilityRaw));
+      setEditRequests(
+        (Array.isArray(latestRequestsRaw) ? latestRequestsRaw : [])
+          .map(normalizeServiceOrderEditRequestItem)
+          .filter((item) => item.requestId > 0)
+      );
+      setRequestEditNotice(String(response?.message || REQUEST_EDIT_SUCCESS));
+      setRequestEditReason("");
+    } catch (err) {
+      setError(getApiErrorMessage(err) || REQUEST_EDIT_ERROR);
+    } finally {
+      setRequestingEdit(false);
+    }
+  }, [isEditLocked, orderId, requestEditReason]);
+
+  const handleDecisionNoteChange = useCallback((requestId, value) => {
+    const safeId = Number(requestId);
+    if (!Number.isFinite(safeId) || safeId <= 0) return;
+    setDecisionNotesByRequestId((prev) => ({
+      ...prev,
+      [safeId]: value,
+    }));
+  }, []);
+
+  const handleDecideRequest = useCallback(async (request, approve) => {
+    const safeRequestId = Number(request?.requestId || 0);
+    if (!Number.isFinite(safeRequestId) || safeRequestId <= 0) return;
+    if (!canApproveServiceOrderSection(roleCode, roleName, request?.section)) return;
+
+    const note = String(decisionNotesByRequestId[safeRequestId] || "").trim();
+    if (!approve && !note) {
+      setError("Vui lòng nhập lý do từ chối.");
+      return;
+    }
+
+    setDecidingRequestId(safeRequestId);
+    setError("");
+    setRequestEditNotice("");
+    try {
+      const response = await serviceOrderApi.decideEditRequest(orderId, safeRequestId, {
+        decision: approve ? "APPROVE" : "REJECT",
+        note: note || null,
+      });
+
+      const [latestCapabilityRaw, latestRequestsRaw] = await Promise.all([
+        serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
+        serviceOrderApi.getEditRequests(orderId).catch(() => []),
+      ]);
+      setEditCapability(normalizeServiceOrderEditCapability(latestCapabilityRaw));
+      setEditRequests(
+        (Array.isArray(latestRequestsRaw) ? latestRequestsRaw : [])
+          .map(normalizeServiceOrderEditRequestItem)
+          .filter((item) => item.requestId > 0)
+      );
+      setRequestEditNotice(String(response?.message || (approve ? "Đã duyệt yêu cầu sửa." : "Đã từ chối yêu cầu sửa.")));
+      setDecisionNotesByRequestId((prev) => ({
+        ...prev,
+        [safeRequestId]: "",
+      }));
+    } catch (err) {
+      setError(getApiErrorMessage(err) || REQUEST_DECISION_ERROR);
+    } finally {
+      setDecidingRequestId(0);
+    }
+  }, [canApproveServiceOrderSection, decisionNotesByRequestId, orderId, roleCode, roleName]);
+
   if (loading) {
     return (
       <div className="create-order-page reception-create-appointment-page">
@@ -599,6 +836,18 @@ export default function ServiceOrderEditPage() {
         </div>
       ) : null}
 
+      {requestEditNotice ? (
+        <div className="validation-summary" role="status">
+          {requestEditNotice}
+        </div>
+      ) : null}
+
+      {editCapability?.isOverrideActive ? (
+        <div className="validation-summary" role="status">
+          {`Đang mở khóa tạm thời đến: ${overrideUntilText}`}
+        </div>
+      ) : null}
+
       {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
         <div className="validation-summary" role="alert">
           <strong>Vui lòng xử lý các lỗi sau:</strong>
@@ -610,15 +859,113 @@ export default function ServiceOrderEditPage() {
         </div>
       ) : null}
 
-      {isEditWindowPassed ? (
+      {isEditLocked ? (
         <div className="validation-summary" role="alert">
-          {EDIT_WINDOW_PASSED_MESSAGE}
+          {editLockedMessage}
         </div>
       ) : null}
 
+      {isEditLocked ? (
+        <section className="reception-appt-section" aria-live="polite">
+          <div className="reception-appt-section-head">
+            <h4 className="reception-appt-section-title">Yêu cầu mở khóa chỉnh sửa</h4>
+          </div>
+          <div className="form-group">
+            <label htmlFor="service-order-edit-request-reason">Lý do yêu cầu sửa</label>
+            <textarea
+              id="service-order-edit-request-reason"
+              rows={3}
+              className="input-field"
+              value={requestEditReason}
+              onChange={(event) => setRequestEditReason(event.target.value)}
+              placeholder="Nhập lý do để quản lý phê duyệt mở khóa"
+            />
+          </div>
+          <div className="form-footer" style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn-primary-large"
+              onClick={handleRequestEdit}
+              disabled={requestingEdit || hasPendingRequest}
+            >
+              {requestingEdit ? "Đang gửi yêu cầu..." : hasPendingRequest ? "Đang có yêu cầu chờ duyệt" : "Gửi yêu cầu sửa"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="reception-appt-section" aria-live="polite">
+        <div className="reception-appt-section-head">
+          <h4 className="reception-appt-section-title">Lịch sử yêu cầu mở khóa</h4>
+        </div>
+        {loadingEditRequests ? (
+          <p className="reception-muted-note">Đang tải yêu cầu sửa...</p>
+        ) : editRequests.length === 0 ? (
+          <p className="reception-muted-note">Chưa có yêu cầu nào.</p>
+        ) : (
+          <div className="reception-plan-preview-list">
+            {editRequests.map((request) => {
+              const status = String(request.status || "").toUpperCase();
+              const deciding = decidingRequestId === request.requestId;
+              const canApprove = canApproveServiceOrderSection(roleCode, roleName, request.section);
+              const isPending = status === "PENDING";
+              const note = decisionNotesByRequestId[request.requestId] || "";
+
+              return (
+                <article key={request.requestId} className="reception-plan-preview-item">
+                  <div className="reception-plan-preview-head">
+                    <strong>{`Yêu cầu #${request.requestId}`}</strong>
+                    <span style={{ color: getRequestStatusColor(status), fontWeight: 700 }}>
+                      {getRequestStatusLabel(status)}
+                    </span>
+                  </div>
+                  <p>{`Phạm vi: ${request.section || "WORKSHOP"}`}</p>
+                  <p>{`Lý do: ${request.reason || "Không có lý do"}`}</p>
+                  <div className="reception-plan-preview-meta">
+                    <span>{`Gửi lúc: ${formatDateTimeValue(request.requestedAtUtc)}`}</span>
+                    <span>{`Xử lý lúc: ${formatDateTimeValue(request.decidedAtUtc)}`}</span>
+                  </div>
+                  {request.decisionNote ? <p>{`Ghi chú xử lý: ${request.decisionNote}`}</p> : null}
+
+                  {canApprove && isPending ? (
+                    <div style={{ marginTop: 12 }}>
+                      <textarea
+                        rows={2}
+                        className="input-field"
+                        value={note}
+                        onChange={(event) => handleDecisionNoteChange(request.requestId, event.target.value)}
+                        placeholder="Ghi chú phê duyệt/từ chối..."
+                      />
+                      <div className="form-footer" style={{ marginTop: 10 }}>
+                        <button
+                          type="button"
+                          className="btn-secondary-outline"
+                          onClick={() => handleDecideRequest(request, false)}
+                          disabled={deciding}
+                        >
+                          Từ chối
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary-large"
+                          onClick={() => handleDecideRequest(request, true)}
+                          disabled={deciding}
+                        >
+                          {deciding ? "Đang xử lý..." : "Duyệt"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       <form className="admin-form reception-appt-form" onSubmit={handleSubmit}>
         <fieldset
-          disabled={saving || isEditWindowPassed}
+          disabled={saving || isEditLocked}
           style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
         >
           <div className="reception-appt-layout">
@@ -857,7 +1204,7 @@ export default function ServiceOrderEditPage() {
           <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>
             Hủy và quay lại
           </button>
-          <button type="submit" className="btn-primary-large" disabled={saving || isEditWindowPassed}>
+          <button type="submit" className="btn-primary-large" disabled={saving || isEditLocked}>
             {saving ? "Đang cập nhật..." : "Lưu thay đổi"}
           </button>
         </div>
@@ -865,3 +1212,5 @@ export default function ServiceOrderEditPage() {
     </div>
   );
 }
+
+

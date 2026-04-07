@@ -44,5 +44,6 @@ namespace MyGarage.Interfaces
         Task<IEnumerable<AppointmentDetailResponseDto>> GetCustomerAppointmentsAsync(long customerId);
         Task<IEnumerable<AppointmentDetailResponseDto>> GetBranchAppointmentsAsync(long branchId, string? status = null);
         Task<AppointmentDetailResponseDto?> GetDetailedAsync(long id);
+        Task<AppointmentEditCapabilityResponseDto?> GetEditCapabilityAsync(long id);
     }
 }

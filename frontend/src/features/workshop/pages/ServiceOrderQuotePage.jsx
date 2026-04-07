@@ -61,6 +61,11 @@ function resolveCurrentStaffId(user) {
   return undefined;
 }
 
+function toPositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export default function ServiceOrderQuotePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,8 +97,10 @@ export default function ServiceOrderQuotePage() {
   const [quoteAttachmentUrl, setQuoteAttachmentUrl] = useState("");
   const [decisionChannel, setDecisionChannel] = useState("APP");
   const [decisionNote, setDecisionNote] = useState("");
+  const [technicalApprovalNote, setTechnicalApprovalNote] = useState("");
   const [submittingSnapshot, setSubmittingSnapshot] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState(false);
+  const [submittingTechnicalApproval, setSubmittingTechnicalApproval] = useState(false);
 
   const loadLatestHandoverSnapshot = useCallback(async () => {
     if (!numericOrderId) return;
@@ -135,6 +142,39 @@ export default function ServiceOrderQuotePage() {
   );
   const hasPendingCustomerDecision =
     String(handoverSnapshot?.approvalState || "").toUpperCase() === "PENDING";
+
+  const canShowTechnicalApprovalSection = useMemo(() => {
+    const normalizedPath = String(location.pathname || "").toLowerCase();
+    return normalizedPath.includes("/workshop/team-leader/") || normalizedPath.includes("/workshop/foreman/");
+  }, [location.pathname]);
+
+  const hasDiagnosisData = Array.isArray(diagnoses) && diagnoses.length > 0;
+  const isTechnicalApproved = useMemo(
+    () =>
+      (Array.isArray(diagnoses) ? diagnoses : []).some((item) =>
+        Boolean(toPositiveNumber(item?.approvedByForemanId ?? item?.ApprovedByForemanId))
+      ),
+    [diagnoses]
+  );
+
+  const handleTechnicalApproval = useCallback(async () => {
+    if (!numericOrderId || !staffId || !hasDiagnosisData || isTechnicalApproved) return;
+
+    setSubmittingTechnicalApproval(true);
+    setHandoverError("");
+    try {
+      await serviceOrderApi.approveDiagnosisTechnical(numericOrderId, {
+        teamLeaderId: staffId,
+        note: technicalApprovalNote || undefined,
+      });
+      setTechnicalApprovalNote("");
+      await refresh();
+    } catch (err) {
+      setHandoverError(err?.message || "Không thể duyệt báo cáo kỹ thuật.");
+    } finally {
+      setSubmittingTechnicalApproval(false);
+    }
+  }, [hasDiagnosisData, isTechnicalApproved, numericOrderId, refresh, staffId, technicalApprovalNote]);
 
   const handleCreateSnapshot = useCallback(async () => {
     if (!numericOrderId) {
@@ -263,6 +303,37 @@ export default function ServiceOrderQuotePage() {
               </div>
             ) : null}
           </section>
+
+          {canShowTechnicalApprovalSection ? (
+            <section className="reception-quote-action-card">
+              <h3>Duyệt báo cáo kỹ thuật</h3>
+              <div className="reception-quote-form-grid">
+                <label className="full-row">
+                  <span>Ghi chú duyệt kỹ thuật (tuỳ chọn)</span>
+                  <textarea
+                    rows={3}
+                    value={technicalApprovalNote}
+                    onChange={(event) => setTechnicalApprovalNote(event.target.value)}
+                    placeholder="Ví dụ: Đã kiểm tra đầy đủ nguyên nhân gốc và hạng mục đề xuất."
+                    disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData}
+                  />
+                </label>
+              </div>
+              <div className="reception-quote-action-row">
+                <button
+                  type="button"
+                  className="btn-success"
+                  onClick={handleTechnicalApproval}
+                  disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData || !staffId}
+                >
+                  {submittingTechnicalApproval ? "Đang duyệt..." : (isTechnicalApproved ? "Đã duyệt kỹ thuật" : "Duyệt kỹ thuật")}
+                </button>
+              </div>
+              {isTechnicalApproved ? (
+                <p className="reception-quote-note">Báo cáo kỹ thuật đã được duyệt.</p>
+              ) : null}
+            </section>
+          ) : null}
 
           <section className="reception-quote-action-card">
             <h3>Snapshot báo giá v1 (T2)</h3>

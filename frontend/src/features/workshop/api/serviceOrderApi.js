@@ -9,6 +9,12 @@ export const serviceOrderApi = {
   // --- Service Orders ---
   getAll: () => request({ url: "/api/service-orders", method: "GET" }),
   getById: (id) => request({ url: `/api/service-orders/${id}`, method: "GET" }),
+  getEditCapabilities: (id) => request({ url: `/api/service-orders/${id}/edit-capabilities`, method: "GET" }),
+  getEditRequests: (id, status) =>
+    request({ url: `/api/service-orders/${id}/edit-requests`, method: "GET", params: status ? { status } : undefined }),
+  requestEdit: (id, data) => request({ url: `/api/service-orders/${id}/edit-requests`, method: "POST", data }),
+  decideEditRequest: (id, requestId, data) =>
+    request({ url: `/api/service-orders/${id}/edit-requests/${requestId}`, method: "PATCH", data }),
   create: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshop: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshopBatch: (data) => request({ url: "/api/service-orders/batches", method: "POST", data }),

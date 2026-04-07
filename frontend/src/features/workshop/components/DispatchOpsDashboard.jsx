@@ -127,7 +127,7 @@ const DISPATCH_TAG_LABELS = DISPATCH_TAG_OPTIONS.reduce((acc, item) => {
   return acc;
 }, {});
 
-const CANCEL_REASONS = ["Sai chuyên môn", "Quá tải cầu", "Thiếu thiết bị", "Khác"];
+const CANCEL_REASONS = ["Sai chuyên môn", "Quá tải khoang", "Thiếu thiết bị", "Khác"];
 
 const TEAM_LEADER_ROLE_CODES = new Set(["TEAM_LEADER"]);
 const TECHNICIAN_ROLE_CODES = new Set(["TECH", "TECHNICIAN", "TEAM_LEADER", "FOREMAN"]);
@@ -549,7 +549,7 @@ function extractAlertReasons(item) {
   if (!item) return reasons;
 
   if (item.isSupportRequested) {
-    reasons.push("Có yêu cầu hỗ trợ hội chẩn từ cầu nâng");
+    reasons.push("Có yêu cầu hỗ trợ hội chẩn từ khoang");
   }
 
   if (item.isCancelPendingApproval) {
@@ -643,6 +643,10 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, teamMap = ne
 
   return {
     serviceOrderId,
+    executeBranchId:
+      toPositiveNumber(readValue(raw, "executeBranchId", "ExecuteBranchId")) ||
+      toPositiveNumber(readValue(order, "executeBranchId", "ExecuteBranchId")) ||
+      null,
     serviceOrderCode:
       toText(readValue(raw, "serviceOrderCode", "ServiceOrderCode")) ||
       toText(readValue(order, "code", "Code")) ||
@@ -775,7 +779,7 @@ function DispatchQueueCard({
               Tiến độ
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Cầu nâng: {item.assignedBayCode || "Chưa chỉ định"}
+              Khoang: {item.assignedBayCode || "Chưa chỉ định"}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
               Yêu cầu lúc: {formatDateTime(item.requestedAt)}
@@ -850,7 +854,7 @@ function SuggestionPreview({ suggestion }) {
       <Stack spacing={1} fontSize="sm" color="gray.700">
         <Text>Thợ chính gợi ý: {suggestion.suggestedLeadTechnicianName || "--"}</Text>
         <Text>Thợ phụ gợi ý: {suggestion.suggestedAssistantTechnicianName || "--"}</Text>
-        <Text>Cầu nâng gợi ý: {suggestion.suggestedBayCode || "--"}</Text>
+        <Text>Khoang gợi ý: {suggestion.suggestedBayCode || "--"}</Text>
       </Stack>
       {loads.length > 0 && (
         <Box mt={3}>
@@ -916,12 +920,12 @@ export default function DispatchOpsDashboard({
   const [leaderSupportTeamIds, setLeaderSupportTeamIds] = useState([]);
   const [leaderSupportRequestMap, setLeaderSupportRequestMap] = useState({});
   const [leaderSupportNote, setLeaderSupportNote] = useState("");
+  const [isLeaderSupportSectionExpanded, setIsLeaderSupportSectionExpanded] = useState(false);
   const [leaderSupportResponseLeadTechnicianId, setLeaderSupportResponseLeadTechnicianId] = useState("");
   const [leaderSupportResponseAssistantTechnicianId, setLeaderSupportResponseAssistantTechnicianId] = useState("");
   const [leaderSupportResponseNote, setLeaderSupportResponseNote] = useState("");
   const [leaderCancelReason, setLeaderCancelReason] = useState(CANCEL_REASONS[0]);
   const [leaderCancelNote, setLeaderCancelNote] = useState("");
-  const [leaderTechnicalApprovalNote, setLeaderTechnicalApprovalNote] = useState("");
 
   const [managerTeamId, setManagerTeamId] = useState("");
   const [managerSupportingTeamIds, setManagerSupportingTeamIds] = useState([]);
@@ -998,7 +1002,17 @@ export default function DispatchOpsDashboard({
     return sortStaffByName(filtered);
   }, [staffs, roleById, branchId]);
 
+  const selectedOrderBranchId = useMemo(() => {
+    const targetOrderId = toPositiveNumber(selectedServiceOrderId);
+    if (!targetOrderId) return null;
+    const matched = boardItems.find((item) => item.serviceOrderId === targetOrderId);
+    return toPositiveNumber(matched?.executeBranchId);
+  }, [selectedServiceOrderId, boardItems]);
+
+  const assignmentBranchId = selectedOrderBranchId || branchId || userBranchId || null;
+
   const availableBays = useMemo(() => {
+    const targetBranchId = isAssignmentPage ? assignmentBranchId : branchId;
     const sorted = (Array.isArray(bays) ? bays : [])
       .filter((bay) => {
         if (readValue(bay, "isDeleted", "IsDeleted") === true) return false;
@@ -1007,8 +1021,8 @@ export default function DispatchOpsDashboard({
         if (isActive === false) return false;
 
         const bayBranchId = toPositiveNumber(readValue(bay, "branchId", "BranchId"));
-        if (!branchId) return true;
-        return bayBranchId === branchId;
+        if (!targetBranchId) return true;
+        return bayBranchId === targetBranchId;
       })
       .sort((a, b) => {
         const aOccupied = Boolean(readValue(a, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
@@ -1021,7 +1035,7 @@ export default function DispatchOpsDashboard({
       });
 
     return sorted;
-  }, [bays, branchId]);
+  }, [bays, branchId, isAssignmentPage, assignmentBranchId]);
 
   const getTechniciansByTeam = useCallback(
     (targetTeamId) => {
@@ -1035,38 +1049,46 @@ export default function DispatchOpsDashboard({
   const leaderTechnicianOptions = useMemo(() => getTechniciansByTeam(leaderTeamId), [getTechniciansByTeam, leaderTeamId]);
   const managerTechnicianOptions = useMemo(() => getTechniciansByTeam(managerTeamId), [getTechniciansByTeam, managerTeamId]);
 
+  const assignmentTeamBranchId = assignmentBranchId;
+  const scopedTeamsForAssignment = useMemo(() => {
+    if (!assignmentTeamBranchId) return activeTeams;
+    return activeTeams.filter(
+      (team) => toPositiveNumber(readValue(team, "branchId", "BranchId")) === assignmentTeamBranchId
+    );
+  }, [activeTeams, assignmentTeamBranchId]);
+
   const assignmentTeamOptions = useMemo(() => {
     const options = [{ value: "", label: "-- Chọn tổ --" }];
-    activeTeams.forEach((team) => {
+    scopedTeamsForAssignment.forEach((team) => {
       const id = toPositiveNumber(readValue(team, "id", "Id"));
       const name = toText(readValue(team, "name", "Name"));
       if (!id) return;
       options.push({ value: String(id), label: name || `Tổ #${id}` });
     });
     return options;
-  }, [activeTeams]);
+  }, [scopedTeamsForAssignment]);
 
   const leaderSupportingTeamOptions = useMemo(() => {
     const primaryTeamId = toPositiveNumber(leaderTeamId);
-    return activeTeams
+    return scopedTeamsForAssignment
       .map((team) => {
         const id = toPositiveNumber(readValue(team, "id", "Id"));
         const name = toText(readValue(team, "name", "Name"));
         return { id, name: name || (id ? `Tổ #${id}` : "") };
       })
       .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
-  }, [activeTeams, leaderTeamId]);
+  }, [scopedTeamsForAssignment, leaderTeamId]);
 
   const managerSupportingTeamOptions = useMemo(() => {
     const primaryTeamId = toPositiveNumber(managerTeamId);
-    return activeTeams
+    return scopedTeamsForAssignment
       .map((team) => {
         const id = toPositiveNumber(readValue(team, "id", "Id"));
         const name = toText(readValue(team, "name", "Name"));
         return { id, name: name || (id ? `Tổ #${id}` : "") };
       })
       .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
-  }, [activeTeams, managerTeamId]);
+  }, [scopedTeamsForAssignment, managerTeamId]);
 
   const leaderPrimaryTechnicianOptions = useMemo(() => {
     const options = [{ value: "", label: "-- Chọn thợ chính --" }];
@@ -1080,15 +1102,17 @@ export default function DispatchOpsDashboard({
   }, [leaderTechnicianOptions]);
 
   const leaderAssistantTechnicianOptions = useMemo(() => {
+    const selectedLeadId = toPositiveNumber(leaderLeadTechnicianId);
     const options = [{ value: "", label: "-- Không chọn --" }];
     leaderTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
+      if (selectedLeadId && id === selectedLeadId) return;
       options.push({ value: String(id), label: name || `Nhân sự #${id}` });
     });
     return options;
-  }, [leaderTechnicianOptions]);
+  }, [leaderTechnicianOptions, leaderLeadTechnicianId]);
 
   const supportResponseTechnicians = useMemo(
     () => getTechniciansByTeam(currentStaffTeamId),
@@ -1107,15 +1131,17 @@ export default function DispatchOpsDashboard({
   }, [supportResponseTechnicians]);
 
   const supportResponseAssistantOptions = useMemo(() => {
+    const selectedLeadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
     const options = [{ value: "", label: "-- Không chọn --" }];
     supportResponseTechnicians.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
+      if (selectedLeadId && id === selectedLeadId) return;
       options.push({ value: String(id), label: name || `Nhân sự #${id}` });
     });
     return options;
-  }, [supportResponseTechnicians]);
+  }, [supportResponseTechnicians, leaderSupportResponseLeadTechnicianId]);
 
   const managerPrimaryTechnicianOptions = useMemo(() => {
     const options = [{ value: "", label: "-- Chọn thợ chính --" }];
@@ -1129,15 +1155,17 @@ export default function DispatchOpsDashboard({
   }, [managerTechnicianOptions]);
 
   const managerAssistantTechnicianOptions = useMemo(() => {
+    const selectedLeadId = toPositiveNumber(managerLeadTechnicianId);
     const options = [{ value: "", label: "-- Không chọn --" }];
     managerTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
+      if (selectedLeadId && id === selectedLeadId) return;
       options.push({ value: String(id), label: name || `Nhân sự #${id}` });
     });
     return options;
-  }, [managerTechnicianOptions]);
+  }, [managerTechnicianOptions, managerLeadTechnicianId]);
 
   const buildTechnicianOptionsForTeam = useCallback((teamId, includeEmpty = false) => {
     const options = [];
@@ -1167,11 +1195,35 @@ export default function DispatchOpsDashboard({
     return map;
   }, [managerSupportingTeamOptions, buildTechnicianOptionsForTeam]);
 
+  useEffect(() => {
+    const leadId = toPositiveNumber(leaderLeadTechnicianId);
+    const assistantId = toPositiveNumber(leaderAssistantTechnicianId);
+    if (leadId && assistantId && leadId === assistantId) {
+      setLeaderAssistantTechnicianId("");
+    }
+  }, [leaderLeadTechnicianId, leaderAssistantTechnicianId]);
+
+  useEffect(() => {
+    const leadId = toPositiveNumber(managerLeadTechnicianId);
+    const assistantId = toPositiveNumber(managerAssistantTechnicianId);
+    if (leadId && assistantId && leadId === assistantId) {
+      setManagerAssistantTechnicianId("");
+    }
+  }, [managerLeadTechnicianId, managerAssistantTechnicianId]);
+
+  useEffect(() => {
+    const leadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
+    const assistantId = toPositiveNumber(leaderSupportResponseAssistantTechnicianId);
+    if (leadId && assistantId && leadId === assistantId) {
+      setLeaderSupportResponseAssistantTechnicianId("");
+    }
+  }, [leaderSupportResponseLeadTechnicianId, leaderSupportResponseAssistantTechnicianId]);
+
   const baySelectionOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chưa chỉ định cầu --" }];
+    const options = [{ value: "", label: "-- Chọn khoang (bắt buộc) --" }];
     availableBays.forEach((bay) => {
       const id = toPositiveNumber(readValue(bay, "id", "Id"));
-      const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
+      const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Khoang #${id}`;
       const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
       const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
       const disabled = occupied || !operational;
@@ -1457,6 +1509,7 @@ export default function DispatchOpsDashboard({
       setLeaderLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
       setLeaderAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
       setLeaderBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
+      setIsLeaderSupportSectionExpanded(false);
       setLeaderSupportResponseLeadTechnicianId(
         incomingAssignmentForCurrentTeam?.technicianId ? String(incomingAssignmentForCurrentTeam.technicianId) : ""
       );
@@ -1675,7 +1728,13 @@ export default function DispatchOpsDashboard({
     const normalizedMap = normalizeSupportingAssignmentMap(managerSupportingAssignmentMap);
     const nextMap = {};
     normalizedIds.forEach((teamId) => {
-      nextMap[teamId] = normalizedMap[teamId] || { technicianId: "", assistantTechnicianId: "" };
+      const row = normalizedMap[teamId] || { technicianId: "", assistantTechnicianId: "" };
+      const leadId = toPositiveNumber(row.technicianId);
+      const assistantId = toPositiveNumber(row.assistantTechnicianId);
+      nextMap[teamId] = {
+        technicianId: row.technicianId || "",
+        assistantTechnicianId: leadId && assistantId && leadId === assistantId ? "" : (row.assistantTechnicianId || ""),
+      };
     });
     const mapChanged = JSON.stringify(nextMap) !== JSON.stringify(normalizedMap);
     if (mapChanged) {
@@ -1746,18 +1805,39 @@ export default function DispatchOpsDashboard({
     setManagerSupportingAssignmentMap((prev) => {
       const normalized = normalizeSupportingAssignmentMap(prev);
       const current = normalized[normalizedTeamId] || { technicianId: "", assistantTechnicianId: "" };
+      const nextValue = toText(value);
+      const nextRow = {
+        ...current,
+        [field]: nextValue,
+      };
+      const leadId = toPositiveNumber(nextRow.technicianId);
+      const assistantId = toPositiveNumber(nextRow.assistantTechnicianId);
+      if (leadId && assistantId && leadId === assistantId) {
+        nextRow.assistantTechnicianId = "";
+      }
       return {
         ...normalized,
-        [normalizedTeamId]: {
-          ...current,
-          [field]: toText(value),
-        },
+        [normalizedTeamId]: nextRow,
       };
     });
   }, []);
 
   const handleLeaderAssign = async () => {
     if (!selectedItem) return;
+
+    const hasAssignedTechnicians =
+      Boolean(toPositiveNumber(selectedItem?.technicianId)) ||
+      Boolean(toPositiveNumber(selectedItem?.assistantTechnicianId));
+    const areAllTechniciansAccepted = hasAssignedTechnicians && Boolean(selectedItem?.startedAt);
+    if (areAllTechniciansAccepted) {
+      toast({
+        title: "Tất cả thợ đã nhận việc, không thể giao lại",
+        status: "info",
+        duration: 2600,
+        isClosable: true,
+      });
+      return;
+    }
 
     const leadId = toPositiveNumber(leaderLeadTechnicianId);
     const assistantId = toPositiveNumber(leaderAssistantTechnicianId);
@@ -1766,6 +1846,11 @@ export default function DispatchOpsDashboard({
 
     if (!leadId || !teamId) {
       toast({ title: "Vui lòng chọn tổ và thợ chính", status: "warning", duration: 2600, isClosable: true });
+      return;
+    }
+
+    if (!bayId) {
+      toast({ title: "Vui lòng chọn khoang trước khi nhận xe và giao ca", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
@@ -1824,6 +1909,7 @@ export default function DispatchOpsDashboard({
       setLeaderSupportNote("");
       setLeaderSupportTeamIds([]);
       setLeaderSupportRequestMap({});
+      setIsLeaderSupportSectionExpanded(false);
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
@@ -1858,27 +1944,6 @@ export default function DispatchOpsDashboard({
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
       toast({ title: "Không thể gửi yêu cầu hủy", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleLeaderTechnicalApproval = async () => {
-    if (!selectedItem || !currentStaffId) return;
-
-    setSaving(true);
-    try {
-      await serviceOrderApi.approveDiagnosisTechnical(selectedItem.serviceOrderId, {
-        teamLeaderId: currentStaffId,
-        note: toText(leaderTechnicalApprovalNote) || null,
-      });
-
-      toast({ title: "Đã duyệt báo cáo kỹ thuật", status: "success", duration: 2500, isClosable: true });
-      setLeaderTechnicalApprovalNote("");
-      await fetchData();
-      setSelectedServiceOrderId(selectedItem.serviceOrderId);
-    } catch (err) {
-      toast({ title: "Không thể duyệt kỹ thuật", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2092,11 +2157,37 @@ export default function DispatchOpsDashboard({
     }
   };
 
-  const canLeaderAssign = Boolean(selectedItem) && !selectedItem?.finalApprovedByManagerId;
-  const canLeaderSupport = Boolean(selectedItem?.technicianId) && !selectedItem?.finalApprovedByManagerId;
-  const canLeaderCancel = Boolean(selectedItem?.technicianId) && !selectedItem?.isCancelPendingApproval;
-  const canLeaderTechnicalApprove = Boolean(selectedItem) && !selectedItem?.technicalApprovedByTeamLeaderId;
+  const selectedPrimaryTeamId =
+    toPositiveNumber(selectedItem?.primaryTeamId) || toPositiveNumber(selectedItem?.teamId);
+  const canCurrentTeamLeadPrimaryFlow =
+    Boolean(selectedItem) && (!selectedPrimaryTeamId || selectedPrimaryTeamId === currentStaffTeamId);
+  const hasLeaderAssignedTechnicians =
+    Boolean(selectedItem) &&
+    (
+      Boolean(toPositiveNumber(selectedItem?.technicianId)) ||
+      Boolean(toPositiveNumber(selectedItem?.assistantTechnicianId))
+    );
+  const isLeaderAssignmentLocked = hasLeaderAssignedTechnicians && Boolean(selectedItem?.startedAt);
+  const canLeaderUseSuggestion =
+    Boolean(selectedItem) &&
+    canCurrentTeamLeadPrimaryFlow &&
+    !isLeaderAssignmentLocked &&
+    Boolean(toPositiveNumber(leaderTeamId));
 
+  const canLeaderAssign =
+    Boolean(selectedItem) &&
+    canCurrentTeamLeadPrimaryFlow &&
+    !isLeaderAssignmentLocked &&
+    !selectedItem?.finalApprovedByManagerId &&
+    Boolean(toPositiveNumber(leaderBayId));
+  const canLeaderSupport =
+    Boolean(selectedItem?.technicianId) &&
+    canCurrentTeamLeadPrimaryFlow &&
+    !selectedItem?.finalApprovedByManagerId;
+  const canLeaderCancel =
+    Boolean(selectedItem?.technicianId) &&
+    canCurrentTeamLeadPrimaryFlow &&
+    !selectedItem?.isCancelPendingApproval;
   const canManagerOverride = Boolean(selectedItem);
   const canManagerCancelDecision = Boolean(selectedItem?.isCancelPendingApproval);
   const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.finalApprovedByManagerId;
@@ -2513,174 +2604,340 @@ export default function DispatchOpsDashboard({
                   {isTeamLeaderMode ? (
                     <VStack align="stretch" spacing={4}>
                       <Divider />
-
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và phân công cặp thợ</Text>
-
-                        <FormControl>
-                          <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                          <FilterDropdown
-                            id="leader-assignment-team"
-                            value={leaderTeamId}
-                            options={assignmentTeamOptions}
-                            onChange={setLeaderTeamId}
-                            minWidth={300}
-                            disabled={Boolean(currentStaffTeamId)}
-                          />
-                        </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
-                          <FilterDropdown
-                            id="leader-main-tech"
-                            value={leaderLeadTechnicianId}
-                            options={leaderPrimaryTechnicianOptions}
-                            onChange={setLeaderLeadTechnicianId}
-                            minWidth="100%"
-                          />
-                        </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
-                          <FilterDropdown
-                            id="leader-assistant-tech"
-                            value={leaderAssistantTechnicianId}
-                            options={leaderAssistantTechnicianOptions}
-                            onChange={setLeaderAssistantTechnicianId}
-                            minWidth="100%"
-                          />
-                        </FormControl>
-
-                        <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
-                          <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                            Lưu ý phân quyền
+                      {!canCurrentTeamLeadPrimaryFlow && (
+                        <Alert status="info" borderRadius="xl" bg="blue.50" border="1px solid" borderColor="blue.100">
+                          <AlertIcon color="blue.500" />
+                          <Text fontSize="sm" color="blue.700">
+                            Lệnh này thuộc tổ chính{" "}
+                            <strong>{selectedItem.primaryTeamName || selectedItem.teamName || "--"}</strong>. Tổ của bạn chỉ xử lý phần xác nhận nhân sự hỗ trợ nếu có yêu cầu.
                           </Text>
-                          <Text mt={1} fontSize="sm" color="blue.700">
-                            Tổ trưởng tổ chính chỉ giao cặp thợ cho tổ chính. Nhu cầu tổ phụ sẽ được gửi riêng ở bước hỗ trợ bên dưới.
+                        </Alert>
+                      )}
+
+                      {canCurrentTeamLeadPrimaryFlow && (
+                        <>
+                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                            <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và phân công cặp thợ</Text>
+
+                            <FormControl>
+                              <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
+                              <FilterDropdown
+                                id="leader-assignment-team"
+                                value={leaderTeamId}
+                                options={assignmentTeamOptions}
+                                onChange={setLeaderTeamId}
+                                minWidth={300}
+                                disabled={Boolean(currentStaffTeamId)}
+                              />
+                            </FormControl>
+
+                            <FormControl mt={2}>
+                              <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
+                              <FilterDropdown
+                                id="leader-main-tech"
+                                value={leaderLeadTechnicianId}
+                                options={leaderPrimaryTechnicianOptions}
+                                onChange={(nextValue) => {
+                                  const nextLeadId = toPositiveNumber(nextValue);
+                                  const currentAssistantId = toPositiveNumber(leaderAssistantTechnicianId);
+                                  setLeaderLeadTechnicianId(nextValue);
+                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                    setLeaderAssistantTechnicianId("");
+                                  }
+                                }}
+                                minWidth="100%"
+                                disabled={isLeaderAssignmentLocked}
+                              />
+                            </FormControl>
+
+                            <FormControl mt={2}>
+                              <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
+                              <FilterDropdown
+                                id="leader-assistant-tech"
+                                value={leaderAssistantTechnicianId}
+                                options={leaderAssistantTechnicianOptions}
+                                onChange={(nextValue) => {
+                                  const nextAssistantId = toPositiveNumber(nextValue);
+                                  const currentLeadId = toPositiveNumber(leaderLeadTechnicianId);
+                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                    setLeaderAssistantTechnicianId("");
+                                    return;
+                                  }
+                                  setLeaderAssistantTechnicianId(nextValue);
+                                }}
+                                minWidth="100%"
+                                disabled={isLeaderAssignmentLocked}
+                              />
+                            </FormControl>
+
+                            <FormControl mt={2}>
+                              <FormLabel fontSize="sm" mb={1}>Khoang (bắt buộc)</FormLabel>
+                              <FilterDropdown
+                                id="leader-bay-select"
+                                value={leaderBayId}
+                                options={baySelectionOptions}
+                                onChange={setLeaderBayId}
+                                minWidth="100%"
+                                disabled={isLeaderAssignmentLocked}
+                              />
+                            </FormControl>
+
+                            <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
+                              <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
+                                Lưu ý phân quyền
+                              </Text>
+                              <Text mt={1} fontSize="sm" color="blue.700">
+                                Tổ trưởng tổ chính chỉ giao cặp thợ cho tổ chính. Nhu cầu tổ phụ sẽ được gửi riêng ở bước hỗ trợ bên dưới.
+                              </Text>
+                            </Box>
+
+                            <HStack mt={3} spacing={2} align="stretch">
+                              <Button
+                                variant="unstyled"
+                                {...actionButtonBaseProps}
+                                border="2px solid"
+                                borderColor="#2563eb"
+                                bg="white"
+                                color="#1d4ed8"
+                                _hover={{ bg: "#eff6ff" }}
+                                onClick={() => loadDispatchSuggestion("team_leader")}
+                                isLoading={suggestionLoading}
+                                isDisabled={!canLeaderUseSuggestion}
+                              >
+                                Gợi ý tự động
+                              </Button>
+                              <Button
+                                variant="unstyled"
+                                {...actionButtonBaseProps}
+                                border="2px solid"
+                                borderColor="#2563eb"
+                                bg="#2563eb"
+                                color="white"
+                                _hover={{ bg: "#1d4ed8" }}
+                                onClick={handleLeaderAssign}
+                                isLoading={saving}
+                                isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
+                              >
+                                Nhận xe và giao ca
+                              </Button>
+                            </HStack>
+                            {isLeaderAssignmentLocked && (
+                              <Text mt={2} fontSize="sm" color="gray.600">
+                                Tất cả thợ đã nhận việc nên cụm phân công và 2 nút đã bị khóa.
+                              </Text>
+                            )}
+
+                            <Box mt={3}>
+                              <SuggestionPreview suggestion={suggestion} />
+                            </Box>
+                          </Box>
+
+                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                            <Text fontWeight="700" color="gray.700" mb={2}>2) Yêu cầu hỗ trợ hội chẩn</Text>
+                            <HStack justify="space-between" align="center" mb={2}>
+                              <Button
+                                size="sm"
+                                colorScheme="orange"
+                                variant="outline"
+                                onClick={() => setIsLeaderSupportSectionExpanded((prev) => !prev)}
+                              >
+                                {isLeaderSupportSectionExpanded ? "Thu gọn hỗ trợ tổ phụ" : "Cần tổ phụ hỗ trợ"}
+                              </Button>
+                              {leaderSupportTeamIds.length > 0 && (
+                                <Badge colorScheme="orange" borderRadius="full" px={2.5}>
+                                  {leaderSupportTeamIds.length} tổ đã chọn
+                                </Badge>
+                              )}
+                            </HStack>
+
+                            {isLeaderSupportSectionExpanded ? (
+                              <>
+                                <SupportingTeamSelector
+                                  mode="request"
+                                  value={leaderSupportTeamIds}
+                                  onChange={(values) => setLeaderSupportTeamIds((values || []).map((value) => String(value)))}
+                                  options={leaderSupportingTeamOptions}
+                                  requestMap={leaderSupportRequestMap}
+                                  onRequestedCountChange={handleLeaderSupportRequestedCountChange}
+                                  emptyText="Không có tổ phụ phù hợp trong chi nhánh hiện tại."
+                                  helperText="Chọn tổ phụ và số lượng thợ cần hỗ trợ. Tổ trưởng tổ phụ sẽ tự chọn thợ của tổ mình."
+                                />
+                                <FormControl mt={2}>
+                                  <FormLabel fontSize="sm" mb={1}>Mô tả vấn đề cần phối hợp</FormLabel>
+                                  <Textarea
+                                    size="sm"
+                                    value={leaderSupportNote}
+                                    onChange={(event) => setLeaderSupportNote(event.target.value)}
+                                    placeholder="Ví dụ: cần phối hợp kiểm tra hệ thống điện khi chẩn đoán lỗi máy..."
+                                  />
+                                </FormControl>
+                                <Button
+                                  mt={3}
+                                  size="sm"
+                                  colorScheme="orange"
+                                  variant="outline"
+                                  onClick={handleLeaderSupport}
+                                  isLoading={saving}
+                                  isDisabled={!canLeaderSupport || leaderSupportTeamIds.length === 0}
+                                >
+                                  Gửi yêu cầu đến tổ phụ
+                                </Button>
+                              </>
+                            ) : (
+                              <Text fontSize="sm" color="gray.500">
+                                Nhấn "Cần tổ phụ hỗ trợ" để mở danh sách tổ phụ và tạo yêu cầu phối hợp.
+                              </Text>
+                            )}
+                          </Box>
+                        </>
+                      )}
+
+                      {selectedIncomingSupportAssignment && (
+                        <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="#fffdf5">
+                          <Text fontWeight="700" color="orange.700" mb={2}>
+                            Xác nhận nhân sự hỗ trợ của tổ phụ
                           </Text>
-                        </Box>
 
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
-                          <FilterDropdown
-                            id="leader-bay-select"
-                            value={leaderBayId}
-                            options={baySelectionOptions}
-                            onChange={setLeaderBayId}
-                            minWidth="100%"
-                          />
-                        </FormControl>
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
+                            <Box p={2.5} border="1px solid" borderColor="orange.100" borderRadius="lg" bg="white">
+                              <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase">
+                                Tổ chính yêu cầu
+                              </Text>
+                              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
+                                {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa xác định"}
+                              </Text>
+                              <Text mt={1} fontSize="sm" color="gray.600">
+                                Cần {selectedIncomingSupportAssignment.requestedTechnicianCount} thợ từ tổ của bạn
+                              </Text>
+                            </Box>
+                            <Box p={2.5} border="1px solid" borderColor="gray.200" borderRadius="lg" bg="white">
+                              <Text fontSize="xs" color="gray.600" fontWeight="700" textTransform="uppercase">
+                                Thời điểm yêu cầu
+                              </Text>
+                              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
+                                {formatDateTime(selectedItem.supportRequestedAt || selectedItem.requestedAt)}
+                              </Text>
+                              <Text mt={1} fontSize="xs" color="gray.500">
+                                Chuyên môn: {getDispatchTagLabel(selectedItem.dispatchTag)}
+                              </Text>
+                            </Box>
+                          </SimpleGrid>
 
-                        <HStack mt={3} spacing={2} align="stretch">
+                          {!canLeaderSelectSupportTeam && (
+                            <Alert mt={2.5} status="success" borderRadius="lg" bg="green.50" border="1px solid" borderColor="green.100">
+                              <AlertIcon color="green.500" />
+                              <Text fontSize="sm" color="green.700">
+                                Đã xác nhận thợ hỗ trợ:{" "}
+                                <strong>{selectedIncomingSupportAssignment.technicianName || "Đã chọn"}</strong>
+                                {selectedIncomingSupportAssignment.assistantTechnicianName
+                                  ? `, phụ: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
+                                  : ""}
+                                .
+                              </Text>
+                            </Alert>
+                          )}
+
+                          <SimpleGrid mt={2.5} columns={{ base: 1, md: 2 }} spacing={2.5}>
+                            <FormControl>
+                              <FormLabel fontSize="sm" mb={1}>Thợ chính tổ phụ</FormLabel>
+                              <FilterDropdown
+                                id="leader-support-response-lead"
+                                value={leaderSupportResponseLeadTechnicianId}
+                                options={supportResponseLeadOptions}
+                                onChange={(nextValue) => {
+                                  const nextLeadId = toPositiveNumber(nextValue);
+                                  const currentAssistantId = toPositiveNumber(leaderSupportResponseAssistantTechnicianId);
+                                  setLeaderSupportResponseLeadTechnicianId(nextValue);
+                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                    setLeaderSupportResponseAssistantTechnicianId("");
+                                  }
+                                }}
+                                minWidth="100%"
+                                disabled={!canLeaderSelectSupportTeam}
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="sm" mb={1}>Thợ phụ tổ phụ</FormLabel>
+                              <FilterDropdown
+                                id="leader-support-response-assistant"
+                                value={leaderSupportResponseAssistantTechnicianId}
+                                options={supportResponseAssistantOptions}
+                                onChange={(nextValue) => {
+                                  const nextAssistantId = toPositiveNumber(nextValue);
+                                  const currentLeadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
+                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                    setLeaderSupportResponseAssistantTechnicianId("");
+                                    return;
+                                  }
+                                  setLeaderSupportResponseAssistantTechnicianId(nextValue);
+                                }}
+                                minWidth="100%"
+                                disabled={!canLeaderSelectSupportTeam}
+                              />
+                            </FormControl>
+                          </SimpleGrid>
+
+                          <FormControl mt={2.5}>
+                            <FormLabel fontSize="sm" mb={1}>Ghi chú phản hồi của tổ phụ</FormLabel>
+                            <Textarea
+                              size="sm"
+                              value={leaderSupportResponseNote}
+                              onChange={(event) => setLeaderSupportResponseNote(event.target.value)}
+                              placeholder="Ví dụ: tổ phụ tiếp nhận hỗ trợ tại khoang DN-001 trong 15 phút nữa..."
+                              isDisabled={!canLeaderSelectSupportTeam}
+                            />
+                          </FormControl>
+
                           <Button
-                            variant="unstyled"
-                            {...actionButtonBaseProps}
-                            border="2px solid"
-                            borderColor="#2563eb"
-                            bg="white"
-                            color="#1d4ed8"
-                            _hover={{ bg: "#eff6ff" }}
-                            onClick={() => loadDispatchSuggestion("team_leader")}
-                            isLoading={suggestionLoading}
-                            isDisabled={!selectedItem || !toPositiveNumber(leaderTeamId)}
-                          >
-                            Gợi ý tự động
-                          </Button>
-                          <Button
-                            variant="unstyled"
-                            {...actionButtonBaseProps}
-                            border="2px solid"
-                            borderColor="#2563eb"
-                            bg="#2563eb"
-                            color="white"
-                            _hover={{ bg: "#1d4ed8" }}
-                            onClick={handleLeaderAssign}
-                            isLoading={saving}
-                            isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
-                          >
-                            Nhận xe và giao ca
-                          </Button>
-                        </HStack>
-
-                        <Box mt={3}>
-                          <SuggestionPreview suggestion={suggestion} />
-                        </Box>
-                      </Box>
-
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>2) Yêu cầu hỗ trợ hội chẩn</Text>
-                        <Textarea
-                          size="sm"
-                          value={leaderSupportNote}
-                          onChange={(event) => setLeaderSupportNote(event.target.value)}
-                          placeholder="Mô tả vấn đề cần quản đốc hỗ trợ..."
-                        />
-                        <Button
-                          mt={3}
-                          size="sm"
-                          colorScheme="orange"
-                          variant="outline"
-                          onClick={handleLeaderSupport}
-                          isLoading={saving}
-                          isDisabled={!canLeaderSupport}
-                        >
-                          Gửi hỗ trợ
-                        </Button>
-                      </Box>
-
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
-                        <FormControl>
-                          <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
-                          <FilterDropdown
-                            id="leader-cancel-reason"
-                            value={leaderCancelReason}
-                            options={cancelReasonOptions}
-                            onChange={setLeaderCancelReason}
-                            minWidth="100%"
-                          />
-                        </FormControl>
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
-                          <Textarea
+                            mt={3}
                             size="sm"
-                            value={leaderCancelNote}
-                            onChange={(event) => setLeaderCancelNote(event.target.value)}
-                            placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
-                          />
-                        </FormControl>
-                        <Button
-                          mt={3}
-                          size="sm"
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={handleLeaderCancelRequest}
-                          isLoading={saving}
-                          isDisabled={!canLeaderCancel}
-                        >
-                          Gửi yêu cầu hủy
-                        </Button>
-                      </Box>
+                            colorScheme="orange"
+                            onClick={handleLeaderSupportSelection}
+                            isLoading={saving}
+                            isDisabled={!canLeaderSelectSupportTeam || !toPositiveNumber(leaderSupportResponseLeadTechnicianId)}
+                          >
+                            {canLeaderSelectSupportTeam ? "Xác nhận thợ hỗ trợ của tổ phụ" : "Đã xác nhận nhân sự hỗ trợ"}
+                          </Button>
+                        </Box>
+                      )}
 
-                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>4) Duyệt báo cáo kỹ thuật</Text>
-                        <Textarea
-                          size="sm"
-                          value={leaderTechnicalApprovalNote}
-                          onChange={(event) => setLeaderTechnicalApprovalNote(event.target.value)}
-                          placeholder="Nhận xét kỹ thuật (nếu có)..."
-                        />
-                        <Button
-                          mt={3}
-                          size="sm"
-                          colorScheme="green"
-                          onClick={handleLeaderTechnicalApproval}
-                          isLoading={saving}
-                          isDisabled={!canLeaderTechnicalApprove}
-                        >
-                          Duyệt kỹ thuật
-                        </Button>
-                      </Box>
+                      {canCurrentTeamLeadPrimaryFlow && (
+                        <>
+                          <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                            <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
+                            <FormControl>
+                              <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
+                              <FilterDropdown
+                                id="leader-cancel-reason"
+                                value={leaderCancelReason}
+                                options={cancelReasonOptions}
+                                onChange={setLeaderCancelReason}
+                                minWidth="100%"
+                              />
+                            </FormControl>
+                            <FormControl mt={2}>
+                              <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
+                              <Textarea
+                                size="sm"
+                                value={leaderCancelNote}
+                                onChange={(event) => setLeaderCancelNote(event.target.value)}
+                                placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
+                              />
+                            </FormControl>
+                            <Button
+                              mt={3}
+                              size="sm"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={handleLeaderCancelRequest}
+                              isLoading={saving}
+                              isDisabled={!canLeaderCancel}
+                            >
+                              Gửi yêu cầu hủy
+                            </Button>
+                          </Box>
+                        </>
+                      )}
                     </VStack>
                   ) : (
                     <VStack align="stretch" spacing={4}>
@@ -2706,7 +2963,14 @@ export default function DispatchOpsDashboard({
                             id="manager-main-tech"
                             value={managerLeadTechnicianId}
                             options={managerPrimaryTechnicianOptions}
-                            onChange={setManagerLeadTechnicianId}
+                            onChange={(nextValue) => {
+                              const nextLeadId = toPositiveNumber(nextValue);
+                              const currentAssistantId = toPositiveNumber(managerAssistantTechnicianId);
+                              setManagerLeadTechnicianId(nextValue);
+                              if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                setManagerAssistantTechnicianId("");
+                              }
+                            }}
                             minWidth="100%"
                           />
                         </FormControl>
@@ -2717,7 +2981,15 @@ export default function DispatchOpsDashboard({
                             id="manager-assistant-tech"
                             value={managerAssistantTechnicianId}
                             options={managerAssistantTechnicianOptions}
-                            onChange={setManagerAssistantTechnicianId}
+                            onChange={(nextValue) => {
+                              const nextAssistantId = toPositiveNumber(nextValue);
+                              const currentLeadId = toPositiveNumber(managerLeadTechnicianId);
+                              if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                setManagerAssistantTechnicianId("");
+                                return;
+                              }
+                              setManagerAssistantTechnicianId(nextValue);
+                            }}
                             minWidth="100%"
                           />
                         </FormControl>
@@ -2737,7 +3009,7 @@ export default function DispatchOpsDashboard({
                         </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Khoang</FormLabel>
                           <FilterDropdown
                             id="manager-bay-select"
                             value={managerBayId}
@@ -3010,39 +3282,50 @@ function SupportNotificationCard({ item, onSelect }) {
 }
 
 function SupportingTeamSelector({
+  mode = "assignment",
   value,
   onChange,
   options,
   assignmentMap,
   onAssignmentChange,
   technicianOptionsByTeam,
+  requestMap,
+  onRequestedCountChange,
   emptyText,
   helperText,
 }) {
+  const isRequestMode = mode === "request";
   const selectedValues = Array.isArray(value) ? value.map((item) => String(item)) : [];
   const selectedSet = new Set(selectedValues);
   const safeOptions = Array.isArray(options) ? options : [];
   const safeAssignmentMap = normalizeSupportingAssignmentMap(assignmentMap);
+  const safeRequestMap = normalizeSupportRequestMap(requestMap);
   const safeTechnicianOptionsByTeam = technicianOptionsByTeam && typeof technicianOptionsByTeam === "object"
     ? technicianOptionsByTeam
     : {};
   const selectedTeams = safeOptions.filter((team) => selectedSet.has(String(team.id)));
+  const requestedCountOptions = Array.from({ length: 8 }, (_, index) => ({
+    value: String(index + 1),
+    label: `${index + 1} thợ`,
+  }));
 
   const handleToggle = (teamId) => {
     const normalizedTeamId = String(teamId);
     const next = selectedSet.has(normalizedTeamId)
       ? selectedValues.filter((item) => item !== normalizedTeamId)
       : [...selectedValues, normalizedTeamId];
-    onChange(next);
+    if (typeof onChange === "function") {
+      onChange(next);
+    }
   };
 
   return (
     <Box border="1px solid" borderColor="gray.200" borderRadius="xl" p={3} bg="white">
       <HStack justify="space-between" mb={2}>
         <Text fontSize="sm" color="gray.700" fontWeight="700">
-          Chọn tổ phối hợp
+          {isRequestMode ? "Chọn tổ phụ cần hỗ trợ" : "Chọn tổ phối hợp"}
         </Text>
-        <Badge colorScheme={selectedValues.length > 0 ? "blue" : "gray"} borderRadius="full">
+        <Badge colorScheme={selectedValues.length > 0 ? (isRequestMode ? "orange" : "blue") : "gray"} borderRadius="full">
           {selectedValues.length} tổ
         </Badge>
       </HStack>
@@ -3117,15 +3400,71 @@ function SupportingTeamSelector({
           <VStack align="stretch" spacing={3}>
             {selectedTeams.map((team) => {
               const teamId = String(team.id);
+              if (isRequestMode) {
+                const request = safeRequestMap[teamId] || { requestedTechnicianCount: "1" };
+                const requestedCount = String(
+                  Math.max(
+                    1,
+                    Math.min(8, Number(readValue(request, "requestedTechnicianCount", "RequestedTechnicianCount") || 1))
+                  )
+                );
+
+                return (
+                  <Box
+                    key={`support-team-request-${team.id}`}
+                    border="1px solid"
+                    borderColor="orange.200"
+                    borderRadius="lg"
+                    p={3}
+                    bg="#fffaf0"
+                  >
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5} alignItems="end">
+                      <Box>
+                        <Text fontSize="sm" fontWeight="700" color="gray.700">
+                          {team.name}
+                        </Text>
+                        <Text mt={1} fontSize="xs" color="gray.500">
+                          Tổ trưởng tổ này sẽ tự chọn thợ sau khi nhận yêu cầu.
+                        </Text>
+                      </Box>
+                      <FormControl maxW="160px" justifySelf={{ base: "stretch", md: "end" }}>
+                        <FormLabel fontSize="xs" mb={1} color="gray.600">
+                          Số lượng thợ cần hỗ trợ
+                        </FormLabel>
+                        <FilterDropdown
+                          id={`support-team-request-count-${team.id}`}
+                          value={requestedCount}
+                          options={requestedCountOptions}
+                          onChange={(nextValue) => onRequestedCountChange?.(team.id, nextValue)}
+                          minWidth={120}
+                          menuMinWidth={120}
+                        />
+                      </FormControl>
+                    </SimpleGrid>
+                  </Box>
+                );
+              }
+
               const assignment = safeAssignmentMap[teamId] || { technicianId: "", assistantTechnicianId: "" };
               const teamOptions = safeTechnicianOptionsByTeam[teamId] || {};
               const leadOptions = [
                 { value: "", label: "-- Chọn thợ chính --" },
                 ...(Array.isArray(teamOptions.lead) ? teamOptions.lead : []),
               ];
+              const selectedLeadId = toPositiveNumber(assignment.technicianId);
+              const selectedAssistantId = toPositiveNumber(assignment.assistantTechnicianId);
               const assistantOptions = Array.isArray(teamOptions.assistant) && teamOptions.assistant.length > 0
-                ? teamOptions.assistant
+                ? teamOptions.assistant.filter((item) => {
+                  const optionId = toPositiveNumber(item?.value);
+                  if (!optionId) return true;
+                  if (!selectedLeadId) return true;
+                  return optionId !== selectedLeadId;
+                })
                 : [{ value: "", label: "-- Không chọn --" }];
+              const safeAssistantValue =
+                selectedLeadId && selectedAssistantId && selectedLeadId === selectedAssistantId
+                  ? ""
+                  : (assignment.assistantTechnicianId || "");
               const hasLeadCandidate = leadOptions.some((item) => toPositiveNumber(item.value));
 
               return (
@@ -3149,7 +3488,14 @@ function SupportingTeamSelector({
                         id={`support-team-lead-${team.id}`}
                         value={assignment.technicianId || ""}
                         options={leadOptions}
-                        onChange={(nextValue) => onAssignmentChange?.(team.id, "technicianId", nextValue)}
+                        onChange={(nextValue) => {
+                          onAssignmentChange?.(team.id, "technicianId", nextValue);
+                          const nextLeadId = toPositiveNumber(nextValue);
+                          const currentAssistantId = toPositiveNumber(assignment.assistantTechnicianId);
+                          if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                            onAssignmentChange?.(team.id, "assistantTechnicianId", "");
+                          }
+                        }}
                         minWidth="100%"
                         disabled={!hasLeadCandidate}
                       />
@@ -3160,9 +3506,16 @@ function SupportingTeamSelector({
                       </FormLabel>
                       <FilterDropdown
                         id={`support-team-assistant-${team.id}`}
-                        value={assignment.assistantTechnicianId || ""}
+                        value={safeAssistantValue}
                         options={assistantOptions}
-                        onChange={(nextValue) => onAssignmentChange?.(team.id, "assistantTechnicianId", nextValue)}
+                        onChange={(nextValue) => {
+                          const nextAssistantId = toPositiveNumber(nextValue);
+                          if (selectedLeadId && nextAssistantId && nextAssistantId === selectedLeadId) {
+                            onAssignmentChange?.(team.id, "assistantTechnicianId", "");
+                            return;
+                          }
+                          onAssignmentChange?.(team.id, "assistantTechnicianId", nextValue);
+                        }}
                         minWidth="100%"
                         disabled={!hasLeadCandidate}
                       />

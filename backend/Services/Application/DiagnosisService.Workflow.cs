@@ -13,7 +13,6 @@ namespace MyGarage.Services
 {
     public partial class DiagnosisService
     {
-        private const string DiagnosisStatusDraft = nameof(DiagnosisStatus.DRAFT);
         private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
         private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
         private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
@@ -454,7 +453,9 @@ namespace MyGarage.Services
         {
             return await _context.Diagnoses
                 .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => IsPendingLikeStatus(x.Status) || x.Status == DiagnosisStatusAssigned)
+                .Where(x =>
+                    x.Status == DiagnosisStatusPending ||
+                    x.Status == DiagnosisStatusAssigned)
                 .ToListAsync();
         }
 
@@ -855,12 +856,15 @@ namespace MyGarage.Services
                 ? null
                 : TryParseDispatchCollaborationNote(latest.DispatchCollaborationMeta, latest.FinalApprovalNote);
 
-            var primaryTeamId = existingMeta?.PrimaryTeamId
-                ?? list
+            long? primaryTeamId = existingMeta?.PrimaryTeamId;
+            if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
+            {
+                primaryTeamId = list
                     .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                    .Select(x => x.AssignedTeamId!.Value)
+                    .Select(x => x.AssignedTeamId)
                     .FirstOrDefault();
-            if (primaryTeamId.HasValue && primaryTeamId.Value <= 0)
+            }
+            if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
             {
                 primaryTeamId = null;
             }
@@ -1261,7 +1265,7 @@ namespace MyGarage.Services
 
         private static bool IsPendingLikeStatus(string? status)
         {
-            return status == DiagnosisStatusPending || status == DiagnosisStatusDraft;
+            return status == DiagnosisStatusPending;
         }
 
         private static bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)

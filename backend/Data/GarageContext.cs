@@ -1053,7 +1053,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue(nameof(DiagnosisStatus.DRAFT));
+                .HasDefaultValue(nameof(DiagnosisStatus.PENDING));
             entity.Property(e => e.SupportRequestNote).HasMaxLength(500);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 

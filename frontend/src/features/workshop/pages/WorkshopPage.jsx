@@ -9,7 +9,6 @@ import { useSearch } from "@shared/core/context/SearchContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 
 // Role Components are now imported in App.jsx for routing
-import WorkflowTimeline from "@features/workshop/components/WorkflowTimeline";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
 import { ChakraProvider } from "@chakra-ui/react";
 import initialTheme from "@horizon/theme/theme";
@@ -235,20 +234,6 @@ export default function WorkshopPage() {
   // Only show the role that the user belongs to, or all if Admin (optional)
   const allowedRoles = Object.entries(ROLES_META).filter(([role]) => role === userRole);
 
-  // Determine current context for Timeline
-  const getTimelineStatus = () => {
-    const path = location.pathname;
-    if (path.includes("/diagnosis") || path.includes("/items")) return "DIAGNOSING";
-    if (path.includes("/quote") || path.includes("/manager")) return "WAITING_APPROVAL";
-    if (path.includes("/condition")) return "RECEPTION";
-    if (path.includes("/technician")) return "REPAIRING";
-    if (path.includes("/qc")) return "QC_PENDING";
-    if (path.includes("/foreman")) return "DIAGNOSING";
-    if (path.includes("/reception")) return "RECEPTION";
-    return "RECEPTION";
-  };
-  const timelineStatus = getTimelineStatus();
-
   const currentRoleMeta = ROLES_META[userRole];
   const roleDashboardPath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "/workshop";
   const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
@@ -453,7 +438,6 @@ export default function WorkshopPage() {
           </header>
 
           <section className="workshop-content">
-            <WorkflowTimeline currentStatus={timelineStatus} />
             <Outlet />
           </section>
         </main>

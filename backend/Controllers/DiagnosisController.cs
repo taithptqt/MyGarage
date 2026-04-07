@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -21,6 +23,69 @@ namespace MyGarage.Controllers
         private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
         private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
         private const string ServiceOrderStatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
+        private static readonly IReadOnlyDictionary<string, string[]> DispatchTagKeywords = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ENGINE_CHASSIS"] = new[]
+            {
+                "dong co",
+                "gam",
+                "phanh",
+                "hop so",
+                "ly hop",
+                "con",
+                "lai",
+                "treo",
+                "truyen dong",
+                "ro ri dau",
+                "nong may",
+                "chet may"
+            },
+            ["ELECTRICAL_AC"] = new[]
+            {
+                "dien",
+                "ac quy",
+                "de may",
+                "de no",
+                "cam bien",
+                "dieu hoa",
+                "may lanh",
+                "quat gio",
+                "den",
+                "kinh dien",
+                "gat mua",
+                "am thanh",
+                "man hinh"
+            },
+            ["BODY_PAINT"] = new[]
+            {
+                "dong son",
+                "than vo",
+                "vo xe",
+                "tray",
+                "xuoc",
+                "mop",
+                "kinh",
+                "noi that",
+                "ngoai that",
+                "danh bong",
+                "cham soc",
+                "rua xe",
+                "son"
+            },
+            ["MAINTENANCE"] = new[]
+            {
+                "bao duong",
+                "dinh ky",
+                "thay dau",
+                "loc dau",
+                "loc gio",
+                "mini check",
+                "quick check",
+                "kiem tra tong quat",
+                "tong quat",
+                "checklist"
+            }
+        };
 
         public sealed record DiagnosisStatusPatchDto
         {
@@ -263,8 +328,10 @@ namespace MyGarage.Controllers
                 await _diagnosisService.RemoveDiagnosesAsync(activeDiagnosis);
             }
 
-            var symptoms = ExtractSymptomsFromNotes(serviceOrder.CustomerNotes);
             var dispatchTag = NormalizeDispatchTag(request?.DispatchTag);
+            var symptoms = FilterSymptomsByDispatchTag(
+                ExtractSymptomsFromNotes(serviceOrder.CustomerNotes),
+                dispatchTag);
             DiagnosisIntakeSuggestionDto? intakeSuggestion = null;
             var shouldBuildIntakeSuggestion =
                 (request?.AutoAssign ?? false) ||
@@ -480,11 +547,11 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de yeu cau ho tro." });
             }
 
-            var primaryTeamId = activeDiagnosis
+            long? primaryTeamId = activeDiagnosis
                 .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                .Select(x => x.AssignedTeamId!.Value)
+                .Select(x => x.AssignedTeamId)
                 .FirstOrDefault();
-            if (primaryTeamId <= 0)
+            if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
             {
                 primaryTeamId = null;
             }
@@ -853,13 +920,20 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de cap nhat nhan su ho tro." });
             }
 
-            await _diagnosisService.AssignSupportingTeamSelectionAsync(
-                activeDiagnosis,
-                request.TeamId,
-                request.TeamLeaderId,
-                request.TechnicianId,
-                request.AssistantTechnicianId,
-                request.Note);
+            try
+            {
+                await _diagnosisService.AssignSupportingTeamSelectionAsync(
+                    activeDiagnosis,
+                    request.TeamId,
+                    request.TeamLeaderId,
+                    request.TechnicianId,
+                    request.AssistantTechnicianId,
+                    request.Note);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
@@ -1022,6 +1096,81 @@ namespace MyGarage.Controllers
             }
 
             return new List<string> { notes };
+        }
+
+        private static List<string> FilterSymptomsByDispatchTag(IReadOnlyList<string>? symptoms, string? dispatchTag)
+        {
+            var normalizedSymptoms = (symptoms ?? Array.Empty<string>())
+                .Select(x => (x ?? string.Empty).Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (normalizedSymptoms.Count == 0)
+            {
+                return new List<string> { "Khong co ghi chu gi" };
+            }
+
+            var dispatchTags = (dispatchTag ?? string.Empty)
+                .Split(new[] { ',', ';', '|', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => (x ?? string.Empty).Trim().ToUpperInvariant())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (dispatchTags.Count == 0)
+            {
+                return normalizedSymptoms;
+            }
+
+            var filtered = normalizedSymptoms
+                .Where(symptom =>
+                {
+                    var normalizedSymptom = NormalizeKeywordText(symptom);
+                    return dispatchTags.Any(tag => IsSymptomCompatibleWithDispatchTag(normalizedSymptom, tag));
+                })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return filtered.Count > 0 ? filtered : normalizedSymptoms;
+        }
+
+        private static bool IsSymptomCompatibleWithDispatchTag(string normalizedSymptom, string dispatchTag)
+        {
+            if (!DispatchTagKeywords.TryGetValue(dispatchTag, out var keywords) || keywords.Length == 0)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedSymptom))
+            {
+                return false;
+            }
+
+            return keywords.Any(keyword => normalizedSymptom.Contains(keyword, StringComparison.Ordinal));
+        }
+
+        private static string NormalizeKeywordText(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return string.Empty;
+            }
+
+            var normalized = raw.Trim().ToLowerInvariant();
+            normalized = normalized.Replace('đ', 'd');
+
+            var decomposed = normalized.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(decomposed.Length);
+            foreach (var ch in decomposed)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(ch);
+                }
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
         }
 
         private async Task<ActionResult<DiagnosisResponseDto>> AssignRequestAsync(long serviceOrderId, DiagnosisAcceptRequestDto request)

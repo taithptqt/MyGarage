@@ -1,45 +1,53 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        private const string ReceptionReplaceReason = "Äiá»u chá»‰nh lá»‹ch háº¹n bá»Ÿi lá»… tÃ¢n";
-        private const string ReceptionReplaceWindowPassedMessage = "Không thể sửa lịch hẹn vì đã qua khung giờ đã chọn lúc tạo.";
+        private static readonly HashSet<string> ReceptionEditableStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            nameof(AppointmentStatus.PENDING),
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.LATE),
+        };
+        private const string ReceptionReplaceReason = "Điều chỉnh lịch hẹn bởi lễ tân";
+        private const string ReceptionReplaceStatusLockedMessage = "Không thể sửa lịch hẹn ở trạng thái hiện tại.";
+        private const string ReceptionReplaceWindowPassedMessage = "Không thể sửa lịch hẹn vì xe đã đến xưởng.";
 
         public async Task<ReceptionAppointmentSaveResponseDto> SaveReceptionBookingAsync(long actorUserId, ReceptionAppointmentSaveRequestDto dto)
         {
             if (dto == null)
             {
-                throw new InvalidOperationException("Dá»¯ liá»‡u Ä‘áº·t lá»‹ch khÃ´ng há»£p lá»‡.");
+                throw new InvalidOperationException("Dữ liệu đặt lịch không hợp lệ.");
             }
 
             if (dto.BranchId <= 0)
             {
-                throw new InvalidOperationException("Chi nhÃ¡nh hiá»‡n táº¡i khÃ´ng há»£p lá»‡.");
+                throw new InvalidOperationException("Chi nhánh hiện tại không hợp lệ.");
             }
 
             if (dto.IsQuickOrder && dto.IsNewVehicle)
             {
-                throw new InvalidOperationException("KhÃ´ng thá»ƒ Ä‘á»“ng thá»i chá»n khÃ¡ch vÃ£ng lai vÃ  xe má»›i cá»§a khÃ¡ch hiá»‡n cÃ³.");
+                throw new InvalidOperationException("Không thể đồng thời chọn khách vãng lai và xe mới của khách hiện có.");
             }
 
             var plans = dto.VehiclePlans?.Where(plan => plan != null).ToList() ?? new List<ReceptionAppointmentVehiclePlanItemDto>();
             if (plans.Count == 0)
             {
-                throw new InvalidOperationException("Thiáº¿u danh sÃ¡ch xe cáº§n Ä‘áº·t lá»‹ch.");
+                throw new InvalidOperationException("Thiếu danh sách xe cần đặt lịch.");
             }
 
             if ((dto.IsQuickOrder || dto.IsNewVehicle) && plans.Count > 1)
             {
-                throw new InvalidOperationException("Luá»“ng khÃ¡ch vÃ£ng lai hoáº·c thÃªm xe má»›i chá»‰ há»— trá»£ má»™t xe má»—i láº§n lÆ°u.");
+                throw new InvalidOperationException("Luồng khách vãng lai hoặc thêm xe mới chỉ hỗ trợ một xe mỗi lần lưu.");
             }
 
             var replaceAppointmentId = dto.ReplaceAppointmentId.GetValueOrDefault();
@@ -77,7 +85,7 @@ namespace MyGarage.Services
                     var canceled = await CancelAsync(replaceAppointmentId, ReceptionReplaceReason, actorUserId);
                     if (canceled == null)
                     {
-                        throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y lá»‹ch háº¹n cáº§n thay tháº¿.");
+                        throw new InvalidOperationException("Không tìm thấy lịch hẹn cần thay thế.");
                     }
                 }
 
@@ -112,17 +120,15 @@ namespace MyGarage.Services
 
         private async Task EnsureReceptionAppointmentStillEditableAsync(long appointmentId)
         {
-            var appointment = await _context.Appointments
-                .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == appointmentId);
-            if (appointment == null)
+            var capability = await GetEditCapabilityAsync(appointmentId);
+            if (capability == null)
             {
                 throw new InvalidOperationException("Không tìm thấy lịch hẹn cần thay thế.");
             }
 
-            if (DateTime.Now >= appointment.EndTime)
+            if (!capability.CanEdit)
             {
-                throw new InvalidOperationException(ReceptionReplaceWindowPassedMessage);
+                throw new InvalidOperationException(capability.BlockingReason ?? ReceptionReplaceWindowPassedMessage);
             }
         }
 
@@ -136,7 +142,7 @@ namespace MyGarage.Services
             var customerId = dto.CustomerId.GetValueOrDefault();
             if (customerId <= 0)
             {
-                throw new InvalidOperationException("KhÃ¡ch hÃ ng khÃ´ng há»£p lá»‡.");
+                throw new InvalidOperationException("Khách hàng không hợp lệ.");
             }
 
             var exists = await _context.Customers
@@ -144,7 +150,7 @@ namespace MyGarage.Services
                 .AnyAsync(c => c.Id == customerId && c.IsDeleted != true);
             if (!exists)
             {
-                throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng Ä‘á»ƒ Ä‘áº·t lá»‹ch.");
+                throw new InvalidOperationException("Không tìm thấy khách hàng để đặt lịch.");
             }
 
             return customerId;
@@ -155,13 +161,13 @@ namespace MyGarage.Services
             var guestName = NormalizeReceptionText(rawName);
             if (string.IsNullOrWhiteSpace(guestName))
             {
-                throw new InvalidOperationException("Vui lÃ²ng nháº­p há» tÃªn khÃ¡ch vÃ£ng lai.");
+                throw new InvalidOperationException("Vui lòng nhập họ tên khách vãng lai.");
             }
 
             var phone = NormalizeReceptionPhone(rawPhone);
             if (string.IsNullOrWhiteSpace(phone))
             {
-                throw new InvalidOperationException("Vui lÃ²ng nháº­p sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch vÃ£ng lai.");
+                throw new InvalidOperationException("Vui lòng nhập số điện thoại khách vãng lai.");
             }
 
             var existing = await _context.Customers
@@ -236,7 +242,7 @@ namespace MyGarage.Services
         {
             if (!plan.StartTime.HasValue)
             {
-                throw new InvalidOperationException("NgÃ y giá» háº¹n khÃ´ng há»£p lá»‡.");
+                throw new InvalidOperationException("Ngày giờ hẹn không hợp lệ.");
             }
 
             var start = plan.StartTime.Value;
@@ -293,7 +299,7 @@ namespace MyGarage.Services
                 var vehicleId = plan.VehicleId.GetValueOrDefault();
                 if (vehicleId <= 0)
                 {
-                    throw new InvalidOperationException("Vui lÃ²ng chá»n xe cá»§a khÃ¡ch.");
+                    throw new InvalidOperationException("Vui lòng chọn xe của khách.");
                 }
                 booking.VehicleId = vehicleId;
             }

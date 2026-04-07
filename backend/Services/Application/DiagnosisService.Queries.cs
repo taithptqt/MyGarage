@@ -23,7 +23,9 @@ namespace MyGarage.Services
 
             if (requestOnly)
             {
-                query = query.Where(x => IsPendingLikeStatus(x.Status) || x.Status == DiagnosisStatusAssigned);
+                query = query.Where(x =>
+                    x.Status == DiagnosisStatusPending ||
+                    x.Status == DiagnosisStatusAssigned);
             }
 
             var rows = await query
@@ -380,7 +382,7 @@ namespace MyGarage.Services
                     {
                         supportingAssignments = list
                             .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                            .Where(x => !primaryTeamId.HasValue || x.AssignedTeamId.Value != primaryTeamId.Value)
+                            .Where(x => !primaryTeamId.HasValue || x.AssignedTeamId.GetValueOrDefault() != primaryTeamId.Value)
                             .GroupBy(x => x.AssignedTeamId!.Value)
                             .Select(group =>
                             {

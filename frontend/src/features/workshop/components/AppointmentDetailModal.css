@@ -2,6 +2,10 @@
   max-width: 940px !important;
 }
 
+.appt-detail-modal .modal-header h2 {
+  width: 100%;
+}
+
 .appt-detail-modal .modal-body-content {
   padding: 20px 22px 22px;
 }
@@ -9,6 +13,27 @@
 .appt-detail-shell {
   display: grid;
   gap: 16px;
+}
+
+.appt-detail-title-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.appt-detail-title-text {
+  display: block;
+}
+
+.appt-detail-header-edit-btn {
+  min-width: 150px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 .appt-detail-hero {
@@ -197,15 +222,14 @@
   justify-content: flex-end;
 }
 
-.appt-detail-edit-btn {
-  min-width: 128px;
-  border-radius: 10px;
-  font-weight: 700;
-}
-
 @media (max-width: 920px) {
   .appt-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .appt-detail-title-wrap {
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   .appt-detail-hero {

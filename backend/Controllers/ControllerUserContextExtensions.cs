@@ -12,5 +12,17 @@ namespace MyGarage.Controllers
                 ? id
                 : null;
         }
+
+        internal static string? GetCurrentRoleCode(this ControllerBase controller)
+        {
+            var claim = controller.User.FindFirst("role_code");
+            return string.IsNullOrWhiteSpace(claim?.Value) ? null : claim!.Value.Trim();
+        }
+
+        internal static string? GetCurrentRoleName(this ControllerBase controller)
+        {
+            var claim = controller.User.FindFirst("role_name");
+            return string.IsNullOrWhiteSpace(claim?.Value) ? null : claim!.Value.Trim();
+        }
     }
 }

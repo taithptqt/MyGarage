@@ -27,6 +27,28 @@
   color: #ffffff;
 }
 
+.workshop-page.dark .sidebar-header p {
+  color: #a3aed0;
+}
+
+.workshop-page.dark .role-item {
+  background: transparent;
+  border-color: transparent;
+}
+
+.workshop-page.dark .role-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.workshop-page.dark .role-item.active {
+  background: #1b254b;
+  border-color: rgba(161, 181, 255, 0.35);
+}
+
+.workshop-page.dark .role-desc {
+  color: #c8d5ff;
+}
+
 .workshop-page.dark .header-title,
 .workshop-page.dark .bc-current,
 .workshop-page.dark .bc-separator {
@@ -4785,6 +4807,11 @@
     font-size: 13px;
   }
 
+  .reception-edit-appointment-page .reception-header-submit-btn {
+    margin-left: 0;
+    min-width: 100%;
+  }
+
   .reception-create-appointment-form {
     padding: 20px 16px 16px;
   }
@@ -4965,6 +4992,12 @@
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.reception-edit-appointment-page .reception-header-submit-btn {
+  margin-left: auto;
+  min-width: 180px;
+  padding: 0 24px;
 }
 
 .btn-back {

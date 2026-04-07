@@ -386,6 +386,8 @@ export default function ReceptionCreateAppointmentForm({
   loading,
   services = [],
   initialValues = null,
+  formId,
+  showFooterActions = true,
   submitLabel = "Xác nhận đặt lịch"
 }) {
   const [formData, setFormData] = useState(() => buildInitialFormData(initialValues));
@@ -1965,7 +1967,7 @@ export default function ReceptionCreateAppointmentForm({
   const selectedVehicleCount = selectedVehicleKeys.length;
 
   return (
-    <form ref={formRef} className="admin-form reception-appt-form" onSubmit={handleSubmit}>
+    <form id={formId || undefined} ref={formRef} className="admin-form reception-appt-form" onSubmit={handleSubmit}>
       {errorText ? <div className="reception-error-banner">{errorText}</div> : null}
       <div className="reception-appt-layout">
         <div className="reception-appt-left-column">
@@ -2773,14 +2775,16 @@ export default function ReceptionCreateAppointmentForm({
         </div>
       </div>
 
-      <div className="form-actions reception-form-actions">
-        <button type="button" className="btn-ghost" onClick={onCancel}>
-          Hủy
-        </button>
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang xử lý..." : submitLabel}
-        </button>
-      </div>
+      {showFooterActions ? (
+        <div className="form-actions reception-form-actions">
+          <button type="button" className="btn-ghost" onClick={onCancel}>
+            Hủy
+          </button>
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? "Đang xử lý..." : submitLabel}
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }

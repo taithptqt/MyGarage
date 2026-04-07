@@ -2,7 +2,6 @@
 
 public enum DiagnosisStatus
 {
-    DRAFT,
     COMPLETED,
     ASSIGNED,
     PENDING
