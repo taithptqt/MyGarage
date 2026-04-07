@@ -31,6 +31,7 @@ import PayosCheckoutPage from "@features/payment/pages/PayosCheckoutPage";
 import PaymentSuccessPage from "@features/payment/pages/PaymentSuccessPage";
 import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
+import RetailCartPage from "@features/retail/pages/RetailCartPage";
 import PartProductDetailPage from "@features/retail/pages/PartProductDetailPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
@@ -91,6 +92,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><PartsSalesPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parts-cart"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><RetailCartPage /></CustomerRoute>
             </ProtectedRoute>
           }
         />
