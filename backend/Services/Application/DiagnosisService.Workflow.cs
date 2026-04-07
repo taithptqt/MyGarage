@@ -1,31 +1,38 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class DiagnosisService
     {
-        private const string DiagnosisStatusPending = "PENDING";
-        private const string DiagnosisStatusAssigned = "ASSIGNED";
-        private const string DiagnosisStatusCompleted = "COMPLETED";
+        private const string DiagnosisStatusDraft = nameof(DiagnosisStatus.DRAFT);
+        private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
+        private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
+        private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
 
-        private const string CancellationStatusNone = "NONE";
-        private const string CancellationStatusPending = "PENDING";
-        private const string CancellationStatusApproved = "APPROVED";
-        private const string CancellationStatusRejected = "REJECTED";
+        private const string CancellationStatusNone = nameof(DiagnosisCancellationStatusCode.NONE);
 
-        private const string ServiceOrderStatusInspecting = "INSPECTING";
-        private const string ServiceOrderStatusNew = "NEW";
-        private const string ServiceOrderStatusWaitingApproval = "WAITING_APPROVAL";
+        private const string ServiceOrderStatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
+        private const string ServiceOrderStatusNew = nameof(ServiceOrderLifecycleStatus.NEW);
+        private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
 
         private const int UnclaimedEscalationMinutes = 10;
         private const int GoldenCancelWindowMinutes = 10;
         private const int DiagnosisSlaMinutes = 45;
+        private const string DispatchCollaborationPrefix = "[DISPATCH_COLLAB]";
+
+        private sealed class DispatchCollaborationMeta
+        {
+            public long? PrimaryTeamId { get; set; }
+            public List<long> TeamIds { get; set; } = new();
+        }
 
         private static string? NormalizeDispatchTag(string? rawTag)
         {
@@ -37,18 +44,138 @@ namespace MyGarage.Services
             return rawTag.Trim().ToUpperInvariant();
         }
 
+        private static IReadOnlyList<string> SplitDispatchTags(string? rawTag)
+        {
+            var normalized = NormalizeDispatchTag(rawTag);
+            if (normalized == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var split = normalized
+                .Split(new[] { ',', ';', '|', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim().ToUpperInvariant())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (split.Count > 0)
+            {
+                return split;
+            }
+
+            return new[] { normalized };
+        }
+
+        private static IReadOnlyList<long> NormalizeTeamIds(IEnumerable<long>? teamIds)
+        {
+            return (teamIds ?? Array.Empty<long>())
+                .Where(x => x > 0)
+                .Distinct()
+                .ToList();
+        }
+
+        private static string? BuildDispatchCollaborationNote(long? primaryTeamId, IReadOnlyList<long>? teamIds)
+        {
+            var normalizedTeamIds = NormalizeTeamIds(teamIds);
+            if (primaryTeamId.HasValue && primaryTeamId.Value > 0 && !normalizedTeamIds.Contains(primaryTeamId.Value))
+            {
+                normalizedTeamIds = new[] { primaryTeamId.Value }.Concat(normalizedTeamIds).ToList();
+            }
+
+            if (normalizedTeamIds.Count <= 1)
+            {
+                return null;
+            }
+
+            var payload = new DispatchCollaborationMeta
+            {
+                PrimaryTeamId = primaryTeamId.HasValue && primaryTeamId.Value > 0 ? primaryTeamId : null,
+                TeamIds = normalizedTeamIds.ToList()
+            };
+
+            return $"{DispatchCollaborationPrefix}{JsonSerializer.Serialize(payload)}";
+        }
+
+        private static DispatchCollaborationMeta? TryParseDispatchCollaborationNote(string? rawNote)
+        {
+            var text = (rawNote ?? string.Empty).Trim();
+            if (!text.StartsWith(DispatchCollaborationPrefix, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var json = text.Substring(DispatchCollaborationPrefix.Length).Trim();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<DispatchCollaborationMeta>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (parsed == null)
+                {
+                    return null;
+                }
+
+                var normalizedTeamIds = NormalizeTeamIds(parsed.TeamIds);
+                var normalizedPrimary = parsed.PrimaryTeamId.HasValue && parsed.PrimaryTeamId.Value > 0
+                    ? parsed.PrimaryTeamId
+                    : null;
+
+                if (normalizedPrimary.HasValue && !normalizedTeamIds.Contains(normalizedPrimary.Value))
+                {
+                    normalizedTeamIds = new[] { normalizedPrimary.Value }.Concat(normalizedTeamIds).ToList();
+                }
+
+                if (normalizedTeamIds.Count == 0 && !normalizedPrimary.HasValue)
+                {
+                    return null;
+                }
+
+                return new DispatchCollaborationMeta
+                {
+                    PrimaryTeamId = normalizedPrimary,
+                    TeamIds = normalizedTeamIds.ToList()
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public async Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null)
         {
-            var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
+            var dispatchTags = SplitDispatchTags(dispatchTag);
+            var hasDispatchFilter = dispatchTags.Count > 0;
 
-            var leaderByDispatchTag = await _context.Teams.AsNoTracking()
+            var candidateTeams = await _context.Teams.AsNoTracking()
                 .Where(x => x.BranchId == serviceOrder.ExecuteBranchId)
                 .Where(x => x.LeaderId.HasValue)
                 .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
-                .Where(x => normalizedDispatchTag == null || x.SpecialtyTag == normalizedDispatchTag)
                 .OrderBy(x => x.Id)
+                .Select(x => new { x.LeaderId, x.SpecialtyTag })
+                .ToListAsync();
+
+            var leaderByDispatchTag = candidateTeams
+                .Where(x =>
+                {
+                    if (!hasDispatchFilter)
+                    {
+                        return true;
+                    }
+
+                    var specialty = NormalizeDispatchTag(x.SpecialtyTag);
+                    return specialty != null && dispatchTags.Contains(specialty, StringComparer.OrdinalIgnoreCase);
+                })
                 .Select(x => x.LeaderId)
-                .FirstOrDefaultAsync();
+                .FirstOrDefault();
 
             if (leaderByDispatchTag.HasValue)
             {
@@ -144,7 +271,7 @@ namespace MyGarage.Services
         {
             return await _context.Diagnoses
                 .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => x.Status == DiagnosisStatusPending || x.Status == DiagnosisStatusAssigned)
+                .Where(x => IsPendingLikeStatus(x.Status) || x.Status == DiagnosisStatusAssigned)
                 .ToListAsync();
         }
 
@@ -189,8 +316,8 @@ namespace MyGarage.Services
                 return true;
             }
 
-            var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
-            if (normalizedDispatchTag == null)
+            var dispatchTags = SplitDispatchTags(dispatchTag);
+            if (dispatchTags.Count == 0)
             {
                 return true;
             }
@@ -205,7 +332,40 @@ namespace MyGarage.Services
                 return true;
             }
 
-            return string.Equals(normalizedDispatchTag, teamSpecialtyTag, StringComparison.OrdinalIgnoreCase);
+            return dispatchTags.Contains(teamSpecialtyTag, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private async Task<long?> ResolveDefaultTechnicianForTeamAsync(long teamId)
+        {
+            var teamLeaderId = await _context.Teams.AsNoTracking()
+                .Where(x => x.Id == teamId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
+                .Select(x => x.LeaderId)
+                .FirstOrDefaultAsync();
+
+            if (teamLeaderId.HasValue)
+            {
+                var leaderIsValid = await _context.Staffs.AsNoTracking()
+                    .AnyAsync(x =>
+                        x.Id == teamLeaderId.Value &&
+                        x.TeamId == teamId &&
+                        (!x.IsDeleted.HasValue || x.IsDeleted.Value == false) &&
+                        (string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase)));
+
+                if (leaderIsValid)
+                {
+                    return teamLeaderId.Value;
+                }
+            }
+
+            var firstTeamTechnicianId = await _context.Staffs.AsNoTracking()
+                .Where(x => x.TeamId == teamId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.Id)
+                .Select(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            return firstTeamTechnicianId > 0 ? firstTeamTechnicianId : null;
         }
 
         public async Task AssignDiagnosesAsync(
@@ -213,6 +373,7 @@ namespace MyGarage.Services
             long technicianId,
             long? assistantTechnicianId,
             long? teamId,
+            IReadOnlyList<long>? supportingTeamIds,
             long? bayId,
             bool managerOverride)
         {
@@ -223,14 +384,51 @@ namespace MyGarage.Services
                 return;
             }
 
-            var resolvedTeamId = teamId ?? await ResolveTeamIdForTechnicianAsync(technicianId);
+            var resolvedPrimaryTeamId = teamId ?? await ResolveTeamIdForTechnicianAsync(technicianId);
+            var normalizedSupportingTeamIds = NormalizeTeamIds(supportingTeamIds)
+                .Where(x => !resolvedPrimaryTeamId.HasValue || x != resolvedPrimaryTeamId.Value)
+                .ToList();
 
-            foreach (var diagnosis in list)
+            var collaborationTeamIds = new List<long>();
+            if (resolvedPrimaryTeamId.HasValue && resolvedPrimaryTeamId.Value > 0)
             {
-                diagnosis.TechnicianId = technicianId;
-                diagnosis.AssistantTechnicianId = assistantTechnicianId;
+                collaborationTeamIds.Add(resolvedPrimaryTeamId.Value);
+            }
+            collaborationTeamIds.AddRange(normalizedSupportingTeamIds);
+            collaborationTeamIds = collaborationTeamIds.Distinct().ToList();
+
+            var collaborationByDiagnosis = collaborationTeamIds.Count == 0
+                ? new List<long?> { resolvedPrimaryTeamId }
+                : collaborationTeamIds.Select(x => (long?)x).ToList();
+
+            var supportTechnicianByTeam = new Dictionary<long, long>();
+            foreach (var supportTeamId in normalizedSupportingTeamIds)
+            {
+                var resolvedTechnicianForTeam = await ResolveDefaultTechnicianForTeamAsync(supportTeamId);
+                supportTechnicianByTeam[supportTeamId] = resolvedTechnicianForTeam ?? technicianId;
+            }
+
+            var collaborationNote = BuildDispatchCollaborationNote(resolvedPrimaryTeamId, collaborationTeamIds);
+
+            var sortedDiagnoses = list
+                .OrderBy(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                .ThenBy(x => x.Id)
+                .ToList();
+
+            for (var index = 0; index < sortedDiagnoses.Count; index++)
+            {
+                var diagnosis = sortedDiagnoses[index];
+                var assignedTeamId = collaborationByDiagnosis[index % collaborationByDiagnosis.Count];
+
+                var isPrimaryTeamAssignment = resolvedPrimaryTeamId.HasValue && assignedTeamId == resolvedPrimaryTeamId;
+                var supportingTechnicianId = assignedTeamId.HasValue && supportTechnicianByTeam.TryGetValue(assignedTeamId.Value, out var mappedTechnicianId)
+                    ? mappedTechnicianId
+                    : technicianId;
+
+                diagnosis.TechnicianId = isPrimaryTeamAssignment ? technicianId : supportingTechnicianId;
+                diagnosis.AssistantTechnicianId = isPrimaryTeamAssignment ? assistantTechnicianId : null;
                 diagnosis.Status = DiagnosisStatusAssigned;
-                diagnosis.AssignedTeamId = resolvedTeamId;
+                diagnosis.AssignedTeamId = assignedTeamId;
                 diagnosis.AssignedBayId = bayId;
                 diagnosis.AssignedAt ??= now;
                 diagnosis.StartedAt = null;
@@ -238,7 +436,7 @@ namespace MyGarage.Services
                 diagnosis.ApprovedByForemanId = null;
                 diagnosis.FinalApprovedByManagerId = null;
                 diagnosis.FinalApprovedAt = null;
-                diagnosis.FinalApprovalNote = null;
+                diagnosis.FinalApprovalNote = collaborationNote;
 
                 diagnosis.CancellationStatus = CancellationStatusNone;
                 diagnosis.CancellationReason = null;
@@ -305,7 +503,7 @@ namespace MyGarage.Services
             var technicians = await _context.Staffs.AsNoTracking()
                 .Where(x => x.TeamId == teamId)
                 .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
-                .Where(x => string.IsNullOrEmpty(x.Status) || !string.Equals(x.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase))
                 .Select(x => new { x.Id, x.FullName, x.SkillLevel })
                 .ToListAsync();
 
@@ -448,7 +646,7 @@ namespace MyGarage.Services
 
             foreach (var diagnosis in list)
             {
-                diagnosis.CancellationStatus = CancellationStatusPending;
+                diagnosis.CancellationStatus = CancellationStatusNone;
                 diagnosis.CancellationReason = reason;
                 diagnosis.CancellationRequestedAt = now;
                 diagnosis.CancellationRequestedBy = requestedByStaffId;
@@ -473,7 +671,7 @@ namespace MyGarage.Services
 
             foreach (var diagnosis in list)
             {
-                if (!string.Equals(diagnosis.CancellationStatus, CancellationStatusPending, StringComparison.OrdinalIgnoreCase))
+                if (!IsCancellationPending(diagnosis))
                 {
                     continue;
                 }
@@ -495,12 +693,9 @@ namespace MyGarage.Services
                     diagnosis.FinalApprovedByManagerId = null;
                     diagnosis.FinalApprovedAt = null;
                     diagnosis.FinalApprovalNote = null;
-                    diagnosis.CancellationStatus = CancellationStatusApproved;
                 }
-                else
-                {
-                    diagnosis.CancellationStatus = CancellationStatusRejected;
-                }
+
+                diagnosis.CancellationStatus = CancellationStatusNone;
 
                 diagnosis.CancellationDecisionBy = managerId;
                 diagnosis.CancellationDecisionAt = now;
@@ -567,7 +762,7 @@ namespace MyGarage.Services
             var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
             if (order != null)
             {
-                order.Status = ServiceOrderStatusWaitingApproval;
+                order.Status = ServiceOrderStatusInspecting;
                 order.UpdatedAt = now;
                 _context.ServiceOrders.Update(order);
             }
@@ -624,13 +819,20 @@ namespace MyGarage.Services
 
             return normalized switch
             {
-                "IN_USE" => false,
-                "BROKEN" => false,
-                "UNDER_MAINTENANCE" => false,
-                "MAINTENANCE" => false,
-                "SUSPENDED" => false,
+                nameof(BayOperationalStatusCode.BROKEN) => false,
+                nameof(BayOperationalStatusCode.UNDER_MAINTENANCE) => false,
                 _ => true,
             };
+        }
+
+        private static bool IsCancellationPending(Diagnosis diagnosis)
+        {
+            return diagnosis.CancellationRequestedAt.HasValue && !diagnosis.CancellationDecisionAt.HasValue;
+        }
+
+        private static bool IsPendingLikeStatus(string? status)
+        {
+            return status == DiagnosisStatusPending || status == DiagnosisStatusDraft;
         }
 
         private static bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)

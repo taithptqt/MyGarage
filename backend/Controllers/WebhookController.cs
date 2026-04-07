@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PayOS;
 using PayOS.Models.Webhooks;
 using PayOS.Models.V2.PaymentRequests;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Services;
 using MyGarage.Models;
@@ -18,6 +19,11 @@ public class WebhookController(
     IOrderStore orderStore,
     IOrderTransactionStore orderTransactionStore) : ControllerBase
 {
+    private const string RetailOrderStatusConfirmed = nameof(RetailOrderStatus.CONFIRMED);
+    private const string RetailOrderStatusDraft = nameof(RetailOrderStatus.DRAFT);
+    private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
+    private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
+
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
     private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
@@ -32,7 +38,7 @@ public class WebhookController(
             return;
         }
 
-        retailOrder.Status = isPaid ? "CONFIRMED" : "DRAFT";
+        retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
         retailOrder.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
     }
@@ -123,7 +129,7 @@ public class WebhookController(
 
                 if (payment is not null)
                 {
-                    var targetStatus = order.AmountRemaining > 0 ? "PENDING" : "COMPLETED";
+                    var targetStatus = order.AmountRemaining > 0 ? PaymentStatusPending : PaymentStatusCompleted;
                     await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, targetStatus);
                 }
                 else if (order.RetailOrderId.HasValue)

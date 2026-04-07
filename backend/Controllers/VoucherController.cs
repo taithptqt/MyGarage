@@ -8,6 +8,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Controllers
 {
@@ -15,6 +16,14 @@ namespace MyGarage.Controllers
     [ApiController]
     public class VoucherController : ControllerBase
     {
+        private const string VoucherStatusActive = nameof(VoucherStatusCode.ACTIVE);
+        private const string VoucherStatusPaused = nameof(VoucherStatusCode.PAUSED);
+        private const string VoucherStatusRevoked = nameof(VoucherStatusCode.REVOKED);
+        private const string VoucherStatusArchived = nameof(VoucherStatusCode.ARCHIVED);
+        private const string VoucherStatusExpired = nameof(VoucherStatusCode.EXPIRED);
+        private const string VoucherStatusScheduled = nameof(VoucherStatusCode.SCHEDULED);
+        private const string VoucherStatusExhausted = nameof(VoucherStatusCode.EXHAUSTED);
+
         public sealed record VoucherStatusPatchDto
         {
             public string? Status { get; init; }
@@ -86,9 +95,9 @@ namespace MyGarage.Controllers
             var status = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
             return status switch
             {
-                "ACTIVE" => await UpdateStatusAsync(id, "ACTIVE", true),
-                "PAUSED" => await UpdateStatusAsync(id, "PAUSED", false),
-                "REVOKED" => await UpdateStatusAsync(id, "REVOKED", false),
+                VoucherStatusActive => await UpdateStatusAsync(id, VoucherStatusActive, true),
+                VoucherStatusPaused => await UpdateStatusAsync(id, VoucherStatusPaused, false),
+                VoucherStatusRevoked => await UpdateStatusAsync(id, VoucherStatusRevoked, false),
                 _ => BadRequest(new { message = "Status must be ACTIVE, PAUSED, or REVOKED." }),
             };
         }
@@ -131,30 +140,30 @@ namespace MyGarage.Controllers
 
             if (voucher.IsDeleted == true)
             {
-                return "ARCHIVED";
+                return VoucherStatusArchived;
             }
 
             if (voucher.IsActive == false)
             {
-                return "PAUSED";
+                return VoucherStatusPaused;
             }
 
             if (voucher.EndDate < now)
             {
-                return "EXPIRED";
+                return VoucherStatusExpired;
             }
 
             if (voucher.StartDate > now)
             {
-                return "SCHEDULED";
+                return VoucherStatusScheduled;
             }
 
             if (voucher.UsageLimit.HasValue && voucher.UsageLimit > 0 && voucher.UsedCount.HasValue && voucher.UsedCount >= voucher.UsageLimit)
             {
-                return "EXHAUSTED";
+                return VoucherStatusExhausted;
             }
 
-            return "ACTIVE";
+            return VoucherStatusActive;
         }
     }
 }

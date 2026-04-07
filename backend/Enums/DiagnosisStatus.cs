@@ -1,9 +1,10 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum DiagnosisStatus
 {
     DRAFT,
-    PENDING,
+    COMPLETED,
     ASSIGNED,
-    COMPLETED
+    PENDING
 }
+

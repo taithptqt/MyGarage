@@ -5,6 +5,8 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
+  CheckboxGroup,
   Divider,
   FormControl,
   FormLabel,
@@ -13,23 +15,20 @@ import {
   Heading,
   HStack,
   Input,
-  Select,
   SimpleGrid,
   Spinner,
   Stack,
-  Stat,
-  StatLabel,
-  StatNumber,
-  Switch,
   Text,
   Textarea,
   VStack,
   useToast,
 } from "@chakra-ui/react";
-import { RepeatIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, RepeatIcon } from "@chakra-ui/icons";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
+import FilterDropdown from "@shared/components/FilterDropdown";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { useSearch } from "@shared/core/context/SearchContext";
@@ -83,37 +82,32 @@ const COLOR_META = {
   },
 };
 
-const STATUS_TAB_META = {
+const STATUS_CARD_THEME = {
   WHITE: {
-    label: "Mới tiếp nhận",
-    description: "Chờ tổ trưởng nhận xe và phân công",
-    tabBg: COLOR_META.WHITE.tabBg,
-    tabBorder: COLOR_META.WHITE.tabBorder,
-    tabText: COLOR_META.WHITE.tabText,
-    activeBg: COLOR_META.WHITE.activeBg,
-    activeText: COLOR_META.WHITE.activeText,
+    dot: "#64748b",
+    activeBorder: "#334155",
+    activeBg: "linear-gradient(150deg, #ffffff 0%, #f8fafc 60%, #eef2ff 100%)",
+    activeShadow: "0 12px 26px rgba(51, 65, 85, 0.14)",
   },
-  IN_PROGRESS: {
-    label: "Đang xử lý",
-    description: "Gộp Đang chuẩn đoán và Cần can thiệp",
-    tabBg: "#fff6e8",
-    tabBorder: "#f6ad55",
-    tabText: "#9c4221",
-    activeBg: "#dd6b20",
-    activeText: "white",
+  YELLOW: {
+    dot: "#b45309",
+    activeBorder: "#d69e2e",
+    activeBg: "linear-gradient(150deg, #fffdf7 0%, #fff8db 58%, #fff1c7 100%)",
+    activeShadow: "0 12px 26px rgba(214, 158, 46, 0.22)",
+  },
+  RED: {
+    dot: "#dc2626",
+    activeBorder: "#e53e3e",
+    activeBg: "linear-gradient(150deg, #fff8f8 0%, #fff1f2 58%, #ffe0e3 100%)",
+    activeShadow: "0 12px 26px rgba(229, 62, 62, 0.22)",
   },
   GREEN: {
-    label: "Đã chuẩn đoán",
-    description: "Đã có kết quả kỹ thuật để duyệt",
-    tabBg: COLOR_META.GREEN.tabBg,
-    tabBorder: COLOR_META.GREEN.tabBorder,
-    tabText: COLOR_META.GREEN.tabText,
-    activeBg: COLOR_META.GREEN.activeBg,
-    activeText: COLOR_META.GREEN.activeText,
+    dot: "#15803d",
+    activeBorder: "#16a34a",
+    activeBg: "linear-gradient(150deg, #f8fffb 0%, #ecfdf3 58%, #dcfce7 100%)",
+    activeShadow: "0 12px 26px rgba(22, 163, 74, 0.2)",
   },
 };
-
-const STATUS_TAB_ORDER = ["WHITE", "IN_PROGRESS", "GREEN"];
 
 const DISPATCH_TAG_OPTIONS = [
   { value: "ENGINE_CHASSIS", label: "Máy - Gầm" },
@@ -128,20 +122,6 @@ const DISPATCH_TAG_LABELS = DISPATCH_TAG_OPTIONS.reduce((acc, item) => {
 }, {});
 
 const CANCEL_REASONS = ["Sai chuyên môn", "Quá tải cầu", "Thiếu thiết bị", "Khác"];
-
-const EMPTY_NOTE_TOKENS = new Set([
-  "khong",
-  "khong co",
-  "khong co ghi chu",
-  "khong co thong tin",
-  "none",
-  "n/a",
-  "na",
-  "null",
-  "undefined",
-  "-",
-  "--",
-]);
 
 const TEAM_LEADER_ROLE_CODES = new Set(["TEAM_LEADER"]);
 const TECHNICIAN_ROLE_CODES = new Set(["TECH", "TECHNICIAN", "TEAM_LEADER", "FOREMAN"]);
@@ -168,31 +148,17 @@ function normalizeCode(value) {
   return toText(value).toUpperCase();
 }
 
-function normalizeNoteText(value) {
-  return toText(value)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isEmptyNote(value) {
-  const normalized = normalizeNoteText(value);
-  return !normalized || EMPTY_NOTE_TOKENS.has(normalized);
-}
-
 function formatDateTime(value) {
   if (!value) return "--";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "--";
-  return parsed.toLocaleString("vi-VN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const pad2 = (num) => String(num).padStart(2, "0");
+  const hours = pad2(parsed.getHours());
+  const minutes = pad2(parsed.getMinutes());
+  const day = pad2(parsed.getDate());
+  const month = pad2(parsed.getMonth() + 1);
+  const year = parsed.getFullYear();
+  return `${hours}:${minutes} (${day}/${month}/${year})`;
 }
 
 function formatMinutes(value) {
@@ -205,9 +171,115 @@ function formatMinutes(value) {
 }
 
 function getDispatchTagLabel(tag) {
-  const code = normalizeCode(tag);
-  if (!code) return "Chưa phân loại";
-  return DISPATCH_TAG_LABELS[code] || code;
+  const normalized = normalizeCode(tag);
+  if (!normalized) return "Chưa chọn chuyên môn";
+
+  const splitTags = normalized
+    .split(/[;,|/]/)
+    .map((item) => normalizeCode(item))
+    .filter(Boolean);
+
+  const uniqueTags = splitTags.length > 0 ? Array.from(new Set(splitTags)) : [normalized];
+  return uniqueTags.map((code) => DISPATCH_TAG_LABELS[code] || code).join(" + ");
+}
+
+function dispatchTagIncludes(tagSource, targetTag) {
+  const normalizedTarget = normalizeCode(targetTag);
+  if (!normalizedTarget) return true;
+
+  const normalizedSource = normalizeCode(tagSource);
+  if (!normalizedSource) return false;
+
+  const splitTags = normalizedSource
+    .split(/[;,|/]/)
+    .map((item) => normalizeCode(item))
+    .filter(Boolean);
+
+  if (splitTags.length === 0) {
+    return normalizedSource === normalizedTarget;
+  }
+
+  return splitTags.includes(normalizedTarget);
+}
+
+function normalizeTeamIds(ids, excludedId = null) {
+  const excluded = toPositiveNumber(excludedId);
+  const unique = new Set();
+  (Array.isArray(ids) ? ids : []).forEach((value) => {
+    const id = toPositiveNumber(value);
+    if (!id) return;
+    if (excluded && id === excluded) return;
+    unique.add(id);
+  });
+  return Array.from(unique);
+}
+
+function extractRequestedServiceNames(details) {
+  if (!Array.isArray(details) || details.length === 0) return "";
+
+  const names = [];
+  const seen = new Set();
+
+  details.forEach((detail) => {
+    if (readValue(detail, "isDeleted", "IsDeleted") === true) return;
+
+    const recommendationId = toPositiveNumber(readValue(detail, "diagnoseRecommendationId", "DiagnoseRecommendationId"));
+    if (recommendationId) return;
+
+    const itemType = normalizeCode(readValue(detail, "itemType", "ItemType"));
+    const hasStandardService = toPositiveNumber(readValue(detail, "standardServiceId", "StandardServiceId"));
+    const isServiceLike = itemType === "SERVICE" || itemType === "LABOR" || Boolean(hasStandardService);
+    if (!isServiceLike) return;
+
+    const name =
+      toText(readValue(detail, "itemName", "ItemName")) ||
+      toText(readValue(detail, "serviceName", "ServiceName")) ||
+      toText(readValue(detail, "standardServiceName", "StandardServiceName"));
+
+    if (!name) return;
+
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(name);
+  });
+
+  return names.join(", ");
+}
+
+function normalizeServiceOrderDetailsResponse(response) {
+  if (Array.isArray(response)) return response;
+
+  const directRows = readValue(response, "items", "Items", "rows", "Rows", "data", "Data");
+  if (Array.isArray(directRows)) return directRows;
+
+  const nestedData = readValue(response, "data", "Data");
+  if (nestedData && typeof nestedData === "object") {
+    const nestedRows = readValue(nestedData, "items", "Items", "rows", "Rows", "data", "Data");
+    if (Array.isArray(nestedRows)) return nestedRows;
+  }
+
+  return [];
+}
+
+const QUEUE_STATE_META = {
+  NEW: { label: "Mới tiếp nhận", colorScheme: "gray" },
+  IN_PROGRESS: { label: "Đang chuẩn đoán", colorScheme: "yellow" },
+  ALERT: { label: "Cần can thiệp", colorScheme: "red" },
+  DIAGNOSED: { label: "Đã chuẩn đoán", colorScheme: "green" },
+};
+
+function getQueueStateMeta(queueState, queueColor) {
+  const normalizedState = normalizeCode(queueState);
+  if (normalizedState && QUEUE_STATE_META[normalizedState]) {
+    return QUEUE_STATE_META[normalizedState];
+  }
+
+  const normalizedColor = normalizeCode(queueColor);
+  if (normalizedColor === "RED") return QUEUE_STATE_META.ALERT;
+  if (normalizedColor === "YELLOW") return QUEUE_STATE_META.IN_PROGRESS;
+  if (normalizedColor === "GREEN") return QUEUE_STATE_META.DIAGNOSED;
+  return QUEUE_STATE_META.NEW;
 }
 
 function resolveApiErrorMessage(error, fallback = "Đã có lỗi xảy ra") {
@@ -314,48 +386,6 @@ function resolveVehiclePlate(raw, order, vehicleMap) {
   return toText(readValue(vehicle, "licensePlate", "LicensePlate", "plateNumber", "PlateNumber"));
 }
 
-function formatAdditionalDescription(value) {
-  const raw = toText(value);
-  if (!raw) return "Không có";
-
-  const collected = [];
-  const collect = (source) => {
-    if (source === null || source === undefined) return;
-
-    if (Array.isArray(source)) {
-      source.forEach((item) => collect(item));
-      return;
-    }
-
-    if (typeof source === "object") {
-      ["additionalDescription", "additionalNote", "description", "note", "notes", "customerNotes", "symptom", "symptoms", "message", "text"].forEach((key) => {
-        collect(source[key]);
-      });
-      return;
-    }
-
-    const text = toText(source);
-    if (text) collected.push(text);
-  };
-
-  try {
-    collect(JSON.parse(raw));
-  } catch {
-    collect(raw);
-  }
-
-  const unique = [];
-  const seen = new Set();
-  collected.forEach((item) => {
-    const key = normalizeNoteText(item);
-    if (!key || isEmptyNote(key) || seen.has(key)) return;
-    seen.add(key);
-    unique.push(item);
-  });
-
-  return unique.length > 0 ? unique.join(", ") : "Không có";
-}
-
 function extractAlertReasons(item) {
   const reasons = [];
   if (!item) return reasons;
@@ -379,9 +409,54 @@ function extractAlertReasons(item) {
   return reasons;
 }
 
-function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap) {
+function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, teamMap = new Map()) {
   const serviceOrderId = toPositiveNumber(readValue(raw, "serviceOrderId", "ServiceOrderId")) || 0;
   const order = orderMap.get(serviceOrderId) || null;
+  const teamId = toPositiveNumber(readValue(raw, "teamId", "TeamId"));
+  const teamName = toText(readValue(raw, "teamName", "TeamName"));
+  const primaryTeamId = toPositiveNumber(readValue(raw, "primaryTeamId", "PrimaryTeamId")) || teamId;
+  const primaryTeamName =
+    toText(readValue(raw, "primaryTeamName", "PrimaryTeamName")) ||
+    teamName ||
+    (primaryTeamId ? toText(readValue(teamMap.get(primaryTeamId), "name", "Name")) : "");
+  const rawAssignedTeamIds = Array.isArray(readValue(raw, "assignedTeamIds", "AssignedTeamIds"))
+    ? readValue(raw, "assignedTeamIds", "AssignedTeamIds")
+    : [];
+  const assignedTeamIds = normalizeTeamIds(
+    [primaryTeamId, teamId, ...rawAssignedTeamIds],
+    null
+  );
+  const rawAssignedTeamNames = Array.isArray(readValue(raw, "assignedTeamNames", "AssignedTeamNames"))
+    ? readValue(raw, "assignedTeamNames", "AssignedTeamNames")
+    : [];
+  const normalizedAssignedTeamNames = rawAssignedTeamNames
+    .map((name) => toText(name))
+    .filter(Boolean);
+  const supportingTeamIds = normalizeTeamIds(assignedTeamIds, primaryTeamId);
+  const supportingTeamNamesFromApi = normalizedAssignedTeamNames.filter(
+    (name) => normalizeCode(name) !== normalizeCode(primaryTeamName)
+  );
+  const supportingTeamNamesFromMap = supportingTeamIds
+    .map((id) => toText(readValue(teamMap.get(id), "name", "Name")))
+    .filter(Boolean);
+  const supportingTeamNames = supportingTeamNamesFromApi.length > 0
+    ? supportingTeamNamesFromApi
+    : supportingTeamNamesFromMap;
+  const technicianId = toPositiveNumber(readValue(raw, "technicianId", "TechnicianId"));
+  const technicianName = toText(readValue(raw, "technicianName", "TechnicianName"));
+  const assistantTechnicianId = toPositiveNumber(readValue(raw, "assistantTechnicianId", "AssistantTechnicianId"));
+  const assistantTechnicianName = toText(readValue(raw, "assistantTechnicianName", "AssistantTechnicianName"));
+  const assignedBayId = toPositiveNumber(readValue(raw, "assignedBayId", "AssignedBayId"));
+  const assignedBayCode = toText(readValue(raw, "assignedBayCode", "AssignedBayCode"));
+  const assignedAt = readValue(raw, "assignedAt", "AssignedAt");
+  const startedAt = readValue(raw, "startedAt", "StartedAt");
+  const customerNotesRaw = toText(readValue(order, "customerNotes", "CustomerNotes"));
+  const parsedCustomerNotes = parseCustomerNotes(customerNotesRaw);
+
+  // Guard rail: if no real assignment signal exists, keep assignee fields empty.
+  const hasRealAssignment = Boolean(primaryTeamId || assignedAt || startedAt || assignedBayId);
+  const hasLeadTechnicianAssigned = Boolean(technicianId);
+  const hasAssistantTechnicianAssigned = Boolean(assistantTechnicianId);
 
   return {
     serviceOrderId,
@@ -393,17 +468,22 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap) {
     queueColor: normalizeCode(readValue(raw, "queueColor", "QueueColor")) || "WHITE",
     queueState: toText(readValue(raw, "queueState", "QueueState")),
     dispatchTag: normalizeCode(readValue(raw, "dispatchTag", "DispatchTag")),
-    teamId: toPositiveNumber(readValue(raw, "teamId", "TeamId")),
-    teamName: toText(readValue(raw, "teamName", "TeamName")),
-    technicianId: toPositiveNumber(readValue(raw, "technicianId", "TechnicianId")),
-    technicianName: toText(readValue(raw, "technicianName", "TechnicianName")),
-    assistantTechnicianId: toPositiveNumber(readValue(raw, "assistantTechnicianId", "AssistantTechnicianId")),
-    assistantTechnicianName: toText(readValue(raw, "assistantTechnicianName", "AssistantTechnicianName")),
-    assignedBayId: toPositiveNumber(readValue(raw, "assignedBayId", "AssignedBayId")),
-    assignedBayCode: toText(readValue(raw, "assignedBayCode", "AssignedBayCode")),
+    teamId: hasRealAssignment ? primaryTeamId : null,
+    teamName: hasRealAssignment ? primaryTeamName : "",
+    primaryTeamId: hasRealAssignment ? primaryTeamId : null,
+    primaryTeamName: hasRealAssignment ? primaryTeamName : "",
+    assignedTeamIds: hasRealAssignment ? assignedTeamIds : [],
+    supportingTeamIds: hasRealAssignment ? supportingTeamIds : [],
+    supportingTeamNames: hasRealAssignment ? supportingTeamNames : [],
+    technicianId: hasRealAssignment && hasLeadTechnicianAssigned ? technicianId : null,
+    technicianName: hasRealAssignment && hasLeadTechnicianAssigned ? technicianName : "",
+    assistantTechnicianId: hasRealAssignment && hasAssistantTechnicianAssigned ? assistantTechnicianId : null,
+    assistantTechnicianName: hasRealAssignment && hasAssistantTechnicianAssigned ? assistantTechnicianName : "",
+    assignedBayId: hasRealAssignment ? assignedBayId : null,
+    assignedBayCode: hasRealAssignment ? assignedBayCode : "",
     requestedAt: readValue(raw, "requestedAt", "RequestedAt"),
-    assignedAt: readValue(raw, "assignedAt", "AssignedAt"),
-    startedAt: readValue(raw, "startedAt", "StartedAt"),
+    assignedAt: hasRealAssignment ? assignedAt : null,
+    startedAt: hasRealAssignment ? startedAt : null,
     pendingMinutes: Number(readValue(raw, "pendingMinutes", "PendingMinutes") || 0),
     assignedMinutes: Number(readValue(raw, "assignedMinutes", "AssignedMinutes") || 0),
     isSupportRequested: Boolean(readValue(raw, "isSupportRequested", "IsSupportRequested")),
@@ -415,84 +495,112 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap) {
     finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt"),
     customerName: resolveCustomerName(raw, order, customerMap),
     vehicleLicensePlate: resolveVehiclePlate(raw, order, vehicleMap),
-    customerNotes: toText(readValue(order, "customerNotes", "CustomerNotes")),
+    customerNotes: customerNotesRaw,
+    customerMainNotes: toText(parsedCustomerNotes?.mainNotes),
+    customerRequestedServices: toText(parsedCustomerNotes?.requestedServices),
   };
 }
 function DispatchQueueCard({ item, isSelected, onSelect }) {
   const meta = COLOR_META[item.queueColor] || COLOR_META.WHITE;
   const alerts = extractAlertReasons(item);
+  const queueStateMeta = getQueueStateMeta(item.queueState, item.queueColor);
+  const statusBorderByColor = {
+    WHITE: "#cbd5e1",
+    YELLOW: "#f6d365",
+    RED: "#fca5a5",
+    GREEN: "#86efac",
+  };
+  const baseBorderColor = statusBorderByColor[item.queueColor] || "#dbe4f2";
 
   return (
     <Box
-      border="1px solid"
-      borderColor={isSelected ? "blue.300" : "gray.100"}
-      borderLeftWidth="4px"
+      border="2px solid"
+      borderColor={isSelected ? meta.activeBg : baseBorderColor}
+      borderLeftWidth="6px"
       borderLeftColor={meta.cardAccent}
       borderRadius="xl"
-      bg={isSelected ? "#eef4ff" : meta.cardBg}
-      p={3}
+      bg={isSelected ? "#f8fbff" : "white"}
+      p={3.5}
       cursor="pointer"
       transition="all 0.18s ease"
-      boxShadow={isSelected ? "0 10px 24px rgba(45, 76, 138, 0.14)" : "0 3px 10px rgba(15,23,42,0.05)"}
-      _hover={{ borderColor: "blue.200", transform: "translateY(-1px)" }}
+      boxShadow={isSelected ? "0 12px 26px rgba(37, 99, 235, 0.16)" : "0 4px 12px rgba(15,23,42,0.06)"}
+      _hover={{ borderColor: meta.activeBg, transform: "translateY(-1px)" }}
       onClick={() => onSelect(item.serviceOrderId)}
     >
-      <Stack spacing={2}>
+      <Stack spacing={3}>
         <HStack justify="space-between" align="start" spacing={3}>
           <Box minW={0}>
-            <HStack spacing={2} flexWrap="wrap">
-              <Text fontWeight="800" color="gray.800" noOfLines={1}>
-                {item.serviceOrderCode}
-              </Text>
-              <Badge colorScheme="purple" borderRadius="full" px={2}>
-                {getDispatchTagLabel(item.dispatchTag)}
-              </Badge>
-              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2}>
-                {item.queueState || "--"}
-              </Badge>
-            </HStack>
+            <Text fontWeight="800" color="gray.800" noOfLines={1}>
+              {item.serviceOrderCode}
+            </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
               {item.customerName || "Khách hàng chưa rõ"} - {item.vehicleLicensePlate || "--"}
             </Text>
           </Box>
 
-          <VStack align="end" spacing={1} minW="130px">
-            <Badge colorScheme="gray" borderRadius="full" px={2.5}>
-              Chờ: {formatMinutes(item.pendingMinutes)}
-            </Badge>
-            <Badge colorScheme="orange" borderRadius="full" px={2.5}>
-              Xử lý: {formatMinutes(item.assignedMinutes)}
-            </Badge>
-          </VStack>
+          <Badge colorScheme={queueStateMeta.colorScheme} borderRadius="full" px={2.5} py={1}>
+            {queueStateMeta.label}
+          </Badge>
+        </HStack>
+
+        <HStack spacing={2} flexWrap="wrap">
+          <Badge colorScheme="purple" borderRadius="full" px={2.5}>
+            Chuyên môn: {getDispatchTagLabel(item.dispatchTag)}
+          </Badge>
+          <Badge colorScheme="gray" borderRadius="full" px={2.5}>
+            Chờ nhận: {formatMinutes(item.pendingMinutes)}
+          </Badge>
+          <Badge colorScheme="orange" borderRadius="full" px={2.5}>
+            Đang xử lý: {formatMinutes(item.assignedMinutes)}
+          </Badge>
         </HStack>
 
         <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
-          <Text fontSize="sm" color="gray.600" noOfLines={1}>
-            Tổ: {item.teamName || "Chưa giao tổ"}
-          </Text>
-          <Text fontSize="sm" color="gray.600" noOfLines={1}>
-            Cầu nâng: {item.assignedBayCode || "Chưa chỉ định"}
-          </Text>
-          <Text fontSize="sm" color="gray.600" noOfLines={1}>
-            Thợ chính: {item.technicianName || "Chưa phân công"}
-          </Text>
-          <Text fontSize="sm" color="gray.600" noOfLines={1}>
-            Thợ phụ: {item.assistantTechnicianName || "--"}
-          </Text>
+          <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
+            <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+              Nhân sự
+            </Text>
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              Tổ chính: {item.primaryTeamName || item.teamName || "Chưa giao tổ"}
+            </Text>
+            {Array.isArray(item.supportingTeamNames) && item.supportingTeamNames.length > 0 && (
+              <Text fontSize="sm" color="gray.600" noOfLines={2}>
+                Tổ phối hợp: {item.supportingTeamNames.join(", ")}
+              </Text>
+            )}
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              Thợ chính: {item.technicianName || "Chưa phân công"}
+            </Text>
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              Thợ phụ: {item.assistantTechnicianName || "--"}
+            </Text>
+          </Box>
+          <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
+            <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+              Tiến độ
+            </Text>
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              Cầu nâng: {item.assignedBayCode || "Chưa chỉ định"}
+            </Text>
+            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+              Yêu cầu lúc: {formatDateTime(item.requestedAt)}
+            </Text>
+          </Box>
         </Grid>
 
-        {alerts.length > 0 ? (
-          <VStack align="start" spacing={1}>
-            {alerts.slice(0, 2).map((reason) => (
-              <Text key={`${item.serviceOrderId}-${reason}`} fontSize="sm" color="red.500" noOfLines={2}>
-                - {reason}
-              </Text>
-            ))}
-          </VStack>
-        ) : (
-          <Text fontSize="sm" color="gray.400">
-            Không có cảnh báo
-          </Text>
+        {alerts.length > 0 && (
+          <Box border="1px solid" borderColor="red.200" bg="red.50" borderRadius="md" p={2}>
+            <Text fontSize="xs" color="red.700" textTransform="uppercase" fontWeight="700" mb={1}>
+              Cần can thiệp
+            </Text>
+            <VStack align="start" spacing={1}>
+              {alerts.slice(0, 2).map((reason) => (
+                <Text key={`${item.serviceOrderId}-${reason}`} fontSize="sm" color="red.600" noOfLines={2}>
+                  - {reason}
+                </Text>
+              ))}
+            </VStack>
+          </Box>
         )}
       </Stack>
     </Box>
@@ -534,13 +642,21 @@ function SuggestionPreview({ suggestion }) {
   );
 }
 
-export default function DispatchOpsDashboard({ mode = "manager" }) {
+export default function DispatchOpsDashboard({
+  mode = "manager",
+  pageMode = "board",
+  assignmentServiceOrderId = null,
+  onOpenAssignment = null,
+  onBack = null,
+}) {
   const toast = useToast();
   const { user } = useAuth();
   const { selectedBranchId } = useBranch();
   const { searchQuery } = useSearch();
 
   const isTeamLeaderMode = mode === "team_leader";
+  const isManagerMode = mode === "manager";
+  const isAssignmentPage = pageMode === "assignment";
 
   const [boardItems, setBoardItems] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -552,13 +668,15 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [includeCompleted, setIncludeCompleted] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [dispatchTagFilter, setDispatchTagFilter] = useState("");
   const [activeColorTab, setActiveColorTab] = useState("WHITE");
-  const [selectedServiceOrderId, setSelectedServiceOrderId] = useState(null);
+  const [selectedServiceOrderId, setSelectedServiceOrderId] = useState(
+    toPositiveNumber(assignmentServiceOrderId)
+  );
 
   const [leaderTeamId, setLeaderTeamId] = useState("");
+  const [leaderSupportingTeamIds, setLeaderSupportingTeamIds] = useState([]);
   const [leaderLeadTechnicianId, setLeaderLeadTechnicianId] = useState("");
   const [leaderAssistantTechnicianId, setLeaderAssistantTechnicianId] = useState("");
   const [leaderBayId, setLeaderBayId] = useState("");
@@ -568,6 +686,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const [leaderTechnicalApprovalNote, setLeaderTechnicalApprovalNote] = useState("");
 
   const [managerTeamId, setManagerTeamId] = useState("");
+  const [managerSupportingTeamIds, setManagerSupportingTeamIds] = useState([]);
   const [managerLeadTechnicianId, setManagerLeadTechnicianId] = useState("");
   const [managerAssistantTechnicianId, setManagerAssistantTechnicianId] = useState("");
   const [managerBayId, setManagerBayId] = useState("");
@@ -577,12 +696,17 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
 
   const [suggestion, setSuggestion] = useState(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [selectedRequestedServices, setSelectedRequestedServices] = useState("");
+  const [selectedRequestedServicesLoading, setSelectedRequestedServicesLoading] = useState(false);
 
   const selectedBranchRaw = Number(selectedBranchId);
   const isAllBranchesSelected = Number.isFinite(selectedBranchRaw) && selectedBranchRaw === 0;
   const selectedBranch = toPositiveNumber(selectedBranchRaw);
   const userBranchId = toPositiveNumber(readValue(user, "branchId", "BranchId"));
-  const branchId = isAllBranchesSelected ? null : selectedBranch || userBranchId;
+  const forceCurrentBranch = isManagerMode && Boolean(userBranchId);
+  const branchId = forceCurrentBranch
+    ? userBranchId
+    : (isAllBranchesSelected ? null : selectedBranch || userBranchId);
 
   const roleById = useMemo(() => {
     const map = new Map();
@@ -668,11 +792,129 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const leaderTechnicianOptions = useMemo(() => getTechniciansByTeam(leaderTeamId), [getTechniciansByTeam, leaderTeamId]);
   const managerTechnicianOptions = useMemo(() => getTechniciansByTeam(managerTeamId), [getTechniciansByTeam, managerTeamId]);
 
+  const assignmentTeamOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Chọn tổ --" }];
+    activeTeams.forEach((team) => {
+      const id = toPositiveNumber(readValue(team, "id", "Id"));
+      const name = toText(readValue(team, "name", "Name"));
+      if (!id) return;
+      options.push({ value: String(id), label: name || `Tổ #${id}` });
+    });
+    return options;
+  }, [activeTeams]);
+
+  const leaderSupportingTeamOptions = useMemo(() => {
+    const primaryTeamId = toPositiveNumber(leaderTeamId);
+    return activeTeams
+      .map((team) => {
+        const id = toPositiveNumber(readValue(team, "id", "Id"));
+        const name = toText(readValue(team, "name", "Name"));
+        return { id, name: name || (id ? `Tổ #${id}` : "") };
+      })
+      .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
+  }, [activeTeams, leaderTeamId]);
+
+  const managerSupportingTeamOptions = useMemo(() => {
+    const primaryTeamId = toPositiveNumber(managerTeamId);
+    return activeTeams
+      .map((team) => {
+        const id = toPositiveNumber(readValue(team, "id", "Id"));
+        const name = toText(readValue(team, "name", "Name"));
+        return { id, name: name || (id ? `Tổ #${id}` : "") };
+      })
+      .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
+  }, [activeTeams, managerTeamId]);
+
+  const leaderPrimaryTechnicianOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Chọn thợ chính --" }];
+    leaderTechnicianOptions.forEach((staff) => {
+      const id = toPositiveNumber(readValue(staff, "id", "Id"));
+      const name = toText(readValue(staff, "fullName", "FullName"));
+      if (!id) return;
+      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+    });
+    return options;
+  }, [leaderTechnicianOptions]);
+
+  const leaderAssistantTechnicianOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Không chọn --" }];
+    leaderTechnicianOptions.forEach((staff) => {
+      const id = toPositiveNumber(readValue(staff, "id", "Id"));
+      const name = toText(readValue(staff, "fullName", "FullName"));
+      if (!id) return;
+      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+    });
+    return options;
+  }, [leaderTechnicianOptions]);
+
+  const managerPrimaryTechnicianOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Chọn thợ chính --" }];
+    managerTechnicianOptions.forEach((staff) => {
+      const id = toPositiveNumber(readValue(staff, "id", "Id"));
+      const name = toText(readValue(staff, "fullName", "FullName"));
+      if (!id) return;
+      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+    });
+    return options;
+  }, [managerTechnicianOptions]);
+
+  const managerAssistantTechnicianOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Không chọn --" }];
+    managerTechnicianOptions.forEach((staff) => {
+      const id = toPositiveNumber(readValue(staff, "id", "Id"));
+      const name = toText(readValue(staff, "fullName", "FullName"));
+      if (!id) return;
+      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+    });
+    return options;
+  }, [managerTechnicianOptions]);
+
+  const baySelectionOptions = useMemo(() => {
+    const options = [{ value: "", label: "-- Chưa chỉ định cầu --" }];
+    availableBays.forEach((bay) => {
+      const id = toPositiveNumber(readValue(bay, "id", "Id"));
+      const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
+      const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
+      const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
+      const disabled = occupied || !operational;
+      if (!id) return;
+      options.push({
+        value: String(id),
+        label: `${code} ${disabled ? "(Đang bận)" : "(Trống)"}`,
+        disabled,
+      });
+    });
+    return options;
+  }, [availableBays]);
+
+  const cancelReasonOptions = useMemo(
+    () => CANCEL_REASONS.map((reason) => ({ value: reason, label: reason })),
+    []
+  );
+
+  const teamFilterOptions = useMemo(() => {
+    const options = [{ value: "", label: "Tất cả tổ" }];
+    activeTeams.forEach((team) => {
+      const id = toPositiveNumber(readValue(team, "id", "Id"));
+      const name = toText(readValue(team, "name", "Name"));
+      options.push({
+        value: id ? String(id) : "",
+        label: name || `Tổ #${id}`,
+      });
+    });
+    return options;
+  }, [activeTeams]);
+
+  const dispatchTagFilterOptions = useMemo(
+    () => [{ value: "", label: "Tất cả chuyên môn" }, ...DISPATCH_TAG_OPTIONS.map((item) => ({ value: item.value, label: item.label }))],
+    []
+  );
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
 
-    const boardParams = { includeCompleted };
+    const boardParams = { includeCompleted: false };
     const teamFilterId = toPositiveNumber(teamFilter);
     if (branchId) {
       boardParams.branchId = branchId;
@@ -714,9 +956,12 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
       const orderMap = new Map(orderList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
       const customerMap = new Map(customerList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
       const vehicleMap = new Map(vehicleList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const teamMap = new Map(
+        (Array.isArray(teamsRes) ? teamsRes : []).map((team) => [toPositiveNumber(readValue(team, "id", "Id")) || 0, team])
+      );
 
       const normalized = (Array.isArray(boardRes) ? boardRes : [])
-        .map((item) => normalizeBoardItem(item, orderMap, customerMap, vehicleMap))
+        .map((item) => normalizeBoardItem(item, orderMap, customerMap, vehicleMap, teamMap))
         .filter((item) => item.serviceOrderId > 0);
 
       setBoardItems(normalized);
@@ -725,7 +970,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
     } finally {
       setLoading(false);
     }
-  }, [branchId, includeCompleted, teamFilter]);
+  }, [branchId, teamFilter]);
 
   useEffect(() => {
     fetchData();
@@ -742,24 +987,37 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
     }
   }, [isTeamLeaderMode, currentStaffTeamId, teamFilter, leaderTeamId]);
 
+  useEffect(() => {
+    const selectedTeamId = toPositiveNumber(teamFilter);
+    if (!selectedTeamId) return;
+    const isExisting = activeTeams.some((team) => toPositiveNumber(readValue(team, "id", "Id")) === selectedTeamId);
+    if (!isExisting) {
+      setTeamFilter("");
+    }
+  }, [activeTeams, teamFilter]);
+
+  const scopedItems = useMemo(() => {
+    return boardItems.filter((item) => {
+      if (!isTeamLeaderMode || !currentStaffTeamId) return true;
+
+      if (item.teamId === currentStaffTeamId) return true;
+
+      if (!item.teamId) {
+        if (item.queueColor !== "WHITE" && item.queueColor !== "RED") return false;
+        if (currentTeamSpecialty && item.dispatchTag && !dispatchTagIncludes(item.dispatchTag, currentTeamSpecialty)) return false;
+        return true;
+      }
+
+      return false;
+    });
+  }, [boardItems, isTeamLeaderMode, currentStaffTeamId, currentTeamSpecialty]);
+
   const visibleItems = useMemo(() => {
     const query = toText(searchQuery).toLowerCase();
     const tagFilterCode = normalizeCode(dispatchTagFilter);
 
-    return boardItems.filter((item) => {
-      if (tagFilterCode && normalizeCode(item.dispatchTag) !== tagFilterCode) return false;
-
-      if (isTeamLeaderMode && currentStaffTeamId) {
-        if (item.teamId === currentStaffTeamId) {
-          // pass
-        } else if (!item.teamId) {
-          if (item.queueColor !== "WHITE" && item.queueColor !== "RED") return false;
-          if (currentTeamSpecialty && item.dispatchTag && normalizeCode(item.dispatchTag) !== currentTeamSpecialty) return false;
-        } else {
-          return false;
-        }
-      }
-
+    return scopedItems.filter((item) => {
+      if (tagFilterCode && !dispatchTagIncludes(item.dispatchTag, tagFilterCode)) return false;
       if (!query) return true;
 
       const haystack = [
@@ -767,6 +1025,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
         item.customerName,
         item.vehicleLicensePlate,
         item.teamName,
+        Array.isArray(item.supportingTeamNames) ? item.supportingTeamNames.join(" ") : "",
         item.technicianName,
         item.assistantTechnicianName,
         getDispatchTagLabel(item.dispatchTag),
@@ -776,7 +1035,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
 
       return haystack.includes(query);
     });
-  }, [boardItems, searchQuery, dispatchTagFilter, isTeamLeaderMode, currentStaffTeamId, currentTeamSpecialty]);
+  }, [scopedItems, searchQuery, dispatchTagFilter]);
 
   const boardByColor = useMemo(() => {
     const grouped = { WHITE: [], YELLOW: [], RED: [], GREEN: [] };
@@ -793,34 +1052,29 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
       YELLOW: boardByColor.YELLOW.length,
       RED: boardByColor.RED.length,
       GREEN: boardByColor.GREEN.length,
-      total: visibleItems.length,
-    }),
-    [boardByColor, visibleItems.length]
-  );
-
-  const tabCounts = useMemo(
-    () => ({
-      WHITE: boardByColor.WHITE.length,
-      IN_PROGRESS: boardByColor.YELLOW.length + boardByColor.RED.length,
-      GREEN: boardByColor.GREEN.length,
     }),
     [boardByColor]
   );
 
-  const activeTabItems = useMemo(() => {
-    if (activeColorTab === "IN_PROGRESS") {
-      return [...boardByColor.RED, ...boardByColor.YELLOW];
-    }
-    return boardByColor[activeColorTab] || [];
-  }, [activeColorTab, boardByColor]);
+  const activeTabItems = useMemo(() => boardByColor[activeColorTab] || [], [activeColorTab, boardByColor]);
 
   const selectedItem = useMemo(() => {
     const targetId = toPositiveNumber(selectedServiceOrderId);
     if (!targetId) return null;
-    return visibleItems.find((item) => item.serviceOrderId === targetId) || null;
-  }, [visibleItems, selectedServiceOrderId]);
+    const sourceItems = isAssignmentPage ? scopedItems : activeTabItems;
+    return sourceItems.find((item) => item.serviceOrderId === targetId) || null;
+  }, [isAssignmentPage, scopedItems, activeTabItems, selectedServiceOrderId]);
 
   useEffect(() => {
+    const routeOrderId = toPositiveNumber(assignmentServiceOrderId);
+    if (!routeOrderId) return;
+    if (routeOrderId !== toPositiveNumber(selectedServiceOrderId)) {
+      setSelectedServiceOrderId(routeOrderId);
+    }
+  }, [assignmentServiceOrderId, selectedServiceOrderId]);
+
+  useEffect(() => {
+    if (isAssignmentPage || typeof onOpenAssignment === "function") return;
     if (activeTabItems.length === 0) {
       setSelectedServiceOrderId(null);
       return;
@@ -829,32 +1083,96 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
     if (!selectedItem) {
       setSelectedServiceOrderId(activeTabItems[0].serviceOrderId);
     }
-  }, [activeTabItems, selectedItem]);
-  useEffect(() => {
-    if (activeTabItems.length > 0) return;
-    const firstAvailable = STATUS_TAB_ORDER.find((tabKey) => (tabCounts[tabKey] || 0) > 0);
-    if (firstAvailable) {
-      setActiveColorTab(firstAvailable);
-    }
-  }, [activeTabItems.length, tabCounts]);
+  }, [isAssignmentPage, activeTabItems, selectedItem, onOpenAssignment]);
 
+  useEffect(() => {
+    if (!isAssignmentPage) return;
+    if (!selectedItem?.queueColor) return;
+    const color = COLUMN_ORDER.includes(selectedItem.queueColor) ? selectedItem.queueColor : "WHITE";
+    if (color !== activeColorTab) {
+      setActiveColorTab(color);
+    }
+  }, [isAssignmentPage, selectedItem?.serviceOrderId, selectedItem?.queueColor, activeColorTab]);
   useEffect(() => {
     if (!selectedItem) return;
 
     if (isTeamLeaderMode) {
       const nextTeamId = toPositiveNumber(selectedItem.teamId) || currentStaffTeamId || toPositiveNumber(leaderTeamId);
+      const nextSupportingTeamIds = normalizeTeamIds(
+        selectedItem.supportingTeamIds || selectedItem.assignedTeamIds || [],
+        nextTeamId
+      );
       setLeaderTeamId(nextTeamId ? String(nextTeamId) : "");
+      setLeaderSupportingTeamIds(nextSupportingTeamIds.map((id) => String(id)));
       setLeaderLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
       setLeaderAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
       setLeaderBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
       return;
     }
 
-    setManagerTeamId(selectedItem.teamId ? String(selectedItem.teamId) : "");
+    const nextManagerTeamId = toPositiveNumber(selectedItem.teamId);
+    const nextManagerSupportingTeamIds = normalizeTeamIds(
+      selectedItem.supportingTeamIds || selectedItem.assignedTeamIds || [],
+      nextManagerTeamId
+    );
+    setManagerTeamId(nextManagerTeamId ? String(nextManagerTeamId) : "");
+    setManagerSupportingTeamIds(nextManagerSupportingTeamIds.map((id) => String(id)));
     setManagerLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
     setManagerAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
     setManagerBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
   }, [selectedItem?.serviceOrderId]);
+
+  useEffect(() => {
+    const orderId = toPositiveNumber(selectedItem?.serviceOrderId);
+    if (!isAssignmentPage || !orderId) {
+      setSelectedRequestedServices("");
+      setSelectedRequestedServicesLoading(false);
+      return;
+    }
+
+    const fallbackRequestedServices = toText(selectedItem?.customerRequestedServices);
+    setSelectedRequestedServices(fallbackRequestedServices);
+    setSelectedRequestedServicesLoading(true);
+
+    let cancelled = false;
+
+    serviceOrderApi
+      .getDetails(orderId)
+      .then((detailsRes) => {
+        if (cancelled) return;
+        const normalized = normalizeServiceOrderDetailsResponse(detailsRes);
+        const extracted = extractRequestedServiceNames(normalized);
+        setSelectedRequestedServices(extracted || fallbackRequestedServices);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedRequestedServices(fallbackRequestedServices);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSelectedRequestedServicesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAssignmentPage, selectedItem?.serviceOrderId, selectedItem?.customerRequestedServices]);
+
+  useEffect(() => {
+    const primaryTeamId = toPositiveNumber(leaderTeamId);
+    setLeaderSupportingTeamIds((prev) =>
+      normalizeTeamIds(prev, primaryTeamId).map((id) => String(id))
+    );
+  }, [leaderTeamId]);
+
+  useEffect(() => {
+    const primaryTeamId = toPositiveNumber(managerTeamId);
+    setManagerSupportingTeamIds((prev) =>
+      normalizeTeamIds(prev, primaryTeamId).map((id) => String(id))
+    );
+  }, [managerTeamId]);
 
   const loadDispatchSuggestion = useCallback(
     async (targetMode) => {
@@ -900,10 +1218,16 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
     const leadId = toPositiveNumber(leaderLeadTechnicianId);
     const assistantId = toPositiveNumber(leaderAssistantTechnicianId);
     const teamId = toPositiveNumber(leaderTeamId) || currentStaffTeamId;
+    const supportingTeamIds = normalizeTeamIds(leaderSupportingTeamIds, teamId);
     const bayId = toPositiveNumber(leaderBayId);
 
     if (!leadId || !teamId) {
       toast({ title: "Vui lòng chọn tổ và thợ chính", status: "warning", duration: 2600, isClosable: true });
+      return;
+    }
+
+    if (supportingTeamIds.length > 0 && !teamId) {
+      toast({ title: "Cần chọn tổ chính trước khi thêm tổ phối hợp", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
@@ -918,6 +1242,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
         teamId,
         teamLeaderId: currentStaffId,
         assistantTechnicianId: assistantId || null,
+        supportingTeamIds,
         bayId: bayId || null,
       });
 
@@ -1009,10 +1334,16 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
     const leadId = toPositiveNumber(managerLeadTechnicianId);
     const assistantId = toPositiveNumber(managerAssistantTechnicianId);
     const teamId = toPositiveNumber(managerTeamId);
+    const supportingTeamIds = normalizeTeamIds(managerSupportingTeamIds, teamId);
     const bayId = toPositiveNumber(managerBayId);
 
     if (!leadId) {
       toast({ title: "Vui lòng chọn thợ chính", status: "warning", duration: 2500, isClosable: true });
+      return;
+    }
+
+    if (supportingTeamIds.length > 0 && !teamId) {
+      toast({ title: "Vui lòng chọn tổ chính khi có tổ phối hợp", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
@@ -1028,6 +1359,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
         technicianId: leadId,
         assistantTechnicianId: assistantId || null,
         teamId: teamId || null,
+        supportingTeamIds,
         bayId: bayId || null,
         reason: toText(managerOverrideReason) || null,
       });
@@ -1098,6 +1430,36 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
   const canManagerOverride = Boolean(selectedItem);
   const canManagerCancelDecision = Boolean(selectedItem?.isCancelPendingApproval);
   const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.finalApprovedByManagerId;
+  const actionButtonBaseProps = {
+    h: "38px",
+    minH: "38px",
+    px: 4,
+    py: 0,
+    borderRadius: "full",
+    fontSize: "sm",
+    fontWeight: "700",
+    lineHeight: "1",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    whiteSpace: "nowrap",
+  };
+
+  const handleQueueCardSelect = useCallback(
+    (serviceOrderId) => {
+      const targetId = toPositiveNumber(serviceOrderId);
+      if (!targetId) return;
+
+      if (!isAssignmentPage && typeof onOpenAssignment === "function") {
+        onOpenAssignment(targetId);
+        return;
+      }
+
+      setSelectedServiceOrderId(targetId);
+    },
+    [isAssignmentPage, onOpenAssignment]
+  );
+
   return (
     <Box
       p={{ base: 4, md: 6 }}
@@ -1111,80 +1473,150 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
               {isTeamLeaderMode ? "Điều phối chuẩn đoán - Tổ trưởng" : "Điều phối chuẩn đoán - Quản đốc"}
             </Heading>
             <Text color="gray.600" mt={1}>
-              Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá.
+              {isAssignmentPage
+                ? "Trang phân công chi tiết cho từng lệnh, tập trung thao tác điều phối và phê duyệt."
+                : "Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá."}
             </Text>
           </Box>
 
-          <Button
-            leftIcon={<RepeatIcon />}
-            colorScheme="blue"
-            variant="outline"
-            onClick={fetchData}
-            isLoading={loading}
-          >
-            Làm mới bảng
-          </Button>
+          <HStack spacing={2} align="center">
+            {isAssignmentPage && (
+              <Button
+                leftIcon={<ArrowBackIcon />}
+                variant="ghost"
+                colorScheme="blue"
+                onClick={onBack}
+              >
+                Quay lại danh sách
+              </Button>
+            )}
+            <Button
+              leftIcon={<RepeatIcon />}
+              colorScheme="blue"
+              variant="outline"
+              onClick={fetchData}
+              isLoading={loading}
+            >
+              Làm mới bảng
+            </Button>
+          </HStack>
         </HStack>
 
-        <SimpleGrid columns={{ base: 2, lg: 5 }} spacing={3}>
-          <Stat bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={3}>
-            <StatLabel color="gray.500">Tổng lệnh</StatLabel>
-            <StatNumber color="#1b2559">{totalStats.total}</StatNumber>
-          </Stat>
-          {COLUMN_ORDER.map((color) => (
-            <Stat key={color} bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={3}>
-              <StatLabel color="gray.500">{COLOR_META[color].label}</StatLabel>
-              <StatNumber color="#1b2559">{totalStats[color]}</StatNumber>
-            </Stat>
-          ))}
-        </SimpleGrid>
+        {!isAssignmentPage && (
+          <Box
+            bg="white"
+            borderRadius="2xl"
+            border="1px solid"
+            borderColor="#d9e2f1"
+            p={{ base: 3, md: 4 }}
+            boxShadow="0 12px 30px rgba(15, 23, 42, 0.08)"
+          >
+            <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={2}>
+              <Box>
+                <Text fontSize="sm" fontWeight="700" color="#1e3a8a">
+                  Trạng thái điều phối
+                </Text>
+                <Text fontSize="sm" color="gray.500">
+                  Nhấn vào một trạng thái để phân loại danh sách lệnh.
+                </Text>
+              </Box>
+              <Badge
+                borderRadius="full"
+                px={3}
+                py={1}
+                bg="#e0ecff"
+                color="#1d4ed8"
+                fontSize="xs"
+                fontWeight="700"
+              >
+                Đang xem: {COLOR_META[activeColorTab]?.label || "--"} ({totalStats[activeColorTab] || 0})
+              </Badge>
+            </HStack>
 
-        <Grid templateColumns={{ base: "1fr", xl: "1fr auto auto" }} gap={3} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" p={3}>
-          <FormControl maxW={{ base: "100%", xl: "300px" }}>
-            <FormLabel fontSize="sm" mb={1} color="gray.600">Lọc theo tổ</FormLabel>
-            <Select
-              size="sm"
-              borderRadius="xl"
-              value={teamFilter}
-              onChange={(event) => setTeamFilter(event.target.value)}
-              isDisabled={isTeamLeaderMode && !!currentStaffTeamId}
-            >
-              <option value="">Tất cả tổ</option>
-              {activeTeams.map((team) => {
-                const id = toPositiveNumber(readValue(team, "id", "Id"));
-                const name = toText(readValue(team, "name", "Name"));
-                const specialty = getDispatchTagLabel(readValue(team, "specialtyTag", "SpecialtyTag"));
+            <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} spacing={3} mt={4}>
+              {COLUMN_ORDER.map((color) => {
+                const isActive = activeColorTab === color;
+                const meta = COLOR_META[color];
+                const theme = STATUS_CARD_THEME[color] || STATUS_CARD_THEME.WHITE;
                 return (
-                  <option key={`team-filter-${id}`} value={id || ""}>
-                    {name || `Tổ #${id}`} - {specialty}
-                  </option>
+                  <Box
+                    as="button"
+                    type="button"
+                    key={color}
+                    aria-pressed={isActive}
+                    onClick={() => setActiveColorTab(color)}
+                    minH={{ base: "112px", md: "124px" }}
+                    p={4}
+                    borderRadius="xl"
+                    border="2px solid"
+                    borderColor={isActive ? theme.activeBorder : "#dbe4f2"}
+                    bg={isActive ? theme.activeBg : "#ffffff"}
+                    textAlign="left"
+                    transition="all 0.18s ease"
+                    boxShadow={isActive ? theme.activeShadow : "0 4px 14px rgba(30, 64, 175, 0.08)"}
+                    _hover={{
+                      borderColor: theme.activeBorder,
+                      transform: "translateY(-2px)",
+                    }}
+                  >
+                    <HStack justify="space-between" align="start">
+                      <VStack align="start" spacing={1}>
+                        <HStack spacing={2}>
+                          <Box
+                            w="10px"
+                            h="10px"
+                            borderRadius="full"
+                            bg={theme.dot}
+                            boxShadow={isActive ? "0 0 0 4px rgba(255, 255, 255, 0.72)" : "0 0 0 4px rgba(148, 163, 184, 0.2)"}
+                          />
+                          <Text fontSize={{ base: "sm", md: "md" }} fontWeight="700" color={isActive ? "#0f172a" : "#334155"}>
+                            {meta.label}
+                          </Text>
+                        </HStack>
+                        <Text fontSize="xs" color={isActive ? "#475569" : "#64748b"} noOfLines={2}>
+                          {meta.description}
+                        </Text>
+                      </VStack>
+                      {isActive && (
+                        <Badge borderRadius="full" bg="white" color={theme.dot} border="1px solid" borderColor={theme.activeBorder}>
+                          Lọc
+                        </Badge>
+                      )}
+                    </HStack>
+
+                    <Text mt={3} fontSize={{ base: "3xl", md: "4xl" }} lineHeight="1" fontWeight="800" letterSpacing="-0.02em" color={isActive ? theme.dot : "#0f172a"}>
+                      {totalStats[color]}
+                    </Text>
+                  </Box>
                 );
               })}
-            </Select>
-          </FormControl>
+            </SimpleGrid>
+          </Box>
+        )}
 
-          <FormControl maxW={{ base: "100%", xl: "280px" }}>
-            <FormLabel fontSize="sm" mb={1} color="gray.600">Lọc theo chuyên môn</FormLabel>
-            <Select
-              size="sm"
-              borderRadius="xl"
-              value={dispatchTagFilter}
-              onChange={(event) => setDispatchTagFilter(event.target.value)}
-            >
-              <option value="">Tất cả chuyên môn</option>
-              {DISPATCH_TAG_OPTIONS.map((item) => (
-                <option key={`tag-filter-${item.value}`} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl display="flex" alignItems="center" gap={2} justifyContent={{ base: "start", xl: "end" }}>
-            <FormLabel mb="0" fontSize="sm" color="gray.600">Hiển thị cả GREEN</FormLabel>
-            <Switch colorScheme="green" isChecked={includeCompleted} onChange={(event) => setIncludeCompleted(event.target.checked)} />
-          </FormControl>
-        </Grid>
+        {!isAssignmentPage && (
+          <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" p={3}>
+            <HStack spacing={3} align="center" flexWrap="wrap">
+              <FilterDropdown
+                id="dispatch-team-filter"
+                label="Lọc theo tổ"
+                value={teamFilter}
+                options={teamFilterOptions}
+                onChange={setTeamFilter}
+                minWidth={300}
+                disabled={isTeamLeaderMode && !!currentStaffTeamId}
+              />
+              <FilterDropdown
+                id="dispatch-tag-filter"
+                label="Lọc theo chuyên môn"
+                value={dispatchTagFilter}
+                options={dispatchTagFilterOptions}
+                onChange={setDispatchTagFilter}
+                minWidth={260}
+              />
+            </HStack>
+          </Box>
+        )}
 
         {error && (
           <Alert status="error" borderRadius="xl">
@@ -1193,70 +1625,41 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
           </Alert>
         )}
 
-        <Grid templateColumns={{ base: "1fr", xl: "2fr 1fr" }} gap={4} alignItems="start">
-          <GridItem>
-            <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" overflow="hidden" boxShadow="0 14px 32px rgba(15,23,42,0.08)">
-              <HStack spacing={2} p={3} overflowX="auto" bg="gray.50" borderBottom="1px solid" borderColor="gray.100">
-                {STATUS_TAB_ORDER.map((tabKey) => {
-                  const meta = STATUS_TAB_META[tabKey];
-                  const isActive = activeColorTab === tabKey;
-                  const count = tabCounts[tabKey] || 0;
-                  return (
-                    <Button
-                      key={`tab-${tabKey}`}
-                      size="sm"
-                      borderRadius="full"
-                      border="1px solid"
-                      borderColor={meta.tabBorder}
-                      bg={isActive ? meta.activeBg : meta.tabBg}
-                      color={isActive ? meta.activeText : meta.tabText}
-                      _hover={{ filter: "brightness(0.98)" }}
-                      onClick={() => setActiveColorTab(tabKey)}
-                    >
-                      {meta.label} ({count})
-                    </Button>
-                  );
-                })}
-              </HStack>
-
-              <Box px={4} py={2} borderBottom="1px solid" borderColor="gray.100" bg="white">
-                <Text fontSize="sm" fontWeight="700" color="gray.700">
-                  {(STATUS_TAB_META[activeColorTab] || STATUS_TAB_META.WHITE).label}
-                </Text>
-                <Text fontSize="sm" color="gray.500">
-                  {(STATUS_TAB_META[activeColorTab] || STATUS_TAB_META.WHITE).description}
-                </Text>
+        <Grid templateColumns="1fr" gap={4} alignItems="start">
+          {!isAssignmentPage && (
+            <GridItem>
+              <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" overflow="hidden" boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+                {loading ? (
+                  <VStack py={12} spacing={3}>
+                    <Spinner color="blue.500" />
+                    <Text color="gray.500">Đang tải dữ liệu điều phối...</Text>
+                  </VStack>
+                ) : activeTabItems.length === 0 ? (
+                  <Box py={12} textAlign="center" color="gray.400">
+                    Không có lệnh phù hợp bộ lọc
+                  </Box>
+                ) : (
+                  <VStack align="stretch" spacing={3} p={3} bg="#f8fafc">
+                    {activeTabItems.map((item) => (
+                      <DispatchQueueCard
+                        key={`dispatch-${item.serviceOrderId}`}
+                        item={item}
+                        isSelected={false}
+                        onSelect={handleQueueCardSelect}
+                      />
+                    ))}
+                  </VStack>
+                )}
               </Box>
+            </GridItem>
+          )}
 
-              {loading ? (
-                <VStack py={12} spacing={3}>
-                  <Spinner color="blue.500" />
-                  <Text color="gray.500">Đang tải dữ liệu điều phối...</Text>
-                </VStack>
-              ) : activeTabItems.length === 0 ? (
-                <Box py={12} textAlign="center" color="gray.400">
-                  Không có lệnh trong nhóm này
-                </Box>
-              ) : (
-                <VStack align="stretch" spacing={2} p={3}>
-                  {activeTabItems.map((item) => (
-                    <DispatchQueueCard
-                      key={`dispatch-${item.serviceOrderId}`}
-                      item={item}
-                      isSelected={item.serviceOrderId === selectedItem?.serviceOrderId}
-                      onSelect={setSelectedServiceOrderId}
-                    />
-                  ))}
-                </VStack>
-              )}
-            </Box>
-          </GridItem>
-
-          <GridItem>
+          {isAssignmentPage && (
+            <GridItem>
             <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
               {!selectedItem ? (
                 <Box border="1px dashed" borderColor="gray.200" borderRadius="xl" p={8} textAlign="center" color="gray.500">
-                  Chọn một lệnh ở bên trái để xem chi tiết và thao tác.
+                  Không tìm thấy lệnh cần phân công trong danh sách hiện tại.
                 </Box>
               ) : (
                 <VStack align="stretch" spacing={4}>
@@ -1267,25 +1670,38 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
                       <Badge colorScheme={(selectedItem.queueColor === "RED" ? "red" : selectedItem.queueColor === "YELLOW" ? "yellow" : selectedItem.queueColor === "GREEN" ? "green" : "gray")} borderRadius="full">
                         {selectedItem.queueColor}
                       </Badge>
-                      <Badge colorScheme="purple" borderRadius="full">{getDispatchTagLabel(selectedItem.dispatchTag)}</Badge>
-                      <Badge colorScheme="blue" borderRadius="full">{selectedItem.queueState || "--"}</Badge>
+                      <Badge colorScheme="purple" borderRadius="full">Chuyên môn: {getDispatchTagLabel(selectedItem.dispatchTag)}</Badge>
+                      <Badge colorScheme={getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).colorScheme} borderRadius="full">
+                        {getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).label}
+                      </Badge>
                     </HStack>
                   </Box>
 
-                  <Stack spacing={2} fontSize="sm" color="gray.700">
-                    <Text><strong>Khách hàng:</strong> {selectedItem.customerName || "--"}</Text>
-                    <Text><strong>Biển số:</strong> {selectedItem.vehicleLicensePlate || "--"}</Text>
-                    <Text><strong>Tổ phụ trách:</strong> {selectedItem.teamName || "Chưa giao tổ"}</Text>
-                    <Text><strong>Thợ chính:</strong> {selectedItem.technicianName || "Chưa phân công"}</Text>
-                    <Text><strong>Thợ phụ:</strong> {selectedItem.assistantTechnicianName || "--"}</Text>
-                    <Text><strong>Cầu nâng:</strong> {selectedItem.assignedBayCode || "Chưa chỉ định"}</Text>
-                    <Text><strong>Ghi chú khách:</strong> {formatAdditionalDescription(selectedItem.customerNotes)}</Text>
-                  </Stack>
+                  <Box p={3} border="1px solid" borderColor="orange.100" borderRadius="xl" bg="#fffaf0">
+                    <Text fontSize="xs" color="orange.700" fontWeight="700" mb={2}>
+                      THÔNG TIN PHÂN TỔ TỪ KHÁCH HÀNG
+                    </Text>
+                    <Stack spacing={2} fontSize="sm" color="gray.700">
+                      <Text>
+                        <strong>Dịch vụ yêu cầu:</strong>{" "}
+                        {selectedRequestedServicesLoading
+                          ? "Đang tải..."
+                          : (selectedRequestedServices || selectedItem.customerRequestedServices || "Chưa ghi rõ")}
+                      </Text>
+                      <Text>
+                        <strong>Mô tả khách hàng:</strong>{" "}
+                        {selectedItem.customerMainNotes || "Không có"}
+                      </Text>
+                    </Stack>
+                  </Box>
 
                   <Box p={3} border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff">
                     <Text fontSize="sm" color="gray.600">Yêu cầu lúc: {formatDateTime(selectedItem.requestedAt)}</Text>
                     <Text fontSize="sm" color="gray.600">Nhận ca lúc: {formatDateTime(selectedItem.assignedAt)}</Text>
-                    <Text fontSize="sm" color="gray.600">Bắt đầu lúc: {formatDateTime(selectedItem.startedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Tổ chính: {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa giao tổ"}</Text>
+                    {Array.isArray(selectedItem.supportingTeamNames) && selectedItem.supportingTeamNames.length > 0 && (
+                      <Text fontSize="sm" color="gray.600">Tổ phối hợp: {selectedItem.supportingTeamNames.join(", ")}</Text>
+                    )}
                     <Text fontSize="sm" color="gray.600">Chờ nhận: {formatMinutes(selectedItem.pendingMinutes)}</Text>
                     <Text fontSize="sm" color="gray.600">Đang xử lý: {formatMinutes(selectedItem.assignedMinutes)}</Text>
                     <Text fontSize="sm" color="gray.600">Duyệt kỹ thuật: {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "Chưa duyệt"}</Text>
@@ -1312,98 +1728,83 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
 
                         <FormControl>
                           <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="leader-assignment-team"
                             value={leaderTeamId}
-                            onChange={(event) => setLeaderTeamId(event.target.value)}
-                            isDisabled={Boolean(currentStaffTeamId)}
-                          >
-                            <option value="">-- Chọn tổ --</option>
-                            {activeTeams.map((team) => {
-                              const id = toPositiveNumber(readValue(team, "id", "Id"));
-                              const name = toText(readValue(team, "name", "Name"));
-                              return (
-                                <option key={`leader-team-${id}`} value={id || ""}>
-                                  {name || `Tổ #${id}`}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={assignmentTeamOptions}
+                            onChange={setLeaderTeamId}
+                            minWidth={300}
+                            disabled={Boolean(currentStaffTeamId)}
+                          />
+                        </FormControl>
+
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Tổ phối hợp (tuỳ chọn)</FormLabel>
+                          <Box border="1px solid" borderColor="gray.200" borderRadius="xl" p={3} bg="white">
+                            <CheckboxGroup
+                              value={leaderSupportingTeamIds}
+                              onChange={(values) => setLeaderSupportingTeamIds((values || []).map((value) => String(value)))}
+                            >
+                              <VStack align="start" spacing={2}>
+                                {leaderSupportingTeamOptions.length === 0 ? (
+                                  <Text fontSize="sm" color="gray.500">Chưa có tổ phối hợp phù hợp.</Text>
+                                ) : (
+                                  leaderSupportingTeamOptions.map((team) => (
+                                    <Checkbox key={`leader-support-${team.id}`} value={String(team.id)}>
+                                      {team.name}
+                                    </Checkbox>
+                                  ))
+                                )}
+                              </VStack>
+                            </CheckboxGroup>
+                            <Text fontSize="xs" color="gray.500" mt={2}>
+                              Tổ chính chịu trách nhiệm điều phối cuối cùng.
+                            </Text>
+                          </Box>
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="leader-main-tech"
                             value={leaderLeadTechnicianId}
-                            onChange={(event) => setLeaderLeadTechnicianId(event.target.value)}
-                          >
-                            <option value="">-- Chọn thợ chính --</option>
-                            {leaderTechnicianOptions.map((staff) => {
-                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                              const name = toText(readValue(staff, "fullName", "FullName"));
-                              return (
-                                <option key={`leader-main-${id}`} value={id || ""}>
-                                  {name || `Nhân sự #${id}`}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={leaderPrimaryTechnicianOptions}
+                            onChange={setLeaderLeadTechnicianId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="leader-assistant-tech"
                             value={leaderAssistantTechnicianId}
-                            onChange={(event) => setLeaderAssistantTechnicianId(event.target.value)}
-                          >
-                            <option value="">-- Không chọn --</option>
-                            {leaderTechnicianOptions.map((staff) => {
-                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                              const name = toText(readValue(staff, "fullName", "FullName"));
-                              return (
-                                <option key={`leader-assistant-${id}`} value={id || ""}>
-                                  {name || `Nhân sự #${id}`}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={leaderAssistantTechnicianOptions}
+                            onChange={setLeaderAssistantTechnicianId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="leader-bay-select"
                             value={leaderBayId}
-                            onChange={(event) => setLeaderBayId(event.target.value)}
-                          >
-                            <option value="">-- Chưa chỉ định cầu --</option>
-                            {availableBays.map((bay) => {
-                              const id = toPositiveNumber(readValue(bay, "id", "Id"));
-                              const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
-                              const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
-                              const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
-                              const disabled = occupied || !operational;
-                              const statusText = disabled ? "(Đang bận)" : "(Trống)";
-                              return (
-                                <option key={`leader-bay-${id}`} value={id || ""} disabled={disabled}>
-                                  {code} {statusText}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={baySelectionOptions}
+                            onChange={setLeaderBayId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
-                        <HStack mt={3} spacing={2}>
+                        <HStack mt={3} spacing={2} align="stretch">
                           <Button
-                            size="sm"
-                            colorScheme="blue"
-                            variant="outline"
+                            variant="unstyled"
+                            {...actionButtonBaseProps}
+                            border="2px solid"
+                            borderColor="#2563eb"
+                            bg="white"
+                            color="#1d4ed8"
+                            _hover={{ bg: "#eff6ff" }}
                             onClick={() => loadDispatchSuggestion("team_leader")}
                             isLoading={suggestionLoading}
                             isDisabled={!selectedItem || !toPositiveNumber(leaderTeamId)}
@@ -1411,8 +1812,13 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
                             Gợi ý tự động
                           </Button>
                           <Button
-                            size="sm"
-                            colorScheme="blue"
+                            variant="unstyled"
+                            {...actionButtonBaseProps}
+                            border="2px solid"
+                            borderColor="#2563eb"
+                            bg="#2563eb"
+                            color="white"
+                            _hover={{ bg: "#1d4ed8" }}
                             onClick={handleLeaderAssign}
                             isLoading={saving}
                             isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
@@ -1451,16 +1857,13 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
                         <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
                         <FormControl>
                           <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="leader-cancel-reason"
                             value={leaderCancelReason}
-                            onChange={(event) => setLeaderCancelReason(event.target.value)}
-                          >
-                            {CANCEL_REASONS.map((reason) => (
-                              <option key={`cancel-reason-${reason}`} value={reason}>{reason}</option>
-                            ))}
-                          </Select>
+                            options={cancelReasonOptions}
+                            onChange={setLeaderCancelReason}
+                            minWidth="100%"
+                          />
                         </FormControl>
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
@@ -1513,90 +1916,71 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
 
                         <FormControl>
                           <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="manager-assignment-team"
                             value={managerTeamId}
-                            onChange={(event) => setManagerTeamId(event.target.value)}
-                          >
-                            <option value="">-- Chọn tổ --</option>
-                            {activeTeams.map((team) => {
-                              const id = toPositiveNumber(readValue(team, "id", "Id"));
-                              const name = toText(readValue(team, "name", "Name"));
-                              const specialty = getDispatchTagLabel(readValue(team, "specialtyTag", "SpecialtyTag"));
-                              return (
-                                <option key={`manager-team-${id}`} value={id || ""}>
-                                  {name || `Tổ #${id}`} - {specialty}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={assignmentTeamOptions}
+                            onChange={setManagerTeamId}
+                            minWidth={300}
+                          />
+                        </FormControl>
+
+                        <FormControl mt={2}>
+                          <FormLabel fontSize="sm" mb={1}>Tổ phối hợp (tuỳ chọn)</FormLabel>
+                          <Box border="1px solid" borderColor="gray.200" borderRadius="xl" p={3} bg="white">
+                            <CheckboxGroup
+                              value={managerSupportingTeamIds}
+                              onChange={(values) => setManagerSupportingTeamIds((values || []).map((value) => String(value)))}
+                            >
+                              <VStack align="start" spacing={2}>
+                                {managerSupportingTeamOptions.length === 0 ? (
+                                  <Text fontSize="sm" color="gray.500">Chưa có tổ phối hợp phù hợp.</Text>
+                                ) : (
+                                  managerSupportingTeamOptions.map((team) => (
+                                    <Checkbox key={`manager-support-${team.id}`} value={String(team.id)}>
+                                      {team.name}
+                                    </Checkbox>
+                                  ))
+                                )}
+                              </VStack>
+                            </CheckboxGroup>
+                            <Text fontSize="xs" color="gray.500" mt={2}>
+                              Tổ chính là tổ được giao trách nhiệm chính thức.
+                            </Text>
+                          </Box>
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="manager-main-tech"
                             value={managerLeadTechnicianId}
-                            onChange={(event) => setManagerLeadTechnicianId(event.target.value)}
-                          >
-                            <option value="">-- Chọn thợ chính --</option>
-                            {managerTechnicianOptions.map((staff) => {
-                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                              const name = toText(readValue(staff, "fullName", "FullName"));
-                              return (
-                                <option key={`manager-main-${id}`} value={id || ""}>
-                                  {name || `Nhân sự #${id}`}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={managerPrimaryTechnicianOptions}
+                            onChange={setManagerLeadTechnicianId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="manager-assistant-tech"
                             value={managerAssistantTechnicianId}
-                            onChange={(event) => setManagerAssistantTechnicianId(event.target.value)}
-                          >
-                            <option value="">-- Không chọn --</option>
-                            {managerTechnicianOptions.map((staff) => {
-                              const id = toPositiveNumber(readValue(staff, "id", "Id"));
-                              const name = toText(readValue(staff, "fullName", "FullName"));
-                              return (
-                                <option key={`manager-assistant-${id}`} value={id || ""}>
-                                  {name || `Nhân sự #${id}`}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={managerAssistantTechnicianOptions}
+                            onChange={setManagerAssistantTechnicianId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Cầu nâng</FormLabel>
-                          <Select
-                            size="sm"
-                            borderRadius="xl"
+                          <FilterDropdown
+                            id="manager-bay-select"
                             value={managerBayId}
-                            onChange={(event) => setManagerBayId(event.target.value)}
-                          >
-                            <option value="">-- Chưa chỉ định cầu --</option>
-                            {availableBays.map((bay) => {
-                              const id = toPositiveNumber(readValue(bay, "id", "Id"));
-                              const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Cầu #${id}`;
-                              const occupied = Boolean(readValue(bay, "currentOccupiedVehicleId", "CurrentOccupiedVehicleId"));
-                              const operational = isOperationalBayAvailable(readValue(bay, "operationalStatus", "OperationalStatus"));
-                              const disabled = occupied || !operational;
-                              return (
-                                <option key={`manager-bay-${id}`} value={id || ""} disabled={disabled}>
-                                  {code} {disabled ? "(Đang bận)" : "(Trống)"}
-                                </option>
-                              );
-                            })}
-                          </Select>
+                            options={baySelectionOptions}
+                            onChange={setManagerBayId}
+                            minWidth="100%"
+                          />
                         </FormControl>
 
                         <FormControl mt={2}>
@@ -1610,11 +1994,15 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
                           />
                         </FormControl>
 
-                        <HStack mt={3} spacing={2}>
+                        <HStack mt={3} spacing={2} align="stretch">
                           <Button
-                            size="sm"
-                            colorScheme="blue"
-                            variant="outline"
+                            variant="unstyled"
+                            {...actionButtonBaseProps}
+                            border="2px solid"
+                            borderColor="#2563eb"
+                            bg="white"
+                            color="#1d4ed8"
+                            _hover={{ bg: "#eff6ff" }}
                             onClick={() => loadDispatchSuggestion("manager")}
                             isLoading={suggestionLoading}
                             isDisabled={!selectedItem || !toPositiveNumber(managerTeamId)}
@@ -1622,8 +2010,13 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
                             Gợi ý tự động
                           </Button>
                           <Button
-                            size="sm"
-                            colorScheme="blue"
+                            variant="unstyled"
+                            {...actionButtonBaseProps}
+                            border="2px solid"
+                            borderColor="#2563eb"
+                            bg="#2563eb"
+                            color="white"
+                            _hover={{ bg: "#1d4ed8" }}
                             onClick={handleManagerOverride}
                             isLoading={saving}
                             isDisabled={!canManagerOverride || !toPositiveNumber(managerLeadTechnicianId)}
@@ -1699,6 +2092,7 @@ export default function DispatchOpsDashboard({ mode = "manager" }) {
               )}
             </Box>
           </GridItem>
+          )}
         </Grid>
       </VStack>
     </Box>

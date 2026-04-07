@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
     public partial class InventoryAdminService
     {
-        private const string ApprovalStatusApproved = "APPROVED";
-        private const string ApprovalStatusRejected = "REJECTED";
+        private const string ApprovalStatusApproved = nameof(ApprovalRequestStatusCode.APPROVED);
+        private const string ApprovalStatusRejected = nameof(ApprovalRequestStatusCode.REJECTED);
+        private const string AuditStatusCompleted = nameof(InventoryAuditStatusCode.COMPLETED);
+        private const string AuditStatusCanceled = nameof(InventoryAuditStatusCode.CANCELED);
 
         public async Task<IReadOnlyList<object>> GetApprovalsAsync(string? status)
         {
@@ -110,7 +113,7 @@ namespace MyGarage.Services
             var audit = await _context.InventoryAudits.FirstOrDefaultAsync(a => a.Id == id);
             if (audit == null) return false;
 
-            audit.Status = ApprovalStatusApproved;
+            audit.Status = AuditStatusCompleted;
             audit.ApprovedBy = approverId;
             audit.UpdatedAt = DateTime.UtcNow;
             audit.UpdatedBy = approverId;
@@ -123,7 +126,7 @@ namespace MyGarage.Services
             var audit = await _context.InventoryAudits.FirstOrDefaultAsync(a => a.Id == id);
             if (audit == null) return false;
 
-            audit.Status = ApprovalStatusRejected;
+            audit.Status = AuditStatusCanceled;
             audit.UpdatedAt = DateTime.UtcNow;
             audit.UpdatedBy = approverId;
             await _context.SaveChangesAsync();

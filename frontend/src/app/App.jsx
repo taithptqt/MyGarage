@@ -175,8 +175,11 @@ function App() {
           <Route path="reception/orders/:orderId/vehicleconditionlogs" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><VehicleConditionLogsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/edit" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderEditPage /></ProtectedRoute>} />
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
+          <Route path="manager/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
+          <Route path="foreman/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
           <Route path="team-leader" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
+          <Route path="team-leader/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />

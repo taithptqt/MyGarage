@@ -266,7 +266,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("FLAGGED");
+                .HasDefaultValue(nameof(AiFraudMonitorStatusCode.FLAGGED));
         });
 
         modelBuilder.Entity<AiKnowledgeBase>(entity =>
@@ -327,7 +327,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("GENERATED");
+                .HasDefaultValue(nameof(AiDispatchStatus.GENERATED));
 
             entity.HasOne(d => d.Branch).WithMany(p => p.AiSmartDispatchings)
                 .HasForeignKey(d => d.BranchId)
@@ -365,7 +365,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(AppointmentStatus.PENDING));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Appointments)
@@ -415,7 +415,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(30)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(BookingGroupStatus.PENDING));
             entity.Property(e => e.TotalAppointments)
                 .HasDefaultValue(0)
                 .HasColumnName("TotalItems");
@@ -460,7 +460,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(ApprovalRequestStatusCode.PENDING));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Approver).WithMany(p => p.ApprovalRequestApprovers)
@@ -536,7 +536,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.OperationalStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("ACTIVE");
+                .HasDefaultValue(nameof(BayOperationalStatusCode.ACTIVE));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Bays)
@@ -583,7 +583,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("ACTIVE");
+                .HasDefaultValue(nameof(BranchStatusCode.ACTIVE));
             entity.Property(e => e.TaxCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -748,7 +748,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(CommissionTransactionStatusCode.PENDING));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.ApprovedByNavigation).WithMany(p => p.CommissionTransactionApprovedByNavigations)
@@ -792,7 +792,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("OPEN");
+                .HasDefaultValue(nameof(ConversationStatusCode.OPEN));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Conversations)
@@ -972,7 +972,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(DeliveryStatusCode.PENDING));
             entity.Property(e => e.TrackingCode)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -1041,7 +1041,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.CancellationStatus)
                 .HasMaxLength(20)
                 .IsUnicode(false)
-                .HasDefaultValue("NONE");
+                .HasDefaultValue(nameof(DiagnosisCancellationStatusCode.NONE));
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.DispatchTag)
                 .HasMaxLength(100)
@@ -1052,7 +1052,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(DiagnosisStatus.DRAFT));
             entity.Property(e => e.SupportRequestNote).HasMaxLength(500);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
@@ -1091,7 +1091,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(ExpenseLogStatusCode.PENDING));
 
             entity.HasOne(d => d.ApprovedByNavigation).WithMany(p => p.ExpenseLogApprovedByNavigations)
                 .HasForeignKey(d => d.ApprovedBy)
@@ -1132,7 +1132,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("ISSUED");
+                .HasDefaultValue(nameof(GatePassStatusCode.ISSUED));
 
             entity.HasOne(d => d.ApprovedByNavigation).WithMany(p => p.GatePassApprovedByNavigations)
                 .HasForeignKey(d => d.ApprovedBy)
@@ -1235,7 +1235,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("DRAFT");
+                .HasDefaultValue(nameof(InventoryAuditStatusCode.DRAFT));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.ApprovedByNavigation).WithMany(p => p.InventoryAuditApprovedByNavigations)
@@ -1299,7 +1299,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.PaymentStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("UNPAID");
+                .HasDefaultValue(nameof(InvoicePaymentStatusCode.UNPAID));
             entity.Property(e => e.Phone)
                 .HasMaxLength(20)
                 .IsUnicode(false);
@@ -1395,7 +1395,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(MaterialRequestStatusCode.PENDING));
 
             entity.HasOne(d => d.ServiceOrder).WithMany(p => p.MaterialRequests)
                 .HasForeignKey(d => d.ServiceOrderId)
@@ -1429,7 +1429,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(MaterialRequestDetailStatusCode.PENDING));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.WastedQuantity)
                 .HasDefaultValue(0m)
@@ -1480,7 +1480,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(MaterialReturnStatusCode.PENDING));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.MaterialReturnCreatedByNavigations)
@@ -1593,7 +1593,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("COMPLETED");
+                .HasDefaultValue(nameof(PaymentStatusCode.COMPLETED));
             entity.Property(e => e.TransactionCode)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -1738,7 +1738,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(PurchaseOrderStatusCode.PENDING));
             entity.Property(e => e.TotalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -1834,7 +1834,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("DRAFT");
+                .HasDefaultValue(nameof(RetailOrderStatus.DRAFT));
             entity.Property(e => e.SubTotal).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TaxAmount)
                 .HasDefaultValue(0m)
@@ -1914,7 +1914,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(RetailReturnStatusCode.PENDING));
             entity.Property(e => e.TotalRefundAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -1958,7 +1958,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(RetailReturnItemStatusCode.PENDING));
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.RetailReturnItemCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)
@@ -2096,7 +2096,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.DepositStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("NOT_REQUIRED");
+                .HasDefaultValue(nameof(ServiceOrderDepositStatusCode.NOT_REQUIRED));
             entity.Property(e => e.FinalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2109,12 +2109,12 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.PaymentStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("UNPAID");
+                .HasDefaultValue(nameof(ServiceOrderPaymentStatusCode.UNPAID));
             entity.Property(e => e.QcinspectorId).HasColumnName("QCInspectorId");
             entity.Property(e => e.Qcstatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING")
+                .HasDefaultValue(nameof(ServiceOrderQcStatusCode.PENDING))
                 .HasColumnName("QCStatus");
             entity.Property(e => e.QcverifiedAt).HasColumnName("QCVerifiedAt");
             entity.Property(e => e.RequiredDepositAmount)
@@ -2124,7 +2124,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("NEW");
+                .HasDefaultValue(nameof(ServiceOrderLifecycleStatus.NEW));
             entity.Property(e => e.SubTotalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2221,7 +2221,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.InsuranceStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("NOT_APPLICABLE");
+                .HasDefaultValue(nameof(ServiceOrderDetailInsuranceStatusCode.NOT_APPLICABLE));
             entity.Property(e => e.IsCustomerBroughtPart).HasDefaultValue(false);
             entity.Property(e => e.IsReturnOldPart).HasDefaultValue(false);
             entity.Property(e => e.IsWarrantyItem).HasDefaultValue(false);
@@ -2240,7 +2240,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("DRAFT");
+                .HasDefaultValue(nameof(ServiceOrderDetailStatusCode.DRAFT));
             entity.Property(e => e.SubTotal).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TaxAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TaxRate).HasColumnType("decimal(5, 2)");
@@ -2352,7 +2352,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(ServiceRefundStatusCode.PENDING));
 
             entity.HasOne(d => d.ApprovedByNavigation).WithMany(p => p.ServiceRefundApprovedByNavigations)
                 .HasForeignKey(d => d.ApprovedBy)
@@ -2389,7 +2389,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("PENDING");
+                .HasDefaultValue(nameof(ServiceProgressStatus.PENDING));
 
             entity.HasOne(d => d.AssignedByNavigation).WithMany(p => p.ServiceStaffAssignmentAssignedByNavigations)
                 .HasForeignKey(d => d.AssignedBy)
@@ -2440,7 +2440,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("OPEN");
+                .HasDefaultValue(nameof(ShiftClosingStatusCode.OPEN));
             entity.Property(e => e.TotalCashIn)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2490,7 +2490,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("ACTIVE");
+                .HasDefaultValue(nameof(TeamStatusCode.ACTIVE));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Teams)
@@ -2536,7 +2536,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("ACTIVE");
+                .HasDefaultValue(nameof(StaffStatusCode.ACTIVE));
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Staff)
@@ -2973,7 +2973,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue("AVAILABLE");
+                .HasDefaultValue(nameof(WorkSlotStatus.AVAILABLE));
 
             entity.HasOne(d => d.Bay).WithMany(p => p.WorkSlots)
                 .HasForeignKey(d => d.BayId)

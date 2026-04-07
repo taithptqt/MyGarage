@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -6,6 +7,15 @@ namespace MyGarage.Services;
 
 public class PaymentConfirmationService : IPaymentConfirmationService
 {
+    private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
+    private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
+    private const string PaymentStatusFailed = nameof(PaymentStatusCode.FAILED);
+    private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
+    private const string RetailOrderStatusConfirmed = nameof(RetailOrderStatus.CONFIRMED);
+    private const string RetailOrderStatusDraft = nameof(RetailOrderStatus.DRAFT);
+    private const string DocumentPaymentStatusPaid = nameof(InvoicePaymentStatusCode.PAID);
+    private const string DocumentPaymentStatusPartial = nameof(InvoicePaymentStatusCode.PARTIAL);
+    private const string DocumentPaymentStatusUnpaid = nameof(InvoicePaymentStatusCode.UNPAID);
     private readonly IGarageContext _db;
     private readonly IEmailService _emailService;
 
@@ -27,7 +37,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
         await UpdateRelatedDocumentsAsync(payment);
 
-        if (previousStatus != "COMPLETED" && normalizedStatus == "COMPLETED")
+        if (previousStatus != PaymentStatusCompleted && normalizedStatus == PaymentStatusCompleted)
         {
             await TrySendPaymentSuccessEmailAsync(payment);
         }
@@ -38,10 +48,10 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         var normalized = status?.Trim().ToUpperInvariant();
         return normalized switch
         {
-            "COMPLETED" => "COMPLETED",
-            "CANCELED" => "CANCELED",
-            "FAILED" => "FAILED",
-            _ => "PENDING"
+            PaymentStatusCompleted => PaymentStatusCompleted,
+            PaymentStatusCanceled => PaymentStatusCanceled,
+            PaymentStatusFailed => PaymentStatusFailed,
+            _ => PaymentStatusPending
         };
     }
 
@@ -53,7 +63,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (invoice is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 invoice.PaidAmount = paidAmount;
@@ -69,7 +79,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (serviceOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
@@ -84,11 +94,11 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (retailOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == "COMPLETED")
+                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 // Retail order status follows existing DB check constraint.
-                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? "CONFIRMED" : "DRAFT";
+                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
                 retailOrder.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -130,20 +140,20 @@ public class PaymentConfirmationService : IPaymentConfirmationService
     {
         if (totalAmount <= 0m)
         {
-            return "PAID";
+            return DocumentPaymentStatusPaid;
         }
 
         if (paidAmount <= 0m)
         {
-            return "UNPAID";
+            return DocumentPaymentStatusUnpaid;
         }
 
         if (paidAmount < totalAmount)
         {
-            return "PARTIAL";
+            return DocumentPaymentStatusPartial;
         }
 
-        return "PAID";
+        return DocumentPaymentStatusPaid;
     }
 
     private async Task<(string Email, string FullName)?> ResolveCustomerRecipientAsync(Payment payment)

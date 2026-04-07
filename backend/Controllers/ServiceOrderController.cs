@@ -6,6 +6,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -15,51 +16,17 @@ namespace MyGarage.Controllers
     [ApiController]
     public class ServiceOrderController : ControllerBase
     {
-        private static readonly HashSet<string> AllowedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "NEW",
-            "CHECKED_IN",
-            "WAITING",
-            "INSPECTING",
-            "DIAGNOSING",
-            "QUOTING",
-            "WAITING_APPROVAL",
-            "APPROVED",
-            "IN_PROGRESS",
-            "REPAIRING",
-            "QC",
-            "QC_PENDING",
-            "READY",
-            "WAITING_PAYMENT",
-            "CLOSED",
-            "CANCELED",
-            "CANCELLED",
-            "RECEPTION",
-            "COMPLETED",
-        };
+        private static readonly HashSet<string> AllowedServiceOrderStatuses =
+            new(Enum.GetNames<ServiceOrderLifecycleStatus>(), StringComparer.OrdinalIgnoreCase);
 
-        private static readonly HashSet<string> AllowedPaymentStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "UNPAID",
-            "PARTIAL",
-            "PAID",
-        };
+        private static readonly HashSet<string> AllowedPaymentStatuses =
+            new(Enum.GetNames<ServiceOrderPaymentStatusCode>(), StringComparer.OrdinalIgnoreCase);
 
-        private static readonly HashSet<string> AllowedDepositStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "NOT_REQUIRED",
-            "PENDING",
-            "PARTIAL",
-            "PAID",
-            "REFUNDED",
-        };
+        private static readonly HashSet<string> AllowedDepositStatuses =
+            new(Enum.GetNames<ServiceOrderDepositStatusCode>(), StringComparer.OrdinalIgnoreCase);
 
-        private static readonly HashSet<string> AllowedQcStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "PENDING",
-            "PASSED",
-            "FAILED",
-        };
+        private static readonly HashSet<string> AllowedQcStatuses =
+            new(Enum.GetNames<ServiceOrderQcStatusCode>(), StringComparer.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> AllowedOrderCategories = new(StringComparer.OrdinalIgnoreCase)
         {

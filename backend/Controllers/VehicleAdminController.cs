@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -15,18 +16,22 @@ public class VehicleAdminController : ControllerBase
 {
     private const string StatusWaitingReceive = "WAITING_RECEIVE";
     private const string StatusReceived = "RECEIVED";
-    private const string StatusInspecting = "INSPECTING";
+    private const string StatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
     private const string StatusRepairing = "REPAIRING";
-    private const string StatusWaitingParts = "WAITING_PARTS";
+    private const string StatusInProgress = nameof(ServiceProgressStatus.IN_PROGRESS);
+    private const string StatusWaitingParts = nameof(ServiceOrderDetailStatusCode.WAITING_PARTS);
     private const string StatusWaitingDelivery = "WAITING_DELIVERY";
-    private const string StatusCompleted = "COMPLETED";
-    private const string StatusDelivered = "DELIVERED";
-    private const string StatusCanceled = "CANCELED";
+    private const string StatusCompleted = nameof(ServiceOrderDetailStatusCode.COMPLETED);
+    private const string StatusDelivered = nameof(RetailOrderStatus.DELIVERED);
+    private const string StatusCanceled = nameof(ServiceOrderDetailStatusCode.CANCELED);
 
     private const string BayStatusEmpty = "EMPTY";
     private const string BayStatusInUse = "IN_USE";
     private const string BayStatusMaintenance = "MAINTENANCE";
     private const string BayStatusSuspended = "SUSPENDED";
+    private const string DbBayStatusActive = nameof(BayOperationalStatusCode.ACTIVE);
+    private const string DbBayStatusBroken = nameof(BayOperationalStatusCode.BROKEN);
+    private const string DbBayStatusUnderMaintenance = nameof(BayOperationalStatusCode.UNDER_MAINTENANCE);
 
     private static readonly string[] VehicleStatusOptions =
     [
@@ -1186,7 +1191,7 @@ public class VehicleAdminController : ControllerBase
             .ToListAsync();
 
         var activeSlotByVehicle = workSlots
-            .Where(w => w.VehicleId.HasValue && (w.ActualReleaseTime == null || NormalizeForSearch(w.Status) == "IN_PROGRESS"))
+            .Where(w => w.VehicleId.HasValue && (w.ActualReleaseTime == null || NormalizeForSearch(w.Status) == StatusInProgress))
             .GroupBy(w => w.VehicleId!.Value)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ActualStartTime ?? x.StartTime).First());
 
@@ -1662,15 +1667,15 @@ public class VehicleAdminController : ControllerBase
         return normalized switch
         {
             "" => StatusWaitingReceive,
-            "NEW" or "PENDING" or "WAITING" or "CHO_TIEP_NHAN" or "WAITING_RECEIVE" => StatusWaitingReceive,
+            nameof(ServiceOrderLifecycleStatus.NEW) or nameof(DiagnosisStatus.PENDING) or "WAITING" or "CHO_TIEP_NHAN" or "WAITING_RECEIVE" => StatusWaitingReceive,
             "RECEIVED" or "DA_TIEP_NHAN" => StatusReceived,
-            "INSPECTING" or "CHECKING" or "DANG_KIEM_TRA" => StatusInspecting,
-            "REPAIRING" or "IN_PROGRESS" or "DANG_SUA" => StatusRepairing,
-            "WAITING_PARTS" or "CHO_PHU_TUNG" => StatusWaitingParts,
+            nameof(ServiceOrderLifecycleStatus.INSPECTING) or "CHECKING" or "DANG_KIEM_TRA" => StatusInspecting,
+            "REPAIRING" or StatusInProgress or "DANG_SUA" => StatusRepairing,
+            nameof(ServiceOrderDetailStatusCode.WAITING_PARTS) or "CHO_PHU_TUNG" => StatusWaitingParts,
             "WAITING_DELIVERY" or "CHO_GIAO" => StatusWaitingDelivery,
-            "COMPLETED" or "DONE" or "HOAN_TAT" => StatusCompleted,
-            "DELIVERED" or "DA_GIAO" or "HANDOVER" => StatusDelivered,
-            "CANCELLED" or "CANCELED" or "HUY" => StatusCanceled,
+            nameof(ServiceOrderDetailStatusCode.COMPLETED) or "DONE" or "HOAN_TAT" => StatusCompleted,
+            nameof(RetailOrderStatus.DELIVERED) or "DA_GIAO" or "HANDOVER" => StatusDelivered,
+            nameof(AppointmentStatus.CANCELLED) or nameof(ServiceOrderDetailStatusCode.CANCELED) or "HUY" => StatusCanceled,
             _ => normalized
         };
     }
@@ -1681,9 +1686,9 @@ public class VehicleAdminController : ControllerBase
         return normalized switch
         {
             "" => BayStatusEmpty,
-            "ACTIVE" or "AVAILABLE" or "READY" or "EMPTY" or "FREE" or "TRONG" => BayStatusEmpty,
+            DbBayStatusActive or "AVAILABLE" or "READY" or "EMPTY" or "FREE" or "TRONG" => BayStatusEmpty,
             "OCCUPIED" or "IN_USE" or "BUSY" or "USING" or "DANG_SU_DUNG" => BayStatusInUse,
-            "MAINTENANCE" or "REPAIR" or "BAO_TRI" => BayStatusMaintenance,
+            DbBayStatusUnderMaintenance or DbBayStatusBroken or "MAINTENANCE" or "REPAIR" or "BAO_TRI" => BayStatusMaintenance,
             "SUSPENDED" or "PAUSED" or "TEMP_STOP" or "TAM_NGUNG" => BayStatusSuspended,
             _ => normalized
         };

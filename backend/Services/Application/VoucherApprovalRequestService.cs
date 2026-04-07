@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MyGarage.Data;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -10,9 +11,9 @@ namespace MyGarage.Services
 {
     public partial class VoucherApprovalRequestService : GenericService<VoucherApprovalRequest>, IVoucherApprovalRequestService
     {
-        private const string StatusPending = "PENDING";
-        private const string StatusApproved = "APPROVED";
-        private const string StatusRejected = "REJECTED";
+        private const string StatusPending = nameof(VoucherApprovalRequestStatusCode.PENDING);
+        private const string StatusApproved = nameof(VoucherApprovalRequestStatusCode.APPROVED);
+        private const string StatusRejected = nameof(VoucherApprovalRequestStatusCode.REJECTED);
 
         private readonly IVoucherApprovalRequestRepository _voucherApprovalRequestRepository;
         private readonly IGarageContext _context;

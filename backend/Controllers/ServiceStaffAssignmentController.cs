@@ -9,6 +9,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Controllers
 {
@@ -16,13 +17,8 @@ namespace MyGarage.Controllers
     [ApiController]
     public class ServiceStaffAssignmentController : ControllerBase
     {
-        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "PENDING",
-            "IN_PROGRESS",
-            "PAUSED",
-            "COMPLETED",
-        };
+        private static readonly HashSet<string> AllowedStatuses =
+            new(Enum.GetNames<ServiceProgressStatus>(), StringComparer.OrdinalIgnoreCase);
 
         private readonly IServiceStaffAssignmentService _serviceStaffAssignmentService;
         private readonly IVehicleConditionLogService _vehicleConditionLogService;
@@ -137,7 +133,7 @@ namespace MyGarage.Controllers
             {
                 if (isCreate)
                 {
-                    dto.Status = "PENDING";
+                    dto.Status = nameof(ServiceProgressStatus.PENDING);
                 }
                 return null;
             }
@@ -164,7 +160,7 @@ namespace MyGarage.Controllers
             {
                 if (isCreate)
                 {
-                    dto.Status = "PENDING";
+                    dto.Status = nameof(ServiceProgressStatus.PENDING);
                 }
                 return null;
             }

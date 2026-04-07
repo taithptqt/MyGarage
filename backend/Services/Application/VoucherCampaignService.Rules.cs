@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -71,30 +72,32 @@ namespace MyGarage.Services
         {
             if (isDeleted == true)
             {
-                return "ARCHIVED";
+                return nameof(VoucherCampaignStatusCode.ARCHIVED);
             }
 
-            if (string.Equals(currentStatus, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(currentStatus, nameof(VoucherCampaignStatusCode.PENDING_APPROVAL), StringComparison.OrdinalIgnoreCase))
             {
-                return "PENDING_APPROVAL";
+                return nameof(VoucherCampaignStatusCode.PENDING_APPROVAL);
             }
 
             if (isActive != true)
             {
-                return endDate < now ? "ENDED" : "PAUSED";
+                return endDate < now
+                    ? nameof(VoucherCampaignStatusCode.ENDED)
+                    : nameof(VoucherCampaignStatusCode.PAUSED);
             }
 
             if (endDate < now)
             {
-                return "ENDED";
+                return nameof(VoucherCampaignStatusCode.ENDED);
             }
 
             if (startDate > now)
             {
-                return "SCHEDULED";
+                return nameof(VoucherCampaignStatusCode.SCHEDULED);
             }
 
-            return "ACTIVE";
+            return nameof(VoucherCampaignStatusCode.ACTIVE);
         }
     }
 }

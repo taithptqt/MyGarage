@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -13,7 +14,7 @@ namespace MyGarage.Services
         private readonly IGarageContext _context;
         private const int MaxCodeGenerationAttempts = 8;
         private const string CheckInLogType = "CHECK_IN";
-        private const string CheckInPendingStatus = "PENDING";
+        private const string CheckInPendingStatus = nameof(DiagnosisStatus.PENDING);
 
         public ServiceOrderService(IServiceOrderRepository repository, IGarageContext context) : base(repository)
         {

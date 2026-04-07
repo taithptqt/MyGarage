@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Services;
@@ -24,6 +25,12 @@ public class OrderController(
     IOrderTransactionStore orderTransactionStore,
     IOrderInvoiceStore orderInvoiceStore) : ControllerBase
 {
+    private const string RetailOrderStatusConfirmed = nameof(RetailOrderStatus.CONFIRMED);
+    private const string RetailOrderStatusDraft = nameof(RetailOrderStatus.DRAFT);
+    private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
+    private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
+    private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
+
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
     private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
@@ -54,7 +61,7 @@ public class OrderController(
             return;
         }
 
-        retailOrder.Status = isPaid ? "CONFIRMED" : "DRAFT";
+        retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
         retailOrder.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
     }
@@ -221,8 +228,8 @@ public class OrderController(
             {
                 var payOsStatus = paymentLink.Status.ToString();
                 var targetStatus = payOsStatus.Contains("CANCEL", StringComparison.OrdinalIgnoreCase)
-                    ? "CANCELED"
-                    : (order.AmountRemaining > 0 ? "PENDING" : "COMPLETED");
+                    ? PaymentStatusCanceled
+                    : (order.AmountRemaining > 0 ? PaymentStatusPending : PaymentStatusCompleted);
                 var amountPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
                 await _paymentConfirmationService.ApplyOutcomeAsync(payment, amountPaid, targetStatus);
             }
@@ -356,7 +363,7 @@ public class OrderController(
                 Amount = request.TotalAmount,
                 TransactionCode = paymentResponse.PaymentLinkId,
                 Type = normalizedPaymentType,
-                Status = "PENDING",
+                Status = PaymentStatusPending,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -448,7 +455,7 @@ public class OrderController(
             var payment = await ResolvePaymentAsync(order);
             if (payment is not null)
             {
-                await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, "CANCELED");
+                await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, PaymentStatusCanceled);
             }
             else if (order.RetailOrderId.HasValue)
             {

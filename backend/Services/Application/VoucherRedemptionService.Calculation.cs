@@ -1,5 +1,6 @@
 ﻿using System;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -37,14 +38,14 @@ namespace MyGarage.Services
         {
             return status switch
             {
-                "DRAFT" => "VCH_NOT_ACTIVE",
-                "PENDING_APPROVAL" => "VCH_PENDING_APPROVAL",
-                "SCHEDULED" => "VCH_NOT_STARTED",
-                "PAUSED" => "VCH_PAUSED",
-                "EXHAUSTED" => "VCH_QUOTA_EXHAUSTED",
-                "EXPIRED" => "VCH_EXPIRED",
-                "REVOKED" => "VCH_REVOKED",
-                "ARCHIVED" => "VCH_ARCHIVED",
+                nameof(VoucherStatusCode.DRAFT) => "VCH_NOT_ACTIVE",
+                nameof(VoucherStatusCode.PENDING_APPROVAL) => "VCH_PENDING_APPROVAL",
+                nameof(VoucherStatusCode.SCHEDULED) => "VCH_NOT_STARTED",
+                nameof(VoucherStatusCode.PAUSED) => "VCH_PAUSED",
+                nameof(VoucherStatusCode.EXHAUSTED) => "VCH_QUOTA_EXHAUSTED",
+                nameof(VoucherStatusCode.EXPIRED) => "VCH_EXPIRED",
+                nameof(VoucherStatusCode.REVOKED) => "VCH_REVOKED",
+                nameof(VoucherStatusCode.ARCHIVED) => "VCH_ARCHIVED",
                 _ => "VCH_INVALID_STATUS"
             };
         }

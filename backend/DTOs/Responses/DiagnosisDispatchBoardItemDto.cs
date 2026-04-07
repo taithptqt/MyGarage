@@ -15,6 +15,10 @@ namespace MyGarage.DTOs.Responses
         public string? DispatchTag { get; set; }
         public long? TeamId { get; set; }
         public string? TeamName { get; set; }
+        public long? PrimaryTeamId { get; set; }
+        public string? PrimaryTeamName { get; set; }
+        public IReadOnlyList<long> AssignedTeamIds { get; set; } = Array.Empty<long>();
+        public IReadOnlyList<string> AssignedTeamNames { get; set; } = Array.Empty<string>();
         public long? TechnicianId { get; set; }
         public string? TechnicianName { get; set; }
         public long? AssistantTechnicianId { get; set; }

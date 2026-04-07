@@ -2,11 +2,16 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
     public partial class InventoryAdminService
     {
+        private const string ApprovalRequestStatusPending = nameof(ApprovalRequestStatusCode.PENDING);
+        private const string InventoryAuditStatusDraft = nameof(InventoryAuditStatusCode.DRAFT);
+        private const string InventoryAuditStatusReviewing = nameof(InventoryAuditStatusCode.REVIEWING);
+
         public async Task<object> GetOverviewAsync()
         {
             var now = DateTime.UtcNow;
@@ -25,11 +30,11 @@ namespace MyGarage.Services
 
             var pendingApprovals = await _context.ApprovalRequests
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && a.Status.ToUpper() == "PENDING");
+                .CountAsync(a => a.Status != null && a.Status.ToUpper() == ApprovalRequestStatusPending);
 
             var pendingAudits = await _context.InventoryAudits
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == "DRAFT" || a.Status.ToUpper() == "PENDING"));
+                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == InventoryAuditStatusDraft || a.Status.ToUpper() == InventoryAuditStatusReviewing));
 
             var lastTransactionByProduct = transactions
                 .Where(t => t.ProductId > 0)

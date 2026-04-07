@@ -29,6 +29,7 @@ namespace MyGarage.Interfaces
             long technicianId,
             long? assistantTechnicianId,
             long? teamId,
+            IReadOnlyList<long>? supportingTeamIds,
             long? bayId,
             bool managerOverride);
         Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId);

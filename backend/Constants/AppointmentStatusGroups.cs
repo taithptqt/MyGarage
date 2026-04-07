@@ -9,7 +9,6 @@ namespace MyGarage.Constants
             nameof(AppointmentStatus.CANCELED),
             nameof(AppointmentStatus.CANCELLED),
             nameof(AppointmentStatus.NO_SHOW),
-            nameof(AppointmentStatus.COMPLETED),
         };
 
         public static readonly HashSet<string> Queueing = new(System.StringComparer.OrdinalIgnoreCase)

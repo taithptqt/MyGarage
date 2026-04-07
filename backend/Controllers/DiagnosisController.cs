@@ -7,6 +7,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -16,12 +17,10 @@ namespace MyGarage.Controllers
     [ApiController]
     public class DiagnosisController : ControllerBase
     {
-        private const string DiagnosisStatusPending = "PENDING";
-        private const string DiagnosisStatusAssigned = "ASSIGNED";
-        private const string DiagnosisStatusCompleted = "COMPLETED";
-        private const string CancellationStatusPending = "PENDING";
-        private const string ServiceOrderStatusInspecting = "INSPECTING";
-        private const string ServiceOrderStatusWaitingApproval = "WAITING_APPROVAL";
+        private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
+        private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
+        private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
+        private const string ServiceOrderStatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
 
         public sealed record DiagnosisStatusPatchDto
         {
@@ -102,13 +101,7 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Du lieu chan doan khong hop le." });
             }
 
-            var status = NormalizeStatus(itemDto.Status);
-            if (status == "DRAFT")
-            {
-                status = DiagnosisStatusPending;
-            }
-
-            itemDto.Status = status;
+            itemDto.Status = NormalizeStatus(itemDto.Status);
             itemDto.DispatchTag = NormalizeDispatchTag(itemDto.DispatchTag);
 
             var entity = _mapper.Map<Diagnosis>(itemDto);
@@ -127,10 +120,6 @@ namespace MyGarage.Controllers
             }
 
             var status = NormalizeStatus(itemDto.Status ?? existingItem.Status ?? DiagnosisStatusPending);
-            if (status == "DRAFT")
-            {
-                return BadRequest(new { message = "Khong con ho tro trang thai DRAFT." });
-            }
 
             _mapper.Map(itemDto, existingItem);
             existingItem.Status = status;
@@ -391,7 +380,7 @@ namespace MyGarage.Controllers
 
             var allDiagnosis = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
             var pendingCancellation = allDiagnosis
-                .Where(x => string.Equals(x.CancellationStatus, CancellationStatusPending, StringComparison.OrdinalIgnoreCase))
+                .Where(x => x.CancellationRequestedAt.HasValue && !x.CancellationDecisionAt.HasValue)
                 .ToList();
 
             if (pendingCancellation.Count == 0)
@@ -475,6 +464,28 @@ namespace MyGarage.Controllers
                 }
             }
 
+            var normalizedSupportingTeamIds = NormalizeSupportingTeamIds(request.SupportingTeamIds, resolvedTeamId);
+            if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
+            {
+                return BadRequest(new { message = "Khi co to phoi hop, bat buoc chi dinh to chinh." });
+            }
+            if (normalizedSupportingTeamIds.Count > 0)
+            {
+                foreach (var supportingTeamId in normalizedSupportingTeamIds)
+                {
+                    var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
+                    if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
+                    {
+                        return BadRequest(new { message = $"To phoi hop #{supportingTeamId} khong ton tai." });
+                    }
+
+                    if (supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
+                    {
+                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                    }
+                }
+            }
+
             if (request.BayId.HasValue)
             {
                 var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder.ExecuteBranchId);
@@ -489,6 +500,7 @@ namespace MyGarage.Controllers
                 request.TechnicianId,
                 assistantTechnicianId: request.AssistantTechnicianId,
                 teamId: resolvedTeamId,
+                supportingTeamIds: normalizedSupportingTeamIds,
                 bayId: request.BayId,
                 managerOverride: true);
 
@@ -534,7 +546,10 @@ namespace MyGarage.Controllers
 
         private static string NormalizeStatus(string? rawStatus)
         {
-            return (rawStatus ?? string.Empty).Trim().ToUpperInvariant();
+            var normalized = (rawStatus ?? string.Empty).Trim().ToUpperInvariant();
+            return Enum.TryParse<DiagnosisStatus>(normalized, true, out var parsed)
+                ? parsed.ToString()
+                : DiagnosisStatusPending;
         }
 
         private static string? NormalizeDispatchTag(string? rawTag)
@@ -545,6 +560,15 @@ namespace MyGarage.Controllers
             }
 
             return rawTag.Trim().ToUpperInvariant();
+        }
+
+        private static IReadOnlyList<long> NormalizeSupportingTeamIds(IEnumerable<long>? teamIds, long? primaryTeamId)
+        {
+            return (teamIds ?? Array.Empty<long>())
+                .Where(x => x > 0)
+                .Where(x => !primaryTeamId.HasValue || x != primaryTeamId.Value)
+                .Distinct()
+                .ToList();
         }
 
         private static List<string> ExtractSymptomsFromNotes(string? customerNotes)
@@ -663,15 +687,42 @@ namespace MyGarage.Controllers
                 }
             }
 
-            if (request.BayId.HasValue)
+            var normalizedSupportingTeamIds = NormalizeSupportingTeamIds(request.SupportingTeamIds, resolvedTeamId);
+            if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
             {
-                var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+                return BadRequest(new { message = "Khi co to phoi hop, bat buoc chon to chinh." });
+            }
+            var requiresServiceOrderContext = request.BayId.HasValue || normalizedSupportingTeamIds.Count > 0;
+            ServiceOrder? serviceOrder = null;
+            if (requiresServiceOrderContext)
+            {
+                serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
                 if (serviceOrder == null)
                 {
                     return NotFound(new { message = "Khong tim thay lenh sua chua." });
                 }
+            }
 
-                var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder.ExecuteBranchId);
+            if (normalizedSupportingTeamIds.Count > 0)
+            {
+                foreach (var supportingTeamId in normalizedSupportingTeamIds)
+                {
+                    var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
+                    if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
+                    {
+                        return BadRequest(new { message = $"To phoi hop #{supportingTeamId} khong ton tai." });
+                    }
+
+                    if (serviceOrder != null && supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
+                    {
+                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                    }
+                }
+            }
+
+            if (request.BayId.HasValue)
+            {
+                var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder!.ExecuteBranchId);
                 if (!bayInBranch)
                 {
                     return BadRequest(new { message = "Cau nang khong thuoc chi nhanh xu ly." });
@@ -684,10 +735,20 @@ namespace MyGarage.Controllers
                     .Select(x => x.DispatchTag)
                     .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
-                var isCompatible = await _diagnosisService.IsDispatchTagCompatibleAsync(dispatchTag, resolvedTeamId);
-                if (!isCompatible)
+                var dispatchTeamIds = new List<long>();
+                if (resolvedTeamId.HasValue && resolvedTeamId.Value > 0)
                 {
-                    return Conflict(new { message = "To duoc chon khong dung chuyen mon cua lenh chan doan." });
+                    dispatchTeamIds.Add(resolvedTeamId.Value);
+                }
+                dispatchTeamIds.AddRange(normalizedSupportingTeamIds);
+
+                foreach (var dispatchTeamId in dispatchTeamIds.Distinct())
+                {
+                    var isCompatible = await _diagnosisService.IsDispatchTagCompatibleAsync(dispatchTag, dispatchTeamId);
+                    if (!isCompatible)
+                    {
+                        return Conflict(new { message = "Co to duoc chon khong dung chuyen mon cua lenh chan doan." });
+                    }
                 }
             }
 
@@ -696,6 +757,7 @@ namespace MyGarage.Controllers
                 request.TechnicianId,
                 request.AssistantTechnicianId,
                 resolvedTeamId,
+                normalizedSupportingTeamIds,
                 request.BayId,
                 request.IsManagerOverride);
 
@@ -737,8 +799,7 @@ namespace MyGarage.Controllers
             var order = await _diagnosisService.GetServiceOrderAsync(existingItem.ServiceOrderId);
             if (order != null)
             {
-                var allCompleted = await _diagnosisService.AreAllDiagnosesCompletedAsync(existingItem.ServiceOrderId);
-                await _diagnosisService.UpdateServiceOrderStatusAsync(order, allCompleted ? ServiceOrderStatusWaitingApproval : ServiceOrderStatusInspecting);
+                await _diagnosisService.UpdateServiceOrderStatusAsync(order, ServiceOrderStatusInspecting);
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);

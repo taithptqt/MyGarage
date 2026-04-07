@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -29,10 +30,7 @@ namespace MyGarage.Services
 
         private static readonly HashSet<string> NotStartedServiceOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
-            "NEW",
-            "RECEPTION",
-            "CANCELED",
-            "CANCELLED"
+            nameof(ServiceOrderLifecycleStatus.NEW)
         };
 
         public async Task<CancelGroupSessionResponseDto?> CancelAllAsync(long GroupSessionId, string reason, long? actorUserId = null)

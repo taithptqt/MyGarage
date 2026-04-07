@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -17,6 +18,9 @@ public class BayAdminController : ControllerBase
     private const string StatusInUse = "IN_USE";
     private const string StatusMaintenance = "MAINTENANCE";
     private const string StatusSuspended = "SUSPENDED";
+    private const string DbBayStatusActive = nameof(BayOperationalStatusCode.ACTIVE);
+    private const string DbBayStatusBroken = nameof(BayOperationalStatusCode.BROKEN);
+    private const string DbBayStatusUnderMaintenance = nameof(BayOperationalStatusCode.UNDER_MAINTENANCE);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -1581,9 +1585,9 @@ public class BayAdminController : ControllerBase
         return normalized switch
         {
             "" => StatusEmpty,
-            "ACTIVE" or "AVAILABLE" or "READY" or "EMPTY" or "FREE" or "TRONG" => StatusEmpty,
+            DbBayStatusActive or "AVAILABLE" or "READY" or "EMPTY" or "FREE" or "TRONG" => StatusEmpty,
             "OCCUPIED" or "IN_USE" or "BUSY" or "USING" or "DANG_SU_DUNG" => StatusInUse,
-            "MAINTENANCE" or "REPAIR" or "BAO_TRI" => StatusMaintenance,
+            DbBayStatusUnderMaintenance or DbBayStatusBroken or "MAINTENANCE" or "REPAIR" or "BAO_TRI" => StatusMaintenance,
             "SUSPENDED" or "PAUSED" or "TEMP_STOP" or "TAM_NGUNG" => StatusSuspended,
             _ => normalized
         };

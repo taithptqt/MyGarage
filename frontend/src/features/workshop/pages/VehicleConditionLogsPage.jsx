@@ -775,14 +775,77 @@ export default function VehicleConditionLogsPage() {
                   <VStack align="stretch" spacing={6}>
                     <Heading size="xs" color="#2b3674" textTransform="uppercase">Hệ thống cảnh báo</Heading>
                     <FormControl>
-                      <FormLabel fontSize="sm" fontWeight="bold">Đèn cảnh báo đang sáng</FormLabel>
-                      <CheckboxGroup colorScheme="red" value={warningLights} onChange={setWarningLights}>
-                        <SimpleGrid columns={2} spacing={2}>
-                          {commonWarningLights.map((light) => (
-                            <Checkbox key={light} value={light}>{light}</Checkbox>
-                          ))}
-                        </SimpleGrid>
-                      </CheckboxGroup>
+                      <VStack align="stretch" spacing={3}>
+                        <Flex justify="space-between" align="center" gap={3} wrap="wrap">
+                          <FormLabel fontSize="sm" fontWeight="700" mb={0}>
+                            Đèn cảnh báo đang sáng
+                          </FormLabel>
+                          <Badge
+                            borderRadius="full"
+                            px={3}
+                            py={1}
+                            fontSize="xs"
+                            colorScheme={warningLights.length > 0 ? "red" : "gray"}
+                            variant="subtle"
+                          >
+                            {warningLights.length}/{commonWarningLights.length} đèn
+                          </Badge>
+                        </Flex>
+
+                        <CheckboxGroup colorScheme="red" value={warningLights} onChange={setWarningLights}>
+                          <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
+                            {commonWarningLights.map((light) => {
+                              const isSelected = warningLights.includes(light);
+                              return (
+                                <Box
+                                  key={light}
+                                  border="1px solid"
+                                  borderColor={isSelected ? "red.300" : "#dbe4f5"}
+                                  bg={isSelected ? "red.50" : "white"}
+                                  borderRadius="xl"
+                                  px={3}
+                                  py={2.5}
+                                  transition="all 0.2s ease"
+                                >
+                                  <Checkbox
+                                    value={light}
+                                    w="100%"
+                                    display="inline-flex"
+                                    alignItems="center"
+                                    flexDirection="row"
+                                    sx={{
+                                      "&": {
+                                        alignItems: "center",
+                                      },
+                                      ".chakra-checkbox__label": {
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        marginInlineStart: "10px",
+                                        marginTop: 0,
+                                        fontSize: "14px",
+                                        fontWeight: 600,
+                                        color: "#253968",
+                                        lineHeight: "1.25",
+                                      },
+                                      ".chakra-checkbox__control": {
+                                        marginTop: 0,
+                                        borderColor: isSelected ? "red.400" : "#bdcce6",
+                                        bg: isSelected ? "red.500" : "white",
+                                      },
+                                    }}
+                                  >
+                                    {light}
+                                  </Checkbox>
+                                </Box>
+                              );
+                            })}
+                          </SimpleGrid>
+                        </CheckboxGroup>
+
+                        <Text fontSize="xs" color="gray.500">
+                          Chọn tất cả đèn đang hiển thị trên bảng táp-lô tại thời điểm tiếp nhận.
+                        </Text>
+                      </VStack>
                     </FormControl>
                   </VStack>
                 </CardBody>

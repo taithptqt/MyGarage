@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Services;
 
@@ -15,6 +16,11 @@ namespace MyGarage.Controllers;
 [Authorize(Roles = "Staff")]
 public class SalaryAdminController : ControllerBase
 {
+    private const string FinanceApprovalStatusPending = nameof(FinanceApprovalRequestStatusCode.PENDING);
+    private const string FinanceApprovalStatusApproved = nameof(FinanceApprovalRequestStatusCode.APPROVED);
+    private const string FinanceApprovalStatusRejected = nameof(FinanceApprovalRequestStatusCode.REJECTED);
+    private const string StaffSalaryStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
+
     private readonly IAccountingCrudService _crud;
     private readonly IGarageContext _db;
 
@@ -279,7 +285,7 @@ public class SalaryAdminController : ControllerBase
         if (row is null) return NotFound();
 
         var status = Convert.ToString(row.GetValueOrDefault("status")) ?? "";
-        if (!string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(status, FinanceApprovalStatusPending, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(new { message = "Only pending salary requests can be approved." });
         }
@@ -325,14 +331,15 @@ public class SalaryAdminController : ControllerBase
             WHERE staff_id = @staffId
               AND effective_from <= @effectiveFrom
               AND (effective_to IS NULL OR effective_to >= @effectiveFrom)
-              AND UPPER(ISNULL(status, 'ACTIVE')) = 'ACTIVE'
+              AND UPPER(ISNULL(status, @staffSalaryStatusActive)) = @staffSalaryStatusActive
               AND (@branchId IS NULL OR branch_id = @branchId OR branch_id IS NULL)
             ORDER BY effective_from DESC, id DESC;
             """,
             [
                 new SqlParameter("@staffId", staffId.Value),
                 new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
-                new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
+                new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive)
             ])).FirstOrDefault();
         if (overlapping is not null)
         {
@@ -364,7 +371,7 @@ public class SalaryAdminController : ControllerBase
                     @baseSalary,
                     @effectiveFrom,
                     NULL,
-                    'ACTIVE',
+                    @staffSalaryStatusActive,
                     @note,
                     @updatedBy,
                     SYSDATETIME(),
@@ -376,6 +383,7 @@ public class SalaryAdminController : ControllerBase
                     new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
                     new SqlParameter("@baseSalary", baseSalary.Value),
                     new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
+                    new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
                     new SqlParameter("@note", (object?)note ?? DBNull.Value),
                     new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
                 ]);
@@ -384,7 +392,7 @@ public class SalaryAdminController : ControllerBase
                 """
                 UPDATE dbo.finance_approval_requests
                 SET
-                    status = 'APPROVED',
+                    status = @financeApprovalStatusApproved,
                     approver_id = @approverId,
                     reject_reason = NULL,
                     updated_at = SYSDATETIME()
@@ -392,6 +400,7 @@ public class SalaryAdminController : ControllerBase
                 """,
                 [
                     new SqlParameter("@id", id),
+                    new SqlParameter("@financeApprovalStatusApproved", FinanceApprovalStatusApproved),
                     new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value)
                 ]);
 
@@ -431,7 +440,7 @@ public class SalaryAdminController : ControllerBase
         if (row is null) return NotFound();
 
         var status = Convert.ToString(row.GetValueOrDefault("status")) ?? "";
-        if (!string.Equals(status, "PENDING", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(status, FinanceApprovalStatusPending, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(new { message = "Only pending salary requests can be rejected." });
         }
@@ -445,7 +454,7 @@ public class SalaryAdminController : ControllerBase
             """
             UPDATE dbo.finance_approval_requests
             SET
-                status = 'REJECTED',
+                status = @financeApprovalStatusRejected,
                 approver_id = @approverId,
                 reject_reason = @rejectReason,
                 updated_at = SYSDATETIME()
@@ -453,6 +462,7 @@ public class SalaryAdminController : ControllerBase
             """,
             [
                 new SqlParameter("@id", id),
+                new SqlParameter("@financeApprovalStatusRejected", FinanceApprovalStatusRejected),
                 new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value),
                 new SqlParameter("@rejectReason", rejectReason)
             ]);
@@ -550,8 +560,10 @@ public class SalaryAdminController : ControllerBase
     private static string NormalizeSalaryProfileStatus(string? status)
     {
         var normalized = (status ?? "").Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(normalized)) return "ACTIVE";
-        return normalized;
+        if (string.IsNullOrWhiteSpace(normalized)) return StaffSalaryStatusActive;
+        return Enum.TryParse<StaffSalaryProfileStatusCode>(normalized, true, out var parsed)
+            ? parsed.ToString()
+            : StaffSalaryStatusActive;
     }
 
     private static long? ToNullableLong(object? value)

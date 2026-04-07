@@ -3,15 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class VehicleConditionLogService
     {
-        private const string StatusPending = "PENDING";
-        private const string StatusAssigned = "ASSIGNED";
-        private const string StatusCompleted = "COMPLETED";
+        private const string StatusPending = nameof(DiagnosisStatus.PENDING);
+        private const string StatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
+        private const string StatusCompleted = nameof(DiagnosisStatus.COMPLETED);
         private const string LogTypeCheckIn = "CHECK_IN";
 
         public async Task<IReadOnlyList<VehicleConditionLog>> GetByOrderAsync(long serviceOrderId)

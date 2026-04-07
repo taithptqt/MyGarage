@@ -18,22 +18,7 @@ namespace MyGarage.Services
             var confirmed = statuses.Count(x =>
                 string.Equals(x, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(x, nameof(AppointmentStatus.ARRIVED), StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, nameof(AppointmentStatus.ARRIVED_LATE), StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x, nameof(AppointmentStatus.COMPLETED), StringComparison.OrdinalIgnoreCase));
-            var completed = statuses.Count(x => string.Equals(x, nameof(AppointmentStatus.COMPLETED), StringComparison.OrdinalIgnoreCase));
-
-            if (total > 0 && completed == total)
-            {
-                return new GroupSessionStatusEvaluation(
-                    nameof(BookingGroupStatus.COMPLETED),
-                    total,
-                    confirmed,
-                    canceled,
-                    ShouldSetConfirmedAt(previousStatus, nameof(BookingGroupStatus.COMPLETED)),
-                    false,
-                    false,
-                    true);
-            }
+                string.Equals(x, nameof(AppointmentStatus.ARRIVED_LATE), StringComparison.OrdinalIgnoreCase));
 
             if (total > 0 && canceled == total)
             {

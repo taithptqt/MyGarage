@@ -1,14 +1,14 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum AppointmentStatus
 {
-    PENDING,
-    LATE,
-    CONFIRMED,
-    ARRIVED,
-    ARRIVED_LATE,
-    CANCELED,
-    CANCELLED,
     NO_SHOW,
-    COMPLETED
+    CANCELLED,
+    CANCELED,
+    ARRIVED_LATE,
+    ARRIVED,
+    CONFIRMED,
+    LATE,
+    PENDING
 }
+

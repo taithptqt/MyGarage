@@ -3,15 +3,16 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class VoucherRedemptionService
     {
-        private const string RedemptionStatusRedeemed = "REDEEMED";
-        private const string ValidationStatusValidated = "VALIDATED";
-        private const string VoucherStatusExhausted = "EXHAUSTED";
+        private const string RedemptionStatusRedeemed = nameof(VoucherRedemptionStatusCode.REDEEMED);
+        private const string ValidationStatusValidated = nameof(VoucherRedemptionValidationStatusCode.VALIDATED);
+        private const string VoucherStatusExhausted = nameof(VoucherStatusCode.EXHAUSTED);
 
         public async Task<VoucherRedeemResultResponseDto> RedeemAsync(VoucherRedemptionRequestDto request)
         {
