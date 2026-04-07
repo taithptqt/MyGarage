@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
 using MyGarage.Models;
@@ -19,8 +20,8 @@ namespace MyGarage.Services
 
         private const string CancellationStatusNone = nameof(DiagnosisCancellationStatusCode.NONE);
 
-        private const string ServiceOrderStatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
-        private const string ServiceOrderStatusNew = nameof(ServiceOrderLifecycleStatus.NEW);
+        private const string ServiceOrderStatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
+        private const string ServiceOrderStatusCheckedIn = nameof(ServiceOrderLifecycleStatus.CHECKED_IN);
         private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
 
         private const int UnclaimedEscalationMinutes = 10;
@@ -28,10 +29,27 @@ namespace MyGarage.Services
         private const int DiagnosisSlaMinutes = 45;
         private const string DispatchCollaborationPrefix = "[DISPATCH_COLLAB]";
 
+        private sealed class DispatchCollaborationTeamAssignmentMeta
+        {
+            public long TeamId { get; set; }
+            public long? TechnicianId { get; set; }
+            public long? AssistantTechnicianId { get; set; }
+            public int? RequestedTechnicianCount { get; set; }
+        }
+
         private sealed class DispatchCollaborationMeta
         {
             public long? PrimaryTeamId { get; set; }
             public List<long> TeamIds { get; set; } = new();
+            public List<DispatchCollaborationTeamAssignmentMeta> TeamAssignments { get; set; } = new();
+        }
+
+        private sealed class NormalizedSupportingAssignment
+        {
+            public long TeamId { get; set; }
+            public long? TechnicianId { get; set; }
+            public long? AssistantTechnicianId { get; set; }
+            public int? RequestedTechnicianCount { get; set; }
         }
 
         private static string? NormalizeDispatchTag(string? rawTag)
@@ -75,14 +93,126 @@ namespace MyGarage.Services
                 .ToList();
         }
 
-        private static string? BuildDispatchCollaborationNote(long? primaryTeamId, IReadOnlyList<long>? teamIds)
+        private static int? NormalizeRequestedTechnicianCount(int? requestedTechnicianCount)
         {
-            var normalizedTeamIds = NormalizeTeamIds(teamIds);
-            if (primaryTeamId.HasValue && primaryTeamId.Value > 0 && !normalizedTeamIds.Contains(primaryTeamId.Value))
+            if (!requestedTechnicianCount.HasValue || requestedTechnicianCount.Value <= 0)
             {
-                normalizedTeamIds = new[] { primaryTeamId.Value }.Concat(normalizedTeamIds).ToList();
+                return null;
             }
 
+            return Math.Clamp(requestedTechnicianCount.Value, 1, 8);
+        }
+
+        private static IReadOnlyList<NormalizedSupportingAssignment> NormalizeSupportingAssignments(
+            IEnumerable<DiagnosisSupportingTeamAssignmentDto>? assignments,
+            IEnumerable<long>? fallbackTeamIds,
+            long? primaryTeamId)
+        {
+            var byTeam = new Dictionary<long, NormalizedSupportingAssignment>();
+
+            foreach (var fallbackTeamId in NormalizeTeamIds(fallbackTeamIds))
+            {
+                if (primaryTeamId.HasValue && fallbackTeamId == primaryTeamId.Value)
+                {
+                    continue;
+                }
+
+                byTeam[fallbackTeamId] = new NormalizedSupportingAssignment
+                {
+                    TeamId = fallbackTeamId,
+                    TechnicianId = null,
+                    AssistantTechnicianId = null,
+                    RequestedTechnicianCount = null
+                };
+            }
+
+            foreach (var assignment in assignments ?? Array.Empty<DiagnosisSupportingTeamAssignmentDto>())
+            {
+                if (assignment == null || assignment.TeamId <= 0)
+                {
+                    continue;
+                }
+
+                if (primaryTeamId.HasValue && assignment.TeamId == primaryTeamId.Value)
+                {
+                    continue;
+                }
+
+                var technicianId = assignment.TechnicianId > 0 ? assignment.TechnicianId : (long?)null;
+                var assistantTechnicianId = assignment.AssistantTechnicianId.HasValue && assignment.AssistantTechnicianId.Value > 0
+                    ? assignment.AssistantTechnicianId
+                    : null;
+                if (technicianId.HasValue && assistantTechnicianId == technicianId)
+                {
+                    assistantTechnicianId = null;
+                }
+
+                byTeam[assignment.TeamId] = new NormalizedSupportingAssignment
+                {
+                    TeamId = assignment.TeamId,
+                    TechnicianId = technicianId,
+                    AssistantTechnicianId = assistantTechnicianId,
+                    RequestedTechnicianCount = NormalizeRequestedTechnicianCount(assignment.RequestedTechnicianCount)
+                };
+            }
+
+            return byTeam.Values
+                .OrderBy(x => x.TeamId)
+                .ToList();
+        }
+
+        private static string? BuildDispatchCollaborationMeta(
+            long? primaryTeamId,
+            IReadOnlyList<DispatchCollaborationTeamAssignmentMeta>? teamAssignments)
+        {
+            var normalizedAssignments = (teamAssignments ?? Array.Empty<DispatchCollaborationTeamAssignmentMeta>())
+                .Where(x => x != null && x.TeamId > 0)
+                .GroupBy(x => x.TeamId)
+                .Select(group =>
+                {
+                    var chosen = group.First();
+                    var leadId = chosen.TechnicianId.HasValue && chosen.TechnicianId.Value > 0
+                        ? chosen.TechnicianId
+                        : null;
+                    var assistantId = chosen.AssistantTechnicianId.HasValue && chosen.AssistantTechnicianId.Value > 0
+                        ? chosen.AssistantTechnicianId
+                        : null;
+                    if (leadId.HasValue && assistantId == leadId)
+                    {
+                        assistantId = null;
+                    }
+
+                    return new DispatchCollaborationTeamAssignmentMeta
+                    {
+                        TeamId = group.Key,
+                        TechnicianId = leadId,
+                        AssistantTechnicianId = assistantId,
+                        RequestedTechnicianCount = NormalizeRequestedTechnicianCount(chosen.RequestedTechnicianCount)
+                    };
+                })
+                .OrderBy(x => x.TeamId)
+                .ToList();
+
+            if (primaryTeamId.HasValue && primaryTeamId.Value > 0 && normalizedAssignments.All(x => x.TeamId != primaryTeamId.Value))
+            {
+                normalizedAssignments.Insert(0, new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = primaryTeamId.Value,
+                    RequestedTechnicianCount = null
+                });
+            }
+
+            var normalizedTeamIds = normalizedAssignments
+                .Select(x => x.TeamId)
+                .Distinct()
+                .ToList();
+
+            if (primaryTeamId.HasValue && primaryTeamId.Value > 0 && !normalizedTeamIds.Contains(primaryTeamId.Value))
+            {
+                normalizedTeamIds.Insert(0, primaryTeamId.Value);
+            }
+
+            // Không cần ghi metadata khi chỉ có duy nhất tổ chính và không có thông tin phối hợp.
             if (normalizedTeamIds.Count <= 1)
             {
                 return null;
@@ -91,63 +221,115 @@ namespace MyGarage.Services
             var payload = new DispatchCollaborationMeta
             {
                 PrimaryTeamId = primaryTeamId.HasValue && primaryTeamId.Value > 0 ? primaryTeamId : null,
-                TeamIds = normalizedTeamIds.ToList()
+                TeamIds = normalizedTeamIds,
+                TeamAssignments = normalizedAssignments
             };
 
-            return $"{DispatchCollaborationPrefix}{JsonSerializer.Serialize(payload)}";
+            return JsonSerializer.Serialize(payload);
         }
 
-        private static DispatchCollaborationMeta? TryParseDispatchCollaborationNote(string? rawNote)
+        private static DispatchCollaborationMeta? NormalizeCollaborationMeta(DispatchCollaborationMeta? parsed)
         {
-            var text = (rawNote ?? string.Empty).Trim();
-            if (!text.StartsWith(DispatchCollaborationPrefix, StringComparison.Ordinal))
+            if (parsed == null)
             {
                 return null;
             }
 
-            var json = text.Substring(DispatchCollaborationPrefix.Length).Trim();
-            if (string.IsNullOrWhiteSpace(json))
+            var normalizedPrimary = parsed.PrimaryTeamId.HasValue && parsed.PrimaryTeamId.Value > 0
+                ? parsed.PrimaryTeamId
+                : null;
+
+            var normalizedTeamIds = NormalizeTeamIds(parsed.TeamIds).ToList();
+            var normalizedAssignments = (parsed.TeamAssignments ?? new List<DispatchCollaborationTeamAssignmentMeta>())
+                .Where(x => x != null && x.TeamId > 0)
+                .GroupBy(x => x.TeamId)
+                .Select(group =>
+                {
+                    var chosen = group.First();
+                    var leadId = chosen.TechnicianId.HasValue && chosen.TechnicianId.Value > 0
+                        ? chosen.TechnicianId
+                        : null;
+                    var assistantId = chosen.AssistantTechnicianId.HasValue && chosen.AssistantTechnicianId.Value > 0
+                        ? chosen.AssistantTechnicianId
+                        : null;
+                    if (leadId.HasValue && assistantId == leadId)
+                    {
+                        assistantId = null;
+                    }
+
+                    return new DispatchCollaborationTeamAssignmentMeta
+                    {
+                        TeamId = group.Key,
+                        TechnicianId = leadId,
+                        AssistantTechnicianId = assistantId,
+                        RequestedTechnicianCount = NormalizeRequestedTechnicianCount(chosen.RequestedTechnicianCount)
+                    };
+                })
+                .OrderBy(x => x.TeamId)
+                .ToList();
+
+            normalizedTeamIds = normalizedTeamIds
+                .Concat(normalizedAssignments.Select(x => x.TeamId))
+                .Distinct()
+                .ToList();
+
+            if (normalizedPrimary.HasValue && !normalizedTeamIds.Contains(normalizedPrimary.Value))
+            {
+                normalizedTeamIds.Insert(0, normalizedPrimary.Value);
+            }
+
+            if (normalizedTeamIds.Count == 0 && !normalizedPrimary.HasValue)
+            {
+                return null;
+            }
+
+            return new DispatchCollaborationMeta
+            {
+                PrimaryTeamId = normalizedPrimary,
+                TeamIds = normalizedTeamIds,
+                TeamAssignments = normalizedAssignments
+            };
+        }
+
+        private static DispatchCollaborationMeta? TryParseDispatchCollaborationJson(string? rawJson)
+        {
+            var text = (rawJson ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text))
             {
                 return null;
             }
 
             try
             {
-                var parsed = JsonSerializer.Deserialize<DispatchCollaborationMeta>(json, new JsonSerializerOptions
+                var parsed = JsonSerializer.Deserialize<DispatchCollaborationMeta>(text, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (parsed == null)
-                {
-                    return null;
-                }
-
-                var normalizedTeamIds = NormalizeTeamIds(parsed.TeamIds);
-                var normalizedPrimary = parsed.PrimaryTeamId.HasValue && parsed.PrimaryTeamId.Value > 0
-                    ? parsed.PrimaryTeamId
-                    : null;
-
-                if (normalizedPrimary.HasValue && !normalizedTeamIds.Contains(normalizedPrimary.Value))
-                {
-                    normalizedTeamIds = new[] { normalizedPrimary.Value }.Concat(normalizedTeamIds).ToList();
-                }
-
-                if (normalizedTeamIds.Count == 0 && !normalizedPrimary.HasValue)
-                {
-                    return null;
-                }
-
-                return new DispatchCollaborationMeta
-                {
-                    PrimaryTeamId = normalizedPrimary,
-                    TeamIds = normalizedTeamIds.ToList()
-                };
+                return NormalizeCollaborationMeta(parsed);
             }
             catch
             {
                 return null;
             }
+        }
+
+        private static DispatchCollaborationMeta? TryParseDispatchCollaborationNote(string? dispatchCollaborationMeta, string? legacyFinalApprovalNote = null)
+        {
+            var parsedNewMeta = TryParseDispatchCollaborationJson(dispatchCollaborationMeta);
+            if (parsedNewMeta != null)
+            {
+                return parsedNewMeta;
+            }
+
+            var legacyText = (legacyFinalApprovalNote ?? string.Empty).Trim();
+            if (!legacyText.StartsWith(DispatchCollaborationPrefix, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var legacyJson = legacyText.Substring(DispatchCollaborationPrefix.Length).Trim();
+            return TryParseDispatchCollaborationJson(legacyJson);
         }
 
         public async Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null)
@@ -249,6 +431,7 @@ namespace MyGarage.Services
                     FinalApprovedByManagerId = null,
                     FinalApprovedAt = null,
                     FinalApprovalNote = null,
+                    DispatchCollaborationMeta = null,
                     CreatedAt = now,
                     UpdatedAt = now
                 })
@@ -374,6 +557,7 @@ namespace MyGarage.Services
             long? assistantTechnicianId,
             long? teamId,
             IReadOnlyList<long>? supportingTeamIds,
+            IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
             bool managerOverride)
         {
@@ -385,30 +569,75 @@ namespace MyGarage.Services
             }
 
             var resolvedPrimaryTeamId = teamId ?? await ResolveTeamIdForTechnicianAsync(technicianId);
-            var normalizedSupportingTeamIds = NormalizeTeamIds(supportingTeamIds)
-                .Where(x => !resolvedPrimaryTeamId.HasValue || x != resolvedPrimaryTeamId.Value)
+            var normalizedSupportingAssignments = NormalizeSupportingAssignments(
+                supportingAssignments,
+                supportingTeamIds,
+                resolvedPrimaryTeamId);
+
+            var supportingTeamIdsResolved = normalizedSupportingAssignments
+                .Select(x => x.TeamId)
+                .Distinct()
                 .ToList();
+
+            var technicianByTeam = new Dictionary<long, long>();
+            var assistantByTeam = new Dictionary<long, long?>();
+            var collaborationAssignments = new List<DispatchCollaborationTeamAssignmentMeta>();
+
+            if (resolvedPrimaryTeamId.HasValue && resolvedPrimaryTeamId.Value > 0)
+            {
+                technicianByTeam[resolvedPrimaryTeamId.Value] = technicianId;
+                assistantByTeam[resolvedPrimaryTeamId.Value] = assistantTechnicianId;
+                collaborationAssignments.Add(new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = resolvedPrimaryTeamId.Value,
+                    TechnicianId = technicianId,
+                    AssistantTechnicianId = assistantTechnicianId
+                });
+            }
+
+            foreach (var supportingAssignment in normalizedSupportingAssignments)
+            {
+                var resolvedSupportLead = supportingAssignment.TechnicianId;
+                var supportAssistant = supportingAssignment.AssistantTechnicianId;
+                if (resolvedSupportLead.HasValue && supportAssistant.HasValue && supportAssistant.Value == resolvedSupportLead.Value)
+                {
+                    supportAssistant = null;
+                }
+
+                if (resolvedSupportLead.HasValue && resolvedSupportLead.Value > 0)
+                {
+                    technicianByTeam[supportingAssignment.TeamId] = resolvedSupportLead.Value;
+                    assistantByTeam[supportingAssignment.TeamId] = supportAssistant;
+                }
+
+                collaborationAssignments.Add(new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = supportingAssignment.TeamId,
+                    TechnicianId = resolvedSupportLead,
+                    AssistantTechnicianId = supportAssistant,
+                    RequestedTechnicianCount = supportingAssignment.RequestedTechnicianCount
+                });
+            }
 
             var collaborationTeamIds = new List<long>();
             if (resolvedPrimaryTeamId.HasValue && resolvedPrimaryTeamId.Value > 0)
             {
                 collaborationTeamIds.Add(resolvedPrimaryTeamId.Value);
             }
-            collaborationTeamIds.AddRange(normalizedSupportingTeamIds);
+            collaborationTeamIds.AddRange(supportingTeamIdsResolved);
             collaborationTeamIds = collaborationTeamIds.Distinct().ToList();
 
-            var collaborationByDiagnosis = collaborationTeamIds.Count == 0
+            var assignmentTeamIds = technicianByTeam
+                .Keys
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            var collaborationByDiagnosis = assignmentTeamIds.Count == 0
                 ? new List<long?> { resolvedPrimaryTeamId }
-                : collaborationTeamIds.Select(x => (long?)x).ToList();
+                : assignmentTeamIds.Select(x => (long?)x).ToList();
 
-            var supportTechnicianByTeam = new Dictionary<long, long>();
-            foreach (var supportTeamId in normalizedSupportingTeamIds)
-            {
-                var resolvedTechnicianForTeam = await ResolveDefaultTechnicianForTeamAsync(supportTeamId);
-                supportTechnicianByTeam[supportTeamId] = resolvedTechnicianForTeam ?? technicianId;
-            }
-
-            var collaborationNote = BuildDispatchCollaborationNote(resolvedPrimaryTeamId, collaborationTeamIds);
+            var collaborationMeta = BuildDispatchCollaborationMeta(resolvedPrimaryTeamId, collaborationAssignments);
 
             var sortedDiagnoses = list
                 .OrderBy(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
@@ -420,13 +649,19 @@ namespace MyGarage.Services
                 var diagnosis = sortedDiagnoses[index];
                 var assignedTeamId = collaborationByDiagnosis[index % collaborationByDiagnosis.Count];
 
-                var isPrimaryTeamAssignment = resolvedPrimaryTeamId.HasValue && assignedTeamId == resolvedPrimaryTeamId;
-                var supportingTechnicianId = assignedTeamId.HasValue && supportTechnicianByTeam.TryGetValue(assignedTeamId.Value, out var mappedTechnicianId)
+                var resolvedLeadTechnicianId = assignedTeamId.HasValue && technicianByTeam.TryGetValue(assignedTeamId.Value, out var mappedTechnicianId)
                     ? mappedTechnicianId
                     : technicianId;
+                var resolvedAssistantTechnicianId = assignedTeamId.HasValue && assistantByTeam.TryGetValue(assignedTeamId.Value, out var mappedAssistantTechnicianId)
+                    ? mappedAssistantTechnicianId
+                    : (resolvedPrimaryTeamId.HasValue && assignedTeamId == resolvedPrimaryTeamId ? assistantTechnicianId : null);
+                if (resolvedAssistantTechnicianId.HasValue && resolvedAssistantTechnicianId.Value == resolvedLeadTechnicianId)
+                {
+                    resolvedAssistantTechnicianId = null;
+                }
 
-                diagnosis.TechnicianId = isPrimaryTeamAssignment ? technicianId : supportingTechnicianId;
-                diagnosis.AssistantTechnicianId = isPrimaryTeamAssignment ? assistantTechnicianId : null;
+                diagnosis.TechnicianId = resolvedLeadTechnicianId;
+                diagnosis.AssistantTechnicianId = resolvedAssistantTechnicianId;
                 diagnosis.Status = DiagnosisStatusAssigned;
                 diagnosis.AssignedTeamId = assignedTeamId;
                 diagnosis.AssignedBayId = bayId;
@@ -436,7 +671,8 @@ namespace MyGarage.Services
                 diagnosis.ApprovedByForemanId = null;
                 diagnosis.FinalApprovedByManagerId = null;
                 diagnosis.FinalApprovedAt = null;
-                diagnosis.FinalApprovalNote = collaborationNote;
+                diagnosis.FinalApprovalNote = null;
+                diagnosis.DispatchCollaborationMeta = collaborationMeta;
 
                 diagnosis.CancellationStatus = CancellationStatusNone;
                 diagnosis.CancellationReason = null;
@@ -599,7 +835,11 @@ namespace MyGarage.Services
             };
         }
 
-        public async Task MarkSupportRequestedAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string? note)
+        public async Task MarkSupportRequestedAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long requestedByStaffId,
+            string? note,
+            IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments = null)
         {
             var now = DateTime.UtcNow;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -607,6 +847,91 @@ namespace MyGarage.Services
             {
                 return;
             }
+
+            var latest = list
+                .OrderByDescending(x => x.UpdatedAt ?? x.AssignedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                .FirstOrDefault();
+            var existingMeta = latest == null
+                ? null
+                : TryParseDispatchCollaborationNote(latest.DispatchCollaborationMeta, latest.FinalApprovalNote);
+
+            var primaryTeamId = existingMeta?.PrimaryTeamId
+                ?? list
+                    .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
+                    .Select(x => x.AssignedTeamId!.Value)
+                    .FirstOrDefault();
+            if (primaryTeamId.HasValue && primaryTeamId.Value <= 0)
+            {
+                primaryTeamId = null;
+            }
+
+            var requestedAssignments = NormalizeSupportingAssignments(
+                supportingAssignments,
+                null,
+                primaryTeamId);
+            var requestedByTeam = requestedAssignments
+                .Where(x => x.TeamId > 0)
+                .ToDictionary(x => x.TeamId, x => x);
+
+            var mergedByTeam = new Dictionary<long, DispatchCollaborationTeamAssignmentMeta>();
+            foreach (var existing in existingMeta?.TeamAssignments ?? new List<DispatchCollaborationTeamAssignmentMeta>())
+            {
+                if (existing == null || existing.TeamId <= 0)
+                {
+                    continue;
+                }
+
+                if (primaryTeamId.HasValue && existing.TeamId == primaryTeamId.Value)
+                {
+                    continue;
+                }
+
+                mergedByTeam[existing.TeamId] = new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = existing.TeamId,
+                    TechnicianId = existing.TechnicianId,
+                    AssistantTechnicianId = existing.AssistantTechnicianId,
+                    RequestedTechnicianCount = NormalizeRequestedTechnicianCount(existing.RequestedTechnicianCount)
+                };
+            }
+
+            foreach (var requested in requestedByTeam.Values)
+            {
+                var existingRequestedCount = mergedByTeam.TryGetValue(requested.TeamId, out var existing)
+                    ? existing.RequestedTechnicianCount
+                    : null;
+
+                mergedByTeam[requested.TeamId] = new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = requested.TeamId,
+                    TechnicianId = null,
+                    AssistantTechnicianId = null,
+                    RequestedTechnicianCount = NormalizeRequestedTechnicianCount(
+                        requested.RequestedTechnicianCount
+                        ?? existingRequestedCount
+                        ?? 1)
+                };
+            }
+
+            var collaborationAssignments = new List<DispatchCollaborationTeamAssignmentMeta>();
+            if (primaryTeamId.HasValue && primaryTeamId.Value > 0)
+            {
+                var primaryDiagnosis = list
+                    .Where(x => x.AssignedTeamId == primaryTeamId.Value)
+                    .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                    .FirstOrDefault();
+
+                collaborationAssignments.Add(new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = primaryTeamId.Value,
+                    TechnicianId = primaryDiagnosis != null && primaryDiagnosis.TechnicianId > 0 ? primaryDiagnosis.TechnicianId : null,
+                    AssistantTechnicianId = primaryDiagnosis?.AssistantTechnicianId,
+                    RequestedTechnicianCount = null
+                });
+            }
+
+            collaborationAssignments.AddRange(mergedByTeam.Values);
+            var collaborationMeta = BuildDispatchCollaborationMeta(primaryTeamId, collaborationAssignments);
 
             foreach (var diagnosis in list)
             {
@@ -618,7 +943,110 @@ namespace MyGarage.Services
                 diagnosis.SupportRequestedAt = now;
                 diagnosis.SupportRequestedBy = requestedByStaffId;
                 diagnosis.SupportRequestNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+                diagnosis.DispatchCollaborationMeta = collaborationMeta;
                 diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task AssignSupportingTeamSelectionAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long teamId,
+            long teamLeaderId,
+            long technicianId,
+            long? assistantTechnicianId,
+            string? note)
+        {
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            var latest = list
+                .OrderByDescending(x => x.UpdatedAt ?? x.AssignedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                .FirstOrDefault();
+            var collaborationMeta = latest == null
+                ? null
+                : TryParseDispatchCollaborationNote(latest.DispatchCollaborationMeta, latest.FinalApprovalNote);
+            if (collaborationMeta == null)
+            {
+                throw new InvalidOperationException("Khong tim thay thong tin phoi hop de cap nhat nhan su ho tro.");
+            }
+
+            var primaryTeamId = collaborationMeta.PrimaryTeamId;
+            if (primaryTeamId.HasValue && primaryTeamId.Value == teamId)
+            {
+                throw new InvalidOperationException("To chinh khong duoc dung luong chon nhan su ho tro to phu.");
+            }
+
+            if (!collaborationMeta.TeamIds.Contains(teamId))
+            {
+                throw new InvalidOperationException("To duoc chon khong nam trong danh sach yeu cau phoi hop.");
+            }
+
+            var byTeam = (collaborationMeta.TeamAssignments ?? new List<DispatchCollaborationTeamAssignmentMeta>())
+                .Where(x => x != null && x.TeamId > 0)
+                .GroupBy(x => x.TeamId)
+                .ToDictionary(x => x.Key, x => x.First());
+
+            if (!byTeam.TryGetValue(teamId, out var targetAssignment))
+            {
+                targetAssignment = new DispatchCollaborationTeamAssignmentMeta
+                {
+                    TeamId = teamId,
+                    TechnicianId = null,
+                    AssistantTechnicianId = null,
+                    RequestedTechnicianCount = null
+                };
+            }
+
+            targetAssignment.TechnicianId = technicianId > 0 ? technicianId : null;
+            targetAssignment.AssistantTechnicianId = assistantTechnicianId.HasValue && assistantTechnicianId.Value > 0
+                ? assistantTechnicianId
+                : null;
+            if (targetAssignment.AssistantTechnicianId.HasValue && targetAssignment.AssistantTechnicianId == targetAssignment.TechnicianId)
+            {
+                targetAssignment.AssistantTechnicianId = null;
+            }
+            targetAssignment.RequestedTechnicianCount = NormalizeRequestedTechnicianCount(targetAssignment.RequestedTechnicianCount ?? 1);
+            byTeam[teamId] = targetAssignment;
+
+            var orderedAssignments = byTeam
+                .Values
+                .OrderBy(x => x.TeamId)
+                .ToList();
+            var nextCollaborationMeta = BuildDispatchCollaborationMeta(primaryTeamId, orderedAssignments);
+
+            var hasPendingSupportSelection = orderedAssignments.Any(x =>
+                (!primaryTeamId.HasValue || x.TeamId != primaryTeamId.Value) &&
+                NormalizeRequestedTechnicianCount(x.RequestedTechnicianCount).GetValueOrDefault() > 0 &&
+                (!x.TechnicianId.HasValue || x.TechnicianId.Value <= 0));
+
+            var now = DateTime.UtcNow;
+            foreach (var diagnosis in list)
+            {
+                if (diagnosis.Status == DiagnosisStatusCompleted)
+                {
+                    continue;
+                }
+
+                diagnosis.DispatchCollaborationMeta = nextCollaborationMeta;
+                diagnosis.UpdatedBy = teamLeaderId;
+                diagnosis.UpdatedAt = now;
+
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    diagnosis.SupportRequestNote = note.Trim();
+                }
+
+                if (!hasPendingSupportSelection)
+                {
+                    diagnosis.SupportRequestedAt = null;
+                    diagnosis.SupportRequestedBy = null;
+                }
             }
 
             _context.Diagnoses.UpdateRange(list);
@@ -693,6 +1121,7 @@ namespace MyGarage.Services
                     diagnosis.FinalApprovedByManagerId = null;
                     diagnosis.FinalApprovedAt = null;
                     diagnosis.FinalApprovalNote = null;
+                    diagnosis.DispatchCollaborationMeta = null;
                 }
 
                 diagnosis.CancellationStatus = CancellationStatusNone;
@@ -705,7 +1134,7 @@ namespace MyGarage.Services
 
             if (approve)
             {
-                serviceOrder.Status = ServiceOrderStatusInspecting;
+                serviceOrder.Status = ServiceOrderStatusDiagnosing;
                 serviceOrder.UpdatedAt = now;
                 _context.ServiceOrders.Update(serviceOrder);
             }
@@ -762,7 +1191,7 @@ namespace MyGarage.Services
             var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
             if (order != null)
             {
-                order.Status = ServiceOrderStatusInspecting;
+                order.Status = ServiceOrderStatusDiagnosing;
                 order.UpdatedAt = now;
                 _context.ServiceOrders.Update(order);
             }
@@ -775,9 +1204,9 @@ namespace MyGarage.Services
             await RemoveRecommendationsByDiagnosisIdsAsync(activeIds);
             _context.Diagnoses.RemoveRange(activeDiagnoses);
 
-            if (serviceOrder.Status == ServiceOrderStatusInspecting)
+            if (serviceOrder.Status == ServiceOrderStatusDiagnosing)
             {
-                serviceOrder.Status = ServiceOrderStatusNew;
+                serviceOrder.Status = ServiceOrderStatusCheckedIn;
             }
 
             serviceOrder.UpdatedAt = DateTime.UtcNow;

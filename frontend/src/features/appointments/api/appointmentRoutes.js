@@ -7,6 +7,7 @@ export const APPOINTMENTS_ROUTES = {
   slotHolds: `${APPOINTMENTS_BASE}/slot-holds`,
   slotHoldDetail: (holdToken) => `${APPOINTMENTS_BASE}/slot-holds/${holdToken}`,
   guest: `${APPOINTMENTS_BASE}/public-bookings`,
+  receptionBookings: `${APPOINTMENTS_BASE}/reception-bookings`,
   branches: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}`,
   detail: (id) => `${APPOINTMENTS_BASE}/${id}`,
   status: (id) => `${APPOINTMENTS_BASE}/${id}`,

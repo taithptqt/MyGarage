@@ -19,6 +19,7 @@ namespace MyGarage.DTOs.Responses
         public string? PrimaryTeamName { get; set; }
         public IReadOnlyList<long> AssignedTeamIds { get; set; } = Array.Empty<long>();
         public IReadOnlyList<string> AssignedTeamNames { get; set; } = Array.Empty<string>();
+        public IReadOnlyList<DiagnosisSupportingAssignmentDto> SupportingAssignments { get; set; } = Array.Empty<DiagnosisSupportingAssignmentDto>();
         public long? TechnicianId { get; set; }
         public string? TechnicianName { get; set; }
         public long? AssistantTechnicianId { get; set; }
@@ -31,6 +32,9 @@ namespace MyGarage.DTOs.Responses
         public int PendingMinutes { get; set; }
         public int AssignedMinutes { get; set; }
         public bool IsSupportRequested { get; set; }
+        public DateTime? SupportRequestedAt { get; set; }
+        public long? SupportRequestedBy { get; set; }
+        public string? SupportRequestNote { get; set; }
         public bool IsCancelPendingApproval { get; set; }
         public string? CancelReason { get; set; }
         public long? TechnicalApprovedByTeamLeaderId { get; set; }

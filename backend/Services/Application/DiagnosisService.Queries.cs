@@ -42,7 +42,7 @@ namespace MyGarage.Services
 
             var filtered = rows.Where(x =>
                 x.AssignedTeamId == teamId.Value ||
-                (TryParseDispatchCollaborationNote(x.FinalApprovalNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
+                (TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.FinalApprovalNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
                 (
                     x.AssignedTeamId == null &&
                     IsPendingLikeStatus(x.Status) &&
@@ -100,7 +100,7 @@ namespace MyGarage.Services
                 diagnoses = diagnoses
                     .Where(x =>
                         x.AssignedTeamId == teamId.Value ||
-                        (TryParseDispatchCollaborationNote(x.FinalApprovalNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
+                        (TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.FinalApprovalNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
                         (
                             x.AssignedTeamId == null &&
                             IsPendingLikeStatus(x.Status) &&
@@ -152,7 +152,7 @@ namespace MyGarage.Services
                 .ToList();
 
             var collaborationTeamIds = diagnoses
-                .Select(x => TryParseDispatchCollaborationNote(x.FinalApprovalNote))
+                .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.FinalApprovalNote))
                 .Where(x => x != null)
                 .SelectMany(x => x!.TeamIds)
                 .Where(x => x > 0)
@@ -185,6 +185,24 @@ namespace MyGarage.Services
                 .Select(x => x!.Value)
                 .Distinct()
                 .ToList();
+
+            var collaborationTechnicianIds = diagnoses
+                .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.FinalApprovalNote))
+                .Where(x => x != null)
+                .SelectMany(x => x!.TeamAssignments)
+                .SelectMany(x => new long?[] { x.TechnicianId, x.AssistantTechnicianId })
+                .Where(x => x.HasValue && x.Value > 0)
+                .Select(x => x!.Value)
+                .Distinct()
+                .ToList();
+
+            if (collaborationTechnicianIds.Count > 0)
+            {
+                technicianIds = technicianIds
+                    .Concat(collaborationTechnicianIds)
+                    .Distinct()
+                    .ToList();
+            }
             var technicianNameMap = technicianIds.Count == 0
                 ? new Dictionary<long, string>()
                 : await _context.Staffs.AsNoTracking()
@@ -247,6 +265,11 @@ namespace MyGarage.Services
                     var hasCancelPending = list.Any(IsCancellationPending);
                     var isPendingOverdue = pendingMinutes >= UnclaimedEscalationMinutes;
                     var isAssignedOverdue = assignedMinutes >= DiagnosisSlaMinutes;
+                    var latestSupportEntry = list
+                        .Where(x => x.SupportRequestedAt.HasValue)
+                        .OrderByDescending(x => x.SupportRequestedAt ?? DateTime.MinValue)
+                        .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                        .FirstOrDefault();
 
                     string queueColor;
                     string queueState;
@@ -272,7 +295,7 @@ namespace MyGarage.Services
                     }
 
                     var collaborationMeta = list
-                        .Select(x => TryParseDispatchCollaborationNote(x.FinalApprovalNote))
+                        .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.FinalApprovalNote))
                         .FirstOrDefault(x => x != null);
 
                     // Only expose assignment identity when there is an actual handled diagnosis
@@ -319,6 +342,70 @@ namespace MyGarage.Services
                     var primaryTeamName = primaryTeamId.HasValue && teamNameMap.TryGetValue(primaryTeamId.Value, out var resolvedPrimaryTeamName)
                         ? resolvedPrimaryTeamName
                         : null;
+
+                    List<DiagnosisSupportingAssignmentDto> supportingAssignments;
+                    if (collaborationMeta?.TeamAssignments?.Count > 0)
+                    {
+                        supportingAssignments = collaborationMeta.TeamAssignments
+                            .Where(x => x.TeamId > 0 && (!primaryTeamId.HasValue || x.TeamId != primaryTeamId.Value))
+                            .GroupBy(x => x.TeamId)
+                            .Select(group =>
+                            {
+                                var assignment = group.First();
+                                return new DiagnosisSupportingAssignmentDto
+                                {
+                                    TeamId = group.Key,
+                                    TeamName = teamNameMap.TryGetValue(group.Key, out var supportingTeamName) ? supportingTeamName : null,
+                                    TechnicianId = assignment.TechnicianId.HasValue && assignment.TechnicianId.Value > 0
+                                        ? assignment.TechnicianId.Value
+                                        : null,
+                                    TechnicianName = assignment.TechnicianId.HasValue && assignment.TechnicianId.Value > 0 && technicianNameMap.TryGetValue(assignment.TechnicianId.Value, out var supportingTechnicianName)
+                                        ? supportingTechnicianName
+                                        : null,
+                                    AssistantTechnicianId = assignment.AssistantTechnicianId.HasValue && assignment.AssistantTechnicianId.Value > 0
+                                        ? assignment.AssistantTechnicianId.Value
+                                        : null,
+                                    AssistantTechnicianName = assignment.AssistantTechnicianId.HasValue && assignment.AssistantTechnicianId.Value > 0 && technicianNameMap.TryGetValue(assignment.AssistantTechnicianId.Value, out var supportingAssistantName)
+                                        ? supportingAssistantName
+                                        : null,
+                                    RequestedTechnicianCount = assignment.RequestedTechnicianCount.HasValue && assignment.RequestedTechnicianCount.Value > 0
+                                        ? assignment.RequestedTechnicianCount.Value
+                                        : null
+                                };
+                            })
+                            .OrderBy(x => x.TeamName ?? string.Empty)
+                            .ToList();
+                    }
+                    else
+                    {
+                        supportingAssignments = list
+                            .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
+                            .Where(x => !primaryTeamId.HasValue || x.AssignedTeamId.Value != primaryTeamId.Value)
+                            .GroupBy(x => x.AssignedTeamId!.Value)
+                            .Select(group =>
+                            {
+                                var latestTeamDiagnosis = group
+                                    .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                                    .First();
+
+                                return new DiagnosisSupportingAssignmentDto
+                                {
+                                    TeamId = group.Key,
+                                    TeamName = teamNameMap.TryGetValue(group.Key, out var supportingTeamName) ? supportingTeamName : null,
+                                    TechnicianId = latestTeamDiagnosis.TechnicianId > 0 ? latestTeamDiagnosis.TechnicianId : null,
+                                    TechnicianName = latestTeamDiagnosis.TechnicianId > 0 && technicianNameMap.TryGetValue(latestTeamDiagnosis.TechnicianId, out var supportingTechnicianName)
+                                        ? supportingTechnicianName
+                                        : null,
+                                    AssistantTechnicianId = latestTeamDiagnosis.AssistantTechnicianId,
+                                    AssistantTechnicianName = latestTeamDiagnosis.AssistantTechnicianId.HasValue && technicianNameMap.TryGetValue(latestTeamDiagnosis.AssistantTechnicianId.Value, out var supportingAssistantName)
+                                        ? supportingAssistantName
+                                        : null,
+                                    RequestedTechnicianCount = null
+                                };
+                            })
+                            .OrderBy(x => x.TeamName ?? string.Empty)
+                            .ToList();
+                    }
 
                     var technicianId = handledDiagnosis?.TechnicianId ?? 0;
                     var assistantTechnicianId = handledDiagnosis?.AssistantTechnicianId;
@@ -372,6 +459,7 @@ namespace MyGarage.Services
                         PrimaryTeamName = primaryTeamName,
                         AssignedTeamIds = assignedTeamIds,
                         AssignedTeamNames = assignedTeamNames,
+                        SupportingAssignments = supportingAssignments,
                         TechnicianId = technicianId > 0 ? technicianId : null,
                         TechnicianName = technicianNameMap.TryGetValue(technicianId, out var technicianName) ? technicianName : null,
                         AssistantTechnicianId = assistantTechnicianId,
@@ -384,6 +472,9 @@ namespace MyGarage.Services
                         PendingMinutes = Math.Max(0, pendingMinutes),
                         AssignedMinutes = Math.Max(0, assignedMinutes),
                         IsSupportRequested = hasSupport,
+                        SupportRequestedAt = latestSupportEntry?.SupportRequestedAt,
+                        SupportRequestedBy = latestSupportEntry?.SupportRequestedBy,
+                        SupportRequestNote = latestSupportEntry?.SupportRequestNote,
                         IsCancelPendingApproval = hasCancelPending,
                         CancelReason = cancelReason,
                         TechnicalApprovedByTeamLeaderId = technicalApprovedBy,

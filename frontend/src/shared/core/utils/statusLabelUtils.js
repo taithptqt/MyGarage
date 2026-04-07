@@ -8,7 +8,7 @@ const STATUS_LABELS_VI = Object.freeze({
   ARRIVED: "\u0110\u00e3 \u0111\u1ebfn",
   ARRIVED_LATE: "\u0110\u1ebfn tr\u1ec5",
   CHECKED_IN: "\u0110\u00e3 check-in",
-  INSPECTING: "\u0110ang chu\u1ea9n \u0111o\u00e1n",
+  DIAGNOSING: "\u0110ang chu\u1ea9n \u0111o\u00e1n",
   IN_PROGRESS: "\u0110ang x\u1eed l\u00fd",
   WAITING_APPROVAL: "Ch\u1edd b\u00e1o gi\u00e1",
   READY: "S\u1eb5n s\u00e0ng b\u00e0n giao",

@@ -1,0 +1,506 @@
+﻿[
+    {
+        "Table":  "accounting_periods",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "accounts_payable",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "AI_FraudMonitors",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "AI_SmartDispatching",
+        "Column":  "Status",
+        "Value":  "GENERATED",
+        "Count":  7
+    },
+    {
+        "Table":  "Appointments",
+        "Column":  "Status",
+        "Value":  "CANCELED",
+        "Count":  3
+    },
+    {
+        "Table":  "Appointments",
+        "Column":  "Status",
+        "Value":  "CONFIRMED",
+        "Count":  1
+    },
+    {
+        "Table":  "Appointments",
+        "Column":  "Status",
+        "Value":  "NO_SHOW",
+        "Count":  81
+    },
+    {
+        "Table":  "Appointments",
+        "Column":  "Status",
+        "Value":  "PENDING",
+        "Count":  9
+    },
+    {
+        "Table":  "ApprovalRequests",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "attendance_adjustments",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "bank_reconciliations",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "bank_transactions",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Bays",
+        "Column":  "OperationalStatus",
+        "Value":  "ACTIVE",
+        "Count":  60
+    },
+    {
+        "Table":  "Branches",
+        "Column":  "Status",
+        "Value":  "ACTIVE",
+        "Count":  3
+    },
+    {
+        "Table":  "CommissionTransactions",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Conversations",
+        "Column":  "Status",
+        "Value":  "WAITING_FOR_CUSTOMER",
+        "Count":  1
+    },
+    {
+        "Table":  "Conversations",
+        "Column":  "Status",
+        "Value":  "WAITING_FOR_STAFF",
+        "Count":  3
+    },
+    {
+        "Table":  "Deliveries",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Diagnoses",
+        "Column":  "CancellationStatus",
+        "Value":  "NONE",
+        "Count":  1
+    },
+    {
+        "Table":  "Diagnoses",
+        "Column":  "Status",
+        "Value":  "ASSIGNED",
+        "Count":  4
+    },
+    {
+        "Table":  "Diagnoses",
+        "Column":  "Status",
+        "Value":  "PENDING",
+        "Count":  1
+    },
+    {
+        "Table":  "employee_loans",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "ExpenseLogs",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "finance_approval_requests",
+        "Column":  "status",
+        "Value":  "APPROVED",
+        "Count":  1
+    },
+    {
+        "Table":  "GatePass",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "GroupSessions",
+        "Column":  "Status",
+        "Value":  "CANCELED",
+        "Count":  8
+    },
+    {
+        "Table":  "GroupSessions",
+        "Column":  "Status",
+        "Value":  "PARTIAL_CONFIRMED",
+        "Count":  1
+    },
+    {
+        "Table":  "GroupSessions",
+        "Column":  "Status",
+        "Value":  "PENDING",
+        "Count":  8
+    },
+    {
+        "Table":  "InventoryAudits",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Invoices",
+        "Column":  "PaymentStatus",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "journal_entries",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "MaterialRequestDetails",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "MaterialRequests",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "MaterialReturns",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "overtime_entries",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "ParkingSlots",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Payments",
+        "Column":  "Status",
+        "Value":  "COMPLETED",
+        "Count":  2
+    },
+    {
+        "Table":  "Payments",
+        "Column":  "Status",
+        "Value":  "PENDING",
+        "Count":  24
+    },
+    {
+        "Table":  "payroll_items",
+        "Column":  "status",
+        "Value":  "DRAFT",
+        "Count":  40
+    },
+    {
+        "Table":  "payroll_items",
+        "Column":  "status",
+        "Value":  "PAID",
+        "Count":  37
+    },
+    {
+        "Table":  "payroll_periods",
+        "Column":  "status",
+        "Value":  "OPEN",
+        "Count":  5
+    },
+    {
+        "Table":  "payroll_periods",
+        "Column":  "status",
+        "Value":  "PAID",
+        "Count":  7
+    },
+    {
+        "Table":  "payroll_runs",
+        "Column":  "status",
+        "Value":  "DRAFT",
+        "Count":  3
+    },
+    {
+        "Table":  "payroll_runs",
+        "Column":  "status",
+        "Value":  "PAID",
+        "Count":  13
+    },
+    {
+        "Table":  "PurchaseOrders",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "QC_Inspections",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "RetailOrders",
+        "Column":  "Status",
+        "Value":  "CONFIRMED",
+        "Count":  2
+    },
+    {
+        "Table":  "RetailOrders",
+        "Column":  "Status",
+        "Value":  "DRAFT",
+        "Count":  41
+    },
+    {
+        "Table":  "RetailReturnItems",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "RetailReturns",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "salary_advances",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "ServiceOrderDetails",
+        "Column":  "InsuranceStatus",
+        "Value":  "NOT_APPLICABLE",
+        "Count":  3
+    },
+    {
+        "Table":  "ServiceOrderDetails",
+        "Column":  "Status",
+        "Value":  "APPROVED",
+        "Count":  3
+    },
+    {
+        "Table":  "ServiceOrders",
+        "Column":  "DepositStatus",
+        "Value":  "NOT_REQUIRED",
+        "Count":  21
+    },
+    {
+        "Table":  "ServiceOrders",
+        "Column":  "PaymentStatus",
+        "Value":  "UNPAID",
+        "Count":  21
+    },
+    {
+        "Table":  "ServiceOrders",
+        "Column":  "QCStatus",
+        "Value":  "PENDING",
+        "Count":  21
+    },
+    {
+        "Table":  "ServiceOrders",
+        "Column":  "Status",
+        "Value":  "INSPECTING",
+        "Count":  4
+    },
+    {
+        "Table":  "ServiceOrders",
+        "Column":  "Status",
+        "Value":  "NEW",
+        "Count":  17
+    },
+    {
+        "Table":  "ServiceRefunds",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "ServiceStaffAssignments",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "ShiftClosings",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "staff_contracts",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "staff_salary_profiles",
+        "Column":  "status",
+        "Value":  "ACTIVE",
+        "Count":  88
+    },
+    {
+        "Table":  "Staffs",
+        "Column":  "Status",
+        "Value":  "ACTIVE",
+        "Count":  92
+    },
+    {
+        "Table":  "StaffSchedules",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "supplier_invoices",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "tax_filings",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "Teams",
+        "Column":  "Status",
+        "Value":  "ACTIVE",
+        "Count":  15
+    },
+    {
+        "Table":  "VoucherApprovalRequests",
+        "Column":  "Status",
+        "Value":  "APPROVED",
+        "Count":  9
+    },
+    {
+        "Table":  "VoucherApprovalRequests",
+        "Column":  "Status",
+        "Value":  "PENDING",
+        "Count":  6
+    },
+    {
+        "Table":  "VoucherApprovalRequests",
+        "Column":  "Status",
+        "Value":  "REJECTED",
+        "Count":  4
+    },
+    {
+        "Table":  "VoucherCampaigns",
+        "Column":  "Status",
+        "Value":  "ACTIVE",
+        "Count":  1
+    },
+    {
+        "Table":  "VoucherCampaigns",
+        "Column":  "Status",
+        "Value":  "ENDED",
+        "Count":  1
+    },
+    {
+        "Table":  "VoucherCodeBatches",
+        "Column":  "Status",
+        "Value":  "COMPLETED",
+        "Count":  2
+    },
+    {
+        "Table":  "VoucherRedemptions",
+        "Column":  "RedemptionStatus",
+        "Value":  "FAILED",
+        "Count":  10
+    },
+    {
+        "Table":  "VoucherRedemptions",
+        "Column":  "RedemptionStatus",
+        "Value":  "REDEEMED",
+        "Count":  65
+    },
+    {
+        "Table":  "VoucherRedemptions",
+        "Column":  "RedemptionStatus",
+        "Value":  "REVERSED",
+        "Count":  18
+    },
+    {
+        "Table":  "VoucherRedemptions",
+        "Column":  "ValidationStatus",
+        "Value":  "FAILED",
+        "Count":  10
+    },
+    {
+        "Table":  "VoucherRedemptions",
+        "Column":  "ValidationStatus",
+        "Value":  "VALIDATED",
+        "Count":  83
+    },
+    {
+        "Table":  "Vouchers",
+        "Column":  "Status",
+        "Value":  "ACTIVE",
+        "Count":  3
+    },
+    {
+        "Table":  "vw_payroll_run_summary",
+        "Column":  "status",
+        "Value":  "DRAFT",
+        "Count":  3
+    },
+    {
+        "Table":  "vw_payroll_run_summary",
+        "Column":  "status",
+        "Value":  "PAID",
+        "Count":  13
+    },
+    {
+        "Table":  "vw_supplier_payable_summary",
+        "Column":  "status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    },
+    {
+        "Table":  "WorkSlots",
+        "Column":  "Status",
+        "Value":  "(NO_DATA)",
+        "Count":  0
+    }
+]

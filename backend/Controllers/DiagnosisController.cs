@@ -20,7 +20,7 @@ namespace MyGarage.Controllers
         private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
         private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
         private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
-        private const string ServiceOrderStatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
+        private const string ServiceOrderStatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
 
         public sealed record DiagnosisStatusPatchDto
         {
@@ -78,6 +78,104 @@ namespace MyGarage.Controllers
 
             var suggestion = await _diagnosisService.BuildDispatchSuggestionAsync(serviceOrderId, teamId);
             return Ok(suggestion);
+        }
+
+        [HttpGet("service-orders/{serviceOrderId:long}/intake-suggestions")]
+        public async Task<ActionResult<DiagnosisIntakeSuggestionDto>> GetIntakeSuggestion(
+            long serviceOrderId,
+            [FromQuery] string? dispatchTag = null,
+            [FromQuery] int? bufferMinutes = null,
+            [FromQuery] string? intakePackageCode = null)
+        {
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            }
+
+            var suggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
+                serviceOrderId,
+                NormalizeDispatchTag(dispatchTag),
+                bufferMinutes,
+                intakePackageCode);
+
+            return Ok(suggestion);
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/handover-snapshots")]
+        public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> CreateHandoverSnapshot(
+            long serviceOrderId,
+            [FromBody] DiagnosisHandoverSnapshotCreateDto? request)
+        {
+            if (request == null)
+            {
+                return BadRequest(new { message = "Du lieu T2 khong hop le." });
+            }
+
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            }
+
+            var snapshot = await _diagnosisService.CreateHandoverSnapshotAsync(serviceOrderId, request);
+            return Ok(snapshot);
+        }
+
+        [HttpGet("service-orders/{serviceOrderId:long}/handover-snapshots/latest")]
+        public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> GetLatestHandoverSnapshot(long serviceOrderId)
+        {
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            }
+
+            var snapshot = await _diagnosisService.GetLatestHandoverSnapshotAsync(serviceOrderId);
+            if (snapshot == null)
+            {
+                return NotFound(new { message = "Chua co snapshot T2 sau chan doan." });
+            }
+
+            return Ok(snapshot);
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/handover-snapshots/{snapshotId:long}/customer-decisions")]
+        public async Task<ActionResult<DiagnosisHandoverSnapshotResponseDto>> ApplyHandoverCustomerDecision(
+            long serviceOrderId,
+            long snapshotId,
+            [FromBody] DiagnosisHandoverDecisionCreateDto? request)
+        {
+            if (request == null)
+            {
+                return BadRequest(new { message = "Thieu thong tin duyet/Tu choi cua khach." });
+            }
+
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            }
+
+            try
+            {
+                var result = await _diagnosisService.ApplyHandoverCustomerDecisionAsync(serviceOrderId, snapshotId, request);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("kpis/intake-conversions")]
+        public async Task<ActionResult<DiagnosisIntakeKpiResponseDto>> GetIntakeConversionKpi(
+            [FromQuery] long? branchId = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
+        {
+            var result = await _diagnosisService.GetIntakeConversionKpiAsync(branchId, startDate, endDate);
+            return Ok(result);
         }
 
         [HttpGet("{id:long}")]
@@ -167,10 +265,80 @@ namespace MyGarage.Controllers
 
             var symptoms = ExtractSymptomsFromNotes(serviceOrder.CustomerNotes);
             var dispatchTag = NormalizeDispatchTag(request?.DispatchTag);
+            DiagnosisIntakeSuggestionDto? intakeSuggestion = null;
+            var shouldBuildIntakeSuggestion =
+                (request?.AutoAssign ?? false) ||
+                (request?.EnforceCapacityGuard ?? false) ||
+                !string.IsNullOrWhiteSpace(request?.IntakePackageCode);
+
+            if (shouldBuildIntakeSuggestion)
+            {
+                intakeSuggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
+                    serviceOrderId,
+                    dispatchTag,
+                    request?.BufferMinutes,
+                    request?.IntakePackageCode);
+
+                var bypassConflictGuard = request?.BypassConflictGuard ?? false;
+                if (!intakeSuggestion.CanApply && !bypassConflictGuard)
+                {
+                    return Conflict(new
+                    {
+                        message = "Khung gio bi xung dot lich booking. Bat bypass de tiep tuc.",
+                        conflictLevel = intakeSuggestion.ConflictLevel,
+                        conflictMinutes = intakeSuggestion.ConflictMinutes,
+                        finalPackageCode = intakeSuggestion.FinalPackageCode,
+                        t1EstimatedHandover = intakeSuggestion.T1EstimatedHandover
+                    });
+                }
+
+                if (intakeSuggestion.RequiresCustomerConsent && request?.CustomerConsentAccepted != true)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Goi chan doan 30p/60p can xac nhan dong y cua khach truoc khi tao yeu cau."
+                    });
+                }
+            }
+
             var placeholderTechnicianId = await _diagnosisService.ResolvePlaceholderTechnicianIdAsync(serviceOrder, dispatchTag);
             var newDiagnosis = await _diagnosisService.CreatePendingDiagnosesAsync(serviceOrderId, placeholderTechnicianId, symptoms, dispatchTag);
 
-            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, ServiceOrderStatusInspecting);
+            if ((request?.AutoAssign ?? false) && intakeSuggestion != null && intakeSuggestion.SuggestedLeadTechnicianId.HasValue)
+            {
+                var resolvedTeamId = intakeSuggestion.SuggestedTeamId;
+                if (!resolvedTeamId.HasValue)
+                {
+                    resolvedTeamId = await _diagnosisService.ResolveTeamIdForTechnicianAsync(intakeSuggestion.SuggestedLeadTechnicianId.Value);
+                }
+
+                await _diagnosisService.AssignDiagnosesAsync(
+                    newDiagnosis,
+                    intakeSuggestion.SuggestedLeadTechnicianId.Value,
+                    assistantTechnicianId: intakeSuggestion.SuggestedAssistantTechnicianId,
+                    teamId: resolvedTeamId,
+                    supportingTeamIds: null,
+                    supportingAssignments: null,
+                    bayId: intakeSuggestion.SuggestedBayId,
+                    managerOverride: false);
+            }
+
+            if (intakeSuggestion != null)
+            {
+                serviceOrder.EstimatedHandover = intakeSuggestion.T1EstimatedHandover;
+                await _diagnosisService.RecordIntakeSnapshotAsync(
+                    serviceOrder,
+                    intakeSuggestion,
+                    dispatchTag,
+                    bypassConflictGuard: request?.BypassConflictGuard ?? false,
+                    autoAssign: request?.AutoAssign ?? false,
+                    customerConsentAccepted: request?.CustomerConsentAccepted == true,
+                    customerConsentChannel: request?.CustomerConsentChannel,
+                    customerConsentNote: request?.CustomerConsentNote,
+                    diagnoses: newDiagnosis);
+            }
+
+            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, ServiceOrderStatusDiagnosing);
 
             var dto = _mapper.Map<DiagnosisResponseDto>(newDiagnosis.First());
             return Ok(dto);
@@ -220,7 +388,7 @@ namespace MyGarage.Controllers
             }
 
             await _diagnosisService.StartDiagnosesAsync(activeDiagnosis, request.TechnicianId, request.BayId);
-            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, ServiceOrderStatusInspecting);
+            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, ServiceOrderStatusDiagnosing);
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
@@ -312,7 +480,73 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de yeu cau ho tro." });
             }
 
-            await _diagnosisService.MarkSupportRequestedAsync(activeDiagnosis, request.RequestedByStaffId, request.Note);
+            var primaryTeamId = activeDiagnosis
+                .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
+                .Select(x => x.AssignedTeamId!.Value)
+                .FirstOrDefault();
+            if (primaryTeamId <= 0)
+            {
+                primaryTeamId = null;
+            }
+
+            var normalizedSupportingAssignments = NormalizeSupportingAssignments(
+                teamIds: null,
+                assignments: request.SupportingAssignments,
+                primaryTeamId: primaryTeamId);
+
+            if (normalizedSupportingAssignments.Count > 0 && !primaryTeamId.HasValue)
+            {
+                return BadRequest(new { message = "Chi cho phep yeu cau to phoi hop sau khi da co to chinh." });
+            }
+
+            if (normalizedSupportingAssignments.Count > 0)
+            {
+                var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+                if (serviceOrder == null)
+                {
+                    return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                }
+
+                var dispatchTag = activeDiagnosis
+                    .Select(x => x.DispatchTag)
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+                foreach (var supportingAssignment in normalizedSupportingAssignments)
+                {
+                    if (supportingAssignment.RequestedTechnicianCount.GetValueOrDefault() <= 0)
+                    {
+                        return BadRequest(new { message = "Moi to phoi hop phai co so luong tho yeu cau lon hon 0." });
+                    }
+
+                    if (supportingAssignment.TechnicianId > 0 || supportingAssignment.AssistantTechnicianId.HasValue)
+                    {
+                        return BadRequest(new { message = "To truong to chinh khong duoc chon tho cho to phoi hop." });
+                    }
+
+                    var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingAssignment.TeamId);
+                    if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
+                    {
+                        return BadRequest(new { message = $"To phoi hop #{supportingAssignment.TeamId} khong ton tai." });
+                    }
+
+                    if (supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
+                    {
+                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                    }
+
+                    var isCompatible = await _diagnosisService.IsDispatchTagCompatibleAsync(dispatchTag, supportingAssignment.TeamId);
+                    if (!isCompatible)
+                    {
+                        return Conflict(new { message = "Co to phoi hop khong dung chuyen mon cua lenh chan doan." });
+                    }
+                }
+            }
+
+            await _diagnosisService.MarkSupportRequestedAsync(
+                activeDiagnosis,
+                request.RequestedByStaffId,
+                request.Note,
+                normalizedSupportingAssignments);
             return Ok(new
             {
                 message = "Da ghi nhan yeu cau ho tro ky thuat.",
@@ -464,15 +698,34 @@ namespace MyGarage.Controllers
                 }
             }
 
-            var normalizedSupportingTeamIds = NormalizeSupportingTeamIds(request.SupportingTeamIds, resolvedTeamId);
+            var normalizedSupportingAssignments = NormalizeSupportingAssignments(
+                request.SupportingTeamIds,
+                request.SupportingAssignments,
+                resolvedTeamId);
+            var normalizedSupportingTeamIds = normalizedSupportingAssignments
+                .Select(x => x.TeamId)
+                .Distinct()
+                .ToList();
+
             if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
             {
                 return BadRequest(new { message = "Khi co to phoi hop, bat buoc chi dinh to chinh." });
             }
             if (normalizedSupportingTeamIds.Count > 0)
             {
-                foreach (var supportingTeamId in normalizedSupportingTeamIds)
+                foreach (var supportingAssignment in normalizedSupportingAssignments)
                 {
+                    if (supportingAssignment.TechnicianId <= 0)
+                    {
+                        return BadRequest(new { message = "Moi to phoi hop phai chi dinh tho chinh." });
+                    }
+
+                    if (supportingAssignment.AssistantTechnicianId.HasValue && supportingAssignment.AssistantTechnicianId.Value == supportingAssignment.TechnicianId)
+                    {
+                        return BadRequest(new { message = "Tho phu cua to phoi hop khong duoc trung tho chinh." });
+                    }
+
+                    var supportingTeamId = supportingAssignment.TeamId;
                     var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
                     if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
                     {
@@ -482,6 +735,33 @@ namespace MyGarage.Controllers
                     if (supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
                     {
                         return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                    }
+
+                    var supportingLeadExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.TechnicianId);
+                    if (!supportingLeadExists)
+                    {
+                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong ton tai." });
+                    }
+
+                    var supportingLeadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.TechnicianId, supportingTeamId);
+                    if (!supportingLeadInTeam)
+                    {
+                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                    }
+
+                    if (supportingAssignment.AssistantTechnicianId.HasValue)
+                    {
+                        var supportingAssistantExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.AssistantTechnicianId.Value);
+                        if (!supportingAssistantExists)
+                        {
+                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong ton tai." });
+                        }
+
+                        var supportingAssistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.AssistantTechnicianId.Value, supportingTeamId);
+                        if (!supportingAssistantInTeam)
+                        {
+                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                        }
                     }
                 }
             }
@@ -501,6 +781,7 @@ namespace MyGarage.Controllers
                 assistantTechnicianId: request.AssistantTechnicianId,
                 teamId: resolvedTeamId,
                 supportingTeamIds: normalizedSupportingTeamIds,
+                supportingAssignments: normalizedSupportingAssignments,
                 bayId: request.BayId,
                 managerOverride: true);
 
@@ -510,6 +791,80 @@ namespace MyGarage.Controllers
 
             var dto = _mapper.Map<DiagnosisResponseDto>(response);
             return Ok(dto);
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/supporting-team-selections")]
+        public async Task<ActionResult<DiagnosisResponseDto>> SelectSupportingTeamAssignment(
+            long serviceOrderId,
+            [FromBody] DiagnosisSupportingTeamSelectionRequestDto request)
+        {
+            if (request == null || request.TeamLeaderId <= 0 || request.TeamId <= 0 || request.TechnicianId <= 0)
+            {
+                return BadRequest(new { message = "Thieu thong tin chon tho ho tro cua to phoi hop." });
+            }
+
+            if (request.AssistantTechnicianId.HasValue && request.AssistantTechnicianId.Value == request.TechnicianId)
+            {
+                return BadRequest(new { message = "Tho phu khong duoc trung voi tho chinh." });
+            }
+
+            var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
+            if (teamLeader == null)
+            {
+                return BadRequest(new { message = "To truong khong ton tai." });
+            }
+
+            var teamLeaderTeamId = teamLeader.TeamId;
+            if (!teamLeaderTeamId.HasValue || teamLeaderTeamId.Value != request.TeamId)
+            {
+                return BadRequest(new { message = "To truong chi duoc chon nhan su cho to cua minh." });
+            }
+
+            var leadExists = await _diagnosisService.TechnicianExistsAsync(request.TechnicianId);
+            if (!leadExists)
+            {
+                return BadRequest(new { message = "Tho chinh khong ton tai." });
+            }
+
+            var leadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.TechnicianId, request.TeamId);
+            if (!leadInTeam)
+            {
+                return BadRequest(new { message = "Tho chinh khong thuoc to duoc yeu cau." });
+            }
+
+            if (request.AssistantTechnicianId.HasValue)
+            {
+                var assistantExists = await _diagnosisService.TechnicianExistsAsync(request.AssistantTechnicianId.Value);
+                if (!assistantExists)
+                {
+                    return BadRequest(new { message = "Tho phu khong ton tai." });
+                }
+
+                var assistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.AssistantTechnicianId.Value, request.TeamId);
+                if (!assistantInTeam)
+                {
+                    return BadRequest(new { message = "Tho phu khong thuoc to duoc yeu cau." });
+                }
+            }
+
+            var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
+            if (activeDiagnosis.Count == 0)
+            {
+                return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de cap nhat nhan su ho tro." });
+            }
+
+            await _diagnosisService.AssignSupportingTeamSelectionAsync(
+                activeDiagnosis,
+                request.TeamId,
+                request.TeamLeaderId,
+                request.TechnicianId,
+                request.AssistantTechnicianId,
+                request.Note);
+
+            var response = activeDiagnosis
+                .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                .First();
+            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
         }
 
         [HttpPatch("{id:long}")]
@@ -562,12 +917,57 @@ namespace MyGarage.Controllers
             return rawTag.Trim().ToUpperInvariant();
         }
 
-        private static IReadOnlyList<long> NormalizeSupportingTeamIds(IEnumerable<long>? teamIds, long? primaryTeamId)
+        private static IReadOnlyList<DiagnosisSupportingTeamAssignmentDto> NormalizeSupportingAssignments(
+            IEnumerable<long>? teamIds,
+            IEnumerable<DiagnosisSupportingTeamAssignmentDto>? assignments,
+            long? primaryTeamId)
         {
-            return (teamIds ?? Array.Empty<long>())
-                .Where(x => x > 0)
-                .Where(x => !primaryTeamId.HasValue || x != primaryTeamId.Value)
-                .Distinct()
+            var byTeam = new Dictionary<long, DiagnosisSupportingTeamAssignmentDto>();
+
+            foreach (var teamId in teamIds ?? Array.Empty<long>())
+            {
+                if (teamId <= 0)
+                {
+                    continue;
+                }
+
+                if (primaryTeamId.HasValue && teamId == primaryTeamId.Value)
+                {
+                    continue;
+                }
+
+                byTeam[teamId] = new DiagnosisSupportingTeamAssignmentDto
+                {
+                    TeamId = teamId,
+                    TechnicianId = 0,
+                    AssistantTechnicianId = null,
+                    RequestedTechnicianCount = null
+                };
+            }
+
+            foreach (var assignment in assignments ?? Array.Empty<DiagnosisSupportingTeamAssignmentDto>())
+            {
+                if (assignment == null || assignment.TeamId <= 0)
+                {
+                    continue;
+                }
+
+                if (primaryTeamId.HasValue && assignment.TeamId == primaryTeamId.Value)
+                {
+                    continue;
+                }
+
+                byTeam[assignment.TeamId] = new DiagnosisSupportingTeamAssignmentDto
+                {
+                    TeamId = assignment.TeamId,
+                    TechnicianId = assignment.TechnicianId,
+                    AssistantTechnicianId = assignment.AssistantTechnicianId,
+                    RequestedTechnicianCount = assignment.RequestedTechnicianCount
+                };
+            }
+
+            return byTeam.Values
+                .OrderBy(x => x.TeamId)
                 .ToList();
         }
 
@@ -687,7 +1087,15 @@ namespace MyGarage.Controllers
                 }
             }
 
-            var normalizedSupportingTeamIds = NormalizeSupportingTeamIds(request.SupportingTeamIds, resolvedTeamId);
+            var normalizedSupportingAssignments = NormalizeSupportingAssignments(
+                request.SupportingTeamIds,
+                request.SupportingAssignments,
+                resolvedTeamId);
+            var normalizedSupportingTeamIds = normalizedSupportingAssignments
+                .Select(x => x.TeamId)
+                .Distinct()
+                .ToList();
+
             if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
             {
                 return BadRequest(new { message = "Khi co to phoi hop, bat buoc chon to chinh." });
@@ -705,8 +1113,19 @@ namespace MyGarage.Controllers
 
             if (normalizedSupportingTeamIds.Count > 0)
             {
-                foreach (var supportingTeamId in normalizedSupportingTeamIds)
+                foreach (var supportingAssignment in normalizedSupportingAssignments)
                 {
+                    if (supportingAssignment.TechnicianId <= 0)
+                    {
+                        return BadRequest(new { message = "Moi to phoi hop phai chi dinh tho chinh." });
+                    }
+
+                    if (supportingAssignment.AssistantTechnicianId.HasValue && supportingAssignment.AssistantTechnicianId.Value == supportingAssignment.TechnicianId)
+                    {
+                        return BadRequest(new { message = "Tho phu cua to phoi hop khong duoc trung tho chinh." });
+                    }
+
+                    var supportingTeamId = supportingAssignment.TeamId;
                     var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
                     if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
                     {
@@ -716,6 +1135,33 @@ namespace MyGarage.Controllers
                     if (serviceOrder != null && supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
                     {
                         return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                    }
+
+                    var supportingLeadExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.TechnicianId);
+                    if (!supportingLeadExists)
+                    {
+                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong ton tai." });
+                    }
+
+                    var supportingLeadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.TechnicianId, supportingTeamId);
+                    if (!supportingLeadInTeam)
+                    {
+                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                    }
+
+                    if (supportingAssignment.AssistantTechnicianId.HasValue)
+                    {
+                        var supportingAssistantExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.AssistantTechnicianId.Value);
+                        if (!supportingAssistantExists)
+                        {
+                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong ton tai." });
+                        }
+
+                        var supportingAssistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.AssistantTechnicianId.Value, supportingTeamId);
+                        if (!supportingAssistantInTeam)
+                        {
+                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                        }
                     }
                 }
             }
@@ -758,6 +1204,7 @@ namespace MyGarage.Controllers
                 request.AssistantTechnicianId,
                 resolvedTeamId,
                 normalizedSupportingTeamIds,
+                normalizedSupportingAssignments,
                 request.BayId,
                 request.IsManagerOverride);
 
@@ -799,7 +1246,7 @@ namespace MyGarage.Controllers
             var order = await _diagnosisService.GetServiceOrderAsync(existingItem.ServiceOrderId);
             if (order != null)
             {
-                await _diagnosisService.UpdateServiceOrderStatusAsync(order, ServiceOrderStatusInspecting);
+                await _diagnosisService.UpdateServiceOrderStatusAsync(order, ServiceOrderStatusDiagnosing);
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);

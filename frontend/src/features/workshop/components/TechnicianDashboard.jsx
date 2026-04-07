@@ -584,7 +584,7 @@ export default function TechnicianDashboard() {
 const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagnosis, onFinish }) => {
   const order = assignment.order;
   const detail = assignment.detail;
-  const isDiagnosing = normalizeCode(readValue(order, "status", "Status")) === "DIAGNOSING" || normalizeCode(readValue(order, "status", "Status")) === "INSPECTING";
+  const isDiagnosing = normalizeCode(readValue(order, "status", "Status")) === "DIAGNOSING";
 
   return (
     <Box bg="white" p={5} borderRadius="2xl" boxShadow="0px 8px 24px rgba(17, 38, 146, 0.04)" border="1px solid" borderColor="gray.50">

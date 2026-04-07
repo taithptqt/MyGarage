@@ -1816,53 +1816,27 @@ export default function CreateServiceOrderPage() {
         return payload;
       });
 
-      let createdCount = 0;
       try {
-        if (shouldCreateGroupSession) {
-          const customerId = Number(formData.customerId || 0);
-          const branchId = Number(effectiveBranchId || 0);
-          if (!customerId || !branchId) {
-            throw new Error("Khong the tao GroupSession vi thieu customerId hoac branchId hop le.");
-          }
-
-          const groupSessionResponse = await serviceOrderApi.createGroupSession({
-            customerId,
-            branchId,
-            customerNote: null,
-          });
-
-          const parsedGroupSessionId = Number(
-            groupSessionResponse?.id ??
-            groupSessionResponse?.Id ??
-            groupSessionResponse?.groupSessionId ??
-            groupSessionResponse?.GroupSessionId ??
-            0
-          );
-
-          if (!Number.isFinite(parsedGroupSessionId) || parsedGroupSessionId <= 0) {
-            throw new Error("Tao GroupSession thanh cong nhung khong nhan duoc GroupSessionId.");
-          }
-
-          createTargets.forEach((payload) => {
-            payload.groupSessionId = parsedGroupSessionId;
-          });
-        }
-
-        for (const payload of createTargets) {
-          await serviceOrderApi.createWorkshop(payload);
-          createdCount += 1;
-        }
+        const batchResponse = await serviceOrderApi.createWorkshopBatch({
+          createGroupSession: shouldCreateGroupSession,
+          customerId: shouldCreateGroupSession ? Number(formData.customerId || 0) : null,
+          branchId: shouldCreateGroupSession ? Number(effectiveBranchId || 0) : null,
+          customerNote: null,
+          items: createTargets,
+        });
+        const createdCount = Number(
+          batchResponse?.totalCreated ??
+          batchResponse?.TotalCreated ??
+          (Array.isArray(batchResponse?.orders) ? batchResponse.orders.length : 0) ??
+          (Array.isArray(batchResponse?.Orders) ? batchResponse.Orders.length : 0)
+        ) || createTargets.length;
         setSuccessOrderSummary({
           count: createdCount,
           isGroup: createTargets.length > 1,
         });
       } catch (err) {
         const message = getApiErrorMessage(err);
-        if (createdCount > 0) {
-          setError(`Đã tạo ${createdCount}/${createTargets.length} lệnh sửa chữa. Phần còn lại lỗi: ${message}`);
-        } else {
-          setError(message);
-        }
+        setError(message);
         scrollToPageTop();
       } finally {
         setSaving(false);

@@ -10,7 +10,7 @@ import "./VehicleManagementPage.css";
 const STATUS_OPTIONS = [
   { value: "WAITING_RECEIVE", label: "Chờ tiếp nhận" },
   { value: "RECEIVED", label: "Đã tiếp nhận" },
-  { value: "INSPECTING", label: "Đang kiểm tra" },
+  { value: "DIAGNOSING", label: "Đang kiểm tra" },
   { value: "REPAIRING", label: "Đang sửa" },
   { value: "WAITING_PARTS", label: "Chờ phụ tùng" },
   { value: "WAITING_DELIVERY", label: "Chờ giao" },

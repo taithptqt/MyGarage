@@ -7,7 +7,7 @@ import { getStaffById, updateStaff, uploadStaffAvatar } from "@features/admin/ap
 import ImageCropper from "@features/workshop/components/ImageCropper";
 import "./ProfileDialog.css";
 
-const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"];
+const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"];
 
 function toDateInput(value) {
   if (!value) return "";

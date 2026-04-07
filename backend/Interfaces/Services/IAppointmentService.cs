@@ -21,6 +21,7 @@ namespace MyGarage.Interfaces
         Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto);
         Task<bool> ReleaseSlotHoldAsync(string holdToken);
         Task<Appointment> BookAsync(long customerId, BookAppointmentRequestDto dto);
+        Task<ReceptionAppointmentSaveResponseDto> SaveReceptionBookingAsync(long actorUserId, ReceptionAppointmentSaveRequestDto dto);
         Task<GroupSessionResponseDto> BookBatchAsync(long customerId, BookAppointmentBatchRequestDto dto);
         Task<GroupSessionResponseDto> BookBatchForCustomerAsync(long actorUserId, long targetCustomerId, BookAppointmentBatchRequestDto dto);
         Task<Appointment?> ConfirmAsync(long id, long? actorUserId = null);

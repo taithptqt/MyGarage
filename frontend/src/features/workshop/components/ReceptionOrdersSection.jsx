@@ -51,7 +51,6 @@ const GROUP_STATUS_PRIORITY = [
   "WAITING_APPROVAL",
   "QUOTING",
   "DIAGNOSING",
-  "INSPECTING",
   "IN_PROGRESS",
   "REPAIRING",
   "READY",
@@ -115,6 +114,28 @@ function buildOrderRowInteraction(order, onOrderClick) {
   };
 }
 
+function normalizePackageCode(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "MINI") return "MINI_10";
+  if (normalized === "QUICK") return "QUICK_30";
+  if (normalized === "FULL") return "FULL_60";
+  return normalized || "MINI_10";
+}
+
+function resolvePackageLabel(packageCode) {
+  const normalized = normalizePackageCode(packageCode);
+  if (normalized === "MINI_10") return "Mini Check (10p)";
+  if (normalized === "QUICK_30") return "Kiểm tra nhanh (30p)";
+  if (normalized === "FULL_60") return "Kiểm tra tổng quát (60p)";
+  return normalized;
+}
+
+function formatPercentValue(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "0%";
+  return `${parsed.toFixed(1)}%`;
+}
+
 export default function ReceptionOrdersSection() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -139,6 +160,7 @@ export default function ReceptionOrdersSection() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
   const [actingGroup, setActingGroup] = useState(null);
+  const [intakeKpi, setIntakeKpi] = useState(null);
 
   const contextBranchId = parseBranchId(selectedBranchId);
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
@@ -148,12 +170,15 @@ export default function ReceptionOrdersSection() {
     setLoading(true);
     setError("");
     try {
-      const [oRes, cRes, vRes, sRes, rRes] = await Promise.all([
+      const [oRes, cRes, vRes, sRes, rRes, kpiRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllCustomers(),
         getAllVehicles(),
         getAllStaff(),
         getAllRoles(),
+        serviceOrderApi
+          .getDiagnosisIntakeConversionKpi({ branchId: effectiveBranchId || undefined })
+          .catch(() => null),
       ]);
 
       setOrders(Array.isArray(oRes) ? oRes : []);
@@ -168,6 +193,7 @@ export default function ReceptionOrdersSection() {
         return isReceptionist && branchMatched;
       });
       setStaff(filteredStaff);
+      setIntakeKpi(kpiRes && typeof kpiRes === "object" ? kpiRes : null);
     } catch (err) {
       setError(err?.message || "Không thể tải dữ liệu tiếp nhận.");
     } finally {
@@ -326,6 +352,43 @@ export default function ReceptionOrdersSection() {
     [orders]
   );
 
+  const intakePackageKpis = useMemo(() => {
+    const baseItems = [
+      { packageCode: "MINI_10", packageName: "Mini Check (10p)" },
+      { packageCode: "QUICK_30", packageName: "Kiểm tra nhanh (30p)" },
+      { packageCode: "FULL_60", packageName: "Kiểm tra tổng quát (60p)" },
+    ];
+
+    const rawItems = Array.isArray(intakeKpi?.packageConversions) ? intakeKpi.packageConversions : [];
+    const byCode = new Map();
+    rawItems.forEach((item) => {
+      const normalizedCode = normalizePackageCode(item?.packageCode);
+      byCode.set(normalizedCode, item);
+    });
+
+    return baseItems.map((base) => {
+      const matched = byCode.get(base.packageCode);
+      return {
+        packageCode: base.packageCode,
+        packageName: base.packageName || resolvePackageLabel(base.packageCode) || matched?.packageName,
+        totalOrders: Number(matched?.totalOrders || 0),
+        approvedOrders: Number(matched?.approvedAdditionalRepairOrders || 0),
+        pendingOrders: Number(matched?.pendingDecisionOrders || 0),
+        approvalRatePercent: Number(matched?.approvalRatePercent || 0),
+      };
+    });
+  }, [intakeKpi]);
+
+  const topTeamKpis = useMemo(() => {
+    const rawItems = Array.isArray(intakeKpi?.teamConversions) ? intakeKpi.teamConversions : [];
+    return rawItems.slice(0, 3).map((item) => ({
+      teamName: item?.teamName || "Chưa phân tổ",
+      totalOrders: Number(item?.totalOrders || 0),
+      approvedOrders: Number(item?.approvedAdditionalRepairOrders || 0),
+      approvalRatePercent: Number(item?.approvalRatePercent || 0),
+    }));
+  }, [intakeKpi]);
+
   const statusPermitUpdate = useCallback(
     (status) => !["COMPLETED", "CANCELED", "CANCELLED"].includes(normalizeStatus(status)),
     []
@@ -466,6 +529,46 @@ export default function ReceptionOrdersSection() {
           <div className="stat-label">Sẵn sàng bàn giao</div>
         </div>
       </div>
+
+      {intakeKpi ? (
+        <div className="reception-intake-kpi-board">
+          <div className="reception-intake-kpi-head">
+            <div>
+              <h3>Hiệu quả chuyển đổi chuẩn đoán</h3>
+              <p>
+                Từ {formatOrderDate(intakeKpi.startDate)} đến {formatOrderDate(intakeKpi.endDate)}
+              </p>
+            </div>
+            <div className="reception-intake-kpi-total">
+              <strong>{Number(intakeKpi.totalApprovedAdditionalRepairOrders || 0)}</strong>
+              <span>xe đồng ý sửa thêm / {Number(intakeKpi.totalIntakeOrders || 0)} xe intake</span>
+            </div>
+          </div>
+
+          <div className="reception-intake-kpi-grid">
+            {intakePackageKpis.map((item) => (
+              <article key={item.packageCode} className="reception-intake-kpi-card">
+                <h4>{item.packageName}</h4>
+                <p>{item.approvedOrders} đồng ý / {item.totalOrders} lượt</p>
+                <strong>{formatPercentValue(item.approvalRatePercent)}</strong>
+                <small>{item.pendingOrders} ca đang chờ khách quyết định</small>
+              </article>
+            ))}
+          </div>
+
+          {topTeamKpis.length > 0 ? (
+            <div className="reception-intake-team-grid">
+              {topTeamKpis.map((item, index) => (
+                <article key={`${item.teamName}-${index}`} className="reception-intake-team-card">
+                  <h5>{item.teamName}</h5>
+                  <p>{item.approvedOrders} / {item.totalOrders} đồng ý sửa thêm</p>
+                  <strong>{formatPercentValue(item.approvalRatePercent)}</strong>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error && (
         <div style={{ padding: "12px", background: "#fee", color: "#e6522c", borderRadius: "8px", marginBottom: "16px", fontWeight: 600 }}>

@@ -5,11 +5,12 @@ import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdEdit, MdHistory, MdPers
 import { formatOrderDateTime, parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
+import FilterDropdown from "@shared/components/FilterDropdown";
 
 const STATUS_LABELS = {
   NEW: "Mới tiếp nhận",
   RECEPTION: "Lễ tân tiếp nhận",
-  INSPECTING: "Đang chuẩn đoán",
+  DIAGNOSING: "Đang chuẩn đoán",
   WAITING_APPROVAL: "Chờ duyệt",
   REPAIRING: "Đang sửa chữa",
   QC_PENDING: "Chờ kiểm tra chất lượng",
@@ -37,6 +38,13 @@ const DISPATCH_TAG_OPTIONS = [
   { value: "MAINTENANCE", label: "Bảo dưỡng nhanh", description: "Bảo dưỡng định kỳ và hạng mục nhanh." },
 ];
 
+const INTAKE_PACKAGE_OPTIONS = [
+  { value: "", label: "Để hệ thống tự chọn" },
+  { value: "MINI_10", label: "Mini Check (10p)" },
+  { value: "QUICK_30", label: "Kiểm tra nhanh (30p)" },
+  { value: "FULL_60", label: "Kiểm tra tổng quát (60p)" },
+];
+
 function formatStatusLabel(status) {
   const key = String(status || "").toUpperCase();
   return STATUS_LABELS[key] || key || "Không xác định";
@@ -59,6 +67,28 @@ function firstText(...values) {
 function formatMoney(amount) {
   const value = Number(amount || 0);
   return `${value.toLocaleString("vi-VN")}đ`;
+}
+
+function formatDateTimeValue(value) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--";
+  return parsed.toLocaleString("vi-VN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatPackageLabel(code) {
+  const key = String(code || "").trim().toUpperCase();
+  if (key === "MINI_10") return "Mini Check (10p)";
+  if (key === "QUICK_30") return "Kiểm tra nhanh (30p)";
+  if (key === "FULL_60") return "Kiểm tra tổng quát (60p)";
+  return key || "--";
 }
 
 export default function ServiceOrderDetailModal({
@@ -98,6 +128,14 @@ export default function ServiceOrderDetailModal({
   const [dispatchTagDraft, setDispatchTagDraft] = useState("ENGINE_CHASSIS");
   const [showDispatchPopup, setShowDispatchPopup] = useState(false);
   const [submittingDiagnosisRequest, setSubmittingDiagnosisRequest] = useState(false);
+  const [loadingIntakeSuggestion, setLoadingIntakeSuggestion] = useState(false);
+  const [intakeSuggestion, setIntakeSuggestion] = useState(null);
+  const [bufferMinutesDraft, setBufferMinutesDraft] = useState(15);
+  const [intakePackageDraft, setIntakePackageDraft] = useState("");
+  const [bypassConflictGuard, setBypassConflictGuard] = useState(false);
+  const [customerConsentAccepted, setCustomerConsentAccepted] = useState(false);
+  const [customerConsentChannel, setCustomerConsentChannel] = useState("APP");
+  const [customerConsentNote, setCustomerConsentNote] = useState("");
 
   const customerChosenDetails = useMemo(() => {
     const isLaborOrService = (detail) => {
@@ -231,6 +269,57 @@ export default function ServiceOrderDetailModal({
     handleOpenPage(`/workshop/reception/orders/${order.id}/vehicleconditionlogs`);
   };
 
+  useEffect(() => {
+    if (!showDispatchPopup || !order?.id) return;
+
+    let isCancelled = false;
+    const normalizedTag = DISPATCH_TAG_OPTIONS.some((item) => item.value === dispatchTagDraft)
+      ? dispatchTagDraft
+      : "ENGINE_CHASSIS";
+    const normalizedBuffer = Number(bufferMinutesDraft);
+    const safeBuffer = Number.isFinite(normalizedBuffer) ? Math.max(0, Math.min(120, normalizedBuffer)) : 15;
+
+    const run = async () => {
+      setLoadingIntakeSuggestion(true);
+      try {
+        const response = await serviceOrderApi.getDiagnosisIntakeSuggestion(order.id, {
+          dispatchTag: normalizedTag,
+          bufferMinutes: safeBuffer,
+          intakePackageCode: intakePackageDraft || undefined,
+        });
+
+        if (isCancelled) return;
+        setIntakeSuggestion(response || null);
+        if (!intakePackageDraft && response?.finalPackageCode) {
+          setIntakePackageDraft(String(response.finalPackageCode).toUpperCase());
+        }
+      } catch {
+        if (!isCancelled) {
+          setIntakeSuggestion(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingIntakeSuggestion(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [showDispatchPopup, order?.id, dispatchTagDraft, bufferMinutesDraft, intakePackageDraft]);
+
+  const isConflictBlocked = useMemo(() => {
+    const conflictLevel = String(intakeSuggestion?.conflictLevel || "").toUpperCase();
+    return conflictLevel === "RED" && !bypassConflictGuard;
+  }, [intakeSuggestion?.conflictLevel, bypassConflictGuard]);
+
+  const intakeConflictLevel = String(intakeSuggestion?.conflictLevel || "").toUpperCase();
+  const requiresCustomerConsent = Boolean(intakeSuggestion?.requiresCustomerConsent);
+  const isConsentBlocked = requiresCustomerConsent && !customerConsentAccepted;
+
   const handleRequestDiagnosis = async () => {
     if (!hasSignedCheckIn) {
       try {
@@ -245,6 +334,13 @@ export default function ServiceOrderDetailModal({
     }
 
     setDispatchTagDraft(selectedDispatchTag || "ENGINE_CHASSIS");
+    setBufferMinutesDraft(15);
+    setIntakePackageDraft("");
+    setBypassConflictGuard(false);
+    setCustomerConsentAccepted(false);
+    setCustomerConsentChannel("APP");
+    setCustomerConsentNote("");
+    setIntakeSuggestion(null);
     setShowDispatchPopup(true);
   };
 
@@ -252,12 +348,30 @@ export default function ServiceOrderDetailModal({
     const normalizedTag = DISPATCH_TAG_OPTIONS.some((item) => item.value === dispatchTagDraft)
       ? dispatchTagDraft
       : "ENGINE_CHASSIS";
+    const normalizedBuffer = Number(bufferMinutesDraft);
+    const safeBuffer = Number.isFinite(normalizedBuffer) ? Math.max(0, Math.min(120, normalizedBuffer)) : 15;
+    const selectedPackageCode = String(intakePackageDraft || intakeSuggestion?.finalPackageCode || "").trim().toUpperCase();
+    if (requiresCustomerConsent && !customerConsentAccepted) {
+      alert("Cần xác nhận đồng ý của khách trước khi tạo yêu cầu gói chuẩn đoán này.");
+      return;
+    }
 
     setSubmittingDiagnosisRequest(true);
     try {
-      await serviceOrderApi.requestDiagnosis(order.id, normalizedTag);
+      await serviceOrderApi.requestDiagnosis(order.id, {
+        dispatchTag: normalizedTag,
+        autoAssign: true,
+        enforceCapacityGuard: true,
+        bypassConflictGuard,
+        bufferMinutes: safeBuffer,
+        intakePackageCode: selectedPackageCode || undefined,
+        customerConsentAccepted: requiresCustomerConsent ? customerConsentAccepted : undefined,
+        customerConsentChannel: requiresCustomerConsent ? customerConsentChannel : undefined,
+        customerConsentNote: requiresCustomerConsent ? customerConsentNote : undefined,
+      });
       setSelectedDispatchTag(normalizedTag);
       setShowDispatchPopup(false);
+      setIntakeSuggestion(null);
       await refreshAfterDiagnosisChange();
     } catch (error) {
       alert(`Lỗi khi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
@@ -424,7 +538,7 @@ export default function ServiceOrderDetailModal({
               >
                 Xem chuẩn đoán
               </button>
-            ) : isDiagnosisRequested || String(order?.status || "").toUpperCase() === "INSPECTING" ? (
+            ) : isDiagnosisRequested || String(order?.status || "").toUpperCase() === "DIAGNOSING" ? (
               <button
                 type="button"
                 className="so-detail-action-btn so-detail-action-warn"
@@ -496,6 +610,131 @@ export default function ServiceOrderDetailModal({
               })}
             </div>
 
+            <div className="so-dispatch-config-row">
+              <label className="so-dispatch-config-item">
+                <span>Buffer (phút)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={120}
+                  value={bufferMinutesDraft}
+                  onChange={(event) => setBufferMinutesDraft(event.target.value)}
+                  disabled={submittingDiagnosisRequest}
+                />
+              </label>
+              <label className="so-dispatch-config-item">
+                <span>Gói chuẩn đoán</span>
+                <FilterDropdown
+                  id={`intake-package-${order?.id || "draft"}`}
+                  value={intakePackageDraft}
+                  options={INTAKE_PACKAGE_OPTIONS}
+                  onChange={(nextValue) => setIntakePackageDraft(String(nextValue || "").toUpperCase())}
+                  minWidth={0}
+                  menuMinWidth={280}
+                  disabled={submittingDiagnosisRequest}
+                  ariaLabel="Chọn gói chuẩn đoán"
+                  optionNoWrap
+                  fullWidth
+                />
+              </label>
+            </div>
+
+            <div className="so-intake-card">
+              {loadingIntakeSuggestion ? (
+                <p className="so-intake-loading">Đang tính gói đề xuất...</p>
+              ) : intakeSuggestion ? (
+                <>
+                  <div className="so-intake-row">
+                    <span>Gói đề xuất</span>
+                    <strong>{formatPackageLabel(intakeSuggestion.finalPackageCode)}</strong>
+                  </div>
+                  <div className="so-intake-row">
+                    <span>T1 dự kiến</span>
+                    <strong>{formatDateTimeValue(intakeSuggestion.t1EstimatedHandover)}</strong>
+                  </div>
+                  <div className="so-intake-row">
+                    <span>Công thức thời gian</span>
+                    <strong>
+                      {`${intakeSuggestion.mainServiceMinutes || 0}p dịch vụ + ${intakeSuggestion.bufferMinutes || 0}p buffer + ${intakeSuggestion.packageEffectiveMinutes || 0}p gói`}
+                    </strong>
+                  </div>
+                  <div className="so-intake-row">
+                    <span>Xung đột booking</span>
+                    <strong className={`so-intake-badge ${String(intakeConflictLevel || "").toLowerCase()}`}>
+                      {`${intakeConflictLevel || "GREEN"}${intakeSuggestion.conflictMinutes > 0 ? ` (${intakeSuggestion.conflictMinutes}p)` : ""}`}
+                    </strong>
+                  </div>
+                  {Array.isArray(intakeSuggestion.reasons) && intakeSuggestion.reasons.length > 0 ? (
+                    <ul className="so-intake-reason-list">
+                      {intakeSuggestion.reasons.slice(0, 3).map((reason, idx) => (
+                        <li key={`${reason}-${idx}`}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {intakeSuggestion.suggestedLeadTechnicianName ? (
+                    <p className="so-intake-assign-text">
+                      Auto-assign: {intakeSuggestion.suggestedLeadTechnicianName}
+                      {intakeSuggestion.suggestedAssistantTechnicianName ? ` + ${intakeSuggestion.suggestedAssistantTechnicianName}` : ""}
+                      {intakeSuggestion.suggestedTeamName ? ` (${intakeSuggestion.suggestedTeamName})` : ""}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="so-intake-loading">Không lấy được gói đề xuất. Bạn vẫn có thể gửi yêu cầu thủ công.</p>
+              )}
+            </div>
+
+            {requiresCustomerConsent ? (
+              <div className="so-consent-card">
+                <label className="so-consent-check">
+                  <input
+                    type="checkbox"
+                    checked={customerConsentAccepted}
+                    onChange={(event) => setCustomerConsentAccepted(Boolean(event.target.checked))}
+                    disabled={submittingDiagnosisRequest}
+                  />
+                  <span>Khách đã đồng ý thực hiện gói chuẩn đoán cộng thêm thời gian.</span>
+                </label>
+                <div className="so-consent-grid">
+                  <label className="so-dispatch-config-item">
+                    <span>Kênh xác nhận</span>
+                    <select
+                      value={customerConsentChannel}
+                      onChange={(event) => setCustomerConsentChannel(String(event.target.value || "APP").toUpperCase())}
+                      disabled={submittingDiagnosisRequest}
+                    >
+                      <option value="APP">Ứng dụng</option>
+                      <option value="ZALO">Zalo</option>
+                      <option value="PHONE">Điện thoại</option>
+                      <option value="DIRECT">Trực tiếp tại quầy</option>
+                    </select>
+                  </label>
+                  <label className="so-dispatch-config-item">
+                    <span>Ghi chú xác nhận</span>
+                    <input
+                      type="text"
+                      value={customerConsentNote}
+                      onChange={(event) => setCustomerConsentNote(event.target.value)}
+                      placeholder="Ví dụ: Khách đồng ý cộng thêm 30 phút"
+                      disabled={submittingDiagnosisRequest}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
+            {intakeConflictLevel === "RED" ? (
+              <label className="so-bypass-toggle">
+                <input
+                  type="checkbox"
+                  checked={bypassConflictGuard}
+                  onChange={(event) => setBypassConflictGuard(Boolean(event.target.checked))}
+                  disabled={submittingDiagnosisRequest}
+                />
+                <span>Bypass canh bao do (chi dung khi khach rat voi)</span>
+              </label>
+            ) : null}
+
             <div className="so-dispatch-popup-actions">
               <button
                 type="button"
@@ -509,9 +748,15 @@ export default function ServiceOrderDetailModal({
                 type="button"
                 className="so-detail-action-btn so-detail-action-primary"
                 onClick={handleConfirmDiagnosisRequest}
-                disabled={submittingDiagnosisRequest}
+                disabled={submittingDiagnosisRequest || loadingIntakeSuggestion || isConflictBlocked || isConsentBlocked}
               >
-                {submittingDiagnosisRequest ? "Đang gửi..." : "Gửi yêu cầu"}
+                {submittingDiagnosisRequest
+                  ? "Đang gửi..."
+                  : isConflictBlocked
+                    ? "Đang bị chặn bởi conflict đỏ"
+                    : isConsentBlocked
+                      ? "Chờ khách xác nhận"
+                      : "Gửi yêu cầu"}
               </button>
             </div>
           </div>

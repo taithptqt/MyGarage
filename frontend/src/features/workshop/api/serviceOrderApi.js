@@ -11,8 +11,10 @@ export const serviceOrderApi = {
   getById: (id) => request({ url: `/api/service-orders/${id}`, method: "GET" }),
   create: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshop: (data) => request({ url: "/api/service-orders", method: "POST", data }),
+  createWorkshopBatch: (data) => request({ url: "/api/service-orders/batches", method: "POST", data }),
   createGroupSession: (data) => request({ url: "/api/group-sessions/service-orders", method: "POST", data }),
   update: (id, data) => request({ url: `/api/service-orders/${id}`, method: "PUT", data }),
+  updateWorkshop: (id, data) => request({ url: `/api/service-orders/${id}/workshop`, method: "PUT", data }),
   delete: (id) => request({ url: `/api/service-orders/${id}`, method: "DELETE" }),
 
   // --- Service Order Details (Services & Parts) ---
@@ -61,12 +63,21 @@ export const serviceOrderApi = {
       data: payload,
     });
   },
-  requestDiagnosis: (serviceOrderId, dispatchTag = null) =>
-    request({
+  requestDiagnosis: (serviceOrderId, payloadOrDispatchTag = null) => {
+    if (payloadOrDispatchTag && typeof payloadOrDispatchTag === "object") {
+      return request({
+        url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
+        method: "POST",
+        data: payloadOrDispatchTag,
+      });
+    }
+
+    return request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
       method: "POST",
-      data: dispatchTag ? { dispatchTag } : undefined,
-    }),
+      data: payloadOrDispatchTag ? { dispatchTag: payloadOrDispatchTag } : undefined,
+    });
+  },
   recallDiagnosisRequest: (serviceOrderId) => request({ url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`, method: "DELETE" }),
   getDiagnosisRequests: (teamId = null) =>
     request({
@@ -83,6 +94,35 @@ export const serviceOrderApi = {
   getDiagnosisDispatchSuggestion: (serviceOrderId, params) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/dispatch-suggestions`,
+      method: "GET",
+      params,
+    }),
+  getDiagnosisIntakeSuggestion: (serviceOrderId, params) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/intake-suggestions`,
+      method: "GET",
+      params,
+    }),
+  createDiagnosisHandoverSnapshot: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/handover-snapshots`,
+      method: "POST",
+      data,
+    }),
+  getLatestDiagnosisHandoverSnapshot: (serviceOrderId) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/handover-snapshots/latest`,
+      method: "GET",
+    }),
+  decideDiagnosisHandoverSnapshot: (serviceOrderId, snapshotId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/handover-snapshots/${snapshotId}/customer-decisions`,
+      method: "POST",
+      data,
+    }),
+  getDiagnosisIntakeConversionKpi: (params) =>
+    request({
+      url: "/api/diagnoses/kpis/intake-conversions",
       method: "GET",
       params,
     }),
@@ -113,6 +153,12 @@ export const serviceOrderApi = {
   requestDiagnosisSupport: (serviceOrderId, data) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/support`,
+      method: "POST",
+      data,
+    }),
+  selectDiagnosisSupportingTeam: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/supporting-team-selections`,
       method: "POST",
       data,
     }),

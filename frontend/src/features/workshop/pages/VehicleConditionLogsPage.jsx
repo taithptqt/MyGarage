@@ -31,6 +31,11 @@ import {
   FormErrorMessage,
   Image,
   Badge,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalBody,
+  ModalCloseButton,
 } from "@chakra-ui/react";
 import {
   MdArrowBack,
@@ -263,6 +268,7 @@ export default function VehicleConditionLogsPage() {
   const [saving, setSaving] = useState(false);
   const [signatureDraft, setSignatureDraft] = useState("");
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [resolvedVehicle, setResolvedVehicle] = useState(null);
 
   // Form states
@@ -912,20 +918,24 @@ export default function VehicleConditionLogsPage() {
                         <Text fontSize="sm" fontWeight="700" mb={2}>Hình ảnh chi tiết ({item.images?.length || 0})</Text>
                         <SimpleGrid columns={{ base: 3, md: 5, lg: 7 }} spacing={2}>
                           {(item.images || []).map((img) => (
-                            <Box key={img.id} position="relative" role="group">
-                              <Image src={img.url} borderRadius="md" boxSize="72px" objectFit="cover" border="1px solid" borderColor="gray.200" />
+                            <Box key={img.id} role="group" display="inline-flex" alignItems="flex-start" gap={1} flexShrink={0}>
+                              <Image
+                                src={img.url}
+                                borderRadius="md"
+                                boxSize="72px"
+                                objectFit="cover"
+                                border="1px solid"
+                                borderColor="gray.200"
+                                cursor="zoom-in"
+                                onClick={() => setPreviewImageUrl(String(img.url || ""))}
+                              />
                               <IconButton
                                 icon={<MdDelete />}
                                 size="xs"
                                 colorScheme="red"
-                                position="absolute"
-                                top={-1}
-                                right={-1}
                                 onClick={() => removeImage(idx, img.id)}
                                 aria-label="Xóa ảnh"
                                 boxShadow="sm"
-                                opacity={0}
-                                _groupHover={{ opacity: 1 }}
                               />
                             </Box>
                           ))}
@@ -1060,7 +1070,17 @@ export default function VehicleConditionLogsPage() {
                           <Text color="gray.600" fontSize="sm" noOfLines={2} mb={2}>{d?.issue || "Không có mô tả"}</Text>
                           <HStack spacing={2} flexWrap="wrap">
                             {(Array.isArray(d?.images) ? d.images : []).map((url, i) => (
-                              <Image key={`${idx}-${i}`} src={url} borderRadius="md" boxSize="64px" objectFit="cover" border="1px solid" borderColor="gray.200" />
+                              <Image
+                                key={`${idx}-${i}`}
+                                src={url}
+                                borderRadius="md"
+                                boxSize="64px"
+                                objectFit="cover"
+                                border="1px solid"
+                                borderColor="gray.200"
+                                cursor="zoom-in"
+                                onClick={() => setPreviewImageUrl(String(url || ""))}
+                              />
                             ))}
                           </HStack>
                         </Box>
@@ -1072,7 +1092,17 @@ export default function VehicleConditionLogsPage() {
                 <Box>
                   <Text fontSize="sm" fontWeight="700" color="#2b3674" mb={2}>Chữ ký khách hàng</Text>
                   {isTargetSigned ? (
-                    <Image src={targetLog.customerSignatureUrl} maxH="88px" border="1px solid" borderColor="#d7e3f5" borderRadius="lg" p={2} bg="white" />
+                    <Image
+                      src={targetLog.customerSignatureUrl}
+                      maxH="88px"
+                      border="1px solid"
+                      borderColor="#d7e3f5"
+                      borderRadius="lg"
+                      p={2}
+                      bg="white"
+                      cursor="zoom-in"
+                      onClick={() => setPreviewImageUrl(String(targetLog.customerSignatureUrl || ""))}
+                    />
                   ) : (
                     <Text color="orange.500" fontWeight="600">Chưa có chữ ký khách hàng</Text>
                   )}
@@ -1083,6 +1113,24 @@ export default function VehicleConditionLogsPage() {
         )}
           </Stack>
         </Box>
+
+        <Modal isOpen={Boolean(previewImageUrl)} onClose={() => setPreviewImageUrl("")} size="xl" isCentered>
+          <ModalOverlay bg="blackAlpha.700" />
+          <ModalContent bg="transparent" boxShadow="none" maxW="90vw">
+            <ModalCloseButton color="white" bg="blackAlpha.500" _hover={{ bg: "blackAlpha.700" }} />
+            <ModalBody p={0} display="flex" justifyContent="center" alignItems="center">
+              <Image
+                src={previewImageUrl}
+                maxH="85vh"
+                maxW="90vw"
+                objectFit="contain"
+                borderRadius="md"
+                border="1px solid"
+                borderColor="whiteAlpha.400"
+              />
+            </ModalBody>
+          </ModalContent>
+        </Modal>
       </Container>
     </Box>
   );

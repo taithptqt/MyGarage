@@ -1,0 +1,190 @@
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:5199
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: D:\IT\OJT\repos\MyGarage\backend
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (87ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id]
+      FROM [Branches] AS [b]
+      WHERE [b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (45ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddMinutes_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [a].[Id], [a].[BranchId], [a].[CancelReason], [a].[CreatedAt], [a].[CreatedBy], [a].[CustomerId], [a].[CustomerNotes], [a].[EndTime], [a].[GroupSessionId], [a].[IsReminderSent], [a].[RequestedServiceIds], [a].[StartTime], [a].[Status], [a].[UpdatedAt], [a].[UpdatedBy], [a].[VehicleId]
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'CONFIRMED', 'LATE') AND [a].[StartTime] <= @__AddMinutes_1
+      ORDER BY [a].[StartTime]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (52ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id], [b].[BayType], [b].[BranchId], [b].[Code], [b].[CreatedAt], [b].[CreatedBy], [b].[CurrentOccupiedVehicleId], [b].[DeletedAt], [b].[DeletedBy], [b].[IsActive], [b].[IsDeleted], [b].[MaxTonnage], [b].[Name], [b].[OperationalStatus], [b].[ServiceArea], [b].[UpdatedAt], [b].[UpdatedBy]
+      FROM [Bays] AS [b]
+      WHERE [b].[BranchId] = @__branchId_0 AND [b].[IsActive] = CAST(1 AS bit) AND ([b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (46ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__atTime_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[EndTime] < @__atTime_1 AND [w].[Status] <> 'COMPLETED' AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'CANCELLED'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (60ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'ARRIVED', 'ARRIVED_LATE')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (50ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddHours_1='?' (DbType = DateTime2), @__now_2='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[StartTime] <= @__AddHours_1 AND ([w].[ActualReleaseTime] IS NULL OR [w].[ActualReleaseTime] > @__now_2) AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'COMPLETED'
+      ORDER BY [w].[BayId], [w].[StartTime]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (45ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddMinutes_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [a].[Id], [a].[BranchId], [a].[CancelReason], [a].[CreatedAt], [a].[CreatedBy], [a].[CustomerId], [a].[CustomerNotes], [a].[EndTime], [a].[GroupSessionId], [a].[IsReminderSent], [a].[RequestedServiceIds], [a].[StartTime], [a].[Status], [a].[UpdatedAt], [a].[UpdatedBy], [a].[VehicleId]
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'CONFIRMED', 'LATE') AND [a].[StartTime] <= @__AddMinutes_1
+      ORDER BY [a].[StartTime]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (52ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id], [b].[BayType], [b].[BranchId], [b].[Code], [b].[CreatedAt], [b].[CreatedBy], [b].[CurrentOccupiedVehicleId], [b].[DeletedAt], [b].[DeletedBy], [b].[IsActive], [b].[IsDeleted], [b].[MaxTonnage], [b].[Name], [b].[OperationalStatus], [b].[ServiceArea], [b].[UpdatedAt], [b].[UpdatedBy]
+      FROM [Bays] AS [b]
+      WHERE [b].[BranchId] = @__branchId_0 AND [b].[IsActive] = CAST(1 AS bit) AND ([b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (44ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__atTime_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[EndTime] < @__atTime_1 AND [w].[Status] <> 'COMPLETED' AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'CANCELLED'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (73ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'ARRIVED', 'ARRIVED_LATE')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (53ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddHours_1='?' (DbType = DateTime2), @__now_2='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[StartTime] <= @__AddHours_1 AND ([w].[ActualReleaseTime] IS NULL OR [w].[ActualReleaseTime] > @__now_2) AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'COMPLETED'
+      ORDER BY [w].[BayId], [w].[StartTime]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (55ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddMinutes_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [a].[Id], [a].[BranchId], [a].[CancelReason], [a].[CreatedAt], [a].[CreatedBy], [a].[CustomerId], [a].[CustomerNotes], [a].[EndTime], [a].[GroupSessionId], [a].[IsReminderSent], [a].[RequestedServiceIds], [a].[StartTime], [a].[Status], [a].[UpdatedAt], [a].[UpdatedBy], [a].[VehicleId]
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'CONFIRMED', 'LATE') AND [a].[StartTime] <= @__AddMinutes_1
+      ORDER BY [a].[StartTime]
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (52ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT [b].[Id], [b].[BayType], [b].[BranchId], [b].[Code], [b].[CreatedAt], [b].[CreatedBy], [b].[CurrentOccupiedVehicleId], [b].[DeletedAt], [b].[DeletedBy], [b].[IsActive], [b].[IsDeleted], [b].[MaxTonnage], [b].[Name], [b].[OperationalStatus], [b].[ServiceArea], [b].[UpdatedAt], [b].[UpdatedBy]
+      FROM [Bays] AS [b]
+      WHERE [b].[BranchId] = @__branchId_0 AND [b].[IsActive] = CAST(1 AS bit) AND ([b].[IsDeleted] <> CAST(1 AS bit) OR [b].[IsDeleted] IS NULL)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (50ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__atTime_1='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[EndTime] < @__atTime_1 AND [w].[Status] <> 'COMPLETED' AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'CANCELLED'
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (40ms) [Parameters=[@__branchId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*)
+      FROM [Appointments] AS [a]
+      WHERE [a].[BranchId] = @__branchId_0 AND [a].[Status] IN ('PENDING', 'ARRIVED', 'ARRIVED_LATE')
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (56ms) [Parameters=[@__branchId_0='?' (DbType = Int64), @__AddHours_1='?' (DbType = DateTime2), @__now_2='?' (DbType = DateTime2)], CommandType='Text', CommandTimeout='30']
+      SELECT [w].[Id], [w].[ActualReleaseTime], [w].[ActualStartTime], [w].[BayId], [w].[BranchId], [w].[CustomerId], [w].[EndTime], [w].[LockedUntil], [w].[Notes], [w].[ParentSlotId], [w].[ServiceStaffAssignmentId], [w].[SlotType], [w].[StartTime], [w].[Status], [w].[TechnicianId], [w].[VehicleId]
+      FROM [WorkSlots] AS [w]
+      WHERE [w].[BranchId] = @__branchId_0 AND [w].[StartTime] <= @__AddHours_1 AND ([w].[ActualReleaseTime] IS NULL OR [w].[ActualReleaseTime] > @__now_2) AND [w].[Status] <> 'CANCELED' AND [w].[Status] <> 'COMPLETED'
+      ORDER BY [w].[BayId], [w].[StartTime]
+warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]
+      Failed to determine the https port for redirect.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (57ms) [Parameters=[@__p_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__p_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (54ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__serviceOrderId_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (42ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__serviceOrderId_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (46ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT [s].[SnapshotData]
+      FROM [ServiceOrderSnapshots] AS [s]
+      WHERE [s].[ServiceOrderId] = @__serviceOrderId_0
+      ORDER BY [s].[RevisionNumber] DESC, [s].[CreatedAt] DESC
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (42ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT MAX([s].[RevisionNumber])
+      FROM [ServiceOrderSnapshots] AS [s]
+      WHERE [s].[ServiceOrderId] = @__serviceOrderId_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (50ms) [Parameters=[@p0='?' (DbType = DateTime2), @p1='?' (DbType = Int64), @p2='?' (DbType = Int32), @p3='?' (DbType = Int64), @p4='?' (Size = 4000)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      INSERT INTO [ServiceOrderSnapshots] ([CreatedAt], [CreatedBy], [RevisionNumber], [ServiceOrderId], [SnapshotData])
+      OUTPUT INSERTED.[Id]
+      VALUES (@p0, @p1, @p2, @p3, @p4);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (49ms) [Parameters=[@p0='?' (Size = 50) (DbType = AnsiString), @p1='?' (DbType = Int64), @p2='?' (Size = 50) (DbType = AnsiString), @p3='?' (Size = 4000), @p4='?' (Size = 4000), @p5='?' (DbType = Int64), @p6='?' (Size = 255) (DbType = AnsiString), @p7='?' (Size = 100) (DbType = AnsiString), @p8='?' (DbType = DateTime2), @p9='?' (Size = 500), @p10='?' (DbType = Int64), @p11='?' (Size = 20) (DbType = AnsiString)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      INSERT INTO [AuditLogs] ([Action], [BranchId], [IpAddress], [NewValue], [OldValue], [RecordId], [SessionId], [TableName], [Timestamp], [UserAgent], [UserId], [UserType])
+      OUTPUT INSERTED.[Id]
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (55ms) [Parameters=[@p39='?' (DbType = Int64), @p0='?' (DbType = DateTime2), @p1='?' (DbType = Int64), @p2='?' (Size = 500), @p3='?' (DbType = DateTime2), @p4='?' (Size = 50) (DbType = AnsiString), @p5='?' (DbType = DateTime2), @p6='?' (DbType = Int64), @p7='?' (DbType = DateTime2), @p8='?' (DbType = Int64), @p9='?' (Size = 4000), @p10='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p11='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p12='?' (Size = 50) (DbType = AnsiString), @p13='?' (DbType = DateTime2), @p14='?' (DbType = Int64), @p15='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p16='?' (DbType = Int64), @p17='?' (Size = 50) (DbType = AnsiString), @p18='?' (Size = 50) (DbType = AnsiString), @p19='?' (DbType = Int64), @p20='?' (DbType = Int64), @p21='?' (Size = 50) (DbType = AnsiString), @p22='?' (DbType = DateTime2), @p23='?' (DbType = Int64), @p24='?' (Size = 50) (DbType = AnsiString), @p25='?' (DbType = DateTime2), @p26='?' (DbType = Int64), @p27='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p28='?' (DbType = Int32), @p29='?' (DbType = Int64), @p30='?' (Size = 50) (DbType = AnsiString), @p31='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p32='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p33='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p34='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p35='?' (DbType = DateTime2), @p36='?' (DbType = Int64), @p37='?' (DbType = DateTime2), @p38='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      UPDATE [ServiceOrders] SET [ActualHandover] = @p0, [AppointmentId] = @p1, [CancellationReason] = @p2, [CheckInTime] = @p3, [Code] = @p4, [CreatedAt] = @p5, [CreatedBy] = @p6, [CustomerApprovedAt] = @p7, [CustomerId] = @p8, [CustomerNotes] = @p9, [DepositForfeitedAmount] = @p10, [DepositRefundedAmount] = @p11, [DepositStatus] = @p12, [EstimatedHandover] = @p13, [ExecuteBranchId] = @p14, [FinalAmount] = @p15, [GroupSessionId] = @p16, [OldPartsReturnOption] = @p17, [OrderCategory] = @p18, [OriginBranchId] = @p19, [OriginalServiceOrderId] = @p20, [PaymentStatus] = @p21, [PromisedHandoverTime] = @p22, [QCInspectorId] = @p23, [QCStatus] = @p24, [QCVerifiedAt] = @p25, [ReceptionistId] = @p26, [RequiredDepositAmount] = @p27, [RevisionNumber] = @p28, [ServiceAdvisorId] = @p29, [Status] = @p30, [SubTotalAmount] = @p31, [TaxAmount] = @p32, [TotalDepositedAmount] = @p33, [TotalDiscount] = @p34, [UpdatedAt] = @p35, [UpdatedBy] = @p36, [ValidUntil] = @p37, [VehicleId] = @p38
+      OUTPUT 1
+      WHERE [Id] = @p39;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (55ms) [Parameters=[@p0='?' (Size = 50) (DbType = AnsiString), @p1='?' (DbType = Int64), @p2='?' (Size = 50) (DbType = AnsiString), @p3='?' (Size = 4000), @p4='?' (Size = 4000), @p5='?' (DbType = Int64), @p6='?' (Size = 255) (DbType = AnsiString), @p7='?' (Size = 100) (DbType = AnsiString), @p8='?' (DbType = DateTime2), @p9='?' (Size = 500), @p10='?' (DbType = Int64), @p11='?' (Size = 20) (DbType = AnsiString)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      INSERT INTO [AuditLogs] ([Action], [BranchId], [IpAddress], [NewValue], [OldValue], [RecordId], [SessionId], [TableName], [Timestamp], [UserAgent], [UserId], [UserType])
+      OUTPUT INSERTED.[Id]
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (56ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__serviceOrderId_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (41ms) [Parameters=[@__snapshotId_0='?' (DbType = Int64), @__serviceOrderId_1='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[CreatedAt], [s].[CreatedBy], [s].[RevisionNumber], [s].[ServiceOrderId], [s].[SnapshotData]
+      FROM [ServiceOrderSnapshots] AS [s]
+      WHERE [s].[Id] = @__snapshotId_0 AND [s].[ServiceOrderId] = @__serviceOrderId_1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (44ms) [Parameters=[@__serviceOrderId_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__serviceOrderId_0
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (154ms) [Parameters=[@p5='?' (DbType = Int64), @p0='?' (DbType = DateTime2), @p1='?' (DbType = Int64), @p2='?' (DbType = Int32), @p3='?' (DbType = Int64), @p4='?' (Size = 4000), @p45='?' (DbType = Int64), @p6='?' (DbType = DateTime2), @p7='?' (DbType = Int64), @p8='?' (Size = 500), @p9='?' (DbType = DateTime2), @p10='?' (Size = 50) (DbType = AnsiString), @p11='?' (DbType = DateTime2), @p12='?' (DbType = Int64), @p13='?' (DbType = DateTime2), @p14='?' (DbType = Int64), @p15='?' (Size = 4000), @p16='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p17='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p18='?' (Size = 50) (DbType = AnsiString), @p19='?' (DbType = DateTime2), @p20='?' (DbType = Int64), @p21='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p22='?' (DbType = Int64), @p23='?' (Size = 50) (DbType = AnsiString), @p24='?' (Size = 50) (DbType = AnsiString), @p25='?' (DbType = Int64), @p26='?' (DbType = Int64), @p27='?' (Size = 50) (DbType = AnsiString), @p28='?' (DbType = DateTime2), @p29='?' (DbType = Int64), @p30='?' (Size = 50) (DbType = AnsiString), @p31='?' (DbType = DateTime2), @p32='?' (DbType = Int64), @p33='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p34='?' (DbType = Int32), @p35='?' (DbType = Int64), @p36='?' (Size = 50) (DbType = AnsiString), @p37='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p38='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p39='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p40='?' (Precision = 18) (Scale = 2) (DbType = Decimal), @p41='?' (DbType = DateTime2), @p42='?' (DbType = Int64), @p43='?' (DbType = DateTime2), @p44='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SET NOCOUNT ON;
+      UPDATE [ServiceOrderSnapshots] SET [CreatedAt] = @p0, [CreatedBy] = @p1, [RevisionNumber] = @p2, [ServiceOrderId] = @p3, [SnapshotData] = @p4
+      OUTPUT 1
+      WHERE [Id] = @p5;
+      UPDATE [ServiceOrders] SET [ActualHandover] = @p6, [AppointmentId] = @p7, [CancellationReason] = @p8, [CheckInTime] = @p9, [Code] = @p10, [CreatedAt] = @p11, [CreatedBy] = @p12, [CustomerApprovedAt] = @p13, [CustomerId] = @p14, [CustomerNotes] = @p15, [DepositForfeitedAmount] = @p16, [DepositRefundedAmount] = @p17, [DepositStatus] = @p18, [EstimatedHandover] = @p19, [ExecuteBranchId] = @p20, [FinalAmount] = @p21, [GroupSessionId] = @p22, [OldPartsReturnOption] = @p23, [OrderCategory] = @p24, [OriginBranchId] = @p25, [OriginalServiceOrderId] = @p26, [PaymentStatus] = @p27, [PromisedHandoverTime] = @p28, [QCInspectorId] = @p29, [QCStatus] = @p30, [QCVerifiedAt] = @p31, [ReceptionistId] = @p32, [RequiredDepositAmount] = @p33, [RevisionNumber] = @p34, [ServiceAdvisorId] = @p35, [Status] = @p36, [SubTotalAmount] = @p37, [TaxAmount] = @p38, [TotalDepositedAmount] = @p39, [TotalDiscount] = @p40, [UpdatedAt] = @p41, [UpdatedBy] = @p42, [ValidUntil] = @p43, [VehicleId] = @p44
+      OUTPUT 1
+      WHERE [Id] = @p45;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (71ms) [Parameters=[@p0='?' (Size = 50) (DbType = AnsiString), @p1='?' (DbType = Int64), @p2='?' (Size = 50) (DbType = AnsiString), @p3='?' (Size = 4000), @p4='?' (Size = 4000), @p5='?' (DbType = Int64), @p6='?' (Size = 255) (DbType = AnsiString), @p7='?' (Size = 100) (DbType = AnsiString), @p8='?' (DbType = DateTime2), @p9='?' (Size = 500), @p10='?' (DbType = Int64), @p11='?' (Size = 20) (DbType = AnsiString), @p12='?' (Size = 50) (DbType = AnsiString), @p13='?' (DbType = Int64), @p14='?' (Size = 50) (DbType = AnsiString), @p15='?' (Size = 4000), @p16='?' (Size = 4000), @p17='?' (DbType = Int64), @p18='?' (Size = 255) (DbType = AnsiString), @p19='?' (Size = 100) (DbType = AnsiString), @p20='?' (DbType = DateTime2), @p21='?' (Size = 500), @p22='?' (DbType = Int64), @p23='?' (Size = 20) (DbType = AnsiString)], CommandType='Text', CommandTimeout='30']
+      SET IMPLICIT_TRANSACTIONS OFF;
+      SET NOCOUNT ON;
+      MERGE [AuditLogs] USING (
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, 0),
+      (@p12, @p13, @p14, @p15, @p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23, 1)) AS i ([Action], [BranchId], [IpAddress], [NewValue], [OldValue], [RecordId], [SessionId], [TableName], [Timestamp], [UserAgent], [UserId], [UserType], _Position) ON 1=0
+      WHEN NOT MATCHED THEN
+      INSERT ([Action], [BranchId], [IpAddress], [NewValue], [OldValue], [RecordId], [SessionId], [TableName], [Timestamp], [UserAgent], [UserId], [UserType])
+      VALUES (i.[Action], i.[BranchId], i.[IpAddress], i.[NewValue], i.[OldValue], i.[RecordId], i.[SessionId], i.[TableName], i.[Timestamp], i.[UserAgent], i.[UserId], i.[UserType])
+      OUTPUT INSERTED.[Id], i._Position;
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (50ms) [Parameters=[@__p_0='?' (DbType = Int64)], CommandType='Text', CommandTimeout='30']
+      SELECT TOP(1) [s].[Id], [s].[ActualHandover], [s].[AppointmentId], [s].[CancellationReason], [s].[CheckInTime], [s].[Code], [s].[CreatedAt], [s].[CreatedBy], [s].[CustomerApprovedAt], [s].[CustomerId], [s].[CustomerNotes], [s].[DepositForfeitedAmount], [s].[DepositRefundedAmount], [s].[DepositStatus], [s].[EstimatedHandover], [s].[ExecuteBranchId], [s].[FinalAmount], [s].[GroupSessionId], [s].[OldPartsReturnOption], [s].[OrderCategory], [s].[OriginBranchId], [s].[OriginalServiceOrderId], [s].[PaymentStatus], [s].[PromisedHandoverTime], [s].[QCInspectorId], [s].[QCStatus], [s].[QCVerifiedAt], [s].[ReceptionistId], [s].[RequiredDepositAmount], [s].[RevisionNumber], [s].[ServiceAdvisorId], [s].[Status], [s].[SubTotalAmount], [s].[TaxAmount], [s].[TotalDepositedAmount], [s].[TotalDiscount], [s].[UpdatedAt], [s].[UpdatedBy], [s].[ValidUntil], [s].[VehicleId]
+      FROM [ServiceOrders] AS [s]
+      WHERE [s].[Id] = @__p_0

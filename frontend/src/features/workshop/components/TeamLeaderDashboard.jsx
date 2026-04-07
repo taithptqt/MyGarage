@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import DispatchOpsDashboard from "./DispatchOpsDashboard";
 
 function toPositiveNumber(value) {
@@ -9,17 +9,29 @@ function toPositiveNumber(value) {
 
 export default function TeamLeaderDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { orderId } = useParams();
 
   const isAssignmentPage = typeof orderId === "string";
   const assignmentServiceOrderId = toPositiveNumber(orderId);
+  const assignmentFocus = new URLSearchParams(location.search).get("focus") || "";
+
+  const handleOpenAssignment = (serviceOrderId, options = {}) => {
+    const params = new URLSearchParams();
+    const focus = String(options?.focus || "").trim();
+    if (focus) params.set("focus", focus);
+    const query = params.toString();
+    navigate(`/workshop/team-leader/dispatch/${serviceOrderId}${query ? `?${query}` : ""}`);
+  };
 
   return (
     <DispatchOpsDashboard
       mode="team_leader"
       pageMode={isAssignmentPage ? "assignment" : "board"}
       assignmentServiceOrderId={assignmentServiceOrderId}
-      onOpenAssignment={(serviceOrderId) => navigate(`/workshop/team-leader/dispatch/${serviceOrderId}`)}
+      assignmentFocus={assignmentFocus}
+      onOpenAssignment={handleOpenAssignment}
+      onOpenQuote={(serviceOrderId) => navigate(`/workshop/team-leader/orders/${serviceOrderId}/quote`)}
       onBack={() => navigate("/workshop/team-leader")}
     />
   );

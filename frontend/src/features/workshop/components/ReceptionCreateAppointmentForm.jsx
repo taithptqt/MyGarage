@@ -95,6 +95,60 @@ function toNumberList(value) {
   );
 }
 
+function parseServiceIdsFromInput(value) {
+  if (Array.isArray(value)) return toNumberList(value);
+  if (Number.isFinite(Number(value)) && Number(value) > 0) return [Number(value)];
+
+  return toNumberList(
+    String(value || "")
+      .split(/[,|]/g)
+      .map((item) => Number(String(item || "").trim()))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+}
+
+function parseInitialNoteLines(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.symptoms)) {
+      return parsed.symptoms.map((item) => String(item || "").trim()).filter(Boolean);
+    }
+    if (Array.isArray(parsed?.symptomsByVehicle)) {
+      const firstWithSymptoms = parsed.symptomsByVehicle.find(
+        (item) => Array.isArray(item?.symptoms) && item.symptoms.length > 0
+      );
+      if (firstWithSymptoms) {
+        return firstWithSymptoms.symptoms.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+    }
+  } catch {
+    // Fallback to plain text parsing.
+  }
+
+  return raw
+    .split(/\r?\n|;/g)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function buildPlanFromServiceIds(serviceIds, serviceCategoryMap) {
+  const normalizedServiceIds = parseServiceIdsFromInput(serviceIds);
+  const categoryIds = toNumberList(
+    normalizedServiceIds
+      .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
+      .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
+  );
+  return normalizePlan({
+    categoryIds,
+    serviceIds: normalizedServiceIds,
+    excludedSharedCategoryIds: [],
+    excludedSharedServiceIds: []
+  });
+}
+
 function buildInitialFormData(initialValues) {
   if (!initialValues) return { ...EMPTY_FORM_DATA };
 
@@ -497,16 +551,78 @@ export default function ReceptionCreateAppointmentForm({
   }, []);
 
   useEffect(() => {
+    const nextFormData = buildInitialFormData(initialValues);
+    const initialVehicleKeys = nextFormData.isQuickOrder
+      ? ["guest"]
+      : nextFormData.isNewVehicle
+        ? ["new-customer"]
+        : toNumberList(nextFormData.selectedVehicleIds).map((vehicleId) => getVehicleKeyFromId(vehicleId));
+
+    const requestedServiceIds = parseServiceIdsFromInput(
+      Array.isArray(initialValues?.serviceIds) && initialValues.serviceIds.length > 0
+        ? initialValues.serviceIds
+        : initialValues?.requestedServiceIds
+    );
+
+    const planByVehicleKey = {};
+    (Array.isArray(initialValues?.vehicleServicePlans) ? initialValues.vehicleServicePlans : []).forEach((rawPlan) => {
+      const vehicleId = Number(rawPlan?.vehicleId || 0);
+      const vehicleKey = String(rawPlan?.vehicleKey || "").trim() || (vehicleId > 0 ? getVehicleKeyFromId(vehicleId) : "");
+      if (!vehicleKey) return;
+
+      const serviceIds = parseServiceIdsFromInput(rawPlan?.serviceIds);
+      if (serviceIds.length === 0) return;
+
+      planByVehicleKey[vehicleKey] = buildPlanFromServiceIds(serviceIds, serviceCategoryMap);
+    });
+
+    const populatedPlanKeys = Object.keys(planByVehicleKey);
+    let nextServiceMode = SERVICE_MODE.SHARED;
+    let nextSharedPlan = { ...EMPTY_PLAN };
+    let nextVehiclePlans = {};
+
+    if (initialVehicleKeys.length > 1 && populatedPlanKeys.length > 1) {
+      nextServiceMode = SERVICE_MODE.CUSTOM;
+      nextVehiclePlans = initialVehicleKeys.reduce((acc, vehicleKey) => {
+        acc[vehicleKey] = planByVehicleKey[vehicleKey] || { ...EMPTY_PLAN };
+        return acc;
+      }, {});
+    } else {
+      const firstVehicleKey = initialVehicleKeys[0] || "";
+      const planFromVehicle = firstVehicleKey ? planByVehicleKey[firstVehicleKey] : null;
+      const fallbackPlan = populatedPlanKeys.length > 0 ? planByVehicleKey[populatedPlanKeys[0]] : null;
+      const resolvedServiceIds = (planFromVehicle || fallbackPlan)?.serviceIds || requestedServiceIds;
+      nextSharedPlan = buildPlanFromServiceIds(resolvedServiceIds, serviceCategoryMap);
+      nextVehiclePlans = {};
+    }
+
+    const initialCategoryForActivePlan =
+      nextServiceMode === SERVICE_MODE.SHARED
+        ? nextSharedPlan.categoryIds?.[0] || ""
+        : (nextVehiclePlans[initialVehicleKeys[0]]?.categoryIds?.[0] || "");
+
+    const initialNoteLines = parseInitialNoteLines(initialValues?.customerNotes || nextFormData.customerNotes);
+    const seededVehicleNotes =
+      initialVehicleKeys.length === 1 && initialNoteLines.length > 0
+        ? { [initialVehicleKeys[0]]: [...initialNoteLines, ""] }
+        : {};
+    const seededSelectedDates = nextFormData.appointmentDate
+      ? initialVehicleKeys.reduce((acc, vehicleKey) => {
+        acc[vehicleKey] = nextFormData.appointmentDate;
+        return acc;
+      }, {})
+      : {};
+
     setErrorText("");
     setSearch("");
     setServiceSearch("");
     setSelectedBrandId("");
     setGuestSelectedBrandId("");
-    setServiceMode(SERVICE_MODE.SHARED);
+    setServiceMode(nextServiceMode);
     setSlotMode(SLOT_MODE.PARALLEL);
     setActiveSlotVehicleKey("");
     setActiveNoteVehicleKey("");
-    setVehicleNotesByKey({});
+    setVehicleNotesByKey(seededVehicleNotes);
     setActiveSession("MORNING");
     setSlotsLoading(false);
     setSelectingSlot(false);
@@ -514,15 +630,15 @@ export default function ReceptionCreateAppointmentForm({
     setParallelSlot(null);
     setSelectedSlotsByVehicle({});
     setSlotHoldTokens({});
-    setSelectedDatesByVehicle({});
+    setSelectedDatesByVehicle(seededSelectedDates);
     setShowOddSlots({ ...INITIAL_ODD_SLOT_VISIBILITY });
-    setSharedPlan({ ...EMPTY_PLAN });
-    setVehiclePlans({});
+    setSharedPlan(nextSharedPlan);
+    setVehiclePlans(nextVehiclePlans);
     setActivePlanVehicleKey("");
-    setActiveCategoryId("");
+    setActiveCategoryId(initialCategoryForActivePlan ? String(initialCategoryForActivePlan) : "");
     setIsServicePickerCollapsed(false);
-    setFormData(buildInitialFormData(initialValues));
-  }, [initialValues]);
+    setFormData(nextFormData);
+  }, [initialValues, serviceCategoryMap]);
 
   const filteredCustomers = useMemo(() => {
     const term = normalizeSearchText(search);

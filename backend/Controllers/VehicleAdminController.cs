@@ -16,7 +16,7 @@ public class VehicleAdminController : ControllerBase
 {
     private const string StatusWaitingReceive = "WAITING_RECEIVE";
     private const string StatusReceived = "RECEIVED";
-    private const string StatusInspecting = nameof(ServiceOrderLifecycleStatus.INSPECTING);
+    private const string StatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
     private const string StatusRepairing = "REPAIRING";
     private const string StatusInProgress = nameof(ServiceProgressStatus.IN_PROGRESS);
     private const string StatusWaitingParts = nameof(ServiceOrderDetailStatusCode.WAITING_PARTS);
@@ -37,7 +37,7 @@ public class VehicleAdminController : ControllerBase
     [
         StatusWaitingReceive,
         StatusReceived,
-        StatusInspecting,
+        StatusDiagnosing,
         StatusRepairing,
         StatusWaitingParts,
         StatusWaitingDelivery,
@@ -1669,7 +1669,7 @@ public class VehicleAdminController : ControllerBase
             "" => StatusWaitingReceive,
             nameof(ServiceOrderLifecycleStatus.NEW) or nameof(DiagnosisStatus.PENDING) or "WAITING" or "CHO_TIEP_NHAN" or "WAITING_RECEIVE" => StatusWaitingReceive,
             "RECEIVED" or "DA_TIEP_NHAN" => StatusReceived,
-            nameof(ServiceOrderLifecycleStatus.INSPECTING) or "CHECKING" or "DANG_KIEM_TRA" => StatusInspecting,
+            nameof(ServiceOrderLifecycleStatus.DIAGNOSING) or "CHECKING" or "DANG_KIEM_TRA" => StatusDiagnosing,
             "REPAIRING" or StatusInProgress or "DANG_SUA" => StatusRepairing,
             nameof(ServiceOrderDetailStatusCode.WAITING_PARTS) or "CHO_PHU_TUNG" => StatusWaitingParts,
             "WAITING_DELIVERY" or "CHO_GIAO" => StatusWaitingDelivery,

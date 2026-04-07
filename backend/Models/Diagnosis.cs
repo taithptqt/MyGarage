@@ -61,6 +61,8 @@ public partial class Diagnosis
 
     public string? FinalApprovalNote { get; set; }
 
+    public string? DispatchCollaborationMeta { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

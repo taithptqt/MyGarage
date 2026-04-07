@@ -151,6 +151,27 @@ namespace MyGarage.Controllers
             }
         }
 
+        [Authorize]
+        [HttpPost("reception-bookings")]
+        public async Task<ActionResult<ReceptionAppointmentSaveResponseDto>> SaveReceptionBooking([FromBody] ReceptionAppointmentSaveRequestDto dto)
+        {
+            var actorUserId = this.GetCurrentUserId();
+            if (actorUserId == null)
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                var result = await _appointmentService.SaveReceptionBookingAsync(actorUserId.Value, dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [AllowAnonymous]
         [HttpPost("public-bookings")]
         public async Task<ActionResult<AppointmentDetailResponseDto>> CreateGuest([FromBody] BookAppointmentRequestDto dto)

@@ -113,7 +113,7 @@ function AuthPage() {
       destination = "/admin";
     } else if (code === "ACCOUNTANT") {
       destination = "/accounting/dashboard";
-    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
+    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(code)) {
       destination = "/workshop";
     }
 
@@ -280,7 +280,7 @@ function AuthPage() {
       dest = "/admin";
     } else if (code === "ACCOUNTANT") {
       dest = "/accounting/dashboard";
-    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(code)) {
+    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(code)) {
       dest = "/workshop";
     }
 

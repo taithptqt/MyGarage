@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Models;
 
@@ -11,10 +13,32 @@ namespace MyGarage.Interfaces
         Task<ServiceOrder?> GetServiceOrderAsync(long serviceOrderId);
         Task<bool> HasSignedCheckInAsync(long serviceOrderId);
         Task<IReadOnlyList<Diagnosis>> GetAllByServiceOrderAsync(long serviceOrderId);
+        Task<DiagnosisIntakeSuggestionDto> BuildIntakeSuggestionAsync(
+            long serviceOrderId,
+            string? dispatchTag,
+            int? bufferMinutesOverride = null,
+            string? requestedPackageCode = null);
         Task RemoveRecommendationsByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds);
         Task RemoveDiagnosesAsync(IEnumerable<Diagnosis> diagnoses);
         Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null);
         Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(long serviceOrderId, long technicianId, IReadOnlyList<string> symptoms, string? dispatchTag = null);
+        Task RecordIntakeSnapshotAsync(
+            ServiceOrder serviceOrder,
+            DiagnosisIntakeSuggestionDto intakeSuggestion,
+            string? dispatchTag,
+            bool bypassConflictGuard,
+            bool autoAssign,
+            bool customerConsentAccepted,
+            string? customerConsentChannel,
+            string? customerConsentNote,
+            IReadOnlyList<Diagnosis> diagnoses);
+        Task<DiagnosisHandoverSnapshotResponseDto> CreateHandoverSnapshotAsync(long serviceOrderId, DiagnosisHandoverSnapshotCreateDto request);
+        Task<DiagnosisHandoverSnapshotResponseDto?> GetLatestHandoverSnapshotAsync(long serviceOrderId);
+        Task<DiagnosisHandoverSnapshotResponseDto> ApplyHandoverCustomerDecisionAsync(
+            long serviceOrderId,
+            long snapshotId,
+            DiagnosisHandoverDecisionCreateDto request);
+        Task<DiagnosisIntakeKpiResponseDto> GetIntakeConversionKpiAsync(long? branchId, DateTime? startDate, DateTime? endDate);
         Task UpdateServiceOrderStatusAsync(ServiceOrder serviceOrder, string status);
         Task<IReadOnlyList<Diagnosis>> GetActiveDiagnosesAsync(long serviceOrderId);
         Task<bool> TechnicianExistsAsync(long technicianId);
@@ -30,10 +54,22 @@ namespace MyGarage.Interfaces
             long? assistantTechnicianId,
             long? teamId,
             IReadOnlyList<long>? supportingTeamIds,
+            IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
             bool managerOverride);
         Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId);
-        Task MarkSupportRequestedAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string? note);
+        Task MarkSupportRequestedAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long requestedByStaffId,
+            string? note,
+            IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments = null);
+        Task AssignSupportingTeamSelectionAsync(
+            IEnumerable<Diagnosis> diagnoses,
+            long teamId,
+            long teamLeaderId,
+            long technicianId,
+            long? assistantTechnicianId,
+            string? note);
         Task RequestCancellationAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string reason);
         Task ApplyCancellationDecisionAsync(ServiceOrder serviceOrder, IEnumerable<Diagnosis> diagnoses, bool approve, long managerId, string? note);
         Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted);

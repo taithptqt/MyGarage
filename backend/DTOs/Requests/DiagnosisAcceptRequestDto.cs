@@ -9,6 +9,7 @@ namespace MyGarage.DTOs.Requests
         public long? BayId { get; set; }
         public long? TeamId { get; set; }
         public IReadOnlyList<long>? SupportingTeamIds { get; set; }
+        public IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? SupportingAssignments { get; set; }
         public long? TeamLeaderId { get; set; }
         public bool IsManagerOverride { get; set; }
     }

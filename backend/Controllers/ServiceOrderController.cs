@@ -83,6 +83,50 @@ namespace MyGarage.Controllers
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
+        [HttpPost("batches")]
+        public async Task<ActionResult<ServiceOrderBatchCreateResponseDto>> CreateBatch([FromBody] ServiceOrderBatchCreateRequestDto dto)
+        {
+            try
+            {
+                var actorUserId = this.GetCurrentUserId();
+                var result = await _serviceOrderService.AddWorkshopBatchAsync(actorUserId, dto);
+                var mappedOrders = _mapper.Map<List<ServiceOrderResponseDto>>(result.Orders);
+                var response = new ServiceOrderBatchCreateResponseDto
+                {
+                    GroupSessionId = result.GroupSessionId,
+                    TotalCreated = mappedOrders.Count,
+                    Orders = mappedOrders
+                };
+
+                return Ok(response);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}/workshop")]
+        public async Task<ActionResult<ServiceOrderResponseDto>> UpdateWorkshop(long id, [FromBody] WorkshopServiceOrderEditRequestDto dto)
+        {
+            try
+            {
+                var actorUserId = this.GetCurrentUserId();
+                var updatedItem = await _serviceOrderService.UpdateWorkshopAsync(id, dto, actorUserId);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+
+                var responseDto = _mapper.Map<ServiceOrderResponseDto>(updatedItem);
+                return Ok(responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         public async Task<ActionResult<ServiceOrderResponseDto>> Update(long id, [FromBody] ServiceOrderUpdateDto itemDto)
         {

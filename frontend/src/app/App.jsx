@@ -17,6 +17,7 @@ import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePag
 import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
+import ReceptionEditAppointmentPage from "@features/workshop/pages/ReceptionEditAppointmentPage";
 import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
 import HorizonMain from "@horizon/Main";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
@@ -169,6 +170,7 @@ function App() {
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
           <Route path="reception/appointments" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionAppointmentsPage /></ProtectedRoute>} />
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
+          <Route path="reception/appointments/:appointmentId/edit" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ReceptionEditAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
@@ -176,10 +178,13 @@ function App() {
           <Route path="reception/orders/:orderId/edit" element={<ProtectedRoute allowedRoles={["RECEPTIONIST"]}><ServiceOrderEditPage /></ProtectedRoute>} />
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="manager/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
+          <Route path="manager/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
           <Route path="foreman/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
+          <Route path="foreman/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="team-leader" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
           <Route path="team-leader/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
+          <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />

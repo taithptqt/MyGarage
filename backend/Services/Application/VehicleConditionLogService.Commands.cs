@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -40,6 +41,32 @@ namespace MyGarage.Services
             activeRequest.DashboardWarningLights = StatusCompleted;
             activeRequest.UpdatedAt = DateTime.UtcNow;
             _context.VehicleConditionLogs.Update(activeRequest);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task MarkServiceOrderCheckedInAsync(long serviceOrderId)
+        {
+            var serviceOrder = await _context.ServiceOrders.FindAsync(serviceOrderId);
+            if (serviceOrder == null)
+            {
+                return;
+            }
+
+            var checkedInStatus = nameof(ServiceOrderLifecycleStatus.CHECKED_IN);
+            var now = DateTime.UtcNow;
+            var isAlreadyCheckedIn = string.Equals(serviceOrder.Status, checkedInStatus, StringComparison.OrdinalIgnoreCase);
+            if (isAlreadyCheckedIn && serviceOrder.CheckInTime.HasValue)
+            {
+                return;
+            }
+
+            serviceOrder.Status = checkedInStatus;
+            if (!serviceOrder.CheckInTime.HasValue)
+            {
+                serviceOrder.CheckInTime = now;
+            }
+            serviceOrder.UpdatedAt = now;
+            _context.ServiceOrders.Update(serviceOrder);
             await _context.SaveChangesAsync();
         }
     }

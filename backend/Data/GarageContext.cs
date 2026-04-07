@@ -1046,6 +1046,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.DispatchTag)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+            entity.Property(e => e.DispatchCollaborationMeta).HasMaxLength(4000);
             entity.Property(e => e.Severity)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -2138,6 +2139,12 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.ToTable("ServiceOrders", tb =>
+            {
+                tb.HasCheckConstraint("CK_ServiceOrders_Status", "[Status] IN ('NEW','CHECKED_IN','WAITING','DIAGNOSING','QUOTING','WAITING_APPROVAL','APPROVED','IN_PROGRESS','REPAIRING','READY','WAITING_PAYMENT','CLOSED','CANCELED')");
+                tb.HasCheckConstraint("CK_ServiceOrders_OrderCategory", "[OrderCategory] IS NULL OR ([OrderCategory]='WARRANTLY' OR [OrderCategory]='REWORK' OR [OrderCategory]='INSURANCE_REPAIR' OR [OrderCategory]='QUICK_SERVICE' OR [OrderCategory]='GENERAL_REPAIR' OR [OrderCategory]='MAINTENANCE')");
+            });
 
             entity.HasOne(d => d.Appointment).WithMany(p => p.ServiceOrders)
                 .HasForeignKey(d => d.AppointmentId)

@@ -1,12 +1,219 @@
-﻿import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
-import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
-import { useBranch } from "@shared/core/context/BranchContext";
+import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
+import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { useBranch } from "@shared/core/context/BranchContext";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
+import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
 import "./Workshop.css";
+
+const DEFAULT_FORM_DATA = {
+  orderCategory: "GENERAL_REPAIR",
+  serviceAdvisorId: "",
+  oldPartsReturnOption: "DISPOSE_ALL",
+  requiredDepositAmount: 0,
+  checkInTime: "",
+  estimatedHandover: "",
+  promisedHandoverTime: "",
+  status: "NEW",
+  serviceIds: [],
+};
+
+const EDIT_WINDOW_PASSED_MESSAGE = "Không thể sửa service order vì đã qua khung giờ đã chọn lúc tạo.";
+
+function readField(obj, keys, fallback = null) {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
+  }
+  return fallback;
+}
+
+function toNumberList(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map(Number)
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
+  );
+}
+
+function parsePositiveId(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function normalizeService(service) {
+  const id = Number(readField(service, ["id", "Id"], 0));
+  const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
+  return {
+    id,
+    categoryId,
+    name: String(readField(service, ["name", "Name"], "") || "").trim(),
+    minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
+    price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0)),
+  };
+}
+
+function buildCategoryOptions(serviceCategories, normalizedServices) {
+  const map = new Map();
+
+  (serviceCategories || []).forEach((category) => {
+    const id = Number(readField(category, ["id", "Id"], 0));
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (category?.isDeleted === true || category?.isActive === false) return;
+    const name = String(readField(category, ["categoryName", "name", "Name"], "") || "").trim();
+    if (!name) return;
+    map.set(id, { id, name });
+  });
+
+  (normalizedServices || []).forEach((service) => {
+    if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
+    if (!map.has(service.categoryId)) {
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => String(a.name).localeCompare(String(b.name), "vi"));
+}
+
+function formatCurrency(value) {
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
+}
+
+function formatDateTimeValue(value) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--";
+  return parsed.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function toLocalDateTimeValue(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
+function hasServiceOrderEditWindowPassed(order) {
+  const estimatedEndRaw = readField(order, ["estimatedHandover", "EstimatedHandover"], null);
+  const promisedEndRaw = readField(order, ["promisedHandoverTime", "PromisedHandoverTime"], null);
+  const endRaw = estimatedEndRaw || promisedEndRaw;
+  if (!endRaw) return false;
+  const endTime = new Date(endRaw);
+  if (Number.isNaN(endTime.getTime())) return false;
+  return Date.now() >= endTime.getTime();
+}
+
+function parseSymptomNotes(rawCustomerNotes) {
+  const rawText = String(rawCustomerNotes || "").trim();
+  if (!rawText) return [];
+
+  try {
+    const parsed = JSON.parse(rawText);
+    const fromObject =
+      parsed && typeof parsed === "object" && Array.isArray(parsed.symptoms) ? parsed.symptoms : Array.isArray(parsed) ? parsed : null;
+    if (fromObject) {
+      return fromObject
+        .map((value) => String(value || "").trim())
+        .filter((line) => line && normalizeSearchText(line) !== "khong co ghi chu gi" && normalizeSearchText(line) !== "khong co ghi chu");
+    }
+    if (typeof parsed === "string") {
+      const line = parsed.trim();
+      return line ? [line] : [];
+    }
+  } catch {
+    return rawText ? [rawText] : [];
+  }
+
+  return [];
+}
+
+function getApiErrorMessage(err) {
+  const fallback = "Không thể cập nhật lệnh sửa chữa. Vui lòng kiểm tra dữ liệu và thử lại.";
+  const data = err?.response?.data;
+  const serverErrors = data?.errors && typeof data.errors === "object" ? Object.values(data.errors).flat() : [];
+  if (serverErrors.length > 0) return String(serverErrors[0] || fallback);
+  const raw = data?.message || data?.error || data?.detail || data?.title || err?.message || "";
+  const text = String(raw);
+  return text || fallback;
+}
+
+function calculateEstimatedFinish(checkInText, totalMinutes) {
+  if (!checkInText || totalMinutes <= 0) return { finishIso: "", finishText: "" };
+  const current = new Date(checkInText);
+  if (Number.isNaN(current.getTime())) return { finishIso: "", finishText: "" };
+
+  const alignToWindow = (value) => {
+    const next = new Date(value);
+    while (next.getDay() === 0) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+    }
+    const openMinutes = 8 * 60;
+    const closeMinutes = 20 * 60;
+    const currentMinutes = next.getHours() * 60 + next.getMinutes();
+    if (currentMinutes < openMinutes) next.setHours(8, 0, 0, 0);
+    if (currentMinutes >= closeMinutes) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+      while (next.getDay() === 0) {
+        next.setDate(next.getDate() + 1);
+        next.setHours(8, 0, 0, 0);
+      }
+    }
+    return next;
+  };
+
+  let cursor = alignToWindow(current);
+  let remaining = Number(totalMinutes);
+  while (remaining > 0) {
+    cursor = alignToWindow(cursor);
+    const closeToday = new Date(cursor);
+    closeToday.setHours(20, 0, 0, 0);
+    const available = Math.max(0, Math.floor((closeToday.getTime() - cursor.getTime()) / 60000));
+    if (available <= 0) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(8, 0, 0, 0);
+      continue;
+    }
+    const consume = Math.min(remaining, available);
+    cursor.setMinutes(cursor.getMinutes() + consume);
+    remaining -= consume;
+    if (remaining > 0) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(8, 0, 0, 0);
+    }
+  }
+
+  const finishIso = toLocalDateTimeValue(cursor);
+  const finishText = formatDateTimeValue(finishIso);
+  return { finishIso, finishText };
+}
 
 export default function ServiceOrderEditPage() {
   const { orderId } = useParams();
@@ -14,118 +221,201 @@ export default function ServiceOrderEditPage() {
   const { selectedBranchId } = useBranch();
   const { user } = useAuth();
 
-  const contextBranchId = Number.isFinite(Number(selectedBranchId)) && Number(selectedBranchId) > 0
-    ? Number(selectedBranchId)
-    : 0;
-  const userBranchId = Number.isFinite(Number(user?.branchId ?? user?.BranchId)) && Number(user?.branchId ?? user?.BranchId) > 0
-    ? Number(user?.branchId ?? user?.BranchId)
-    : 0;
-  const effectiveBranchId = contextBranchId || userBranchId;
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const [order, setOrder] = useState(null);
   const [staff, setStaff] = useState([]);
-  const [orderCategories, setOrderCategories] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [services, setServices] = useState([]);
-  const [initialServiceDetails, setInitialServiceDetails] = useState([]);
-
-
-  const [formData, setFormData] = useState({
-    customerNotes: "",
-    serviceAdvisorId: "",
-    orderCategory: "",
-    oldPartsReturnOption: "DISPOSE_ALL",
-    requiredDepositAmount: 0,
-    checkInTime: "",
-    estimatedHandover: "",
-    promisedHandoverTime: "",
-    serviceIds: []
-  });
+  const [customers, setCustomers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
 
   const [serviceSearch, setServiceSearch] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState("");
+  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [symptomInputs, setSymptomInputs] = useState([""]);
-  const [focusedSymptomIndex, setFocusedSymptomIndex] = useState(0);
+  const pickerMinDate = useMemo(() => new Date(2000, 0, 1), []);
+
+  const effectiveBranchId = useMemo(() => {
+    const fromContext = parsePositiveId(selectedBranchId);
+    if (fromContext > 0) return fromContext;
+    return parsePositiveId(user?.branchId ?? user?.BranchId);
+  }, [selectedBranchId, user?.BranchId, user?.branchId]);
+  const isEditWindowPassed = hasServiceOrderEditWindowPassed(order);
+
+  const normalizedServices = useMemo(() => {
+    return (services || []).map(normalizeService).filter((service) => service.id > 0 && service.name);
+  }, [services]);
+
+  const categoryOptions = useMemo(
+    () => buildCategoryOptions(serviceCategories, normalizedServices),
+    [serviceCategories, normalizedServices]
+  );
+
+  const serviceById = useMemo(
+    () => new Map(normalizedServices.map((service) => [Number(service.id), service])),
+    [normalizedServices]
+  );
+
+  const customerById = useMemo(() => {
+    const map = new Map();
+    (customers || []).forEach((item) => {
+      const id = Number(readField(item, ["id", "Id"], 0));
+      if (id > 0) map.set(id, item);
+    });
+    return map;
+  }, [customers]);
+
+  const vehicleById = useMemo(() => {
+    const map = new Map();
+    (vehicles || []).forEach((item) => {
+      const id = Number(readField(item, ["id", "Id"], 0));
+      if (id > 0) map.set(id, item);
+    });
+    return map;
+  }, [vehicles]);
+
+  const selectedServices = useMemo(() => {
+    return toNumberList(formData.serviceIds)
+      .map((serviceId) => serviceById.get(serviceId))
+      .filter(Boolean);
+  }, [formData.serviceIds, serviceById]);
+
+  const filteredServices = useMemo(() => {
+    const term = normalizeSearchText(serviceSearch);
+    const activeCategory = parsePositiveId(activeCategoryId);
+
+    return normalizedServices
+      .filter((service) => (activeCategory > 0 ? Number(service.categoryId) === activeCategory : true))
+      .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
+  }, [activeCategoryId, normalizedServices, serviceSearch]);
+
+  const { totalMinutes, totalPrice, suggestedFinish } = useMemo(() => {
+    const minutes = selectedServices.reduce((sum, service) => sum + Number(service?.minutes || 0), 0);
+    const price = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
+    return {
+      totalMinutes: minutes,
+      totalPrice: price,
+      suggestedFinish: calculateEstimatedFinish(formData.checkInTime, minutes),
+    };
+  }, [formData.checkInTime, selectedServices]);
+
+  const customerDisplay = useMemo(() => {
+    const customerId = parsePositiveId(order?.customerId ?? order?.CustomerId);
+    const customer = customerById.get(customerId);
+    const fullName = String(readField(customer, ["fullName", "FullName"], "") || "").trim();
+    const phone = String(readField(customer, ["phone", "Phone"], "") || "").trim();
+    return {
+      fullName: fullName || (customerId > 0 ? `Khách hàng #${customerId}` : "Chưa xác định"),
+      phone: phone || "Chưa có số điện thoại",
+    };
+  }, [customerById, order?.CustomerId, order?.customerId]);
+
+  const vehicleDisplay = useMemo(() => {
+    const vehicleId = parsePositiveId(order?.vehicleId ?? order?.VehicleId);
+    const vehicle = vehicleById.get(vehicleId);
+    const plate = String(readField(vehicle, ["licensePlate", "LicensePlate"], "") || "").trim();
+    const modelName = String(readField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "") || "").trim();
+    const color = String(readField(vehicle, ["color", "Color"], "") || "").trim();
+    const descriptor = [modelName, color].filter(Boolean).join(" - ");
+    return {
+      plate: plate ? formatLicensePlate(plate) : "Chưa có biển số",
+      descriptor: descriptor || "Chưa rõ dòng xe",
+    };
+  }, [order?.VehicleId, order?.vehicleId, vehicleById]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
-      const [orderRes, sRes, rRes, catRes, srvRes, detailsRes] = await Promise.all([
+      const [orderRes, staffRes, roleRes, categoryRes, serviceRes, detailsRes, customerRes, vehicleRes] = await Promise.all([
         serviceOrderApi.getById(orderId),
         getAllStaff(),
         getAllRoles(),
         getAllServiceCategories(),
         getAllStandardServices(),
-        serviceOrderApi.getDetails(orderId).catch(() => [])
+        serviceOrderApi.getDetails(orderId).catch(() => []),
+        getAllCustomers(),
+        getAllVehicles(),
       ]);
 
-      if (!orderRes) throw new Error("Không tìm thấy lệnh sửa chữa.");
+      if (!orderRes) {
+        throw new Error("Không tìm thấy lệnh sửa chữa.");
+      }
 
-      setOrder(orderRes);
-      setOrderCategories(catRes || []);
-      setServices(srvRes || []);
+      const staffList = Array.isArray(staffRes) ? staffRes : [];
+      const roleList = Array.isArray(roleRes) ? roleRes : [];
+      const roleCodeById = new Map(
+        roleList.map((role) => [
+          Number(readField(role, ["id", "Id"], 0)),
+          String(readField(role, ["roleCode", "RoleCode"], "") || "").toUpperCase(),
+        ])
+      );
 
-      const existingSvcs = (detailsRes || []).filter((d) => {
-        const t = String(d?.itemType || "").toUpperCase();
-        const isLaborOrService = t === "LABOR" || t === "SERVICE";
-        const isFromDiagnosis = Boolean(d?.diagnoseRecommendationId);
-        return isLaborOrService && !isFromDiagnosis;
-      });
-      const uniqueSvcMap = new Map();
-      existingSvcs.forEach((d) => {
-        const sid = Number(d.standardServiceId);
-        if (sid > 0 && !uniqueSvcMap.has(sid)) uniqueSvcMap.set(sid, d);
-      });
-      const uniqueExistingSvcs = Array.from(uniqueSvcMap.values());
-      setInitialServiceDetails(uniqueExistingSvcs);
-      const existingSvcIds = uniqueExistingSvcs.map((d) => Number(d.standardServiceId)).filter((x) => x > 0);
-
-      const filteredStaff = sRes.filter((s) => {
-        const role = rRes.find((r) => r.id === s.roleId);
-        const isMatchedRole = role && (role.roleCode === "RECEPTIONIST" || role.roleCode === "MANAGER");
-        const staffBranchId = Number(s.branchId ?? s.BranchId ?? 0);
+      const filteredStaff = staffList.filter((item) => {
+        const roleId = Number(readField(item, ["roleId", "RoleId"], 0));
+        const roleCode = roleCodeById.get(roleId) || "";
+        const isMatchedRole = roleCode === "RECEPTIONIST" || roleCode === "MANAGER";
+        const staffBranchId = Number(readField(item, ["branchId", "BranchId"], 0));
         const isMatchedBranch = !effectiveBranchId || staffBranchId === effectiveBranchId;
         return isMatchedRole && isMatchedBranch;
       });
-      setStaff(filteredStaff);
 
-      setFormData({
-        customerNotes: orderRes.customerNotes || "",
-        serviceAdvisorId: orderRes.serviceAdvisorId || "",
-        orderCategory: orderRes.orderCategory || "",
-        oldPartsReturnOption: orderRes.oldPartsReturnOption || "DISPOSE_ALL",
-        requiredDepositAmount: orderRes.requiredDepositAmount || 0,
-        checkInTime: orderRes.checkInTime ? orderRes.checkInTime.slice(0, 16) : "",
-        estimatedHandover: orderRes.estimatedHandover ? orderRes.estimatedHandover.slice(0, 16) : "",
-        promisedHandoverTime: orderRes.promisedHandoverTime ? orderRes.promisedHandoverTime.slice(0, 16) : "",
-        serviceIds: existingSvcIds
+      const editableDetails = (Array.isArray(detailsRes) ? detailsRes : []).filter((detail) => {
+        const itemType = String(readField(detail, ["itemType", "ItemType"], "") || "").toUpperCase();
+        const isLaborOrService = itemType === "LABOR" || itemType === "SERVICE";
+        const hasDiagnosisRef = Boolean(readField(detail, ["diagnoseRecommendationId", "DiagnoseRecommendationId"], null));
+        return isLaborOrService && !hasDiagnosisRef;
       });
 
-      const parsedSymptoms = (() => {
-        try {
-          const raw = String(orderRes.customerNotes || "").trim();
-          if (!raw) return [];
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed?.symptoms)) {
-            return parsed.symptoms.map((x) => String(x || "").trim()).filter(Boolean);
-          }
-          if (Array.isArray(parsed)) {
-            return parsed.map((x) => String(x || "").trim()).filter(Boolean);
-          }
-          if (typeof parsed === "string" && parsed.trim()) {
-            return [parsed.trim()];
-          }
-          return [];
-        } catch {
-          const plain = String(orderRes.customerNotes || "").trim();
-          return plain ? [plain] : [];
-        }
-      })();
+      const initialServiceIds = Array.from(
+        new Set(
+          editableDetails
+            .map((detail) => Number(readField(detail, ["standardServiceId", "StandardServiceId"], 0)))
+            .filter((serviceId) => Number.isFinite(serviceId) && serviceId > 0)
+        )
+      );
+
+      const parsedSymptoms = parseSymptomNotes(readField(orderRes, ["customerNotes", "CustomerNotes"], ""));
+      const checkInTime = toLocalDateTimeValue(readField(orderRes, ["checkInTime", "CheckInTime"], null));
+      const estimatedHandover = toLocalDateTimeValue(readField(orderRes, ["estimatedHandover", "EstimatedHandover"], null));
+      const promisedHandoverTime = toLocalDateTimeValue(readField(orderRes, ["promisedHandoverTime", "PromisedHandoverTime"], null));
+      const normalizedCategory = String(readField(orderRes, ["orderCategory", "OrderCategory"], "GENERAL_REPAIR") || "GENERAL_REPAIR").toUpperCase();
+      const normalizedStatus = String(readField(orderRes, ["status", "Status"], "NEW") || "NEW").toUpperCase();
+
+      setOrder(orderRes);
+      setStaff(filteredStaff);
+      setServiceCategories(Array.isArray(categoryRes) ? categoryRes : []);
+      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setCustomers(Array.isArray(customerRes) ? customerRes : []);
+      setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
+
+      setFormData({
+        orderCategory: normalizedCategory,
+        serviceAdvisorId: parsePositiveId(readField(orderRes, ["serviceAdvisorId", "ServiceAdvisorId"], 0)) || "",
+        oldPartsReturnOption: String(readField(orderRes, ["oldPartsReturnOption", "OldPartsReturnOption"], "DISPOSE_ALL") || "DISPOSE_ALL"),
+        requiredDepositAmount: Number(readField(orderRes, ["requiredDepositAmount", "RequiredDepositAmount"], 0) || 0),
+        checkInTime: checkInTime || toLocalDateTimeValue(new Date()),
+        estimatedHandover,
+        promisedHandoverTime,
+        status: normalizedStatus,
+        serviceIds: initialServiceIds,
+      });
+
       setSymptomInputs(parsedSymptoms.length > 0 ? [...parsedSymptoms, ""] : [""]);
+
+      const firstService = initialServiceIds.length > 0 ? Number(initialServiceIds[0]) : 0;
+      const firstNormalized = (Array.isArray(serviceRes) ? serviceRes : [])
+        .map(normalizeService)
+        .find((service) => service.id === firstService);
+      setActiveCategoryId(firstNormalized?.categoryId ? String(firstNormalized.categoryId) : "");
     } catch (err) {
-      setError(err.message);
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -135,206 +425,74 @@ export default function ServiceOrderEditPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleServiceToggle = (id) => {
-    const serviceId = Number(id);
-    setFormData(prev => {
-      const exists = prev.serviceIds.map(Number).includes(serviceId);
-      return {
-        ...prev,
-        serviceIds: exists
-          ? prev.serviceIds.filter((sid) => Number(sid) !== serviceId).map(Number)
-          : [...prev.serviceIds.map(Number), serviceId]
-      };
-    });
-    setServiceSearch("");
-  };
-
-  const filteredServices = useMemo(() => {
-    if (!serviceSearch) return [];
-    const selectedCategory = orderCategories.find(c => (c.code || c.name) === formData.orderCategory);
-    const catId = selectedCategory ? selectedCategory.id : null;
-
-    return services.filter(s =>
-      (!catId || s.categoryId === catId || s.CategoryId === catId) &&
-      ((s.Name || s.name || "").toLowerCase().includes(serviceSearch.toLowerCase())) &&
-      !formData.serviceIds.map(Number).includes(Number(s.id))
-    ).slice(0, 10);
-  }, [services, serviceSearch, formData.serviceIds, formData.orderCategory, orderCategories]);
-
-  const calculateEstimatedFinish = useCallback((startText, totalMinutes) => {
-    if (!startText || !totalMinutes || totalMinutes <= 0) {
-      return { finishText: "", finishIso: "" };
+  useEffect(() => {
+    if (!activeCategoryId && categoryOptions.length > 0) {
+      setActiveCategoryId(String(categoryOptions[0].id));
     }
-    const current = new Date(startText);
-    if (Number.isNaN(current.getTime())) {
-      return { finishText: "", finishIso: "" };
-    }
+  }, [activeCategoryId, categoryOptions]);
 
-    const alignToWindow = (value) => {
-      let t = new Date(value);
-      while (t.getDay() === 0) {
-        t.setDate(t.getDate() + 1);
-        t.setHours(8, 0, 0, 0);
-      }
-      const openMins = 8 * 60;
-      const closeMins = 20 * 60;
-      const curMins = t.getHours() * 60 + t.getMinutes();
-      if (curMins < openMins) t.setHours(8, 0, 0, 0);
-      if (curMins >= closeMins) {
-        t.setDate(t.getDate() + 1);
-        t.setHours(8, 0, 0, 0);
-        while (t.getDay() === 0) {
-          t.setDate(t.getDate() + 1);
-          t.setHours(8, 0, 0, 0);
-        }
-      }
-      return t;
-    };
+  const showError = useCallback(
+    (fieldName) => submitAttempted && Boolean(fieldErrors[fieldName]),
+    [fieldErrors, submitAttempted]
+  );
 
-    let t = alignToWindow(current);
-    let remaining = Number(totalMinutes);
-    while (remaining > 0) {
-      t = alignToWindow(t);
-      const closeToday = new Date(t);
-      closeToday.setHours(20, 0, 0, 0);
-      const available = Math.max(0, Math.floor((closeToday.getTime() - t.getTime()) / 60000));
-      if (available <= 0) {
-        t.setDate(t.getDate() + 1);
-        t.setHours(8, 0, 0, 0);
-        continue;
-      }
-      const consume = Math.min(remaining, available);
-      t.setMinutes(t.getMinutes() + consume);
-      remaining -= consume;
-      if (remaining > 0) {
-        t.setDate(t.getDate() + 1);
-        t.setHours(8, 0, 0, 0);
-      }
-    }
+  const validateForm = useCallback(
+    (data) => {
+      const errors = {};
+      const checkIn = data.checkInTime ? new Date(data.checkInTime) : null;
+      const estimated = data.estimatedHandover || suggestedFinish.finishIso ? new Date(data.estimatedHandover || suggestedFinish.finishIso) : null;
+      const promised = data.promisedHandoverTime ? new Date(data.promisedHandoverTime) : null;
 
-    const hh = String(t.getHours()).padStart(2, "0");
-    const mm = String(t.getMinutes()).padStart(2, "0");
-    const dd = String(t.getDate()).padStart(2, "0");
-    const mo = String(t.getMonth() + 1).padStart(2, "0");
-    const yy = t.getFullYear();
+      if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
+      if (!checkIn || Number.isNaN(checkIn.getTime())) {
+        errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
+      }
 
-    return {
-      finishText: `${hh}:${mm} - Ngày ${dd}-${mo}`,
-      finishIso: `${yy}-${mo}-${dd}T${hh}:${mm}:00`,
-    };
+      if (estimated && checkIn && !Number.isNaN(estimated.getTime()) && estimated < checkIn) {
+        errors.estimatedHandover = "Dự kiến hoàn thành phải lớn hơn hoặc bằng thời điểm xe vào xưởng.";
+      }
+
+      if (promised && checkIn && !Number.isNaN(promised.getTime()) && promised < checkIn) {
+        errors.promisedHandoverTime = "Ngày giờ cam kết trả xe phải lớn hơn hoặc bằng thời điểm xe vào xưởng.";
+      }
+
+      if (Number(data.requiredDepositAmount || 0) < 0) {
+        errors.requiredDepositAmount = "Số tiền cọc không được nhỏ hơn 0.";
+      }
+
+      if (toNumberList(data.serviceIds).length === 0) {
+        errors.serviceIds = "Vui lòng chọn ít nhất một dịch vụ.";
+      }
+
+      return errors;
+    },
+    [suggestedFinish.finishIso]
+  );
+
+  const handleFieldValueChange = useCallback((fieldName, value) => {
+    setFormData((prev) => ({ ...prev, [fieldName]: value }));
   }, []);
 
-  const { totalMinutes, totalPrice, finishTimeStr, estimatedFinishIso } = useMemo(() => {
-    const selectedServices = services.filter((s) => formData.serviceIds.map(Number).includes(Number(s.id)));
-    const total = selectedServices.reduce((sum, s) => sum + (s.StandardMinutes || s.standardMinutes || 60), 0);
-    const priceSum = selectedServices.reduce((sum, s) => sum + (s.basePrice || s.BasePrice || 0), 0);
-    const { finishText, finishIso } = calculateEstimatedFinish(formData.checkInTime, total);
-    return { totalMinutes: total, totalPrice: priceSum, finishTimeStr: finishText, estimatedFinishIso: finishIso };
-  }, [formData.serviceIds, formData.checkInTime, services, calculateEstimatedFinish]);
+  const handleChange = useCallback((event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleServiceToggle = useCallback((serviceId) => {
+    const normalizedId = Number(serviceId);
+    if (!Number.isFinite(normalizedId) || normalizedId <= 0) return;
+
     setFormData((prev) => {
-      return { ...prev, [name]: type === 'checkbox' ? checked : value };
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const normalizedSymptoms = symptomInputs
-        .map((x) => String(x || "").trim())
-        .filter(Boolean);
-      const symptomPayload = normalizedSymptoms.length > 0 ? normalizedSymptoms : ["Không có ghi chú gì"];
-
-      const payload = {
-        ...order,
-        ...formData,
-        customerNotes: JSON.stringify({ symptoms: symptomPayload }),
-        serviceAdvisorId: formData.serviceAdvisorId ? Number(formData.serviceAdvisorId) : null,
-        requiredDepositAmount: Number(formData.requiredDepositAmount) || 0,
-        checkInTime: formData.checkInTime || new Date().toISOString(),
-        estimatedHandover: formData.estimatedHandover || estimatedFinishIso || null,
-        promisedHandoverTime: formData.promisedHandoverTime || null,
+      const current = toNumberList(prev.serviceIds);
+      const has = current.includes(normalizedId);
+      return {
+        ...prev,
+        serviceIds: has ? current.filter((id) => id !== normalizedId) : [...current, normalizedId],
       };
+    });
+  }, []);
 
-      await serviceOrderApi.update(orderId, payload);
-
-      // Đông bộ service details theo danh sách đang chọn (xử lý cả dữ liệu trùng cũ)
-      const currentIds = Array.from(new Set(formData.serviceIds.map(Number).filter((x) => x > 0)));
-      const latestDetails = await serviceOrderApi.getDetails(orderId).catch(() => []);
-      const editableDetails = (latestDetails || []).filter((d) => {
-        const t = String(d?.itemType || "").toUpperCase();
-        const isLaborOrService = t === "LABOR" || t === "SERVICE";
-        return isLaborOrService && !d?.diagnoseRecommendationId;
-      });
-
-      const groupedByServiceId = editableDetails.reduce((acc, d) => {
-        const sid = Number(d?.standardServiceId || 0);
-        if (sid <= 0) return acc;
-        if (!acc[sid]) acc[sid] = [];
-        acc[sid].push(d);
-        return acc;
-      }, {});
-
-      const detailPromises = [];
-
-      // Vơi dịch vụ đang chọn: giữ 1 dòng, xóa dòng trùng
-      currentIds.forEach((sid) => {
-        const rows = groupedByServiceId[sid] || [];
-        if (rows.length > 1) {
-          rows.slice(1).forEach((d) => detailPromises.push(serviceOrderApi.deleteDetail(d.id)));
-        }
-      });
-
-      // Vơi dịch vụ không còn chọn: xóa toàn bộ dòng
-      Object.keys(groupedByServiceId).map(Number).forEach((sid) => {
-        if (!currentIds.includes(sid)) {
-          (groupedByServiceId[sid] || []).forEach((d) => detailPromises.push(serviceOrderApi.deleteDetail(d.id)));
-        }
-      });
-
-      // Vơi dịch vụ chọn mơi chưa có dòng: thêm mơi
-      currentIds.forEach((sid) => {
-        const rows = groupedByServiceId[sid] || [];
-        if (rows.length === 0) {
-          const service = services.find((s) => Number(s.id) === sid);
-          if (service) {
-            detailPromises.push(serviceOrderApi.createDetail({
-              serviceOrderId: orderId,
-              standardServiceId: sid,
-              itemType: "LABOR",
-              itemName: service.Name || service.name,
-              description: "Dịch vụ khách yêu cầu trươc (Edit)",
-              quantity: 1,
-              unit: "Lần",
-              unitPriceAtTime: service.BasePrice || service.basePrice || 0,
-              subTotal: service.BasePrice || service.basePrice || 0,
-              taxRate: service.TaxRate || service.taxRate || 0,
-              finalAmount: service.BasePrice || service.basePrice || 0,
-              payerType: "CUSTOMER",
-              status: "APPROVED"
-            }));
-          }
-        }
-      });
-
-      if (detailPromises.length > 0) {
-        await Promise.all(detailPromises);
-      }
-
-      navigate(`/workshop/reception?viewOrderId=${orderId}`);
-    } catch (err) {
-      setError("Lđ-i khi cập nhật: " + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <div className="loading-state"><div className="spinner" /><p>Đang tải dữ liệu lệnh...</p></div>;
-
-  const handleSymptomChange = (index, value) => {
+  const handleSymptomChange = useCallback((index, value) => {
     setSymptomInputs((prev) => {
       const next = [...prev];
       next[index] = value;
@@ -342,213 +500,368 @@ export default function ServiceOrderEditPage() {
       if (isLast && String(value || "").trim() && next.length < 12) {
         next.push("");
       }
+      while (next.length > 1) {
+        const last = next[next.length - 1];
+        const secondLast = next[next.length - 2];
+        if (String(last || "").trim() || !String(secondLast || "").trim()) break;
+        next.pop();
+      }
       return next;
     });
-  };
+  }, []);
 
-  const handleSymptomFocus = (index) => {
-    setFocusedSymptomIndex(index);
-  };
+  const handleSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+      if (saving) return;
+      if (hasServiceOrderEditWindowPassed(order)) {
+        setError(EDIT_WINDOW_PASSED_MESSAGE);
+        return;
+      }
+
+      setSubmitAttempted(true);
+      setError("");
+
+      const errors = validateForm(formData);
+      setFieldErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const normalizedSymptoms = symptomInputs
+          .map((line) => String(line || "").trim())
+          .filter(Boolean);
+
+        const payload = {
+          orderCategory: formData.orderCategory || null,
+          serviceAdvisorId: parsePositiveId(formData.serviceAdvisorId) || null,
+          oldPartsReturnOption: formData.oldPartsReturnOption || "DISPOSE_ALL",
+          requiredDepositAmount: Math.max(0, Number(formData.requiredDepositAmount || 0)),
+          checkInTime: formData.checkInTime || null,
+          estimatedHandover: formData.estimatedHandover || suggestedFinish.finishIso || null,
+          promisedHandoverTime: formData.promisedHandoverTime || null,
+          status: formData.status || "NEW",
+          serviceIds: toNumberList(formData.serviceIds),
+          symptomNotes: normalizedSymptoms,
+        };
+
+        await serviceOrderApi.updateWorkshop(orderId, payload);
+        navigate(`/workshop/reception?viewOrderId=${orderId}`);
+      } catch (err) {
+        setError(getApiErrorMessage(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [formData, navigate, order, orderId, saving, suggestedFinish.finishIso, symptomInputs, validateForm]
+  );
+
+  if (loading) {
+    return (
+      <div className="create-order-page reception-create-appointment-page">
+        <div className="reception-appt-section">
+          <p className="reception-muted-note">Đang tải dữ liệu lệnh sửa chữa...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="create-order-page">
-      <div className="page-header-actions">
-        <button className="btn-back" onClick={() => navigate(-1)}>ệđ Quay lại Dashboard</button>
-        <h2 className="page-title">Chệnh sửa thông tin lệnh sửa chữa: {order?.code}</h2>
+    <div className="create-order-page reception-create-appointment-page">
+      <div className="page-header-actions reception-create-header">
+        <button type="button" className="btn-back" onClick={() => navigate(-1)}>
+          Quay lại Dashboard
+        </button>
+        <div className="reception-create-header-copy">
+          <h2 className="page-title">{`Chỉnh sửa lệnh sửa chữa ${order?.code ? `#${order.code}` : ""}`}</h2>
+          <p className="reception-create-header-note">
+            Cập nhật dịch vụ và thông tin tiếp nhận theo luồng mới. Hệ thống chỉ lưu khi toàn bộ dữ liệu hợp lệ.
+          </p>
+        </div>
       </div>
 
-      {error && <div className="alert alert-danger">{error}</div>}
+      <div className="reception-appt-topbar">
+        <div className="reception-appt-topbar-copy">
+          <p className="reception-appt-topbar-kicker">SERVICE ORDER</p>
+          <h3 className="reception-appt-topbar-title">Cập nhật thông tin tiếp nhận dịch vụ</h3>
+          <p className="reception-appt-topbar-note">
+            Luồng lưu theo cơ chế all-or-nothing: nếu có lỗi ở bất kỳ bước nào, hệ thống sẽ không ghi dữ liệu xuống cơ sở dữ liệu.
+          </p>
+        </div>
+      </div>
 
-      <form className="order-form-grid" onSubmit={handleSubmit}>
-        {/* Section 1: Customer & Vehicle (Read Only / Basic Edit) */}
-        <div className="form-section shadow-sm">
-          <h3 className="section-title">1. Thông tin chung</h3>
-          
-          <div className="form-group">
-            <label>Phân loại lệnh sửa chữa *</label>
-            <select name="orderCategory" value={formData.orderCategory} onChange={handleChange} required>
-              <option value="">-- Chọn phân loại --</option>
-              {orderCategories.map(cat => (
-                <option key={cat.id} value={cat.code || cat.name}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
+      {error ? (
+        <div className="reception-error-banner" role="alert">
+          {error}
+        </div>
+      ) : null}
 
-          <div className="form-group" style={{ marginTop: '20px', padding: '16px', background: '#f4f7fe', borderRadius: '12px', border: '1px solid #e9edf7' }}>
-            <label>Tìm & Chọn Cụ Thể Nghiệp Vụ Yêu Cầu</label>
-            <div style={{ position: 'relative', marginBottom: '10px' }}>
-              <input
-                type="text"
-                placeholder={`Gõ để tìm nghiệp vụ ${formData.orderCategory ? '('.concat(formData.orderCategory).concat(') ') : ''}...`}
-                value={serviceSearch}
-                onChange={(e) => setServiceSearch(e.target.value)}
-                disabled={!formData.orderCategory}
-              />
-              {filteredServices.length > 0 && (
-                <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                  {filteredServices.map(s => (
-                    <div key={s.id} className="dropdown-item" style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f4f7fe' }} onClick={() => handleServiceToggle(s.id)}>
-                      <strong style={{ color: '#2b3674' }}>{s.Name || s.name}</strong> 
-                      <span style={{ float: 'right', color: '#05cd99', fontSize: '13px', fontWeight: 600 }}>{(s.BasePrice || s.basePrice || 0).toLocaleString()}đ</span>
+      {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
+        <div className="validation-summary" role="alert">
+          <strong>Vui lòng xử lý các lỗi sau:</strong>
+          <ul>
+            {Object.values(fieldErrors).map((message, index) => (
+              <li key={`${message}-${index}`}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {isEditWindowPassed ? (
+        <div className="validation-summary" role="alert">
+          {EDIT_WINDOW_PASSED_MESSAGE}
+        </div>
+      ) : null}
+
+      <form className="admin-form reception-appt-form" onSubmit={handleSubmit}>
+        <fieldset
+          disabled={saving || isEditWindowPassed}
+          style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
+        >
+          <div className="reception-appt-layout">
+          <div className="reception-appt-left-column">
+            <section className="reception-appt-section">
+              <div className="reception-appt-step-head">
+                <span className="reception-step-badge">BƯỚC 1</span>
+              </div>
+              <h4 className="reception-appt-section-title">Thông tin khách hàng và xe</h4>
+
+              <div className="reception-customer-selected-card">
+                <div className="reception-customer-selected-main">
+                  <small className="reception-customer-selected-tag">KHÁCH HÀNG</small>
+                  <strong>{customerDisplay.fullName}</strong>
+                  <span className="reception-customer-selected-contact">{customerDisplay.phone}</span>
+                </div>
+              </div>
+
+              <div className="reception-customer-selected-card" style={{ marginTop: 10 }}>
+                <div className="reception-customer-selected-main">
+                  <small className="reception-customer-selected-tag">XE TIẾP NHẬN</small>
+                  <strong>{vehicleDisplay.plate}</strong>
+                  <span className="reception-customer-selected-contact">{vehicleDisplay.descriptor}</span>
+                </div>
+              </div>
+
+              <div className="reception-plan-preview">
+                <h5 className="reception-plan-preview-title">Thông tin lệnh hiện tại</h5>
+                <div className="reception-plan-preview-list">
+                  <article className="reception-plan-preview-item">
+                    <div className="reception-plan-preview-head">
+                      <strong>Mã lệnh</strong>
+                      <span>{order?.code || "--"}</span>
                     </div>
+                    <p>{`Trạng thái: ${String(order?.status || order?.Status || "--")}`}</p>
+                    <div className="reception-plan-preview-meta">
+                      <span>{`Check-in: ${formatDateTimeValue(formData.checkInTime)}`}</span>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="reception-appt-section">
+              <div className="reception-appt-step-head">
+                <span className="reception-step-badge">BƯỚC 2</span>
+              </div>
+              <h4 className="reception-appt-section-title">Dịch vụ yêu cầu</h4>
+
+              <div className="reception-service-layout">
+                <div className="reception-service-type-col">
+                  <h5 className="reception-service-col-title">Lọc theo loại dịch vụ</h5>
+                  <div className="reception-category-grid">
+                    {categoryOptions.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        className={`reception-category-chip ${String(activeCategoryId) === String(category.id) ? "selected" : ""}`}
+                        onClick={() => setActiveCategoryId(String(category.id))}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+
+                </div>
+
+                <div className="reception-service-detail-col">
+                  <div className="form-group reception-service-search">
+                    <label>Tìm dịch vụ</label>
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên dịch vụ..."
+                      value={serviceSearch}
+                      onChange={(event) => setServiceSearch(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="reception-service-list">
+                    {filteredServices.length === 0 ? (
+                      <div className="reception-muted-note">Không tìm thấy dịch vụ phù hợp theo bộ lọc hiện tại.</div>
+                    ) : (
+                      filteredServices.map((service) => {
+                        const selected = toNumberList(formData.serviceIds).includes(service.id);
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            className={`reception-service-card ${selected ? "selected" : ""}`}
+                            onClick={() => handleServiceToggle(service.id)}
+                          >
+                            <div className="reception-service-card-main">
+                              <strong>{service.name}</strong>
+                              <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng chuẩn"}</small>
+                            </div>
+                            <span>{formatCurrency(service.price)}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                </div>
+              </div>
+
+              {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
+            </section>
+          </div>
+          <div className="reception-appt-right-column">
+            <section className="reception-appt-section">
+              <div className="reception-appt-step-head">
+                <span className="reception-step-badge">BƯỚC 3</span>
+              </div>
+              <h4 className="reception-appt-section-title">Thông tin nghiệp vụ</h4>
+
+              <div className="form-group">
+                <label>Cố vấn dịch vụ *</label>
+                <select
+                  name="serviceAdvisorId"
+                  className={showError("serviceAdvisorId") ? "input-invalid" : ""}
+                  value={formData.serviceAdvisorId}
+                  onChange={handleChange}
+                >
+                  <option value="">-- Chọn cố vấn --</option>
+                  {staff.map((item) => {
+                    const staffId = Number(readField(item, ["id", "Id"], 0));
+                    const staffName = String(readField(item, ["fullName", "FullName"], "") || "").trim();
+                    return (
+                      <option key={staffId} value={staffId}>
+                        {staffName || `Nhân sự #${staffId}`}
+                      </option>
+                    );
+                  })}
+                </select>
+                {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
+              </div>
+
+              <div className="form-group">
+                <label>Xử lý phụ tùng cũ</label>
+                <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
+                  <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
+                  <option value="RETURN_ALL">Trả lại cho khách hàng</option>
+                  <option value="CUSTOM">Cho khách kiểm tra rồi quyết định</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Số tiền cọc (VNĐ)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="10000"
+                  name="requiredDepositAmount"
+                  className={showError("requiredDepositAmount") ? "input-invalid" : ""}
+                  value={formData.requiredDepositAmount}
+                  onChange={handleChange}
+                />
+                {showError("requiredDepositAmount") ? <div className="field-error">{fieldErrors.requiredDepositAmount}</div> : null}
+              </div>
+
+              <div className="form-group">
+                <label>Mô tả triệu chứng</label>
+                <div className="reception-note-editor">
+                  {symptomInputs.map((symptom, index) => (
+                    <textarea
+                      key={`symptom-${index}`}
+                      rows={1}
+                      className="reception-note-input"
+                      value={symptom}
+                      placeholder={`Nhập mô tả ${index + 1}...`}
+                      onChange={(event) => handleSymptomChange(index, event.target.value)}
+                    />
                   ))}
                 </div>
-              )}
-              {serviceSearch && filteredServices.length === 0 && formData.orderCategory && (
-                <div className="dropdown-panel" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e9edf7', borderRadius: '8px', zIndex: 10, padding: '12px', color: '#a3aed0', fontStyle: 'italic' }}>
-                  Không tìm thấy dịch vụ nào phù hợp trong danh mục này.
-                </div>
-              )}
-            </div>
-
-            {formData.serviceIds.length > 0 && (
-                <div className="selected-services-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {formData.serviceIds.map(sid => {
-                  const s = services.find(srv => Number(srv.id) === Number(sid));
-                  return (
-                    <div key={sid} style={{ background: '#4318ff', color: '#fff', padding: '6px 12px', borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 6px rgba(67, 24, 255, 0.3)' }}>
-                      {s?.Name || s?.name || "Ký hiệu không xác định"} - {(s?.basePrice || s?.BasePrice || 0).toLocaleString()}đ
-                      <span style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '4px', background: 'rgba(255,255,255,0.2)', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }} onClick={() => handleServiceToggle(sid)}>đ-</span>
-                    </div>
-                  );
-                })}
               </div>
-            )}
 
-            {formData.serviceIds.length > 0 && (
-              <>
-                <div style={{ marginTop: '16px', padding: '12px', background: '#fff', borderRadius: '8px', color: '#1b254b', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(67, 24, 255, 0.1)' }}>
-                  <div>
-                    <strong>Tđ.ng thời gian:</strong> {totalMinutes} phút
-                    {finishTimeStr && <span style={{ display: 'block', fontSize: '12px', color: '#a3aed0', marginTop: '4px' }}>Dự kiến xong: <strong style={{ color: '#4318ff' }}>{finishTimeStr}</strong></span>}
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '12px', color: '#a3aed0' }}>Tđ.ng tiền tạm tính</div>
-                    <span style={{ color: '#05cd99', fontWeight: 'bold', fontSize: '20px' }}>{totalPrice?.toLocaleString() || 0}đ</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="form-group" style={{ marginTop: '16px' }}>
-            <label>Cđ vấn dịch vụ (Service Advisor) *</label>
-            <select 
-              name="serviceAdvisorId" 
-              value={formData.serviceAdvisorId} 
-              onChange={handleChange}
-              required
-            >
-              <option value="">-- Chọn cđ vấn --</option>
-              {staff.map(s => (
-                <option key={s.id} value={s.id}>{s.fullName}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Section 2: Order Details */}
-        <div className="form-section shadow-sm">
-          <h3 className="section-title">2. Nghiệp vụ & Tài chính</h3>
-          
-          <div className="form-group">
-            <label>Xử lý phụ tùng cũ</label>
-            <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
-              <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
-              <option value="RETURN_ALL">Trả lại cho khách hàng</option>
-              <option value="CUSTOM">Chờ khách kiểm tra rôi quyết định</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Sđ tiền cọc yêu cầu (VNĐ)</label>
-            <input
-              type="number"
-              name="requiredDepositAmount"
-              value={formData.requiredDepositAmount}
-              onChange={handleChange}
-              min="0"
-              step="10000"
-            />
-          </div>
-        </div>
-
-        {/* Section 3: Timeline & Notes */}
-        <div className="form-section shadow-sm full-width">
-          <h3 className="section-title">3. Mô tả thêm và Lịch trình</h3>
-
-          <div className="form-group">
-            <label>Mô tả thêm</label>
-            <div className="symptom-list" style={{ display: "grid", gap: "10px" }}>
-              {symptomInputs.map((symptom, index) => (
-                <div key={`symptom-edit-${index}`} className="form-group" style={{ marginBottom: 0 }}>
-                  <input
-                    type="text"
-                    value={symptom}
-                    placeholder={`Nhập mô tả ${index + 1}...`}
-                    onChange={(e) => handleSymptomChange(index, e.target.value)}
-                    onFocus={() => handleSymptomFocus(index)}
-                    disabled={index > 0 && !String(symptomInputs[index - 1] || "").trim()}
-                    style={{
-                      opacity: String(symptom || "").trim() || focusedSymptomIndex === index ? 1 : 0.5,
-                      transition: "opacity 0.2s ease",
-                      cursor: index > 0 && !String(symptomInputs[index - 1] || "").trim() ? "not-allowed" : "text",
-                    }}
+              <div className="timeline-grid timeline-grid-vertical">
+                <div className="form-group">
+                  <label>Thời điểm xe vào xưởng *</label>
+                  <DateTimePicker
+                    value={formData.checkInTime}
+                    onChange={(value) => handleFieldValueChange("checkInTime", value)}
+                    placeholder="Chọn ngày và giờ..."
+                    minDate={pickerMinDate}
                   />
+                  {showError("checkInTime") ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="timeline-grid">
-            <div className="form-group">
-              <label>Thời điểm xe vào xưởng *</label>
-              <DateTimePicker 
-                value={formData.checkInTime} 
-                onChange={(val) => handleChange({ target: { name: 'checkInTime', value: val } })}
-                placeholder="Chọn ngày giờ vào xưởng"
-              />
-            </div>
-            <div className="form-group">
-              <label>Ngày giờ cam kết trả xe</label>
-              <DateTimePicker 
-                value={formData.promisedHandoverTime} 
-                onChange={(val) => handleChange({ target: { name: 'promisedHandoverTime', value: val } })}
-                placeholder="Chọn ngày giờ cam kết"
-              />
-            </div>
-            <div className="form-group">
-              <label>Dự kiến hoàn thành (Ươc tính)</label>
-              <DateTimePicker 
-                value={formData.estimatedHandover || estimatedFinishIso} 
-                onChange={(val) => handleChange({ target: { name: 'estimatedHandover', value: val } })}
-                placeholder="Chọn ngày giờ dự kiến xong"
-              />
-            </div>
-          </div>
-        </div>
+                <div className="form-group">
+                  <label>Dự kiến hoàn thành</label>
+                  <DateTimePicker
+                    value={formData.estimatedHandover || suggestedFinish.finishIso}
+                    onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
+                    placeholder="Chọn ngày giờ dự kiến..."
+                    minDate={pickerMinDate}
+                  />
+                  {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
+                </div>
 
-        <div className="form-footer full-width">
-          <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>Hủy và Quay lại</button>
-          <button type="submit" className="btn-primary-large" disabled={saving}>
-            {saving ? "Đang xử lý..." : "Lưu thay đđ.i"}
+                <div className="form-group">
+                  <label>Ngày giờ cam kết trả xe</label>
+                  <DateTimePicker
+                    value={formData.promisedHandoverTime}
+                    onChange={(value) => handleFieldValueChange("promisedHandoverTime", value)}
+                    placeholder="Chọn ngày giờ cam kết..."
+                    minDate={pickerMinDate}
+                  />
+                  {showError("promisedHandoverTime") ? <div className="field-error">{fieldErrors.promisedHandoverTime}</div> : null}
+                </div>
+              </div>
+
+              <div className="reception-summary-inline" role="status" aria-live="polite">
+                <div className="reception-summary-inline-row">
+                  <span>Tổng số dịch vụ</span>
+                  <strong>{selectedServices.length}</strong>
+                </div>
+                <div className="reception-summary-inline-row">
+                  <span>Tổng thời lượng</span>
+                  <strong>{`${totalMinutes} phút`}</strong>
+                </div>
+                <div className="reception-summary-inline-row">
+                  <span>Tổng giá tạm tính</span>
+                  <strong>{formatCurrency(totalPrice)}</strong>
+                </div>
+                <div className="reception-summary-inline-row">
+                  <span>Dự kiến hoàn thành</span>
+                  <strong>{suggestedFinish.finishText || "--"}</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+          </div>
+        </fieldset>
+
+        <div className="form-footer">
+          <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>
+            Hủy và quay lại
+          </button>
+          <button type="submit" className="btn-primary-large" disabled={saving || isEditWindowPassed}>
+            {saving ? "Đang cập nhật..." : "Lưu thay đổi"}
           </button>
         </div>
       </form>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

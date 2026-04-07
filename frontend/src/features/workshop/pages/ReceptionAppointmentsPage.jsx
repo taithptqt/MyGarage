@@ -6,23 +6,14 @@ import {
   confirmAppointment,
   checkInAppointment,
   cancelAppointment,
-  getAllStandardServices,
 } from "@features/appointments/api/appointmentApi";
 import { cancelGroupSessionAll } from "@features/appointments/api/groupSessionApi";
-import {
-  getAllCustomers,
-  getAllVehicles,
-  getAllCustomerVehicles,
-} from "@features/admin/api/customerApi";
-import { Modal } from "@features/admin/components/AdminModals";
 import DateRangePickerModal, { getDateRangeButtonLabel } from "@features/admin/components/DateRangePickerModal";
 import { useSearch } from "@shared/core/context/SearchContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { useAuth } from "@shared/core/context/AuthContext";
-import AppointmentForm from "@features/workshop/components/AppointmentForm";
 import ReceptionAppointmentsSection from "@features/workshop/components/ReceptionAppointmentsSection";
 import AppointmentDetailModal from "@features/workshop/components/AppointmentDetailModal";
-import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
 
 function parseBranchId(value) {
   const parsed = Number(value);
@@ -147,12 +138,7 @@ export default function ReceptionAppointmentsPage() {
   const { user } = useAuth();
 
   const [appointments, setAppointments] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
-  const [customerVehicles, setCustomerVehicles] = useState([]);
-  const [services, setServices] = useState([]);
   const [apptLoading, setApptLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null);
   const [actingAppt, setActingAppt] = useState(null);
@@ -160,7 +146,6 @@ export default function ReceptionAppointmentsPage() {
   const [selectedApptForView, setSelectedApptForView] = useState(null);
   const [apptDetailLoading, setApptDetailLoading] = useState(false);
   const [apptDetailError, setApptDetailError] = useState("");
-  const [editingAppt, setEditingAppt] = useState(null);
   const [apptStatusFilter, setApptStatusFilter] = useState("ALL");
   const [apptSortBy, setApptSortBy] = useState("NEWEST");
   const [apptViewMode, setApptViewMode] = useState("SINGLE");
@@ -191,23 +176,6 @@ export default function ReceptionAppointmentsPage() {
       .filter((item) => item.id > 0 && (!effectiveBranchId || item.branchId === 0 || item.branchId === effectiveBranchId));
   }, [effectiveBranchId]);
 
-  const fetchReferenceData = useCallback(async () => {
-    try {
-      const [customerRes, vehicleRes, customerVehicleRes, serviceRes] = await Promise.all([
-        getAllCustomers(),
-        getAllVehicles(),
-        getAllCustomerVehicles(),
-        getAllStandardServices(),
-      ]);
-      setCustomers(Array.isArray(customerRes) ? customerRes : []);
-      setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
-      setCustomerVehicles(Array.isArray(customerVehicleRes) ? customerVehicleRes : []);
-      setServices(Array.isArray(serviceRes) ? serviceRes : []);
-    } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu lịch hẹn.");
-    }
-  }, []);
-
   const fetchAppointments = useCallback(async () => {
     if (!effectiveBranchId) {
       setAppointments([]);
@@ -219,7 +187,7 @@ export default function ReceptionAppointmentsPage() {
       const data = await getBranchAppointments(effectiveBranchId);
       setAppointments(normalizeAppointments(data));
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu lịch hẹn.");
+      setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
     } finally {
       setApptLoading(false);
     }
@@ -234,13 +202,9 @@ export default function ReceptionAppointmentsPage() {
       const data = await getBranchAppointments(effectiveBranchId);
       setAppointments(normalizeAppointments(data));
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu lịch hẹn.");
+      setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
     }
   }, [effectiveBranchId, normalizeAppointments]);
-
-  useEffect(() => {
-    fetchReferenceData();
-  }, [fetchReferenceData]);
 
   useEffect(() => {
     fetchAppointments();
@@ -403,11 +367,11 @@ export default function ReceptionAppointmentsPage() {
       } else if (action === "checkin") {
         await checkInAppointment(id, { arrivedAt: new Date().toISOString() });
       } else if (action === "cancel") {
-        const reasonInput = window.prompt("Lý do hủy lịch:", "Nhân viên hủy");
+        const reasonInput = window.prompt("L\u00fd do h\u1ee7y l\u1ecbch:", "Nh\u00e2n vi\u00ean h\u1ee7y");
         if (reasonInput === null) return;
         const reason = String(reasonInput || "").trim();
         if (!reason) {
-          alert("Vui lòng nhập lý do hủy.");
+          alert("Vui l\u00f2ng nh\u1eadp l\u00fd do h\u1ee7y.");
           return;
         }
         await cancelAppointment(id, reason);
@@ -415,7 +379,7 @@ export default function ReceptionAppointmentsPage() {
 
       await fetchAppointmentsSilent();
     } catch (err) {
-      setError(`Thao tác lịch hẹn thất bại: ${err?.message || "Không rõ lỗi"}`);
+      setError(`Thao t\u00e1c l\u1ecbch h\u1eb9n th\u1ea5t b\u1ea1i: ${err?.message || "Kh\u00f4ng r\u00f5 l\u1ed7i"}`);
     } finally {
       setActingAppt(null);
     }
@@ -431,19 +395,19 @@ export default function ReceptionAppointmentsPage() {
       .filter(Boolean);
 
     const warningMessage = confirmedPlates.length > 0
-      ? `Nhóm này có xe ${confirmedPlates.join(", ")} đã xác nhận. Bạn có chắc chắn muốn hủy toàn bộ không?`
-      : "Bạn có chắc chắn muốn hủy toàn bộ nhóm này không?";
+      ? `Nh\u00f3m n\u00e0y c\u00f3 xe ${confirmedPlates.join(", ")} \u0111\u00e3 x\u00e1c nh\u1eadn. B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y to\u00e0n b\u1ed9 kh\u00f4ng?`
+      : "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y to\u00e0n b\u1ed9 nh\u00f3m n\u00e0y kh\u00f4ng?";
 
     if (!window.confirm(warningMessage)) return;
 
     const reasonInput = window.prompt(
-      "Nhập lý do hủy (bắt buộc):",
-      "Quá giờ hẹn",
+      "Nh\u1eadp l\u00fd do h\u1ee7y (b\u1eaft bu\u1ed9c):",
+      "Qu\u00e1 gi\u1edd h\u1eb9n",
     );
     if (reasonInput === null) return;
     const reason = String(reasonInput || "").trim();
     if (!reason) {
-      alert("Lý do hủy là bắt buộc.");
+      alert("L\u00fd do h\u1ee7y l\u00e0 b\u1eaft bu\u1ed9c.");
       return;
     }
 
@@ -485,7 +449,7 @@ export default function ReceptionAppointmentsPage() {
         return { ...prev, ...normalizedDetail };
       });
     } catch (err) {
-      setApptDetailError(err?.message || "Không thể tải chi tiết lịch hẹn.");
+      setApptDetailError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i chi ti\u1ebft l\u1ecbch h\u1eb9n.");
     } finally {
       setApptDetailLoading(false);
     }
@@ -498,64 +462,18 @@ export default function ReceptionAppointmentsPage() {
     setApptDetailLoading(false);
   }, []);
 
-  const buildEditInitialValues = useCallback((appointment) => {
-    if (!appointment) return null;
-    return {
-      customerId: Number(appointment.customerId || 0) || "",
-      customerName: appointment.customerName || "",
-      customerPhone: appointment.customerPhone || "",
-      selectedVehicleIds: Number(appointment.vehicleId || 0) > 0 ? [Number(appointment.vehicleId)] : [],
-      startTime: appointment.startTime || appointment.StartTime || "",
-      requestedServiceIds: appointment.requestedServiceIds || appointment.RequestedServiceIds || "",
-      customerNotes: appointment.customerNotes || appointment.CustomerNotes || "",
-    };
-  }, []);
-
-  const handleOpenApptEdit = useCallback(async (appointment) => {
+  const handleOpenApptEdit = useCallback((appointment) => {
     const base = normalizeAppointmentItem(appointment || selectedApptForView);
     if (!base?.id) return;
     if (!canEditAppointment(base.status)) {
-      setApptDetailError("Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc.");
+      setApptDetailError("Kh\u00f4ng th\u1ec3 s\u1eeda l\u1ecbch khi xe \u0111\u00e3 \u0111\u1ebfn ho\u1eb7c l\u1ecbch \u0111\u00e3 k\u1ebft th\u00fac.");
       return;
     }
 
     setError("");
-    setModal("edit_appt");
-    try {
-      const detail = await getAppointmentDetail(base.id);
-      setEditingAppt(normalizeAppointmentItem(detail));
-    } catch {
-      setEditingAppt(base);
-    }
-  }, [selectedApptForView]);
-
-  const closeEditApptModal = useCallback(() => {
     setModal(null);
-    setEditingAppt(null);
-  }, []);
-
-  const handleSaveEditedAppointment = useCallback(async (formData) => {
-    if (!editingAppt?.id) return;
-    setSaving(true);
-    setError("");
-    try {
-      await saveReceptionAppointment({
-        effectiveBranchId,
-        formData,
-        customers,
-        vehicles,
-        customerVehicles,
-        services,
-        replaceAppointmentId: editingAppt.id,
-      });
-      await fetchAppointmentsSilent();
-      closeEditApptModal();
-    } catch (err) {
-      setError(err?.message || "Không thể cập nhật lịch hẹn.");
-    } finally {
-      setSaving(false);
-    }
-  }, [editingAppt, effectiveBranchId, customers, vehicles, customerVehicles, services, fetchAppointmentsSilent, closeEditApptModal]);
+    navigate(`/workshop/reception/appointments/${base.id}/edit`);
+  }, [navigate, selectedApptForView]);
 
   const openDateRangePicker = useCallback(() => {
     setModal("date_range");
@@ -585,7 +503,7 @@ export default function ReceptionAppointmentsPage() {
     <div className="reception-dashboard">
       {error && (
         <div style={{ padding: "12px", background: "#fee", color: "#e6522c", borderRadius: "8px", marginBottom: "16px", fontWeight: 600 }}>
-          Lỗi: {error}
+          L\u1ed7i: {error}
         </div>
       )}
 
@@ -621,26 +539,6 @@ export default function ReceptionAppointmentsPage() {
         setApptsPage={setApptsPage}
         setApptsPageSize={setApptsPageSize}
       />
-
-      {modal === "edit_appt" && editingAppt && (
-        <Modal title="Chỉnh sửa lịch hẹn" onClose={closeEditApptModal} className="modal-lg">
-          <div className="appt-edit-intro">
-            <strong>Mã lịch hẹn #{editingAppt.id}</strong>
-            <span>Điều chỉnh thông tin lịch hẹn và lưu để cập nhật lịch mới cho khách hàng.</span>
-          </div>
-          <AppointmentForm
-            customers={customers}
-            vehicles={vehicles}
-            customerVehicles={customerVehicles}
-            services={services}
-            initialValues={buildEditInitialValues(editingAppt)}
-            submitLabel="Lưu thay đổi"
-            onSubmit={handleSaveEditedAppointment}
-            onCancel={closeEditApptModal}
-            loading={saving}
-          />
-        </Modal>
-      )}
 
       {modal === "appt_detail" && selectedApptForView && (
         <AppointmentDetailModal

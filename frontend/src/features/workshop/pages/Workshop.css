@@ -795,6 +795,150 @@
   color: #60739c;
 }
 
+.so-dispatch-config-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.so-dispatch-config-item {
+  display: grid;
+  gap: 6px;
+}
+
+.so-dispatch-config-item span {
+  font-size: 12px;
+  color: #5b6f94;
+  font-weight: 700;
+}
+
+.so-dispatch-config-item input,
+.so-dispatch-config-item select {
+  width: 100%;
+  border: 1px solid #cfdcf3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f3567;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.so-intake-card {
+  border: 1px solid #d8e4f7;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.so-intake-loading {
+  margin: 0;
+  font-size: 13px;
+  color: #5f7396;
+}
+
+.so-intake-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.so-intake-row span {
+  font-size: 12px;
+  color: #60739c;
+}
+
+.so-intake-row strong {
+  color: #1f3567;
+  font-size: 13px;
+  text-align: right;
+}
+
+.so-intake-badge {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px !important;
+  font-weight: 800;
+}
+
+.so-intake-badge.green {
+  background: #dff7ea;
+  color: #0d824b;
+}
+
+.so-intake-badge.yellow {
+  background: #fff5da;
+  color: #9a6f00;
+}
+
+.so-intake-badge.red {
+  background: #ffe2e2;
+  color: #b42323;
+}
+
+.so-intake-reason-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: #4e638a;
+  font-size: 12px;
+}
+
+.so-intake-assign-text {
+  margin: 0;
+  font-size: 12px;
+  color: #314f89;
+  font-weight: 700;
+}
+
+.so-consent-card {
+  border: 1px solid #d9e6fb;
+  border-radius: 12px;
+  background: #f6faff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.so-consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #1f3c77;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.so-consent-check input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+.so-consent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.so-bypass-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8d4a4a;
+  font-weight: 700;
+}
+
+.so-bypass-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
 .so-dispatch-popup-actions {
   display: flex;
   justify-content: flex-end;
@@ -853,6 +997,14 @@
   }
 
   .so-dispatch-popup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .so-dispatch-config-row {
+    grid-template-columns: 1fr;
+  }
+
+  .so-consent-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1463,6 +1615,133 @@
   margin-bottom: 32px;
 }
 
+.reception-intake-kpi-board {
+  border: 1px solid #d9e5f8;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffffff 0%, #f6f9ff 100%);
+  box-shadow: 0 12px 28px rgba(17, 38, 146, 0.06);
+  padding: 16px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.reception-intake-kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reception-intake-kpi-head h3 {
+  margin: 0;
+  color: #1d3464;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.reception-intake-kpi-head p {
+  margin: 4px 0 0;
+  color: #677fa8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reception-intake-kpi-total {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.reception-intake-kpi-total strong {
+  color: #2158b7;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.reception-intake-kpi-total span {
+  color: #5c739d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reception-intake-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reception-intake-kpi-card {
+  border: 1px solid #d8e5fa;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.reception-intake-kpi-card h4 {
+  margin: 0;
+  color: #244984;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reception-intake-kpi-card p {
+  margin: 0;
+  color: #566f9e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reception-intake-kpi-card strong {
+  color: #0a7d58;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.reception-intake-kpi-card small {
+  color: #788fb3;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reception-intake-team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reception-intake-team-card {
+  border: 1px dashed #c8d8f4;
+  border-radius: 12px;
+  background: #f9fbff;
+  padding: 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.reception-intake-team-card h5 {
+  margin: 0;
+  color: #2a4f8d;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reception-intake-team-card p {
+  margin: 0;
+  color: #5f779f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reception-intake-team-card strong {
+  color: #255dbd;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
 .stat-card {
   background: #ffffff;
   padding: 24px;
@@ -1578,6 +1857,275 @@
 .reception-dashboard .btn-secondary-outline,
 .reception-dashboard .btn-icon {
   font-family: "Be Vietnam Pro", "Nunito Sans", "Segoe UI", Arial, sans-serif;
+}
+
+.reception-quote-page {
+  padding: 20px;
+  margin-top: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.reception-quote-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reception-quote-title {
+  margin: 0;
+  color: #1f3567;
+  font-size: clamp(24px, 2.4vw, 32px);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.reception-quote-subtitle {
+  margin: 6px 0 0;
+  color: #6c81a8;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reception-quote-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.reception-quote-summary-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reception-quote-summary-card article {
+  border: 1px solid #dce7f9;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.reception-quote-summary-card article span {
+  color: #6f83a9;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.reception-quote-summary-card article strong {
+  color: #1f3567;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.reception-quote-timeline-card {
+  border: 1px solid #dae6fa;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f8fbff 0%, #ffffff 100%);
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reception-quote-timeline-row {
+  border: 1px dashed #c9daf6;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+  display: grid;
+  gap: 6px;
+}
+
+.reception-quote-timeline-row p {
+  margin: 0;
+  color: #6f84aa;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reception-quote-timeline-row strong {
+  color: #244887;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.reception-quote-action-card {
+  border: 1px solid #dbe7fa;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.reception-quote-action-card h3 {
+  margin: 0;
+  color: #254985;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.reception-quote-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reception-quote-form-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.reception-quote-form-grid label.full-row {
+  grid-column: 1 / -1;
+}
+
+.reception-quote-form-grid span {
+  color: #5f769f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reception-quote-form-grid input,
+.reception-quote-form-grid select,
+.reception-quote-form-grid textarea {
+  width: 100%;
+  border: 1px solid #cfdcf3;
+  border-radius: 10px;
+  background: #f9fbff;
+  color: #1f3567;
+  font-size: 14px;
+  padding: 10px;
+  outline: none;
+  resize: vertical;
+}
+
+.reception-quote-form-grid input:focus,
+.reception-quote-form-grid select:focus,
+.reception-quote-form-grid textarea:focus {
+  border-color: #8db0e8;
+}
+
+.reception-quote-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reception-quote-action-row .btn-success,
+.reception-quote-action-row .btn-danger {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 0 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reception-quote-action-row .btn-success {
+  border-color: #9fdcbc;
+  background: #e7f9ef;
+  color: #0f7b55;
+}
+
+.reception-quote-action-row .btn-danger {
+  border-color: #f0b6be;
+  background: #fff1f3;
+  color: #b4233a;
+}
+
+.reception-quote-action-row .btn-success:disabled,
+.reception-quote-action-row .btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reception-quote-note {
+  margin: 0;
+  color: #506991;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.reception-quote-error {
+  margin: 0;
+  color: #bb2a46;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reception-quote-table-card {
+  border: 1px solid #dae6fa;
+  border-radius: 14px;
+  padding: 12px;
+  background: #ffffff;
+  display: grid;
+  gap: 10px;
+}
+
+.reception-quote-table-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.reception-quote-table-head h3 {
+  margin: 0;
+  color: #244887;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.reception-quote-table-head strong {
+  color: #2158b7;
+  font-size: 22px;
+  line-height: 1;
+}
+
+@media (max-width: 1100px) {
+  .reception-quote-summary-card,
+  .reception-quote-timeline-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reception-intake-kpi-grid,
+  .reception-intake-team-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .reception-quote-page {
+    padding: 14px;
+  }
+
+  .reception-quote-summary-card,
+  .reception-quote-timeline-card,
+  .reception-quote-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reception-quote-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reception-quote-action-row .btn-primary,
+  .reception-quote-action-row .toolbar-action-btn,
+  .reception-quote-action-row .btn-success,
+  .reception-quote-action-row .btn-danger {
+    width: 100%;
+  }
 }
 
 .table-toolbar {

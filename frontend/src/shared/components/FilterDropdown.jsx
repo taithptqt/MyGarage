@@ -30,8 +30,11 @@ export default function FilterDropdown({
   options,
   onChange,
   minWidth = 170,
+  menuMinWidth,
   ariaLabel,
   disabled = false,
+  optionNoWrap = false,
+  fullWidth = false,
 }) {
   const [open, setOpen] = useState(false);
   const [hoveredValue, setHoveredValue] = useState(null);
@@ -43,7 +46,7 @@ export default function FilterDropdown({
   );
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, width: fullWidth ? "100%" : undefined }}>
       {label ? (
         <label htmlFor={id} style={labelStyle}>{label}:</label>
       ) : null}
@@ -55,7 +58,7 @@ export default function FilterDropdown({
             setOpen(false);
           }
         }}
-        style={{ position: "relative", minWidth }}
+        style={{ position: "relative", minWidth, width: fullWidth ? "100%" : undefined }}
       >
         <button
           id={id}
@@ -109,6 +112,7 @@ export default function FilterDropdown({
               top: "calc(100% + 6px)",
               left: 0,
               right: 0,
+              minWidth: menuMinWidth || undefined,
               zIndex: 40,
               background: "#ffffff",
               border: "1px solid #dbe4f2",
@@ -148,6 +152,7 @@ export default function FilterDropdown({
                     padding: "9px 10px",
                     fontSize: 14,
                     fontWeight: isActive ? 700 : 500,
+                    whiteSpace: optionNoWrap ? "nowrap" : "normal",
                     cursor: isOptionDisabled ? "not-allowed" : "pointer",
                   }}
                 >
