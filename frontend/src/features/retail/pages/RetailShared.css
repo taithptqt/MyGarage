@@ -13,12 +13,12 @@
   --parts-gold: #c5a059;
   --parts-gold-deep: #8a6a2e;
   --parts-emerald: #1d2a26;
-  --parts-shadow-soft: 0 16px 34px rgba(29, 42, 38, 0.1);
-  --parts-shadow-card: 0 18px 42px rgba(29, 42, 38, 0.12);
+  --parts-shadow-soft: 0 10px 24px rgba(29, 42, 38, 0.08);
+  --parts-shadow-card: 0 12px 28px rgba(29, 42, 38, 0.1);
   --parts-motion-dur-fast: 160ms;
   --parts-motion-dur-base: 260ms;
   --parts-motion-ease: cubic-bezier(0.2, 0, 0, 1);
-  --parts-control-height: 48px;
+  --parts-control-height: 44px;
   position: relative;
   overflow: hidden;
   background:
@@ -118,8 +118,8 @@
   max-width: 700px;
   margin: 0;
   color: rgba(29, 42, 38, 0.76);
-  font-size: 1.04rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.62;
 }
 
 .parts-shop-hero-actions {
@@ -209,10 +209,10 @@
 .parts-shop-inline-stat {
   min-width: 190px;
   border: 1px solid var(--parts-border);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 243, 232, 0.88));
-  padding: 16px 18px;
-  box-shadow: 0 10px 26px rgba(29, 42, 38, 0.06);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 243, 232, 0.9));
+  padding: 14px 16px;
+  box-shadow: 0 8px 20px rgba(29, 42, 38, 0.05);
 }
 
 .parts-shop-inline-stat strong {
@@ -235,11 +235,11 @@
   position: relative;
   overflow: hidden;
   border: 1px solid var(--parts-border);
-  border-radius: 26px;
-  background: linear-gradient(180deg, var(--parts-surface) 0%, rgba(248, 243, 232, 0.96) 100%);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 254, 251, 0.96) 0%, rgba(248, 243, 232, 0.94) 100%);
   box-shadow: var(--parts-shadow-card);
-  backdrop-filter: blur(6px);
-  padding: 24px;
+  backdrop-filter: blur(4px);
+  padding: 22px;
   transform: translateY(8px);
   opacity: 0;
   animation: parts-fade-up var(--parts-motion-dur-base) var(--parts-motion-ease) forwards;
@@ -249,7 +249,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 18%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 18%);
   pointer-events: none;
 }
 
@@ -275,8 +275,8 @@
   position: relative;
   min-height: var(--parts-control-height);
   border: 1px solid rgba(29, 42, 38, 0.14);
-  border-radius: 16px;
-  padding: 11px 16px;
+  border-radius: 12px;
+  padding: 10px 16px;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
@@ -284,11 +284,11 @@
   justify-content: center;
   gap: 8px;
   text-align: center;
-  white-space: normal;
-  font-family: "Space Grotesk", "Barlow", sans-serif;
-  font-size: 0.84rem;
+  white-space: nowrap;
+  font-family: "Barlow", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.1;
   transition:
     transform var(--parts-motion-dur-fast) ease,
     box-shadow var(--parts-motion-dur-fast) ease,
@@ -299,12 +299,12 @@
 }
 
 .parts-shop-btn:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .parts-shop-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(197, 160, 89, 0.16);
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.18);
 }
 
 .parts-shop-btn:disabled {
@@ -316,32 +316,140 @@
 }
 
 .parts-shop-btn-primary {
-  border-color: rgba(197, 160, 89, 0.48);
-  background: linear-gradient(135deg, #c5a059 0%, #d3b174 68%, #e6cf9f 100%);
+  border-color: rgba(186, 150, 78, 0.46);
+  background: linear-gradient(180deg, #d4b06a 0%, #c69b4a 100%);
   color: #2d2106;
-  box-shadow: 0 12px 28px rgba(197, 160, 89, 0.22);
+  box-shadow: 0 6px 16px rgba(197, 160, 89, 0.16);
 }
 
 .parts-shop-btn-primary:hover:not(:disabled) {
-  box-shadow: 0 16px 32px rgba(197, 160, 89, 0.3);
-  filter: brightness(1.03);
+  box-shadow: 0 8px 18px rgba(197, 160, 89, 0.2);
+  filter: brightness(1.02);
 }
 
 .parts-shop-btn-ghost {
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.9);
   color: var(--parts-emerald);
   border-color: rgba(29, 42, 38, 0.14);
 }
 
 .parts-shop-btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(197, 160, 89, 0.34);
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(29, 42, 38, 0.2);
 }
 
 .parts-shop-btn-inline {
-  min-height: 40px;
+  min-height: 38px;
   padding: 8px 14px;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
+}
+
+.retail-cart-entry {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  min-width: 72px;
+  min-height: 72px;
+  padding: 0;
+  border: 1px solid rgba(186, 150, 78, 0.34);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(212, 176, 106, 0.96), rgba(198, 155, 74, 0.96));
+  color: #fffaf0;
+  box-shadow: 0 12px 22px rgba(197, 160, 89, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition:
+    transform var(--parts-motion-dur-fast) ease,
+    box-shadow var(--parts-motion-dur-fast) ease,
+    border-color var(--parts-motion-dur-fast) ease,
+    background-color var(--parts-motion-dur-fast) ease,
+    color var(--parts-motion-dur-fast) ease;
+}
+
+.retail-cart-entry:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(197, 160, 89, 0.22);
+}
+
+.retail-cart-entry:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(197, 160, 89, 0.2),
+    0 14px 24px rgba(197, 160, 89, 0.22);
+}
+
+.retail-cart-entry--compact {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 18px;
+}
+
+.retail-cart-entry--panel {
+  margin-top: 0;
+  align-self: auto;
+}
+
+.retail-cart-entry.parts-shop-btn-ghost {
+  border-color: rgba(29, 42, 38, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--parts-emerald);
+  box-shadow: 0 8px 18px rgba(29, 42, 38, 0.08);
+}
+
+.retail-cart-entry.parts-shop-btn-ghost:hover {
+  box-shadow: 0 10px 20px rgba(29, 42, 38, 0.12);
+}
+
+.retail-cart-entry-icon-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.retail-cart-entry-icon {
+  width: 31px;
+  height: 31px;
+  display: block;
+}
+
+.retail-cart-entry--compact .retail-cart-entry-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.retail-cart-entry-badge {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fffdf8;
+  color: var(--parts-emerald);
+  border: 1px solid rgba(29, 42, 38, 0.08);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(29, 42, 38, 0.1);
+}
+
+.retail-cart-entry--compact .retail-cart-entry-badge {
+  top: 4px;
+  right: 4px;
+  min-width: 20px;
+  height: 20px;
+  font-size: 0.64rem;
 }
 
 .parts-shop-tag {
@@ -349,11 +457,11 @@
   align-items: center;
   gap: 8px;
   color: var(--parts-gold-deep);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .parts-shop-tag::before {
@@ -369,9 +477,9 @@
   gap: 6px;
   min-height: var(--parts-control-height);
   border: 1px solid rgba(29, 42, 38, 0.1);
-  border-radius: 18px;
+  border-radius: 14px;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
 }
 
@@ -381,7 +489,7 @@
   min-width: 40px;
   min-height: 40px;
   padding: 0;
-  border-radius: 14px;
+  border-radius: 10px;
   line-height: 1;
 }
 
@@ -397,7 +505,7 @@
   text-align: center;
   padding: 0 6px;
   border: 1px solid rgba(29, 42, 38, 0.14);
-  border-radius: 14px;
+  border-radius: 10px;
   outline: none;
   background: rgba(255, 255, 255, 0.9);
   color: var(--parts-text);
@@ -439,9 +547,9 @@
   place-items: center;
   padding: 16px;
   background:
-    radial-gradient(circle at 18% 18%, rgba(197, 160, 89, 0.18), transparent 32%),
-    linear-gradient(180deg, rgba(247, 240, 226, 0.98), rgba(238, 230, 214, 0.98));
-  color: rgba(29, 42, 38, 0.66);
+    radial-gradient(circle at 18% 18%, rgba(197, 160, 89, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(247, 242, 233, 0.98), rgba(240, 234, 223, 0.98));
+  color: rgba(29, 42, 38, 0.58);
   text-align: center;
 }
 
@@ -460,8 +568,8 @@
 .parts-shop-empty {
   color: var(--parts-text-muted);
   padding: 10px 0;
-  line-height: 1.7;
-  font-size: 0.96rem;
+  line-height: 1.65;
+  font-size: 0.94rem;
 }
 
 .parts-shop-empty-panel {
@@ -469,7 +577,7 @@
   gap: 14px;
   justify-items: start;
   border: 1px dashed rgba(29, 42, 38, 0.16);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.54);
   padding: 18px;
 }
@@ -494,18 +602,18 @@
 .parts-shop-modal {
   width: min(680px, 100%);
   border: 1px solid rgba(29, 42, 38, 0.18);
-  border-radius: 24px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 88% 10%, rgba(197, 160, 89, 0.2), transparent 28%),
+    radial-gradient(circle at 88% 10%, rgba(197, 160, 89, 0.14), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 243, 232, 0.96));
-  box-shadow: 0 28px 52px rgba(10, 16, 14, 0.26);
-  padding: 24px;
+  box-shadow: 0 20px 40px rgba(10, 16, 14, 0.22);
+  padding: 22px;
   animation: parts-fade-up 220ms ease-out;
 }
 
 .parts-shop-modal-head h3 {
   margin: 0;
-  font-size: clamp(1.45rem, 2.6vw, 2rem);
+  font-size: clamp(1.35rem, 2.4vw, 1.8rem);
   line-height: 1.1;
   letter-spacing: -0.02em;
   color: var(--parts-emerald);
@@ -641,7 +749,7 @@
 
   .parts-shop-card {
     padding: 18px;
-    border-radius: 22px;
+    border-radius: 18px;
   }
 
   .parts-shop-hero-actions,

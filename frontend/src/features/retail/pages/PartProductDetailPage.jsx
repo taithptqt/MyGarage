@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
+import RetailCartEntry from "@features/retail/components/RetailCartEntry";
 import RetailImage from "@features/retail/components/RetailImage";
 import {
   getCategories,
@@ -208,10 +209,11 @@ export default function PartProductDetailPage() {
             Xem ảnh, thông tin kỹ thuật và thêm phụ tùng vào đúng giỏ bán lẻ hiện tại của bạn.
           </p>
           <div className="parts-shop-hero-actions">
+            <RetailCartEntry totalItems={totalItems} label="Giỏ hàng" />
             <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost">
               Quay lại catalog
             </Link>
-            <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-primary">
+            <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
               Xem đơn phụ tùng
             </Link>
           </div>
@@ -309,10 +311,10 @@ export default function PartProductDetailPage() {
                     <div className="part-product-cart-head">
                       <span>{totalItems} sản phẩm đang có trong giỏ</span>
                       <Link
-                        to="/parts-shop"
+                        to="/parts-cart"
                         className="parts-shop-btn parts-shop-btn-ghost parts-shop-btn-inline part-product-cart-link"
                       >
-                        Mở giỏ hàng
+                        Mở cart
                       </Link>
                     </div>
 

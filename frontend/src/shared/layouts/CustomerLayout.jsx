@@ -9,6 +9,7 @@ export default function CustomerLayout({ children }) {
   const hideDefaultNavbar =
     location.pathname.startsWith("/booking") ||
     location.pathname.startsWith("/my-appointments") ||
+    location.pathname.startsWith("/parts-cart") ||
     location.pathname.startsWith("/parts-shop") ||
     location.pathname.startsWith("/my-retail-orders");
 
