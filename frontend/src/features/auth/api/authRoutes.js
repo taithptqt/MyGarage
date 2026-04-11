@@ -5,7 +5,7 @@ export const AUTH_ROUTES = {
   register: `${AUTH_BASE}/accounts`,
   google: `${AUTH_BASE}/external-sessions/google`,
   me: `${AUTH_BASE}/profile`,
-  forgotPassword: `${AUTH_BASE}/credential-recovery-requests`,
-  resetPassword: `${AUTH_BASE}/credential-recovery-finalizations`,
+  forgotPassword: `${AUTH_BASE}/forgot-password`,
+  resetPassword: `${AUTH_BASE}/reset-password`,
   changePassword: `${AUTH_BASE}/password`,
 };

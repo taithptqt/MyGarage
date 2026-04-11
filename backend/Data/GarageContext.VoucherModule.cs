@@ -355,6 +355,8 @@ public partial class GarageContext
                 .HasForeignKey(d => d.CreatedBy);
         });
 
+        ConfigureChatbotModule(modelBuilder);
+        ConfigureAuthModule(modelBuilder);
     }
 }
 

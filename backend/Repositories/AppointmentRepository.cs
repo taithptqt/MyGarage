@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Constants;
 using MyGarage.Data;
-using MyGarage.Models;
 using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Repositories
 {
@@ -27,21 +26,35 @@ namespace MyGarage.Repositories
                 .Include(a => a.GroupSession)
                 .AsQueryable();
 
-            query = ApplyStatusFilter(query, status);
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalized = status.Trim().ToUpperInvariant();
+                if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+                {
+                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED)
+                        || a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED));
+                }
+                else
+                {
+                    query = query.Where(a => a.Status.ToUpper() == normalized);
+                }
+            }
 
             return await query
                 .OrderByDescending(a => a.StartTime)
+                .ThenByDescending(a => a.Id)
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<Appointment>> GetByBranchAndDateAsync(long branchId, DateOnly date)
         {
-            var dayStart = date.ToDateTime(TimeOnly.MinValue);
-            var dayEnd = dayStart.AddDays(1);
-            return await _dbSet
+            var start = date.ToDateTime(TimeOnly.MinValue);
+            var end = start.AddDays(1);
+
+            return await BuildDetailedQuery()
                 .Where(a => a.BranchId == branchId
-                         && a.StartTime >= dayStart
-                         && a.StartTime < dayEnd
+                         && a.StartTime >= start
+                         && a.StartTime < end
                          && (a.Status == null
                              || (a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)
                                  && a.Status.ToUpper() != nameof(AppointmentStatus.CANCELLED))))
@@ -58,6 +71,7 @@ namespace MyGarage.Repositories
                         .ThenInclude(m => m.Brand)
                 .Where(a => a.CustomerId == customerId)
                 .OrderByDescending(a => a.StartTime)
+                .ThenByDescending(a => a.Id)
                 .ToListAsync();
         }
 
@@ -71,10 +85,23 @@ namespace MyGarage.Repositories
                         .ThenInclude(m => m.Brand)
                 .Where(a => a.BranchId == branchId);
 
-            query = ApplyStatusFilter(query, status);
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalized = status.Trim().ToUpperInvariant();
+                if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+                {
+                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED)
+                        || a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED));
+                }
+                else
+                {
+                    query = query.Where(a => a.Status.ToUpper() == normalized);
+                }
+            }
 
             return await query
                 .OrderByDescending(a => a.StartTime)
+                .ThenByDescending(a => a.Id)
                 .ToListAsync();
         }
 
@@ -108,6 +135,15 @@ namespace MyGarage.Repositories
                         .ThenInclude(m => m.Brand)
                 .FirstOrDefaultAsync(a => a.Id == id);
         }
+
+        private IQueryable<Appointment> BuildDetailedQuery()
+        {
+            return _context.Appointments
+                .Include(a => a.Customer)
+                .Include(a => a.Vehicle)
+                .Include(a => a.Branch)
+                .Include(a => a.GroupSession)
+                .Include(a => a.ServiceOrders);
+        }
     }
 }
-

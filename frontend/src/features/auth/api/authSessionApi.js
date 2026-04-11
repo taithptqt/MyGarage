@@ -24,3 +24,19 @@ export async function googleLogin(payload) {
     data: typeof payload === "string" ? { idToken: payload } : payload,
   });
 }
+
+export async function forgotPassword(payload) {
+  return requestSafe({
+    url: AUTH_ROUTES.forgotPassword,
+    method: "POST",
+    data: payload,
+  });
+}
+
+export async function resetPassword(payload) {
+  return requestSafe({
+    url: AUTH_ROUTES.resetPassword,
+    method: "POST",
+    data: payload,
+  });
+}

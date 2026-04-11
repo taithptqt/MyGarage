@@ -26,7 +26,7 @@ function GoogleLoginButton({ onCredential, onError }) {
     try {
       await callbackRef.current?.(response.credential);
     } catch (err) {
-      errorRef.current?.(`Google login error: ${err?.message || "Unknown"}`);
+      errorRef.current?.(`Lỗi đăng nhập Google: ${err?.message || "Không xác định"}`);
     }
   }, []);
 

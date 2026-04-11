@@ -65,10 +65,6 @@ public partial class Staff
 
     public virtual ICollection<AccountingPeriod> AccountingPeriods { get; set; } = new List<AccountingPeriod>();
 
-    public virtual ICollection<AiContentStore> AiContentStores { get; set; } = new List<AiContentStore>();
-
-    public virtual ICollection<AiTechnicalAssistant> AiTechnicalAssistants { get; set; } = new List<AiTechnicalAssistant>();
-
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public virtual ICollection<Appointment> AppointmentUpdatedByNavigations { get; set; } = new List<Appointment>();
     public virtual ICollection<GroupSession> GroupSessionCreatedByNavigations { get; set; } = new List<GroupSession>();

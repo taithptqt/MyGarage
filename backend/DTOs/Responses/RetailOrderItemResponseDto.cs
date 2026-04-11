@@ -6,6 +6,8 @@ namespace MyGarage.DTOs.Responses
         public long Id { get; set; }
         public long RetailOrderId { get; set; }
         public long ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public string? ProductSku { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? CostPriceAtTime { get; set; }
         public decimal? UnitPriceAtTime { get; set; }

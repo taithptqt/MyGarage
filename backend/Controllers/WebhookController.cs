@@ -7,6 +7,7 @@ using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Services;
 using MyGarage.Models;
+using MyGarage.Enums;
 
 namespace MyGarage.Controllers;
 
@@ -30,7 +31,14 @@ public class WebhookController(
     private readonly IOrderStore _orderStore = orderStore;
     private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
 
-    private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
+    private async Task UpdateRetailOrderStatusDirectlyAsync(
+        long retailOrderId,
+        bool isPaid,
+        decimal amountPaid = 0,
+        string transactionCode = "",
+        DateTimeOffset? transactionTime = null,
+        string? fallbackEmail = null,
+        string? fallbackFullName = null)
     {
         var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == retailOrderId);
         if (retailOrder is null)
@@ -41,6 +49,18 @@ public class WebhookController(
         retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
         retailOrder.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
+
+        if (isPaid)
+        {
+            await _paymentConfirmationService.SendRetailOrderSuccessEmailAsync(
+                retailOrderId,
+                amountPaid,
+                transactionCode,
+                "COMPLETED",
+                transactionTime ?? DateTimeOffset.Now,
+                fallbackEmail,
+                fallbackFullName);
+        }
     }
 
     private static DateTimeOffset ParseWebhookDateTime(string dateTimeString)
@@ -134,7 +154,47 @@ public class WebhookController(
                 }
                 else if (order.RetailOrderId.HasValue)
                 {
-                    await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, order.AmountRemaining <= 0);
+                    // Không có Payment row (CHK constraint skip) → fallback gửi email qua RetailOrder
+                    Console.WriteLine($"[Webhook] No Payment row for RetailOrderId={order.RetailOrderId}. Using direct fallback with BuyerEmail={order.BuyerEmail ?? "(null)"}.");
+                    await UpdateRetailOrderStatusDirectlyAsync(
+                        order.RetailOrderId.Value,
+                        order.AmountRemaining <= 0,
+                        order.AmountPaid,
+                        webhookData.Reference,
+                        ParseWebhookDateTime(webhookData.TransactionDateTime),
+                        order.BuyerEmail,
+                        order.BuyerName);
+                }
+                else
+                {
+                    Console.WriteLine($"[Webhook] No Payment row AND no RetailOrderId for OrderCode={order.OrderCode}. Email will NOT be sent.");
+                }
+            }
+            else
+            {
+                // ⚡ FALLBACK: In-memory order không tìm thấy (backend vừa restart).
+                // Tìm payment PENDING trong DB theo Amount để vẫn trigger email.
+                // Lưu ý: cách này chỉ là safety net, luồng chính chạy khi order còn trong memory.
+                try
+                {
+                    var amountPaid = (decimal)webhookData.Amount;
+                    var cutoff = DateTime.UtcNow.AddMinutes(-30); // Chỉ xét payment tạo trong 30 phút qua
+
+                    var paymentFromDb = await _db.Payments
+                        .Where(p => p.Status == nameof(PaymentStatusCode.PENDING)
+                                 && p.Amount == amountPaid
+                                 && p.CreatedAt >= cutoff)
+                        .OrderByDescending(p => p.Id)
+                        .FirstOrDefaultAsync();
+
+                    if (paymentFromDb is not null)
+                    {
+                        await _paymentConfirmationService.ApplyOutcomeAsync(paymentFromDb, amountPaid, nameof(PaymentStatusCode.COMPLETED));
+                    }
+                }
+                catch
+                {
+                    // Webhook phải luôn trả 200, swallow lỗi ở đây
                 }
             }
 

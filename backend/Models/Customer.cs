@@ -53,8 +53,6 @@ public partial class Customer
 
     public string Type { get; set; } = null!;
 
-    public virtual ICollection<AiCustomerInsight> AiCustomerInsights { get; set; } = new List<AiCustomerInsight>();
-
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
     public virtual ICollection<GroupSession> GroupSessions { get; set; } = new List<GroupSession>();

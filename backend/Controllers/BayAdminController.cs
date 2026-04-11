@@ -15,6 +15,9 @@ namespace MyGarage.Controllers;
 public class BayAdminController : ControllerBase
 {
     private const string StatusEmpty = "EMPTY";
+    private const string StatusActive = nameof(BayOperationalStatusCode.ACTIVE);
+    private const string StatusUnderMaintenance = nameof(BayOperationalStatusCode.UNDER_MAINTENANCE);
+    private const string StatusBroken = nameof(BayOperationalStatusCode.BROKEN);
     private const string StatusInUse = "IN_USE";
     private const string StatusMaintenance = "MAINTENANCE";
     private const string StatusSuspended = "SUSPENDED";
@@ -89,10 +92,9 @@ public class BayAdminController : ControllerBase
             areaOptions,
             statusOptions = new[]
             {
-                StatusEmpty,
-                StatusInUse,
-                StatusMaintenance,
-                StatusSuspended
+                StatusActive,
+                StatusUnderMaintenance,
+                StatusBroken
             }
         });
     }
@@ -250,10 +252,10 @@ public class BayAdminController : ControllerBase
         {
             totalBays = visible.Count,
             hiddenBays = rows.Count(x => x.IsHidden),
-            emptyBays = visible.Count(x => x.OperationalStatus == StatusEmpty),
-            inUseBays = visible.Count(x => x.OperationalStatus == StatusInUse),
-            maintenanceBays = visible.Count(x => x.OperationalStatus == StatusMaintenance),
-            suspendedBays = visible.Count(x => x.OperationalStatus == StatusSuspended),
+            emptyBays = visible.Count(x => x.OperationalStatus == StatusActive && x.OccupiedCount == 0),
+            inUseBays = visible.Count(x => x.OperationalStatus == StatusActive && x.OccupiedCount > 0),
+            maintenanceBays = visible.Count(x => x.OperationalStatus == StatusUnderMaintenance),
+            suspendedBays = visible.Count(x => x.OperationalStatus == StatusBroken),
             lockedBays = visible.Count(x => x.IsLocked),
             totalCapacity,
             occupiedVehicles = totalOccupied,
@@ -438,7 +440,7 @@ public class BayAdminController : ControllerBase
                 });
             }
 
-            if (bay.OperationalStatus == StatusMaintenance && bay.OccupiedCount > 0)
+            if (bay.OperationalStatus == StatusUnderMaintenance && bay.OccupiedCount > 0)
             {
                 alerts.Add(new BayAlertItem
                 {
@@ -609,8 +611,8 @@ public class BayAdminController : ControllerBase
         var candidates = rows
             .Where(x =>
                 !x.IsLocked &&
-                x.OperationalStatus != StatusMaintenance &&
-                x.OperationalStatus != StatusSuspended &&
+                x.OperationalStatus != StatusUnderMaintenance &&
+                x.OperationalStatus != StatusBroken &&
                 x.OccupiedCount < x.Capacity &&
                 (!branchId.HasValue || x.BranchId == branchId.Value) &&
                 (!vehicleId.HasValue || IsSegmentCompatible(normalizedSegment, x.SupportedSegments)))
@@ -938,9 +940,9 @@ public class BayAdminController : ControllerBase
             activeVehicleCount = activeSessions.Select(s => s.VehicleId).Append(bay.CurrentOccupiedVehicleId.Value).Distinct().Count();
         }
 
-        if (normalizedStatus == StatusEmpty && activeVehicleCount > 0)
+        if (normalizedStatus != StatusActive && activeVehicleCount > 0)
         {
-            return BadRequest(new { message = "Khoang van dang co xe, khong the chuyen ve TRONG." });
+            return BadRequest(new { message = "Khoang van dang co xe, khong the chuyen sang trang thai khac ACTIVE." });
         }
 
         bay.OperationalStatus = normalizedStatus;
@@ -1098,7 +1100,7 @@ public class BayAdminController : ControllerBase
             bay.ReservationStatus = ReservationStatusAvailable;
             if (NormalizeOperationalStatus(bay.OperationalStatus) == StatusInUse)
             {
-                bay.OperationalStatus = StatusEmpty;
+                bay.OperationalStatus = StatusActive;
             }
         }
 
@@ -1215,9 +1217,9 @@ public class BayAdminController : ControllerBase
 
         fromBay.CurrentOccupiedVehicleId = remainingInSource.FirstOrDefault();
         if (fromBay.CurrentOccupiedVehicleId == 0) fromBay.CurrentOccupiedVehicleId = null;
-        if (fromBay.CurrentOccupiedVehicleId == null && NormalizeOperationalStatus(fromBay.OperationalStatus) == StatusInUse)
+        if (fromBay.CurrentOccupiedVehicleId == null && NormalizeOperationalStatus(fromBay.OperationalStatus) == StatusActive)
         {
-            fromBay.OperationalStatus = StatusEmpty;
+            fromBay.OperationalStatus = StatusActive;
         }
         fromBay.ReservationStatus = fromBay.CurrentOccupiedVehicleId.HasValue
             ? ReservationStatusOccupied
@@ -1227,9 +1229,9 @@ public class BayAdminController : ControllerBase
         {
             toBay.CurrentOccupiedVehicleId = request.VehicleId;
         }
-        if (targetStatus == StatusEmpty)
+        if (targetStatus == StatusActive)
         {
-            toBay.OperationalStatus = StatusInUse;
+            toBay.OperationalStatus = StatusActive;
         }
         toBay.ReservationStatus = ReservationStatusOccupied;
 
@@ -1325,10 +1327,6 @@ public class BayAdminController : ControllerBase
                 .ToList();
 
             var status = NormalizeOperationalStatus(bay.OperationalStatus);
-            if (status == StatusEmpty && activeVehicles.Count > 0)
-            {
-                status = StatusInUse;
-            }
 
             var occupiedCount = activeVehicles.Count;
             var capacity = metadata.Capacity;
@@ -1529,8 +1527,8 @@ public class BayAdminController : ControllerBase
     {
         if (bay.IsDeleted == true) return "Khoang da bi an.";
         if (bay.IsActive == false) return "Khoang dang bi khoa.";
-        if (normalizedStatus == StatusMaintenance) return "Khoang dang bao tri.";
-        if (normalizedStatus == StatusSuspended) return "Khoang dang tam ngung.";
+        if (normalizedStatus == StatusUnderMaintenance) return "Khoang dang bao tri.";
+        if (normalizedStatus == StatusBroken) return "Khoang dang tam ngung.";
         return string.Empty;
     }
 
@@ -1708,7 +1706,7 @@ public class BayAdminController : ControllerBase
     private static bool IsKnownOperationalStatus(string? normalizedStatus)
     {
         var value = NormalizeKey(normalizedStatus);
-        return value == StatusEmpty || value == StatusInUse || value == StatusMaintenance || value == StatusSuspended;
+        return value == StatusActive || value == StatusUnderMaintenance || value == StatusBroken;
     }
 
     private static string NormalizeArea(string? area)
@@ -1926,7 +1924,7 @@ public class BayAdminController : ControllerBase
         public int Capacity { get; set; }
         public IReadOnlyList<string> SupportedSegments { get; set; } = [];
         public decimal? MaxTonnage { get; set; }
-        public string OperationalStatus { get; set; } = StatusEmpty;
+        public string OperationalStatus { get; set; } = StatusActive;
         public bool IsLocked { get; set; }
         public bool IsHidden { get; set; }
         public int OccupiedCount { get; set; }

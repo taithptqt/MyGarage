@@ -101,7 +101,7 @@ function Header({ overlay = false }) {
         <div className="mg-header-side">
           <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
           <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
-          <a href="/my-appointments" onClick={(event) => { event.preventDefault(); handleNavigate("/my-appointments"); }}>LỊCH HẸN CỦA TÔI</a>
+          <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
         </div>
 
         <div className="mg-header-logo" role="img" aria-label="MY GARAGE">
@@ -110,8 +110,8 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="#">HỌP & SỰ KIỆN</a>
-          <a href="#">ĐỐI TÁC</a>
+          <a href="/my-appointments" onClick={(event) => { event.preventDefault(); handleNavigate("/my-appointments"); }}>LỊCH HẸN</a>
+          <a href="/my-retail-orders" onClick={(event) => { event.preventDefault(); handleNavigate("/my-retail-orders"); }}>ĐƠN PHỤ TÙNG</a>
           <a href="#">TIN TỨC</a>
           <a href="#">LIÊN HỆ</a>
         </div>

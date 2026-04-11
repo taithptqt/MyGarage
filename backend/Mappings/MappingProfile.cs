@@ -9,42 +9,24 @@ namespace MyGarage.Mappings
     {
         public MappingProfile()
         {
-            // AiContentStore Mappings
-            CreateMap<AiContentStore, AiContentStoreResponseDto>();
-            CreateMap<AiContentStoreCreateDto, AiContentStore>();
-            CreateMap<AiContentStoreUpdateDto, AiContentStore>();
-            // AiCustomerInsight Mappings
-            CreateMap<AiCustomerInsight, AiCustomerInsightResponseDto>();
-            CreateMap<AiCustomerInsightCreateDto, AiCustomerInsight>();
-            CreateMap<AiCustomerInsightUpdateDto, AiCustomerInsight>();
             // AiForecast Mappings
             CreateMap<AiForecast, AiForecastResponseDto>();
             CreateMap<AiForecastCreateDto, AiForecast>();
             CreateMap<AiForecastUpdateDto, AiForecast>();
-            // AiFraudMonitor Mappings
-            CreateMap<AiFraudMonitor, AiFraudMonitorResponseDto>();
-            CreateMap<AiFraudMonitorCreateDto, AiFraudMonitor>();
-            CreateMap<AiFraudMonitorUpdateDto, AiFraudMonitor>();
             // AiKnowledgeBase Mappings
             CreateMap<AiKnowledgeBase, AiKnowledgeBaseResponseDto>();
             CreateMap<AiKnowledgeBaseCreateDto, AiKnowledgeBase>();
             CreateMap<AiKnowledgeBaseUpdateDto, AiKnowledgeBase>();
-            // AiLearningFeedback Mappings
-            CreateMap<AiLearningFeedback, AiLearningFeedbackResponseDto>();
-            CreateMap<AiLearningFeedbackCreateDto, AiLearningFeedback>();
-            CreateMap<AiLearningFeedbackUpdateDto, AiLearningFeedback>();
             // AiModelConfig Mappings
-            CreateMap<AiModelConfig, AiModelConfigResponseDto>();
+            CreateMap<AiModelConfig, AiModelConfigResponseDto>()
+                .ForMember(dest => dest.HasApiKey, opt =>
+                    opt.MapFrom(src => !string.IsNullOrWhiteSpace(src.ApiKey)));
             CreateMap<AiModelConfigCreateDto, AiModelConfig>();
             CreateMap<AiModelConfigUpdateDto, AiModelConfig>();
             // AiSmartDispatching Mappings
             CreateMap<AiSmartDispatching, AiSmartDispatchingResponseDto>();
             CreateMap<AiSmartDispatchingCreateDto, AiSmartDispatching>();
             CreateMap<AiSmartDispatchingUpdateDto, AiSmartDispatching>();
-            // AiTechnicalAssistant Mappings
-            CreateMap<AiTechnicalAssistant, AiTechnicalAssistantResponseDto>();
-            CreateMap<AiTechnicalAssistantCreateDto, AiTechnicalAssistant>();
-            CreateMap<AiTechnicalAssistantUpdateDto, AiTechnicalAssistant>();
             // Appointment Mappings
             CreateMap<Appointment, AppointmentResponseDto>();
             CreateMap<AppointmentCreateDto, Appointment>();
@@ -217,7 +199,9 @@ namespace MyGarage.Mappings
             CreateMap<RetailOrderCreateDto, RetailOrder>();
             CreateMap<RetailOrderUpdateDto, RetailOrder>();
             // RetailOrderItem Mappings
-            CreateMap<RetailOrderItem, RetailOrderItemResponseDto>();
+            CreateMap<RetailOrderItem, RetailOrderItemResponseDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
+                .ForMember(dest => dest.ProductSku, opt => opt.MapFrom(src => src.Product != null ? src.Product.Sku : null));
             CreateMap<RetailOrderItemCreateDto, RetailOrderItem>();
             CreateMap<RetailOrderItemUpdateDto, RetailOrderItem>();
             // RetailReturn Mappings

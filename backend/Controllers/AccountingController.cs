@@ -197,7 +197,7 @@ public class AccountingController : ControllerBase
                 new SqlParameter("@id", id)
             ]);
         await _crud.ExecuteAsync(
-            """
+            $"""
             UPDATE dbo.payroll_items
             SET status=@itemStatusApproved
             WHERE payroll_run_id=@id
@@ -231,7 +231,7 @@ public class AccountingController : ControllerBase
                 new SqlParameter("@status", PayrollRunStatusPaid)
             ]);
         await _crud.ExecuteAsync(
-            """
+            $"""
             UPDATE dbo.payroll_items
             SET status=@itemStatusPaid
             WHERE payroll_run_id=@id;
@@ -315,7 +315,7 @@ public class AccountingController : ControllerBase
         if (!_crud.TryGetConfig("journal-entry-lines", out var lineCfg) || !await _crud.TableExistsAsync(lineCfg))
             return NotFound(new { message = "journal_entry_lines table/view unavailable." });
         return Ok(await _crud.QueryAsync(
-            """
+            $"""
             IF COL_LENGTH('dbo.journal_entry_lines', 'branch_id') IS NOT NULL
                 SELECT
                     coa.account_code,
@@ -499,7 +499,7 @@ public class AccountingController : ControllerBase
         }
 
         var pendingRequest = (await _crud.QueryAsync(
-            """
+            $"""
             SELECT TOP 1 id
             FROM dbo.finance_approval_requests
             WHERE request_type='PAYROLL_ADJUSTMENT'

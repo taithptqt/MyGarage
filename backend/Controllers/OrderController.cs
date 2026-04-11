@@ -6,6 +6,7 @@ using Microsoft.Data.SqlClient;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
+using MyGarage.Enums;
 using MyGarage.Services;
 
 using PayOS.Models.V2.PaymentRequests;
@@ -30,6 +31,7 @@ public class OrderController(
     private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
     private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
     private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
+    private static long _orderCodeSeed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
@@ -37,6 +39,23 @@ public class OrderController(
     private readonly IOrderStore _orderStore = orderStore;
     private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
     private readonly IOrderInvoiceStore _orderInvoiceStore = orderInvoiceStore;
+
+    private static long GenerateOrderCode()
+    {
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        while (true)
+        {
+            var current = Interlocked.Read(ref _orderCodeSeed);
+            var next = nowMs > current ? nowMs : current + 1;
+            var original = Interlocked.CompareExchange(ref _orderCodeSeed, next, current);
+
+            if (original == current)
+            {
+                return next;
+            }
+        }
+    }
 
     private static bool IsInflowRequiresInvoiceConstraintViolation(Exception ex)
     {
@@ -53,7 +72,14 @@ public class OrderController(
         return false;
     }
 
-    private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
+    private async Task UpdateRetailOrderStatusDirectlyAsync(
+        long retailOrderId,
+        bool isPaid,
+        decimal amountPaid = 0,
+        string transactionCode = "",
+        DateTimeOffset? transactionTime = null,
+        string? fallbackEmail = null,
+        string? fallbackFullName = null)
     {
         var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == retailOrderId);
         if (retailOrder is null)
@@ -64,6 +90,18 @@ public class OrderController(
         retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
         retailOrder.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
+
+        if (isPaid)
+        {
+            await _paymentConfirmationService.SendRetailOrderSuccessEmailAsync(
+                retailOrderId,
+                amountPaid,
+                transactionCode,
+                "COMPLETED",
+                transactionTime ?? DateTimeOffset.Now,
+                fallbackEmail,
+                fallbackFullName);
+        }
     }
 
     private static string NormalizePaymentType(string? paymentType)
@@ -235,7 +273,15 @@ public class OrderController(
             }
             else if (order.RetailOrderId.HasValue)
             {
-                await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, order.AmountRemaining <= 0);
+                var amtPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
+                await UpdateRetailOrderStatusDirectlyAsync(
+                    order.RetailOrderId.Value,
+                    order.AmountRemaining <= 0,
+                    amtPaid,
+                    order.PaymentLinkId ?? "",
+                    DateTimeOffset.Now,
+                    order.BuyerEmail,
+                    order.BuyerName);
             }
 
             return Ok(order);
@@ -351,6 +397,9 @@ public class OrderController(
                     TaxPercentage = i.TaxPercentage
                 })]
             };
+
+            // DB: INFLOW requires InvoiceId; retail PayOS without invoice must be OUTFLOW (CHK_Payments_InflowRequiresInvoice).
+            var paymentDirection = resolvedInvoiceId is > 0 ? "INFLOW" : "OUTFLOW";
 
             var payment = new Payment
             {

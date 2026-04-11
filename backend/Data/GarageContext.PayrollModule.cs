@@ -227,5 +227,6 @@ public partial class GarageContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
+
     }
 }

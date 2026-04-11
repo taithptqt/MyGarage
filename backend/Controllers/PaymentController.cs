@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
@@ -41,6 +43,21 @@ namespace MyGarage.Controllers
             return Ok(dtos);
         }
 
+        [Authorize]
+        [HttpGet("mine")]
+        public async Task<ActionResult<IEnumerable<PaymentResponseDto>>> GetMine()
+        {
+            var customerId = this.GetCurrentUserId();
+            if (customerId == null)
+            {
+                return Unauthorized();
+            }
+
+            var items = await _paymentService.GetByCustomerPayerAsync(customerId.Value);
+            var dtos = _mapper.Map<IEnumerable<PaymentResponseDto>>(items);
+            return Ok(dtos);
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<PaymentResponseDto>> GetById(long id)
         {
@@ -51,6 +68,46 @@ namespace MyGarage.Controllers
             }
             var dto = _mapper.Map<PaymentResponseDto>(item);
             return Ok(dto);
+        }
+
+        [Authorize]
+        [HttpGet("{id:long}/status")]
+        public async Task<ActionResult<object>> GetStatus(long id)
+        {
+            var customerId = this.GetCurrentUserId();
+            if (customerId == null)
+            {
+                return Unauthorized();
+            }
+
+            var item = await _paymentService.GetByIdAsync(id);
+            if (item == null)
+            {
+                return NotFound(new { message = "Payment not found." });
+            }
+
+            var isOwnedByCustomer =
+                item.PayerId.HasValue &&
+                item.PayerId.Value == customerId.Value &&
+                string.Equals(item.PayerType, "CUSTOMER", StringComparison.OrdinalIgnoreCase);
+
+            if (!isOwnedByCustomer)
+            {
+                return NotFound(new { message = "Payment not found." });
+            }
+
+            var normalizedStatus = string.IsNullOrWhiteSpace(item.Status)
+                ? "PENDING"
+                : item.Status.Trim().ToUpperInvariant();
+
+            return Ok(new
+            {
+                id = item.Id,
+                status = normalizedStatus,
+                amount = item.Amount,
+                transactionCode = item.TransactionCode,
+                updatedAt = item.UpdatedAt
+            });
         }
 
         [HttpPost]

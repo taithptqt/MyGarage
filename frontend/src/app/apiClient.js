@@ -41,6 +41,19 @@ function extractErrorMessage(error) {
   return "Request failed.";
 }
 
+function isPublicAuthRequestUrl(requestUrl) {
+  const normalizedUrl = String(requestUrl || "").toLowerCase();
+  return [
+    "/api/auth/sessions",
+    "/api/auth/accounts",
+    "/api/auth/external-sessions/google",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/credential-recovery-requests",
+    "/api/auth/credential-recovery-finalizations",
+  ].some((route) => normalizedUrl.includes(route));
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL || undefined,
   headers: {
@@ -52,6 +65,14 @@ apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // FormData cần boundary tự sinh; header json mặc định làm ASP.NET không bind IFormFile → 400
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (config.headers && typeof config.headers.delete === "function") {
+      config.headers.delete("Content-Type");
+    } else {
+      delete config.headers["Content-Type"];
+    }
   }
   return config;
 });
@@ -66,11 +87,10 @@ apiClient.interceptors.response.use(
       
       if (typeof window !== "undefined") {
         const isLoginPage = window.location.pathname === "/login";
-        const requestUrl = String(error.config?.url || "").toLowerCase();
-    const isLoginRequest = requestUrl.includes("/api/auth/sessions");
+        const isPublicAuthRequest = isPublicAuthRequestUrl(error.config?.url);
         
         // Only redirect if NOT on login page AND NOT a login request
-        if (!isLoginPage && !isLoginRequest) {
+        if (!isLoginPage && !isPublicAuthRequest) {
           window.location.href = "/login";
         }
       }
@@ -91,12 +111,17 @@ export async function request(config) {
 export async function requestSafe(config) {
   try {
     const response = await apiClient.request(config);
-    return { ok: true, data: response.data };
+    return { ok: true, status: response.status, data: response.data };
   } catch (error) {
+    const status = error?.response?.status;
     const data = error?.response?.data;
     if (data && typeof data === "object") {
-      return { ok: false, data };
+      return { ok: false, status, data };
     }
-    return { ok: false, data: { message: extractErrorMessage(error) } };
+    return {
+      ok: false,
+      status,
+      data: { message: extractErrorMessage(error) },
+    };
   }
 }

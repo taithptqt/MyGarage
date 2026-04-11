@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
 using AutoMapper;
@@ -11,6 +12,7 @@ namespace MyGarage.Controllers
 {
     [Route("api/chat-messages")]
     [ApiController]
+    [Authorize(Policy = "AdminStaffOnly")]
     public class ChatMessageController : ControllerBase
     {
         private readonly IChatMessageService _chatMessageService;

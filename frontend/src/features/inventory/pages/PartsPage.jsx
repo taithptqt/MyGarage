@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
@@ -19,6 +19,14 @@ const EMPTY_PART = {
 
 function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
   const [form, setForm] = useState(initial);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(initial?.imageUrl || "");
+
+  useEffect(() => {
+    setForm(initial);
+    setImageFile(null);
+    setPreviewUrl(initial?.imageUrl || "");
+  }, [initial]);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -43,10 +51,31 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
     });
   }
 
+  function handleImageChange(e) {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+
+    if (!file) {
+      setPreviewUrl(form?.imageUrl || "");
+      return;
+    }
+
+    if (previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
-    onSubmit(form);
+    onSubmit({ ...form, imageFile });
   }
+
+  useEffect(() => () => {
+    if (previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+  }, [previewUrl]);
 
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
@@ -97,6 +126,21 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
           ))}
         </select>
       </div>
+      <div className="form-group">
+        <label>Ảnh sản phẩm</label>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleImageChange}
+        />
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt="Xem trước ảnh sản phẩm"
+            style={{ marginTop: 8, width: "100%", maxWidth: 220, borderRadius: 8, objectFit: "cover" }}
+          />
+        ) : null}
+      </div>
       <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
         <input name="isActive" type="checkbox" checked={form.isActive} onChange={handleChange} id="chk-active-part" />
         <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>?ang kinh doanh</label>
@@ -114,6 +158,7 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
 export default function PartsPage() {
   const { searchQuery } = useSearch();
   const [products, setProducts] = useState([]);
+  const [productImages, setProductImages] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -127,12 +172,14 @@ export default function PartsPage() {
     setLoading(true);
     setError("");
     try {
-      const [partsRes, catRes] = await Promise.all([
+      const [partsRes, catRes, imagesRes] = await Promise.all([
         inventoryApi.getProducts(),
         inventoryApi.getPartCategories(),
+        inventoryApi.getProductImages(),
       ]);
       setProducts(partsRes);
       setCategories(catRes);
+      setProductImages(Array.isArray(imagesRes) ? imagesRes : []);
     } catch (err) {
       setError("Không thể tải danh mục phụ tùng.");
     } finally {
@@ -141,6 +188,34 @@ export default function PartsPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const imageByProductId = useMemo(() => {
+    const grouped = new Map();
+    (productImages || []).forEach((item) => {
+      const productId = item?.productId;
+      if (productId == null) return;
+
+      const current = grouped.get(productId);
+      if (!current) {
+        grouped.set(productId, item);
+        return;
+      }
+
+      const currentMain = current?.isMain === true ? 1 : 0;
+      const incomingMain = item?.isMain === true ? 1 : 0;
+      if (incomingMain > currentMain) {
+        grouped.set(productId, item);
+        return;
+      }
+
+      const currentSort = Number.isFinite(Number(current?.sortOrder)) ? Number(current.sortOrder) : Number.MAX_SAFE_INTEGER;
+      const incomingSort = Number.isFinite(Number(item?.sortOrder)) ? Number(item.sortOrder) : Number.MAX_SAFE_INTEGER;
+      if (incomingSort < currentSort) {
+        grouped.set(productId, item);
+      }
+    });
+    return grouped;
+  }, [productImages]);
 
   const query = String(searchQuery || "").trim().toLowerCase();
   const filtered = (products || []).filter((p) =>
@@ -153,7 +228,11 @@ export default function PartsPage() {
   async function handleCreate(form) {
     setSaving(true);
     try {
-      await inventoryApi.createProduct(form);
+      const { imageFile, ...payload } = form;
+      const created = await inventoryApi.createProduct(payload);
+      if (imageFile && created?.id) {
+        await inventoryApi.uploadProductImage(created.id, imageFile);
+      }
       await fetchData();
       closeModal();
     } catch (err) { setFormError(err.message); } finally { setSaving(false); }
@@ -162,7 +241,11 @@ export default function PartsPage() {
   async function handleEdit(form) {
     setSaving(true);
     try {
-      await inventoryApi.updateProduct(selected.id, form);
+      const { imageFile, ...payload } = form;
+      await inventoryApi.updateProduct(selected.id, payload);
+      if (imageFile) {
+        await inventoryApi.uploadProductImage(selected.id, imageFile);
+      }
       await fetchData();
       closeModal();
     } catch (err) { setFormError(err.message); } finally { setSaving(false); }
@@ -249,7 +332,16 @@ export default function PartsPage() {
       {modal === "edit" && selected && (
         <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
-          <PartForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
+          <PartForm
+            initial={{
+              ...selected,
+              imageUrl: imageByProductId.get(selected.id)?.imageUrl || "",
+            }}
+            categories={categories}
+            onSubmit={handleEdit}
+            onCancel={closeModal}
+            loading={saving}
+          />
         </Modal>
       )}
 

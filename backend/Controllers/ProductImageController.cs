@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -23,9 +24,14 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ProductImageResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<ProductImageResponseDto>>> GetAll([FromQuery] long? productId = null)
         {
             var items = await _productImageService.GetAllAsync();
+            if (productId.HasValue)
+            {
+                items = items.Where(item => item.ProductId == productId.Value).ToList();
+            }
+
             var dtos = _mapper.Map<IEnumerable<ProductImageResponseDto>>(items);
             return Ok(dtos);
         }

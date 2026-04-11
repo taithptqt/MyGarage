@@ -62,6 +62,13 @@ namespace MyGarage.Services
                 ValidateStaffAccountForLogin(staff);
                 var nowUtc = DateTime.UtcNow;
                 var shouldSaveStaff = false;
+                var staffSecurityStamp = GetOrCreateSecurityStamp(staff.SecurityStamp);
+
+                if (!string.Equals(staff.SecurityStamp, staffSecurityStamp, StringComparison.Ordinal))
+                {
+                    staff.SecurityStamp = staffSecurityStamp;
+                    shouldSaveStaff = true;
+                }
 
                 if (!string.Equals(staff.GoogleId, googleId, StringComparison.Ordinal))
                 {
@@ -105,6 +112,7 @@ namespace MyGarage.Services
                     staff.AvatarUrl ?? "",
                     "Staff",
                     roleCode,
+                    staffSecurityStamp,
                     roleName,
                     staff.BranchId,
                     staffBranchName);
@@ -124,8 +132,9 @@ namespace MyGarage.Services
                     FullName = payload.Name ?? "",
                     Phone = normalizedPhone,
                     PasswordHash = "",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
+                    SecurityStamp = CreateSecurityStamp(),
+                    CreatedAt = _clock.UtcNow,
+                    UpdatedAt = _clock.UtcNow,
                     IsActive = true,
                     IsDeleted = false
                 };
@@ -158,6 +167,7 @@ namespace MyGarage.Services
             var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
             var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
             AssignPreferredBranchToCustomer(customer, nearestBranchId);
+            customer.SecurityStamp = GetOrCreateSecurityStamp(customer.SecurityStamp);
             _context.Customers.Update(customer);
             await _context.SaveChangesAsync();
             return GenerateToken(
@@ -168,6 +178,7 @@ namespace MyGarage.Services
                 "",
                 "Customer",
                 "CUSTOMER",
+                customer.SecurityStamp ?? string.Empty,
                 "Customer",
                 nearestBranchId,
                 nearestBranchName);

@@ -27,8 +27,9 @@ namespace MyGarage.Services
                 Email = normalizedEmail,
                 Phone = request.Phone,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
+                SecurityStamp = CreateSecurityStamp(),
+                CreatedAt = _clock.UtcNow,
+                UpdatedAt = _clock.UtcNow,
                 IsActive = true
             };
 
@@ -50,6 +51,7 @@ namespace MyGarage.Services
                 "",
                 "Customer",
                 "CUSTOMER",
+                customer.SecurityStamp ?? string.Empty,
                 "Customer",
                 nearestBranchId,
                 nearestBranchName);

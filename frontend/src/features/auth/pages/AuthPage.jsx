@@ -7,6 +7,7 @@ import LoginForm from "@features/auth/login/LoginForm";
 import { isLoginFormValid } from "@features/auth/login/loginValidation";
 import RegisterForm from "@features/auth/register/RegisterForm";
 import { isRegisterFormValid } from "@features/auth/register/registerValidation";
+import { clearAuthStorage, readAuthToken } from "@features/auth/utils/authStorage";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import "./AuthPage.css";
@@ -33,6 +34,36 @@ const GOOGLE_PHONE_ROLE = {
   STAFF: "STAFF",
 };
 
+function shouldReturnToRequestedCustomerPath(roleCode, requestedPath = "") {
+  const normalizedRoleCode = String(roleCode || "").trim().toUpperCase();
+  const normalizedPath = String(requestedPath || "").trim();
+  if (normalizedRoleCode !== "CUSTOMER") {
+    return false;
+  }
+  if (!normalizedPath || normalizedPath === "/login") {
+    return false;
+  }
+  return normalizedPath.startsWith("/");
+}
+
+function resolvePostAuthDestination(data, requestedPath) {
+  const code = String(data?.roleCode || "").toUpperCase();
+  const roleName = String(data?.role || "").toLowerCase();
+  if (shouldReturnToRequestedCustomerPath(code, requestedPath)) {
+    return requestedPath;
+  }
+  if (code === "ADMIN" || roleName === "admin") {
+    return "/admin";
+  }
+  if (code === "ACCOUNTANT") {
+    return "/accounting/dashboard";
+  }
+  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(code)) {
+    return "/workshop";
+  }
+  return "/home";
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,9 +72,11 @@ function AuthPage() {
     register: contextRegister,
     googleLogin: contextGoogleLogin,
     logout: contextLogout,
+    user,
+    isAuthenticated,
+    loading: authLoading,
   } = useAuth();
 
-  const token = localStorage.getItem("mygarage_token");
   const [mode, setMode] = useState("login");
   const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
@@ -54,6 +87,7 @@ function AuthPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [flashMessage, setFlashMessage] = useState("");
   const [result, setResult] = useState(null);
   const [pendingGoogleToken, setPendingGoogleToken] = useState("");
   const [needGooglePhone, setNeedGooglePhone] = useState(false);
@@ -68,6 +102,17 @@ function AuthPage() {
   }, [mode]);
 
   useEffect(() => {
+    const incomingFlash = location?.state?.flashMessage;
+    if (!incomingFlash) return;
+
+    setFlashMessage(String(incomingFlash));
+    const timer = setTimeout(() => setFlashMessage(""), 3000);
+    navigate(location.pathname, { replace: true, state: null });
+
+    return () => clearTimeout(timer);
+  }, [location, navigate]);
+
+  useEffect(() => {
     if (navigator?.permissions) {
       navigator.permissions
         .query({ name: "geolocation" })
@@ -80,6 +125,12 @@ function AuthPage() {
         });
     }
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated && readAuthToken()) {
+      clearAuthStorage();
+    }
+  }, [authLoading, isAuthenticated]);
 
   const isLoginValid = useMemo(() => isLoginFormValid(loginForm), [loginForm]);
   const isRegisterValid = useMemo(() => isRegisterFormValid(registerForm), [registerForm]);
@@ -103,21 +154,7 @@ function AuthPage() {
   const updateRegister = (key, value) => setRegisterForm((prev) => ({ ...prev, [key]: value }));
 
   const redirectAfterAuth = (data) => {
-    const code = String(data?.roleCode || "").toUpperCase();
-    const roleName = String(data?.role || "").toLowerCase();
-    let destination = "/home";
-
-    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
-      destination = "/booking/form";
-    } else if (code === "ADMIN" || roleName === "admin") {
-      destination = "/admin";
-    } else if (code === "ACCOUNTANT") {
-      destination = "/accounting/dashboard";
-    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(code)) {
-      destination = "/workshop";
-    }
-
-    navigate(destination, { replace: true });
+    navigate(resolvePostAuthDestination(data, requestedPath), { replace: true });
   };
 
   const handleLogin = async (event) => {
@@ -268,27 +305,26 @@ function AuthPage() {
     setError("");
   };
 
-  if (token) {
-    const savedUser = JSON.parse(localStorage.getItem("mygarage_user") || "{}");
-    const code = String(savedUser?.roleCode || "").toUpperCase();
-    const roleName = String(savedUser?.role || "").toLowerCase();
-    let dest = "/home";
+  if (authLoading) {
+    return (
+      <main className="page">
+        <div className="auth-shell">
+          <section className="card">
+            <h1>Đang kiểm tra phiên đăng nhập...</h1>
+            <p className="subtitle">MyGarage đang đồng bộ trạng thái tài khoản của bạn.</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
-    if (requestedPath.startsWith("/booking/form") && code === "CUSTOMER") {
-      dest = "/booking/form";
-    } else if (code === "ADMIN" || roleName === "admin") {
-      dest = "/admin";
-    } else if (code === "ACCOUNTANT") {
-      dest = "/accounting/dashboard";
-    } else if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(code)) {
-      dest = "/workshop";
-    }
-
-    return <Navigate to={dest} replace />;
+  if (isAuthenticated && user) {
+    return <Navigate to={resolvePostAuthDestination(user, requestedPath)} replace />;
   }
 
   return (
     <main className="page">
+      {flashMessage ? <div className="auth-toast-success">{flashMessage}</div> : null}
       <div className="auth-scene" aria-hidden="true">
         <div className="auth-floating-tag auth-floating-tag--left">
           <span>15.000+</span>

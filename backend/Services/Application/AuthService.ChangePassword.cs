@@ -19,6 +19,8 @@ namespace MyGarage.Services
                 }
 
                 customer.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                customer.SecurityStamp = CreateSecurityStamp();
+                ResetCustomerLockout(customer);
                 _context.Customers.Update(customer);
                 await _context.SaveChangesAsync();
             }
@@ -33,6 +35,8 @@ namespace MyGarage.Services
                 }
 
                 staff.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                staff.SecurityStamp = CreateSecurityStamp();
+                ResetStaffLockout(staff);
                 _context.Staffs.Update(staff);
                 await _context.SaveChangesAsync();
             }

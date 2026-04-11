@@ -10,6 +10,25 @@ export const inventoryApi = {
   createProduct: (data) => request({ url: "/api/products", method: "POST", data }),
   updateProduct: (id, data) => request({ url: `/api/products/${id}`, method: "PUT", data }),
   deleteProduct: (id) => request({ url: `/api/products/${id}`, method: "DELETE" }),
+  uploadProductImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/products/${productId}/image`,
+      method: "POST",
+      data: formData,
+    });
+  },
+
+  appendProductGalleryImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/products/${productId}/gallery-image`,
+      method: "POST",
+      data: formData,
+    });
+  },
 
   getSuppliers: () => request({ url: "/api/suppliers", method: "GET" }),
   createSupplier: (data) => request({ url: "/api/suppliers", method: "POST", data }),
@@ -26,7 +45,7 @@ export const inventoryApi = {
   getInventories: () => request({ url: "/api/inventories", method: "GET" }),
   updateInventory: (id, data) => request({ url: `/api/inventories/${id}`, method: "PUT", data }),
 
-  getProductImages: () => request({ url: "/api/product-images", method: "GET" }),
+  getProductImages: (params = {}) => request({ url: "/api/product-images", method: "GET", params }),
   createProductImage: (data) => request({ url: "/api/product-images", method: "POST", data }),
   deleteProductImage: (id) => request({ url: `/api/product-images/${id}`, method: "DELETE" }),
 

@@ -385,7 +385,8 @@ public class SalaryAdminController : ControllerBase
                     new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
                     new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
                     new SqlParameter("@note", (object?)note ?? DBNull.Value),
-                    new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
+                    new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value),
+                    new SqlParameter("@activeStatus", nameof(AccountingStatus.ACTIVE))
                 ]);
 
             await _crud.ExecuteAsync(
@@ -464,7 +465,8 @@ public class SalaryAdminController : ControllerBase
                 new SqlParameter("@id", id),
                 new SqlParameter("@financeApprovalStatusRejected", FinanceApprovalStatusRejected),
                 new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value),
-                new SqlParameter("@rejectReason", rejectReason)
+                new SqlParameter("@rejectReason", rejectReason),
+                new SqlParameter("@rejectedStatus", nameof(AccountingStatus.REJECTED))
             ]);
 
         return Ok(new { message = "Initial salary request rejected.", requestId = id });

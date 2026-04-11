@@ -9,15 +9,10 @@ namespace MyGarage.Interfaces
 {
     public interface IGarageContext
     {
-        DbSet<AiContentStore> AiContentStores { get; }
-        DbSet<AiCustomerInsight> AiCustomerInsights { get; }
         DbSet<AiForecast> AiForecasts { get; }
-        DbSet<AiFraudMonitor> AiFraudMonitors { get; }
         DbSet<AiKnowledgeBase> AiKnowledgeBases { get; }
-        DbSet<AiLearningFeedback> AiLearningFeedbacks { get; }
         DbSet<AiModelConfig> AiModelConfigs { get; }
         DbSet<AiSmartDispatching> AiSmartDispatchings { get; }
-        DbSet<AiTechnicalAssistant> AiTechnicalAssistants { get; }
         DbSet<Appointment> Appointments { get; }
         DbSet<AppointmentInsuranceAsset> AppointmentInsuranceAssets { get; }
         DbSet<AppointmentInsuranceUpload> AppointmentInsuranceUploads { get; }
@@ -31,6 +26,12 @@ namespace MyGarage.Interfaces
         DbSet<BranchOperatingHour> BranchOperatingHours { get; }
         DbSet<Category> Categories { get; }
         DbSet<ChatMessage> ChatMessages { get; }
+        DbSet<ChatMessageAttachment> ChatMessageAttachments { get; }
+        DbSet<ChatbotSession> ChatbotSessions { get; }
+        DbSet<ChatbotMessage> ChatbotMessages { get; }
+        DbSet<ChatbotActionLog> ChatbotActionLogs { get; }
+        DbSet<ConversationCustomerRead> ConversationCustomerReads { get; }
+        DbSet<ConversationStaffRead> ConversationStaffReads { get; }
         DbSet<CommissionRule> CommissionRules { get; }
         DbSet<CommissionTransaction> CommissionTransactions { get; }
         DbSet<Conversation> Conversations { get; }
@@ -61,6 +62,7 @@ namespace MyGarage.Interfaces
         DbSet<Package> Packages { get; }
         DbSet<PackageItem> PackageItems { get; }
         DbSet<PartInventoryReservation> PartInventoryReservations { get; }
+        DbSet<PasswordResetToken> PasswordResetTokens { get; }
         DbSet<Product> Products { get; }
         DbSet<ProductImage> ProductImages { get; }
         DbSet<PurchaseOrder> PurchaseOrders { get; }
