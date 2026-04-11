@@ -203,6 +203,7 @@ function App() {
           <Route path="reception" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionOrdersSection /></ProtectedRoute>} />
           <Route path="reception/create" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><CreateServiceOrderPage /></ProtectedRoute>} />
           <Route path="reception/appointments" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionAppointmentsPage /></ProtectedRoute>} />
+          <Route path="reception/chat" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionChatPage /></ProtectedRoute>} />
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/appointments/:appointmentId/edit" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionEditAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />

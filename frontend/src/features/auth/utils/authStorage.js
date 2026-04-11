@@ -2,8 +2,18 @@ const TOKEN_KEY = "mygarage_token";
 const USER_KEY = "mygarage_user";
 const LAST_ACTIVE_KEY = "mygarage_last_active_at";
 
+function getStorage() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function readAuthUser() {
-  const savedUser = localStorage.getItem(USER_KEY);
+  const storage = getStorage();
+  const savedUser = storage?.getItem(USER_KEY);
   if (!savedUser) return null;
   try {
     return JSON.parse(savedUser);
@@ -13,19 +23,23 @@ export function readAuthUser() {
 }
 
 export function readAuthToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return getStorage()?.getItem(TOKEN_KEY) || "";
 }
 
 export function persistAuthUser(userData) {
-  localStorage.setItem(TOKEN_KEY, userData?.token || "");
-  localStorage.setItem(USER_KEY, JSON.stringify(userData || null));
-  localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+  const storage = getStorage();
+  if (!storage) return;
+  storage.setItem(TOKEN_KEY, userData?.token || "");
+  storage.setItem(USER_KEY, JSON.stringify(userData || null));
+  storage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
 }
 
 export function clearAuthStorage() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(LAST_ACTIVE_KEY);
+  const storage = getStorage();
+  if (!storage) return;
+  storage.removeItem(TOKEN_KEY);
+  storage.removeItem(USER_KEY);
+  storage.removeItem(LAST_ACTIVE_KEY);
 }
 
 export function isAuthTokenAvailable() {

@@ -220,9 +220,10 @@ public sealed partial class ChatbotToolDefinitionRegistry
             branchId.Value,
             date,
             requestedServiceIds,
-            bookingFlow,
-            vehicleCount,
-            isParallel);
+            requestedPackageIds: null,
+            bookingFlow: bookingFlow,
+            vehicleCount: vehicleCount,
+            isParallel: isParallel);
 
         var result = slots
             .Where(x => x.IsAvailable && x.RemainingCapacity > 0)
@@ -323,9 +324,10 @@ public sealed partial class ChatbotToolDefinitionRegistry
             resolvedBranchId,
             date,
             string.Join(",", serviceIds),
-            "FIXED",
-            1,
-            false);
+            requestedPackageIds: null,
+            bookingFlow: "FIXED",
+            vehicleCount: 1,
+            isParallel: false);
         var target = slots.FirstOrDefault(x =>
             x.IsAvailable &&
             x.RemainingCapacity > 0 &&

@@ -62,6 +62,7 @@ namespace MyGarage.Interfaces
         DbSet<Package> Packages { get; }
         DbSet<PackageItem> PackageItems { get; }
         DbSet<PartInventoryReservation> PartInventoryReservations { get; }
+        DbSet<PasswordResetToken> PasswordResetTokens { get; }
         DbSet<Product> Products { get; }
         DbSet<ProductImage> ProductImages { get; }
         DbSet<PurchaseOrder> PurchaseOrders { get; }

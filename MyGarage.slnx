@@ -1,4 +1,3 @@
 <Solution>
   <Project Path="backend/MyGarage.csproj" />
-  <Project Path="backend.Tests/MyGarage.Tests.csproj" />
 </Solution>

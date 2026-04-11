@@ -20,6 +20,8 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<AiForecast> AiForecasts { get; set; }
 
+    public virtual DbSet<AiFraudMonitor> AiFraudMonitors { get; set; }
+
     public virtual DbSet<AiKnowledgeBase> AiKnowledgeBases { get; set; }
 
     public virtual DbSet<AiModelConfig> AiModelConfigs { get; set; }
@@ -123,6 +125,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<PackageItem> PackageItems { get; set; }
 
     public virtual DbSet<PartInventoryReservation> PartInventoryReservations { get; set; }
+
+    public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<Product> Products { get; set; }
 
@@ -313,7 +317,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.HasIndex(e => e.GroupSessionId, "IX_Appointments_GroupSessionId");
 
-            entity.Property(e => e.BookingGroupId).HasColumnName("GroupSessionId");
+            entity.Property(e => e.GroupSessionId).HasColumnName("GroupSessionId");
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.InsuranceClaimMode)

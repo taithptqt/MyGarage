@@ -53,8 +53,8 @@ namespace MyGarage.Repositories
 
             return await BuildDetailedQuery()
                 .Where(a => a.BranchId == branchId
-                         && a.StartTime >= dayStart
-                         && a.StartTime < dayEnd
+                         && a.StartTime >= start
+                         && a.StartTime < end
                          && (a.Status == null
                              || (a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)
                                  && a.Status.ToUpper() != nameof(AppointmentStatus.CANCELLED))))
@@ -142,7 +142,7 @@ namespace MyGarage.Repositories
                 .Include(a => a.Customer)
                 .Include(a => a.Vehicle)
                 .Include(a => a.Branch)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.ServiceOrders);
         }
     }

@@ -14,6 +14,7 @@ namespace MyGarage.Controllers;
 [Authorize(Policy = "AdminStaffOnly")]
 public class BayAdminController : ControllerBase
 {
+    private const string StatusEmpty = "EMPTY";
     private const string StatusActive = nameof(BayOperationalStatusCode.ACTIVE);
     private const string StatusUnderMaintenance = nameof(BayOperationalStatusCode.UNDER_MAINTENANCE);
     private const string StatusBroken = nameof(BayOperationalStatusCode.BROKEN);

@@ -243,6 +243,7 @@ export default function WorkshopPage() {
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
   const isReceptionDashboard = (userRole === "RECEPTIONIST" || userRole === "ADMIN") && location.pathname.startsWith("/workshop/reception");
+  const canAccessReceptionChat = userRole === "RECEPTIONIST";
   const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
     ? "appointments"
     : location.pathname.startsWith("/workshop/reception/chat")
@@ -307,13 +308,15 @@ export default function WorkshopPage() {
                 >
                   Lịch đặt trước
                 </button>
-                <button
-                  type="button"
-                  className={`role-sub-item ${receptionTab === "chat" ? "active" : ""}`}
-                  onClick={() => goReceptionTab("chat")}
-                >
-                  Chat khách hàng
-                </button>
+                {canAccessReceptionChat ? (
+                  <button
+                    type="button"
+                    className={`role-sub-item ${receptionTab === "chat" ? "active" : ""}`}
+                    onClick={() => goReceptionTab("chat")}
+                  >
+                    Chat khách hàng
+                  </button>
+                ) : null}
               </div>
             )}
               </nav>

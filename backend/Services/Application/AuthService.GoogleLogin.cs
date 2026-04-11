@@ -62,6 +62,13 @@ namespace MyGarage.Services
                 ValidateStaffAccountForLogin(staff);
                 var nowUtc = DateTime.UtcNow;
                 var shouldSaveStaff = false;
+                var staffSecurityStamp = GetOrCreateSecurityStamp(staff.SecurityStamp);
+
+                if (!string.Equals(staff.SecurityStamp, staffSecurityStamp, StringComparison.Ordinal))
+                {
+                    staff.SecurityStamp = staffSecurityStamp;
+                    shouldSaveStaff = true;
+                }
 
                 if (!string.Equals(staff.GoogleId, googleId, StringComparison.Ordinal))
                 {

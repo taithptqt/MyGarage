@@ -128,7 +128,7 @@ export default function MyAppointmentsPage() {
     }
 
     const hasInStandalone = filteredAppointments.some((item) => Number(item.id) === targetAppointmentId);
-    const hasInGroup = bookingGroups.some((group) =>
+    const hasInGroup = GroupSessions.some((group) =>
       Array.isArray(group.appointments) &&
       group.appointments.some((item) => Number(item.id) === targetAppointmentId)
     );
@@ -168,7 +168,7 @@ export default function MyAppointmentsPage() {
     return () => window.clearTimeout(clearHighlightTimer);
   }, [
     activeTab,
-    bookingGroups,
+    GroupSessions,
     filter,
     filteredAppointments,
     loading,

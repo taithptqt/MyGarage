@@ -28,11 +28,27 @@ function isBranchInList(branchList, branchId) {
   return branchList.some((item) => Number(item?.id) === Number(branchId));
 }
 
+function readStoredBranchId() {
+  if (typeof window === "undefined") return null;
+  try {
+    return parseBranchId(window.localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredBranchId(branchId) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, String(branchId));
+  } catch {
+    // Ignore storage write failures so the login page cannot crash.
+  }
+}
+
 export function BranchProvider({ children }) {
   const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchId] = useState(() =>
-    parseBranchId(localStorage.getItem(STORAGE_KEY))
-  );
+  const [selectedBranchId, setSelectedBranchId] = useState(readStoredBranchId);
   const [loading, setLoading] = useState(false);
 
   const refreshBranches = useCallback(async () => {
@@ -56,12 +72,12 @@ export function BranchProvider({ children }) {
 
         setSelectedBranchId((currentId) => {
           if (!list.length) {
-            localStorage.setItem(STORAGE_KEY, String(ALL_BRANCHES_ID));
+            writeStoredBranchId(ALL_BRANCHES_ID);
             return ALL_BRANCHES_ID;
           }
 
           const nextId = isBranchInList(list, currentId) ? currentId : Number(list[0]?.id) || ALL_BRANCHES_ID;
-          localStorage.setItem(STORAGE_KEY, String(nextId));
+          writeStoredBranchId(nextId);
           return nextId;
         });
       } catch {
@@ -77,7 +93,7 @@ export function BranchProvider({ children }) {
     const parsed = parseBranchId(branchId);
     if (parsed === null) return;
     setSelectedBranchId(parsed);
-    localStorage.setItem(STORAGE_KEY, String(parsed));
+    writeStoredBranchId(parsed);
   }, []);
 
   const selectedBranch = useMemo(

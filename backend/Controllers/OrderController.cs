@@ -31,6 +31,7 @@ public class OrderController(
     private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
     private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
     private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
+    private static long _orderCodeSeed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
