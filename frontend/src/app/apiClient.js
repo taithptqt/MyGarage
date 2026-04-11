@@ -91,12 +91,17 @@ export async function request(config) {
 export async function requestSafe(config) {
   try {
     const response = await apiClient.request(config);
-    return { ok: true, data: response.data };
+    return { ok: true, status: response.status, data: response.data };
   } catch (error) {
+    const status = error?.response?.status;
     const data = error?.response?.data;
     if (data && typeof data === "object") {
-      return { ok: false, data };
+      return { ok: false, status, data };
     }
-    return { ok: false, data: { message: extractErrorMessage(error) } };
+    return {
+      ok: false,
+      status,
+      data: { message: extractErrorMessage(error) },
+    };
   }
 }

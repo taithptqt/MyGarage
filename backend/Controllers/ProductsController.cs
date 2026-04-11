@@ -1,11 +1,16 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
 using MyGarage.Models;
+using MyGarage.Support;
 
 namespace MyGarage.Controllers
 {
@@ -15,11 +20,13 @@ namespace MyGarage.Controllers
     {
         private readonly IProductService _productService;
         private readonly IMapper _mapper;
+        private readonly IGarageContext _db;
 
-        public ProductsController(IProductService productService, IMapper mapper)
+        public ProductsController(IProductService productService, IMapper mapper, IGarageContext db)
         {
             _productService = productService;
             _mapper = mapper;
+            _db = db;
         }
 
         [HttpGet]
@@ -40,6 +47,85 @@ namespace MyGarage.Controllers
             }
 
             var dto = _mapper.Map<ProductResponseDto>(item);
+            return Ok(dto);
+        }
+
+        [HttpGet("stock-availability")]
+        public async Task<ActionResult<IEnumerable<RetailStockAvailabilityEntry>>> GetStockAvailability(
+            [FromQuery] string? productIds,
+            [FromQuery] long? branchId,
+            CancellationToken cancellationToken)
+        {
+            var normalizedProductIds = (productIds ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(raw => long.TryParse(raw, out var value) ? value : 0L)
+                .Where(value => value > 0)
+                .Distinct()
+                .ToList();
+
+            if (normalizedProductIds.Count == 0)
+            {
+                return BadRequest(new { message = "ProductIds query is required." });
+            }
+
+            if (branchId.HasValue)
+            {
+                var branchExists = await _db.Branches
+                    .AsNoTracking()
+                    .AnyAsync(branch => branch.Id == branchId.Value && branch.IsDeleted != true, cancellationToken);
+
+                if (!branchExists)
+                {
+                    return BadRequest(new { message = "Selected branch is invalid.", branchId });
+                }
+            }
+
+            var availabilityEntries = await RetailStockAvailabilityResolver.GetAvailabilityEntriesAsync(
+                _db,
+                normalizedProductIds,
+                branchId,
+                cancellationToken);
+
+            return Ok(availabilityEntries);
+        }
+
+        [HttpGet("{id:long}/retail-stock-by-branches")]
+        public async Task<ActionResult<RetailProductBranchStockResponseDto>> GetRetailStockByBranches(
+            long id,
+            CancellationToken cancellationToken)
+        {
+            var productExists = await _db.Products
+                .AsNoTracking()
+                .AnyAsync(
+                    product =>
+                        product.Id == id &&
+                        product.IsDeleted != true &&
+                        product.IsActive != false,
+                    cancellationToken);
+
+            if (!productExists)
+            {
+                return NotFound();
+            }
+
+            var rows = await RetailStockAvailabilityResolver.GetRetailStockBreakdownByProductAsync(
+                _db,
+                id,
+                cancellationToken);
+
+            var dto = new RetailProductBranchStockResponseDto
+            {
+                ProductId = id,
+                Branches = rows
+                    .Select(row => new RetailBranchStockRowDto
+                    {
+                        BranchId = row.BranchId,
+                        BranchName = row.BranchName,
+                        AvailableQuantity = row.AvailableQuantity,
+                    })
+                    .ToList(),
+            };
+
             return Ok(dto);
         }
 

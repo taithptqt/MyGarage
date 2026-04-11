@@ -10,6 +10,16 @@ export const inventoryApi = {
   createProduct: (data) => request({ url: "/api/products", method: "POST", data }),
   updateProduct: (id, data) => request({ url: `/api/products/${id}`, method: "PUT", data }),
   deleteProduct: (id) => request({ url: `/api/products/${id}`, method: "DELETE" }),
+  uploadProductImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/parts/${productId}/image`,
+      method: "POST",
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 
   getSuppliers: () => request({ url: "/api/suppliers", method: "GET" }),
   createSupplier: (data) => request({ url: "/api/suppliers", method: "POST", data }),

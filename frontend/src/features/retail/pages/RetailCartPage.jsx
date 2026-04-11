@@ -10,18 +10,23 @@ import {
   getBranches,
   getCategories,
   getProductImages,
+  getProductStockAvailability,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
+  clampQuantityToAvailable,
   formatVnd,
   getBranchLabel,
   getCategoryLabel,
   getProductImageAlt,
   getProductName,
   getProductUnitLabel,
+  normalizeAvailableQuantity,
+  readStoredRetailBranchId,
   resolveProductImage,
   sortProductImages,
   toPositiveInt,
+  writeStoredRetailBranchId,
 } from "@features/retail/utils/retailFormat";
 import "./RetailShared.css";
 import "./RetailCartPage.css";
@@ -61,7 +66,9 @@ export default function RetailCartPage() {
   const [categories, setCategories] = useState([]);
   const [productImages, setProductImages] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [stockByProductId, setStockByProductId] = useState({});
   const [loadingMeta, setLoadingMeta] = useState(true);
+  const [loadingStock, setLoadingStock] = useState(false);
   const [error, setError] = useState("");
   const [bannerMessage, setBannerMessage] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -71,7 +78,7 @@ export default function RetailCartPage() {
   const [pendingOrder, setPendingOrder] = useState(null);
   const {
     cart,
-    totalItems,
+    totalLineItems,
     subtotal,
     selectedItems,
     selectedLineCount,
@@ -82,6 +89,7 @@ export default function RetailCartPage() {
     removeSelectedItems,
     setItemQuantity,
     setItemSelected,
+    syncCartWithAvailability,
     toggleSelectAllCartItems,
     updateCartQty,
   } = useRetailCart();
@@ -112,10 +120,6 @@ export default function RetailCartPage() {
         setCategories(nextCategories);
         setProductImages(nextProductImages);
         setBranches(nextBranches);
-
-        if (nextBranches[0]?.id) {
-          setBranchId((current) => current || String(nextBranches[0].id));
-        }
       } catch (loadError) {
         if (!ignore) {
           setError(loadError?.message || "Không thể tải dữ liệu giỏ hàng retail lúc này.");
@@ -136,6 +140,37 @@ export default function RetailCartPage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!branches.length) {
+      return;
+    }
+
+    setBranchId((current) => {
+      if (current && branches.some((item) => String(item.id) === String(current))) {
+        return String(current);
+      }
+
+      const stored = readStoredRetailBranchId();
+      if (stored && branches.some((item) => String(item.id) === stored)) {
+        return stored;
+      }
+
+      return String(branches[0].id);
+    });
+  }, [branches]);
+
+  useEffect(() => {
+    if (!branchId || !branches.length) {
+      return;
+    }
+
+    if (!branches.some((item) => String(item.id) === String(branchId))) {
+      return;
+    }
+
+    writeStoredRetailBranchId(branchId);
+  }, [branchId, branches]);
 
   useEffect(() => {
     function handlePaymentMessage(event) {
@@ -188,6 +223,132 @@ export default function RetailCartPage() {
     [branchId, branches]
   );
 
+  const cartProductIds = useMemo(
+    () => cart.map((item) => Number(item.id)).filter((value) => Number.isFinite(value) && value > 0),
+    [cart]
+  );
+
+  useEffect(() => {
+    if (!cartProductIds.length) {
+      setStockByProductId({});
+      return undefined;
+    }
+
+    let ignore = false;
+
+    async function loadStockByBranch() {
+      setLoadingStock(true);
+
+      try {
+        const entries = await getProductStockAvailability({
+          productIds: cartProductIds,
+          branchId: branchId || undefined,
+        });
+
+        if (ignore) return;
+
+        const nextStockByProductId = Array.isArray(entries)
+          ? Object.fromEntries(
+              entries.map((entry) => [
+                String(entry?.productId),
+                normalizeAvailableQuantity(entry?.availableQuantity),
+              ])
+            )
+          : {};
+
+        setStockByProductId(nextStockByProductId);
+
+        const syncResult = syncCartWithAvailability(nextStockByProductId);
+        if (syncResult?.adjusted) {
+          const adjustments = [
+            syncResult.updatedProductIds?.length
+              ? `${syncResult.updatedProductIds.length} mặt hàng đã được giảm về mức tồn kho hợp lệ`
+              : null,
+            syncResult.removedProductIds?.length
+              ? `${syncResult.removedProductIds.length} mặt hàng đã được gỡ khỏi giỏ vì chi nhánh này đã hết hàng`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(". ");
+
+          if (adjustments) {
+            setBannerMessage(adjustments);
+          }
+        }
+      } catch (loadError) {
+        if (!ignore) {
+          setError(loadError?.message || "Không thể đồng bộ tồn kho retail lúc này.");
+          setStockByProductId({});
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingStock(false);
+        }
+      }
+    }
+
+    loadStockByBranch();
+
+    return () => {
+      ignore = true;
+    };
+  }, [branchId, cartProductIds.join(",")]);
+
+  function getAvailableQuantity(productId) {
+    const key = String(productId);
+    return Object.prototype.hasOwnProperty.call(stockByProductId, key)
+      ? normalizeAvailableQuantity(stockByProductId[key])
+      : null;
+  }
+
+  function formatStockHint(availableQuantity) {
+    if (availableQuantity == null) {
+      return "Đang kiểm tra tồn kho khả dụng...";
+    }
+
+    if (availableQuantity <= 0) {
+      return "Hết hàng tại chi nhánh đã chọn";
+    }
+
+    return `Còn ${availableQuantity} sản phẩm tại chi nhánh đã chọn`;
+  }
+
+  function handleCartQuantityChange(product, rawValue) {
+    const availableQuantity = getAvailableQuantity(product.id);
+    const mutation = setItemQuantity(product.id, rawValue, {
+      maxQty: availableQuantity ?? undefined,
+    });
+
+    if (!mutation?.ok && availableQuantity != null && availableQuantity <= 0) {
+      setError(`${getProductName(product)} hiện đã hết hàng tại chi nhánh đã chọn.`);
+      return;
+    }
+
+    if (mutation?.adjusted && availableQuantity != null) {
+      setBannerMessage(
+        `${getProductName(product)} chỉ còn tối đa ${availableQuantity} sản phẩm tại chi nhánh đã chọn.`
+      );
+    }
+  }
+
+  function handleCartQuantityStep(product, delta) {
+    const availableQuantity = getAvailableQuantity(product.id);
+    const mutation = updateCartQty(product.id, delta, {
+      maxQty: availableQuantity ?? undefined,
+    });
+
+    if (!mutation?.ok && availableQuantity != null && availableQuantity <= 0) {
+      setError(`${getProductName(product)} hiện đã hết hàng tại chi nhánh đã chọn.`);
+      return;
+    }
+
+    if (mutation?.adjusted && Number(delta) > 0 && availableQuantity != null) {
+      setBannerMessage(
+        `${getProductName(product)} chỉ còn tối đa ${availableQuantity} sản phẩm tại chi nhánh đã chọn.`
+      );
+    }
+  }
+
   async function handleCheckout() {
     setBannerMessage("");
     setError("");
@@ -205,6 +366,43 @@ export default function RetailCartPage() {
     setSubmitting(true);
 
     try {
+      const latestStockEntries = await getProductStockAvailability({
+        productIds: selectedItems.map((item) => item.id),
+        branchId,
+      });
+      const latestStockByProductId = Array.isArray(latestStockEntries)
+        ? Object.fromEntries(
+            latestStockEntries.map((entry) => [
+              String(entry?.productId),
+              normalizeAvailableQuantity(entry?.availableQuantity),
+            ])
+          )
+        : {};
+
+      setStockByProductId(latestStockByProductId);
+
+      const stockIssues = selectedItems
+        .map((item) => {
+          const availableQuantity = normalizeAvailableQuantity(latestStockByProductId[String(item.id)]);
+          return {
+            id: Number(item.id),
+            name: getProductName(item),
+            requestedQuantity: toPositiveInt(item.qty, 1),
+            availableQuantity,
+          };
+        })
+        .filter((item) => item.requestedQuantity > item.availableQuantity);
+
+      if (stockIssues.length) {
+        syncCartWithAvailability(latestStockByProductId);
+        setError(
+          `Không đủ tồn kho tại chi nhánh đã chọn cho: ${stockIssues
+            .map((item) => `${item.name} (còn ${item.availableQuantity})`)
+            .join(", ")}. Giỏ hàng đã được đồng bộ lại theo tồn kho mới nhất.`
+        );
+        return;
+      }
+
       const payload = {
         branchId: Number(branchId),
         customerNotes: notes.trim() || null,
@@ -361,8 +559,8 @@ export default function RetailCartPage() {
           </div>
           <div className="parts-shop-hero-stats retail-cart-hero-stats">
             <article className="parts-shop-hero-stat">
-              <strong>{totalItems}</strong>
-              <span>sản phẩm đang nằm trong cart</span>
+              <strong>{totalLineItems}</strong>
+              <span>mặt hàng đang nằm trong cart</span>
             </article>
             <article className="parts-shop-hero-stat">
               <strong>{selectedQuantity}</strong>
@@ -415,7 +613,7 @@ export default function RetailCartPage() {
                 <div>
                   <span className="parts-shop-section-kicker">Cart items</span>
                   <h3>Phụ tùng đang có trong giỏ</h3>
-                  <p>{totalItems} sản phẩm, {selectedLineCount} dòng đang được chọn để checkout.</p>
+                  <p>{totalLineItems} mặt hàng trong giỏ, {selectedLineCount} mặt hàng đang được chọn để checkout.</p>
                 </div>
                 <div className="retail-cart-toolbar">
                   <label className="retail-cart-select-all">
@@ -441,6 +639,10 @@ export default function RetailCartPage() {
                 {cart.map((item) => {
                   const relatedImages = productImagesByProductId.get(String(item.id)) || [];
                   const category = categoriesById.get(String(item.categoryId));
+                  const availableQuantity = getAvailableQuantity(item.id);
+                  const isOutOfStock = availableQuantity != null && availableQuantity <= 0;
+                  const isAtStockLimit =
+                    availableQuantity != null && availableQuantity > 0 && Number(item.qty || 0) >= availableQuantity;
                   const categoryLabel =
                     category || item?.categoryId
                       ? getCategoryLabel(category || { id: item.categoryId })
@@ -487,6 +689,9 @@ export default function RetailCartPage() {
                             <span>{categoryLabel}</span>
                             <span>{getProductUnitLabel(item)}</span>
                           </div>
+                          <div className={`retail-cart-item-stock ${isOutOfStock ? "is-out" : ""}`}>
+                            {formatStockHint(availableQuantity)}
+                          </div>
                         </div>
 
                         <div className="retail-cart-item-price">
@@ -500,23 +705,28 @@ export default function RetailCartPage() {
                             <button
                               type="button"
                               className="parts-shop-btn parts-shop-btn-ghost"
-                              onClick={() => updateCartQty(item.id, -1)}
+                              onClick={() => handleCartQuantityStep(item, -1)}
                               aria-label={`Giảm số lượng ${getProductName(item)}`}
+                              disabled={isOutOfStock}
                             >
                               -
                             </button>
                             <input
                               type="number"
                               min="1"
+                              max={Math.max(availableQuantity ?? Number(item.qty || 1), 1)}
+                              className="parts-shop-cart-qty-input"
                               value={item.qty}
-                              onChange={(event) => setItemQuantity(item.id, event.target.value)}
+                              onChange={(event) => handleCartQuantityChange(item, event.target.value)}
                               aria-label={`Số lượng ${getProductName(item)}`}
+                              disabled={isOutOfStock}
                             />
                             <button
                               type="button"
                               className="parts-shop-btn parts-shop-btn-ghost"
-                              onClick={() => updateCartQty(item.id, 1)}
+                              onClick={() => handleCartQuantityStep(item, 1)}
                               aria-label={`Tăng số lượng ${getProductName(item)}`}
+                              disabled={isOutOfStock || isAtStockLimit}
                             >
                               +
                             </button>
@@ -621,6 +831,9 @@ export default function RetailCartPage() {
 
               {loadingMeta ? (
                 <div className="retail-cart-summary-footnote">Đang đồng bộ danh mục, ảnh và chi nhánh...</div>
+              ) : null}
+              {loadingStock ? (
+                <div className="retail-cart-summary-footnote">Đang kiểm tra tồn kho khả dụng theo chi nhánh đã chọn...</div>
               ) : null}
             </aside>
           </div>

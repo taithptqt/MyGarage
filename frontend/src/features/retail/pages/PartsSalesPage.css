@@ -362,12 +362,9 @@
 
 .parts-shop-filter {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px) minmax(200px, 260px);
   gap: 12px;
-}
-
-.parts-shop-filter-right {
-  min-width: 250px;
+  align-items: stretch;
 }
 
 .parts-shop-filter input,
@@ -556,6 +553,18 @@
   -webkit-line-clamp: 3;
 }
 
+.parts-shop-stock-hint {
+  margin: 0 0 10px;
+  color: rgba(29, 42, 38, 0.6);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.parts-shop-stock-hint.is-out {
+  color: #8b2f2b;
+}
+
 .parts-shop-price {
   font-size: 1.36rem;
   line-height: 1.06;
@@ -588,18 +597,67 @@
 
 .parts-shop-pagination {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 10px 14px;
   margin-top: 22px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.parts-shop-pagination__edge {
+  flex: 0 0 auto;
+  min-width: 72px;
 }
 
 .parts-shop-page-numbers {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(100%, 520px);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-block: 2px;
+  scrollbar-width: thin;
+}
+
+.parts-shop-page-ellipsis {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  min-width: 1.25rem;
+  padding-inline: 2px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--parts-text-muted, rgba(29, 42, 38, 0.45));
+  user-select: none;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .parts-shop-pagination {
+    gap: 8px;
+  }
+
+  .parts-shop-pagination__edge {
+    min-width: 64px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
+  }
+
+  .parts-shop-page-button:not(.parts-shop-pagination__edge) {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+  }
 }
 
 .parts-shop-page-button {
@@ -1053,10 +1111,6 @@
 
   .parts-shop-filter {
     grid-template-columns: 1fr;
-  }
-
-  .parts-shop-filter-right {
-    min-width: 0;
   }
 
   .parts-shop-hero-stats {

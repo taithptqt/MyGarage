@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
@@ -1846,8 +1846,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.Property(e => e.Description).HasMaxLength(255);
             entity.Property(e => e.ImageUrl)
-                .HasMaxLength(500)
-                .IsUnicode(false);
+                .HasColumnType("NVARCHAR(MAX)");
             entity.Property(e => e.IsMain).HasDefaultValue(false);
             entity.Property(e => e.SortOrder).HasDefaultValue(0);
 

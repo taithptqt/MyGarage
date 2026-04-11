@@ -18,7 +18,7 @@ function CartIcon() {
 
 export default function RetailCartEntry({
   to = "/parts-cart",
-  totalItems = 0,
+  itemCount = 0,
   label = "Giỏ hàng",
   variant = "primary",
   compact = false,
@@ -38,13 +38,13 @@ export default function RetailCartEntry({
       ]
         .filter(Boolean)
         .join(" ")}
-      aria-label={`${label}. Hiện có ${totalItems} sản phẩm trong giỏ`}
+      aria-label={`${label}. Hiện có ${itemCount} mặt hàng trong giỏ`}
       title={label}
     >
       <span className="retail-cart-entry-icon-wrap" aria-hidden="true">
         <CartIcon />
-        {totalItems > 0 ? (
-          <span className="retail-cart-entry-badge">{totalItems}</span>
+        {itemCount > 0 ? (
+          <span className="retail-cart-entry-badge">{itemCount}</span>
         ) : null}
       </span>
     </Link>

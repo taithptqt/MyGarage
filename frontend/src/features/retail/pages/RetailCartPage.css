@@ -183,6 +183,18 @@
   font-weight: 700;
 }
 
+.retail-cart-item-stock {
+  margin-top: 8px;
+  color: rgba(29, 42, 38, 0.62);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.retail-cart-item-stock.is-out {
+  color: #8b2f2b;
+}
+
 .retail-cart-item-price,
 .retail-cart-item-total,
 .retail-cart-item-qty {
@@ -205,6 +217,7 @@
   color: var(--parts-emerald);
   font-size: 0.95rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .retail-cart-item-actions .parts-shop-btn {
@@ -223,6 +236,11 @@
     radial-gradient(circle at 92% 12%, rgba(197, 160, 89, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(243, 237, 226, 0.92));
   padding: 8px 16px;
+}
+
+.retail-cart-summary-stats .parts-shop-summary-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .retail-cart-form {

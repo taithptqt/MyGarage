@@ -8,18 +8,25 @@ import {
   getCategories,
   getProductById,
   getProductImages,
+  getProductRetailStockByBranches,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
+  clampQuantityToAvailable,
   formatVnd,
+  getBranchLabel,
   getCategoryLabel,
   getProductDescription,
   getProductImageAlt,
   getProductName,
   getProductUnitLabel,
+  normalizeAvailableQuantity,
+  readStoredRetailBranchId,
   resolveProductImage,
+  RETAIL_BRANCH_CHANGED_EVENT,
   sortProductImages,
   toPositiveInt,
+  writeStoredRetailBranchId,
 } from "@features/retail/utils/retailFormat";
 import "./RetailShared.css";
 import "./PartProductDetailPage.css";
@@ -45,12 +52,19 @@ export default function PartProductDetailPage() {
   const [product, setProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [productImages, setProductImages] = useState([]);
+  const [stockBreakdown, setStockBreakdown] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [stockContextError, setStockContextError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bannerMessage, setBannerMessage] = useState("");
   const [draftQty, setDraftQty] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const { addToCart, totalItems } = useRetailCart();
+  const { addToCart, totalLineItems } = useRetailCart();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [productId]);
 
   useEffect(() => {
     let ignore = false;
@@ -59,6 +73,8 @@ export default function PartProductDetailPage() {
       setLoading(true);
       setError("");
       setBannerMessage("");
+      setStockContextError("");
+      setStockBreakdown([]);
 
       try {
         const [productData, categoryData, imageData] = await Promise.all([
@@ -78,12 +94,29 @@ export default function PartProductDetailPage() {
         setProductImages(sortProductImages(Array.isArray(imageData) ? imageData : []));
         setSelectedImageIndex(0);
         setDraftQty(1);
+
+        let nextBreakdown = [];
+        try {
+          const stockPayload = await getProductRetailStockByBranches(productId);
+          nextBreakdown = Array.isArray(stockPayload?.branches) ? stockPayload.branches : [];
+        } catch (stockError) {
+          if (!ignore) {
+            setStockContextError(
+              stockError?.message || "Không thể tải tồn kho theo chi nhánh lúc này."
+            );
+          }
+        }
+
+        if (!ignore) {
+          setStockBreakdown(nextBreakdown);
+        }
       } catch (loadError) {
         if (!ignore) {
           setError(loadError?.message || "Không thể tải chi tiết phụ tùng lúc này.");
           setProduct(null);
           setCategories([]);
           setProductImages([]);
+          setStockBreakdown([]);
         }
       } finally {
         if (!ignore) {
@@ -104,6 +137,48 @@ export default function PartProductDetailPage() {
       ignore = true;
     };
   }, [productId]);
+
+  useEffect(() => {
+    if (!stockBreakdown.length) {
+      setSelectedBranchId("");
+      return;
+    }
+
+    const idSet = new Set(stockBreakdown.map((row) => String(row.branchId)));
+
+    setSelectedBranchId((current) => {
+      if (current && idSet.has(String(current))) {
+        return String(current);
+      }
+
+      const stored = readStoredRetailBranchId();
+      if (stored && idSet.has(stored)) {
+        return stored;
+      }
+
+      return String(stockBreakdown[0].branchId);
+    });
+  }, [stockBreakdown]);
+
+  useEffect(() => {
+    function handleExternalBranch(event) {
+      const nextId = event?.detail?.branchId;
+      if (nextId == null || nextId === "") {
+        return;
+      }
+
+      setSelectedBranchId((current) => {
+        if (!stockBreakdown.some((row) => String(row.branchId) === String(nextId))) {
+          return current;
+        }
+
+        return String(nextId);
+      });
+    }
+
+    window.addEventListener(RETAIL_BRANCH_CHANGED_EVENT, handleExternalBranch);
+    return () => window.removeEventListener(RETAIL_BRANCH_CHANGED_EVENT, handleExternalBranch);
+  }, [stockBreakdown]);
 
   const categoriesById = useMemo(
     () => new Map(categories.map((item) => [String(item.id), item])),
@@ -137,9 +212,140 @@ export default function PartProductDetailPage() {
   const retailPriceLabel =
     product?.retailPrice == null ? "Chưa cập nhật" : formatVnd(product.retailPrice);
 
+  const selectedBranchRow = useMemo(
+    () => stockBreakdown.find((row) => String(row.branchId) === String(selectedBranchId)) || null,
+    [selectedBranchId, stockBreakdown]
+  );
+
+  const selectedBranchDisplayName = useMemo(() => {
+    if (!selectedBranchRow) {
+      return "";
+    }
+
+    return getBranchLabel({
+      id: selectedBranchRow.branchId,
+      branchName: selectedBranchRow.branchName,
+      name: selectedBranchRow.branchName,
+    });
+  }, [selectedBranchRow]);
+
+  const availableQuantity = useMemo(() => {
+    if (stockContextError) {
+      return null;
+    }
+
+    if (!stockBreakdown.length || !selectedBranchRow) {
+      return null;
+    }
+
+    return normalizeAvailableQuantity(selectedBranchRow.availableQuantity);
+  }, [selectedBranchRow, stockBreakdown.length, stockContextError]);
+
+  const systemWideOutOfStock = useMemo(
+    () =>
+      !stockContextError &&
+      stockBreakdown.length > 0 &&
+      stockBreakdown.every((row) => normalizeAvailableQuantity(row.availableQuantity) <= 0),
+    [stockBreakdown, stockContextError]
+  );
+
+  const alternativeStockBranches = useMemo(() => {
+    if (!selectedBranchId || !stockBreakdown.length) {
+      return [];
+    }
+
+    return stockBreakdown
+      .filter(
+        (row) =>
+          String(row.branchId) !== String(selectedBranchId) &&
+          normalizeAvailableQuantity(row.availableQuantity) > 0
+      )
+      .sort(
+        (left, right) =>
+          normalizeAvailableQuantity(right.availableQuantity) -
+          normalizeAvailableQuantity(left.availableQuantity)
+      )
+      .slice(0, 3);
+  }, [selectedBranchId, stockBreakdown]);
+
+  const hasStockData =
+    !stockContextError && stockBreakdown.length > 0 && selectedBranchRow != null;
+  const isOutOfStock = hasStockData && availableQuantity != null && availableQuantity <= 0;
+  const isStockUnavailable = !hasStockData;
+
+  const stockPresentation = useMemo(() => {
+    if (stockContextError) {
+      return { text: stockContextError, toneClass: "is-unknown" };
+    }
+
+    if (!stockBreakdown.length) {
+      return {
+        text: "Chưa có dữ liệu tồn kho theo chi nhánh",
+        toneClass: "is-unknown",
+      };
+    }
+
+    if (!selectedBranchDisplayName) {
+      return {
+        text: "Chưa chọn được chi nhánh hiển thị",
+        toneClass: "is-unknown",
+      };
+    }
+
+    if (systemWideOutOfStock) {
+      return {
+        text: "Tạm hết hàng toàn hệ thống",
+        toneClass: "is-out",
+      };
+    }
+
+    if (availableQuantity != null && availableQuantity <= 0) {
+      return {
+        text: `Hiện không còn tồn kho tại ${selectedBranchDisplayName}`,
+        toneClass: "is-out",
+      };
+    }
+
+    if (availableQuantity != null && availableQuantity > 0) {
+      return {
+        text: `${selectedBranchDisplayName}: còn ${availableQuantity} sản phẩm`,
+        toneClass: "is-in",
+      };
+    }
+
+    return {
+      text: "Chưa có dữ liệu tồn kho",
+      toneClass: "is-unknown",
+    };
+  }, [
+    availableQuantity,
+    selectedBranchDisplayName,
+    stockBreakdown.length,
+    stockContextError,
+    systemWideOutOfStock,
+  ]);
+
+  useEffect(() => {
+    if (availableQuantity == null) {
+      return;
+    }
+
+    if (availableQuantity <= 0) {
+      setDraftQty(1);
+      return;
+    }
+
+    setDraftQty((current) => clampQuantityToAvailable(current, availableQuantity, 1));
+  }, [availableQuantity]);
+
+  function handleBranchChange(event) {
+    const nextValue = event.target.value;
+    setSelectedBranchId(nextValue);
+    writeStoredRetailBranchId(nextValue);
+  }
+
   const technicalDetails = useMemo(
     () => [
-      { label: "SKU", value: product?.sku || "Chưa cập nhật" },
       { label: "Đơn vị", value: productUnitLabel },
       { label: "Danh mục", value: getCategoryLabel(category) },
       { label: "Giá retail", value: retailPriceLabel },
@@ -180,9 +386,36 @@ export default function PartProductDetailPage() {
       return;
     }
 
-    const quantity = toPositiveInt(draftQty, 1);
-    addToCart(product, quantity);
-    setBannerMessage(`Đã thêm ${quantity} ${productName} vào giỏ phụ tùng.`);
+    if (!hasStockData) {
+      setError("Chưa xác định được tồn kho theo chi nhánh cho phụ tùng này.");
+      return;
+    }
+
+    if (availableQuantity <= 0) {
+      setError(
+        `Phụ tùng này hiện không còn tồn kho tại ${selectedBranchDisplayName || "chi nhánh đang chọn"}.`
+      );
+      return;
+    }
+
+    const quantity = clampQuantityToAvailable(draftQty, availableQuantity, 1);
+    const mutation = addToCart(product, quantity, { maxQty: availableQuantity });
+
+    if (!mutation?.ok) {
+      setError(
+        `${productName} chỉ còn tối đa ${availableQuantity} sản phẩm tại ${selectedBranchDisplayName || "chi nhánh đang chọn"}.`
+      );
+      return;
+    }
+
+    if (mutation.adjusted) {
+      setBannerMessage(
+        `Đã thêm tối đa ${mutation.addedQuantity} ${productName} theo tồn kho tại ${selectedBranchDisplayName || "chi nhánh đang chọn"}.`
+      );
+      return;
+    }
+
+    setBannerMessage(`Đã thêm ${mutation.addedQuantity} ${productName} vào giỏ phụ tùng.`);
   }
 
   return (
@@ -209,7 +442,7 @@ export default function PartProductDetailPage() {
             Xem ảnh, thông tin kỹ thuật và thêm phụ tùng vào đúng giỏ bán lẻ hiện tại của bạn.
           </p>
           <div className="parts-shop-hero-actions">
-            <RetailCartEntry totalItems={totalItems} label="Giỏ hàng" />
+            <RetailCartEntry itemCount={totalLineItems} label="Giỏ hàng" />
             <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost">
               Quay lại catalog
             </Link>
@@ -285,16 +518,79 @@ export default function PartProductDetailPage() {
                     <strong>{retailPriceLabel}</strong>
                     <span>{formatStatus(product.isActive)}</span>
                   </div>
+                  <div className={`part-product-stock-hint ${stockPresentation.toneClass}`}>
+                    <span className="part-product-stock-label">Tồn kho theo chi nhánh</span>
+                    <strong>{stockPresentation.text}</strong>
+                  </div>
+
+                  {stockBreakdown.length > 0 ? (
+                    <div className="part-product-branch-row">
+                      <label className="part-product-branch-label" htmlFor="part-product-branch-select">
+                        Chi nhánh xem tồn và mua
+                      </label>
+                      <select
+                        id="part-product-branch-select"
+                        className="part-product-branch-select"
+                        value={selectedBranchId}
+                        onChange={handleBranchChange}
+                      >
+                        {stockBreakdown.map((row) => {
+                          const qty = normalizeAvailableQuantity(row.availableQuantity);
+                          const label = getBranchLabel({
+                            id: row.branchId,
+                            branchName: row.branchName,
+                            name: row.branchName,
+                          });
+                          return (
+                            <option key={row.branchId} value={String(row.branchId)}>
+                              {qty > 0 ? `${label} — còn ${qty}` : `${label} — hết hàng`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {alternativeStockBranches.length > 0 ? (
+                    <ul className="part-product-stock-alternatives" aria-label="Chi nhánh khác còn hàng">
+                      {alternativeStockBranches.map((row) => {
+                        const qty = normalizeAvailableQuantity(row.availableQuantity);
+                        const label = getBranchLabel({
+                          id: row.branchId,
+                          branchName: row.branchName,
+                          name: row.branchName,
+                        });
+                        return (
+                          <li key={row.branchId} className="part-product-stock-alt-item">
+                            <span>
+                              {label} còn {qty} sản phẩm
+                            </span>
+                            <button
+                              type="button"
+                              className="parts-shop-btn parts-shop-btn-ghost parts-shop-btn-inline part-product-branch-swap"
+                              onClick={() => {
+                                const id = String(row.branchId);
+                                setSelectedBranchId(id);
+                                writeStoredRetailBranchId(id);
+                              }}
+                            >
+                              Đổi sang chi nhánh này
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+
+                  <p className="part-product-stock-footnote">
+                    Chọn chi nhánh nhận hàng trong{" "}
+                    <Link to="/parts-cart" className="part-product-inline-link">
+                      giỏ hàng
+                    </Link>{" "}
+                    để đồng bộ thanh toán và tồn kho.
+                  </p>
 
                   <div className="part-product-meta-grid">
-                    <div>
-                      <span>SKU</span>
-                      <strong>{product?.sku || "Chưa cập nhật"}</strong>
-                    </div>
-                    <div>
-                      <span>Mã sản phẩm</span>
-                      <strong>#{product?.id}</strong>
-                    </div>
                     <div>
                       <span>Đơn vị</span>
                       <strong>{productUnitLabel}</strong>
@@ -309,7 +605,7 @@ export default function PartProductDetailPage() {
 
                   <div className="part-product-cart-box">
                     <div className="part-product-cart-head">
-                      <span>{totalItems} sản phẩm đang có trong giỏ</span>
+                      <span>{totalLineItems} mặt hàng đang có trong giỏ</span>
                       <Link
                         to="/parts-cart"
                         className="parts-shop-btn parts-shop-btn-ghost parts-shop-btn-inline part-product-cart-link"
@@ -323,20 +619,50 @@ export default function PartProductDetailPage() {
                         <button
                           type="button"
                           className="parts-shop-btn parts-shop-btn-ghost"
-                          onClick={() => setDraftQty((current) => Math.max(1, Number(current || 1) - 1))}
+                          onClick={() =>
+                            setDraftQty((current) =>
+                              availableQuantity > 0
+                                ? clampQuantityToAvailable(
+                                    Math.max(1, Number(current || 1) - 1),
+                                    availableQuantity,
+                                    1
+                                  )
+                                : 1
+                            )
+                          }
+                          disabled={isOutOfStock || isStockUnavailable}
                         >
                           -
                         </button>
                         <input
                           type="number"
                           min="1"
+                          max={Math.max(availableQuantity, 1)}
                           value={draftQty}
-                          onChange={(event) => setDraftQty(toPositiveInt(event.target.value, 1))}
+                          onChange={(event) =>
+                            setDraftQty(
+                              availableQuantity > 0
+                                ? clampQuantityToAvailable(
+                                    toPositiveInt(event.target.value, 1),
+                                    availableQuantity,
+                                    1
+                                  )
+                                : 1
+                            )
+                          }
+                          disabled={isOutOfStock || isStockUnavailable}
                         />
                         <button
                           type="button"
                           className="parts-shop-btn parts-shop-btn-ghost"
-                          onClick={() => setDraftQty((current) => Number(current || 1) + 1)}
+                          onClick={() =>
+                            setDraftQty((current) =>
+                              availableQuantity > 0
+                                ? clampQuantityToAvailable(Number(current || 1) + 1, availableQuantity, 1)
+                                : 1
+                            )
+                          }
+                          disabled={isOutOfStock || isStockUnavailable || draftQty >= availableQuantity}
                         >
                           +
                         </button>
@@ -346,9 +672,9 @@ export default function PartProductDetailPage() {
                         type="button"
                         className="parts-shop-btn parts-shop-btn-primary part-product-cart-button"
                         onClick={handleAddToCart}
-                        disabled={!isAvailable}
+                        disabled={!isAvailable || isOutOfStock || isStockUnavailable}
                       >
-                        Thêm vào giỏ
+                        {isStockUnavailable ? "Chưa rõ tồn kho" : isOutOfStock ? "Hết hàng" : "Thêm vào giỏ"}
                       </button>
                     </div>
                   </div>

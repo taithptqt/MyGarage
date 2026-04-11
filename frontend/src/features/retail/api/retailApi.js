@@ -1,4 +1,4 @@
-import { request } from "@app/apiClient";
+import { request, requestSafe } from "@app/apiClient";
 
 export async function getProducts() {
   return request({ url: "/api/products", method: "GET" });
@@ -6,6 +6,70 @@ export async function getProducts() {
 
 export async function getProductById(productId) {
   return request({ url: `/api/products/${productId}`, method: "GET" });
+}
+
+export async function getProductStockAvailability({ productIds, branchId } = {}) {
+  const normalizedProductIds = Array.isArray(productIds)
+    ? productIds
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    : [];
+
+  if (!normalizedProductIds.length) {
+    return [];
+  }
+
+  const params = {
+    productIds: normalizedProductIds.join(","),
+  };
+
+  if (branchId != null && branchId !== "") {
+    params.branchId = branchId;
+  }
+
+  return request({
+    url: "/api/products/stock-availability",
+    method: "GET",
+    params,
+  });
+}
+
+export async function getProductStockAvailabilitySafe({ productIds, branchId } = {}) {
+  const normalizedProductIds = Array.isArray(productIds)
+    ? productIds
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    : [];
+
+  if (!normalizedProductIds.length) {
+    return { ok: true, status: 200, data: [] };
+  }
+
+  const params = {
+    productIds: normalizedProductIds.join(","),
+  };
+
+  if (branchId != null && branchId !== "") {
+    params.branchId = branchId;
+  }
+
+  return requestSafe({
+    url: "/api/products/stock-availability",
+    method: "GET",
+    params,
+  });
+}
+
+export async function getProductRetailStockByBranches(productId) {
+  const id = Number(productId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return { productId: id, branches: [] };
+  }
+
+  return request({
+    url: `/api/products/${id}/retail-stock-by-branches`,
+    method: "GET",
+  });
 }
 
 export async function getCategories() {
