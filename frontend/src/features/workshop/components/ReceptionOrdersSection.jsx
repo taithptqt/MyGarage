@@ -334,7 +334,7 @@ export default function ReceptionOrdersSection() {
 
   const handleCompleteOrder = useCallback(async (order) => {
     if (!statusPermitUpdate(order.status)) {
-      alert("L?nh n?y d? k?t th?c ho?c d? h?y, kh?ng th? b?n giao.");
+      alert("Lệnh này đã kết thúc hoặc đã hủy, không thể bàn giao.");
       return;
     }
     if (!window.confirm(`Xác nhận bàn giao xe ${order.code} cho khách?`)) return;
@@ -919,4 +919,3 @@ function OrdersTableContent({
     </>
   );
 }
-

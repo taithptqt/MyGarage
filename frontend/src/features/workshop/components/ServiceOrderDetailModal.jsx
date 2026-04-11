@@ -504,10 +504,6 @@ export default function ServiceOrderDetailModal({
     return "";
   }, [canRecallDiagnosisRequest, hasDiagnosisReport, hasSignedCheckIn, isDiagnosisAssigned, isDiagnosisCompleted, isDiagnosisRequested, isOrderDiagnosing]);
 
-  const fallbackMainNote = String(parsedNotes.mainNotes || "").toLowerCase().includes("không có")
-    ? "Không có ghi chú gì"
-    : String(parsedNotes.mainNotes || "").trim();
-
   return (
     <>
       <Modal

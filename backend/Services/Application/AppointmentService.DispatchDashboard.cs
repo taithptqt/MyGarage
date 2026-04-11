@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -48,7 +49,7 @@ namespace MyGarage.Services
                     BayName = bay.Name,
                     BayType = bay.BayType,
                     ServiceArea = bay.ServiceArea ?? string.Empty,
-                    Status = slot == null ? nameof(DispatchBayLoadStatus.IDLE) : nameof(DispatchBayLoadStatus.BUSY),
+                    Status = slot == null ? "IDLE" : "BUSY",
                     IsOverflowFromQuick = isOverflow,
                     SlotType = slot?.SlotType,
                     CurrentCustomerId = slot?.CustomerId,

@@ -16,7 +16,7 @@ import {
 import "./MyAppointmentsPage.css";
 import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
 
-function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false, highlight = false }) {
+function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false }) {
   const status = STATUS_META[item.status] || { label: item.status || "Không rõ", tone: "default" };
   const canCancel =
     item.status === APPOINTMENT_STATUS.PENDING ||
@@ -24,10 +24,7 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false, h
   const displayCancelReason = formatAppointmentCancelReason(item.cancelReason);
 
   return (
-    <article
-      id={item?.id ? `appointment-card-${item.id}` : undefined}
-      className={`my-appt-card ${inGroup ? "my-appt-card-in-group" : ""} ${highlight ? "my-appt-card--focus" : ""}`}
-    >
+    <article className={`my-appt-card ${inGroup ? "my-appt-card-in-group" : ""}`}>
       <div className="my-appt-card-main">
         <div className="my-appt-card-head">
           <h3>{item.branchName || "Chi nhánh chưa xác định"}</h3>
@@ -114,70 +111,11 @@ export default function MyAppointmentsPage() {
   );
 
   const [activeTab, setActiveTab] = useState(() => resolveTabFromQuery(searchParams.get("tab")));
-  const [highlightAppointmentId, setHighlightAppointmentId] = useState(null);
 
   useEffect(() => {
     const nextTab = resolveTabFromQuery(searchParams.get("tab"));
     setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
   }, [searchParams]);
-
-  useEffect(() => {
-    const targetAppointmentId = Number(searchParams.get("appointmentId") || 0);
-    if (!Number.isFinite(targetAppointmentId) || targetAppointmentId <= 0 || loading) {
-      return;
-    }
-
-    const hasInStandalone = filteredAppointments.some((item) => Number(item.id) === targetAppointmentId);
-    const hasInGroup = GroupSessions.some((group) =>
-      Array.isArray(group.appointments) &&
-      group.appointments.some((item) => Number(item.id) === targetAppointmentId)
-    );
-
-    if (!hasInStandalone && !hasInGroup) {
-      if (filter || searchTerm.trim()) {
-        setFilter("");
-        setSearchTerm("");
-      }
-      return;
-    }
-
-    if (!hasInStandalone && hasInGroup && activeTab !== APPOINTMENTS_VIEW_TABS.GROUP) {
-      setActiveTab(APPOINTMENTS_VIEW_TABS.GROUP);
-      const nextParams = new URLSearchParams(searchParams);
-      nextParams.set("tab", APPOINTMENTS_VIEW_TABS.GROUP);
-      setSearchParams(nextParams, { replace: true });
-      return;
-    }
-
-    const targetElement = document.getElementById(`appointment-card-${targetAppointmentId}`);
-    if (!targetElement) {
-      return;
-    }
-
-    targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
-    setHighlightAppointmentId(targetAppointmentId);
-
-    const clearHighlightTimer = window.setTimeout(() => {
-      setHighlightAppointmentId((current) => (Number(current) === targetAppointmentId ? null : current));
-    }, 2800);
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("appointmentId");
-    setSearchParams(nextParams, { replace: true });
-
-    return () => window.clearTimeout(clearHighlightTimer);
-  }, [
-    activeTab,
-    GroupSessions,
-    filter,
-    filteredAppointments,
-    loading,
-    searchParams,
-    searchTerm,
-    setFilter,
-    setSearchParams,
-    setSearchTerm,
-  ]);
 
   const handleChangeTab = (nextTab) => {
     setActiveTab(nextTab);
@@ -338,7 +276,6 @@ export default function MyAppointmentsPage() {
                           cancelling={cancelling}
                           openCancelPopup={openCancelPopup}
                           inGroup
-                          highlight={Number(highlightAppointmentId) === Number(item.id)}
                         />
                       ))}
                     </div>
@@ -354,7 +291,6 @@ export default function MyAppointmentsPage() {
                   item={item}
                   cancelling={cancelling}
                   openCancelPopup={openCancelPopup}
-                  highlight={Number(highlightAppointmentId) === Number(item.id)}
                 />
               ))}
             </section>

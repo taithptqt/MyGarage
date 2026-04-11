@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MyGarage.Constants;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services

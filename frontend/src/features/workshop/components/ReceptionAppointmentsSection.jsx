@@ -146,7 +146,7 @@ function GroupBlock({
       >
         <div>
           <h4 style={{ margin: 0, color: "#17325b" }}>{group.groupCode || `BG-${group.id}`}</h4>
-          <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 600, color: "#5b6f8c" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#5b6f8c" }}>
             {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.appointments.length} lịch
           </p>
         </div>

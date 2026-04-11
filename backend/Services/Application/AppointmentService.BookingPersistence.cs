@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services

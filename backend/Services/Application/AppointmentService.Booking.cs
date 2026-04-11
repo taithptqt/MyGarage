@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -44,12 +45,12 @@ namespace MyGarage.Services
                 var minLeadMinutes = Math.Max(15, slotStepMinutes);
                 if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
                 {
-                    fixedLeadViolations.Add($"{ResolveBookingItemLabel(item)} (c?n c�ch hi?n t?i �t nh?t {minLeadMinutes} ph�t)");
+                    fixedLeadViolations.Add($"{ResolveBookingItemLabel(item)} (cần cách hiện tại ít nhất {minLeadMinutes} phút)");
                 }
             }
 
             if (fixedLeadViolations.Count > 0)
-                throw new InvalidOperationException("C�c xe chua d�p ?ng di?u ki?n gi? c? d?nh: " + string.Join("; ", fixedLeadViolations));
+                throw new InvalidOperationException("Các xe chưa đáp ứng điều kiện giờ cố định: " + string.Join("; ", fixedLeadViolations));
 
             using var tx = await _context.Database.BeginTransactionAsync();
             try
@@ -107,7 +108,7 @@ namespace MyGarage.Services
                 return $"Xe ID {dto.VehicleId.Value}";
             if (!string.IsNullOrWhiteSpace(dto.Vin))
                 return $"Xe VIN {dto.Vin.Trim()}";
-            return "Xe chua r� bi?n s?";
+            return "Xe chưa rõ biển số";
         }
 
     }
