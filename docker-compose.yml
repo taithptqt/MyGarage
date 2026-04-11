@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mygarage-app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: mygarage-app
+    image: mygarage-app:prod
+    restart: unless-stopped
+    ports:
+      # Chuyển cổng 80 của VPS (Mặc định lướt web) vào cổng 8080 của Docker (vừa cài ở Dockerfile)
+      - "80:8080" 
+    env_file:
+      - .env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+      # Dưới đây là cách ánh xạ đè các cấu hình nhạy cảm từ biến môi trường của hệ thống
+      - Jwt__Key=${VITE_JWT_KEY_PROD:-SuperSecretKeyForMyGarageBackend दैटIsLongEnoughToWork}
+      - ConnectionStrings__GarageDbConnection=${DB_CONNECTION_STRING}
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION_STRING}
+      - EmailSettings__Password=${EMAIL_SMTP_PASSWORD}
+      - LlmGateway__Providers__GEMINI_OPENAI__DefaultApiKey=${GEMINI_API_KEY}
+      - GoogleAuth__ClientId=${VITE_GOOGLE_CLIENT_ID}
+      # PayOS
+      - PayOS__ApiKey=${PAYOS_API_KEY}
+      - PayOS__ClientId=${PAYOS_CLIENT_ID}
+      - PayOS__ChecksumKey=${PAYOS_CHECKSUM_KEY}
+      - PayOS__PayoutApiKey=${PAYOS_PAYOUT_API_KEY}
+      - PayOS__PayoutClientId=${PAYOS_PAYOUT_CLIENT_ID}
+      - PayOS__PayoutChecksumKey=${PAYOS_PAYOUT_CHECKSUM_KEY}

@@ -12,6 +12,9 @@ using PayOS;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using MyGarage.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,6 +105,17 @@ builder.Services.AddScoped<IBookingGroupStatusPolicy, BookingGroupStatusPolicy>(
 builder.Services.AddScoped<IBookingGroupService, BookingGroupService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
 
+builder.Services.AddSingleton<IValidateOptions<CustomerAutomationJobsOptions>, CustomerAutomationJobsOptionsValidator>();
+builder.Services.AddOptions<CustomerAutomationJobsOptions>()
+    .Bind(builder.Configuration.GetSection(CustomerAutomationJobsOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<LlmGatewayOptions>, LlmGatewayOptionsValidator>();
+builder.Services.AddOptions<LlmGatewayOptions>()
+    .Bind(builder.Configuration.GetSection(LlmGatewayOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddScoped<ICustomerAutomationJobProcessor, CustomerAutomationJobProcessor>();
+builder.Services.AddHostedService<CustomerAutomationJobsBackgroundService>();
+
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
 
@@ -121,32 +135,17 @@ builder.Services.AddScoped<IInventoryAdminService, InventoryAdminService>();
 builder.Services.AddScoped<IStaffScheduleRepository, StaffScheduleRepository>();
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();
 
-builder.Services.AddScoped<IAiContentStoreRepository, AiContentStoreRepository>();
-builder.Services.AddScoped<IAiContentStoreService, AiContentStoreService>();
-
-builder.Services.AddScoped<IAiCustomerInsightRepository, AiCustomerInsightRepository>();
-builder.Services.AddScoped<IAiCustomerInsightService, AiCustomerInsightService>();
-
 builder.Services.AddScoped<IAiForecastRepository, AiForecastRepository>();
 builder.Services.AddScoped<IAiForecastService, AiForecastService>();
 
-builder.Services.AddScoped<IAiFraudMonitorRepository, AiFraudMonitorRepository>();
-builder.Services.AddScoped<IAiFraudMonitorService, AiFraudMonitorService>();
-
 builder.Services.AddScoped<IAiKnowledgeBaseRepository, AiKnowledgeBaseRepository>();
 builder.Services.AddScoped<IAiKnowledgeBaseService, AiKnowledgeBaseService>();
-
-builder.Services.AddScoped<IAiLearningFeedbackRepository, AiLearningFeedbackRepository>();
-builder.Services.AddScoped<IAiLearningFeedbackService, AiLearningFeedbackService>();
 
 builder.Services.AddScoped<IAiModelConfigRepository, AiModelConfigRepository>();
 builder.Services.AddScoped<IAiModelConfigService, AiModelConfigService>();
 
 builder.Services.AddScoped<IAiSmartDispatchingRepository, AiSmartDispatchingRepository>();
 builder.Services.AddScoped<IAiSmartDispatchingService, AiSmartDispatchingService>();
-
-builder.Services.AddScoped<IAiTechnicalAssistantRepository, AiTechnicalAssistantRepository>();
-builder.Services.AddScoped<IAiTechnicalAssistantService, AiTechnicalAssistantService>();
 
 builder.Services.AddScoped<IApprovalRequestRepository, ApprovalRequestRepository>();
 builder.Services.AddScoped<IApprovalRequestService, ApprovalRequestService>();
@@ -178,6 +177,31 @@ builder.Services.AddScoped<ICommissionTransactionService, CommissionTransactionS
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IChatV2Service, ChatV2Service>();
+builder.Services.AddScoped<IChatbotToolAllowlist, ChatbotToolAllowlist>();
+builder.Services.AddScoped<IChatbotRequestValidator, ChatbotRequestValidator>();
+builder.Services.AddSingleton<IChatbotRateLimitHook, InMemoryChatbotRateLimitHook>();
+builder.Services.AddScoped<IChatbotPricingInventoryGuard, ChatbotPricingInventoryGuard>();
+builder.Services.AddScoped<IChatbotService, ChatbotService>();
+builder.Services.AddScoped<IChatbotImageUploadService, ChatbotImageUploadService>();
+builder.Services.AddScoped<IIntentDetector, IntentDetector>();
+builder.Services.AddScoped<IGuardrailValidator, GuardrailValidator>();
+builder.Services.AddScoped<IVisionAnalyzer, HeuristicVisionAnalyzer>();
+builder.Services.AddScoped<IFileSecurityScanner, NoOpFileSecurityScanner>();
+builder.Services.AddScoped<IChatbotBookingWorkflowService, ChatbotBookingWorkflowService>();
+builder.Services.AddScoped<IChatbotHandoffService, ChatbotHandoffService>();
+builder.Services.AddScoped<IChatbotVoucherResolverService, ChatbotVoucherResolverService>();
+builder.Services.AddScoped<IChatbotLoyaltyStatusLookupService, ChatbotLoyaltyStatusLookupService>();
+builder.Services.AddScoped<IChatbotVoucherStatusLookupService, ChatbotVoucherStatusLookupService>();
+builder.Services.AddScoped<IChatbotRetrievalService, ChatbotRetrievalService>();
+builder.Services.AddScoped<IChatbotAnswerComposer, ChatbotAnswerComposer>();
+builder.Services.AddScoped<IPromptBuilder, PromptBuilder>();
+builder.Services.AddSingleton<IChatbotLlmPromptBuilder, ChatbotLlmPromptBuilder>();
+builder.Services.AddSingleton<IChatbotLlmResponseNormalizer, ChatbotLlmResponseNormalizer>();
+builder.Services.AddScoped<IChatbotToolDefinitionRegistry, ChatbotToolDefinitionRegistry>();
+builder.Services.AddScoped<IChatbotLlmGateway, ChatbotLlmGateway>();
+builder.Services.AddSingleton<IChatbotLlmProviderClient, OpenAiCompatibleChatbotLlmProviderClient>();
+builder.Services.AddScoped<IFunctionCallingRouter, SecureFunctionCallingRouter>();
+builder.Services.AddScoped<IChatbotOrchestrator, ChatbotOrchestrator>();
 
 builder.Services.AddScoped<ICustomerFeedbackRepository, CustomerFeedbackRepository>();
 builder.Services.AddScoped<ICustomerFeedbackService, CustomerFeedbackService>();
@@ -335,6 +359,9 @@ builder.Services.AddScoped<IWorkSlotService, WorkSlotService>();
 // Authentication & JWT Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAuthCredentialRecoveryValidator, AuthCredentialRecoveryValidator>();
+builder.Services.AddScoped<IAuthSecurityStampValidator, AuthSecurityStampValidator>();
+builder.Services.AddSingleton<IAuthRateLimitHook, InMemoryAuthRateLimitHook>();
 builder.Services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 builder.Services.AddHttpClient();
 
@@ -374,6 +401,22 @@ builder.Services.AddAuthentication(options =>
             }
 
             return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            if (context.Principal == null)
+            {
+                context.Fail("Invalid session.");
+                return;
+            }
+
+            using var scope = context.HttpContext.RequestServices.CreateScope();
+            var validator = scope.ServiceProvider.GetRequiredService<IAuthSecurityStampValidator>();
+            var isValid = await validator.ValidateAsync(context.Principal, context.HttpContext.RequestAborted);
+            if (!isValid)
+            {
+                context.Fail("Session is no longer valid.");
+            }
         }
     };
 });
@@ -538,3 +581,5 @@ static string ResolveFrontendDistPath(string contentRootPath)
 
     return Path.Combine(contentRootPath, "frontend", "dist");
 }
+
+public partial class Program;

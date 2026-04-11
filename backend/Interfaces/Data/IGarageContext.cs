@@ -9,15 +9,10 @@ namespace MyGarage.Interfaces
 {
     public interface IGarageContext
     {
-        DbSet<AiContentStore> AiContentStores { get; }
-        DbSet<AiCustomerInsight> AiCustomerInsights { get; }
         DbSet<AiForecast> AiForecasts { get; }
-        DbSet<AiFraudMonitor> AiFraudMonitors { get; }
         DbSet<AiKnowledgeBase> AiKnowledgeBases { get; }
-        DbSet<AiLearningFeedback> AiLearningFeedbacks { get; }
         DbSet<AiModelConfig> AiModelConfigs { get; }
         DbSet<AiSmartDispatching> AiSmartDispatchings { get; }
-        DbSet<AiTechnicalAssistant> AiTechnicalAssistants { get; }
         DbSet<Appointment> Appointments { get; }
         DbSet<BookingGroup> BookingGroups { get; }
         DbSet<ApprovalRequest> ApprovalRequests { get; }
@@ -29,6 +24,9 @@ namespace MyGarage.Interfaces
         DbSet<Category> Categories { get; }
         DbSet<ChatMessage> ChatMessages { get; }
         DbSet<ChatMessageAttachment> ChatMessageAttachments { get; }
+        DbSet<ChatbotSession> ChatbotSessions { get; }
+        DbSet<ChatbotMessage> ChatbotMessages { get; }
+        DbSet<ChatbotActionLog> ChatbotActionLogs { get; }
         DbSet<ConversationCustomerRead> ConversationCustomerReads { get; }
         DbSet<ConversationStaffRead> ConversationStaffReads { get; }
         DbSet<CommissionRule> CommissionRules { get; }
@@ -58,6 +56,7 @@ namespace MyGarage.Interfaces
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Payment> Payments { get; }
         DbSet<PaymentMethod> PaymentMethods { get; }
+        DbSet<PasswordResetToken> PasswordResetTokens { get; }
         DbSet<Product> Products { get; }
         DbSet<ProductImage> ProductImages { get; }
         DbSet<PurchaseOrder> PurchaseOrders { get; }

@@ -47,6 +47,7 @@ function AuthPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [flashMessage, setFlashMessage] = useState("");
   const [result, setResult] = useState(null);
   const [pendingGoogleToken, setPendingGoogleToken] = useState("");
   const [needGooglePhone, setNeedGooglePhone] = useState(false);
@@ -62,6 +63,17 @@ function AuthPage() {
   useEffect(() => {
     document.title = mode === "login" ? "Đăng nhập | MyGarage" : "Đăng ký | MyGarage";
   }, [mode]);
+
+  useEffect(() => {
+    const incomingFlash = location?.state?.flashMessage;
+    if (!incomingFlash) return;
+
+    setFlashMessage(String(incomingFlash));
+    const timer = setTimeout(() => setFlashMessage(""), 3000);
+    navigate(location.pathname, { replace: true, state: null });
+
+    return () => clearTimeout(timer);
+  }, [location, navigate]);
 
   useEffect(() => {
     if (navigator?.permissions) {
@@ -263,6 +275,7 @@ function AuthPage() {
 
   return (
     <main className="page">
+      {flashMessage ? <div className="auth-toast-success">{flashMessage}</div> : null}
       <div className="auth-scene" aria-hidden="true">
         <div className="auth-floating-tag auth-floating-tag--left">
           <span>15.000+</span>

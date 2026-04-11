@@ -9,7 +9,7 @@ public partial class Staff
 
     public string FullName { get; set; } = null!;
 
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
 
     public string? Email { get; set; }
 
@@ -60,10 +60,6 @@ public partial class Staff
     public long? DeletedBy { get; set; }
 
     public virtual ICollection<AccountingPeriod> AccountingPeriods { get; set; } = new List<AccountingPeriod>();
-
-    public virtual ICollection<AiContentStore> AiContentStores { get; set; } = new List<AiContentStore>();
-
-    public virtual ICollection<AiTechnicalAssistant> AiTechnicalAssistants { get; set; } = new List<AiTechnicalAssistant>();
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public virtual ICollection<Appointment> AppointmentUpdatedByNavigations { get; set; } = new List<Appointment>();

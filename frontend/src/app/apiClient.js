@@ -41,6 +41,19 @@ function extractErrorMessage(error) {
   return "Request failed.";
 }
 
+function isPublicAuthRequestUrl(requestUrl) {
+  const normalizedUrl = String(requestUrl || "").toLowerCase();
+  return [
+    "/api/auth/sessions",
+    "/api/auth/accounts",
+    "/api/auth/external-sessions/google",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/credential-recovery-requests",
+    "/api/auth/credential-recovery-finalizations",
+  ].some((route) => normalizedUrl.includes(route));
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL || undefined,
   headers: {
@@ -66,11 +79,10 @@ apiClient.interceptors.response.use(
       
       if (typeof window !== "undefined") {
         const isLoginPage = window.location.pathname === "/login";
-        const requestUrl = String(error.config?.url || "").toLowerCase();
-    const isLoginRequest = requestUrl.includes("/api/auth/sessions");
+        const isPublicAuthRequest = isPublicAuthRequestUrl(error.config?.url);
         
         // Only redirect if NOT on login page AND NOT a login request
-        if (!isLoginPage && !isLoginRequest) {
+        if (!isLoginPage && !isPublicAuthRequest) {
           window.location.href = "/login";
         }
       }

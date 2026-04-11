@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const { ok, data } = await authApi.login(credentials);
-    if (!ok) throw new Error(data?.message || "Đểng nhập thất bại.");
+    if (!ok) throw new Error(data?.message || "Đăng nhập thất bại.");
 
     const userData = mapAuthUserPayload(data);
     ensureAuthorizedRole(userData);
@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (payload) => {
     const { ok, data } = await authApi.register(payload);
-    if (!ok) throw new Error(data?.message || "Đểng ký thất bại.");
+    if (!ok) throw new Error(data?.message || "Đăng ký thất bại.");
 
     const userData = mapAuthUserPayload(data);
     ensureAuthorizedRole(userData);
@@ -93,7 +93,7 @@ export const AuthProvider = ({ children }) => {
 
   const googleLogin = async (payload) => {
     const { ok, data } = await authApi.googleLogin(payload);
-    if (!ok) throw new Error(data?.message || "Đểng nhập Google thất bại.");
+    if (!ok) throw new Error(data?.message || "Đăng nhập Google thất bại.");
 
     const userData = mapAuthUserPayload(data);
     ensureAuthorizedRole(userData);

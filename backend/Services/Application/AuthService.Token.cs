@@ -18,6 +18,7 @@ namespace MyGarage.Services
             string avatarUrl,
             string role,
             string roleCode,
+            string securityStamp,
             string roleName,
             long? branchId = null,
             string branchName = "")
@@ -34,7 +35,8 @@ namespace MyGarage.Services
                 new Claim(ClaimTypes.Email, email),
                 new Claim(ClaimTypes.Role, role),
                 new Claim("role_code", roleCode ?? string.Empty),
-                new Claim("role_name", roleName ?? string.Empty)
+                new Claim("role_name", roleName ?? string.Empty),
+                new Claim("security_stamp", securityStamp ?? string.Empty)
             };
             if (branchId.HasValue)
             {

@@ -34,6 +34,14 @@ namespace MyGarage.Services
             if (staff != null)
             {
                 ValidateStaffAccountForLogin(staff);
+                var staffSecurityStamp = GetOrCreateSecurityStamp(staff.SecurityStamp);
+                if (!string.Equals(staff.SecurityStamp, staffSecurityStamp, StringComparison.Ordinal))
+                {
+                    staff.SecurityStamp = staffSecurityStamp;
+                    _context.Staffs.Update(staff);
+                    await _context.SaveChangesAsync();
+                }
+
                 var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
                 var staffBranchName = await GetBranchNameAsync(staff.BranchId);
                 return GenerateToken(
@@ -44,6 +52,7 @@ namespace MyGarage.Services
                     staff.AvatarUrl ?? "",
                     "Staff",
                     roleCode,
+                    staffSecurityStamp,
                     roleName,
                     staff.BranchId,
                     staffBranchName);
@@ -58,8 +67,9 @@ namespace MyGarage.Services
                     FullName = payload.Name ?? "",
                     Phone = "",
                     PasswordHash = "",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
+                    SecurityStamp = CreateSecurityStamp(),
+                    CreatedAt = _clock.UtcNow,
+                    UpdatedAt = _clock.UtcNow,
                     IsActive = true,
                     IsDeleted = false
                 };
@@ -72,6 +82,7 @@ namespace MyGarage.Services
             var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
             var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
             AssignPreferredBranchToCustomer(customer, nearestBranchId);
+            customer.SecurityStamp = GetOrCreateSecurityStamp(customer.SecurityStamp);
             _context.Customers.Update(customer);
             await _context.SaveChangesAsync();
             return GenerateToken(
@@ -82,6 +93,7 @@ namespace MyGarage.Services
                 "",
                 "Customer",
                 "CUSTOMER",
+                customer.SecurityStamp ?? string.Empty,
                 "Customer",
                 nearestBranchId,
                 nearestBranchName);

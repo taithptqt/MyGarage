@@ -29,8 +29,6 @@ public partial class Diagnosis
 
     public long? UpdatedBy { get; set; }
 
-    public virtual ICollection<AiTechnicalAssistant> AiTechnicalAssistants { get; set; } = new List<AiTechnicalAssistant>();
-
     public virtual Staff? ApprovedByForeman { get; set; }
 
     public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendations { get; set; } = new List<DiagnoseRecommendation>();

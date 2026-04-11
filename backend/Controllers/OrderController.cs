@@ -67,7 +67,14 @@ public class OrderController(
         return false;
     }
 
-    private async Task UpdateRetailOrderStatusDirectlyAsync(long retailOrderId, bool isPaid)
+    private async Task UpdateRetailOrderStatusDirectlyAsync(
+        long retailOrderId,
+        bool isPaid,
+        decimal amountPaid = 0,
+        string transactionCode = "",
+        DateTimeOffset? transactionTime = null,
+        string? fallbackEmail = null,
+        string? fallbackFullName = null)
     {
         var retailOrder = await _db.RetailOrders.FirstOrDefaultAsync(x => x.Id == retailOrderId);
         if (retailOrder is null)
@@ -78,6 +85,18 @@ public class OrderController(
         retailOrder.Status = isPaid ? nameof(RetailOrderStatus.CONFIRMED) : nameof(RetailOrderStatus.DRAFT);
         retailOrder.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        if (isPaid)
+        {
+            await _paymentConfirmationService.SendRetailOrderSuccessEmailAsync(
+                retailOrderId,
+                amountPaid,
+                transactionCode,
+                "COMPLETED",
+                transactionTime ?? DateTimeOffset.Now,
+                fallbackEmail,
+                fallbackFullName);
+        }
     }
 
     private static string NormalizePaymentType(string? paymentType)
@@ -249,7 +268,15 @@ public class OrderController(
             }
             else if (order.RetailOrderId.HasValue)
             {
-                await UpdateRetailOrderStatusDirectlyAsync(order.RetailOrderId.Value, order.AmountRemaining <= 0);
+                var amtPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
+                await UpdateRetailOrderStatusDirectlyAsync(
+                    order.RetailOrderId.Value,
+                    order.AmountRemaining <= 0,
+                    amtPaid,
+                    order.PaymentLinkId ?? "",
+                    DateTimeOffset.Now,
+                    order.BuyerEmail,
+                    order.BuyerName);
             }
 
             return Ok(order);

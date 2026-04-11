@@ -1,5 +1,7 @@
 ﻿import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "@features/auth/pages/AuthPage";
+import ForgotPasswordPage from "@features/auth/recovery/ForgotPasswordPage";
+import ResetPasswordPage from "@features/auth/recovery/ResetPasswordPage";
 import HomePage from "@features/home/pages/HomePage";
 import AdminPage from "@features/admin/pages/AdminPage";
 import DispatchCenterPage from "@features/admin/pages/DispatchCenterPage";
@@ -36,6 +38,7 @@ import PartProductDetailPage from "@features/retail/pages/PartProductDetailPage"
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
+import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
 import AccountingMain from "@horizon/AccountingMain";
 
 function CustomerRoute({ children }) {
@@ -61,6 +64,10 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/login" element={<AuthPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
+        <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
         <Route path="/home" element={<HomePage />} />
         
         {/* Customer Appointment Routes */}
@@ -214,6 +221,7 @@ function App() {
         <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
+      <CustomerChatbotWidget />
       <CustomerMessengerWidget />
     </BranchProvider>
   );

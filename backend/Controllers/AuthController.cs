@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -75,19 +76,32 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost("credential-recovery-requests")]
+        [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
         {
-            await _authService.ForgotPasswordAsync(request);
-            return Ok(new { Message = "If that email is registered, a password reset link has been sent." });
+            try
+            {
+                await _authService.ForgotPasswordAsync(request);
+                return Ok(new { Message = "Đã gửi liên kết thành công" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("credential-recovery-finalizations")]
+        [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
         {
             try
             {
                 await _authService.ResetPasswordAsync(request);
                 return Ok(new { Message = "Password has been successfully reset." });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (UnauthorizedAccessException ex)
             {

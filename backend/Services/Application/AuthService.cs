@@ -13,7 +13,6 @@ using Microsoft.IdentityModel.Tokens;
 using MyGarage.Data;
 using MyGarage.DTOs.Requests.Auth;
 using MyGarage.DTOs.Responses.Auth;
-using MyGarage.Models;
 using MyGarage.Interfaces;
 
 namespace MyGarage.Services
@@ -23,15 +22,24 @@ namespace MyGarage.Services
         private readonly IGarageContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly ISystemClock _clock;
+        private readonly IAuthCredentialRecoveryValidator _credentialRecoveryValidator;
+        private readonly IAuthRateLimitHook _authRateLimitHook;
 
         public AuthService(
             IGarageContext context,
             IConfiguration configuration,
-            IEmailService emailService)
+            IEmailService emailService,
+            ISystemClock clock,
+            IAuthCredentialRecoveryValidator credentialRecoveryValidator,
+            IAuthRateLimitHook authRateLimitHook)
         {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
+            _clock = clock;
+            _credentialRecoveryValidator = credentialRecoveryValidator;
+            _authRateLimitHook = authRateLimitHook;
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
@@ -56,10 +64,15 @@ namespace MyGarage.Services
                 var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng);
                 var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
                 AssignPreferredBranchToCustomer(customer, nearestBranchId);
+                var customerSecurityStamp = GetOrCreateSecurityStamp(customer.SecurityStamp);
 
-                if (customerNeedsRehash)
+                if (customerNeedsRehash || !string.Equals(customer.SecurityStamp, customerSecurityStamp, StringComparison.Ordinal))
                 {
-                    customer.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                    customer.SecurityStamp = customerSecurityStamp;
+                    if (customerNeedsRehash)
+                    {
+                        customer.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                    }
                 }
 
                 _context.Customers.Update(customer);
@@ -73,6 +86,7 @@ namespace MyGarage.Services
                     "",
                     "Customer",
                     "CUSTOMER",
+                    customerSecurityStamp,
                     "Customer",
                     nearestBranchId,
                     nearestBranchName);
@@ -87,10 +101,16 @@ namespace MyGarage.Services
             }
 
             ValidateStaffAccountForLogin(staff);
+            var staffSecurityStamp = GetOrCreateSecurityStamp(staff.SecurityStamp);
 
-            if (staffNeedsRehash)
+            if (staffNeedsRehash || !string.Equals(staff.SecurityStamp, staffSecurityStamp, StringComparison.Ordinal))
             {
-                staff.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                staff.SecurityStamp = staffSecurityStamp;
+                if (staffNeedsRehash)
+                {
+                    staff.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+                }
+
                 _context.Staffs.Update(staff);
                 await _context.SaveChangesAsync();
             }
@@ -105,6 +125,7 @@ namespace MyGarage.Services
                 staff.AvatarUrl ?? "",
                 "Staff",
                 roleCode,
+                staffSecurityStamp,
                 roleName,
                 staff.BranchId,
                 staffBranchName);

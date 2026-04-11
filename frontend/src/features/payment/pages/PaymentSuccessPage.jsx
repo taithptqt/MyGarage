@@ -72,13 +72,19 @@ export default function PaymentSuccessPage() {
   async function checkStatus() {
     let orderBasedStatus = null;
 
+    // Bước 1: Sync order với PayOS → trigger ApplyOutcomeAsync bên backend → gửi email
     if (orderId) {
-      const orderResult = await syncOrder(orderId);
-      if (orderResult.ok) {
-        orderBasedStatus = normalizeOrderStatus(orderResult.data);
+      try {
+        const orderResult = await syncOrder(orderId);
+        if (orderResult.ok) {
+          orderBasedStatus = normalizeOrderStatus(orderResult.data);
+        }
+      } catch {
+        // ignore, fallback to paymentId check
       }
     }
 
+    // Nếu đã xác định được status từ order và không có paymentId (retail không có payment record)
     if (!paymentId) {
       const current = orderBasedStatus || "UNKNOWN";
       setStatus(current);
@@ -91,24 +97,33 @@ export default function PaymentSuccessPage() {
       return current;
     }
 
-    const result = await getPaymentStatus(paymentId);
-    if (!result.ok) {
+    // Bước 2: Kiểm tra trạng thái payment record
+    try {
+      const result = await getPaymentStatus(paymentId);
+      if (!result.ok) {
+        const fallbackStatus = orderBasedStatus || "UNKNOWN";
+        setStatus(fallbackStatus);
+        setMessage(
+          orderBasedStatus
+            ? getMessageByStatus(fallbackStatus, isRetailCheckout)
+            : (result.data?.message || "Khong lay duoc trang thai thanh toan.")
+        );
+        setLoading(false);
+        return fallbackStatus;
+      }
+
+      const current = String(result.data?.status || orderBasedStatus || "PENDING").toUpperCase();
+      setStatus(current);
+      setMessage(getMessageByStatus(current, isRetailCheckout));
+      setLoading(false);
+      return current;
+    } catch {
       const fallbackStatus = orderBasedStatus || "UNKNOWN";
       setStatus(fallbackStatus);
-      setMessage(
-        orderBasedStatus
-          ? getMessageByStatus(fallbackStatus, isRetailCheckout)
-          : (result.data?.message || "Khong lay duoc trang thai thanh toan.")
-      );
+      setMessage(getMessageByStatus(fallbackStatus, isRetailCheckout));
       setLoading(false);
       return fallbackStatus;
     }
-
-    const current = String(result.data?.status || orderBasedStatus || "PENDING").toUpperCase();
-    setStatus(current);
-    setMessage(getMessageByStatus(current, isRetailCheckout));
-    setLoading(false);
-    return current;
   }
 
   useEffect(() => {

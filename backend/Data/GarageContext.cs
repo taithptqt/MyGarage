@@ -18,23 +18,13 @@ public partial class GarageContext : DbContext, IGarageContext
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public virtual DbSet<AiContentStore> AiContentStores { get; set; }
-
-    public virtual DbSet<AiCustomerInsight> AiCustomerInsights { get; set; }
-
     public virtual DbSet<AiForecast> AiForecasts { get; set; }
 
-    public virtual DbSet<AiFraudMonitor> AiFraudMonitors { get; set; }
-
     public virtual DbSet<AiKnowledgeBase> AiKnowledgeBases { get; set; }
-
-    public virtual DbSet<AiLearningFeedback> AiLearningFeedbacks { get; set; }
 
     public virtual DbSet<AiModelConfig> AiModelConfigs { get; set; }
 
     public virtual DbSet<AiSmartDispatching> AiSmartDispatchings { get; set; }
-
-    public virtual DbSet<AiTechnicalAssistant> AiTechnicalAssistants { get; set; }
 
     public virtual DbSet<Appointment> Appointments { get; set; }
 
@@ -57,6 +47,12 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<ChatMessage> ChatMessages { get; set; }
 
     public virtual DbSet<ChatMessageAttachment> ChatMessageAttachments { get; set; }
+
+    public virtual DbSet<ChatbotSession> ChatbotSessions { get; set; }
+
+    public virtual DbSet<ChatbotMessage> ChatbotMessages { get; set; }
+
+    public virtual DbSet<ChatbotActionLog> ChatbotActionLogs { get; set; }
 
     public virtual DbSet<ConversationCustomerRead> ConversationCustomerReads { get; set; }
 
@@ -115,6 +111,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<Payment> Payments { get; set; }
 
     public virtual DbSet<PaymentMethod> PaymentMethods { get; set; }
+
+    public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<Product> Products { get; set; }
 
@@ -202,40 +200,6 @@ public partial class GarageContext : DbContext, IGarageContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<AiContentStore>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AI_Conte__3214EC07E69C6280");
-
-            entity.ToTable("AI_ContentStore");
-
-            entity.Property(e => e.ContextType)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-
-            entity.HasOne(d => d.Staff).WithMany(p => p.AiContentStores)
-                .HasForeignKey(d => d.StaffId)
-                .HasConstraintName("FK__AI_Conten__Staff__15702A09");
-        });
-
-        modelBuilder.Entity<AiCustomerInsight>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AI_Custo__3214EC07001F4BCB");
-
-            entity.ToTable("AI_CustomerInsights");
-
-            entity.Property(e => e.BuyingPropensity).HasColumnType("decimal(5, 2)");
-            entity.Property(e => e.ChurnRisk).HasColumnType("decimal(5, 2)");
-            entity.Property(e => e.Segment)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
-
-            entity.HasOne(d => d.Customer).WithMany(p => p.AiCustomerInsights)
-                .HasForeignKey(d => d.CustomerId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AI_Custom__Custo__16644E42");
-        });
-
         modelBuilder.Entity<AiForecast>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__AI_Forec__3214EC07A43540EC");
@@ -254,25 +218,6 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__AI_Foreca__Vehic__1758727B");
         });
 
-        modelBuilder.Entity<AiFraudMonitor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AI_Fraud__3214EC0761F06F3E");
-
-            entity.ToTable("AI_FraudMonitors");
-
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.EntityType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.RiskLevel)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Status)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasDefaultValue("FLAGGED");
-        });
-
         modelBuilder.Entity<AiKnowledgeBase>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__AI_Knowl__3214EC0754A71E47");
@@ -285,20 +230,6 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.Topic).HasMaxLength(255);
-        });
-
-        modelBuilder.Entity<AiLearningFeedback>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AI_Learn__3214EC076C65EAD2");
-
-            entity.ToTable("AI_LearningFeedback");
-
-            entity.Property(e => e.AiFeature)
-                .HasMaxLength(100)
-                .IsUnicode(false)
-                .HasColumnName("AI_Feature");
-            entity.Property(e => e.AiOutput).HasColumnName("AI_Output");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
         });
 
         modelBuilder.Entity<AiModelConfig>(entity =>
@@ -337,24 +268,6 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.BranchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__AI_SmartD__Branc__184C96B4");
-        });
-
-        modelBuilder.Entity<AiTechnicalAssistant>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AI_Techn__3214EC075DCBC30D");
-
-            entity.ToTable("AI_TechnicalAssistant");
-
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
-
-            entity.HasOne(d => d.Mechanic).WithMany(p => p.AiTechnicalAssistants)
-                .HasForeignKey(d => d.MechanicId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK__AI_Techni__Mecha__1940BAED");
-
-            entity.HasOne(d => d.RelatedDiagnose).WithMany(p => p.AiTechnicalAssistants)
-                .HasForeignKey(d => d.RelatedDiagnoseId)
-                .HasConstraintName("FK__AI_Techni__Relat__1A34DF26");
         });
 
         modelBuilder.Entity<Appointment>(entity =>
