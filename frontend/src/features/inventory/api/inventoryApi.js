@@ -14,10 +14,19 @@ export const inventoryApi = {
     const formData = new FormData();
     formData.append("file", file);
     return request({
-      url: `/api/admin/parts/${productId}/image`,
+      url: `/api/admin/products/${productId}/image`,
       method: "POST",
       data: formData,
-      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  appendProductGalleryImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/products/${productId}/gallery-image`,
+      method: "POST",
+      data: formData,
     });
   },
 
@@ -36,7 +45,7 @@ export const inventoryApi = {
   getInventories: () => request({ url: "/api/inventories", method: "GET" }),
   updateInventory: (id, data) => request({ url: `/api/inventories/${id}`, method: "PUT", data }),
 
-  getProductImages: () => request({ url: "/api/product-images", method: "GET" }),
+  getProductImages: (params = {}) => request({ url: "/api/product-images", method: "GET", params }),
   createProductImage: (data) => request({ url: "/api/product-images", method: "POST", data }),
   deleteProductImage: (id) => request({ url: `/api/product-images/${id}`, method: "DELETE" }),
 

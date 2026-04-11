@@ -53,6 +53,14 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // FormData cần boundary tự sinh; header json mặc định làm ASP.NET không bind IFormFile → 400
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (config.headers && typeof config.headers.delete === "function") {
+      config.headers.delete("Content-Type");
+    } else {
+      delete config.headers["Content-Type"];
+    }
+  }
   return config;
 });
 

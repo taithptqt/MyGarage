@@ -340,6 +340,11 @@ export default function InventoryAdminPage({ section }) {
   const [editingProduct, setEditingProduct] = useState(null);
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [productMainImageFile, setProductMainImageFile] = useState(null);
+  const [productMainImagePreview, setProductMainImagePreview] = useState("");
+  const [editProductImages, setEditProductImages] = useState([]);
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const [productThumbById, setProductThumbById] = useState({});
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoryModalMode, setCategoryModalMode] = useState("create");
   const [editingCategory, setEditingCategory] = useState(null);
@@ -379,13 +384,14 @@ export default function InventoryAdminPage({ section }) {
       }
 
       if (isCatalogSection) {
-        const [prods, cats, sups, cfg, structure, branchData] = await Promise.all([
+        const [prods, cats, sups, cfg, structure, branchData, allProductImages] = await Promise.all([
           inventoryApi.getProducts(),
           inventoryApi.getPartCategories(),
           inventoryApi.getSuppliers(),
           inventoryApi.getSettings(),
           inventoryApi.getWarehouseStructure(),
-          inventoryApi.getBranches()
+          inventoryApi.getBranches(),
+          inventoryApi.getProductImages()
         ]);
         setProducts(prods || []);
         setCategories(cats || []);
@@ -396,6 +402,16 @@ export default function InventoryAdminPage({ section }) {
           bins: structure?.bins || [],
           branches: branchData || []
         });
+        const thumbs = {};
+        (allProductImages || []).forEach((img) => {
+          const pid = img?.productId;
+          const url = img?.imageUrl;
+          if (pid == null || !url) return;
+          const prefer = img?.isMain === true;
+          const prevUrl = thumbs[pid];
+          if (!prevUrl || prefer) thumbs[pid] = url;
+        });
+        setProductThumbById(thumbs);
       }
 
       if (section === "policy") {
@@ -490,6 +506,43 @@ export default function InventoryAdminPage({ section }) {
     fetchData();
   }, [fetchData]);
 
+  const clearMainImagePick = useCallback(() => {
+    setProductMainImagePreview((prev) => {
+      if (prev && String(prev).startsWith("blob:")) {
+        URL.revokeObjectURL(prev);
+      }
+      return "";
+    });
+    setProductMainImageFile(null);
+  }, []);
+
+  const refreshEditProductImages = useCallback(async (productId) => {
+    if (productId == null) {
+      setEditProductImages([]);
+      return;
+    }
+    try {
+      const rows = await inventoryApi.getProductImages({ productId });
+      const list = Array.isArray(rows) ? [...rows] : [];
+      list.sort((a, b) => {
+        if (a.isMain === true && b.isMain !== true) return -1;
+        if (b.isMain === true && a.isMain !== true) return 1;
+        return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      });
+      setEditProductImages(list);
+    } catch {
+      setEditProductImages([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showCreateProductModal || !editingProduct?.id) {
+      setEditProductImages([]);
+      return;
+    }
+    refreshEditProductImages(editingProduct.id);
+  }, [showCreateProductModal, editingProduct?.id, refreshEditProductImages]);
+
   const categoryMap = useMemo(() => {
     const map = new Map();
     (categories || []).forEach((item) => map.set(item.id, item.categoryName));
@@ -538,17 +591,81 @@ export default function InventoryAdminPage({ section }) {
 
   const updateForm = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
   const updateProductForm = (name, value) => setProductForm((prev) => ({ ...prev, [name]: value }));
+
+  const onMainProductImageChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const okTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!okTypes.includes(file.type)) {
+      setError("Chỉ chấp nhận ảnh JPEG, PNG hoặc WEBP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ảnh không được vượt quá 5MB.");
+      return;
+    }
+    setError("");
+    setProductMainImagePreview((prev) => {
+      if (prev && String(prev).startsWith("blob:")) {
+        URL.revokeObjectURL(prev);
+      }
+      return URL.createObjectURL(file);
+    });
+    setProductMainImageFile(file);
+  };
+
+  const onGalleryImageSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !editingProduct?.id) return;
+    const okTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!okTypes.includes(file.type)) {
+      setError("Chỉ chấp nhận ảnh JPEG, PNG hoặc WEBP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ảnh không được vượt quá 5MB.");
+      return;
+    }
+    setError("");
+    setGalleryBusy(true);
+    try {
+      await inventoryApi.appendProductGalleryImage(editingProduct.id, file);
+      await refreshEditProductImages(editingProduct.id);
+      await fetchData();
+    } catch (err) {
+      setError(err?.message || "Không tải được ảnh phụ lên.");
+    } finally {
+      setGalleryBusy(false);
+    }
+  };
+
+  const onDeleteProductImageRow = async (imageRow) => {
+    if (!editingProduct?.id || !imageRow?.id) return;
+    const ok = window.confirm("Xóa ảnh này? Ảnh trên cloud vẫn có thể tồn tại nếu bạn cần dọn tay trên Azure.");
+    if (!ok) return;
+    try {
+      await inventoryApi.deleteProductImage(imageRow.id);
+      await refreshEditProductImages(editingProduct.id);
+      await fetchData();
+    } catch (err) {
+      setError(err?.message || "Không xóa được ảnh.");
+    }
+  };
   const updateCategoryForm = (name, value) => setCategoryForm((prev) => ({ ...prev, [name]: value }));
 
   const openCreateProductModal = () => {
     setProductModalMode("create");
     setEditingProduct(null);
     setProductForm({ ...EMPTY_PRODUCT_FORM });
+    clearMainImagePick();
     setShowCreateProductModal(true);
   };
 
   const openEditProductModal = (product) => {
     setProductModalMode("edit");
+    clearMainImagePick();
     setEditingProduct(product);
     setProductForm({
       sku: product?.sku || "",
@@ -568,6 +685,7 @@ export default function InventoryAdminPage({ section }) {
 
   const closeCreateProductModal = () => {
     if (savingProduct) return;
+    clearMainImagePick();
     setEditingProduct(null);
     setShowCreateProductModal(false);
   };
@@ -744,7 +862,11 @@ export default function InventoryAdminPage({ section }) {
     setSavingProduct(true);
     try {
       const payload = buildProductPayloadFromForm();
-      await inventoryApi.createProduct(payload);
+      const created = await inventoryApi.createProduct(payload);
+      if (productMainImageFile && created?.id != null) {
+        await inventoryApi.uploadProductImage(created.id, productMainImageFile);
+      }
+      clearMainImagePick();
       setShowCreateProductModal(false);
       setEditingProduct(null);
       setProductForm({ ...EMPTY_PRODUCT_FORM });
@@ -764,6 +886,10 @@ export default function InventoryAdminPage({ section }) {
         ...editingProduct,
         ...payload
       });
+      if (productMainImageFile) {
+        await inventoryApi.uploadProductImage(editingProduct.id, productMainImageFile);
+      }
+      clearMainImagePick();
       setShowCreateProductModal(false);
       setEditingProduct(null);
       setProductForm({ ...EMPTY_PRODUCT_FORM });
@@ -1118,7 +1244,9 @@ export default function InventoryAdminPage({ section }) {
                 <Modal title={productModalMode === "edit" ? "Sửa sản phẩm" : "Thêm sản phẩm mới"} onClose={closeCreateProductModal}>
                   <div className="inventory-product-modal">
                     <p className="inventory-product-modal-desc">
-                      Điền các thông tin cần thiết để thêm sản phẩm vào danh mục kho.
+                      Điền thông tin sản phẩm. Ảnh tải lên Azure Blob (cấu hình{" "}
+                      <code className="inventory-code-inline">AzureStorage</code>); hệ thống chỉ lưu URL trong{" "}
+                      <code className="inventory-code-inline">ProductImages</code>. Định dạng JPEG/PNG/WEBP, tối đa 5MB.
                     </p>
 
                     <div className="inventory-product-modal-section">
@@ -1167,6 +1295,94 @@ export default function InventoryAdminPage({ section }) {
                           </select>
                         </label>
                       </div>
+                    </div>
+
+                    <div className="inventory-product-modal-section">
+                      <h4>Ảnh Part Shop (cloud)</h4>
+                      <p className="inventory-product-image-hint">
+                        Ảnh đại diện dùng cho catalog / giỏ hàng. Nhấn <strong>Lưu sản phẩm</strong> để gửi file lên Azure và cập nhật
+                        URL trong CSDL. Khi sửa, chọn ảnh mới rồi lưu để thay ảnh chính (ghi đè bản ghi đại diện).
+                      </p>
+                      <div className="inventory-product-image-row">
+                        {productMainImagePreview ||
+                        (productModalMode === "edit" &&
+                          (editProductImages.find((i) => i.isMain)?.imageUrl || editProductImages[0]?.imageUrl)) ? (
+                          <img
+                            className="inventory-product-image-preview"
+                            src={
+                              productMainImagePreview ||
+                              editProductImages.find((i) => i.isMain)?.imageUrl ||
+                              editProductImages[0]?.imageUrl ||
+                              ""
+                            }
+                            alt=""
+                          />
+                        ) : (
+                          <div className="inventory-product-image-placeholder">Chưa có ảnh</div>
+                        )}
+                        <div className="inventory-product-image-actions">
+                          <label className="btn-ghost inventory-product-image-file">
+                            Chọn ảnh đại diện
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="inventory-file-input-hidden"
+                              onChange={onMainProductImageChange}
+                            />
+                          </label>
+                          {productMainImageFile ? (
+                            <button type="button" className="btn-ghost" onClick={clearMainImagePick}>
+                              Bỏ chọn file
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {productModalMode === "edit" && editingProduct?.id ? (
+                        <div className="inventory-product-gallery-block">
+                          <div className="inventory-product-gallery-toolbar">
+                            <span className="inventory-product-gallery-title">Gallery (trang chi tiết)</span>
+                            <label
+                              className={`btn-ghost inventory-product-image-file ${galleryBusy ? "is-busy" : ""}`}
+                            >
+                              {galleryBusy ? "Đang tải..." : "+ Thêm ảnh phụ"}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="inventory-file-input-hidden"
+                                disabled={galleryBusy}
+                                onChange={onGalleryImageSelected}
+                              />
+                            </label>
+                          </div>
+                          {editProductImages.length === 0 ? (
+                            <p className="inventory-product-gallery-empty">Chưa có ảnh trong CSDL.</p>
+                          ) : (
+                            <ul className="inventory-product-gallery-list">
+                              {editProductImages.map((img) => (
+                                <li key={img.id} className="inventory-product-gallery-item">
+                                  <img src={img.imageUrl} alt="" className="inventory-product-gallery-thumb" />
+                                  <div className="inventory-product-gallery-meta">
+                                    {img.isMain ? (
+                                      <span className="badge badge-active">Đại diện</span>
+                                    ) : (
+                                      <span className="badge">Phụ</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="btn-icon"
+                                      onClick={() => onDeleteProductImageRow(img)}
+                                      disabled={galleryBusy}
+                                    >
+                                      Xóa
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="inventory-product-modal-section">
@@ -1245,10 +1461,11 @@ export default function InventoryAdminPage({ section }) {
                     </div>
 
                     <div className="form-actions">
-                      <button className="btn-ghost" onClick={closeCreateProductModal} disabled={savingProduct}>
+                      <button type="button" className="btn-ghost" onClick={closeCreateProductModal} disabled={savingProduct}>
                         Hủy
                       </button>
                       <button
+                        type="button"
                         className="btn-primary"
                         onClick={() => runAction(productModalMode === "edit" ? handleUpdateProduct : handleCreateProduct)}
                         disabled={savingProduct}
@@ -1265,6 +1482,7 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
+                      <th>Ảnh</th>
                       <th>SKU</th>
                       <th>Tên sản phẩm</th>
                       <th>Đơn vị</th>
@@ -1281,11 +1499,23 @@ export default function InventoryAdminPage({ section }) {
                   </thead>
                   <tbody>
                     {products.length === 0 ? (
-                      <NoDataRow colSpan={13} message="Chưa có sản phẩm trong danh mục kho." />
+                      <NoDataRow colSpan={14} message="Chưa có sản phẩm trong danh mục kho." />
                     ) : (
                       products.map((p) => (
                         <tr key={p.id}>
                           <td className="td-id">#{p.id}</td>
+                          <td className="td-thumb">
+                            {productThumbById[p.id] ? (
+                              <img
+                                src={productThumbById[p.id]}
+                                alt=""
+                                className="inventory-product-table-thumb"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span className="inventory-product-table-thumb-fallback">—</span>
+                            )}
+                          </td>
                           <td>{p.sku}</td>
                           <td>{p.name}</td>
                           <td>{p.unit}</td>
