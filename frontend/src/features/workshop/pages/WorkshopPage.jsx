@@ -242,12 +242,18 @@ export default function WorkshopPage() {
   const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
-  const isReceptionDashboard = (userRole === "RECEPTIONIST" || userRole === "ADMIN") && location.pathname.startsWith("/workshop/reception");
-  const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
-    ? "appointments"
-    : "orders";
+  const isReceptionDashboard = (userRole === "RECEPTIONIST" || userRole === "ADMIN") && currentNormalizedPath.startsWith("/workshop/reception");
+  const receptionTab = currentNormalizedPath.startsWith("/workshop/reception/chat")
+    ? "chat"
+    : currentNormalizedPath.startsWith("/workshop/reception/appointments")
+      ? "appointments"
+      : "orders";
 
   const goReceptionTab = useCallback((tab) => {
+    if (tab === "chat") {
+      navigate("/workshop/reception/chat");
+      return;
+    }
     if (tab === "appointments") {
       navigate("/workshop/reception/appointments");
       return;
@@ -300,6 +306,13 @@ export default function WorkshopPage() {
                   onClick={() => goReceptionTab("appointments")}
                 >
                   Lịch đặt trước
+                </button>
+                <button
+                  type="button"
+                  className={`role-sub-item ${receptionTab === "chat" ? "active" : ""}`}
+                  onClick={() => goReceptionTab("chat")}
+                >
+                  Chat khách hàng
                 </button>
               </div>
             )}

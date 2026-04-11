@@ -18,7 +18,7 @@ namespace MyGarage.Services
 
             var total = await query.CountAsync();
             var rows = await query
-                .OrderByDescending(x => x.Transaction.CreatedAt)
+                .OrderByDescending(x => x.TransactionCreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -34,7 +34,17 @@ namespace MyGarage.Services
                 .Include(t => t.Product)
                 .Include(t => t.CreatedByNavigation)
                 .Join(_context.Warehouses.AsNoTracking(), t => t.WarehouseId, w => w.Id, (t, w) => new { t, w })
-                .Join(_context.Branches.AsNoTracking(), tw => tw.w.BranchId, b => b.Id, (tw, b) => new TransactionQueryRow(tw.t, tw.w, b))
+                .Join(
+                    _context.Branches.AsNoTracking(),
+                    tw => tw.w.BranchId,
+                    b => b.Id,
+                    (tw, b) => new TransactionQueryRow
+                    {
+                        Transaction = tw.t,
+                        Warehouse = tw.w,
+                        Branch = b,
+                        TransactionCreatedAt = tw.t.CreatedAt
+                    })
                 .AsQueryable();
         }
 
@@ -88,6 +98,12 @@ namespace MyGarage.Services
             };
         }
 
-        private sealed record TransactionQueryRow(StockTransaction Transaction, Warehouse Warehouse, Branch Branch);
+        private sealed class TransactionQueryRow
+        {
+            public required StockTransaction Transaction { get; init; }
+            public required Warehouse Warehouse { get; init; }
+            public required Branch Branch { get; init; }
+            public DateTime? TransactionCreatedAt { get; init; }
+        }
     }
 }
