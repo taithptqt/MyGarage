@@ -2,6 +2,18 @@
   max-width: 1320px;
 }
 
+/* Trang chi tiết: Times New Roman (ghi đè font sans-serif từ RetailShared) */
+.parts-shop-page.part-product-page,
+.parts-shop-page.part-product-page .parts-shop-hero h1,
+.parts-shop-page.part-product-page .parts-shop-btn,
+.parts-shop-page.part-product-page .parts-shop-qty input,
+.parts-shop-page.part-product-page button,
+.parts-shop-page.part-product-page input,
+.parts-shop-page.part-product-page select,
+.parts-shop-page.part-product-page textarea {
+  font-family: "Times New Roman", Times, serif;
+}
+
 .part-product-hero {
   min-height: 56vh;
 }
@@ -144,7 +156,6 @@
   line-height: 1.08;
   letter-spacing: -0.03em;
   color: var(--parts-emerald);
-  font-family: "Space Grotesk", "Barlow", sans-serif;
 }
 
 .part-product-price-row {
@@ -158,7 +169,6 @@
   color: var(--parts-emerald);
   font-size: clamp(1.7rem, 2.8vw, 2.35rem);
   line-height: 1.04;
-  font-family: "Space Grotesk", "Barlow", sans-serif;
 }
 
 .part-product-price-row span {
@@ -174,6 +184,126 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.part-product-stock-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(29, 42, 38, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(29, 42, 38, 0.68);
+  line-height: 1.4;
+}
+
+.part-product-stock-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.part-product-stock-hint strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.part-product-stock-hint.is-out {
+  color: #8b2f2b;
+  border-color: rgba(217, 108, 94, 0.28);
+  background: rgba(255, 240, 237, 0.86);
+}
+
+.part-product-stock-hint.is-in {
+  color: #176f4a;
+  border-color: rgba(61, 154, 105, 0.2);
+  background: rgba(237, 248, 241, 0.9);
+}
+
+.part-product-stock-hint.is-unknown {
+  color: rgba(29, 42, 38, 0.68);
+  border-color: rgba(29, 42, 38, 0.12);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.part-product-branch-row {
+  display: grid;
+  gap: 8px;
+}
+
+.part-product-branch-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(29, 42, 38, 0.52);
+}
+
+.part-product-branch-select {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid rgba(29, 42, 38, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--parts-text);
+  outline: none;
+}
+
+.part-product-branch-select:focus {
+  border-color: rgba(197, 160, 89, 0.8);
+  box-shadow: 0 0 0 4px rgba(197, 160, 89, 0.12);
+}
+
+.part-product-stock-alternatives {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.part-product-stock-alt-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(61, 154, 105, 0.22);
+  background: rgba(237, 248, 241, 0.65);
+  font-size: 0.88rem;
+  color: rgba(29, 42, 38, 0.82);
+}
+
+.part-product-branch-swap {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+}
+
+.part-product-stock-footnote {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: rgba(29, 42, 38, 0.58);
+}
+
+.part-product-inline-link {
+  color: var(--parts-emerald);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.part-product-inline-link:hover {
+  color: var(--parts-gold-deep);
+  text-decoration: underline;
 }
 
 .part-product-meta-grid {
@@ -272,7 +402,6 @@
   color: var(--parts-emerald);
   font-size: 1.55rem;
   line-height: 1.08;
-  font-family: "Space Grotesk", "Barlow", sans-serif;
 }
 
 .part-product-spec-grid {

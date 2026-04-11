@@ -2,6 +2,39 @@ import { getApiBaseUrl } from "@features/auth/api/authApi";
 
 export const RETAIL_CART_STORAGE_KEY = "mygarage_retail_cart";
 
+export const RETAIL_SELECTED_BRANCH_STORAGE_KEY = "mygarage_retail_selected_branch";
+
+export const RETAIL_BRANCH_CHANGED_EVENT = "mygarage-retail-branch-changed";
+
+export function readStoredRetailBranchId() {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = localStorage.getItem(RETAIL_SELECTED_BRANCH_STORAGE_KEY);
+    if (raw == null || raw === "") return "";
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? String(Math.floor(n)) : "";
+  } catch {
+    return "";
+  }
+}
+
+export function writeStoredRetailBranchId(branchId) {
+  if (typeof window === "undefined") return;
+  const s = branchId != null && branchId !== "" ? String(branchId).trim() : "";
+  if (!s) {
+    localStorage.removeItem(RETAIL_SELECTED_BRANCH_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(RETAIL_SELECTED_BRANCH_STORAGE_KEY, s);
+  try {
+    window.dispatchEvent(
+      new CustomEvent(RETAIL_BRANCH_CHANGED_EVENT, { detail: { branchId: s } })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 const moneyFormatter = new Intl.NumberFormat("vi-VN");
 const mojibakePattern =
   /(?:Ã.|Â.|Ä‘|Æ°|Æ¡|áº|á»|â€|Ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿]|ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿])/u;
@@ -89,6 +122,28 @@ export function toPositiveInt(value, fallback = 1) {
 
   const rounded = Math.floor(parsed);
   return rounded > 0 ? rounded : fallback;
+}
+
+export function toNonNegativeInt(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+
+  const rounded = Math.floor(parsed);
+  return rounded >= 0 ? rounded : fallback;
+}
+
+export function normalizeAvailableQuantity(value) {
+  return toNonNegativeInt(value, 0);
+}
+
+export function clampQuantityToAvailable(value, availableQuantity, fallback = 1) {
+  const safeAvailable = normalizeAvailableQuantity(availableQuantity);
+  if (safeAvailable <= 0) {
+    return 0;
+  }
+
+  const normalizedValue = toPositiveInt(value, fallback);
+  return Math.min(normalizedValue, safeAvailable);
 }
 
 export function normalizeText(value) {

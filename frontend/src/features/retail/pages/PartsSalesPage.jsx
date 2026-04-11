@@ -9,18 +9,25 @@ import {
   getCategories,
   getProductImages,
   getProducts,
+  getProductStockAvailabilitySafe,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
+  clampQuantityToAvailable,
   formatVnd,
   getCategoryLabel,
   getProductDescription,
   getProductImageAlt,
   getProductName,
+  normalizeAvailableQuantity,
   normalizeText,
+  readStoredRetailBranchId,
   resolveProductImage,
+  RETAIL_BRANCH_CHANGED_EVENT,
+  RETAIL_SELECTED_BRANCH_STORAGE_KEY,
   sortProductImages,
   toPositiveInt,
+  writeStoredRetailBranchId,
 } from "@features/retail/utils/retailFormat";
 import "./RetailShared.css";
 import "./PartsSalesPage.css";
@@ -32,16 +39,40 @@ const SHOP_HIGHLIGHTS = [
 ];
 const PRODUCTS_PER_PAGE = 12;
 
+/** Trang hiển thị dạng gọn: 1 … 18 19 [20] 21 22 … 42 */
+function buildCatalogPageItems(currentPage, totalPages, delta = 2) {
+  if (totalPages <= 0) return [];
+  const windowStart = Math.max(2, currentPage - delta);
+  const windowEnd = Math.min(totalPages - 1, currentPage + delta);
+  const pages = new Set([1, totalPages]);
+  for (let p = windowStart; p <= windowEnd; p += 1) {
+    if (p >= 1 && p <= totalPages) pages.add(p);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) {
+      out.push("ellipsis");
+    }
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
 function CatalogPagination({ currentPage, totalPages, onPageChange }) {
   if (totalPages <= 1) {
     return null;
   }
 
+  const pageItems = buildCatalogPageItems(currentPage, totalPages, 2);
+
   return (
     <nav className="parts-shop-pagination" aria-label="Phân trang phụ tùng">
       <button
         type="button"
-        className="parts-shop-page-button"
+        className="parts-shop-page-button parts-shop-pagination__edge"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
       >
@@ -49,25 +80,32 @@ function CatalogPagination({ currentPage, totalPages, onPageChange }) {
       </button>
 
       <div className="parts-shop-page-numbers">
-        {Array.from({ length: totalPages }, (_, index) => {
-          const page = index + 1;
-          return (
+        {pageItems.map((item, index) =>
+          item === "ellipsis" ? (
+            <span
+              key={`e-${index}`}
+              className="parts-shop-page-ellipsis"
+              aria-hidden="true"
+            >
+              …
+            </span>
+          ) : (
             <button
               type="button"
-              key={page}
-              className={`parts-shop-page-button ${page === currentPage ? "active" : ""}`}
-              aria-current={page === currentPage ? "page" : undefined}
-              onClick={() => onPageChange(page)}
+              key={item}
+              className={`parts-shop-page-button ${item === currentPage ? "active" : ""}`}
+              aria-current={item === currentPage ? "page" : undefined}
+              onClick={() => onPageChange(item)}
             >
-              {page}
+              {item}
             </button>
-          );
-        })}
+          )
+        )}
       </div>
 
       <button
         type="button"
-        className="parts-shop-page-button"
+        className="parts-shop-page-button parts-shop-pagination__edge"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
       >
@@ -84,6 +122,7 @@ export default function PartsSalesPage() {
   const [products, setProducts] = useState([]);
   const [productImages, setProductImages] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [stockByProductId, setStockByProductId] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -92,10 +131,32 @@ export default function PartsSalesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [draftQty, setDraftQty] = useState({});
   const [bannerMessage, setBannerMessage] = useState("");
+  const [branchStockTick, setBranchStockTick] = useState(0);
   const {
-    totalItems,
+    totalLineItems,
     addToCart,
   } = useRetailCart();
+
+  useEffect(() => {
+    function bumpBranchStock() {
+      setBranchStockTick((value) => value + 1);
+    }
+
+    window.addEventListener(RETAIL_BRANCH_CHANGED_EVENT, bumpBranchStock);
+
+    function handleStorage(event) {
+      if (event.key === RETAIL_SELECTED_BRANCH_STORAGE_KEY) {
+        bumpBranchStock();
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(RETAIL_BRANCH_CHANGED_EVENT, bumpBranchStock);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -130,6 +191,7 @@ export default function PartsSalesPage() {
           setProducts([]);
           setProductImages([]);
           setCategories([]);
+          setStockByProductId({});
         }
       } finally {
         if (!ignore) {
@@ -144,6 +206,93 @@ export default function PartsSalesPage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadStock() {
+      if (!products.length) {
+        if (!ignore) {
+          setStockByProductId({});
+        }
+        return;
+      }
+
+      const productIds = products.map((item) => item?.id);
+      let branchId = readStoredRetailBranchId();
+
+      let result = await getProductStockAvailabilitySafe({
+        productIds,
+        branchId: branchId || undefined,
+      });
+
+      if (
+        !result.ok &&
+        branchId &&
+        result.data?.branchId != null
+      ) {
+        writeStoredRetailBranchId("");
+        branchId = "";
+        result = await getProductStockAvailabilitySafe({
+          productIds,
+          branchId: undefined,
+        });
+      }
+
+      if (ignore) return;
+
+      if (!result.ok) {
+        setError(result.data?.message || "Không thể tải tồn kho catalog lúc này.");
+        setStockByProductId({});
+        return;
+      }
+
+      setError("");
+      const nextStockEntries = result.data;
+      const nextStockByProductId = Array.isArray(nextStockEntries)
+        ? Object.fromEntries(
+            nextStockEntries.map((entry) => [
+              String(entry?.productId),
+              normalizeAvailableQuantity(entry?.availableQuantity),
+            ])
+          )
+        : {};
+
+      setStockByProductId(nextStockByProductId);
+    }
+
+    loadStock();
+
+    return () => {
+      ignore = true;
+    };
+  }, [products, branchStockTick]);
+
+  useEffect(() => {
+    setDraftQty((previous) => {
+      const nextState = { ...previous };
+      let changed = false;
+
+      Object.entries(nextState).forEach(([productId, rawQty]) => {
+        const availableQuantity = normalizeAvailableQuantity(stockByProductId[productId]);
+        if (availableQuantity <= 0) {
+          if (Number(rawQty) !== 0) {
+            nextState[productId] = 0;
+            changed = true;
+          }
+          return;
+        }
+
+        const clampedQty = clampQuantityToAvailable(rawQty, availableQuantity, 1);
+        if (Number(clampedQty) !== Number(rawQty)) {
+          nextState[productId] = clampedQty;
+          changed = true;
+        }
+      });
+
+      return changed ? nextState : previous;
+    });
+  }, [stockByProductId]);
 
   useEffect(() => {
     if (currentPage !== 1) {
@@ -300,10 +449,54 @@ export default function PartsSalesPage() {
     () => [
       { value: `${products.length}+`, label: "mã phụ tùng đang mở bán" },
       { value: `${categories.length}`, label: "nhóm danh mục đang hiển thị" },
-      { value: `${totalItems}`, label: "sản phẩm đang nằm trong giỏ" },
+      { value: `${totalLineItems}`, label: "mặt hàng đang nằm trong giỏ" },
     ],
-    [categories.length, products.length, totalItems]
+    [categories.length, products.length, totalLineItems]
   );
+
+  function getAvailableQuantity(productId) {
+    return normalizeAvailableQuantity(stockByProductId[String(productId)]);
+  }
+
+  function updateDraftQuantity(productId, nextValue) {
+    const availableQuantity = getAvailableQuantity(productId);
+
+    setDraftQty((previous) => ({
+      ...previous,
+      [productId]:
+        availableQuantity > 0
+          ? clampQuantityToAvailable(nextValue, availableQuantity, 1)
+          : 0,
+    }));
+  }
+
+  function handleAddProductToCart(product, quantity, availableQuantity) {
+    const productName = getProductName(product);
+    const mutation = addToCart(product, quantity, { maxQty: availableQuantity });
+
+    if (!mutation?.ok) {
+      if (availableQuantity <= 0) {
+        setBannerMessage(`${productName} hiện đã hết hàng trong tồn kho khả dụng.`);
+        return;
+      }
+
+      setBannerMessage(
+        `${productName} chỉ còn tối đa ${availableQuantity} sản phẩm khả dụng trong tồn kho hiện tại.`
+      );
+      return;
+    }
+
+    if (mutation.adjusted) {
+      setBannerMessage(
+        `Đã thêm tối đa ${mutation.addedQuantity} ${productName} theo số lượng tồn kho khả dụng hiện tại.`
+      );
+      return;
+    }
+
+    setBannerMessage(
+      `Đã thêm ${mutation.addedQuantity} ${productName} vào giỏ. Mở cart page để chọn sản phẩm cần checkout.`
+    );
+  }
 
   return (
     <div className="parts-shop-page">
@@ -322,7 +515,7 @@ export default function PartsSalesPage() {
             Chọn phụ tùng, gom vào giỏ, rà soát sản phẩm cần thanh toán rồi checkout ở cart page theo đúng flow retail hiện có của MyGarage.
           </p>
           <div className="parts-shop-hero-actions">
-            <RetailCartEntry totalItems={totalItems} label="Giỏ hàng" />
+            <RetailCartEntry itemCount={totalLineItems} label="Giỏ hàng" />
             <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
               Xem đơn của tôi
             </Link>
@@ -395,7 +588,7 @@ export default function PartsSalesPage() {
               </div>
               <div className="parts-shop-panel-action">
                 <RetailCartEntry
-                  totalItems={totalItems}
+                  itemCount={totalLineItems}
                   label="Xem giỏ hàng"
                   variant="ghost"
                   className="retail-cart-entry--panel"
@@ -410,37 +603,31 @@ export default function PartsSalesPage() {
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Tìm theo tên, SKU hoặc mô tả phụ tùng"
               />
-              <div className="parts-shop-filter-right">
-                <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                  <option value="name-asc">Sắp xếp: Tên A-Z</option>
-                  <option value="name-desc">Sắp xếp: Tên Z-A</option>
-                  <option value="price-asc">Giá: Thấp đến cao</option>
-                  <option value="price-desc">Giá: Cao đến thấp</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="parts-shop-pills">
-            <button
-              type="button"
-              className={`parts-shop-pill ${catFilter === "all" ? "active" : ""}`}
-              onClick={() => setCatFilter("all")}
-            >
-              Tất cả
-            </button>
-            {categories.map((category) => (
-              <button
-                type="button"
-                key={category.id}
-                className={`parts-shop-pill ${
-                  String(catFilter) === String(category.id) ? "active" : ""
-                }`}
-                onClick={() => setCatFilter(String(category.id))}
+              <select
+                className="parts-shop-filter-select"
+                value={catFilter}
+                onChange={(event) => setCatFilter(event.target.value)}
+                aria-label="Lọc theo danh mục phụ tùng"
               >
-                {getCategoryLabel(category)}
-              </button>
-            ))}
+                <option value="all">Tất cả danh mục</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={String(category.id)}>
+                    {getCategoryLabel(category)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="parts-shop-filter-select"
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                aria-label="Sắp xếp danh sách phụ tùng"
+              >
+                <option value="name-asc">Sắp xếp: Tên A-Z</option>
+                <option value="name-desc">Sắp xếp: Tên Z-A</option>
+                <option value="price-asc">Giá: Thấp đến cao</option>
+                <option value="price-desc">Giá: Cao đến thấp</option>
+              </select>
+            </div>
           </div>
 
           {loading ? (
@@ -455,7 +642,17 @@ export default function PartsSalesPage() {
                 {paginatedProducts.map((product) => {
                   const category = categoriesById.get(String(product?.categoryId));
                   const relatedImages = productImagesByProductId.get(String(product?.id)) || [];
-                  const qty = draftQty[product.id] || 1;
+                  const availableQuantity = getAvailableQuantity(product.id);
+                  const isOutOfStock = availableQuantity <= 0;
+                  const savedDraft = draftQty[product.id];
+                  const qty = isOutOfStock
+                    ? 0
+                    : clampQuantityToAvailable(
+                        savedDraft != null ? Number(savedDraft) : 1,
+                        availableQuantity,
+                        1
+                      );
+                  const isAtStockLimit = qty >= availableQuantity && !isOutOfStock;
                   const productDetailPath = `/parts-shop/products/${product.id}`;
                   const productDescription = getProductDescription(product, relatedImages);
                   const productName = getProductName(product);
@@ -490,6 +687,12 @@ export default function PartsSalesPage() {
 
                           <p className="parts-shop-item-desc">{productDescription}</p>
 
+                          <div className={`parts-shop-stock-hint ${isOutOfStock ? "is-out" : ""}`}>
+                            {isOutOfStock
+                              ? "Tạm hết hàng trong tồn kho khả dụng"
+                              : `Còn ${availableQuantity} sản phẩm khả dụng`}
+                          </div>
+
                           <div className="parts-shop-price">{formatVnd(product.retailPrice)}</div>
                         </div>
                       </Link>
@@ -500,34 +703,27 @@ export default function PartsSalesPage() {
                             type="button"
                             className="parts-shop-btn parts-shop-btn-ghost"
                             onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Math.max(1, Number(previous[product.id] || 1) - 1),
-                              }))
+                              updateDraftQuantity(product.id, Math.max(1, Number(qty) - 1))
                             }
+                            disabled={isOutOfStock}
                           >
                             -
                           </button>
                           <input
                             type="number"
-                            min="1"
+                            min={isOutOfStock ? 0 : 1}
+                            max={isOutOfStock ? 0 : Math.max(availableQuantity, 1)}
                             value={qty}
                             onChange={(event) =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: toPositiveInt(event.target.value, 1),
-                              }))
+                              updateDraftQuantity(product.id, toPositiveInt(event.target.value, 1))
                             }
+                            disabled={isOutOfStock}
                           />
                           <button
                             type="button"
                             className="parts-shop-btn parts-shop-btn-ghost"
-                            onClick={() =>
-                              setDraftQty((previous) => ({
-                                ...previous,
-                                [product.id]: Number(previous[product.id] || 1) + 1,
-                              }))
-                            }
+                            onClick={() => updateDraftQuantity(product.id, Number(qty) + 1)}
+                            disabled={isOutOfStock || isAtStockLimit}
                           >
                             +
                           </button>
@@ -536,14 +732,10 @@ export default function PartsSalesPage() {
                         <button
                           type="button"
                           className="parts-shop-btn parts-shop-btn-primary parts-shop-action-button"
-                          onClick={() => {
-                            addToCart(product, qty);
-                            setBannerMessage(
-                              `Đã thêm ${qty} ${productName} vào giỏ. Mở cart page để chọn sản phẩm cần checkout.`
-                            );
-                          }}
+                          onClick={() => handleAddProductToCart(product, qty, availableQuantity)}
+                          disabled={isOutOfStock}
                         >
-                          Thêm vào giỏ
+                          {isOutOfStock ? "Hết hàng" : "Thêm vào giỏ"}
                         </button>
                       </div>
                     </article>

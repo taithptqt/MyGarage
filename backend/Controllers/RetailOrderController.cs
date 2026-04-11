@@ -11,6 +11,7 @@ using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
+using MyGarage.Support;
 
 namespace MyGarage.Controllers
 {
@@ -172,6 +173,38 @@ namespace MyGarage.Controllers
             }
 
             var productMap = products.ToDictionary(product => product.Id);
+            var availabilityMap = await RetailStockAvailabilityResolver.GetAvailableQuantitiesAsync(
+                _db,
+                productIds,
+                request.BranchId);
+
+            var stockIssues = normalizedItems
+                .Select(item =>
+                {
+                    var product = productMap[item.ProductId];
+                    availabilityMap.TryGetValue(item.ProductId, out var availableQuantity);
+
+                    return new
+                    {
+                        productId = item.ProductId,
+                        productName = product.Name,
+                        requestedQuantity = item.Quantity,
+                        availableQuantity
+                    };
+                })
+                .Where(item => item.requestedQuantity > item.availableQuantity)
+                .OrderBy(item => item.productId)
+                .ToList();
+
+            if (stockIssues.Count > 0)
+            {
+                return BadRequest(new
+                {
+                    message = "Một hoặc nhiều phụ tùng không còn đủ tồn kho tại chi nhánh đã chọn.",
+                    items = stockIssues
+                });
+            }
+
             var retailOrderItems = normalizedItems
                 .Select(item =>
                 {
