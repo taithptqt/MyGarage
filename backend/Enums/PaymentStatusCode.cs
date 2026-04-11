@@ -1,9 +1,10 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum PaymentStatusCode
 {
-    PENDING,
-    COMPLETED,
     CANCELED,
-    FAILED
+    FAILED,
+    COMPLETED,
+    PENDING
 }
+

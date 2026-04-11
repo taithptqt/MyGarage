@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -15,6 +15,8 @@ public partial class ServiceOrder
 
     public long? AppointmentId { get; set; }
 
+    public long? GroupSessionId { get; set; }
+
     public long OriginBranchId { get; set; }
 
     public long ExecuteBranchId { get; set; }
@@ -28,6 +30,16 @@ public partial class ServiceOrder
     public long? ReceptionistId { get; set; }
 
     public string? CustomerNotes { get; set; }
+
+    public string? RequestedPackageIds { get; set; }
+
+    public decimal? InsuranceDeductibleAmount { get; set; }
+
+    public string? InsuranceDeductibleOption { get; set; }
+
+    public string? InsuranceClaimMode { get; set; }
+
+    public string? InsuranceQuoteState { get; set; }
 
     public int? RevisionNumber { get; set; }
 
@@ -67,6 +79,8 @@ public partial class ServiceOrder
 
     public DateTime? CheckInTime { get; set; }
 
+    public DateTime? ArrivalTime { get; set; }
+
     public string? PaymentStatus { get; set; }
 
     public DateTime? EstimatedHandover { get; set; }
@@ -84,6 +98,8 @@ public partial class ServiceOrder
     public long? UpdatedBy { get; set; }
 
     public virtual Appointment? Appointment { get; set; }
+
+    public virtual GroupSession? GroupSession { get; set; }
 
     public virtual ICollection<CommissionTransaction> CommissionTransactions { get; set; } = new List<CommissionTransaction>();
 
@@ -127,6 +143,10 @@ public partial class ServiceOrder
 
     public virtual ICollection<ServiceOrderDiscount> ServiceOrderDiscounts { get; set; } = new List<ServiceOrderDiscount>();
 
+    public virtual ICollection<ServiceOrderInsuranceAsset> InsuranceAssets { get; set; } = new List<ServiceOrderInsuranceAsset>();
+
+    public virtual ICollection<ServiceOrderInsuranceUpload> InsuranceUploads { get; set; } = new List<ServiceOrderInsuranceUpload>();
+
     public virtual ICollection<ServiceOrderSnapshot> ServiceOrderSnapshots { get; set; } = new List<ServiceOrderSnapshot>();
 
     public virtual ICollection<ServiceRefund> ServiceRefunds { get; set; } = new List<ServiceRefund>();
@@ -140,4 +160,6 @@ public partial class ServiceOrder
     public virtual ICollection<VoucherApprovalRequest> VoucherApprovalRequests { get; set; } = new List<VoucherApprovalRequest>();
 
     public virtual ICollection<VoucherRedemption> VoucherRedemptions { get; set; } = new List<VoucherRedemption>();
+
+    public virtual ICollection<WorkSlot> WorkSlots { get; set; } = new List<WorkSlot>();
 }

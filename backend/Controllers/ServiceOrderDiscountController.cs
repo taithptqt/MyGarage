@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,16 @@ namespace MyGarage.Controllers
     public class ServiceOrderDiscountController : ControllerBase
     {
         private readonly IServiceOrderDiscountService _serviceOrderDiscountService;
+        private readonly IServiceOrderService _serviceOrderService;
         private readonly IMapper _mapper;
 
-        public ServiceOrderDiscountController(IServiceOrderDiscountService serviceOrderDiscountService, IMapper mapper)
+        public ServiceOrderDiscountController(
+            IServiceOrderDiscountService serviceOrderDiscountService,
+            IServiceOrderService serviceOrderService,
+            IMapper mapper)
         {
             _serviceOrderDiscountService = serviceOrderDiscountService;
+            _serviceOrderService = serviceOrderService;
             _mapper = mapper;
         }
 
@@ -45,41 +51,82 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceOrderDiscountResponseDto>> Create([FromBody] ServiceOrderDiscountCreateDto itemDto)
         {
-            var entity = _mapper.Map<ServiceOrderDiscount>(itemDto);
-            var createdItem = await _serviceOrderDiscountService.AddAsync(entity);
-            var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            try
+            {
+                if (itemDto == null || itemDto.ServiceOrderId <= 0)
+                {
+                    return BadRequest(new { message = "Thiếu ServiceOrderId hợp lệ để tạo chiết khấu lệnh sửa chữa." });
+                }
+
+                await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(itemDto.ServiceOrderId);
+
+                var entity = _mapper.Map<ServiceOrderDiscount>(itemDto);
+                var createdItem = await _serviceOrderDiscountService.AddAsync(entity);
+                var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(createdItem);
+                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<ServiceOrderDiscountResponseDto>> Update(long id, [FromBody] ServiceOrderDiscountUpdateDto itemDto)
         {
-            var existingItem = await _serviceOrderDiscountService.GetByIdAsync(id);
-            if (existingItem == null)
+            try
             {
-                return NotFound();
-            }
+                var existingItem = await _serviceOrderDiscountService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _serviceOrderDiscountService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
+                var targetServiceOrderId = itemDto?.ServiceOrderId > 0
+                    ? itemDto.ServiceOrderId
+                    : existingItem.ServiceOrderId;
+                await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(targetServiceOrderId);
+
+                _mapper.Map(itemDto, existingItem);
+                var updatedItem = await _serviceOrderDiscountService.UpdateAsync(id, existingItem);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+
+                var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(updatedItem);
+                return Ok(responseDto);
             }
-            var responseDto = _mapper.Map<ServiceOrderDiscountResponseDto>(updatedItem);
-            return Ok(responseDto);
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _serviceOrderDiscountService.DeleteAsync(id);
-            if (!result)
+            try
             {
-                return NotFound();
+                var existingItem = await _serviceOrderDiscountService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(existingItem.ServiceOrderId);
+
+                var result = await _serviceOrderDiscountService.DeleteAsync(id);
+                if (!result)
+                {
+                    return NotFound();
+                }
+                return NoContent();
             }
-            return NoContent();
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

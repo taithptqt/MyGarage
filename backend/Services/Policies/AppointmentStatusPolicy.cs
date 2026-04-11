@@ -29,9 +29,9 @@ namespace MyGarage.Services
         public void EnsureCanCheckIn(Appointment appointment)
         {
             if (!string.Equals(appointment.Status, nameof(AppointmentStatus.CONFIRMED), StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(appointment.Status, nameof(AppointmentStatus.PENDING), StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(appointment.Status, nameof(AppointmentStatus.LATE), StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException($"Chi co the check-in lich da xac nhan/queued. Hien tai: {appointment.Status}");
+                throw new InvalidOperationException($"Chi co the check-in lich o trang thai CONFIRMED/LATE. Hien tai: {appointment.Status}");
             }
         }
 

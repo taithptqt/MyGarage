@@ -21,6 +21,34 @@ export async function getAppointmentDetail(id) {
   return request({ url: APPOINTMENTS_ROUTES.detail(id), method: "GET" });
 }
 
+export async function getAppointmentEditCapabilities(id) {
+  return request({ url: APPOINTMENTS_ROUTES.editCapabilities(id), method: "GET" });
+}
+
+export async function requestAppointmentEdit(id, payload) {
+  return request({
+    url: APPOINTMENTS_ROUTES.editRequests(id),
+    method: "POST",
+    data: payload,
+  });
+}
+
+export async function getAppointmentEditRequests(id, status) {
+  return request({
+    url: APPOINTMENTS_ROUTES.editRequests(id),
+    method: "GET",
+    params: status ? { status } : undefined,
+  });
+}
+
+export async function decideAppointmentEditRequest(id, requestId, payload) {
+  return request({
+    url: APPOINTMENTS_ROUTES.editRequestDecision(id, requestId),
+    method: "PATCH",
+    data: payload,
+  });
+}
+
 export async function confirmAppointment(id) {
   return request({
     url: APPOINTMENTS_ROUTES.status(id),

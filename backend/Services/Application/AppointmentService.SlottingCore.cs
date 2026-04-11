@@ -12,13 +12,17 @@ namespace MyGarage.Services
         private static (int lockedQuick, int lockedRepair) CountLockedBays(IEnumerable<Bay> activeBays, IEnumerable<WorkSlot> locks, DateTime start, DateTime end)
         {
             var bayById = activeBays.ToDictionary(b => b.Id, b => b);
-            var overlapping = locks.Where(l => l.StartTime < end && l.EndTime > start).ToList();
+            var overlappingBayIds = locks
+                .Where(l => l.BayId.HasValue && l.StartTime < end && l.EndTime > start && !IsBufferSlotType(l.SlotType))
+                .Select(l => l.BayId!.Value)
+                .Distinct()
+                .ToList();
             var quick = 0;
             var repair = 0;
 
-            foreach (var lockSlot in overlapping)
+            foreach (var bayId in overlappingBayIds)
             {
-                if (!bayById.TryGetValue(lockSlot.BayId, out var bay))
+                if (!bayById.TryGetValue(bayId, out var bay))
                 {
                     continue;
                 }
@@ -36,7 +40,7 @@ namespace MyGarage.Services
             return (quick, repair);
         }
 
-        private static BookingFlowType ResolveFlow(string? bookingFlow, string? requestedServiceIds)
+        private static BookingFlowType ResolveFlow(string? bookingFlow, string? requestedServiceIds, string? requestedPackageIds = null)
         {
             if (!string.IsNullOrWhiteSpace(bookingFlow))
             {
@@ -45,14 +49,16 @@ namespace MyGarage.Services
                 if (key.Contains("fixed") || key.Contains("slot")) return BookingFlowType.Fixed;
             }
 
-            return string.IsNullOrWhiteSpace(requestedServiceIds) ? BookingFlowType.Flexible : BookingFlowType.Fixed;
+            return string.IsNullOrWhiteSpace(requestedServiceIds) && string.IsNullOrWhiteSpace(requestedPackageIds)
+                ? BookingFlowType.Flexible
+                : BookingFlowType.Fixed;
         }
 
         private static BookingFlowType ResolveFlowByAppointment(Appointment appointment)
         {
             if (!string.IsNullOrWhiteSpace(appointment.CustomerNotes) && appointment.CustomerNotes.Contains(AppointmentNoteMarkers.FlowFlexible, StringComparison.OrdinalIgnoreCase))
                 return BookingFlowType.Flexible;
-            return ResolveFlow(null, appointment.RequestedServiceIds);
+            return ResolveFlow(null, appointment.RequestedServiceIds, appointment.RequestedPackageIds);
         }
 
         private void ApplyUpdateAudit(Appointment appointment, long? actorStaffId)

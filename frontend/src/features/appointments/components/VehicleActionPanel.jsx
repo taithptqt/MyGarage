@@ -1,5 +1,19 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { extractField, formatStoredVehicleLabel } from "@features/appointments/utils/bookingCommon";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE } from "@shared/utils/licensePlateValidation";
+import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE } from "@shared/utils/vinValidation";
+
+function splitVehicleDisplayLabel(label) {
+  const normalized = String(label || "").trim();
+  if (!normalized) {
+    return { plate: "Không biển số", descriptor: "" };
+  }
+
+  const parts = normalized.split(" - ");
+  const plate = String(parts.shift() || "").trim() || normalized;
+  const descriptor = parts.join(" - ").trim();
+  return { plate, descriptor };
+}
 
 export default function VehicleActionPanel({
   linkedVehicles,
@@ -16,11 +30,14 @@ export default function VehicleActionPanel({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isNewVehicleFormVisible, setIsNewVehicleFormVisible] = useState(false);
+  const savedVehiclePopupRef = useRef(null);
 
   const selectedExistingKeys = useMemo(
-    () => new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
+    () =>
+      new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
     [selectedVehicles]
   );
+
   const selectableLinkedVehicles = useMemo(
     () =>
       (linkedVehicles || []).filter((vehicle) => {
@@ -38,13 +55,32 @@ export default function VehicleActionPanel({
     [draftVehicle.brandId, models]
   );
 
-  function handleOpenNewVehicleForm() {
-    setIsNewVehicleFormVisible(true);
-  }
+  const manufactureYearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= 1980; year -= 1) {
+      years.push(year);
+    }
+    return years;
+  }, []);
 
-  function handleCancelNewVehicleForm() {
-    setIsNewVehicleFormVisible(false);
-  }
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    function handleOutsidePointerDown(event) {
+      if (!savedVehiclePopupRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsidePointerDown);
+    document.addEventListener("touchstart", handleOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsidePointerDown);
+      document.removeEventListener("touchstart", handleOutsidePointerDown);
+    };
+  }, [isOpen]);
 
   function handleSubmitNewVehicle(event) {
     event?.preventDefault?.();
@@ -67,13 +103,13 @@ export default function VehicleActionPanel({
   function handleOpenNewVehicle(event) {
     event.preventDefault();
     event.stopPropagation();
-    handleOpenNewVehicleForm();
+    setIsNewVehicleFormVisible(true);
   }
 
   function handleCancelNewVehicle(event) {
     event.preventDefault();
     event.stopPropagation();
-    handleCancelNewVehicleForm();
+    setIsNewVehicleFormVisible(false);
   }
 
   function handlePickExistingVehicle(event, vehicle) {
@@ -116,7 +152,7 @@ export default function VehicleActionPanel({
 
       {isOpen ? (
         <div className="vehicle-popup-backdrop" onClick={() => setIsOpen(false)}>
-          <div className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
+          <div ref={savedVehiclePopupRef} className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
             <div className="vehicle-popup-head">
               <div className="vehicle-popup-head-text">
                 <h5>Chọn xe đã lưu lại</h5>
@@ -130,10 +166,14 @@ export default function VehicleActionPanel({
               {(linkedVehicles || []).length === 0 ? (
                 <p className="booking-empty">Chưa có xe đã lưu để chọn.</p>
               ) : selectableLinkedVehicles.length === 0 ? (
-                <p className="booking-empty">Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.</p>
+                <p className="booking-empty">
+                  Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.
+                </p>
               ) : (
                 selectableLinkedVehicles.map((vehicle) => {
                   const key = `existing-${Number(extractField(vehicle, ["id", "Id"]))}`;
+                  const vehicleLabel = formatStoredVehicleLabel(vehicle);
+                  const { plate, descriptor } = splitVehicleDisplayLabel(vehicleLabel);
                   return (
                     <button
                       key={key}
@@ -145,8 +185,8 @@ export default function VehicleActionPanel({
                         +
                       </span>
                       <div className="vehicle-popup-item-content">
-                        <strong>{formatStoredVehicleLabel(vehicle)}</strong>
-                        <small>Nhấn để thêm xe vào lịch hẹn</small>
+                        <strong>{plate}</strong>
+                        <small>{descriptor || "Nhấn để thêm xe vào lịch hẹn"}</small>
                       </div>
                       <span className="vehicle-popup-item-action">Thêm xe</span>
                     </button>
@@ -160,17 +200,20 @@ export default function VehicleActionPanel({
 
       {isNewVehicleFormVisible ? (
         <>
-          <div className="form-grid step4-form-grid">
-            <label>
-              Biển số xe <span>*</span>
+          <div className="form-grid step4-form-grid vehicle-new-form-grid">
+            <label className="vehicle-new-field vehicle-new-field-plate">
+              Biển số xe mới <span>*</span>
               <input
                 type="text"
                 value={draftVehicle.licensePlate}
                 onChange={(e) => onDraftChange("licensePlate", e.target.value)}
-                placeholder="Nhập biển số xe"
+                pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                title={VIETNAM_LICENSE_PLATE_TITLE}
+                style={{ textTransform: "uppercase" }}
+                placeholder="VD: 30A-12345"
               />
             </label>
-            <label>
+            <label className="vehicle-new-field vehicle-new-field-brand">
               Hãng xe <span>*</span>
               <select
                 value={draftVehicle.brandId}
@@ -179,7 +222,7 @@ export default function VehicleActionPanel({
                   onDraftChange("modelId", "");
                 }}
               >
-                <option value="">Chọn hãng xe</option>
+                <option value="">-- Chọn hãng --</option>
                 {(brands || []).map((brand) => (
                   <option key={extractField(brand, ["id", "Id"])} value={extractField(brand, ["id", "Id"])}>
                     {extractField(brand, ["name", "Name"], "")}
@@ -187,14 +230,14 @@ export default function VehicleActionPanel({
                 ))}
               </select>
             </label>
-            <label>
+            <label className="vehicle-new-field vehicle-new-field-model">
               Dòng xe <span>*</span>
               <select
                 value={draftVehicle.modelId}
                 disabled={!draftVehicle.brandId}
                 onChange={(e) => onDraftChange("modelId", e.target.value)}
               >
-                <option value="">Chọn dòng xe</option>
+                <option value="">-- Chọn dòng xe --</option>
                 {modelOptions.map((model) => (
                   <option key={extractField(model, ["id", "Id"])} value={extractField(model, ["id", "Id"])}>
                     {extractField(model, ["modelName", "ModelName"], "")}
@@ -202,15 +245,42 @@ export default function VehicleActionPanel({
                 ))}
               </select>
             </label>
-            <label>
-              Số VIN <span>*</span>
-              <input
-                type="text"
-                value={draftVehicle.vin}
-                onChange={(e) => onDraftChange("vin", e.target.value)}
-                placeholder="Nhập số VIN"
-              />
-            </label>
+            <div className="vehicle-new-row-bottom">
+              <label className="vehicle-new-field vehicle-new-field-color">
+                Màu sắc (tùy chọn)
+                <input
+                  type="text"
+                  value={draftVehicle.color || ""}
+                  onChange={(e) => onDraftChange("color", e.target.value)}
+                />
+              </label>
+              <label className="vehicle-new-field vehicle-new-field-year">
+                Năm sản xuất <span>*</span>
+                <select
+                  value={draftVehicle.manufactureYear || ""}
+                  onChange={(e) => onDraftChange("manufactureYear", e.target.value)}
+                >
+                  <option value="">-- Chọn năm --</option>
+                  {manufactureYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="vehicle-new-field vehicle-new-field-vin">
+                <span className="vehicle-new-label">VIN (tùy chọn)</span>
+                <input
+                  type="text"
+                  value={draftVehicle.vin}
+                  onChange={(e) => onDraftChange("vin", e.target.value)}
+                  pattern={VIETNAM_VIN_PATTERN}
+                  title={VIETNAM_VIN_TITLE}
+                  maxLength={17}
+                  style={{ textTransform: "uppercase" }}
+                />
+              </label>
+            </div>
           </div>
 
           <div className="vehicle-action-toolbar">
@@ -226,23 +296,29 @@ export default function VehicleActionPanel({
 
       {(selectedVehicles || []).length > 0 ? (
         <div className="vehicle-batch-list">
-          {selectedVehicles.map((vehicle) => (
-            <article
-              key={vehicle.key}
-              className={`vehicle-batch-item ${activeVehicleKey === vehicle.key ? "active" : ""}`}
-            >
-              <button
-                type="button"
-                className="vehicle-batch-select"
-                onClick={(event) => handleSelectVehicle(event, vehicle.key)}
+          {selectedVehicles.map((vehicle) => {
+            const { plate, descriptor } = splitVehicleDisplayLabel(vehicle.displayLabel);
+            return (
+              <article
+                key={vehicle.key}
+                className={`vehicle-batch-item ${activeVehicleKey === vehicle.key ? "active" : ""}`}
               >
-                <strong>{vehicle.displayLabel}</strong>
-              </button>
-              <button type="button" onClick={(event) => handleRemoveVehicle(event, vehicle.key)}>
-                Xóa
-              </button>
-            </article>
-          ))}
+                <button
+                  type="button"
+                  className="vehicle-batch-select"
+                  onClick={(event) => handleSelectVehicle(event, vehicle.key)}
+                >
+                  <span className="vehicle-batch-label">
+                    <strong>{plate}</strong>
+                    {descriptor ? <small>{descriptor}</small> : null}
+                  </span>
+                </button>
+                <button type="button" onClick={(event) => handleRemoveVehicle(event, vehicle.key)}>
+                  Xóa
+                </button>
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </section>

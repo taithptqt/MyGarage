@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Enums;
 using MyGarage.Models;
@@ -8,6 +9,14 @@ namespace MyGarage.Services;
 
 public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationService
 {
+    private const string PayrollPeriodStatusOpen = nameof(PayrollPeriodStatusCode.OPEN);
+    private const string PayrollRunStatusDraft = nameof(PayrollRunStatusCode.DRAFT);
+    private const string PayrollItemStatusDraft = nameof(PayrollItemStatusCode.DRAFT);
+    private const string StaffSalaryProfileStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
+    private const string StaffContractStatusActive = nameof(StaffContractStatusCode.ACTIVE);
+    private const string EmployeeLoanStatusActive = nameof(EmployeeLoanStatusCode.ACTIVE);
+    private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
+    private const string StaffStatusOnLeave = nameof(StaffStatusCode.ON_LEAVE);
     private readonly IGarageContext _db;
 
     public PayrollBatchCalculationService(IGarageContext db)
@@ -56,11 +65,11 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
     private static readonly HashSet<string> AcceptedApprovalStatuses =
     [
-        nameof(AccountingStatus.APPROVED),
-        nameof(AccountingStatus.APPLIED),
-        nameof(AccountingStatus.PAID),
-        nameof(AccountingStatus.POSTED),
-        nameof(AccountingStatus.COMPLETED)
+        nameof(AttendanceAdjustmentStatusCode.APPROVED),
+        nameof(AttendanceAdjustmentStatusCode.APPLIED),
+        nameof(OvertimeEntryStatusCode.PAID),
+        nameof(JournalEntryStatusCode.POSTED),
+        nameof(PaymentStatusCode.COMPLETED)
     ];
 
     private static readonly HashSet<string> AttendanceDeductionTypes =
@@ -76,33 +85,29 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
     private static readonly HashSet<string> AcceptedAdvanceStatuses =
     [
-        nameof(AccountingStatus.APPROVED),
-        nameof(AccountingStatus.DISBURSED),
-        nameof(AccountingStatus.PAID),
-        nameof(AccountingStatus.DEDUCTING)
+        nameof(SalaryAdvanceStatusCode.APPROVED),
+        nameof(SalaryAdvanceStatusCode.DEDUCTING)
     ];
 
     private static readonly HashSet<string> AcceptedLoanStatuses =
     [
-        nameof(StaffStatusCode.ACTIVE),
-        nameof(AccountingStatus.APPROVED),
-        nameof(AccountingStatus.REPAYING)
+        nameof(EmployeeLoanStatusCode.ACTIVE)
     ];
 
     private static readonly HashSet<string> ActiveStaffStatuses =
     [
-        nameof(StaffStatusCode.ACTIVE),
-        nameof(StaffStatusCode.ON_LEAVE)
+        StaffStatusActive,
+        StaffStatusOnLeave
     ];
 
     public async Task<PayrollBatchCalculationResult> CalculatePayrollForAllAsync(
         PayrollBatchCalculationCommand command,
         CancellationToken cancellationToken = default)
     {
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var period = await ResolvePayrollPeriodAsync(command, cancellationToken);
 
-        if (!string.Equals(NormalizeKey(period.Status), nameof(AccountingStatus.OPEN), StringComparison.Ordinal))
+        if (!string.Equals(NormalizeKey(period.Status), PayrollPeriodStatusOpen, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Batch payroll calculation only supports OPEN payroll period.");
         }
@@ -281,7 +286,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     item.PitAmount = pitAmount;
                     item.OtherDeduction = 0m;
                     item.NetPay = netPay;
-                    item.Status = nameof(AccountingStatus.DRAFT);
+                    item.Status = PayrollItemStatusDraft;
                     item.UpdatedAt = now;
                     updated++;
                 }
@@ -305,7 +310,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         PitAmount = pitAmount,
                         OtherDeduction = 0m,
                         NetPay = netPay,
-                        Status = nameof(AccountingStatus.DRAFT),
+                        Status = PayrollItemStatusDraft,
                         CreatedAt = now,
                         UpdatedAt = now
                     };
@@ -383,7 +388,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
         var openPeriod = await _db.PayrollPeriods
             .AsNoTracking()
-            .Where(x => x.Status != null && x.Status.ToUpper() == nameof(AccountingStatus.OPEN))
+            .Where(x => x.Status != null && x.Status.ToUpper() == PayrollPeriodStatusOpen)
             .OrderByDescending(x => x.StartDate)
             .ThenByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -417,7 +422,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 throw new InvalidOperationException("Selected payroll run does not belong to the selected payroll period.");
             }
 
-            if (!string.Equals(NormalizeKey(provided.Status), nameof(AccountingStatus.DRAFT), StringComparison.Ordinal))
+            if (!string.Equals(NormalizeKey(provided.Status), PayrollRunStatusDraft, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Batch calculation can only update a DRAFT payroll run.");
             }
@@ -426,7 +431,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         }
 
         var draftQuery = _db.PayrollRuns
-            .Where(x => x.PayrollPeriodId == payrollPeriodId && x.Status != null && x.Status.ToUpper() == nameof(AccountingStatus.DRAFT));
+            .Where(x => x.PayrollPeriodId == payrollPeriodId && x.Status != null && x.Status.ToUpper() == PayrollRunStatusDraft);
         if (branchId.HasValue)
         {
             draftQuery = draftQuery.Where(x => x.BranchId == branchId.Value);
@@ -452,13 +457,13 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             .MaxAsync(cancellationToken);
         var nextRunNo = Math.Max(1, (maxRunNo ?? 0) + 1);
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var run = new PayrollRun
         {
             PayrollPeriodId = payrollPeriodId,
             BranchId = branchId,
             RunNo = nextRunNo,
-            Status = nameof(AccountingStatus.DRAFT),
+            Status = PayrollRunStatusDraft,
             CalculatedBy = calculatedByUserId,
             CalculatedAt = now,
             CreatedAt = now,
@@ -520,7 +525,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         foreach (var row in rows)
         {
             if (result.ContainsKey(row.StaffId)) continue;
-            if (!string.Equals(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)), nameof(StaffStatusCode.ACTIVE), StringComparison.Ordinal)) continue;
+            if (!string.Equals(NormalizeStatus(row.Status, StaffSalaryProfileStatusActive), StaffSalaryProfileStatusActive, StringComparison.Ordinal)) continue;
             if (row.BaseSalary <= 0m) continue;
             result[row.StaffId] = row.BaseSalary;
         }
@@ -549,7 +554,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         foreach (var row in rows)
         {
             if (result.ContainsKey(row.StaffId)) continue;
-            if (!string.Equals(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)), nameof(StaffStatusCode.ACTIVE), StringComparison.Ordinal)) continue;
+            if (!string.Equals(NormalizeStatus(row.Status, StaffContractStatusActive), StaffContractStatusActive, StringComparison.Ordinal)) continue;
             result[row.StaffId] = new ContractCompensationSnapshot(
                 BaseSalary: Math.Max(0m, row.BaseSalary),
                 AllowanceAmount: Math.Max(0m, row.AllowanceAmount));
@@ -716,7 +721,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
         foreach (var row in rows)
         {
-            if (!AcceptedLoanStatuses.Contains(NormalizeStatus(row.Status, nameof(StaffStatusCode.ACTIVE)))) continue;
+            if (!AcceptedLoanStatuses.Contains(NormalizeStatus(row.Status, EmployeeLoanStatusActive))) continue;
             var plannedDeduction = row.MonthlyDeduction > 0m
                 ? Math.Min(row.MonthlyDeduction, row.OutstandingAmount)
                 : row.OutstandingAmount;
@@ -891,17 +896,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             return true;
         }
 
-        if (normalizedStatus.Contains("INACTIVE", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("TERMINAT", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("RESIGN", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("QUIT", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("FIRED", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("SUSPEND", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return true;
+        return false;
     }
 
     private static bool IsAdjustmentStatusAccepted(string? status)
@@ -1089,4 +1084,3 @@ public sealed class PayrollBatchCalculationResult
     public decimal NetTotal { get; set; }
     public string Message { get; set; } = "";
 }
-

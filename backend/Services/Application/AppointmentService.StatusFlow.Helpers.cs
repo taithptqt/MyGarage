@@ -10,7 +10,7 @@ namespace MyGarage.Services
             var appointment = await _appointmentRepository.GetByIdAsync(id);
             if (appointment == null) return null;
 
-            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(actorUserId);
+            var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
             return (appointment, actorStaffId);
         }
 
@@ -18,7 +18,7 @@ namespace MyGarage.Services
         {
             ApplyUpdateAudit(appointment, actorStaffId);
             var updated = await _appointmentRepository.UpdateAsync(id, appointment);
-            await _bookingGroupService.SyncCountersAsync(updated?.BookingGroupId, actorStaffId);
+            await _groupSessionService.SyncCountersAsync(updated?.GroupSessionId, actorStaffId);
             return updated;
         }
     }

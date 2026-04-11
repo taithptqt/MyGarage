@@ -20,6 +20,14 @@ export default function QCDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const contextBranchId = Number.isFinite(Number(selectedBranchId)) && Number(selectedBranchId) > 0
+    ? Number(selectedBranchId)
+    : 0;
+  const userBranchId = Number.isFinite(Number(user?.branchId ?? user?.BranchId)) && Number(user?.branchId ?? user?.BranchId) > 0
+    ? Number(user?.branchId ?? user?.BranchId)
+    : 0;
+  const effectiveBranchId = contextBranchId || userBranchId;
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -28,7 +36,11 @@ export default function QCDashboard() {
         getAllStaff()
       ]);
       
-      const branchStaff = sRes.filter(s => !selectedBranchId || s.branchId === Number(selectedBranchId));
+      const branchStaff = sRes.filter((s) => {
+        if (!effectiveBranchId) return true;
+        const staffBranchId = Number(s.branchId ?? s.BranchId ?? 0);
+        return staffBranchId === effectiveBranchId;
+      });
       const currentStaff = branchStaff.find(s => s.email === user.email || s.fullName === user.fullName);
       if (currentStaff) setStaffId(currentStaff.id);
       
@@ -38,7 +50,7 @@ export default function QCDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user, selectedBranchId]);
+  }, [effectiveBranchId, user]);
 
   useEffect(() => {
     fetchData();

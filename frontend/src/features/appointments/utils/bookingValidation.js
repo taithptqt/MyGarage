@@ -1,4 +1,8 @@
-﻿export function validateBookingStep(stepNumber, data) {
+import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
+import { isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { isValidVin } from "@shared/utils/vinValidation";
+
+export function validateBookingStep(stepNumber, data) {
   const {
     selectedCategoryIds,
     bookingFlow,
@@ -33,6 +37,7 @@
   if (stepNumber === 4) {
     if (!String(customerForm?.fullName || "").trim()) return "Vui lòng nhập họ tên khách hàng.";
     if (!String(customerForm?.phone || "").trim()) return "Vui lòng nhập số điện thoại khách hàng.";
+    if (!isValidVietnamesePhone(customerForm?.phone)) return "Số điện thoại khách hàng không đúng định dạng Việt Nam.";
     if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
     if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
 
@@ -54,7 +59,9 @@
       if (!newVehicle?.brandId) return "Vui lòng chọn hãng xe.";
       if (!newVehicle?.modelId) return "Vui lòng chọn dòng xe.";
       if (!String(newVehicle?.licensePlate || "").trim()) return "Vui lòng nhập biển số xe.";
+      if (!isValidVietnameseLicensePlate(newVehicle?.licensePlate)) return "Biển số xe không đúng định dạng Việt Nam.";
       if (!String(newVehicle?.vin || "").trim()) return "Vui lòng nhập số VIN.";
+      if (!isValidVin(newVehicle?.vin)) return "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
     }
   }
 

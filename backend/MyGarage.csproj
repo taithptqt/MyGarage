@@ -4,7 +4,18 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);tmp_build_verify_*/**;tmp_build_verify*/**</DefaultItemExcludes>
+    <DefaultItemExcludes>
+      $(DefaultItemExcludes);
+      backend/**;
+      bin_temp*/**;
+      tmp_build_verify*/**;
+      tmp_build_verify_*/**;
+      **/obj_codex/**;
+      **/bin_codex/**;
+      artifacts/**;
+      docs/**;
+      .dotnet_home/**;
+    </DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

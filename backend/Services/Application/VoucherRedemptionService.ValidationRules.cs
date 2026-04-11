@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Models;
@@ -9,6 +10,8 @@ namespace MyGarage.Services
 {
     public partial class VoucherRedemptionService
     {
+        private const string VoucherStatusActive = nameof(VoucherStatusCode.ACTIVE);
+
         private VoucherValidationResultResponseDto? ValidateVoucherState(Voucher voucher, DateTime now)
         {
             if (voucher.IsDeleted == true)
@@ -17,7 +20,7 @@ namespace MyGarage.Services
             }
 
             var status = (voucher.Status ?? string.Empty).Trim().ToUpperInvariant();
-            if (!string.IsNullOrWhiteSpace(status) && status != nameof(VoucherStatusCode.ACTIVE))
+            if (!string.IsNullOrWhiteSpace(status) && status != VoucherStatusActive)
             {
                 return BuildFail(MapStatusReason(status), $"Voucher status is {status}.", voucher);
             }

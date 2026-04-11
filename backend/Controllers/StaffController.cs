@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
@@ -27,12 +27,16 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null)
+        public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null, [FromQuery] long? teamId = null)
         {
             var items = await _staffService.GetAllAsync();
             if (branchId.HasValue)
             {
                 items = items.Where(s => s.BranchId == branchId.Value).ToList();
+            }
+            if (teamId.HasValue)
+            {
+                items = items.Where(s => s.TeamId == teamId.Value).ToList();
             }
             var dtos = _mapper.Map<IEnumerable<StaffResponseDto>>(items);
             return Ok(dtos);
@@ -95,18 +99,18 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Tệp ảnh không hợp lệ." });
+                return BadRequest(new { message = "T?p ?nh kh�ng h?p l?." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Chỉ chấp nhận tệp ảnh." });
+                return BadRequest(new { message = "Ch? ch?p nh?n t?p ?nh." });
             }
 
             var staff = await _staffService.GetByIdAsync(id);
             if (staff == null)
             {
-                return NotFound(new { message = "Không tìm thấy nhân viên." });
+                return NotFound(new { message = "Kh�ng t�m th?y nh�n vi�n." });
             }
 
             var extension = Path.GetExtension(file.FileName);
@@ -115,7 +119,7 @@ namespace MyGarage.Controllers
                 extension = ".jpg";
             }
 
-            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
             await using var stream = file.OpenReadStream();
             var avatarUrl = await _cloudStorageService.UploadAsync(
                 stream,

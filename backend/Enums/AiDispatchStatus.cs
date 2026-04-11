@@ -1,8 +1,10 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum AiDispatchStatus
 {
-    GENERATED,
+    PENDING,
+    REJECTED,
     APPLIED,
-    REJECTED
+    GENERATED
 }
+

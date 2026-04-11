@@ -15,6 +15,7 @@ namespace MyGarage.Controllers
     {
         private readonly IStandardServiceService _standardServiceService;
         private readonly IMapper _mapper;
+        private const string PackageCodePrefix = "PKG-";
 
         public StandardServicesController(IStandardServiceService standardServiceService, IMapper mapper)
         {
@@ -46,6 +47,12 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<StandardServiceResponseDto>> Create([FromBody] StandardServiceCreateDto itemDto)
         {
+            var invalidCodeResult = ValidateStandardServiceCode(itemDto?.Code);
+            if (invalidCodeResult != null)
+            {
+                return invalidCodeResult;
+            }
+
             var entity = _mapper.Map<StandardService>(itemDto);
             var createdItem = await _standardServiceService.AddAsync(entity);
             var responseDto = _mapper.Map<StandardServiceResponseDto>(createdItem);
@@ -55,6 +62,12 @@ namespace MyGarage.Controllers
         [HttpPut("{id:long}")]
         public async Task<ActionResult<StandardServiceResponseDto>> Update(long id, [FromBody] StandardServiceUpdateDto itemDto)
         {
+            var invalidCodeResult = ValidateStandardServiceCode(itemDto?.Code);
+            if (invalidCodeResult != null)
+            {
+                return invalidCodeResult;
+            }
+
             var existingItem = await _standardServiceService.GetByIdAsync(id);
             if (existingItem == null)
             {
@@ -82,6 +95,24 @@ namespace MyGarage.Controllers
             }
 
             return NoContent();
+        }
+
+        private ActionResult? ValidateStandardServiceCode(string? code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(new { message = "Mã dịch vụ không được để trống." });
+            }
+
+            if (code.Trim().StartsWith(PackageCodePrefix, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = "Mã bắt đầu bằng PKG- phải được quản lý ở bảng Packages, không tạo trong Standard Services."
+                });
+            }
+
+            return null;
         }
     }
 }

@@ -34,7 +34,7 @@ function Header({ overlay = false }) {
   const avatarUrl = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl);
   const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
-  const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(roleCode);
+  const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode);
 
   const dashboardPath = useMemo(() => {
     switch (roleCode) {
@@ -52,6 +52,8 @@ function Header({ overlay = false }) {
         return "/workshop/qc";
       case "FOREMAN":
         return "/workshop/foreman";
+      case "TEAM_LEADER":
+        return "/workshop/team-leader";
       default:
         return "";
     }

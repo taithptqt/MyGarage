@@ -1,71 +1,102 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+﻿import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
+  Container,
+  Flex,
   Heading,
   HStack,
-  Spinner,
-  Text,
-  SimpleGrid,
-  Badge,
-  Stack,
   Icon,
-  Progress,
-  Divider,
-  Image,
+  IconButton,
+  Input,
+  Stack,
+  Text,
+  Textarea,
   VStack,
-  Flex,
-  Tooltip,
+  SimpleGrid,
+  Radio,
+  RadioGroup,
+  Checkbox,
+  CheckboxGroup,
+  Center,
   useToast,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  Card,
+  CardBody,
+  FormLabel,
+  FormControl,
+  FormErrorMessage,
+  Image,
+  Badge,
   Modal,
   ModalOverlay,
   ModalContent,
   ModalBody,
   ModalCloseButton,
-  useDisclosure,
 } from "@chakra-ui/react";
 import {
-  MdSpeed,
-  MdLocalGasStation,
-  MdWarning,
-  MdCardGiftcard,
-  MdBuild,
-  MdHistory,
-  MdAssignment,
-  MdPhotoCamera,
+  MdArrowBack,
   MdSave,
+  MdSpeed,
+  MdWarning,
+  MdPhotoCamera,
   MdDelete,
   MdEdit,
+  MdLock,
+  MdAdd,
+  MdDirectionsCar,
+  MdPerson,
 } from "react-icons/md";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
-import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
+import { getAllVehicles } from "@features/admin/api/customerApi";
 
-function pick(obj, keys, fallback = null) {
-  for (const k of keys) {
-    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+function parseDefectsData(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.defectItems)) return parsed.defectItems;
+    return [];
+  } catch {
+    return [];
   }
-  return fallback;
 }
 
-function normalizeLog(row) {
-  return {
-    id: pick(row, ["id", "Id"]),
-    serviceOrderId: pick(row, ["serviceOrderId", "ServiceOrderId"]),
-    logType: pick(row, ["logType", "LogType"]),
-    odoReading: pick(row, ["odoReading", "OdoReading"]),
-    fuelLevel: pick(row, ["fuelLevel", "FuelLevel"]),
-    dashboardWarningLights: pick(row, ["dashboardWarningLights", "DashboardWarningLights"], ""),
-    valuables: pick(row, ["valuables", "Valuables"], ""),
-    defectsAndImages: pick(row, ["defectsAndImages", "DefectsAndImages"], ""),
-    customerSignatureUrl: pick(row, ["customerSignatureUrl", "CustomerSignatureUrl"], ""),
-    inspectorId: pick(row, ["inspectorId", "InspectorId"]),
-    createdAt: pick(row, ["createdAt", "CreatedAt"]),
-    createdBy: pick(row, ["createdBy", "CreatedBy"]),
-    updatedAt: pick(row, ["updatedAt", "UpdatedAt"]),
-    updatedBy: pick(row, ["updatedBy", "UpdatedBy"]),
-  };
+function createDefaultDefectItems() {
+  const now = Date.now();
+  return [
+    { id: now + 1, part: "Góc trước trái", issue: "", images: [] },
+    { id: now + 2, part: "Góc trước phải", issue: "", images: [] },
+    { id: now + 3, part: "Góc sau trái", issue: "", images: [] },
+    { id: now + 4, part: "Góc sau phải", issue: "", images: [] },
+  ];
+}
+
+function hasInspectionData(log) {
+  if (!log) return false;
+  const hasOdo = log.odoReading !== null && log.odoReading !== undefined && String(log.odoReading).trim() !== "";
+  const hasFuel = log.fuelLevel !== null && log.fuelLevel !== undefined && String(log.fuelLevel).trim() !== "";
+  const hasValuables = Boolean(String(log.valuables || "").trim());
+  const hasDefects = Boolean(String(log.defectsAndImages || "").trim());
+  const rawWarnings = String(log.dashboardWarningLights || "").trim();
+  const normalizedWarnings = rawWarnings.toUpperCase();
+  const isRequestMarker = normalizedWarnings === "PENDING" || normalizedWarnings === "ASSIGNED" || normalizedWarnings === "COMPLETED";
+  const hasRealWarnings = Boolean(rawWarnings) && !isRequestMarker;
+
+  return hasOdo || hasFuel || hasValuables || hasDefects || hasRealWarnings;
+}
+
+function sanitizeWarningLightsValue(rawValue) {
+  const value = String(rawValue || "").trim();
+  const normalized = value.toUpperCase();
+  if (normalized === "PENDING" || normalized === "ASSIGNED" || normalized === "COMPLETED") {
+    return "";
+  }
+  return value;
 }
 
 function isRequestOnlyLog(log) {
@@ -80,9 +111,9 @@ function isRequestOnlyLog(log) {
   return !hasOdo && !hasFuel && !hasValuables && !hasDefects && !hasSignature && isMarker;
 }
 
-const SignaturePad = ({ onSave, onClear }) => {
+function SignaturePad({ onSave, onClear }) {
   const canvasRef = useRef(null);
-  const isDrawing = useRef(false);
+  const isDrawingRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -93,11 +124,11 @@ const SignaturePad = ({ onSave, onClear }) => {
     ctx.lineCap = "round";
   }, []);
 
-  const getPos = (e) => {
+  const getPointer = (event) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
+    const touch = event.touches ? event.touches[0] : event;
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
@@ -106,537 +137,1010 @@ const SignaturePad = ({ onSave, onClear }) => {
     };
   };
 
-  const startDrawing = (e) => {
-    e.preventDefault();
-    isDrawing.current = true;
-    const pos = getPos(e);
+  const startDraw = (event) => {
+    event.preventDefault();
+    isDrawingRef.current = true;
+    const pos = getPointer(event);
     const ctx = canvasRef.current.getContext("2d");
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
   };
 
-  const draw = (e) => {
-    if (!isDrawing.current) return;
-    e.preventDefault();
-    const pos = getPos(e);
+  const draw = (event) => {
+    if (!isDrawingRef.current) return;
+    event.preventDefault();
+    const pos = getPointer(event);
     const ctx = canvasRef.current.getContext("2d");
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   };
 
-  const stopDrawing = () => {
-    if (!isDrawing.current) return;
-    isDrawing.current = false;
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    onSave(dataUrl);
+  const stopDraw = () => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    onSave(canvasRef.current.toDataURL("image/png"));
   };
 
   const clear = () => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     onClear();
   };
 
   return (
-    <Box w="full" mt={2}>
-      <Box 
-        border="2px solid" 
-        borderColor="blue.100" 
-        borderRadius="xl" 
-        bg="blue.50" 
-        position="relative"
-        overflow="hidden"
-        h="180px"
-        cursor="crosshair"
-      >
+    <Box>
+      <Box border="2px solid" borderColor="blue.100" borderRadius="xl" bg="blue.50" overflow="hidden" h="170px">
         <canvas
           ref={canvasRef}
-          width={600}
-          height={180}
-          onMouseDown={startDrawing}
+          width={640}
+          height={170}
+          onMouseDown={startDraw}
           onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseOut={stopDrawing}
-          onTouchStart={startDrawing}
+          onMouseUp={stopDraw}
+          onMouseOut={stopDraw}
+          onTouchStart={startDraw}
           onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-          style={{ width: '100%', height: '100%', touchAction: 'none' }}
+          onTouchEnd={stopDraw}
+          style={{ width: "100%", height: "100%", touchAction: "none" }}
         />
-        <Button 
-          size="xs" 
-          position="absolute" 
-          bottom={2} 
-          right={2} 
-          onClick={clear}
-          variant="ghost"
-          colorScheme="gray"
-        >
+      </Box>
+      <HStack justify="flex-end" mt={2}>
+        <Button size="sm" variant="ghost" onClick={clear}>
           Xóa chữ ký
         </Button>
-      </Box>
-    </Box>
-  );
-};
-
-const FuelLevelDisplay = ({ level }) => {
-  const percentage = level || 0;
-  let color = "red";
-  if (percentage > 25) color = "orange";
-  if (percentage > 50) color = "yellow";
-  if (percentage > 75) color = "green";
-
-  return (
-    <Box w="full">
-      <HStack justify="space-between" mb={1}>
-        <HStack spacing={1}>
-          <Icon as={MdLocalGasStation} color={`${color}.500`} />
-          <Text fontSize="xs" fontWeight="bold">Mức nhiên liệu</Text>
-        </HStack>
-        <Text fontSize="xs" fontWeight="bold">{percentage}%</Text>
       </HStack>
-      <Progress value={percentage} colorScheme={color} size="xs" borderRadius="full" bg="gray.100" />
-    </Box>
-  );
-};
-
-const WarningLights = ({ lights }) => {
-  if (!lights) return null;
-  const list = String(lights || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.length === 0) return null;
-
-  return (
-    <Box>
-      <HStack spacing={1} mb={2}>
-        <Icon as={MdWarning} color="orange.400" />
-        <Text fontSize="xs" fontWeight="bold">Đèn cảnh báo</Text>
-      </HStack>
-      <Flex flexWrap="wrap" gap={1}>
-        {list.map((light, idx) => (
-          <Badge key={idx} colorScheme="orange" variant="subtle" fontSize="2xs" px={2} borderRadius="full">
-            {light}
-          </Badge>
-        ))}
-      </Flex>
-    </Box>
-  );
-};
-
-const ConditionCard = ({ log, onUpdateSignature, onImageClick }) => {
-  const isCheckIn = log.logType?.toLowerCase().includes("in");
-  const toast = useToast();
-  const [showSignPad, setShowSignPad] = useState(false);
-  const [signature, setSignature] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Parse defectsAndImages JSON with robust error handling
-  let defectsData = { mainDescription: "", items: [], customerSignature: null, defectItems: [] };
-  try {
-    const rawData = log.defectsAndImages;
-    if (rawData) {
-      const parsed = typeof rawData === "string" ? JSON.parse(rawData) : rawData;
-      const finalObj = typeof parsed === "string" ? JSON.parse(parsed) : parsed;
-      
-      if (Array.isArray(finalObj)) {
-        defectsData.defectItems = finalObj;
-      } else if (finalObj && typeof finalObj === "object") {
-        // Legacy object-based structure
-        defectsData = { ...defectsData, ...finalObj };
-      }
-    }
-  } catch (e) {
-    console.error("Error parsing defectsData:", e);
-    defectsData.mainDescription = String(log.defectsAndImages || "");
-  }
-
-  // Ensure items is always an array
-  if (!Array.isArray(defectsData.items)) {
-    defectsData.items = [];
-  }
-
-  const finalSignature = String(log.customerSignatureUrl || "").trim();
-  const [signatureLoadFailed, setSignatureLoadFailed] = useState(false);
-
-  useEffect(() => {
-    setSignatureLoadFailed(false);
-  }, [log.id, finalSignature]);
-
-  const handleSignConfirm = async () => {
-    if (!signature) {
-      toast({ title: "Vui lòng ký vào khung", status: "warning" });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // 1. Upload signature to server to get URL
-      const { url } = await vehicleConditionLogApi.uploadSignature(signature);
-
-      // 2. Prepare updated defects (removing base64 to avoid trash data)
-      const updatedDefects = {
-        ...defectsData,
-        signedAt: new Date().toISOString()
-      };
-      // Explicitly remove base64 if it existed from previous logic
-      if (updatedDefects.customerSignature) {
-        delete updatedDefects.customerSignature;
-      }
-
-      const payload = {
-        ...log,
-        defectsAndImages: JSON.stringify(updatedDefects),
-        customerSignatureUrl: url
-      };
-
-      await vehicleConditionLogApi.update(log.id, payload);
-      toast({ title: "Đã lưu chữ ký thành công", status: "success" });
-      setShowSignPad(false);
-      if (onUpdateSignature) onUpdateSignature();
-    } catch (err) {
-      toast({ title: "Lỗi khi lưu chữ ký", status: "error" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Box
-      bg="white"
-      borderRadius="2xl"
-      p={5}
-      boxShadow="0px 18px 40px rgba(112, 144, 176, 0.08)"
-      border="1px solid"
-      borderColor="gray.50"
-      position="relative"
-    >
-      <HStack justify="space-between" mb={4}>
-        <Badge
-          colorScheme={isCheckIn ? "green" : "orange"}
-          fontSize="xs"
-          px={3}
-          py={1}
-          borderRadius="lg"
-          variant="solid"
-        >
-          {log.logType || "Ghi nhận"}
-        </Badge>
-        <Text fontSize="xs" color="gray.400" fontWeight="bold">
-          {formatOrderDateTime(log.createdAt)}
-        </Text>
-      </HStack>
-
-      <VStack align="stretch" spacing={5}>
-        <HStack spacing={4}>
-          <HStack flex={1} bg="gray.50" p={3} borderRadius="xl">
-            <Icon as={MdSpeed} color="blue.500" boxSize={5} />
-            <Box>
-              <Text fontSize="2xs" color="gray.500" fontWeight="bold" textTransform="uppercase">ODO</Text>
-              <Text fontSize="md" fontWeight="bold" color="#2b3674">{log.odoReading?.toLocaleString() || "0"} KM</Text>
-            </Box>
-          </HStack>
-          <Box flex={1.5}>
-            <FuelLevelDisplay level={log.fuelLevel} />
-          </Box>
-        </HStack>
-
-        <Box bg="gray.50" p={3} borderRadius="xl">
-          <HStack spacing={2} mb={1}>
-            <Icon as={MdCardGiftcard} color="purple.500" />
-            <Text fontSize="xs" fontWeight="bold" color="#2b3674" textTransform="uppercase">Tài sản trên xe</Text>
-          </HStack>
-          <Text fontSize="sm" color={log.valuables ? "gray.700" : "gray.400"}>
-            {log.valuables || "Không có tài sản gửi kèm"}
-          </Text>
-        </Box>
-
-        <Box>
-          <HStack spacing={2} mb={2}>
-            <Icon as={MdBuild} color="red.500" />
-            <Text fontSize="xs" fontWeight="bold" color="#2b3674" textTransform="uppercase">Hư hại & Hình ảnh</Text>
-          </HStack>
-          
-          {defectsData.mainDescription && (
-            <Text fontSize="sm" color="gray.700" mb={3} bg="gray.50" p={2} borderRadius="md">
-              {defectsData.mainDescription}
-            </Text>
-          )}
-
-          {/* NEW Structured Defect Items */}
-          {defectsData.defectItems && defectsData.defectItems.length > 0 && (
-            <VStack spacing={4} align="stretch" mt={2}>
-              {defectsData.defectItems.map((item, idx) => (
-                <Box key={idx} bg="gray.50" p={3} borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm">
-                  <HStack justify="space-between" mb={2}>
-                    <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2}>{item.part || "Khác"}</Badge>
-                  </HStack>
-                  <Text fontSize="sm" fontWeight="bold" color="#2b3674" mb={1}>{item.issue}</Text>
-                  
-                  {item.images && item.images.length > 0 ? (
-                    <SimpleGrid columns={{ base: 3, md: 4 }} spacing={2} mt={2}>
-                      {item.images.map((url, imgIdx) => (
-                        <Image 
-                          key={imgIdx} 
-                          src={url} 
-                          borderRadius="md" 
-                          boxSize="80px" 
-                          objectFit="cover" 
-                          cursor="pointer"
-                          _hover={{ opacity: 0.8, transform: "scale(1.05)" }}
-                          transition="all 0.2s"
-                          onClick={() => onImageClick && onImageClick(url)}
-                          border="1px solid"
-                          borderColor="gray.200"
-                        />
-                      ))}
-                    </SimpleGrid>
-                  ) : (
-                    <Text fontSize="xs" color="gray.400" fontStyle="italic">Không có hình ảnh đính kèm</Text>
-                  )}
-                </Box>
-              ))}
-            </VStack>
-          )}
-
-          {/* LEGACY Items Display (Backward Compatibility) */}
-          {defectsData.items && defectsData.items.length > 0 && (
-            <VStack spacing={3} align="stretch" mt={2}>
-              {defectsData.items.map((item, idx) => (
-                <HStack key={idx} spacing={4} align="start" bg="gray.50" p={2} borderRadius="lg">
-                  <Box 
-                    w="120px" 
-                    h="90px" 
-                    borderRadius="md" 
-                    overflow="hidden" 
-                    flexShrink={0} 
-                    border="1px solid" 
-                    borderColor="gray.200" 
-                    boxShadow="sm"
-                    cursor="pointer"
-                    _hover={{ opacity: 0.8, transform: "scale(1.02)" }}
-                    transition="all 0.2s"
-                    onClick={() => onImageClick && onImageClick(item.url)}
-                  >
-                    <Image src={item.url} w="full" h="full" objectFit="cover" />
-                  </Box>
-                  <Text fontSize="sm" color="gray.600" noOfLines={5} py={1}>{item.description || "(Không có mô tả)"}</Text>
-                </HStack>
-              ))}
-            </VStack>
-          )}
-
-          {!defectsData.mainDescription && (!defectsData.items || defectsData.items.length === 0) && (!defectsData.defectItems || defectsData.defectItems.length === 0) && (
-            <Text fontSize="sm" color="gray.400 italic">Không có ghi chú hư hại</Text>
-          )}
-        </Box>
-
-        <WarningLights lights={log.dashboardWarningLights} />
-
-        <Divider />
-
-        {finalSignature && !signatureLoadFailed ? (
-          <Box>
-            <HStack justify="space-between" mb={2}>
-               <Text fontSize="xs" fontWeight="bold" color="#2b3674" textTransform="uppercase">Chữ ký khách hàng</Text>
-               <Icon as={MdSave} color="green.500" />
-            </HStack>
-            <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="xl" p={2} textAlign="center">
-              <Image
-                src={finalSignature}
-                maxH="100px"
-                mx="auto"
-                onError={() => setSignatureLoadFailed(true)}
-              />
-            </Box>
-          </Box>
-        ) : (
-          <Box>
-            {!showSignPad ? (
-              <Button 
-                w="full" 
-                size="sm" 
-                colorScheme="blue" 
-                variant="outline" 
-                leftIcon={<MdEdit />}
-                onClick={() => setShowSignPad(true)}
-                borderRadius="xl"
-              >
-                KHÁCH HÀNG KÝ DUYỆT
-              </Button>
-            ) : (
-              <VStack spacing={3}>
-                 <Text fontSize="xs" fontWeight="bold" color="red.500" w="full">Mời khách hàng ký vào khung dưới:</Text>
-                 <SignaturePad onSave={setSignature} onClear={() => setSignature(null)} />
-                 <HStack w="full">
-                    <Button size="sm" flex={1} variant="ghost" onClick={() => setShowSignPad(false)}>Hủy</Button>
-                    <Button 
-                      size="sm" 
-                      flex={2} 
-                      colorScheme="green" 
-                      onClick={handleSignConfirm}
-                      isLoading={submitting}
-                    >
-                      Xác nhận chữ ký
-                    </Button>
-                 </HStack>
-              </VStack>
-            )}
-          </Box>
-        )}
-      </VStack>
-    </Box>
-  );
-};
-
-export default function VehicleConditionLogsPage() {
-  const navigate = useNavigate();
-  const { orderId } = useParams();
-
-  const [order, setOrder] = useState(null);
-  const [allLogs, setAllLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const [selectedImage, setSelectedImage] = useState(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const [orderRes, logsRes] = await Promise.all([
-          serviceOrderApi.getById(orderId),
-          vehicleConditionLogApi.getByServiceOrderId(orderId),
-        ]);
-        setOrder(orderRes || null);
-        setAllLogs(Array.isArray(logsRes) ? logsRes.map(normalizeLog) : []);
-      } catch (err) {
-        setError(err?.message || "Không thể tải nhật ký xe.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [orderId]);
-
-  const displayLogs = useMemo(() => {
-    return (allLogs || []).filter((log) => !isRequestOnlyLog(log));
-  }, [allLogs]);
-
-  const showingVehicleHistoryFallback = false; // Simplified for performance
-
-  return (
-    <Box p={6} bg="#f4f7fe" minH="100vh">
-      <HStack justify="space-between" mb={6} flexWrap="wrap" gap={3}>
-        <Box>
-          <HStack spacing={2} mb={1}>
-            <Icon as={MdAssignment} boxSize={6} color="blue.500" />
-            <Heading size="lg" color="#2b3674">Nhật ký xe</Heading>
-          </HStack>
-          <HStack spacing={4}>
-            <Text color="#707eae" fontWeight="bold">
-              Mã lệnh: <Badge variant="solid" colorScheme="blue">{order?.code || `#${orderId}`}</Badge>
-            </Text>
-            {order?.vehicleLicensePlate && (
-              <Text color="#707eae" fontWeight="bold">
-                Biển số: <Badge variant="outline" colorScheme="gray">{order.vehicleLicensePlate}</Badge>
-              </Text>
-            )}
-          </HStack>
-        </Box>
-        <Button
-          leftIcon={<MdSpeed />}
-          colorScheme="brand"
-          bg="blue.500"
-          _hover={{ bg: "blue.600" }}
-          color="white"
-          onClick={() => navigate("/workshop/reception")}
-          borderRadius="xl"
-          px={6}
-        >
-          Quay lại Reception
-        </Button>
-      </HStack>
-
-      {loading ? (
-        <Flex justify="center" align="center" py={20}>
-          <Spinner thickness="4px" speed="0.65s" emptyColor="gray.200" color="blue.500" size="xl" />
-        </Flex>
-      ) : error ? (
-        <Box bg="red.50" p={4} borderRadius="lg" border="1px solid" borderColor="red.100">
-          <Text color="red.500" fontWeight="bold">{error}</Text>
-        </Box>
-      ) : (
-        <>
-          {showingVehicleHistoryFallback && (
-            <HStack bg="orange.50" p={4} borderRadius="xl" mb={6} border="1px solid" borderColor="orange.100" spacing={3}>
-              <Icon as={MdHistory} boxSize={5} color="orange.500" />
-              <Box>
-                <Text color="orange.800" fontWeight="bold" fontSize="sm">
-                  Đang hiển thị lịch sử xe
-                </Text>
-                <Text color="orange.700" fontSize="xs">
-                  Lệnh hiện tại chưa có biên bản. Dưới đây là các lần ghi nhận trước đó của xe này để bạn tham khảo.
-                </Text>
-              </Box>
-            </HStack>
-          )}
-
-          {displayLogs.length === 0 ? (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              bg="white"
-              borderRadius="2xl"
-              p={10}
-              border="2px dashed"
-              borderColor="gray.200"
-            >
-              <Icon as={MdAssignment} boxSize={12} color="gray.300" mb={4} />
-              <Text color="gray.500" fontWeight="bold">Chưa có dữ liệu nhật ký cho xe này.</Text>
-              <Text color="gray.400" fontSize="sm">Các bản ghi Check-in/Check-out sẽ xuất hiện tại đây.</Text>
-            </Flex>
-          ) : (
-            <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-              {displayLogs.map((log) => (
-                <ConditionCard 
-                  key={log.id} 
-                  log={log} 
-                  onImageClick={(url) => {
-                    setSelectedImage(url);
-                    onOpen();
-                  }}
-                  onUpdateSignature={() => {
-                    // Refetch data to show the new signature
-                    window.location.reload();
-                  }}
-                />
-              ))}
-            </SimpleGrid>
-          )}
-        </>
-      )}
-
-      {/* Image Zoom Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="full" isCentered>
-        <ModalOverlay bg="blackAlpha.800" backdropFilter="blur(10px)" />
-        <ModalContent bg="transparent" boxShadow="none">
-          <ModalCloseButton color="white" size="lg" zIndex={2} bg="blackAlpha.500" borderRadius="full" m={4} />
-          <ModalBody px={5} py={20} display="flex" alignItems="center" justifyContent="center" onClick={onClose}>
-            <Image 
-              src={selectedImage} 
-              maxH="85vh" 
-              maxW="90vw" 
-              objectFit="contain" 
-              borderRadius="xl"
-              boxShadow="2xl"
-              mx="auto"
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 }
+
+function readField(source, keys, fallback = "") {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeKeyword(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function hasRequiredCornerCoverage(items) {
+  const coverage = {
+    frontLeft: false,
+    frontRight: false,
+    rearLeft: false,
+    rearRight: false,
+  };
+
+  (items || []).forEach((item) => {
+    const images = Array.isArray(item?.images) ? item.images : [];
+    if (images.length === 0) return;
+
+    const part = normalizeKeyword(item?.part);
+    if (!coverage.frontLeft && (part.includes("goc truoc trai") || part.includes("truoc trai") || part.includes("front left"))) {
+      coverage.frontLeft = true;
+    }
+    if (!coverage.frontRight && (part.includes("goc truoc phai") || part.includes("truoc phai") || part.includes("front right"))) {
+      coverage.frontRight = true;
+    }
+    if (!coverage.rearLeft && (part.includes("goc sau trai") || part.includes("sau trai") || part.includes("rear left") || part.includes("back left"))) {
+      coverage.rearLeft = true;
+    }
+    if (!coverage.rearRight && (part.includes("goc sau phai") || part.includes("sau phai") || part.includes("rear right") || part.includes("back right"))) {
+      coverage.rearRight = true;
+    }
+  });
+
+  return coverage.frontLeft && coverage.frontRight && coverage.rearLeft && coverage.rearRight;
+}
+
+export default function VehicleConditionLogsPage() {
+  const { orderId } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const phase = "CHECK_IN";
+
+  const [order, setOrder] = useState(null);
+  const [allLogs, setAllLogs] = useState([]);
+  const [targetLog, setTargetLog] = useState(null);
+  const [requestLog, setRequestLog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorHeader, setErrorHeader] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
+  const [resolvedVehicle, setResolvedVehicle] = useState(null);
+
+  // Form states
+  const [editingLogId, setEditingLogId] = useState(null);
+  const [odo, setOdo] = useState("");
+  const [odoError, setOdoError] = useState("");
+  const [fuel, setFuel] = useState("50");
+  const [warningLights, setWarningLights] = useState([]);
+  const [valuables, setValuables] = useState("");
+  const [defectItems, setDefectItems] = useState(createDefaultDefectItems);
+  const [inputKey, setInputKey] = useState(Date.now());
+
+  const commonWarningLights = [
+    "Check Engine",
+    "ABS",
+    "Airbag",
+    "Brake System",
+    "Oil Pressure",
+    "Battery/Charging",
+    "Tire Pressure (TPMS)",
+  ];
+
+  const displayVehiclePlate = useMemo(
+    () =>
+      firstText(
+        order?.vehicleLicensePlate,
+        order?.VehicleLicensePlate,
+        resolvedVehicle?.licensePlate,
+        resolvedVehicle?.LicensePlate,
+        "-"
+      ),
+    [order, resolvedVehicle]
+  );
+
+  const isTargetSigned = Boolean(String(targetLog?.customerSignatureUrl || "").trim());
+  const shouldShowForm = !isTargetSigned;
+
+  const prefillFormFromLog = useCallback((log) => {
+    setEditingLogId(log?.id || null);
+    setOdo(log?.odoReading !== null && log?.odoReading !== undefined ? String(log.odoReading) : "");
+    setFuel(log?.fuelLevel !== null && log?.fuelLevel !== undefined ? String(log.fuelLevel) : "50");
+    const safeWarningLights = sanitizeWarningLightsValue(log?.dashboardWarningLights);
+    setWarningLights(safeWarningLights ? safeWarningLights.split(", ").filter(Boolean) : []);
+    setValuables(log?.valuables || "");
+
+    const parsed = parseDefectsData(log?.defectsAndImages);
+    if (parsed.length > 0) {
+      setDefectItems(
+        parsed.map((d, idx) => ({
+          id: Date.now() + idx,
+          part: d?.part || "",
+          issue: d?.issue || "",
+          images: Array.isArray(d?.images)
+            ? d.images.map((url, i) => ({ id: `${Date.now()}-${idx}-${i}`, url }))
+            : [],
+        }))
+      );
+      return;
+    }
+
+    setDefectItems(createDefaultDefectItems());
+  }, []);
+
+  const fetchInitialData = useCallback(async () => {
+    setLoading(true);
+    setErrorHeader("");
+
+    try {
+      const orderRes = await serviceOrderApi.getById(orderId);
+      if (!orderRes) {
+        setErrorHeader("Không tìm thấy lệnh sửa chữa này.");
+        return;
+      }
+      setOrder(orderRes);
+
+      try {
+        const hasPlateOnOrder = Boolean(firstText(orderRes?.vehicleLicensePlate, orderRes?.VehicleLicensePlate));
+        const vehicleId = Number(readField(orderRes, ["vehicleId", "VehicleId"], 0));
+        if (!hasPlateOnOrder && Number.isFinite(vehicleId) && vehicleId > 0) {
+          const vehiclesRes = await getAllVehicles();
+          const vehicles = Array.isArray(vehiclesRes) ? vehiclesRes : [];
+          const matchedVehicle =
+            vehicles.find((v) => Number(readField(v, ["id", "Id"], 0)) === vehicleId) || null;
+          setResolvedVehicle(matchedVehicle);
+        } else {
+          setResolvedVehicle(null);
+        }
+      } catch {
+        setResolvedVehicle(null);
+      }
+
+      let logsRes = await vehicleConditionLogApi.getByServiceOrderId(orderId);
+      let logs = Array.isArray(logsRes) ? logsRes : [];
+
+      const hasAnyCheckIn = logs.some((x) => String(x.logType || "").toUpperCase() === phase);
+      if (!hasAnyCheckIn) {
+        try {
+          await serviceOrderApi.createCheckInRequest(Number(orderId));
+          logsRes = await vehicleConditionLogApi.getByServiceOrderId(orderId);
+          logs = Array.isArray(logsRes) ? logsRes : logs;
+        } catch {
+          // Ignore duplicate creation and continue.
+        }
+      }
+
+      setAllLogs(logs);
+
+      const logsWithData = logs.filter(hasInspectionData);
+      const requestOnlyLogs = logs.filter(isRequestOnlyLog);
+
+      const latestPhaseRequestLog = requestOnlyLogs
+        .filter((x) => String(x.logType || "").toUpperCase() === phase)
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+      setRequestLog(latestPhaseRequestLog);
+
+      const phaseLogs = logsWithData
+        .filter((x) => String(x.logType || "").toUpperCase() === phase)
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      const latestPhaseLog = phaseLogs[0] || null;
+      const fallbackLog = latestPhaseLog || latestPhaseRequestLog;
+      setTargetLog(fallbackLog);
+
+      if (fallbackLog && !String(fallbackLog.customerSignatureUrl || "").trim()) {
+        prefillFormFromLog(fallbackLog);
+      } else if (!fallbackLog) {
+        setEditingLogId(null);
+        setOdo("");
+        setFuel("50");
+        setWarningLights([]);
+        setValuables("");
+        setDefectItems(createDefaultDefectItems());
+      }
+    } catch (err) {
+      setErrorHeader("Đã xảy ra lỗi khi tải dữ liệu. Vui lòng thử lại.");
+      toast({ title: "Lỗi tải thông tin", status: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId, phase, prefillFormFromLog, toast]);
+
+  useEffect(() => {
+    void fetchInitialData();
+  }, [fetchInitialData]);
+
+  const validateOdo = (value) => {
+    const val = parseInt(value, 10);
+    if (!value) {
+      setOdoError("Vui lòng nhập số KM (ODO).");
+      return false;
+    }
+    if (Number.isNaN(val) || val <= 0 || val >= 2000000) {
+      setOdoError("Số KM phải lớn hơn 0 và nhỏ hơn 2.000.000.");
+      return false;
+    }
+
+    setOdoError("");
+    return true;
+  };
+
+  const handleImageUpload = (e, defectIndex) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setDefectItems((prev) => {
+          const next = [...prev];
+          next[defectIndex].images = [
+            ...(next[defectIndex].images || []),
+            { id: `${Date.now()}-${Math.random()}`, url: reader.result, file },
+          ];
+          return next;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setInputKey(Date.now());
+  };
+
+  const removeImage = (defectIndex, imageId) => {
+    setDefectItems((prev) => {
+      const next = [...prev];
+      next[defectIndex].images = (next[defectIndex].images || []).filter((img) => img.id !== imageId);
+      return next;
+    });
+  };
+
+  const addDefect = () => {
+    setDefectItems((prev) => [...prev, { id: Date.now(), part: "", issue: "", images: [] }]);
+  };
+
+  const removeDefect = (index) => {
+    if (defectItems.length <= 1) {
+      setDefectItems(createDefaultDefectItems());
+      return;
+    }
+    setDefectItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateDefectField = (index, field, value) => {
+    setDefectItems((prev) => {
+      const next = [...prev];
+      next[index][field] = value;
+      return next;
+    });
+  };
+
+  const persistCheckIn = async (signatureUrl = "") => {
+    const processedDefectItems = await Promise.all(
+      defectItems.map(async (item) => {
+        const uploadedImageUrls = await Promise.all(
+          (item.images || []).map(async (img) => {
+            if (img.url && !String(img.url).startsWith("data:")) return img.url;
+            const { url } = await vehicleConditionLogApi.uploadImage(img.file || img.url);
+            return url;
+          })
+        );
+
+        return {
+          part: item.part || "Khác",
+          issue: item.issue || "",
+          images: uploadedImageUrls,
+        };
+      })
+    );
+
+    const payload = {
+      serviceOrderId: Number(orderId),
+      logType: phase,
+      odoReading: Number(odo),
+      fuelLevel: Number(fuel),
+      dashboardWarningLights: warningLights.join(", "),
+      valuables,
+      defectsAndImages: JSON.stringify(processedDefectItems),
+      customerSignatureUrl: signatureUrl,
+      inspectorId: targetLog?.inspectorId || null,
+    };
+
+    const targetUpdateId = editingLogId || requestLog?.id || null;
+    if (targetUpdateId) {
+      await vehicleConditionLogApi.update(targetUpdateId, payload);
+      return;
+    }
+
+    await vehicleConditionLogApi.create(payload);
+  };
+
+  const handleSave = async () => {
+    if (!validateOdo(odo)) {
+      toast({ title: odoError || "Vui lòng kiểm tra lại ODO", status: "warning" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await persistCheckIn("");
+      toast({
+        title: "Đã lưu tạm check-in",
+        description: "Bạn có thể tiếp tục chỉnh sửa trước khi khách hàng ký.",
+        status: "success",
+        duration: 2800,
+      });
+      await fetchInitialData();
+    } catch (err) {
+      toast({
+        title: "Lỗi khi lưu dữ liệu",
+        description: err?.response?.data?.message || err?.message,
+        status: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSignCheckIn = async () => {
+    if (!validateOdo(odo)) {
+      toast({ title: odoError || "Vui lòng kiểm tra lại ODO", status: "warning" });
+      return;
+    }
+
+    if (!hasRequiredCornerCoverage(defectItems)) {
+      toast({
+        title: "Chưa đủ ảnh 4 góc xe",
+        description: "Cần có ảnh cho đủ trước trái, trước phải, sau trái, sau phải trước khi ký.",
+        status: "warning",
+        duration: 4200,
+      });
+      return;
+    }
+
+    if (!signatureDraft) {
+      toast({
+        title: "Chưa có chữ ký khách hàng",
+        description: "Vui lòng mở khung chữ ký và mời khách hàng ký xác nhận.",
+        status: "warning",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { url } = await vehicleConditionLogApi.uploadSignature(signatureDraft);
+      await persistCheckIn(String(url || ""));
+      toast({
+        title: "Đã hoàn tất check-in",
+        description: "Biên bản đã khóa chỉnh sửa. Có thể tiếp tục bước xử lý khác.",
+        status: "success",
+        duration: 3200,
+      });
+      await fetchInitialData();
+      setShowSignaturePad(false);
+      setSignatureDraft("");
+    } catch (err) {
+      toast({
+        title: "Lỗi khi ký check-in",
+        description: err?.response?.data?.message || err?.message,
+        status: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Box p={10} textAlign="center">Đang tải...</Box>;
+
+  if (errorHeader) {
+    return (
+      <Box p={10} textAlign="center">
+        <VStack spacing={4}>
+          <Icon as={MdWarning} color="red.500" boxSize={12} />
+          <Heading size="md">{errorHeader}</Heading>
+          <Button onClick={() => navigate("/workshop/reception")}>Quay lại Reception</Button>
+        </VStack>
+      </Box>
+    );
+  }
+
+  const parsedDefects = parseDefectsData(targetLog?.defectsAndImages);
+  const displayWarningLights = sanitizeWarningLightsValue(targetLog?.dashboardWarningLights);
+  const titleText = "Check-in tình trạng xe";
+  const infoCardProps = {
+    borderRadius: "20px",
+    border: "1px solid",
+    borderColor: "#d7e3f5",
+    bg: "white",
+    boxShadow: "0 12px 28px rgba(27, 37, 89, 0.08)",
+  };
+
+  return (
+    <Box bg="linear-gradient(180deg, #f5f8ff 0%, #eef3fb 100%)" minH="100vh" pb={10}>
+      <Container maxW="1720px" pt={{ base: 4, md: 6 }}>
+        <Box
+          borderRadius="22px"
+          border="1px solid"
+          borderColor="#d7e3f5"
+          bg="white"
+          px={{ base: 4, md: 6 }}
+          py={{ base: 4, md: 5 }}
+          mb={6}
+          boxShadow="0 12px 28px rgba(27, 37, 89, 0.08)"
+        >
+          <Breadcrumb fontSize="sm" color="gray.500" mb={3}>
+            <BreadcrumbItem>
+              <BreadcrumbLink onClick={() => navigate("/workshop/reception")}>Reception</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbItem isCurrentPage>
+              <BreadcrumbLink>Check-in</BreadcrumbLink>
+            </BreadcrumbItem>
+          </Breadcrumb>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} gap={4} flexWrap="wrap">
+            <HStack spacing={4} align="start">
+              <IconButton
+                icon={<MdArrowBack />}
+                onClick={() => navigate("/workshop/reception")}
+                variant="ghost"
+                borderRadius="full"
+                aria-label="Quay lại"
+              />
+              <VStack align="start" spacing={1}>
+                <Heading size="md" color="#1B2559" fontWeight="800">{titleText}</Heading>
+                <Text fontSize="sm" color="gray.600">
+                  Lệnh: <strong>{order?.code || `#${orderId}`}</strong> - Biển số: <strong>{displayVehiclePlate}</strong>
+                </Text>
+                <Badge
+                  borderRadius="full"
+                  bg="#e8f0ff"
+                  color="#2b4fa8"
+                  px={3}
+                  py={1}
+                  fontSize="11px"
+                  fontWeight="700"
+                >
+                  Lễ tân xử lý trực tiếp check-in/check-out
+                </Badge>
+              </VStack>
+            </HStack>
+
+            {shouldShowForm ? (
+              <HStack spacing={2} flexWrap="wrap" justify={{ base: "start", md: "end" }} align="center">
+                <Button
+                  leftIcon={<Icon as={MdSave} boxSize={4} />}
+                  bg="#2f5fbf"
+                  color="white"
+                  mt={0}
+                  h="40px"
+                  minH="40px"
+                  px={4}
+                  display="inline-flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  lineHeight="1"
+                  iconSpacing={2}
+                  sx={{
+                    "& .chakra-button__icon": {
+                      display: "inline-flex",
+                      alignItems: "center",
+                      lineHeight: 0,
+                    },
+                  }}
+                  onClick={handleSave}
+                  isLoading={saving}
+                  _hover={{ bg: "#234b9b" }}
+                >
+                  Lưu tạm
+                </Button>
+                <Button
+                  leftIcon={<Icon as={MdEdit} boxSize={4} />}
+                  colorScheme="green"
+                  mt={0}
+                  h="40px"
+                  minH="40px"
+                  px={4}
+                  display="inline-flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  lineHeight="1"
+                  iconSpacing={2}
+                  sx={{
+                    "& .chakra-button__icon": {
+                      display: "inline-flex",
+                      alignItems: "center",
+                      lineHeight: 0,
+                    },
+                  }}
+                  onClick={handleSignCheckIn}
+                  isLoading={saving}
+                >
+                  Ký xác nhận
+                </Button>
+              </HStack>
+            ) : isTargetSigned ? (
+              <HStack spacing={2} color="#2f5fbf" bg="#edf4ff" px={3} py={2} borderRadius="full">
+                <Icon as={MdLock} />
+                <Text fontWeight="700">Đã ký, đã khóa chỉnh sửa</Text>
+              </HStack>
+            ) : null}
+          </Flex>
+        </Box>
+
+        <Box w="100%">
+          <Stack spacing={6}>
+        {shouldShowForm ? (
+          <Stack spacing={8}>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+              <Card {...infoCardProps}>
+                <CardBody>
+                  <VStack align="stretch" spacing={6}>
+                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Thông số vận hành</Heading>
+
+                    <FormControl isRequired isInvalid={!!odoError}>
+                      <FormLabel fontSize="sm" fontWeight="bold">Số KM hiển thị trên Taplo (ODO)</FormLabel>
+                      <HStack mb={2}>
+                        <Icon as={MdSpeed} color={odoError ? "red.500" : "blue.500"} boxSize={5} />
+                        <Input
+                          type="number"
+                          placeholder="Nhập số KM..."
+                          value={odo}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOdo(val);
+                            validateOdo(val);
+                          }}
+                          onBlur={() => validateOdo(odo)}
+                          borderRadius="xl"
+                        />
+                      </HStack>
+                      {odoError ? <FormErrorMessage>{odoError}</FormErrorMessage> : null}
+                    </FormControl>
+
+                    <FormControl>
+                      <FormLabel fontSize="sm" fontWeight="bold">Mức nhiên liệu hiện tại (%)</FormLabel>
+                      <RadioGroup onChange={setFuel} value={fuel}>
+                        <SimpleGrid columns={3} spacing={2}>
+                          <Radio value="0">Cạn (0%)</Radio>
+                          <Radio value="25">1/4 (25%)</Radio>
+                          <Radio value="50">1/2 (50%)</Radio>
+                          <Radio value="75">3/4 (75%)</Radio>
+                          <Radio value="100">Đầy (100%)</Radio>
+                        </SimpleGrid>
+                      </RadioGroup>
+                    </FormControl>
+                  </VStack>
+                </CardBody>
+              </Card>
+
+              <Card {...infoCardProps}>
+                <CardBody>
+                  <VStack align="stretch" spacing={6}>
+                    <Heading size="xs" color="#2b3674" textTransform="uppercase">Hệ thống cảnh báo</Heading>
+                    <FormControl>
+                      <VStack align="stretch" spacing={3}>
+                        <Flex justify="space-between" align="center" gap={3} wrap="wrap">
+                          <FormLabel fontSize="sm" fontWeight="700" mb={0}>
+                            Đèn cảnh báo đang sáng
+                          </FormLabel>
+                          <Badge
+                            borderRadius="full"
+                            px={3}
+                            py={1}
+                            fontSize="xs"
+                            colorScheme={warningLights.length > 0 ? "red" : "gray"}
+                            variant="subtle"
+                          >
+                            {warningLights.length}/{commonWarningLights.length} đèn
+                          </Badge>
+                        </Flex>
+
+                        <CheckboxGroup colorScheme="red" value={warningLights} onChange={setWarningLights}>
+                          <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
+                            {commonWarningLights.map((light) => {
+                              const isSelected = warningLights.includes(light);
+                              return (
+                                <Box
+                                  key={light}
+                                  border="1px solid"
+                                  borderColor={isSelected ? "red.300" : "#dbe4f5"}
+                                  bg={isSelected ? "red.50" : "white"}
+                                  borderRadius="xl"
+                                  px={3}
+                                  py={2.5}
+                                  transition="all 0.2s ease"
+                                >
+                                  <Checkbox
+                                    value={light}
+                                    w="100%"
+                                    display="inline-flex"
+                                    alignItems="center"
+                                    flexDirection="row"
+                                    sx={{
+                                      "&": {
+                                        alignItems: "center",
+                                      },
+                                      ".chakra-checkbox__label": {
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        marginInlineStart: "10px",
+                                        marginTop: 0,
+                                        fontSize: "14px",
+                                        fontWeight: 600,
+                                        color: "#253968",
+                                        lineHeight: "1.25",
+                                      },
+                                      ".chakra-checkbox__control": {
+                                        marginTop: 0,
+                                        borderColor: isSelected ? "red.400" : "#bdcce6",
+                                        bg: isSelected ? "red.500" : "white",
+                                      },
+                                    }}
+                                  >
+                                    {light}
+                                  </Checkbox>
+                                </Box>
+                              );
+                            })}
+                          </SimpleGrid>
+                        </CheckboxGroup>
+
+                        <Text fontSize="xs" color="gray.500">
+                          Chọn tất cả đèn đang hiển thị trên bảng táp-lô tại thời điểm tiếp nhận.
+                        </Text>
+                      </VStack>
+                    </FormControl>
+                  </VStack>
+                </CardBody>
+              </Card>
+            </SimpleGrid>
+
+            <Card {...infoCardProps}>
+              <CardBody>
+                <VStack align="stretch" spacing={4}>
+                  <Heading size="xs" color="#2b3674" textTransform="uppercase">Tài sản trên xe</Heading>
+                  <Textarea
+                    placeholder="Ghi chú các tài sản có giá trị (ví tiền, kính mát, điện thoại...)"
+                    value={valuables}
+                    onChange={(e) => setValuables(e.target.value)}
+                    borderRadius="xl"
+                    rows={4}
+                  />
+                </VStack>
+              </CardBody>
+            </Card>
+
+            <VStack align="stretch" spacing={6}>
+              <Heading size="md" color="#2b3674">Danh sách hư hại và hình ảnh</Heading>
+              <Text fontSize="sm" color="red.500" fontWeight="600">
+                Bắt buộc có ảnh cho đủ 4 góc: góc trước trái, góc trước phải, góc sau trái, góc sau phải.
+              </Text>
+              {defectItems.map((item, idx) => (
+                <Card key={item.id} {...infoCardProps}>
+                  <CardBody p={{ base: 3, md: 4 }}>
+                    <VStack align="stretch" spacing={3}>
+                      <HStack justify="space-between" align="end" spacing={3}>
+                        <FormControl isRequired>
+                          <FormLabel fontSize="sm" fontWeight="700" mb={1}>Vị trí / Bộ phận</FormLabel>
+                          <Input
+                            placeholder="VD: Cửa trước trái, đuôi xe..."
+                            value={item.part}
+                            onChange={(e) => updateDefectField(idx, "part", e.target.value)}
+                            borderRadius="lg"
+                            h="40px"
+                          />
+                        </FormControl>
+                        <IconButton
+                          icon={<MdDelete />}
+                          size="sm"
+                          colorScheme="red"
+                          variant="ghost"
+                          aria-label="Xóa"
+                          onClick={() => removeDefect(idx)}
+                        />
+                      </HStack>
+
+                      <FormControl isRequired>
+                        <FormLabel fontSize="sm" fontWeight="700" mb={1}>Mô tả hư hại</FormLabel>
+                        <Textarea
+                          placeholder="VD: Trầy xước, móp nhẹ..."
+                          value={item.issue}
+                          onChange={(e) => updateDefectField(idx, "issue", e.target.value)}
+                          borderRadius="lg"
+                          rows={2}
+                        />
+                      </FormControl>
+
+                      <Box>
+                        <Text fontSize="sm" fontWeight="700" mb={2}>Hình ảnh chi tiết ({item.images?.length || 0})</Text>
+                        <SimpleGrid columns={{ base: 3, md: 5, lg: 7 }} spacing={2}>
+                          {(item.images || []).map((img) => (
+                            <Box key={img.id} role="group" display="inline-flex" alignItems="flex-start" gap={1} flexShrink={0}>
+                              <Image
+                                src={img.url}
+                                borderRadius="md"
+                                boxSize="72px"
+                                objectFit="cover"
+                                border="1px solid"
+                                borderColor="gray.200"
+                                cursor="zoom-in"
+                                onClick={() => setPreviewImageUrl(String(img.url || ""))}
+                              />
+                              <IconButton
+                                icon={<MdDelete />}
+                                size="xs"
+                                colorScheme="red"
+                                onClick={() => removeImage(idx, img.id)}
+                                aria-label="Xóa ảnh"
+                                boxShadow="sm"
+                              />
+                            </Box>
+                          ))}
+                          <Center
+                            border="2px dashed"
+                            borderColor="gray.300"
+                            borderRadius="md"
+                            boxSize="72px"
+                            cursor="pointer"
+                            _hover={{ borderColor: "blue.400", bg: "blue.50", color: "blue.500" }}
+                            transition="all 0.2s"
+                            onClick={() => document.getElementById(`file-upload-${idx}`)?.click()}
+                          >
+                            <VStack spacing={0}>
+                              <Icon as={MdPhotoCamera} boxSize={4} />
+                              <Text fontSize="2xs" fontWeight="700">Thêm ảnh</Text>
+                            </VStack>
+                            <input
+                              type="file"
+                              id={`file-upload-${idx}`}
+                              style={{ display: "none" }}
+                              multiple
+                              accept="image/*"
+                              key={inputKey}
+                              onChange={(e) => handleImageUpload(e, idx)}
+                            />
+                          </Center>
+                        </SimpleGrid>
+                      </Box>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              ))}
+
+              <Button
+                leftIcon={<MdAdd />}
+                variant="outline"
+                w="full"
+                py={6}
+                borderRadius="2xl"
+                onClick={addDefect}
+                borderColor="gray.300"
+                color="gray.600"
+                _hover={{ borderColor: "blue.400", color: "blue.500", bg: "blue.50" }}
+              >
+                Thêm vị trí hư hại khác
+              </Button>
+
+              <Card {...infoCardProps}>
+                <CardBody>
+                  <VStack align="stretch" spacing={4}>
+                    <Heading size="xs" color="#2b3674" textTransform="uppercase">
+                      Chữ ký khách hàng
+                    </Heading>
+                    <Text fontSize="sm" color="gray.600">
+                      Có thể lưu tạm trước. Khi ký xong, biên bản check-in sẽ bị khóa chỉnh sửa.
+                    </Text>
+                    {!showSignaturePad ? (
+                      <Button
+                        leftIcon={<MdEdit />}
+                        variant="outline"
+                        colorScheme="blue"
+                        onClick={() => setShowSignaturePad(true)}
+                      >
+                        Mở khung chữ ký
+                      </Button>
+                    ) : (
+                      <>
+                        <SignaturePad onSave={setSignatureDraft} onClear={() => setSignatureDraft("")} />
+                        <HStack justify="space-between">
+                          <Text fontSize="xs" color={signatureDraft ? "green.500" : "red.500"} fontWeight="600">
+                            {signatureDraft ? "Đã có chữ ký nháp" : "Chưa có chữ ký"}
+                          </Text>
+                          <Button size="sm" variant="ghost" onClick={() => setShowSignaturePad(false)}>
+                            Ẩn khung ký
+                          </Button>
+                        </HStack>
+                      </>
+                    )}
+                  </VStack>
+                </CardBody>
+              </Card>
+            </VStack>
+          </Stack>
+        ) : (
+          <Card {...infoCardProps}>
+            <CardBody p={{ base: 3, md: 4 }}>
+              <VStack align="stretch" spacing={4}>
+                <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
+                  <HStack spacing={2} flexWrap="wrap">
+                    <Badge colorScheme={phase === "CHECK_IN" ? "green" : "orange"} px={3} py={1} borderRadius="full">
+                      {phase}
+                    </Badge>
+                    <Text fontWeight="800" color="#2b3674">{order?.code || `#${orderId}`}</Text>
+                    <HStack spacing={1}><Icon as={MdDirectionsCar} color="gray.500" /><Text>{displayVehiclePlate}</Text></HStack>
+                    <HStack spacing={1}><Icon as={MdPerson} color="gray.500" /><Text>{firstText(order?.customerName, order?.CustomerName, "-")}</Text></HStack>
+                  </HStack>
+                  <Badge px={3} py={1} borderRadius="full" bg="#edf7ef" color="#1f7a3f">Đã ký</Badge>
+                </HStack>
+
+                <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
+                  <Box bg="#f7faff" p={3} borderRadius="lg" border="1px solid" borderColor="#d7e3f5">
+                    <Text fontSize="xs" color="gray.500">ODO</Text>
+                    <Text fontWeight="700">{targetLog?.odoReading?.toLocaleString() || "-"} KM</Text>
+                  </Box>
+                  <Box bg="#f7faff" p={3} borderRadius="lg" border="1px solid" borderColor="#d7e3f5">
+                    <Text fontSize="xs" color="gray.500">Nhiên liệu</Text>
+                    <Text fontWeight="700">{targetLog?.fuelLevel ?? "-"}%</Text>
+                  </Box>
+                  <Box bg="#f7faff" p={3} borderRadius="lg" border="1px solid" borderColor="#d7e3f5">
+                    <Text fontSize="xs" color="gray.500">Đèn cảnh báo</Text>
+                    <Text fontWeight="700" noOfLines={1}>{displayWarningLights || "Không có"}</Text>
+                  </Box>
+                  <Box bg="#f7faff" p={3} borderRadius="lg" border="1px solid" borderColor="#d7e3f5">
+                    <Text fontSize="xs" color="gray.500">Tài sản trên xe</Text>
+                    <Text fontWeight="700" noOfLines={1}>{targetLog?.valuables || "Không có"}</Text>
+                  </Box>
+                </SimpleGrid>
+
+                <Box>
+                  <HStack justify="space-between" mb={2}>
+                    <Text fontSize="sm" fontWeight="700" color="#2b3674">Hư hại và hình ảnh</Text>
+                    <Badge borderRadius="full" px={3} py={1} bg="#edf4ff" color="#2b4fa8">{parsedDefects.length} mục</Badge>
+                  </HStack>
+                  {parsedDefects.length === 0 ? (
+                    <Text color="gray.500">Không có dữ liệu hư hại.</Text>
+                  ) : (
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                      {parsedDefects.map((d, idx) => (
+                        <Box key={`${d?.part || "part"}-${idx}`} border="1px solid" borderColor="#d7e3f5" borderRadius="lg" p={3} bg="#fbfcff">
+                          <Text fontWeight="700" fontSize="sm">{d?.part || "Khác"}</Text>
+                          <Text color="gray.600" fontSize="sm" noOfLines={2} mb={2}>{d?.issue || "Không có mô tả"}</Text>
+                          <HStack spacing={2} flexWrap="wrap">
+                            {(Array.isArray(d?.images) ? d.images : []).map((url, i) => (
+                              <Image
+                                key={`${idx}-${i}`}
+                                src={url}
+                                borderRadius="md"
+                                boxSize="64px"
+                                objectFit="cover"
+                                border="1px solid"
+                                borderColor="gray.200"
+                                cursor="zoom-in"
+                                onClick={() => setPreviewImageUrl(String(url || ""))}
+                              />
+                            ))}
+                          </HStack>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
+                  )}
+                </Box>
+
+                <Box>
+                  <Text fontSize="sm" fontWeight="700" color="#2b3674" mb={2}>Chữ ký khách hàng</Text>
+                  {isTargetSigned ? (
+                    <Image
+                      src={targetLog.customerSignatureUrl}
+                      maxH="88px"
+                      border="1px solid"
+                      borderColor="#d7e3f5"
+                      borderRadius="lg"
+                      p={2}
+                      bg="white"
+                      cursor="zoom-in"
+                      onClick={() => setPreviewImageUrl(String(targetLog.customerSignatureUrl || ""))}
+                    />
+                  ) : (
+                    <Text color="orange.500" fontWeight="600">Chưa có chữ ký khách hàng</Text>
+                  )}
+                </Box>
+              </VStack>
+            </CardBody>
+          </Card>
+        )}
+          </Stack>
+        </Box>
+
+        <Modal isOpen={Boolean(previewImageUrl)} onClose={() => setPreviewImageUrl("")} size="xl" isCentered>
+          <ModalOverlay bg="blackAlpha.700" />
+          <ModalContent bg="transparent" boxShadow="none" maxW="90vw">
+            <ModalCloseButton color="white" bg="blackAlpha.500" _hover={{ bg: "blackAlpha.700" }} />
+            <ModalBody p={0} display="flex" justifyContent="center" alignItems="center">
+              <Image
+                src={previewImageUrl}
+                maxH="85vh"
+                maxW="90vw"
+                objectFit="contain"
+                borderRadius="md"
+                border="1px solid"
+                borderColor="whiteAlpha.400"
+              />
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      </Container>
+    </Box>
+  );
+}
+
+
+
+
+
+
+
 
 

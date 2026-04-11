@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { servicesApi } from "@features/services/api/servicesApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { generateAcronym } from "@shared/core/utils/stringUtils";
 import { useSearch } from "@shared/core/context/SearchContext";
+import {
+  filterPackageManagedStandardServices,
+  getPackageManagedStandardServiceMessage,
+  isPackageManagedStandardServiceCode,
+  normalizeStandardServiceCode,
+} from "@shared/utils/standardServiceCodeRules";
 import "./ServicesPage.css";
 
 const EMPTY_SERVICE = {
@@ -20,7 +26,7 @@ const toNumber = (value, fallback = 0) => {
 };
 
 const categoryLabel = (category) =>
-  category?.categoryName || category?.name || category?.code || (category?.id ? `Danh mục #${category.id}` : "-");
+  category?.categoryName || category?.name || category?.code || (category?.id ? `Danh má»¥c #${category.id}` : "-");
 
 function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
   const [form, setForm] = useState(() => ({
@@ -30,6 +36,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
     standardMinutes: initial?.standardMinutes ?? 0,
     isActive: initial?.isActive !== false
   }));
+  const [codeError, setCodeError] = useState("");
 
   const isCreateMode = !form?.id;
   const formPrefix = form?.id ? `service-${form.id}` : "service-new";
@@ -38,9 +45,10 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
     const { name, value, type, checked } = event.target;
 
     setForm((prev) => {
-      const nextForm = { ...prev, [name]: type === "checkbox" ? checked : value };
+      const nextValue = name === "code" ? normalizeStandardServiceCode(value) : value;
+      const nextForm = { ...prev, [name]: type === "checkbox" ? checked : nextValue };
 
-      // Tự động tạo mã theo tên khi tạo mới và người dùng chưa nhập mã riêng.
+      // Tá»± Ä‘á»™ng táº¡o mÃ£ theo tÃªn khi táº¡o má»›i vÃ  ngÆ°á»i dÃ¹ng chÆ°a nháº­p mÃ£ riÃªng.
       if (name === "name" && !prev.id) {
         const oldAcronym = generateAcronym(prev.name || "");
         if (!prev.code || prev.code === oldAcronym) {
@@ -50,12 +58,23 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
 
       return nextForm;
     });
+
+    if (name === "code") {
+      setCodeError(isPackageManagedStandardServiceCode(value) ? getPackageManagedStandardServiceMessage() : "");
+    }
   }
 
   function handleSubmit(event) {
     event.preventDefault();
+    const normalizedCode = normalizeStandardServiceCode(form.code);
+    if (isPackageManagedStandardServiceCode(normalizedCode)) {
+      setCodeError(getPackageManagedStandardServiceMessage());
+      return;
+    }
+
     onSubmit({
       ...form,
+      code: normalizedCode,
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       basePrice: toNumber(form.basePrice, 0),
       standardMinutes: toNumber(form.standardMinutes, 0),
@@ -66,37 +85,41 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form service-form" onSubmit={handleSubmit}>
       <p className="service-form-note">
-        Điền thông tin dịch vụ để đồng bộ cho đặt lịch và lệnh sửa chữa.
+        Äiá»n thÃ´ng tin dá»‹ch vá»¥ Ä‘á»ƒ Ä‘á»“ng bá»™ cho Ä‘áº·t lá»‹ch vÃ  lá»‡nh sá»­a chá»¯a.
       </p>
 
       <div className="service-form-grid">
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-name`}>Tên dịch vụ *</label>
+          <label htmlFor={`${formPrefix}-name`}>TÃªn dá»‹ch vá»¥ *</label>
           <input
             id={`${formPrefix}-name`}
             name="name"
             value={form.name || ""}
             onChange={handleChange}
-            placeholder="Ví dụ: Thay dầu động cơ"
+            placeholder="VÃ­ dá»¥: Thay dáº§u Ä‘á»™ng cÆ¡"
             required
           />
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-code`}>Mã dịch vụ *</label>
+          <label htmlFor={`${formPrefix}-code`}>MÃ£ dá»‹ch vá»¥ *</label>
           <input
             id={`${formPrefix}-code`}
             name="code"
             value={form.code || ""}
             onChange={handleChange}
-            placeholder="Ví dụ: TDDC"
+            placeholder="VÃ­ dá»¥: TDDC"
             required
           />
-          {isCreateMode ? <p className="service-form-hint">Mã được gợi ý tự động theo tên, bạn có thể sửa lại.</p> : null}
+          <p className="service-form-hint">
+            GÃ³i dá»‹ch vá»¥ dÃ¹ng mÃ£ báº¯t Ä‘áº§u báº±ng <strong>PKG-</strong> pháº£i táº¡o á»Ÿ má»¥c Packages.
+          </p>
+          {codeError ? <p className="service-form-error">{codeError}</p> : null}
+          {isCreateMode ? <p className="service-form-hint">MÃ£ Ä‘Æ°á»£c gá»£i Ã½ tá»± Ä‘á»™ng theo tÃªn, báº¡n cÃ³ thá»ƒ sá»­a láº¡i.</p> : null}
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-price`}>Đơn giá (VNĐ) *</label>
+          <label htmlFor={`${formPrefix}-price`}>ÄÆ¡n giÃ¡ (VNÄ) *</label>
           <input
             id={`${formPrefix}-price`}
             name="basePrice"
@@ -110,7 +133,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-minutes`}>Thời gian (phút) *</label>
+          <label htmlFor={`${formPrefix}-minutes`}>Thá»i gian (phÃºt) *</label>
           <input
             id={`${formPrefix}-minutes`}
             name="standardMinutes"
@@ -123,7 +146,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group service-form-group--full">
-          <label htmlFor={`${formPrefix}-category`}>Danh mục *</label>
+          <label htmlFor={`${formPrefix}-category`}>Danh má»¥c *</label>
           <select
             id={`${formPrefix}-category`}
             name="categoryId"
@@ -131,7 +154,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
             onChange={handleChange}
             required
           >
-            <option value="">-- Chọn danh mục --</option>
+            <option value="">-- Chá»n danh má»¥c --</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {categoryLabel(category)}
@@ -149,9 +172,9 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
             onChange={handleChange}
           />
           <label htmlFor={`${formPrefix}-active`} className="service-form-status-copy">
-            <span className="service-form-status-title">Đang kinh doanh</span>
+            <span className="service-form-status-title">Äang kinh doanh</span>
             <small className="service-form-status-note">
-              Dịch vụ sẽ hiển thị ở giao diện đặt lịch và có thể được chọn khi lập phiếu.
+              Dá»‹ch vá»¥ sáº½ hiá»ƒn thá»‹ á»Ÿ giao diá»‡n Ä‘áº·t lá»‹ch vÃ  cÃ³ thá»ƒ Ä‘Æ°á»£c chá»n khi láº­p phiáº¿u.
             </small>
           </label>
         </div>
@@ -159,10 +182,10 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
 
       <div className="form-actions service-form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>
-          Hủy
+          Há»§y
         </button>
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+        <button type="submit" className="btn-primary" disabled={loading || Boolean(codeError)}>
+          {loading ? "Äang lÆ°u..." : "LÆ°u"}
         </button>
       </div>
     </form>
@@ -189,10 +212,10 @@ export default function ServicesPage() {
         servicesApi.getStandardServices(),
         servicesApi.getServiceCategories()
       ]);
-      setServices(serviceResponse || []);
+      setServices(filterPackageManagedStandardServices(serviceResponse || []));
       setCategories(categoryResponse || []);
     } catch {
-      setError("Không thể tải danh mục dịch vụ.");
+      setError("KhÃ´ng thá»ƒ táº£i danh má»¥c dá»‹ch vá»¥.");
     } finally {
       setLoading(false);
     }
@@ -223,7 +246,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "Không thể thêm dịch vụ.");
+      setFormError(err?.message || "KhÃ´ng thá»ƒ thÃªm dá»‹ch vá»¥.");
     } finally {
       setSaving(false);
     }
@@ -236,7 +259,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "Không thể cập nhật dịch vụ.");
+      setFormError(err?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t dá»‹ch vá»¥.");
     } finally {
       setSaving(false);
     }
@@ -249,7 +272,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "Không thể xóa dịch vụ.");
+      setFormError(err?.message || "KhÃ´ng thá»ƒ xÃ³a dá»‹ch vá»¥.");
     } finally {
       setSaving(false);
     }
@@ -259,16 +282,16 @@ export default function ServicesPage() {
     <div className="management-content services-page">
       <header className="admin-header">
         <div>
-          <h1>Quản lý dịch vụ</h1>
-          <p className="header-sub">Danh mục các dịch vụ sửa chữa và bảo dưỡng</p>
+          <h1>Quáº£n lÃ½ dá»‹ch vá»¥</h1>
+          <p className="header-sub">Danh má»¥c cÃ¡c dá»‹ch vá»¥ sá»­a chá»¯a vÃ  báº£o dÆ°á»¡ng</p>
         </div>
         <button className="btn-primary" onClick={() => setModal("create")}>
-          + Thêm dịch vụ
+          + ThÃªm dá»‹ch vá»¥
         </button>
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} dịch vụ</span>
+        <span className="result-count">{filtered.length} dá»‹ch vá»¥</span>
       </div>
 
       {error ? <div className="error service-page-error">{error}</div> : null}
@@ -277,26 +300,26 @@ export default function ServicesPage() {
         {loading ? (
           <div className="loading-state">
             <div className="spinner" />
-            <p>Đang tải...</p>
+            <p>Äang táº£i...</p>
           </div>
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Mã</th>
-                <th>Tên dịch vụ</th>
-                <th>Đơn giá</th>
-                <th>Thời gian</th>
-                <th className="th-center">Danh mục</th>
-                <th className="th-center">Trạng thái</th>
-                <th>Thao tác</th>
+                <th>MÃ£</th>
+                <th>TÃªn dá»‹ch vá»¥</th>
+                <th>ÄÆ¡n giÃ¡</th>
+                <th>Thá»i gian</th>
+                <th className="th-center">Danh má»¥c</th>
+                <th className="th-center">Tráº¡ng thÃ¡i</th>
+                <th>Thao tÃ¡c</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="td-center">
-                    Không có dịch vụ phù hợp.
+                    KhÃ´ng cÃ³ dá»‹ch vá»¥ phÃ¹ há»£p.
                   </td>
                 </tr>
               ) : (
@@ -306,12 +329,12 @@ export default function ServicesPage() {
                     <tr key={service.id}>
                       <td className="td-id">{service.code}</td>
                       <td className="td-name">{service.name}</td>
-                      <td>{Number(service.basePrice || 0).toLocaleString("vi-VN")}đ</td>
-                      <td>{Number(service.standardMinutes || 0)} phút</td>
+                      <td>{Number(service.basePrice || 0).toLocaleString("vi-VN")}Ä‘</td>
+                      <td>{Number(service.standardMinutes || 0)} phÃºt</td>
                       <td className="td-center">{categoryLabel(category)}</td>
                       <td className="td-center">
                         <span className={`badge ${service.isActive !== false ? "badge-active" : "badge-inactive"}`}>
-                          {service.isActive !== false ? "Đang kinh doanh" : "Ngừng kinh doanh"}
+                          {service.isActive !== false ? "Äang kinh doanh" : "Ngá»«ng kinh doanh"}
                         </span>
                       </td>
                       <td>
@@ -323,7 +346,7 @@ export default function ServicesPage() {
                               setModal("edit");
                             }}
                           >
-                            Sửa
+                            Sá»­a
                           </button>
                           <button
                             className="btn-icon"
@@ -332,7 +355,7 @@ export default function ServicesPage() {
                               setModal("delete");
                             }}
                           >
-                            Xóa
+                            XÃ³a
                           </button>
                         </div>
                       </td>
@@ -346,7 +369,7 @@ export default function ServicesPage() {
       </div>
 
       {modal === "create" && (
-        <Modal title="Thêm dịch vụ mới" onClose={closeModal} className="service-modal">
+        <Modal title="ThÃªm dá»‹ch vá»¥ má»›i" onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
           <ServiceForm
             initial={EMPTY_SERVICE}
@@ -359,7 +382,7 @@ export default function ServicesPage() {
       )}
 
       {modal === "edit" && selected ? (
-        <Modal title={`Sửa dịch vụ • ${selected.name}`} onClose={closeModal} className="service-modal">
+        <Modal title={`Sá»­a dá»‹ch vá»¥ â€¢ ${selected.name}`} onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
           <ServiceForm
             initial={selected}
@@ -372,9 +395,9 @@ export default function ServicesPage() {
       ) : null}
 
       {modal === "delete" && selected ? (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="XÃ¡c nháº­n xÃ³a" onClose={closeModal}>
           <ConfirmDialog
-            message={`Xóa dịch vụ "${selected.name}"?`}
+            message={`XÃ³a dá»‹ch vá»¥ "${selected.name}"?`}
             onConfirm={handleDelete}
             onCancel={closeModal}
             loading={saving}
@@ -384,3 +407,4 @@ export default function ServicesPage() {
     </div>
   );
 }
+

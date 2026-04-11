@@ -1,4 +1,6 @@
-﻿export function extractField(obj, keys, fallback = null) {
+import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+
+export function extractField(obj, keys, fallback = null) {
   for (const key of keys) {
     if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
   }
@@ -49,27 +51,7 @@ export function timeLabel(value) {
 }
 
 export function formatLicensePlateInput(value) {
-  const raw = String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-
-  if (!raw) return "";
-
-  let prefix = "";
-  let rest = "";
-
-  const startsWithProvince = /^\d{2}[A-Z]/.test(raw);
-  if (startsWithProvince) {
-    prefix = raw.slice(0, 3);
-    rest = raw.slice(3, 8);
-  } else {
-    prefix = raw.slice(0, Math.min(3, raw.length));
-    rest = raw.slice(prefix.length, prefix.length + 5);
-  }
-
-  if (!rest) return prefix;
-  if (rest.length <= 3) return `${prefix}-${rest}`;
-  return `${prefix}-${rest.slice(0, 3)}.${rest.slice(3)}`;
+  return formatLicensePlateByFieldName("licensePlate", value);
 }
 
 export function formatVehicleDescriptor(brandName, modelName) {
@@ -80,13 +62,57 @@ export function formatVehicleDescriptor(brandName, modelName) {
 
 export function formatStoredVehicleLabel(vehicle) {
   const plate = String(vehicle?.licensePlate || "").trim() || "Không biển số";
-  const descriptor = formatVehicleDescriptor(vehicle?.brandName, vehicle?.modelName);
-  return descriptor ? `${plate} - ${descriptor}` : plate;
+  const brandObject = extractField(vehicle, ["brand", "Brand", "vehicleBrand", "VehicleBrand"], null);
+  const modelObject = extractField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null);
+  const brandName = String(
+    extractField(vehicle, ["brandName", "BrandName", "vehicleBrandName", "VehicleBrandName"], "") ||
+    extractField(brandObject, ["name", "Name", "brandName", "BrandName"], "")
+  ).trim();
+  const modelName = String(
+    extractField(vehicle, ["modelName", "ModelName", "vehicleModelName", "VehicleModelName"], "") ||
+    extractField(modelObject, ["modelName", "ModelName", "name", "Name"], "")
+  ).trim();
+  const descriptor = formatVehicleDescriptor(brandName, modelName);
+  return `${plate} - ${descriptor || "Chưa rõ hãng - chưa rõ dòng xe"}`;
+}
+
+export function formatVehicleTabLabel(vehicle) {
+  const directPlate = String(
+    vehicle?.payload?.licensePlate || vehicle?.licensePlate || vehicle?.LicensePlate || ""
+  ).trim();
+  if (directPlate) return directPlate;
+
+  const displayLabel = String(vehicle?.displayLabel || "").trim();
+  if (!displayLabel) return "Kh\u00f4ng bi\u1ec3n s\u1ed1";
+
+  const [platePart] = displayLabel.split(" - ");
+  const plate = String(platePart || "").trim();
+  return plate || displayLabel;
 }
 
 export function iconByIndex(index) {
   const icons = ["🔧", "🛞", "⚙️", "🛡️", "🧰", "🔩"];
-  return icons[index % icons.length];
+  const safeIndex = Math.abs(Number(index) || 0);
+  return icons[safeIndex % icons.length];
+}
+
+export function resolveBookingItemIcon(item) {
+  const code = toSafeUpper(extractField(item, ["code", "Code"], ""));
+  const name = normalizeText(extractField(item, ["name", "Name"], ""));
+
+  if (code === "BH-CAUKE") return "🛻";
+
+  if (code.startsWith("PKG-BH")) {
+    if (code.includes("WATER") || name.includes("thủy kích") || name.includes("thuy kich")) return "🌊";
+    if (code.includes("HEAVY") || name.includes("tai nạn") || name.includes("tai nan")) return "💥";
+    if (code.includes("LIENKET") || name.includes("liên kết") || name.includes("lien ket")) return "🤝";
+    if (code.includes("TUTUC") || name.includes("tự túc") || name.includes("tu tuc")) return "🧾";
+    if (code.includes("FAST") || name.includes("xước xát") || name.includes("xuoc xat")) return "🎨";
+    if (code.includes("ADVISOR") || name.includes("tư vấn") || name.includes("tu van")) return "💬";
+    return "🛡️";
+  }
+
+  return iconByIndex(extractField(item, ["id", "Id"], 0));
 }
 
 export function isQuickCategory(category) {

@@ -18,7 +18,7 @@
         value={form.phone}
         onChange={(e) => onChange("phone", e.target.value)}
         placeholder="0900000000"
-        pattern="^(0[0-9]{9,10}|\+84[0-9]{9,10})$"
+        pattern="^(0[0-9]{9}|\+84[0-9]{9})$"
         title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
         required
       />
@@ -54,4 +54,3 @@
 }
 
 export default RegisterForm;
-

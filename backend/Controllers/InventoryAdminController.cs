@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Interfaces;
@@ -171,7 +171,7 @@ public class InventoryAdminController : ControllerBase
 
     private async Task WriteSettingsAsync(InventoryAdminSettings settings)
     {
-        var sanitized = settings with { UpdatedAt = DateTime.UtcNow };
+        var sanitized = settings with { UpdatedAt = VietnamTime.Now };
         await using var stream = System.IO.File.Create(SettingsPath);
         await JsonSerializer.SerializeAsync(stream, sanitized, _jsonOptions);
     }
@@ -211,7 +211,7 @@ public class InventoryAdminController : ControllerBase
                 MaterialReturnRule = "ALLOW_WITH_REASON",
                 TransferRule = "REQUIRE_APPROVAL"
             },
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = VietnamTime.Now
         };
     }
 

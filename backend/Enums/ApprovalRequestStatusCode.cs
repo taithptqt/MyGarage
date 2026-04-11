@@ -1,8 +1,9 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum ApprovalRequestStatusCode
 {
-    PENDING,
+    REJECTED,
     APPROVED,
-    REJECTED
+    PENDING
 }
+

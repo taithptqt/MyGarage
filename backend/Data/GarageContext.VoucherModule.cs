@@ -41,9 +41,10 @@ public partial class GarageContext
         modelBuilder.Ignore<VwPayrollRunSummary>();
         modelBuilder.Ignore<VwSupplierPayableSummary>();
 
+        // Keep SQL Server default decimal precision explicit to avoid runtime warning.
         modelBuilder.Entity<SalaryCoefficient>(entity =>
         {
-            entity.Property(e => e.CoefficientValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CoefficientValue).HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<Voucher>(entity =>

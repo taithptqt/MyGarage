@@ -14,22 +14,30 @@ namespace MyGarage.Services
         {
             return await _context.WorkSlots
                 .Where(s => s.BranchId == branchId
+                    && s.BayId.HasValue
                     && s.StartTime <= closingTime
-                    && s.SlotType != nameof(WorkSlotType.OVERNIGHT_LOCK)
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != nameof(AppointmentStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
+                    && s.Status != nameof(WorkSlotStatus.OVERNIGHT_HOLD)
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > closingTime))
                 .ToListAsync();
         }
 
         private async Task<bool> HasExistingOvernightLockAsync(long branchId, DateTime nextMorning, WorkSlot source)
         {
+            if (!source.BayId.HasValue)
+            {
+                return false;
+            }
+
             var marker = BuildOvernightSourceMarker(source.Id);
             return await _context.WorkSlots.AnyAsync(s =>
                 s.BranchId == branchId
-                && s.BayId == source.BayId
-                && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
+                && s.BayId == source.BayId.Value
+                && s.SlotType == nameof(WorkSlotType.REPAIR)
+                && s.Status == nameof(WorkSlotStatus.OVERNIGHT_HOLD)
                 && s.StartTime >= nextMorning
                 && s.StartTime < nextMorning.AddDays(1)
                 && s.Notes != null
@@ -56,10 +64,14 @@ namespace MyGarage.Services
                 TechnicianId = source.TechnicianId,
                 StartTime = nextMorning,
                 EndTime = nextMorning.AddMinutes(lockMinutes),
-                SlotType = nameof(WorkSlotType.OVERNIGHT_LOCK),
+                SlotType = nameof(WorkSlotType.REPAIR),
                 CustomerId = source.CustomerId,
                 VehicleId = source.VehicleId,
-                Status = nameof(WorkSlotStatus.LOCKED),
+                AppointmentId = source.AppointmentId,
+                ServiceOrderId = source.ServiceOrderId,
+                IsAdditional = source.IsAdditional,
+                SequenceOrder = source.SequenceOrder > 0 ? source.SequenceOrder : 3,
+                Status = nameof(WorkSlotStatus.OVERNIGHT_HOLD),
                 Notes = BuildOvernightSourceMarker(source.Id)
             };
         }

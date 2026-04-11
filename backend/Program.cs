@@ -101,9 +101,11 @@ builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAppointmentStatusPolicy, AppointmentStatusPolicy>();
 builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembler>();
-builder.Services.AddScoped<IBookingGroupStatusPolicy, BookingGroupStatusPolicy>();
-builder.Services.AddScoped<IBookingGroupService, BookingGroupService>();
+builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
+builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
+builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
+builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
 
 builder.Services.AddSingleton<IValidateOptions<CustomerAutomationJobsOptions>, CustomerAutomationJobsOptionsValidator>();
 builder.Services.AddOptions<CustomerAutomationJobsOptions>()
@@ -118,6 +120,9 @@ builder.Services.AddHostedService<CustomerAutomationJobsBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
+
+builder.Services.AddScoped<ITeamRepository, TeamRepository>();
+builder.Services.AddScoped<ITeamService, TeamService>();
 
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -322,6 +327,9 @@ builder.Services.AddScoped<ISalaryCoefficientService, SalaryCoefficientService>(
 
 builder.Services.AddScoped<IStandardServiceRepository, StandardServiceRepository>();
 builder.Services.AddScoped<IStandardServiceService, StandardServiceService>();
+
+builder.Services.AddScoped<IPackageRepository, PackageRepository>();
+builder.Services.AddScoped<IPackageService, PackageService>();
 
 builder.Services.AddScoped<IStockTransactionRepository, StockTransactionRepository>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();

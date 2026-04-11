@@ -18,7 +18,7 @@ namespace MyGarage.Services
             if (validationError != null) return validationError;
 
             var voucher = redemption!.Voucher!;
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var discountAmount = redemption.DiscountAmount;
 
             await using var tx = await _context.Database.BeginTransactionAsync();

@@ -4,10 +4,11 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 import { getCustomerById, updateCustomer } from "@features/admin/api/customerApi";
 import { getStaffById, updateStaff, uploadStaffAvatar } from "@features/admin/api/staffApi";
+import { VIETNAM_PHONE_PATTERN, isValidEmail, isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import ImageCropper from "@features/workshop/components/ImageCropper";
 import "./ProfileDialog.css";
 
-const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"];
+const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"];
 
 function toDateInput(value) {
   if (!value) return "";
@@ -184,14 +185,11 @@ export default function ProfileDialog({ onClose }) {
     const email = String(formData.email || "").trim();
     const citizenId = String(formData.citizenId || "").trim();
 
-    const phoneRegex = /^(0\d{9,10}|\+84\d{9,10})$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!phoneRegex.test(phone)) {
+    if (!isValidVietnamesePhone(phone)) {
       setError("Số điện thoại không đúng định dạng.");
       return;
     }
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(email)) {
       setError("Email không đúng định dạng.");
       return;
     }
@@ -275,11 +273,20 @@ export default function ProfileDialog({ onClose }) {
             </label>
             <label>
               Số điện thoại
-              <input name="phone" value={formData.phone} onChange={onChange} required />
+              <input
+                type="tel"
+                inputMode="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={onChange}
+                pattern={VIETNAM_PHONE_PATTERN}
+                title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                required
+              />
             </label>
             <label>
               Email
-              <input name="email" value={formData.email} onChange={onChange} required />
+              <input type="email" name="email" value={formData.email} onChange={onChange} required />
             </label>
 
             {isStaffRole ? (

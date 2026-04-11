@@ -9,6 +9,10 @@ export async function getAllStandardServices() {
   return request({ url: REFERENCE_ROUTES.standardServices, method: "GET" });
 }
 
+export async function getAllPackages() {
+  return request({ url: REFERENCE_ROUTES.packages, method: "GET" });
+}
+
 export async function getVehicleBrands() {
   return request({ url: REFERENCE_ROUTES.vehicleBrands, method: "GET" });
 }
@@ -27,6 +31,10 @@ export async function getAllCategories() {
 
 export async function getAllServiceCategories() {
   return request({ url: REFERENCE_ROUTES.serviceCategories, method: "GET" });
+}
+
+export async function getAllInsuranceCompanies() {
+  return request({ url: REFERENCE_ROUTES.insuranceCompanies, method: "GET" });
 }
 
 export async function getAllCustomers() {

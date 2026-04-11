@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Constants;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -33,6 +34,8 @@ namespace MyGarage.Services
                 throw new KeyNotFoundException("Kh\u00F4ng t\u00ECm th\u1EA5y ca s\u1EEDa ch\u1EEFa c\u1EA7n x\u1EED l\u00FD.");
             if (IsClosedWorkSlotStatus(slot.Status))
                 throw new InvalidOperationException("Ca s\u1EEDa ch\u1EEFa \u0111\u00E3 k\u1EBFt th\u00FAc, kh\u00F4ng th\u1EC3 gia h\u1EA1n.");
+            if (!slot.BayId.HasValue)
+                throw new InvalidOperationException("Ca s\u1EEDa ch\u1EEFa ch\u01B0a \u0111\u01B0\u1EE3c g\u00E1n khoang, kh\u00F4ng th\u1EC3 gia h\u1EA1n.");
 
             var response = new WorkSlotDynamicExtensionResponseDto
             {
@@ -65,7 +68,7 @@ namespace MyGarage.Services
 
             var slotStepMinutes = await ResolveBranchSlotStepMinutesAsync(slot.BranchId, now);
             var closeAt = await ResolveBranchCloseTimeAsync(slot.BranchId, now);
-            var extensionMinutes = RoundUpToStep(additionalMinutes + FlexibleBufferMinutes, slotStepMinutes);
+            var extensionMinutes = RoundUpToStep(additionalMinutes + ExecutionBufferMinutes, slotStepMinutes);
             var proposedEnd = now.AddMinutes(extensionMinutes);
 
             if (TimeOnly.FromDateTime(now) >= ExtensionLockTime &&
@@ -164,7 +167,9 @@ namespace MyGarage.Services
                     && s.Id != targetSlot.Id
                     && s.StartTime < proposedEnd
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(s => s.StartTime)
                 .ToListAsync();
@@ -185,7 +190,8 @@ namespace MyGarage.Services
             var bays = await _context.Bays
                 .AsNoTracking()
                 .Where(b => b.BranchId == currentSlot.BranchId && b.IsActive == true && b.IsDeleted != true)
-                .OrderBy(b => b.Code)
+                .OrderBy(b => b.SequenceOrder)
+                .ThenBy(b => b.Code)
                 .ToListAsync();
 
             var timelineEnd = now.AddHours(12);
@@ -194,7 +200,9 @@ namespace MyGarage.Services
                 .Where(s => s.BranchId == currentSlot.BranchId
                     && s.StartTime < timelineEnd
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .ToListAsync();
 
@@ -292,7 +300,7 @@ namespace MyGarage.Services
 
             var busyRepairBayIds = openSlots
                 .Where(s => repairBays.Any(b => b.Id == s.BayId) && s.StartTime <= now && ResolveEffectiveSlotEnd(s) > now)
-                .Select(s => s.BayId)
+                .Select(s => s.BayId!.Value)
                 .Distinct()
                 .ToHashSet();
 
@@ -336,21 +344,21 @@ namespace MyGarage.Services
             bool mustBeQuick,
             bool allowQuickFallbackForHeavy,
             long ignoredSlotId,
-            long excludedBayId)
+            long? excludedBayId)
         {
             IEnumerable<Bay> candidates;
             if (mustBeQuick)
             {
-                var quick = bays.Where(b => IsQuickBay(b) && b.Id != excludedBayId);
-                var other = bays.Where(b => IsRepairBay(b) && b.Id != excludedBayId);
+                var quick = bays.Where(b => IsQuickBay(b) && (!excludedBayId.HasValue || b.Id != excludedBayId.Value));
+                var other = bays.Where(b => IsRepairBay(b) && (!excludedBayId.HasValue || b.Id != excludedBayId.Value));
                 candidates = quick.Concat(other);
             }
             else
             {
-                var repair = bays.Where(b => IsRepairBay(b) && b.Id != excludedBayId);
+                var repair = bays.Where(b => IsRepairBay(b) && (!excludedBayId.HasValue || b.Id != excludedBayId.Value));
                 if (allowQuickFallbackForHeavy)
                 {
-                    candidates = repair.Concat(bays.Where(b => IsQuickBay(b) && b.Id != excludedBayId));
+                    candidates = repair.Concat(bays.Where(b => IsQuickBay(b) && (!excludedBayId.HasValue || b.Id != excludedBayId.Value)));
                 }
                 else
                 {
@@ -382,6 +390,11 @@ namespace MyGarage.Services
             DateTime proposedEnd,
             int slotStepMinutes)
         {
+            if (!sourceSlot.BayId.HasValue)
+            {
+                return null;
+            }
+
             var remainingMinutes = (int)Math.Ceiling((proposedEnd - closeAt).TotalMinutes);
             if (remainingMinutes <= 0)
             {
@@ -394,7 +407,8 @@ namespace MyGarage.Services
 
             var existingLock = await _context.WorkSlots
                 .FirstOrDefaultAsync(s => s.BranchId == sourceSlot.BranchId
-                    && s.SlotType == nameof(WorkSlotType.OVERNIGHT_LOCK)
+                    && s.SlotType == nameof(WorkSlotType.REPAIR)
+                    && s.Status == nameof(WorkSlotStatus.OVERNIGHT_HOLD)
                     && s.Notes != null
                     && s.Notes.Contains(marker));
 
@@ -409,9 +423,14 @@ namespace MyGarage.Services
             existingLock.BayId = sourceSlot.BayId;
             existingLock.StartTime = nextMorning;
             existingLock.EndTime = nextMorning.AddMinutes(lockMinutes);
-            existingLock.Status = nameof(WorkSlotStatus.LOCKED);
+            existingLock.SlotType = nameof(WorkSlotType.REPAIR);
+            existingLock.Status = nameof(WorkSlotStatus.OVERNIGHT_HOLD);
             existingLock.VehicleId = sourceSlot.VehicleId;
             existingLock.CustomerId = sourceSlot.CustomerId;
+            existingLock.AppointmentId = sourceSlot.AppointmentId;
+            existingLock.ServiceOrderId = sourceSlot.ServiceOrderId;
+            existingLock.IsAdditional = sourceSlot.IsAdditional;
+            existingLock.SequenceOrder = sourceSlot.SequenceOrder > 0 ? sourceSlot.SequenceOrder : 3;
             await _context.SaveChangesAsync();
             return existingLock;
         }
@@ -444,9 +463,11 @@ namespace MyGarage.Services
                 return false;
             }
 
-            return string.Equals(status, nameof(WorkSlotStatus.CANCELED), StringComparison.OrdinalIgnoreCase)
+            return string.Equals(status, nameof(WorkSlotStatus.CANCELLED), StringComparison.OrdinalIgnoreCase)
                    || string.Equals(status, nameof(WorkSlotStatus.COMPLETED), StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(status, "CANCELLED", StringComparison.OrdinalIgnoreCase);
+                   || string.Equals(status, nameof(WorkSlotStatus.NOSHOW), StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(status, "CANCELED", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(status, "NO_SHOW", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string AppendWorkSlotTag(string? notes, string tag)

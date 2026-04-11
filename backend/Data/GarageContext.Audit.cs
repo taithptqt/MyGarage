@@ -77,7 +77,7 @@ public partial class GarageContext
         var ipAddress = httpContext?.Connection.RemoteIpAddress?.ToString();
         var userAgent = httpContext?.Request.Headers.UserAgent.ToString();
         var sessionId = httpContext?.TraceIdentifier;
-        var timestamp = DateTime.UtcNow;
+        var timestamp = VietnamTime.Now;
 
         var result = new List<PendingAuditEntry>();
         var entries = ChangeTracker.Entries()

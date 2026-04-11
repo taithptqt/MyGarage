@@ -27,6 +27,35 @@ namespace MyGarage.Services
             if (start < openTime || end > closeTime)
                 throw new InvalidOperationException($"Lịch hẹn phải trong giờ làm việc {openTime:HH\\:mm}-{closeTime:HH\\:mm}.");
         }
+
+        private static int ComputeWorkingMinutes(TimeOnly openTime, TimeOnly closeTime)
+        {
+            var openMinutes = openTime.Hour * 60 + openTime.Minute;
+            var closeMinutes = closeTime.Hour * 60 + closeTime.Minute;
+            var spanMinutes = closeMinutes - openMinutes;
+            return Math.Max(0, spanMinutes);
+        }
+
+        private static bool ShouldFallbackToFlexibleFlowForLongDuration(
+            int plannedDurationMinutes,
+            TimeOnly openTime,
+            TimeOnly closeTime)
+        {
+            var workingMinutes = ComputeWorkingMinutes(openTime, closeTime);
+            if (workingMinutes <= 0)
+            {
+                return false;
+            }
+
+            return plannedDurationMinutes > workingMinutes;
+        }
+
+        private int ResolveFlexibleWindowMinutes(int slotStepMinutes)
+        {
+            var normalizedStep = ResolveSlotStepMinutes(slotStepMinutes);
+            var minimumWindow = Math.Max(StandardCheckInSetupMinutes + ExecutionBufferMinutes, normalizedStep);
+            return RoundUpToStep(minimumWindow, normalizedStep);
+        }
     }
 }
 

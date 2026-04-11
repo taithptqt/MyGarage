@@ -1,10 +1,12 @@
-import {
-  createCustomer,
-  createCustomerVehicle,
-  createVehicle
-} from "@features/admin/api/customerApi";
-import { createBookingGroup } from "@features/appointments/api/bookingGroupApi";
-import { bookAppointment, cancelAppointment } from "@features/appointments/api/appointmentApi";
+import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
+import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
+import { buildCustomerNotesPayload } from "@features/appointments/utils/bookingCommon";
+import { buildInsuranceSnapshotPayload } from "@features/appointments/utils/bookingInsurance";
+import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
+import { sumServiceMinutes } from "@shared/utils/serviceDurationUtils";
+
+const VEHICLE_KEY_GUEST = "guest";
+const VEHICLE_KEY_NEW = "new-customer";
 
 const ERRORS = {
   invalidBranch: "Chi nhánh hiện tại không hợp lệ.",
@@ -14,7 +16,6 @@ const ERRORS = {
   missingNewVehicleModel: "Vui lòng chọn dòng xe mới.",
   missingVehicle: "Vui lòng chọn xe của khách.",
   vehicleNotFound: "Không tìm thấy xe đã chọn.",
-  replaceReason: "Điều chỉnh lịch hẹn bởi lễ tân"
 };
 
 function toNumberList(value) {
@@ -23,45 +24,64 @@ function toNumberList(value) {
     new Set(
       value
         .map(Number)
-        .filter((id) => Number.isFinite(id) && id > 0)
+        .filter((id) => Number.isFinite(id) && id !== 0)
     )
   );
 }
 
-function findCustomerById(customers, id) {
-  return (customers || []).find((customer) => Number(customer.id) === Number(id)) || null;
+function readText(value) {
+  const text = String(value || "").trim();
+  return text || null;
 }
 
-function findVehicleById(vehicles, id) {
-  return (vehicles || []).find((vehicle) => Number(vehicle.id) === Number(id)) || null;
+function normalizeBookingFlow(value, fallback = BOOKING_FLOW.FIXED) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.includes("flex")) return BOOKING_FLOW.FLEXIBLE;
+  if (raw.includes("fixed")) return BOOKING_FLOW.FIXED;
+  return fallback;
 }
 
-function findVehicleByPlate(vehicles, plate) {
-  const normalizedPlate = String(plate || "").trim().toUpperCase();
-  if (!normalizedPlate) return null;
-  return (
-    (vehicles || []).find(
-      (vehicle) => String(vehicle.licensePlate || "").trim().toUpperCase() === normalizedPlate
-    ) || null
-  );
-}
-
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + Math.max(Number(minutes || 0), 0) * 60 * 1000);
+function isFlexibleTriggerServiceCode(rawCode) {
+  const normalizedCode = String(rawCode || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]/g, "");
+  return normalizedCode.startsWith("dg");
 }
 
 function normalizeServiceLookup(services) {
   const map = new Map();
   (services || []).forEach((service) => {
     const id = Number(service?.id ?? service?.Id);
-    if (!Number.isFinite(id) || id <= 0) return;
+    if (!Number.isFinite(id) || id === 0) return;
     map.set(id, {
       ...service,
       id,
-      minutes: Math.max(0, Number(service?.standardMinutes ?? service?.StandardMinutes ?? 0) || 0)
+      code: String(service?.code ?? service?.Code ?? ""),
+      minutes: Math.max(0, Number(service?.standardMinutes ?? service?.StandardMinutes ?? 0) || 0),
     });
   });
   return map;
+}
+
+function buildFlexibleTriggerServiceIdSet(serviceLookup) {
+  const set = new Set();
+  serviceLookup.forEach((service, id) => {
+    if (isFlexibleTriggerServiceCode(service?.code)) {
+      set.add(Number(id));
+    }
+  });
+  return set;
+}
+
+function resolveVehicleBookingFlow(planFlow, serviceIds, flexibleTriggerServiceIdSet) {
+  const explicitFlow = normalizeBookingFlow(planFlow, "");
+  if (explicitFlow === BOOKING_FLOW.FLEXIBLE || explicitFlow === BOOKING_FLOW.FIXED) {
+    return explicitFlow;
+  }
+  return (serviceIds || []).some((serviceId) => flexibleTriggerServiceIdSet.has(Number(serviceId)))
+    ? BOOKING_FLOW.FLEXIBLE
+    : BOOKING_FLOW.FIXED;
 }
 
 function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
@@ -71,18 +91,29 @@ function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
   (Array.isArray(vehicleServicePlans) ? vehicleServicePlans : []).forEach((rawPlan) => {
     const vehicleKey = String(rawPlan?.vehicleKey || "").trim() || null;
     const vehicleId = Number(rawPlan?.vehicleId);
-    const serviceIds = toNumberList(rawPlan?.serviceIds);
-    const computedMinutes = serviceIds.reduce((sum, serviceId) => {
-      const service = serviceLookup.get(serviceId);
-      return sum + Number(service?.minutes || 0);
-    }, 0);
+    const allServiceIds = toNumberList(rawPlan?.serviceIds);
+    const split = splitBookingItemIds(allServiceIds);
+    const serviceIds = split.serviceIds;
+    const packageIds = split.packageIds;
+    const selectedServices = serviceIds
+      .map((serviceId) => serviceLookup.get(serviceId))
+      .filter(Boolean);
+    const selectedPackages = packageIds
+      .map((packageId) => serviceLookup.get(-packageId))
+      .filter(Boolean);
+    const computedMinutes = sumServiceMinutes(selectedServices);
+    const packageMinutes = sumServiceMinutes(selectedPackages);
     const totalMinutes = Number(rawPlan?.totalMinutes);
-    const resolvedMinutes = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : computedMinutes;
+    const resolvedMinutes = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : computedMinutes + packageMinutes;
 
     const plan = {
-      serviceIds,
+      serviceIds: allServiceIds,
       requestedServiceIds: serviceIds.length > 0 ? serviceIds.join(",") : null,
-      totalMinutes: Math.max(resolvedMinutes, 30)
+      requestedPackageIds: packageIds.length > 0 ? packageIds.join(",") : null,
+      totalMinutes: Math.max(resolvedMinutes, 30),
+      bookingFlow: normalizeBookingFlow(rawPlan?.bookingFlow, ""),
+      customerNotes: readText(rawPlan?.customerNotes),
+      ...buildInsuranceSnapshotPayload(rawPlan),
     };
 
     if (vehicleKey) byVehicleKey.set(vehicleKey, plan);
@@ -92,41 +123,129 @@ function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
   return { byVehicleKey, byVehicleId };
 }
 
-function resolveVehiclePlan({ vehicleKey, vehicleId, defaultServiceIds, defaultDuration, planMaps }) {
+function resolveVehiclePlan({
+  vehicleKey,
+  vehicleId,
+  defaultServiceIds,
+  defaultDuration,
+  planMaps,
+  flexibleTriggerServiceIdSet,
+  slotBookingFlow,
+}) {
   const byKeyPlan = vehicleKey ? planMaps.byVehicleKey.get(vehicleKey) : null;
   const byIdPlan = Number.isFinite(vehicleId) && vehicleId > 0 ? planMaps.byVehicleId.get(vehicleId) : null;
   const plan = byKeyPlan || byIdPlan;
 
   const serviceIds = plan?.serviceIds?.length > 0 ? plan.serviceIds : defaultServiceIds;
-  const requestedServiceIds = serviceIds.length > 0 ? serviceIds.join(",") : null;
+  const split = splitBookingItemIds(serviceIds);
+  const requestedServiceIds = split.serviceIds.length > 0 ? split.serviceIds.join(",") : null;
+  const requestedPackageIds = split.packageIds.length > 0 ? split.packageIds.join(",") : null;
   const totalMinutes = Math.max(Number(plan?.totalMinutes || defaultDuration || 30), 30);
+  const bookingFlow = resolveVehicleBookingFlow(
+    plan?.bookingFlow || slotBookingFlow,
+    serviceIds,
+    flexibleTriggerServiceIdSet
+  );
 
-  return { serviceIds, requestedServiceIds, totalMinutes };
+  return {
+    serviceIds,
+    requestedServiceIds,
+    requestedPackageIds,
+    totalMinutes,
+    bookingFlow,
+    customerNotes: readText(plan?.customerNotes),
+    insuranceCompanyId: plan?.insuranceCompanyId || null,
+    insuranceDeductibleAmount: plan?.insuranceDeductibleAmount ?? null,
+    insuranceDeductibleOption: readText(plan?.insuranceDeductibleOption),
+    insuranceClaimMode: readText(plan?.insuranceClaimMode),
+    insuranceQuoteState: readText(plan?.insuranceQuoteState),
+    insuranceCardImageUrls: Array.isArray(plan?.insuranceCardImageUrls) ? plan.insuranceCardImageUrls : [],
+    insuranceDamageImageUrls: Array.isArray(plan?.insuranceDamageImageUrls) ? plan.insuranceDamageImageUrls : [],
+  };
 }
 
-function buildAppointmentBasePayload({
-  effectiveBranchId,
-  customerId,
-  customerFullName,
-  customerPhone,
-  startAt,
-  endAt,
-  requestedServiceIds,
-  customerNotes
-}) {
-  return {
-    branchId: effectiveBranchId,
-    customerId,
-    customerFullName,
-    customerPhone,
-    bookingFlow: "FIXED",
-    startTime: startAt.toISOString(),
-    endTime: endAt.toISOString(),
-    checkInWindowStart: null,
-    checkInWindowEnd: null,
-    requestedServiceIds,
-    customerNotes
-  };
+function parseSlotSelectionByVehicle(slotSelections) {
+  const byVehicleKey = new Map();
+  const byVehicleId = new Map();
+
+  (Array.isArray(slotSelections) ? slotSelections : []).forEach((item) => {
+    const vehicleKey = String(item?.vehicleKey || "").trim();
+    const vehicleId = Number(item?.vehicleId);
+    const normalized = {
+      startTime: readText(item?.startTime),
+      endTime: readText(item?.endTime),
+      bookingFlow: normalizeBookingFlow(item?.bookingFlow, ""),
+      checkInWindowStart: readText(item?.checkInWindowStart),
+      checkInWindowEnd: readText(item?.checkInWindowEnd),
+      slotHoldToken: readText(item?.slotHoldToken),
+    };
+    if (vehicleKey) byVehicleKey.set(vehicleKey, normalized);
+    if (Number.isFinite(vehicleId) && vehicleId > 0) byVehicleId.set(vehicleId, normalized);
+  });
+
+  return { byVehicleKey, byVehicleId };
+}
+
+function resolveSlotSelection(slotMaps, vehicleKey, vehicleId) {
+  return slotMaps.byVehicleKey.get(vehicleKey) || slotMaps.byVehicleId.get(Number(vehicleId)) || null;
+}
+
+function buildVehicleNotesMap(vehicleNotePlans) {
+  const map = new Map();
+  (Array.isArray(vehicleNotePlans) ? vehicleNotePlans : []).forEach((item) => {
+    const vehicleKey = String(item?.vehicleKey || "").trim();
+    if (!vehicleKey) return;
+    map.set(vehicleKey, readText(item?.customerNotes));
+  });
+  return map;
+}
+
+function getVehicleIdFromKey(vehicleKey) {
+  const match = String(vehicleKey || "").match(/^existing-(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function getSelectedVehicleKeys(formData) {
+  if (formData.isQuickOrder) return [VEHICLE_KEY_GUEST];
+  if (formData.isNewVehicle) return [VEHICLE_KEY_NEW];
+
+  const selectedVehicleIds = toNumberList(formData.selectedVehicleIds);
+  return selectedVehicleIds.map((vehicleId) => `existing-${vehicleId}`);
+}
+
+function splitCustomerNotesInput(value) {
+  return String(value || "")
+    .split(/\r?\n|;/g)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function resolveFallbackStartIso(formData) {
+  const appointmentDate = String(formData.appointmentDate || "").trim();
+  const startTime = String(formData.startTime || "").trim();
+  if (!appointmentDate || !startTime) return null;
+
+  const startAt = new Date(`${appointmentDate}T${startTime}`);
+  return Number.isNaN(startAt.getTime()) ? null : startAt.toISOString();
+}
+
+function resolveDurationMinutes(slotSelection, fallbackDuration) {
+  const slotStart = slotSelection?.startTime ? new Date(slotSelection.startTime) : null;
+  const slotEnd = slotSelection?.endTime ? new Date(slotSelection.endTime) : null;
+  if (slotStart && slotEnd && !Number.isNaN(slotStart.getTime()) && !Number.isNaN(slotEnd.getTime())) {
+    const diff = Math.ceil((slotEnd.getTime() - slotStart.getTime()) / 60000);
+    if (diff > 0) return Math.max(diff, 30);
+  }
+
+  return Math.max(Number(fallbackDuration || 30), 30);
+}
+
+function normalizeRequestedServiceIds(raw) {
+  const ids = String(raw || "")
+    .split(/[,|]/g)
+    .map((item) => Number(String(item || "").trim()))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  return ids.length > 0 ? Array.from(new Set(ids)).join(",") : null;
 }
 
 export async function saveReceptionAppointment({
@@ -140,258 +259,176 @@ export async function saveReceptionAppointment({
 }) {
   if (!effectiveBranchId) throw new Error(ERRORS.invalidBranch);
 
-  const startAt = new Date(`${formData.appointmentDate}T${formData.startTime}`);
-  if (Number.isNaN(startAt.getTime())) throw new Error(ERRORS.invalidDateTime);
-
   const serviceLookup = normalizeServiceLookup(services);
+  const flexibleTriggerServiceIdSet = buildFlexibleTriggerServiceIdSet(serviceLookup);
   const fallbackServiceIds = toNumberList(formData.serviceIds);
   const fallbackDuration = Math.max(Number(formData.totalMinutes || 0), 30);
-  const customerNotes = String(formData.customerNotes || "").trim() || null;
+  const splitCustomerNotes = splitCustomerNotesInput(formData.customerNotes);
+  const normalizedCustomerNotes =
+    buildCustomerNotesPayload(splitCustomerNotes) || readText(formData.customerNotes) || null;
   const planMaps = normalizeVehicleServicePlanMaps(formData.vehicleServicePlans, serviceLookup);
+  const selectedVehicleKeys = getSelectedVehicleKeys(formData);
+
+  if (!formData.isQuickOrder && !formData.isNewVehicle && selectedVehicleKeys.length === 0) {
+    throw new Error(ERRORS.missingVehicle);
+  }
+
+  const slotMaps = parseSlotSelectionByVehicle(formData.vehicleSlotSelections);
+  const fallbackStartIso = resolveFallbackStartIso(formData);
+  const vehicleNoteMap = buildVehicleNotesMap(formData.vehicleNotePlans);
+
+  const vehiclePlans = selectedVehicleKeys.map((vehicleKey) => {
+    const vehicleId = getVehicleIdFromKey(vehicleKey);
+    const slotSelection = resolveSlotSelection(slotMaps, vehicleKey, vehicleId);
+    const startTime = readText(slotSelection?.startTime || fallbackStartIso);
+    if (!startTime) throw new Error(ERRORS.invalidDateTime);
+
+    const plan = resolveVehiclePlan({
+      vehicleKey,
+      vehicleId,
+      defaultServiceIds: fallbackServiceIds,
+      defaultDuration: fallbackDuration,
+      planMaps,
+      flexibleTriggerServiceIdSet,
+      slotBookingFlow: slotSelection?.bookingFlow,
+    });
+
+    const totalMinutes = resolveDurationMinutes(slotSelection, plan.totalMinutes);
+    const requestedServiceIds = normalizeRequestedServiceIds(plan.requestedServiceIds);
+    const requestedPackageIds = normalizeRequestedServiceIds(plan.requestedPackageIds);
+    const vehicleNotes = vehicleNoteMap.get(vehicleKey);
+    const customerNotes = vehicleNotes || plan.customerNotes || normalizedCustomerNotes;
+    const bookingFlow = normalizeBookingFlow(plan.bookingFlow, BOOKING_FLOW.FIXED);
+    const checkInWindowStart = bookingFlow === BOOKING_FLOW.FLEXIBLE
+      ? readText(slotSelection?.checkInWindowStart || slotSelection?.startTime || startTime)
+      : null;
+    const checkInWindowEnd = bookingFlow === BOOKING_FLOW.FLEXIBLE
+      ? readText(slotSelection?.checkInWindowEnd || slotSelection?.endTime || startTime)
+      : null;
+
+    return {
+      vehicleKey,
+      vehicleId: vehicleId > 0 ? vehicleId : null,
+      bookingFlow,
+      startTime,
+      endTime: readText(slotSelection?.endTime),
+      checkInWindowStart,
+      checkInWindowEnd,
+      totalMinutes,
+      requestedServiceIds,
+      requestedPackageIds,
+      customerNotes,
+      insuranceCompanyId: plan.insuranceCompanyId,
+      insuranceDeductibleAmount: plan.insuranceDeductibleAmount,
+      insuranceDeductibleOption: plan.insuranceDeductibleOption,
+      insuranceClaimMode: plan.insuranceClaimMode,
+      insuranceQuoteState: plan.insuranceQuoteState,
+      insuranceCardImageUrls: Array.isArray(plan.insuranceCardImageUrls) ? plan.insuranceCardImageUrls : [],
+      insuranceDamageImageUrls: Array.isArray(plan.insuranceDamageImageUrls) ? plan.insuranceDamageImageUrls : [],
+      slotHoldToken: readText(slotSelection?.slotHoldToken),
+      licensePlate:
+        vehicleKey === VEHICLE_KEY_GUEST
+          ? readText(formData.guestVehiclePlate)
+          : vehicleKey === VEHICLE_KEY_NEW
+            ? readText(formData.vehicleLicensePlate)
+            : null,
+      vehicleModelId:
+        vehicleKey === VEHICLE_KEY_GUEST
+          ? Number(formData.guestVehicleModelId || 0) || null
+          : vehicleKey === VEHICLE_KEY_NEW
+            ? Number(formData.vehicleModelId || 0) || null
+            : null,
+      vin:
+        vehicleKey === VEHICLE_KEY_GUEST
+          ? readText(formData.guestVehicleVin)
+          : vehicleKey === VEHICLE_KEY_NEW
+            ? readText(formData.vehicleVin)
+            : null,
+      color:
+        vehicleKey === VEHICLE_KEY_GUEST
+          ? readText(formData.guestVehicleColor)
+          : vehicleKey === VEHICLE_KEY_NEW
+            ? readText(formData.vehicleColor)
+            : null,
+      insuranceCompanyId: plan?.insuranceCompanyId || null,
+      insuranceDeductibleAmount: plan?.insuranceDeductibleAmount ?? null,
+      insuranceDeductibleOption: plan?.insuranceDeductibleOption || null,
+      insuranceClaimMode: plan?.insuranceClaimMode || null,
+      insuranceQuoteState: plan?.insuranceQuoteState || null,
+    };
+  });
+
+  if (formData.isQuickOrder && !Number(formData.guestVehicleModelId || 0)) {
+    throw new Error(ERRORS.missingGuestModel);
+  }
+
+  if (!formData.isQuickOrder) {
+    const customerId = Number(formData.customerId || 0);
+    if (!customerId) throw new Error(ERRORS.invalidCustomer);
+  }
+
+  if (formData.isNewVehicle && !Number(formData.vehicleModelId || 0)) {
+    throw new Error(ERRORS.missingNewVehicleModel);
+  }
+
   const selectedServiceIdsUnion = toNumberList([
     ...fallbackServiceIds,
     ...(Array.isArray(formData.vehicleServicePlans)
       ? formData.vehicleServicePlans.flatMap((plan) => toNumberList(plan?.serviceIds))
-      : [])
+      : []),
   ]);
   const selectedServiceObjects = selectedServiceIdsUnion.map((serviceId) => serviceLookup.get(serviceId)).filter(Boolean);
 
-  let successSummary = null;
+  const response = await saveReceptionBooking({
+    branchId: Number(effectiveBranchId),
+    isQuickOrder: Boolean(formData.isQuickOrder),
+    isNewVehicle: Boolean(formData.isNewVehicle),
+    customerId: formData.customerId ? Number(formData.customerId) : null,
+    customerName: readText(formData.customerName),
+    customerPhone: readText(formData.customerPhone),
+    guestName: readText(formData.guestName),
+    guestPhone: readText(formData.guestPhone),
+    guestVehiclePlate: readText(formData.guestVehiclePlate),
+    guestVehicleModelId: Number(formData.guestVehicleModelId || 0) || null,
+    guestVehicleColor: readText(formData.guestVehicleColor),
+    guestVehicleVin: readText(formData.guestVehicleVin),
+    guestVehicleYear: Number(formData.guestVehicleYear || 0) || null,
+    vehicleLicensePlate: readText(formData.vehicleLicensePlate),
+    vehicleModelId: Number(formData.vehicleModelId || 0) || null,
+    vehicleColor: readText(formData.vehicleColor),
+    vehicleVin: readText(formData.vehicleVin),
+    vehicleYear: Number(formData.vehicleYear || 0) || null,
+    ...buildInsuranceSnapshotPayload(formData),
+    customerNotes: normalizedCustomerNotes,
+    replaceAppointmentId: Number(replaceAppointmentId) > 0 ? Number(replaceAppointmentId) : null,
+    vehiclePlans,
+  });
 
-  if (formData.isQuickOrder) {
-    let customer = (customers || []).find(
-      (item) => String(item.phone || "").trim() === String(formData.guestPhone || "").trim()
-    );
-    if (!customer) {
-      customer = await createCustomer({
-        fullName: formData.guestName,
-        phone: formData.guestPhone,
-        isRegistered: false,
-        status: "active"
-      });
-    }
-
-    const modelId = Number(formData.guestVehicleModelId || 0);
-    if (!modelId) throw new Error(ERRORS.missingGuestModel);
-
-    let vehicle = findVehicleByPlate(vehicles, formData.guestVehiclePlate);
-    if (!vehicle) {
-      vehicle = await createVehicle({
-        licensePlate: formData.guestVehiclePlate,
-        modelId,
-        color: formData.guestVehicleColor || null,
-        vin: formData.guestVehicleVin || null,
-        year: formData.guestVehicleYear ? Number(formData.guestVehicleYear) : null,
-        status: "active"
-      });
-    }
-
-    const linked = (customerVehicles || []).some(
-      (item) =>
-        Number(item.customerId) === Number(customer.id) &&
-        Number(item.vehicleId) === Number(vehicle.id)
-    );
-    if (!linked) {
-      await createCustomerVehicle({
-        customerId: Number(customer.id),
-        vehicleId: Number(vehicle.id),
-        isCurrentOwner: true,
-        ownershipStartDate: new Date().toISOString().slice(0, 10)
-      });
-    }
-
-    const plan = resolveVehiclePlan({
-      vehicleKey: "guest",
-      vehicleId: Number(vehicle.id),
-      defaultServiceIds: fallbackServiceIds,
-      defaultDuration: fallbackDuration,
-      planMaps
-    });
-    const endAt = addMinutes(startAt, plan.totalMinutes);
-
-    const payload = {
-      ...buildAppointmentBasePayload({
-        effectiveBranchId,
-        customerId: Number(customer.id),
-        customerFullName: formData.guestName,
-        customerPhone: formData.guestPhone,
-        startAt,
-        endAt,
-        requestedServiceIds: plan.requestedServiceIds,
-        customerNotes
-      }),
-      vehicleId: Number(vehicle.id),
-      vehicleModelId: modelId,
-      licensePlate: formData.guestVehiclePlate,
-      vin: formData.guestVehicleVin,
-      color: formData.guestVehicleColor || null
-    };
-
-    const created = await bookAppointment(payload);
-    successSummary = created || payload;
-  } else {
-    const customerId = Number(formData.customerId || 0);
-    const customer = findCustomerById(customers, customerId);
-    if (!customerId || !customer) throw new Error(ERRORS.invalidCustomer);
-
-    if (formData.isNewVehicle) {
-      const modelId = Number(formData.vehicleModelId || 0);
-      if (!modelId) throw new Error(ERRORS.missingNewVehicleModel);
-
-      const newVehicle = await createVehicle({
-        licensePlate: formData.vehicleLicensePlate,
-        modelId,
-        color: formData.vehicleColor || null,
-        vin: formData.vehicleVin || null,
-        year: formData.vehicleYear ? Number(formData.vehicleYear) : null,
-        status: "active"
-      });
-
-      await createCustomerVehicle({
-        customerId,
-        vehicleId: Number(newVehicle.id),
-        isCurrentOwner: true,
-        ownershipStartDate: new Date().toISOString().slice(0, 10)
-      });
-
-      const plan = resolveVehiclePlan({
-        vehicleKey: "new-customer",
-        vehicleId: Number(newVehicle.id),
-        defaultServiceIds: fallbackServiceIds,
-        defaultDuration: fallbackDuration,
-        planMaps
-      });
-      const endAt = addMinutes(startAt, plan.totalMinutes);
-
-      const payload = {
-        ...buildAppointmentBasePayload({
-          effectiveBranchId,
-          customerId,
-          customerFullName: customer.fullName || formData.customerName,
-          customerPhone: customer.phone || formData.customerPhone,
-          startAt,
-          endAt,
-          requestedServiceIds: plan.requestedServiceIds,
-          customerNotes
-        }),
-        vehicleId: Number(newVehicle.id),
-        vehicleModelId: modelId,
-        licensePlate: formData.vehicleLicensePlate,
-        vin: formData.vehicleVin,
-        color: formData.vehicleColor || null
-      };
-
-      const created = await bookAppointment(payload);
-      successSummary = created || payload;
-    } else {
-      const selectedVehicleIds = toNumberList(formData.selectedVehicleIds);
-      if (selectedVehicleIds.length === 0) throw new Error(ERRORS.missingVehicle);
-
-      if (selectedVehicleIds.length === 1) {
-        const vehicle = findVehicleById(vehicles, selectedVehicleIds[0]);
-        if (!vehicle) throw new Error(ERRORS.vehicleNotFound);
-
-        const plan = resolveVehiclePlan({
-          vehicleKey: `existing-${selectedVehicleIds[0]}`,
-          vehicleId: selectedVehicleIds[0],
-          defaultServiceIds: fallbackServiceIds,
-          defaultDuration: fallbackDuration,
-          planMaps
-        });
-        const endAt = addMinutes(startAt, plan.totalMinutes);
-
-        const payload = {
-          ...buildAppointmentBasePayload({
-            effectiveBranchId,
-            customerId,
-            customerFullName: customer.fullName || formData.customerName,
-            customerPhone: customer.phone || formData.customerPhone,
-            startAt,
-            endAt,
-            requestedServiceIds: plan.requestedServiceIds,
-            customerNotes
-          }),
-          vehicleId: Number(vehicle.id)
-        };
-
-        const created = await bookAppointment(payload);
-        successSummary = created || payload;
-      } else {
-        const items = selectedVehicleIds.map((vehicleId) => {
-          const vehicle = findVehicleById(vehicles, vehicleId);
-          const plan = resolveVehiclePlan({
-            vehicleKey: `existing-${vehicleId}`,
-            vehicleId,
-            defaultServiceIds: fallbackServiceIds,
-            defaultDuration: fallbackDuration,
-            planMaps
-          });
-          const endAt = addMinutes(startAt, plan.totalMinutes);
-
-          return {
-            ...buildAppointmentBasePayload({
-              effectiveBranchId,
-              customerId,
-              customerFullName: customer.fullName || formData.customerName,
-              customerPhone: customer.phone || formData.customerPhone,
-              startAt,
-              endAt,
-              requestedServiceIds: plan.requestedServiceIds,
-              customerNotes
-            }),
-            vehicleId,
-            licensePlate: vehicle?.licensePlate || null,
-            vehicleModelId: vehicle?.modelId ? Number(vehicle.modelId) : null,
-            vin: vehicle?.vin || null,
-            color: vehicle?.color || null
-          };
-        });
-
-        const grouped = await createBookingGroup({
-          branchId: effectiveBranchId,
-          customerId,
-          customerNote: customerNotes,
-          items
-        });
-
-        const groupedAppointments = Array.isArray(grouped?.appointments)
-          ? grouped.appointments
-          : Array.isArray(grouped?.Appointments)
-            ? grouped.Appointments
-            : [];
-        successSummary = groupedAppointments[0] || items[0];
-      }
-    }
-  }
-
-  const shouldReplace = Number(replaceAppointmentId) > 0;
-  if (shouldReplace) {
-    await cancelAppointment(Number(replaceAppointmentId), ERRORS.replaceReason);
-  }
+  const primaryStart = response?.startTime || response?.StartTime || vehiclePlans[0]?.startTime || fallbackStartIso;
+  if (!primaryStart) throw new Error(ERRORS.invalidDateTime);
 
   return {
     customerName:
-      successSummary?.customerName ||
-      successSummary?.CustomerName ||
+      response?.customerName ||
+      response?.CustomerName ||
       formData.customerName ||
       formData.guestName ||
       "",
     customerPhone:
-      successSummary?.customerPhone ||
-      successSummary?.CustomerPhone ||
+      response?.customerPhone ||
+      response?.CustomerPhone ||
       formData.customerPhone ||
       formData.guestPhone ||
       "",
     vehicleLicensePlate:
-      successSummary?.vehicleLicensePlate ||
-      successSummary?.VehicleLicensePlate ||
-      successSummary?.licensePlate ||
+      response?.vehicleLicensePlate ||
+      response?.VehicleLicensePlate ||
       formData.vehicleLicensePlate ||
       formData.guestVehiclePlate ||
       "",
-    startTime: successSummary?.startTime || successSummary?.StartTime || startAt.toISOString(),
+    startTime: primaryStart,
     services: selectedServiceObjects,
-    groupVehicleCount: Math.max(1, Number(formData.selectedVehicleIds?.length || 0)),
-    updateMode: shouldReplace
+    groupVehicleCount: Math.max(1, vehiclePlans.length),
+    updateMode: Boolean(response?.updateMode ?? response?.UpdateMode ?? Number(replaceAppointmentId) > 0),
   };
 }

@@ -9,15 +9,16 @@ import { useSearch } from "@shared/core/context/SearchContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 
 // Role Components are now imported in App.jsx for routing
-import WorkflowTimeline from "@features/workshop/components/WorkflowTimeline";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
 import { ChakraProvider } from "@chakra-ui/react";
 import initialTheme from "@horizon/theme/theme";
 
 const ROLES_META = {
+  ADMIN: { path: "reception", label: "Admin Workshop", icon: "🛠️", description: "Toàn quyền điều phối xưởng" },
   RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📝", description: "Tiếp nhận, Báo giá & Thanh toán" },
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
-  FOREMAN: { path: "foreman", label: "Foreman", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  FOREMAN: { path: "foreman", label: "Quản đốc", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
+  TEAM_LEADER: { path: "team-leader", label: "Tổ trưởng", icon: "🧭", description: "Điều phối chẩn đoán theo tổ" },
   TECH: { path: "technician", label: "Technician", icon: "🔧", description: "Thực hiện & Báo cáo" },
   QUALITY_CONTROL: { path: "qc", label: "Quality Control", icon: "✅", description: "Kiểm tra chất lượng" }
 };
@@ -234,20 +235,6 @@ export default function WorkshopPage() {
   // Only show the role that the user belongs to, or all if Admin (optional)
   const allowedRoles = Object.entries(ROLES_META).filter(([role]) => role === userRole);
 
-  // Determine current context for Timeline
-  const getTimelineStatus = () => {
-    const path = location.pathname;
-    if (path.includes("/diagnosis") || path.includes("/items")) return "DIAGNOSING";
-    if (path.includes("/quote") || path.includes("/manager")) return "WAITING_APPROVAL";
-    if (path.includes("/condition")) return "RECEPTION";
-    if (path.includes("/technician")) return "REPAIRING";
-    if (path.includes("/qc")) return "QC_PENDING";
-    if (path.includes("/foreman")) return "DIAGNOSING";
-    if (path.includes("/reception")) return "RECEPTION";
-    return "RECEPTION";
-  };
-  const timelineStatus = getTimelineStatus();
-
   const currentRoleMeta = ROLES_META[userRole];
   const roleDashboardPath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "/workshop";
   const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
@@ -255,8 +242,7 @@ export default function WorkshopPage() {
   const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
-  const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
-  const shouldHideWorkflowTimeline = location.pathname.startsWith("/workshop/reception/chat");
+  const isReceptionDashboard = (userRole === "RECEPTIONIST" || userRole === "ADMIN") && location.pathname.startsWith("/workshop/reception");
   const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
     ? "appointments"
     : location.pathname.startsWith("/workshop/reception/chat")
@@ -466,7 +452,6 @@ export default function WorkshopPage() {
           </header>
 
           <section className="workshop-content">
-            {!shouldHideWorkflowTimeline ? <WorkflowTimeline currentStatus={timelineStatus} /> : null}
             <Outlet />
           </section>
         </main>

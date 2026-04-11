@@ -48,6 +48,10 @@ namespace MyGarage.Mappings
             CreateMap<Branch, BranchResponseDto>();
             CreateMap<BranchCreateDto, Branch>();
             CreateMap<BranchUpdateDto, Branch>();
+            // Team Mappings
+            CreateMap<Team, TeamResponseDto>();
+            CreateMap<TeamCreateDto, Team>();
+            CreateMap<TeamUpdateDto, Team>();
             // BranchException Mappings
             CreateMap<BranchException, BranchExceptionResponseDto>();
             CreateMap<BranchExceptionCreateDto, BranchException>();

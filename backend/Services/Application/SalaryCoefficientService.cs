@@ -84,11 +84,11 @@ namespace MyGarage.Services
             entity.CoefficientName = BuildCoefficientName(yearsOfService);
             entity.IsActive ??= true;
             entity.IsDeleted ??= false;
-            entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedAt = VietnamTime.Now;
 
             if (!excludeId.HasValue)
             {
-                entity.CreatedAt ??= DateTime.UtcNow;
+                entity.CreatedAt ??= VietnamTime.Now;
             }
 
             return entity;

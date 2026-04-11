@@ -2,16 +2,19 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
     public partial class VoucherCampaignService
     {
+        private const string VoucherCampaignStatusArchived = nameof(VoucherCampaignStatusCode.ARCHIVED);
+
         public async Task<int> SyncLifecycleStatusesAsync(DateTime? now = null)
         {
-            var current = now ?? DateTime.UtcNow;
+            var current = now ?? VietnamTime.Now;
             var campaigns = await _context.VoucherCampaigns
-                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != nameof(VoucherCampaignStatusCode.ARCHIVED)))
+                .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != VoucherCampaignStatusArchived))
                 .ToListAsync();
 
             if (campaigns.Count == 0)

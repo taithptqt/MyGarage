@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -8,6 +7,15 @@ namespace MyGarage.Services;
 
 public class PaymentConfirmationService : IPaymentConfirmationService
 {
+    private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
+    private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
+    private const string PaymentStatusFailed = nameof(PaymentStatusCode.FAILED);
+    private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
+    private const string RetailOrderStatusConfirmed = nameof(RetailOrderStatus.CONFIRMED);
+    private const string RetailOrderStatusDraft = nameof(RetailOrderStatus.DRAFT);
+    private const string DocumentPaymentStatusPaid = nameof(InvoicePaymentStatusCode.PAID);
+    private const string DocumentPaymentStatusPartial = nameof(InvoicePaymentStatusCode.PARTIAL);
+    private const string DocumentPaymentStatusUnpaid = nameof(InvoicePaymentStatusCode.UNPAID);
     private readonly IGarageContext _db;
     private readonly IEmailService _emailService;
     private readonly IOrderStore _orderStore;
@@ -30,32 +38,14 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         var normalizedStatus = NormalizeStatus(status);
         var previousStatus = (payment.Status ?? string.Empty).ToUpperInvariant();
 
-        _logger.LogInformation(
-            "[PaymentConfirmationService] ApplyOutcomeAsync: PaymentId={PaymentId}, previousStatus={PreviousStatus}, " +
-            "newStatus={NewStatus}, amountPaid={AmountPaid}, RetailOrderId={RetailOrderId}, ServiceOrderId={ServiceOrderId}",
-            payment.Id, previousStatus, normalizedStatus, amountPaid,
-            payment.RetailOrderId, payment.ServiceOrderId);
-
-        // Chỉ cập nhật nếu status thực sự thay đổi hoặc amount thay đổi
-        var statusChanged = previousStatus != normalizedStatus;
-        var amountChanged = payment.Amount != amountPaid;
-
-        if (statusChanged || amountChanged)
-        {
-            payment.Amount = amountPaid;
-            payment.Status = normalizedStatus;
-            payment.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
+        payment.Amount = amountPaid;
+        payment.Status = normalizedStatus;
+        payment.UpdatedAt = VietnamTime.Now;
+        await _db.SaveChangesAsync();
 
         await UpdateRelatedDocumentsAsync(payment);
 
-        // FIX: Gửi email khi status cuối cùng là COMPLETED.
-        // Trước đây: chỉ gửi khi previousStatus != COMPLETED → bị skip nếu webhook đã set COMPLETED trước.
-        // Bây giờ: gửi nếu (1) đang transition sang COMPLETED, HOẶC (2) đã COMPLETED nhưng chưa gửi email.
-        // Dùng heuristic: nếu previousStatus đã là COMPLETED VÀ status vẫn COMPLETED → có thể webhook đã xử lý.
-        // Tuy nhiên, webhook KHÔNG gửi email (chỉ set status), nên syncOrder cần gửi email.
-        if (normalizedStatus == nameof(PaymentStatusCode.COMPLETED))
+        if (previousStatus != PaymentStatusCompleted && normalizedStatus == PaymentStatusCompleted)
         {
             if (previousStatus != nameof(PaymentStatusCode.COMPLETED))
             {
@@ -83,14 +73,10 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         var normalized = status?.Trim().ToUpperInvariant();
         return normalized switch
         {
-            nameof(PaymentStatusCode.COMPLETED) => nameof(PaymentStatusCode.COMPLETED),
-            "PAID" => nameof(PaymentStatusCode.COMPLETED),
-            "SUCCESS" => nameof(PaymentStatusCode.COMPLETED),
-            "SUCCEEDED" => nameof(PaymentStatusCode.COMPLETED),
-            nameof(PaymentStatusCode.CANCELED) => nameof(PaymentStatusCode.CANCELED),
-            "CANCELLED" => nameof(PaymentStatusCode.CANCELED),
-            nameof(PaymentStatusCode.FAILED) => nameof(PaymentStatusCode.FAILED),
-            _ => nameof(PaymentStatusCode.PENDING)
+            PaymentStatusCompleted => PaymentStatusCompleted,
+            PaymentStatusCanceled => PaymentStatusCanceled,
+            PaymentStatusFailed => PaymentStatusFailed,
+            _ => PaymentStatusPending
         };
     }
 
@@ -102,15 +88,13 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (invoice is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
+                    .Where(x => x.InvoiceId == payment.InvoiceId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 invoice.PaidAmount = paidAmount;
                 var invoiceTotal = invoice.TotalAmount ?? 0m;
-                invoice.PaymentStatus = invoiceTotal > 0m && paidAmount >= invoiceTotal
-                    ? nameof(PaymentDocumentStatusCode.PAID)
-                    : (paidAmount > 0m ? nameof(PaymentDocumentStatusCode.PARTIAL) : nameof(PaymentDocumentStatusCode.UNPAID));
-                invoice.UpdatedAt = DateTime.UtcNow;
+                invoice.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, invoiceTotal);
+                invoice.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -120,14 +104,12 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (serviceOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
+                    .Where(x => x.ServiceOrderId == payment.ServiceOrderId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
-                serviceOrder.PaymentStatus = serviceTotal > 0m && paidAmount >= serviceTotal
-                    ? nameof(PaymentDocumentStatusCode.PAID)
-                    : (paidAmount > 0m ? nameof(PaymentDocumentStatusCode.PARTIAL) : nameof(PaymentDocumentStatusCode.UNPAID));
-                serviceOrder.UpdatedAt = DateTime.UtcNow;
+                serviceOrder.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, serviceTotal);
+                serviceOrder.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -137,12 +119,12 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (retailOrder is not null)
             {
                 var paidAmount = await _db.Payments
-                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == nameof(PaymentStatusCode.COMPLETED))
+                    .Where(x => x.RetailOrderId == payment.RetailOrderId.Value && x.Status == PaymentStatusCompleted)
                     .SumAsync(x => (decimal?)x.Amount) ?? 0m;
 
                 // Retail order status follows existing DB check constraint.
-                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? nameof(RetailOrderStatus.CONFIRMED) : nameof(RetailOrderStatus.DRAFT);
-                retailOrder.UpdatedAt = DateTime.UtcNow;
+                retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
+                retailOrder.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -175,105 +157,42 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
             var amount = payment.Amount.ToString("N0");
             var body = $@"
-<div style=""font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px; color: #333;"">
-    <div style=""max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"">
-        <!-- Header -->
-        <div style=""background-color: #0056b3; color: #ffffff; padding: 20px; text-align: center;"">
-            <h2 style=""margin: 0; font-size: 24px;"">MyGarage</h2>
-            <p style=""margin: 5px 0 0; font-size: 16px; opacity: 0.9;"">Hóa Đơn / Xác nhận thanh toán</p>
-        </div>
+                <h3>MyGarage - Thanh to�n th�nh c�ng</h3>
+                <p>Xin ch�o {recipient.Value.FullName},</p>
+                <p>Ch�ng t�i d� nh?n thanh to�n th�nh c�ng cho giao d?ch <b>{payment.TransactionCode}</b>.</p>
+                <ul>
+                  <li>S? ti?n: <b>{amount} VND</b></li>
+                  <li>Tr?ng th�i: <b>{payment.Status}</b></li>
+                  <li>Th?i gian: <b>{VietnamTime.Now:dd/MM/yyyy HH:mm:ss}</b></li>
+                </ul>
+                <p>C?m on b?n d� s? d?ng d?ch v? MyGarage.</p>";
 
-        <!-- Content -->
-        <div style=""padding: 20px; line-height: 1.6;"">
-            <p>Xin chào <strong>{recipient.Value.FullName}</strong>,</p>
-            <p>Tuyệt vời! Chúng tôi đã xác nhận khoản thanh toán thành công cho giao dịch <b>{payment.TransactionCode}</b> của bạn.</p>
-
-            <div style=""background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 10px 15px; margin: 20px 0;"">
-                <p style=""margin: 0;""><strong>Số tiền:</strong> <span style=""color: #d9534f; font-weight: bold; font-size: 16px;"">{amount} VND</span></p>
-                <p style=""margin: 5px 0 0;""><strong>Trạng thái:</strong> <span style=""color: #28a745;"">Thành công ({payment.Status})</span></p>
-                <p style=""margin: 5px 0 0;""><strong>Thời gian:</strong> {payment.UpdatedAt ?? DateTime.UtcNow:dd/MM/yyyy HH:mm:ss}</p>
-            </div>";
-
-            if (payment.RetailOrderId.HasValue)
-            {
-                var retailOrder = await _db.RetailOrders
-                    .Include(r => r.RetailOrderItems)
-                    .ThenInclude(ri => ri.Product)
-                    .FirstOrDefaultAsync(r => r.Id == payment.RetailOrderId.Value);
-                
-                if (retailOrder != null && retailOrder.RetailOrderItems.Any())
-                {
-                    body += $@"
-            <h4 style=""border-bottom: 2px solid #eeeeee; padding-bottom: 8px; margin-top: 30px; color: #0056b3;"">
-                Chi tiết mua hàng (Mã đơn: {retailOrder.OrderCode})
-            </h4>
-            <table style=""width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;"">
-                <thead>
-                    <tr style=""background-color: #f1f1f1; text-align: left;"">
-                        <th style=""padding: 10px; border-bottom: 1px solid #ddd;"">Sản phẩm</th>
-                        <th style=""padding: 10px; border-bottom: 1px solid #ddd; text-align: center;"">SL</th>
-                        <th style=""padding: 10px; border-bottom: 1px solid #ddd; text-align: right;"">Đơn giá</th>
-                        <th style=""padding: 10px; border-bottom: 1px solid #ddd; text-align: right;"">Thành tiền</th>
-                    </tr>
-                </thead>
-                <tbody>";
-
-                    foreach (var item in retailOrder.RetailOrderItems)
-                    {
-                        var prodName = item.Product?.Name ?? "Sản phẩm";
-                        body += $@"
-                    <tr>
-                        <td style=""padding: 10px; border-bottom: 1px solid #eee;"">{prodName}</td>
-                        <td style=""padding: 10px; border-bottom: 1px solid #eee; text-align: center;"">{item.Quantity:N0}</td>
-                        <td style=""padding: 10px; border-bottom: 1px solid #eee; text-align: right;"">{item.UnitPriceAtTime:N0}</td>
-                        <td style=""padding: 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;"">{item.FinalAmount:N0}</td>
-                    </tr>";
-                    }
-
-                    body += $@"
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan=""3"" style=""padding: 10px 10px 5px; text-align: right; color: #555;"">Tạm tính:</td>
-                        <td style=""padding: 10px 10px 5px; text-align: right;"">{retailOrder.SubTotal:N0} ₫</td>
-                    </tr>
-                    <tr>
-                        <td colspan=""3"" style=""padding: 5px 10px; text-align: right; color: #555;"">Giảm giá:</td>
-                        <td style=""padding: 5px 10px; text-align: right; color: #28a745;"">-{(retailOrder.TotalDiscountAmount ?? 0):N0} ₫</td>
-                    </tr>
-                    <tr>
-                        <td colspan=""3"" style=""padding: 5px 10px; text-align: right; color: #555;"">Thuế:</td>
-                        <td style=""padding: 5px 10px; text-align: right;"">+{(retailOrder.TaxAmount ?? 0):N0} ₫</td>
-                    </tr>
-                    <tr>
-                        <td colspan=""3"" style=""padding: 15px 10px; text-align: right; font-weight: bold; font-size: 16px; border-top: 2px solid #ddd;"">TỔNG CỘNG:</td>
-                        <td style=""padding: 15px 10px; text-align: right; font-weight: bold; font-size: 16px; color: #d9534f; border-top: 2px solid #ddd;"">{retailOrder.FinalAmount:N0} ₫</td>
-                    </tr>
-                </tfoot>
-            </table>";
-                }
-            }
-
-            body += $@"
-            <p style=""margin-top: 30px;"">Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với chúng tôi qua số điện thoại hỗ trợ hoặc phản hồi trực tiếp qua email này.</p>
-            <p>Trân trọng,<br><strong>Đội ngũ MyGarage</strong></p>
-        </div>
-
-        <!-- Footer -->
-        <div style=""background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #888;"">
-            <p style=""margin: 0;"">© {DateTime.Now.Year} MyGarage. All rights reserved.</p>
-            <p style=""margin: 5px 0 0;"">Email này được gửi tự động từ hệ thống. Vui lòng không trả lời bằng email rác.</p>
-        </div>
-    </div>
-</div>";
-
-            var subject = payment.RetailOrderId.HasValue ? "MyGarage - Thanh toán thành công & Hóa đơn mua hàng" : "MyGarage - Thanh toán thành công";
-            await _emailService.SendEmailAsync(recipient.Value.Email, subject, body);
+            await _emailService.SendEmailAsync(recipient.Value.Email, "MyGarage - Thanh to�n th�nh c�ng", body);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[PaymentConfirmationService] Gửi email thất bại cho payment #{PaymentId}", payment.Id);
         }
+    }
+
+    private static string ResolveDocumentPaymentStatus(decimal paidAmount, decimal totalAmount)
+    {
+        if (totalAmount <= 0m)
+        {
+            return DocumentPaymentStatusPaid;
+        }
+
+        if (paidAmount <= 0m)
+        {
+            return DocumentPaymentStatusUnpaid;
+        }
+
+        if (paidAmount < totalAmount)
+        {
+            return DocumentPaymentStatusPartial;
+        }
+
+        return DocumentPaymentStatusPaid;
     }
 
     private async Task<(string Email, string FullName)?> ResolveCustomerRecipientAsync(Payment payment)
@@ -285,8 +204,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == payment.PayerId.Value);
             if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
             {
-                _logger.LogDebug("[ResolveEmail] Bước 1: ✅ Tìm thấy email={Email} từ Customer #{CustomerId}", customer.Email, customer.Id);
-                return (customer.Email!, customer.FullName ?? "Khách hàng");
+                return (customer.Email!, customer.FullName ?? "Kh�ch h�ng");
             }
             _logger.LogDebug("[ResolveEmail] Bước 1: Customer #{PayerId} không có email hoặc không tồn tại", payment.PayerId.Value);
         }
@@ -300,8 +218,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 .FirstOrDefaultAsync(s => s.Id == payment.ServiceOrderId.Value);
             if (serviceOrder?.Customer is not null && !string.IsNullOrWhiteSpace(serviceOrder.Customer.Email))
             {
-                _logger.LogDebug("[ResolveEmail] Bước 2: ✅ Tìm thấy email={Email} từ ServiceOrder", serviceOrder.Customer.Email);
-                return (serviceOrder.Customer.Email!, serviceOrder.Customer.FullName ?? "Khách hàng");
+                return (serviceOrder.Customer.Email!, serviceOrder.Customer.FullName ?? "Kh�ch h�ng");
             }
             _logger.LogDebug("[ResolveEmail] Bước 2: ServiceOrder không có Customer.Email");
         }
@@ -316,8 +233,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 .FirstOrDefaultAsync(r => r.Id == payment.RetailOrderId.Value);
             if (retailOrder?.Customer is not null && !string.IsNullOrWhiteSpace(retailOrder.Customer.Email))
             {
-                _logger.LogDebug("[ResolveEmail] Bước 3: ✅ Tìm thấy email={Email} từ RetailOrder.Customer", retailOrder.Customer.Email);
-                return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Khách hàng");
+                return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Kh�ch h�ng");
             }
             _logger.LogDebug("[ResolveEmail] Bước 3: RetailOrder.Customer không có email (CustomerId={CustomerId})",
                 retailOrder?.CustomerId);
@@ -360,15 +276,13 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == invoice.PayerId.Value);
                 if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
                 {
-                    _logger.LogDebug("[ResolveEmail] Bước 5: ✅ Tìm thấy email={Email} từ Invoice.PayerId", customer.Email);
-                    return (customer.Email!, customer.FullName ?? "Khách hàng");
+                    return (customer.Email!, customer.FullName ?? "Kh�ch h�ng");
                 }
             }
 
             if (invoice is not null && !string.IsNullOrWhiteSpace(invoice.ReceiveEmail))
             {
-                _logger.LogDebug("[ResolveEmail] Bước 5b: ✅ Tìm thấy ReceiveEmail={Email} từ Invoice", invoice.ReceiveEmail);
-                return (invoice.ReceiveEmail!, "Khách hàng");
+                return (invoice.ReceiveEmail!, "Kh�ch h�ng");
             }
         }
 

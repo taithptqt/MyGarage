@@ -245,6 +245,15 @@ export default function DateRangePickerModal({
     setCalendarActiveStartDate(toMonthStartDate(from));
   }, []);
 
+  const handleQuickSetToday = useCallback(() => {
+    const today = toDateText(new Date());
+    setDraftDateFrom(today);
+    setDraftDateTo(today);
+    setDraftDateFromInput(formatDateInputValue(today));
+    setDraftDateToInput(formatDateInputValue(today));
+    setCalendarActiveStartDate(toMonthStartDate(today));
+  }, []);
+
   const disableApplyButton = requireFullRange
     ? !draftDateFrom || !draftDateTo
     : !draftDateFrom && !draftDateTo;
@@ -330,6 +339,9 @@ export default function DateRangePickerModal({
         </div>
 
         <div className="date-range-quick-actions">
+          <button type="button" className="date-quick-btn" onClick={handleQuickSetToday}>
+            Hôm nay
+          </button>
           <button type="button" className="date-quick-btn" onClick={() => handleQuickSetDateRange(7)}>
             7 ngày gần nhất
           </button>

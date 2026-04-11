@@ -13,6 +13,8 @@ public partial class Bay
 
     public string Name { get; set; } = null!;
 
+    public int SequenceOrder { get; set; }
+
     public string BayType { get; set; } = null!;
 
     public string ServiceArea { get; set; } = null!;
@@ -22,6 +24,10 @@ public partial class Bay
     public string? OperationalStatus { get; set; }
 
     public long? CurrentOccupiedVehicleId { get; set; }
+
+    public DateTime? LastStatusChangedAt { get; set; }
+
+    public int ReservationStatus { get; set; }
 
     public bool? IsActive { get; set; }
 

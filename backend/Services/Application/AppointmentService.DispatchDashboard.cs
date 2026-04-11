@@ -13,13 +13,20 @@ namespace MyGarage.Services
         public async Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null)
         {
             var snapshot = at ?? _clock.LocalNow;
-            var bays = await _context.Bays.AsNoTracking().Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true).OrderBy(b => b.Code).ToListAsync();
+            var bays = await _context.Bays
+                .AsNoTracking()
+                .Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true)
+                .OrderBy(b => b.SequenceOrder)
+                .ThenBy(b => b.Code)
+                .ToListAsync();
             var slots = await _context.WorkSlots.AsNoTracking()
                 .Where(s => s.BranchId == branchId
                     && s.StartTime <= snapshot
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != nameof(AppointmentStatus.CANCELLED))
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
+                    && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderByDescending(s => s.StartTime)
                 .ToListAsync();
 
@@ -36,6 +43,7 @@ namespace MyGarage.Services
                 bayDtos.Add(new DispatchBayStatusDto
                 {
                     BayId = bay.Id,
+                    SequenceOrder = bay.SequenceOrder,
                     BayCode = bay.Code,
                     BayName = bay.Name,
                     BayType = bay.BayType,

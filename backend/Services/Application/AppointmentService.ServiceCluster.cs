@@ -9,14 +9,21 @@ using MyGarage.Models;
 
 namespace MyGarage.Services
 {
-    public partial class AppointmentService
+        public partial class AppointmentService
     {
-        private const int FlexibleBufferMinutes = 15;
-
-        private async Task<BookingFlowType> ResolveFlowAsync(string? bookingFlow, string? requestedServiceIds)
+        private async Task<BookingFlowType> ResolveFlowAsync(
+            string? bookingFlow,
+            string? requestedServiceIds,
+            string? requestedPackageIds = null)
         {
             var explicitFlow = ParseExplicitFlow(bookingFlow);
+            if (explicitFlow.HasValue)
+            {
+                return explicitFlow.Value;
+            }
+
             var services = await LoadRequestedServicesAsync(requestedServiceIds);
+            var packages = await LoadRequestedPackagesAsync(requestedPackageIds);
 
             if (services.Count > 0)
             {
@@ -25,10 +32,19 @@ namespace MyGarage.Services
                     : BookingFlowType.Fixed;
             }
 
-            return explicitFlow ?? BookingFlowType.Flexible;
+            if (packages.Count > 0)
+            {
+                return packages.Any(IsInspectionPackage)
+                    ? BookingFlowType.Flexible
+                    : BookingFlowType.Fixed;
+            }
+
+            return BookingFlowType.Flexible;
         }
 
-        private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(string? requestedServiceIds)
+        private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(
+            string? requestedServiceIds,
+            string? requestedPackageIds = null)
         {
             var normalizedIds = ParseServiceIds(requestedServiceIds)
                 .Distinct()
@@ -37,6 +53,11 @@ namespace MyGarage.Services
             if (normalizedIds.Count > 0)
             {
                 return string.Join(",", normalizedIds);
+            }
+
+            if (ParsePackageIds(requestedPackageIds).Any())
+            {
+                return null;
             }
 
             var defaultDiagnosticServiceId = await ResolveDefaultDiagnosticServiceIdAsync();
@@ -72,10 +93,15 @@ namespace MyGarage.Services
             return fallbackDiagnostic?.Id;
         }
 
-        private static string BuildFlexibleDynamicNotice(int estimatedMinutes)
+        private static string BuildFlexibleDynamicNotice(
+            int serviceMinutes,
+            int setupMinutes,
+            int bufferMinutes,
+            int estimatedMinutes)
         {
-            return $"D\u1EF1a tr\u00EAn c\u00E1c h\u1EA1ng m\u1EE5c b\u1EA1n ch\u1ECDn, th\u1EDDi gian d\u1EF1 ki\u1EBFn ho\u00E0n t\u1EA5t l\u00E0 {estimatedMinutes} ph\u00FAt. " +
-                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ki\u1EC3m tra xong.";
+            return $"T\u1ED5ng th\u1EDDi gian d\u1EF1 ki\u1EBFn {estimatedMinutes} ph\u00FAt " +
+                   $"(s\u1EEDa ch\u1EEFa {serviceMinutes}p + ti\u1EBFp nh\u1EADn/ch\u1EE5p \u1EA3nh {setupMinutes}p + buffer {bufferMinutes}p). " +
+                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ho\u00E0n t\u1EA5t b\u01B0\u1EDBc ki\u1EC3m tra ban \u0111\u1EA7u.";
         }
 
         private async Task<List<StandardService>> LoadRequestedServicesAsync(string? requestedServiceIds)
@@ -133,22 +159,50 @@ namespace MyGarage.Services
 
         private static bool IsInspectionService(StandardService service)
         {
-            var text = NormalizeText($"{service.Code} {service.Name} {service.Category?.Name}");
-            return text.Contains("kiem tra")
-                   || text.Contains("chuan doan")
-                   || text.Contains("diagnostic")
-                   || text.Contains("general check")
-                   || text.Contains("quick check")
-                   || text.Contains("checkup")
-                   || text.Contains("check-up");
+            var code = NormalizeText(service.Code ?? string.Empty)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+            return code.StartsWith("dg", StringComparison.Ordinal);
+        }
+
+        private static bool IsMiniCheckService(string? code, string? name, string? categoryName = null)
+        {
+            var normalizedCode = NormalizeText(code ?? string.Empty)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+
+            if (normalizedCode is "mini10" or "minicheck" or "mini" || normalizedCode.StartsWith("mnc", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var text = NormalizeText($"{code} {name} {categoryName}");
+            return text.Contains("mini check")
+                   || text.Contains("mini-check")
+                   || text.Contains("minicheck");
         }
 
         private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
         {
-            var services = await LoadRequestedServicesAsync(requestedServiceIds);
-            if (services.Count == 0) return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
+            return await ResolveServiceClusterAsync(requestedServiceIds, null, notes);
+        }
+
+        private async Task<ServiceCluster> ResolveServiceClusterAsync(
+            string? requestedServiceIds,
+            string? requestedPackageIds,
+            string? notes)
+        {
+            var services = await LoadRequestedServicesWithPackageItemsAsync(requestedServiceIds, requestedPackageIds);
+            var packages = await LoadRequestedPackagesAsync(requestedPackageIds);
+            if (services.Count == 0 && packages.Count == 0)
+            {
+                return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
+            }
 
             var heavy = services.Any(s => IsHeavyHint(s.Name) || IsHeavyHint(s.Category?.Name));
+            heavy = heavy || packages.Any(IsPackageHeavySignal);
             return heavy ? ServiceCluster.Heavy : ServiceCluster.Quick;
         }
     }

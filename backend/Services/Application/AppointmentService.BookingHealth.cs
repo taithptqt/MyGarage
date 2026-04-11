@@ -21,14 +21,20 @@ namespace MyGarage.Services
             var delayedSlots = await _context.WorkSlots.AsNoTracking()
                 .Where(s => s.BranchId == branchId
                     && s.EndTime < atTime
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
-                    && s.Status != nameof(AppointmentStatus.CANCELLED))
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW))
                 .ToListAsync();
 
             var totalDelay = delayedSlots.Sum(s => (int)Math.Max(0, Math.Ceiling(((s.ActualReleaseTime ?? atTime) - s.EndTime).TotalMinutes)));
             var queueCount = await _context.Appointments.AsNoTracking()
-                .Where(a => a.BranchId == branchId && (a.Status == nameof(AppointmentStatus.PENDING) || a.Status == nameof(AppointmentStatus.ARRIVED) || a.Status == nameof(AppointmentStatus.ARRIVED_LATE)))
+                .Where(a => a.BranchId == branchId &&
+                    (a.Status == nameof(AppointmentStatus.PENDING) ||
+                     a.Status == nameof(AppointmentStatus.CONFIRMED) ||
+                     a.Status == nameof(AppointmentStatus.LATE) ||
+                     a.Status == nameof(AppointmentStatus.ARRIVED) ||
+                     a.Status == nameof(AppointmentStatus.ARRIVED_LATE)))
                 .CountAsync();
 
             var locked = totalDelay >= delayThreshold || (totalDelay >= delayThreshold / 2 && queueCount >= parkingThreshold);

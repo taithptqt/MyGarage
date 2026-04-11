@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -10,6 +11,8 @@ namespace MyGarage.Services
     {
         private const string ApprovalStatusApproved = nameof(ApprovalRequestStatusCode.APPROVED);
         private const string ApprovalStatusRejected = nameof(ApprovalRequestStatusCode.REJECTED);
+        private const string AuditStatusCompleted = nameof(InventoryAuditStatusCode.COMPLETED);
+        private const string AuditStatusCanceled = nameof(InventoryAuditStatusCode.CANCELED);
 
         public async Task<IReadOnlyList<object>> GetApprovalsAsync(string? status)
         {
@@ -51,7 +54,7 @@ namespace MyGarage.Services
 
             request.Status = ApprovalStatusApproved;
             request.ApproverId = approverId;
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
             if (!string.IsNullOrWhiteSpace(note)) request.Reason = note.Trim();
 
             await _context.SaveChangesAsync();
@@ -66,7 +69,7 @@ namespace MyGarage.Services
             request.Status = ApprovalStatusRejected;
             request.ApproverId = approverId;
             request.RejectReason = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
 
             await _context.SaveChangesAsync();
             return true;
@@ -110,9 +113,9 @@ namespace MyGarage.Services
             var audit = await _context.InventoryAudits.FirstOrDefaultAsync(a => a.Id == id);
             if (audit == null) return false;
 
-            audit.Status = ApprovalStatusApproved;
+            audit.Status = AuditStatusCompleted;
             audit.ApprovedBy = approverId;
-            audit.UpdatedAt = DateTime.UtcNow;
+            audit.UpdatedAt = VietnamTime.Now;
             audit.UpdatedBy = approverId;
             await _context.SaveChangesAsync();
             return true;
@@ -123,8 +126,8 @@ namespace MyGarage.Services
             var audit = await _context.InventoryAudits.FirstOrDefaultAsync(a => a.Id == id);
             if (audit == null) return false;
 
-            audit.Status = ApprovalStatusRejected;
-            audit.UpdatedAt = DateTime.UtcNow;
+            audit.Status = AuditStatusCanceled;
+            audit.UpdatedAt = VietnamTime.Now;
             audit.UpdatedBy = approverId;
             await _context.SaveChangesAsync();
             return true;

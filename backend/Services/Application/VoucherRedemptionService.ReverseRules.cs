@@ -3,12 +3,19 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class VoucherRedemptionService
     {
+        private const string RedemptionStatusReversed = nameof(VoucherRedemptionStatusCode.REVERSED);
+        private const string DocumentPaymentStatusPaid = nameof(InvoicePaymentStatusCode.PAID);
+        private const string VoucherStatusExpired = nameof(VoucherStatusCode.EXPIRED);
+        private const string VoucherStatusScheduled = nameof(VoucherStatusCode.SCHEDULED);
+        private const string VoucherStatusActiveAfterReverse = nameof(VoucherStatusCode.ACTIVE);
+
         private async Task<VoucherRedeemResultResponseDto?> ValidateReverseRequestAsync(
             VoucherRedemption? redemption,
             VoucherRedemptionReverseDto request)
@@ -23,7 +30,7 @@ namespace MyGarage.Services
                 };
             }
 
-            if (!string.Equals(redemption.RedemptionStatus, nameof(VoucherRedemptionStatusCode.REDEEMED), StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(redemption.RedemptionStatus, RedemptionStatusRedeemed, StringComparison.OrdinalIgnoreCase))
             {
                 return new VoucherRedeemResultResponseDto
                 {
@@ -47,7 +54,7 @@ namespace MyGarage.Services
             {
                 var invoice = await _context.Invoices.FirstOrDefaultAsync(x => x.Id == redemption.InvoiceId.Value);
                 if (invoice != null &&
-                    string.Equals(invoice.PaymentStatus, nameof(PaymentDocumentStatusCode.PAID), StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(invoice.PaymentStatus, DocumentPaymentStatusPaid, StringComparison.OrdinalIgnoreCase) &&
                     !request.ApprovalRequestId.HasValue)
                 {
                     return new VoucherRedeemResultResponseDto
@@ -75,8 +82,8 @@ namespace MyGarage.Services
 
         private static void ApplyReverseState(VoucherRedemption redemption, VoucherRedemptionReverseDto request, DateTime now)
         {
-            redemption.RedemptionStatus = nameof(VoucherRedemptionStatusCode.REVERSED);
-            redemption.ValidationStatus = nameof(VoucherValidationStatusCode.VALIDATED);
+            redemption.RedemptionStatus = RedemptionStatusReversed;
+            redemption.ValidationStatus = ValidationStatusValidated;
             redemption.FailReasonCode = null;
             redemption.ReversedAt = now;
             redemption.ReverseReason = request.Reason?.Trim();
@@ -92,7 +99,7 @@ namespace MyGarage.Services
             voucher.UpdatedAt = now;
             voucher.UpdatedBy = approvedBy;
 
-            if (!string.Equals(voucher.Status, nameof(VoucherStatusCode.EXHAUSTED), StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(voucher.Status, VoucherStatusExhausted, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -106,17 +113,17 @@ namespace MyGarage.Services
 
             if (now > voucher.EndDate)
             {
-                voucher.Status = nameof(VoucherStatusCode.EXPIRED);
+                voucher.Status = VoucherStatusExpired;
                 voucher.IsActive = false;
             }
             else if (now < voucher.StartDate)
             {
-                voucher.Status = nameof(VoucherStatusCode.SCHEDULED);
+                voucher.Status = VoucherStatusScheduled;
                 voucher.IsActive = true;
             }
             else
             {
-                voucher.Status = nameof(VoucherStatusCode.ACTIVE);
+                voucher.Status = VoucherStatusActiveAfterReverse;
                 voucher.IsActive = true;
             }
         }

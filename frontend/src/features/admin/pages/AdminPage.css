@@ -505,6 +505,19 @@ select.search-input:not([multiple]):focus {
   font-weight: 700;
 }
 
+.form-helper {
+  color: #6f7fa8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.form-error-text {
+  color: #c44337;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .form-group input,
 .form-group select {
   border: 1px solid var(--border);

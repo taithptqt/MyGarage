@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -12,16 +13,8 @@ namespace MyGarage.Services
 {
     public partial class VoucherCampaignService : GenericService<VoucherCampaign>, IVoucherCampaignService
     {
-        private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
-        {
-            nameof(VoucherCampaignStatusCode.DRAFT),
-            nameof(VoucherCampaignStatusCode.PENDING_APPROVAL),
-            nameof(VoucherCampaignStatusCode.SCHEDULED),
-            nameof(VoucherCampaignStatusCode.ACTIVE),
-            nameof(VoucherCampaignStatusCode.PAUSED),
-            nameof(VoucherCampaignStatusCode.ENDED),
-            nameof(VoucherCampaignStatusCode.ARCHIVED)
-        };
+        private static readonly HashSet<string> AllowedStatuses =
+            new(Enum.GetNames<VoucherCampaignStatusCode>(), StringComparer.OrdinalIgnoreCase);
 
         private readonly IVoucherCampaignRepository _voucherCampaignRepository;
         private readonly IGarageContext _context;

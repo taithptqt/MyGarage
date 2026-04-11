@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using Microsoft.EntityFrameworkCore;
 
 namespace MyGarage.Controllers
 {
@@ -15,11 +17,19 @@ namespace MyGarage.Controllers
     public class DiagnoseRecommendationController : ControllerBase
     {
         private readonly IDiagnoseRecommendationService _diagnoseRecommendationService;
+        private readonly IServiceOrderService _serviceOrderService;
+        private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
-        public DiagnoseRecommendationController(IDiagnoseRecommendationService diagnoseRecommendationService, IMapper mapper)
+        public DiagnoseRecommendationController(
+            IDiagnoseRecommendationService diagnoseRecommendationService,
+            IServiceOrderService serviceOrderService,
+            IGarageContext context,
+            IMapper mapper)
         {
             _diagnoseRecommendationService = diagnoseRecommendationService;
+            _serviceOrderService = serviceOrderService;
+            _context = context;
             _mapper = mapper;
         }
 
@@ -51,41 +61,106 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<DiagnoseRecommendationResponseDto>> Create([FromBody] DiagnoseRecommendationCreateDto itemDto)
         {
-            var entity = _mapper.Map<DiagnoseRecommendation>(itemDto);
-            var createdItem = await _diagnoseRecommendationService.AddAsync(entity);
-            var responseDto = _mapper.Map<DiagnoseRecommendationResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            try
+            {
+                if (itemDto == null || itemDto.DiagnoseId <= 0)
+                {
+                    return BadRequest(new { message = "Thiếu DiagnoseId hợp lệ để tạo kiến nghị kỹ thuật." });
+                }
+
+                var serviceOrderId = await ResolveServiceOrderIdFromDiagnoseIdAsync(itemDto.DiagnoseId);
+                if (serviceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(serviceOrderId);
+                }
+
+                var entity = _mapper.Map<DiagnoseRecommendation>(itemDto);
+                var createdItem = await _diagnoseRecommendationService.AddAsync(entity);
+                var responseDto = _mapper.Map<DiagnoseRecommendationResponseDto>(createdItem);
+                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<DiagnoseRecommendationResponseDto>> Update(long id, [FromBody] DiagnoseRecommendationUpdateDto itemDto)
         {
-            var existingItem = await _diagnoseRecommendationService.GetByIdAsync(id);
-            if (existingItem == null)
+            try
             {
-                return NotFound();
+                var existingItem = await _diagnoseRecommendationService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                var diagnoseId = itemDto?.DiagnoseId > 0 ? itemDto.DiagnoseId : existingItem.DiagnoseId;
+                var serviceOrderId = await ResolveServiceOrderIdFromDiagnoseIdAsync(diagnoseId);
+                if (serviceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(serviceOrderId);
+                }
+
+                _mapper.Map(itemDto, existingItem);
+                var updatedItem = await _diagnoseRecommendationService.UpdateAsync(id, existingItem);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+
+                var responseDto = _mapper.Map<DiagnoseRecommendationResponseDto>(updatedItem);
+                return Ok(responseDto);
             }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _diagnoseRecommendationService.UpdateAsync(id, existingItem);
-
-            if (updatedItem == null)
+            catch (InvalidOperationException ex)
             {
-                return NotFound();
+                return BadRequest(new { message = ex.Message });
             }
-            var responseDto = _mapper.Map<DiagnoseRecommendationResponseDto>(updatedItem);
-            return Ok(responseDto);
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _diagnoseRecommendationService.DeleteAsync(id);
-            if (!result)
+            try
             {
-                return NotFound();
+                var existingItem = await _diagnoseRecommendationService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                var serviceOrderId = await ResolveServiceOrderIdFromDiagnoseIdAsync(existingItem.DiagnoseId);
+                if (serviceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsureQuoteAndPartsEditableAsync(serviceOrderId);
+                }
+
+                var result = await _diagnoseRecommendationService.DeleteAsync(id);
+                if (!result)
+                {
+                    return NotFound();
+                }
+                return NoContent();
             }
-            return NoContent();
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private async Task<long> ResolveServiceOrderIdFromDiagnoseIdAsync(long diagnoseId)
+        {
+            if (diagnoseId <= 0)
+            {
+                return 0;
+            }
+
+            return await _context.Diagnoses
+                .AsNoTracking()
+                .Where(x => x.Id == diagnoseId)
+                .Select(x => x.ServiceOrderId)
+                .FirstOrDefaultAsync();
         }
     }
 }

@@ -1,9 +1,10 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum StaffStatusCode
 {
-    ACTIVE,
-    ON_LEAVE,
+    TERMINATED,
     SUSPENDED,
-    TERMINATED
+    ON_LEAVE,
+    ACTIVE
 }
+

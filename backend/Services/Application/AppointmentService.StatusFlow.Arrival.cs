@@ -10,7 +10,7 @@ namespace MyGarage.Services
     {
         private void ApplyFlexibleArrival(Appointment appointment, DateTime arriveTime)
         {
-            if (arriveTime > appointment.EndTime.AddMinutes(NoShowMinutes))
+            if (arriveTime >= appointment.EndTime.AddMinutes(NoShowMinutes))
             {
                 appointment.Status = nameof(AppointmentStatus.PENDING);
                 appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "WINDOW_MISSED_REPRIORITIZED");
@@ -20,10 +20,38 @@ namespace MyGarage.Services
             appointment.Status = nameof(AppointmentStatus.ARRIVED);
         }
 
-        private async Task ApplyLateFixedArrivalAsync(Appointment appointment, DateTime arriveTime)
+        private async Task ApplyEarlyFixedArrivalAsync(Appointment appointment, DateTime arriveTime)
+        {
+            var candidates = (await GetAvailableSlotsAsync(
+                    appointment.BranchId,
+                    DateOnly.FromDateTime(appointment.StartTime),
+                    appointment.RequestedServiceIds,
+                    appointment.RequestedPackageIds,
+                    AppointmentBookingFlows.Fixed))
+                .Where(s => s.StartTime >= arriveTime && s.StartTime < appointment.StartTime)
+                .OrderByDescending(s => s.IsTopPick)
+                .ThenByDescending(s => s.CompactionScore)
+                .ThenBy(s => s.StartTime)
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                appointment.Status = nameof(AppointmentStatus.ARRIVED);
+                appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "EARLY_WAIT_BOOKED_SLOT");
+                return;
+            }
+
+            var preferred = candidates[0];
+            appointment.StartTime = preferred.StartTime;
+            appointment.EndTime = preferred.EndTime;
+            appointment.Status = nameof(AppointmentStatus.ARRIVED);
+            appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "EARLY_BROUGHT_FORWARD");
+        }
+
+        private async Task ApplyLateFixedArrivalAsync(Appointment appointment, DateTime arriveTime, int cancelAfterMinutes)
         {
             var lateMinutes = (arriveTime - appointment.StartTime).TotalMinutes;
-            if (lateMinutes > NoShowMinutes)
+            if (lateMinutes >= cancelAfterMinutes)
             {
                 ApplyLateSwitchToFlexibleQueue(appointment);
                 return;
@@ -33,8 +61,9 @@ namespace MyGarage.Services
                     appointment.BranchId,
                     DateOnly.FromDateTime(appointment.StartTime),
                     appointment.RequestedServiceIds,
+                    appointment.RequestedPackageIds,
                     AppointmentBookingFlows.Fixed))
-                .Where(s => s.StartTime >= arriveTime.AddMinutes(15))
+                .Where(s => s.StartTime >= arriveTime)
                 .OrderByDescending(s => s.IsTopPick)
                 .ThenByDescending(s => s.CompactionScore)
                 .ThenBy(s => s.StartTime)

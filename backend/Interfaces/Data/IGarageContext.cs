@@ -14,10 +14,13 @@ namespace MyGarage.Interfaces
         DbSet<AiModelConfig> AiModelConfigs { get; }
         DbSet<AiSmartDispatching> AiSmartDispatchings { get; }
         DbSet<Appointment> Appointments { get; }
-        DbSet<BookingGroup> BookingGroups { get; }
+        DbSet<AppointmentInsuranceAsset> AppointmentInsuranceAssets { get; }
+        DbSet<AppointmentInsuranceUpload> AppointmentInsuranceUploads { get; }
+        DbSet<GroupSession> GroupSessions { get; }
         DbSet<ApprovalRequest> ApprovalRequests { get; }
         DbSet<AuditLog> AuditLogs { get; }
         DbSet<Bay> Bays { get; }
+        DbSet<CapacityConfig> CapacityConfigs { get; }
         DbSet<Branch> Branches { get; }
         DbSet<BranchException> BranchExceptions { get; }
         DbSet<BranchOperatingHour> BranchOperatingHours { get; }
@@ -56,7 +59,9 @@ namespace MyGarage.Interfaces
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Payment> Payments { get; }
         DbSet<PaymentMethod> PaymentMethods { get; }
-        DbSet<PasswordResetToken> PasswordResetTokens { get; }
+        DbSet<Package> Packages { get; }
+        DbSet<PackageItem> PackageItems { get; }
+        DbSet<PartInventoryReservation> PartInventoryReservations { get; }
         DbSet<Product> Products { get; }
         DbSet<ProductImage> ProductImages { get; }
         DbSet<PurchaseOrder> PurchaseOrders { get; }
@@ -73,15 +78,19 @@ namespace MyGarage.Interfaces
         DbSet<ServiceOrder> ServiceOrders { get; }
         DbSet<ServiceOrderDetail> ServiceOrderDetails { get; }
         DbSet<ServiceOrderDiscount> ServiceOrderDiscounts { get; }
+        DbSet<ServiceOrderInsuranceAsset> ServiceOrderInsuranceAssets { get; }
+        DbSet<ServiceOrderInsuranceUpload> ServiceOrderInsuranceUploads { get; }
         DbSet<ServiceOrderSnapshot> ServiceOrderSnapshots { get; }
         DbSet<ServiceRefund> ServiceRefunds { get; }
         DbSet<ServiceStaffAssignment> ServiceStaffAssignments { get; }
         DbSet<Shift> Shifts { get; }
         DbSet<ShiftClosing> ShiftClosings { get; }
         DbSet<Staff> Staffs { get; }
+        DbSet<Team> Teams { get; }
         DbSet<StaffSchedule> StaffSchedules { get; }
         DbSet<StaffTier> StaffTiers { get; }
         DbSet<StandardService> StandardServices { get; }
+        DbSet<ServiceBom> ServiceBoms { get; }
         DbSet<StockTransaction> StockTransactions { get; }
         DbSet<Supplier> Suppliers { get; }
         DbSet<Vehicle> Vehicles { get; }

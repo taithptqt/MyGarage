@@ -15,69 +15,121 @@ namespace MyGarage.Services
         private async Task<Appointment> BookCoreAsync(
             long authUserId,
             BookAppointmentRequestDto dto,
-            long? bookingGroupId,
+            long? groupSessionId,
             IDbContextTransaction? externalTransaction)
         {
-            var actorStaffId = await _bookingGroupService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
+            var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(dto.CreatedBy ?? authUserId);
             var requestedServiceIdList = ParseServiceIds(dto.RequestedServiceIds).Distinct().ToList();
-            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds);
+            var requestedPackageIdList = ParsePackageIds(dto.RequestedPackageIds).Distinct().ToList();
+            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds, dto.RequestedPackageIds);
             var effectiveRequestedServiceIds = requestedServiceIdList.Count > 0
                 ? string.Join(",", requestedServiceIdList)
-                : await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds);
+                : await ResolveRequestedServiceIdsForBookingAsync(dto.RequestedServiceIds, dto.RequestedPackageIds);
+            var effectiveRequestedPackageIds = requestedPackageIdList.Count > 0
+                ? await ResolveRequestedPackageIdsForBookingAsync(dto.RequestedPackageIds)
+                : null;
             long actualCustomerId = dto.CustomerId ?? authUserId;
             var (requestedStartAt, requestedEndAt) = ResolveRequestedWindow(flow, dto);
-            ValidateBookingBasics(dto, flow, requestedServiceIdList, requestedStartAt);
+            ValidateBookingBasics(dto, flow, requestedServiceIdList, requestedPackageIdList, requestedStartAt);
+            await EnsureInsuranceCompanyExistsAsync(dto.InsuranceCompanyId);
 
             var opHour = await _context.BranchOperatingHours
                 .AsNoTracking()
                 .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)requestedStartAt.DayOfWeek);
-            if (opHour?.IsDayOff == true) throw new InvalidOperationException("Chi nh�nh kh�ng ho?t d?ng v�o ng�y n�y.");
+            if (opHour?.IsDayOff == true)
+            {
+                throw new InvalidOperationException("Chi nhánh không hoạt động vào ngày này.");
+            }
 
             var openTime = opHour?.OpenTime ?? new TimeOnly(8, 0);
             var closeTime = opHour?.CloseTime ?? new TimeOnly(20, 0);
             var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
 
-            if (flow == BookingFlowType.Fixed)
-            {
-                var minLeadMinutes = Math.Max(15, slotStepMinutes);
-                if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
-                    throw new InvalidOperationException("Th?i gian h?n ph?i c�ch hi?n t?i �t nh?t " + minLeadMinutes + " ph�t.");
-            }
+            var vehicleModelId = await ResolveVehicleModelIdForBookingAsync(actualCustomerId, dto);
+            await EnsureRequestedServicesCompatibleWithVehicleEngineAsync(
+                vehicleModelId,
+                effectiveRequestedServiceIds,
+                effectiveRequestedPackageIds);
+            var partAvailability = await EvaluatePartAvailabilityForBookingAsync(
+                dto.BranchId,
+                vehicleModelId,
+                effectiveRequestedServiceIds,
+                effectiveRequestedPackageIds);
 
             var plannedDurationMinutes = await ResolveScheduledDurationAsync(
                 effectiveRequestedServiceIds,
                 slotStepMinutes,
-                isParallel: false);
-            requestedEndAt = requestedStartAt.AddMinutes(plannedDurationMinutes);
+                false,
+                effectiveRequestedPackageIds);
 
-            if (requestedEndAt <= requestedStartAt) throw new InvalidOperationException("Gi? k?t th�c ph?i sau gi? b?t d?u.");
+            if (flow == BookingFlowType.Fixed &&
+                ShouldFallbackToFlexibleFlowForLongDuration(plannedDurationMinutes, openTime, closeTime))
+            {
+                flow = BookingFlowType.Flexible;
+            }
+
+            if (flow == BookingFlowType.Fixed)
+            {
+                var minLeadMinutes = Math.Max(15, slotStepMinutes);
+                if (requestedStartAt.Date == _clock.LocalNow.Date && requestedStartAt < _clock.LocalNow.AddMinutes(minLeadMinutes))
+                {
+                    throw new InvalidOperationException("Thời gian hẹn phải cách hiện tại ít nhất " + minLeadMinutes + " phút.");
+                }
+
+                requestedEndAt = requestedStartAt.AddMinutes(plannedDurationMinutes);
+            }
+            else if (requestedEndAt <= requestedStartAt)
+            {
+                requestedEndAt = requestedStartAt.AddMinutes(ResolveFlexibleWindowMinutes(slotStepMinutes));
+            }
+
+            if (requestedEndAt <= requestedStartAt)
+            {
+                throw new InvalidOperationException("Giờ kết thúc phải sau giờ bắt đầu.");
+            }
+
             ValidateTimeWindow(requestedStartAt, requestedEndAt, openTime, closeTime);
             ValidateSlotHoldOrThrow(dto, flow, requestedStartAt, requestedEndAt);
 
             var health = await GetBranchBookingHealthAsync(dto.BranchId, _clock.LocalNow);
             if (health.IsBookingLocked && health.LockUntil.HasValue && requestedStartAt < health.LockUntil.Value)
-                throw new InvalidOperationException($"Chi nh�nh dang t?m kh�a nh?n l?ch d?n {health.LockUntil:HH:mm dd/MM/yyyy} do qu� t?i.");
+            {
+                throw new InvalidOperationException($"Chi nhánh đang tạm khóa nhận lịch đến {health.LockUntil:HH:mm dd/MM/yyyy} do quá tải.");
+            }
 
-            var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, dto.CustomerNotes);
-            await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
+            var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, effectiveRequestedPackageIds, dto.CustomerNotes);
+            if (flow == BookingFlowType.Flexible)
+            {
+                await EnsureFlexibleQueueCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, dto.SlotHoldToken);
+            }
+            else
+            {
+                await EnsureFixedFlowCapacityAsync(dto.BranchId, requestedStartAt, requestedEndAt, requestedCluster, dto.SlotHoldToken);
+            }
+
             var created = await PersistBookingAsync(
                 externalTransaction,
                 actorStaffId,
                 dto,
                 actualCustomerId,
-                bookingGroupId,
+                groupSessionId,
                 requestedStartAt,
                 requestedEndAt,
                 flow,
                 effectiveRequestedServiceIds,
-                requestedCluster);
+                effectiveRequestedPackageIds,
+                requestedCluster,
+                vehicleModelId,
+                plannedDurationMinutes,
+                slotStepMinutes,
+                partAvailability);
+
             if (!string.IsNullOrWhiteSpace(dto.SlotHoldToken))
             {
                 _slotHoldService.ConsumeHold(dto.SlotHoldToken);
             }
+
             return created;
         }
-
-
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -81,7 +82,9 @@ namespace MyGarage.Services
 
             if (isActive != true)
             {
-                return endDate < now ? nameof(VoucherCampaignStatusCode.ENDED) : nameof(VoucherCampaignStatusCode.PAUSED);
+                return endDate < now
+                    ? nameof(VoucherCampaignStatusCode.ENDED)
+                    : nameof(VoucherCampaignStatusCode.PAUSED);
             }
 
             if (endDate < now)

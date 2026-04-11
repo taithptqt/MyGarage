@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +7,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Controllers
 {
@@ -14,11 +16,16 @@ namespace MyGarage.Controllers
     public class GatePassController : ControllerBase
     {
         private readonly IGatePassService _gatePassService;
+        private readonly IServiceOrderService _serviceOrderService;
         private readonly IMapper _mapper;
 
-        public GatePassController(IGatePassService gatePassService, IMapper mapper)
+        public GatePassController(
+            IGatePassService gatePassService,
+            IServiceOrderService serviceOrderService,
+            IMapper mapper)
         {
             _gatePassService = gatePassService;
+            _serviceOrderService = serviceOrderService;
             _mapper = mapper;
         }
 
@@ -45,41 +52,139 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<GatePassResponseDto>> Create([FromBody] GatePassCreateDto itemDto)
         {
-            var entity = _mapper.Map<GatePass>(itemDto);
-            var createdItem = await _gatePassService.AddAsync(entity);
-            var responseDto = _mapper.Map<GatePassResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            try
+            {
+                if (itemDto == null || itemDto.ServiceOrderId <= 0)
+                {
+                    return BadRequest(new { message = "Thiếu ServiceOrderId hợp lệ để tạo phiếu xuất cổng." });
+                }
+
+                var lockError = await ValidateGatePassMutationAsync(itemDto.ServiceOrderId, existingGatePass: null);
+                if (!string.IsNullOrWhiteSpace(lockError))
+                {
+                    return BadRequest(new { message = lockError });
+                }
+
+                var entity = _mapper.Map<GatePass>(itemDto);
+                var createdItem = await _gatePassService.AddAsync(entity);
+                var responseDto = _mapper.Map<GatePassResponseDto>(createdItem);
+                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<GatePassResponseDto>> Update(long id, [FromBody] GatePassUpdateDto itemDto)
         {
-            var existingItem = await _gatePassService.GetByIdAsync(id);
-            if (existingItem == null)
+            try
             {
-                return NotFound();
-            }
+                var existingItem = await _gatePassService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _gatePassService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
+                var targetServiceOrderId = itemDto?.ServiceOrderId > 0
+                    ? itemDto.ServiceOrderId
+                    : existingItem.ServiceOrderId;
+                var lockError = await ValidateGatePassMutationAsync(targetServiceOrderId, existingItem);
+                if (!string.IsNullOrWhiteSpace(lockError))
+                {
+                    return BadRequest(new { message = lockError });
+                }
+
+                _mapper.Map(itemDto, existingItem);
+                var updatedItem = await _gatePassService.UpdateAsync(id, existingItem);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+                var responseDto = _mapper.Map<GatePassResponseDto>(updatedItem);
+                return Ok(responseDto);
             }
-            var responseDto = _mapper.Map<GatePassResponseDto>(updatedItem);
-            return Ok(responseDto);
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _gatePassService.DeleteAsync(id);
-            if (!result)
+            try
             {
-                return NotFound();
+                var existingItem = await _gatePassService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                var lockError = await ValidateGatePassMutationAsync(existingItem.ServiceOrderId, existingItem);
+                if (!string.IsNullOrWhiteSpace(lockError))
+                {
+                    return BadRequest(new { message = lockError });
+                }
+
+                var result = await _gatePassService.DeleteAsync(id);
+                if (!result)
+                {
+                    return NotFound();
+                }
+                return NoContent();
             }
-            return NoContent();
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private async Task<string?> ValidateGatePassMutationAsync(long serviceOrderId, GatePass? existingGatePass)
+        {
+            if (existingGatePass != null && IsGatePassFinalized(existingGatePass))
+            {
+                return "Không thể chỉnh sửa phiếu xuất cổng vì xe đã được xác nhận ra cổng.";
+            }
+
+            if (serviceOrderId <= 0)
+            {
+                return "Thiếu ServiceOrderId hợp lệ để xử lý phiếu xuất cổng.";
+            }
+
+            var capability = await _serviceOrderService.GetEditCapabilityAsync(serviceOrderId);
+            if (capability == null)
+            {
+                return "Không tìm thấy service order để xử lý phiếu xuất cổng.";
+            }
+
+            if (capability.IsClosedLocked)
+            {
+                return "Không thể chỉnh sửa phiếu xuất cổng vì service order đã đóng.";
+            }
+
+            return null;
+        }
+
+        private static bool IsGatePassFinalized(GatePass gatePass)
+        {
+            if (gatePass.PassedAt.HasValue)
+            {
+                return true;
+            }
+
+            return string.Equals(
+                NormalizeStatus(gatePass.Status),
+                nameof(GatePassStatusCode.SCANNED),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeStatus(string? status)
+        {
+            return string.IsNullOrWhiteSpace(status)
+                ? string.Empty
+                : status.Trim().ToUpperInvariant().Replace("-", "_").Replace(" ", "_");
         }
     }
 }

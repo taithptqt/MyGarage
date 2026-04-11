@@ -1,16 +1,19 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum ServiceOrderLifecycleStatus
 {
     NEW,
-    INSPECTING,
+    CHECKED_IN,
+    WAITING,
+    DIAGNOSING,
     QUOTING,
     WAITING_APPROVAL,
     APPROVED,
     IN_PROGRESS,
-    QC,
-    WAITING_PAYMENT,
+    REPAIRING,
     READY,
+    WAITING_PAYMENT,
     CLOSED,
-    CANCELED,
+    CANCELED
 }
+

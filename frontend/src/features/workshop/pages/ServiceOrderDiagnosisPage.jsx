@@ -16,56 +16,121 @@ import {
   useToast,
   Grid,
   GridItem,
-  Divider,
-  SimpleGrid,
   Icon,
-  Tag,
-  TagLabel,
-  TagLeftIcon,
   FormControl,
   FormLabel,
 } from "@chakra-ui/react";
 import {
-  Car,
   Wrench,
   AlertTriangle,
-  Activity,
   MessageSquare,
-  Droplets,
-  Wind,
-  Zap,
-  CheckCircle,
-  Info,
-  Clock,
 } from "lucide-react";
 
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
-import { getAllStandardServices } from "@features/admin/api/serviceApi";
+import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
 
-const SYSTEM_CATEGORIES = [
-  { id: "engine", label: "??ng co", icon: Activity },
-  { id: "transmission", label: "Hộp số", icon: Wrench },
-  { id: "brakes", label: "Phanh & ABS", icon: AlertTriangle },
-  { id: "steering", label: "Hệ thống Lái / Gầm", icon: Car },
-  { id: "electrical", label: "Điện / Bình ắc quy", icon: Zap },
-  { id: "hvac", label: "Điều hòa / Sưởi", icon: Wind },
-  { id: "fluids", label: "Chất lỏng / Rò rỉ", icon: Droplets },
-  { id: "other", label: "Khác", icon: Info },
-];
-
-const SYMPTOM_TYPES = {
-  engine: ["Rung giật", "Mất công suất", "Chết máy", "Không khởi động được", "Khói bất thường"],
-  transmission: ["Khó sang số", "Trượt số", "Giật cục", "Chậm phản hồi"],
-  brakes: ["Kêu rít / Xào xạo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
-  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va dập gầm"],
-  electrical: ["Đèn pha mờ", "Còi tịt", "Đồng hồ taplo lỗi", "Hết bình"],
-  hvac: ["Không mát", "Mát yếu", "Mùi hôi", "Quạt gió kêu"],
-  fluids: ["Nước làm mát", "Dầu máy", "Dầu phanh", "Nước rửa kính"],
-  other: ["Tiếng ồn lạ", "Mùi khét", "Hư hỏng ngoại thất", "Khác"],
+const DIAGNOSIS_DROPDOWN_STYLES = {
+  bg: "#f8fafc",
+  borderColor: "#d7e3f5",
+  borderRadius: "12px",
+  color: "#1b2559",
+  _hover: { borderColor: "#c4d4ef" },
+  _focus: { borderColor: "#5f86eb", boxShadow: "0 0 0 1px #5f86eb" },
+  _disabled: {
+    color: "#1b2559",
+    WebkitTextFillColor: "#1b2559",
+    opacity: 1,
+    bg: "#f2f5fb",
+    cursor: "not-allowed",
+  },
 };
+
+function DiagnosisDropdown({
+  label,
+  value,
+  onChange,
+  placeholder,
+  isDisabled = false,
+  size = "md",
+  minW,
+  maxW,
+  flex,
+  labelColor = "#2b3674",
+  labelFontSize = "sm",
+  children,
+  ...selectProps
+}) {
+  return (
+    <Box minW={minW} maxW={maxW} flex={flex}>
+      {label ? (
+        <Text fontSize={labelFontSize} fontWeight="600" color={labelColor} mb={2}>
+          {label}
+        </Text>
+      ) : null}
+      <Select
+        size={size}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder={placeholder}
+        isDisabled={isDisabled}
+        w="100%"
+        {...DIAGNOSIS_DROPDOWN_STYLES}
+        {...selectProps}
+      >
+        {children}
+      </Select>
+    </Box>
+  );
+}
+
+function toPositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function extractServiceId(service) {
+  return toPositiveNumber(service?.id ?? service?.Id);
+}
+
+function extractServiceName(service) {
+  return String(service?.name ?? service?.Name ?? service?.serviceName ?? service?.ServiceName ?? "").trim();
+}
+
+function extractServiceCategoryId(service) {
+  return toPositiveNumber(
+    service?.categoryId ??
+    service?.CategoryId ??
+    service?.serviceCategoryId ??
+    service?.ServiceCategoryId ??
+    service?.serviceCategory?.id ??
+    service?.ServiceCategory?.id
+  );
+}
+
+function extractServiceCategoryName(service) {
+  return String(
+    service?.serviceCategoryName ??
+    service?.ServiceCategoryName ??
+    service?.categoryName ??
+    service?.CategoryName ??
+    service?.serviceCategory?.categoryName ??
+    service?.serviceCategory?.name ??
+    service?.ServiceCategory?.categoryName ??
+    service?.ServiceCategory?.name ??
+    ""
+  ).trim();
+}
+
+function extractCategoryId(category) {
+  return toPositiveNumber(category?.id ?? category?.Id);
+}
+
+function extractCategoryName(category) {
+  return String(category?.categoryName ?? category?.name ?? category?.Name ?? category?.code ?? "").trim();
+}
 
 export default function ServiceOrderDiagnosisPage() {
   const navigate = useNavigate();
@@ -85,6 +150,7 @@ export default function ServiceOrderDiagnosisPage() {
   const [recommendations, setRecommendations] = useState([]);
   const [deletedRecommendationIds, setDeletedRecommendationIds] = useState([]);
   const [services, setServices] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [products, setProducts] = useState([]);
 
   // Form structured for AI + Legacy
@@ -106,6 +172,50 @@ export default function ServiceOrderDiagnosisPage() {
     ["ASSIGNED", "COMPLETED", "PENDING"].includes(String(activeDiagnosis.status || "PENDING").toUpperCase());
 
   const backPath = isTechnician ? "/workshop/technician" : "/workshop/reception";
+
+  const serviceCategoryByServiceId = useMemo(() => {
+    const map = new Map();
+    (services || []).forEach((service) => {
+      const serviceId = extractServiceId(service);
+      const categoryId = extractServiceCategoryId(service);
+      if (serviceId) {
+        map.set(String(serviceId), categoryId ? String(categoryId) : "");
+      }
+    });
+    return map;
+  }, [services]);
+
+  const serviceNameById = useMemo(() => {
+    const map = new Map();
+    (services || []).forEach((service) => {
+      const serviceId = extractServiceId(service);
+      if (!serviceId) return;
+      const name = extractServiceName(service);
+      map.set(String(serviceId), name || `Dịch vụ #${serviceId}`);
+    });
+    return map;
+  }, [services]);
+
+  const serviceCategoryOptions = useMemo(() => {
+    const map = new Map();
+
+    (serviceCategories || []).forEach((category) => {
+      const id = extractCategoryId(category);
+      if (!id) return;
+      const label = extractCategoryName(category) || `Nhóm ${id}`;
+      map.set(String(id), { value: String(id), label });
+    });
+
+    (services || []).forEach((service) => {
+      const categoryId = extractServiceCategoryId(service);
+      if (!categoryId) return;
+      if (map.has(String(categoryId))) return;
+      const fallbackLabel = extractServiceCategoryName(service) || `Nhóm ${categoryId}`;
+      map.set(String(categoryId), { value: String(categoryId), label: fallbackLabel });
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  }, [serviceCategories, services]);
 
   const parseSymptomsFromNotes = (rawNotes) => {
     try {
@@ -159,16 +269,18 @@ export default function ServiceOrderDiagnosisPage() {
     setLoading(true);
     setError("");
     try {
-      const [orderRes, diagnosesRes, servicesRes, productsRes, conditionLogsRes] = await Promise.all([
+      const [orderRes, diagnosesRes, servicesRes, serviceCategoriesRes, productsRes, conditionLogsRes] = await Promise.all([
         serviceOrderApi.getById(id),
         serviceOrderApi.getDiagnoses(id),
         getAllStandardServices(),
+        getAllServiceCategories(),
         inventoryApi.getProducts(),
         vehicleConditionLogApi.getByServiceOrderId(id),
       ]);
 
       setOrder(orderRes || null);
       setServices(Array.isArray(servicesRes) ? servicesRes : []);
+      setServiceCategories(Array.isArray(serviceCategoriesRes) ? serviceCategoriesRes : []);
       setProducts(Array.isArray(productsRes) ? productsRes : []);
       
       const signedCheckInExists =
@@ -179,8 +291,21 @@ export default function ServiceOrderDiagnosisPage() {
           return type === "CHECK_IN" && signature.length > 0;
         });
         
-      if (!signedCheckInExists && isTechnician) { // Receptions can still view
-        setError("Khách chưa ký check-in. Chưa thể truy cập màn hình chuẩn đoán.");
+      if (!signedCheckInExists) {
+        const message = "Khách chưa ký check-in. Vui lòng hoàn tất Nhật ký xe trước khi vào chuẩn đoán.";
+        if (isTechnician) {
+          setError(message);
+          return;
+        }
+
+        toast({
+          title: "Chưa hoàn tất check-in",
+          description: message,
+          status: "warning",
+          duration: 4500,
+          isClosable: true,
+        });
+        navigate(`/workshop/reception/orders/${id}/vehicleconditionlogs`, { replace: true });
         return;
       }
 
@@ -279,23 +404,34 @@ export default function ServiceOrderDiagnosisPage() {
     if (activeDiagId) saveCurrentFormToState();
   }, [form.rootCause, form.primarySystem, form.symptomTypes, form.occurrenceCondition, form.severity, form.symptom]);
 
-  const toggleSymptomType = (type) => {
-    if (!canEdit) return;
-    setForm((prev) => {
-      const exists = prev.symptomTypes.includes(type);
-      if (exists) return { ...prev, symptomTypes: prev.symptomTypes.filter((s) => s !== type) };
-      return { ...prev, symptomTypes: [...prev.symptomTypes, type] };
-    });
-  };
-
-  const addRecommendation = () => {
+  const addServiceRecommendation = () => {
     setRecommendations((prev) => [
       ...prev,
       {
         id: `tmp-${Date.now()}-${Math.random()}`,
         diagnoseId: activeDiagId,
         parentRecommendationId: null,
+        serviceCategoryId: "",
         itemType: "LABOR",
+        standardServiceId: null,
+        inventoryItemId: null,
+        quantity: 1,
+        urgency: "RECOMMENDED",
+        evidenceMediaUrls: "",
+        technicianNotes: "",
+        isNew: true,
+      },
+    ]);
+  };
+
+  const addMaterialRecommendation = (parentRecommendationId) => {
+    setRecommendations((prev) => [
+      ...prev,
+      {
+        id: `tmp-${Date.now()}-${Math.random()}`,
+        diagnoseId: activeDiagId,
+        parentRecommendationId,
+        itemType: "PART",
         standardServiceId: null,
         inventoryItemId: null,
         quantity: 1,
@@ -312,10 +448,32 @@ export default function ServiceOrderDiagnosisPage() {
   };
 
   const removeRecommendation = (rec) => {
-    if (!rec?.isNew && !String(rec?.id).startsWith("tmp-")) {
-      setDeletedRecommendationIds((prev) => [...prev, rec.id]);
-    }
-    setRecommendations((prev) => prev.filter((x) => x.id !== rec.id));
+    const targetId = String(rec?.id || "");
+    if (!targetId) return;
+
+    setRecommendations((prev) => {
+      const idsToRemove = new Set([targetId]);
+      const isRoot = !rec?.parentRecommendationId;
+
+      if (isRoot) {
+        prev.forEach((item) => {
+          if (String(item.parentRecommendationId || "") === targetId) {
+            idsToRemove.add(String(item.id));
+          }
+        });
+      }
+
+      const persistedIds = prev
+        .filter((item) => idsToRemove.has(String(item.id)))
+        .filter((item) => !item?.isNew && !String(item?.id).startsWith("tmp-"))
+        .map((item) => item.id);
+
+      if (persistedIds.length > 0) {
+        setDeletedRecommendationIds((prevDeleted) => [...new Set([...prevDeleted, ...persistedIds])]);
+      }
+
+      return prev.filter((item) => !idsToRemove.has(String(item.id)));
+    });
   };
 
   const saveAllDiagnoses = async () => {
@@ -362,13 +520,15 @@ export default function ServiceOrderDiagnosisPage() {
         await serviceOrderApi.completeDiagnosis(activeDiagId, payloadDiag);
       }
 
-      for (const rec of recommendations) {
-        const payload = {
+      const normalizeRecommendationPayload = (rec, parentRecommendationId = null) => {
+        const normalizedType = String(rec.itemType || "PART").toUpperCase();
+        const itemType = normalizedType === "LABOR" ? "LABOR" : normalizedType === "CONSUMABLE" ? "CONSUMABLE" : "PART";
+        return {
           diagnoseId: savedDiagnosisId,
-          parentRecommendationId: rec.parentRecommendationId ? Number(rec.parentRecommendationId) : null,
-          itemType: String(rec.itemType || "LABOR").toUpperCase(),
-          standardServiceId: rec.itemType === "LABOR" ? (rec.standardServiceId ? Number(rec.standardServiceId) : null) : null,
-          inventoryItemId: rec.itemType !== "LABOR" ? (rec.inventoryItemId ? Number(rec.inventoryItemId) : null) : null,
+          parentRecommendationId: toPositiveNumber(parentRecommendationId),
+          itemType,
+          standardServiceId: itemType === "LABOR" ? toPositiveNumber(rec.standardServiceId) : null,
+          inventoryItemId: itemType !== "LABOR" ? toPositiveNumber(rec.inventoryItemId) : null,
           quantity: Number(rec.quantity || 1),
           urgency: rec.urgency || "RECOMMENDED",
           evidenceMediaUrls: rec.evidenceMediaUrls || null,
@@ -376,11 +536,56 @@ export default function ServiceOrderDiagnosisPage() {
           updatedBy: user?.id,
           createdBy: user?.id,
         };
+      };
 
-        if (rec.isNew || String(rec.id).startsWith("tmp-")) {
+      const isTemporaryRecommendation = (rec) => rec?.isNew || String(rec?.id || "").startsWith("tmp-");
+
+      const roots = recommendations.filter((rec) => !rec.parentRecommendationId);
+      const children = recommendations.filter((rec) => !!rec.parentRecommendationId);
+      const recommendationIdMap = new Map();
+
+      for (const root of roots) {
+        const effectiveCategoryId =
+          toPositiveNumber(root.serviceCategoryId) ||
+          toPositiveNumber(serviceCategoryByServiceId.get(String(root.standardServiceId)));
+        if (!effectiveCategoryId) {
+          throw new Error("Vui lòng chọn loại dịch vụ trước khi chọn dịch vụ sửa chữa.");
+        }
+        if (!toPositiveNumber(root.standardServiceId)) {
+          throw new Error("Vui lòng chọn dịch vụ sửa chữa cho từng dòng dịch vụ.");
+        }
+      }
+
+      for (const child of children) {
+        if (!toPositiveNumber(child.inventoryItemId)) {
+          throw new Error("Vui lòng chọn vật tư cụ thể cho từng dòng vật tư.");
+        }
+      }
+
+      for (const root of roots) {
+        const payload = normalizeRecommendationPayload({ ...root, itemType: "LABOR" }, null);
+
+        if (isTemporaryRecommendation(root)) {
+          const created = await serviceOrderApi.createDiagnoseRecommendation(payload);
+          const createdId = toPositiveNumber(created?.id ?? created?.Id);
+          if (createdId) recommendationIdMap.set(String(root.id), createdId);
+        } else {
+          await serviceOrderApi.updateDiagnoseRecommendation(root.id, payload);
+          const persistedId = toPositiveNumber(root.id);
+          if (persistedId) recommendationIdMap.set(String(root.id), persistedId);
+        }
+      }
+
+      for (const child of children) {
+        const mappedParentId = recommendationIdMap.get(String(child.parentRecommendationId));
+        const parentId = toPositiveNumber(mappedParentId ?? child.parentRecommendationId);
+        if (!parentId) continue;
+
+        const payload = normalizeRecommendationPayload(child, parentId);
+        if (isTemporaryRecommendation(child)) {
           await serviceOrderApi.createDiagnoseRecommendation(payload);
         } else {
-          await serviceOrderApi.updateDiagnoseRecommendation(rec.id, payload);
+          await serviceOrderApi.updateDiagnoseRecommendation(child.id, payload);
         }
       }
 
@@ -399,7 +604,7 @@ export default function ServiceOrderDiagnosisPage() {
     recommendations
       .filter((r) => !!r.parentRecommendationId)
       .forEach((r) => {
-        const key = Number(r.parentRecommendationId);
+        const key = String(r.parentRecommendationId);
         if (!childrenMap.has(key)) childrenMap.set(key, []);
         childrenMap.get(key).push(r);
       });
@@ -487,84 +692,6 @@ export default function ServiceOrderDiagnosisPage() {
                 />
               </Box>
 
-              {/* KHU VỰC 2: AI-Ready Phân loại */}
-              <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
-                <HStack justify="space-between" mb={4}>
-                  <HStack color="#4318ff">
-                    <Icon as={Activity} size={20} />
-                    <Heading size="sm">Phân loại Dữ liệu (Dành cho AI)</Heading>
-                  </HStack>
-                </HStack>
-                
-                <VStack align="stretch" spacing={5}>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="600" color="#2b3674" mb={2}>1. Vùng phát sinh lỗi cốt lõi</Text>
-                    <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
-                      {SYSTEM_CATEGORIES.map((sys) => (
-                        <Button
-                          key={sys.id}
-                          variant={form.primarySystem === sys.id ? "solid" : "outline"}
-                          colorScheme={form.primarySystem === sys.id ? "blue" : "gray"}
-                          isDisabled={!canEdit}
-                          size="sm"
-                          justifyContent="flex-start"
-                          onClick={() => setForm(f => ({ ...f, primarySystem: sys.id, symptomTypes: [] }))}
-                          boxShadow={form.primarySystem === sys.id ? "md" : "none"}
-                        >
-                          <Icon as={sys.icon} size={16} mr={2} /> 
-                          {sys.label}
-                        </Button>
-                      ))}
-                    </SimpleGrid>
-                  </Box>
-
-                  {form.primarySystem && (
-                    <Box>
-                      <Text fontSize="sm" fontWeight="600" color="#2b3674" mb={2}>2. Thuộc tính lỗi kỹ thuật</Text>
-                      <HStack wrap="wrap" gap={2}>
-                        {SYMPTOM_TYPES[form.primarySystem]?.map((symp, idx) => {
-                          const isSelected = form.symptomTypes.includes(symp);
-                          return (
-                            <Tag
-                              key={idx}
-                              size="lg"
-                              variant={isSelected ? "solid" : "outline"}
-                              colorScheme={isSelected ? "cyan" : "gray"}
-                              cursor={canEdit ? "pointer" : "not-allowed"}
-                              opacity={!canEdit && !isSelected ? 0.6 : 1}
-                              onClick={() => toggleSymptomType(symp)}
-                              borderRadius="full"
-                            >
-                              {isSelected && <TagLeftIcon boxSize="12px" as={CheckCircle} />}
-                              <TagLabel fontSize="sm">{symp}</TagLabel>
-                            </Tag>
-                          );
-                        })}
-                      </HStack>
-                    </Box>
-                  )}
-
-                  <Box>
-                    <Text fontSize="sm" fontWeight="600" color="#2b3674" mb={2}>3. Điều kiện tái hiện hiện tượng</Text>
-                    <Select 
-                      placeholder="Chọn điều kiện phát hiện rõ nhất" 
-                      value={form.occurrenceCondition}
-                      onChange={(e) => setForm(f => ({ ...f, occurrenceCondition: e.target.value }))}
-                      isDisabled={!canEdit}
-                    >
-                      <option value="cold_start">Máy nguội (Mới khởi động)</option>
-                      <option value="idling">Không tải (Đứng yên nổ máy)</option>
-                      <option value="accelerating">Lúc tăng tốc / đạp ga mạnh</option>
-                      <option value="braking">Lúc rà phanh</option>
-                      <option value="turning">Lúc đánh lái cua</option>
-                      <option value="high_speed">Chạy tốc độ cao (&gt; 60km/h)</option>
-                      <option value="hot_engine">Máy nóng (Quạt chạy)</option>
-                      <option value="always">Liên tục bất kỳ lúc nào</option>
-                    </Select>
-                  </Box>
-                </VStack>
-              </Box>
-
               {/* KHU VỰC 3: Nguyên nhân gốc rễ */}
               <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                 <HStack color="#ffb547" mb={4}>
@@ -597,17 +724,17 @@ export default function ServiceOrderDiagnosisPage() {
                   </GridItem>
                   <GridItem>
                     <FormControl>
-                      <FormLabel fontSize="sm" fontWeight="600" color="#2b3674">Mức độ nghiêm trọng</FormLabel>
-                      <Select
+                      <DiagnosisDropdown
+                        label="Mức độ nghiêm trọng"
                         value={form.severity}
-                        onChange={(e) => setForm((prev) => ({ ...prev, severity: e.target.value }))}
+                        onChange={(value) => setForm((prev) => ({ ...prev, severity: value }))}
                         isDisabled={!canEdit}
                       >
                         <option value="LOW">Thấp (Chưa gấp)</option>
                         <option value="MEDIUM">Trung bình</option>
                         <option value="HIGH">Cao</option>
                         <option value="CRITICAL">Khẩn cấp (Nguy hiểm)</option>
-                      </Select>
+                      </DiagnosisDropdown>
                     </FormControl>
                   </GridItem>
                 </Grid>
@@ -621,40 +748,55 @@ export default function ServiceOrderDiagnosisPage() {
                     <Heading size="sm">Vật tư & Nhân công đề xuất</Heading>
                   </HStack>
                   {canEdit && (
-                    <Button size="sm" colorScheme="blue" variant="outline" onClick={addRecommendation}>
-                      + Thêm hạng mục
+                    <Button size="sm" colorScheme="blue" variant="outline" onClick={addServiceRecommendation}>
+                      + Thêm dịch vụ
                     </Button>
                   )}
                 </HStack>
 
                 {recommendations.length === 0 ? (
-                  <Text color="#707eae" fontSize="sm">Chưa có đề xuất thay thế hay sửa chữa nào cho triệu chứng này.</Text>
+                  <Text color="#707eae" fontSize="sm">
+                    Chưa có dịch vụ đề xuất cho triệu chứng này. Hãy thêm dịch vụ trước, sau đó thêm vật tư cho từng dịch vụ.
+                  </Text>
                 ) : (
                   <VStack align="stretch" spacing={3}>
                     {recommendationsByParent.roots.map((root) => (
                       <Box key={root.id} p={3} border="1px solid #e9edf7" borderRadius="md" bg="gray.50">
                         <RecommendationRow
+                          mode="service"
                           item={root}
                           canEdit={canEdit}
                           services={services}
+                          serviceCategoryOptions={serviceCategoryOptions}
+                          serviceCategoryByServiceId={serviceCategoryByServiceId}
                           products={products}
                           onChange={updateRecommendation}
                           onRemove={removeRecommendation}
+                          onAddMaterial={addMaterialRecommendation}
                         />
-                        {(recommendationsByParent.childrenMap.get(Number(root.id)) || []).length > 0 && (
+                        {(recommendationsByParent.childrenMap.get(String(root.id)) || []).length > 0 && (
                           <VStack align="stretch" mt={3} spacing={2} pl={4} borderLeft="2px solid #d6e0f5">
-                            {(recommendationsByParent.childrenMap.get(Number(root.id)) || []).map((child) => (
+                            {(recommendationsByParent.childrenMap.get(String(root.id)) || []).map((child) => (
                               <RecommendationRow
                                 key={child.id}
+                                mode="material"
                                 item={child}
                                 canEdit={canEdit}
                                 services={services}
+                                serviceCategoryOptions={serviceCategoryOptions}
+                                serviceCategoryByServiceId={serviceCategoryByServiceId}
                                 products={products}
                                 onChange={updateRecommendation}
                                 onRemove={removeRecommendation}
+                                parentServiceName={serviceNameById.get(String(root.standardServiceId)) || `Dịch vụ #${root.id}`}
                               />
                             ))}
                           </VStack>
+                        )}
+                        {(recommendationsByParent.childrenMap.get(String(root.id)) || []).length === 0 && (
+                          <Text mt={2} fontSize="xs" color="#7f8fb2">
+                            Chưa có vật tư cho dịch vụ này.
+                          </Text>
                         )}
                       </Box>
                     ))}
@@ -677,65 +819,166 @@ export default function ServiceOrderDiagnosisPage() {
   );
 }
 
-function RecommendationRow({ item, canEdit, services, products, onChange, onRemove }) {
-  const itemType = String(item.itemType || "LABOR").toUpperCase();
+function RecommendationRow({
+  item,
+  mode = "service",
+  canEdit,
+  services,
+  serviceCategoryOptions,
+  serviceCategoryByServiceId,
+  products,
+  onChange,
+  onRemove,
+  onAddMaterial,
+  parentServiceName,
+}) {
+  const isServiceMode = mode === "service";
+  const normalizedItemType = String(item.itemType || (isServiceMode ? "LABOR" : "PART")).toUpperCase();
+  const itemType = normalizedItemType === "CONSUMABLE" ? "CONSUMABLE" : normalizedItemType === "LABOR" ? "LABOR" : "PART";
+  const canAddMaterial = Boolean(item.standardServiceId);
+  const inferredServiceCategoryId = String(serviceCategoryByServiceId?.get(String(item.standardServiceId)) || "");
+  const selectedServiceCategoryId = String(item.serviceCategoryId || inferredServiceCategoryId || "");
+  const filteredServices = selectedServiceCategoryId
+    ? (services || []).filter((service) => String(extractServiceCategoryId(service) || "") === selectedServiceCategoryId)
+    : [];
 
   return (
-    <Stack spacing={2} p={3} border="1px solid #e9edf7" borderRadius="md" bg="white">
+    <Stack
+      spacing={2}
+      p={3}
+      border={isServiceMode ? "1px solid #cfe0ff" : "1px dashed #f0c991"}
+      borderRadius="md"
+      bg={isServiceMode ? "#f6f9ff" : "#fff9f0"}
+      boxShadow={isServiceMode ? "0 2px 8px rgba(42, 67, 122, 0.06)" : "none"}
+    >
       <HStack justify="space-between">
-        <Text fontWeight="bold" fontSize="sm" color="#2b3674">#{item.id}</Text>
-        {canEdit && (
-          <Button size="xs" colorScheme="red" variant="ghost" onClick={() => onRemove(item)}>
-            Xóa
-          </Button>
-        )}
+        <Text fontWeight="bold" fontSize="sm" color={isServiceMode ? "#2b3674" : "#8a5a1f"}>
+          {isServiceMode ? "Dịch vụ" : "Vật tư"} #{item.id}
+        </Text>
+        <HStack spacing={1}>
+          {isServiceMode && canEdit && (
+            <Button
+              size="xs"
+              colorScheme="blue"
+              variant="outline"
+              onClick={() => onAddMaterial?.(item.id)}
+              isDisabled={!canAddMaterial}
+            >
+              + Thêm vật tư
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="xs" colorScheme="red" variant="ghost" onClick={() => onRemove(item)}>
+              Xóa
+            </Button>
+          )}
+        </HStack>
       </HStack>
 
-      <HStack spacing={3} flexWrap="wrap">
-        <Box minW="140px">
-          <Text fontSize="xs" fontWeight="600" mb={1} color="#a3aed0">Loại</Text>
-          <Select
-            size="sm"
-            value={itemType}
-            isDisabled={!canEdit}
-            onChange={(e) => onChange(item.id, { itemType: e.target.value, standardServiceId: null, inventoryItemId: null })}
-          >
-            <option value="LABOR">Nhân công</option>
-            <option value="PART">Phụ tùng</option>
-            <option value="CONSUMABLE">Vật tư / Dung dịch</option>
-          </Select>
+      {!isServiceMode && (
+        <Box px={3} py={2} borderRadius="md" border="1px solid #f0d4aa" bg="#fff3df">
+          <Text fontSize="xs" fontWeight="700" color="#8a5a1f">
+            Thuộc dịch vụ: {parentServiceName || "Chưa xác định"}
+          </Text>
         </Box>
+      )}
 
-        {itemType === "LABOR" ? (
-          <Box minW="220px" flex="1">
-            <Text fontSize="xs" fontWeight="600" mb={1} color="#a3aed0">Dịch vụ sửa chữa</Text>
-            <Select
+      <HStack spacing={3} flexWrap="wrap">
+        {isServiceMode ? (
+          <>
+            <DiagnosisDropdown
+              label="Loại dịch vụ"
+              labelFontSize="xs"
+              labelColor="#7f8fb2"
+              minW="220px"
+              size="sm"
+              value={selectedServiceCategoryId}
+              isDisabled={!canEdit}
+              onChange={(value) => onChange(item.id, {
+                serviceCategoryId: value || "",
+                standardServiceId: null,
+                itemType: "LABOR",
+                inventoryItemId: null,
+                parentRecommendationId: null,
+              })}
+            >
+              <option value="">-- Chọn loại dịch vụ --</option>
+              {(serviceCategoryOptions || []).map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </DiagnosisDropdown>
+              <DiagnosisDropdown
+                label="Dịch vụ sửa chữa"
+                labelFontSize="xs"
+                labelColor="#7f8fb2"
+              minW="280px"
+              flex="1"
               size="sm"
               value={item.standardServiceId || ""}
+              isDisabled={!canEdit || !selectedServiceCategoryId}
+              onChange={(value) => onChange(item.id, {
+                itemType: "LABOR",
+                standardServiceId: value || null,
+                inventoryItemId: null,
+                parentRecommendationId: null,
+              })}
+              >
+                <option value="">
+                  {selectedServiceCategoryId ? "-- Chọn dịch vụ --" : "-- Chọn loại dịch vụ trước --"}
+                </option>
+                {filteredServices.map((service) => {
+                  const serviceId = extractServiceId(service);
+                  const serviceName = extractServiceName(service);
+                  if (!serviceId) return null;
+                  return (
+                    <option key={serviceId} value={serviceId}>
+                      {serviceName || `Dịch vụ #${serviceId}`}
+                    </option>
+                  );
+                })}
+              </DiagnosisDropdown>
+              {!selectedServiceCategoryId && (
+                <Text fontSize="xs" color="#7f8fb2">
+                  Chọn loại dịch vụ trước để lọc danh sách dịch vụ.
+                </Text>
+              )}
+            </>
+          ) : (
+          <>
+            <DiagnosisDropdown
+              label="Loại vật tư"
+              labelFontSize="xs"
+              labelColor="#b07a2f"
+              minW="160px"
+              size="sm"
+              value={itemType}
               isDisabled={!canEdit}
-              onChange={(e) => onChange(item.id, { standardServiceId: e.target.value || null })}
+              onChange={(value) => onChange(item.id, { itemType: value, inventoryItemId: null })}
             >
-              <option value="">-- Chọn --</option>
-              {services.map((s) => <option key={s.id} value={s.id}>{s.name || s.Name}</option>)}
-            </Select>
-          </Box>
-        ) : (
-          <Box minW="220px" flex="1">
-            <Text fontSize="xs" fontWeight="600" mb={1} color="#a3aed0">Phụ tùng</Text>
-            <Select
+              <option value="PART">Phụ tùng</option>
+              <option value="CONSUMABLE">Vật tư / Dung dịch</option>
+            </DiagnosisDropdown>
+            <DiagnosisDropdown
+              label="Vật tư cụ thể"
+              labelFontSize="xs"
+              labelColor="#b07a2f"
+              minW="260px"
+              flex="1"
               size="sm"
               value={item.inventoryItemId || ""}
               isDisabled={!canEdit}
-              onChange={(e) => onChange(item.id, { inventoryItemId: e.target.value || null })}
+              onChange={(value) => onChange(item.id, { inventoryItemId: value || null })}
             >
               <option value="">-- Chọn sản phẩm --</option>
               {products.map((p) => <option key={p.id} value={p.id}>{p.name || p.Name}</option>)}
-            </Select>
-          </Box>
+            </DiagnosisDropdown>
+          </>
         )}
 
         <Box minW="80px" maxW="100px">
-          <Text fontSize="xs" fontWeight="600" mb={1} color="#a3aed0">Số lượng</Text>
+          <Text fontSize="xs" fontWeight="600" mb={1} color={isServiceMode ? "#a3aed0" : "#b07a2f"}>Số lượng</Text>
           <Input
             size="sm"
             type="number"
@@ -745,26 +988,27 @@ function RecommendationRow({ item, canEdit, services, products, onChange, onRemo
           />
         </Box>
 
-        <Box minW="140px">
-          <Text fontSize="xs" fontWeight="600" mb={1} color="#a3aed0">Độ cần thiết</Text>
-          <Select
-            size="sm"
-            value={item.urgency || "RECOMMENDED"}
-            isDisabled={!canEdit}
-            onChange={(e) => onChange(item.id, { urgency: e.target.value })}
-          >
-            <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
-            <option value="RECOMMENDED">Nên làm</option>
-            <option value="OPTIONAL">Không bắt buộc</option>
-          </Select>
-        </Box>
+        <DiagnosisDropdown
+          label="Độ cần thiết"
+          labelFontSize="xs"
+          labelColor={isServiceMode ? "#a3aed0" : "#b07a2f"}
+          minW="140px"
+          size="sm"
+          value={item.urgency || "RECOMMENDED"}
+          isDisabled={!canEdit}
+          onChange={(value) => onChange(item.id, { urgency: value })}
+        >
+          <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
+          <option value="RECOMMENDED">Nên làm</option>
+          <option value="OPTIONAL">Không bắt buộc</option>
+        </DiagnosisDropdown>
       </HStack>
 
       {/* Optional fields can be added here or collapsable like Media URLs/Tech notes */}
       <Box pt={2}>
         <Input
           size="xs"
-          placeholder="Ghi chú kỹ thuật viên cho riêng phụ tùng/việc này..."
+          placeholder={isServiceMode ? "Ghi chú cho dịch vụ này..." : "Ghi chú cho vật tư này..."}
           value={item.technicianNotes || ""}
           isDisabled={!canEdit}
           onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}

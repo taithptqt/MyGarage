@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import Footer from "@shared/components/Footer";
@@ -96,9 +96,9 @@ export default function MyAppointmentsPage() {
     cancelTarget,
     cancelReason,
     stats,
-    bookingGroups,
+    GroupSessions,
     filteredAppointments,
-    filteredBookingGroups,
+    filteredGroupSessions,
     setFilter,
     setSearchTerm,
     setCancelReason,
@@ -200,7 +200,7 @@ export default function MyAppointmentsPage() {
 
   const isGroupTab = activeTab === APPOINTMENTS_VIEW_TABS.GROUP;
   const hasResults = isGroupTab
-    ? filteredBookingGroups.length > 0
+    ? filteredGroupSessions.length > 0
     : filteredAppointments.length > 0;
 
   return (
@@ -254,7 +254,7 @@ export default function MyAppointmentsPage() {
               className={activeTab === APPOINTMENTS_VIEW_TABS.GROUP ? "active" : ""}
               onClick={() => handleChangeTab(APPOINTMENTS_VIEW_TABS.GROUP)}
             >
-              Lịch hẹn nhóm ({bookingGroups.length})
+              Lịch hẹn nhóm ({GroupSessions.length})
             </button>
           </section>
 
@@ -311,7 +311,7 @@ export default function MyAppointmentsPage() {
             </section>
           ) : isGroupTab ? (
             <section className="my-appt-group-list">
-              {filteredBookingGroups.map((group) => {
+              {filteredGroupSessions.map((group) => {
                 const groupStatus =
                   GROUP_STATUS_META[group.status] || { label: group.status || "Không rõ", tone: "default" };
                 const visibleCount = Array.isArray(group.appointments) ? group.appointments.length : 0;

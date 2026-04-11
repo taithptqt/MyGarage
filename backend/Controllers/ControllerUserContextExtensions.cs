@@ -13,25 +13,16 @@ namespace MyGarage.Controllers
                 : null;
         }
 
-        internal static string? GetCurrentRole(this ControllerBase controller)
-        {
-            return controller.User.FindFirst(ClaimTypes.Role)?.Value;
-        }
-
         internal static string? GetCurrentRoleCode(this ControllerBase controller)
         {
-            return controller.User.FindFirst("role_code")?.Value;
+            var claim = controller.User.FindFirst("role_code");
+            return string.IsNullOrWhiteSpace(claim?.Value) ? null : claim!.Value.Trim();
         }
 
         internal static string? GetCurrentRoleName(this ControllerBase controller)
         {
-            return controller.User.FindFirst("role_name")?.Value;
-        }
-
-        internal static long? GetCurrentBranchId(this ControllerBase controller)
-        {
-            var claim = controller.User.FindFirst("branch_id")?.Value;
-            return long.TryParse(claim, out var branchId) ? branchId : null;
+            var claim = controller.User.FindFirst("role_name");
+            return string.IsNullOrWhiteSpace(claim?.Value) ? null : claim!.Value.Trim();
         }
     }
 }

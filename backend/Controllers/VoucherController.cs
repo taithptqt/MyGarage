@@ -1,4 +1,4 @@
-﻿// Mục đích: Cung cấp API CRUD và các thao tác vòng đời cho bản ghi voucher chính.
+// M?c d�ch: Cung c?p API CRUD v� c�c thao t�c v�ng d?i cho b?n ghi voucher ch�nh.
 using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 
 namespace MyGarage.Controllers
 {
@@ -15,6 +16,14 @@ namespace MyGarage.Controllers
     [ApiController]
     public class VoucherController : ControllerBase
     {
+        private const string VoucherStatusActive = nameof(VoucherStatusCode.ACTIVE);
+        private const string VoucherStatusPaused = nameof(VoucherStatusCode.PAUSED);
+        private const string VoucherStatusRevoked = nameof(VoucherStatusCode.REVOKED);
+        private const string VoucherStatusArchived = nameof(VoucherStatusCode.ARCHIVED);
+        private const string VoucherStatusExpired = nameof(VoucherStatusCode.EXPIRED);
+        private const string VoucherStatusScheduled = nameof(VoucherStatusCode.SCHEDULED);
+        private const string VoucherStatusExhausted = nameof(VoucherStatusCode.EXHAUSTED);
+
         public sealed record VoucherStatusPatchDto
         {
             public string? Status { get; init; }
@@ -86,9 +95,9 @@ namespace MyGarage.Controllers
             var status = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
             return status switch
             {
-                nameof(VoucherStatusCode.ACTIVE) => await UpdateStatusAsync(id, nameof(VoucherStatusCode.ACTIVE), true),
-                nameof(VoucherStatusCode.PAUSED) => await UpdateStatusAsync(id, nameof(VoucherStatusCode.PAUSED), false),
-                nameof(VoucherStatusCode.REVOKED) => await UpdateStatusAsync(id, nameof(VoucherStatusCode.REVOKED), false),
+                VoucherStatusActive => await UpdateStatusAsync(id, VoucherStatusActive, true),
+                VoucherStatusPaused => await UpdateStatusAsync(id, VoucherStatusPaused, false),
+                VoucherStatusRevoked => await UpdateStatusAsync(id, VoucherStatusRevoked, false),
                 _ => BadRequest(new { message = "Status must be ACTIVE, PAUSED, or REVOKED." }),
             };
         }
@@ -114,7 +123,7 @@ namespace MyGarage.Controllers
 
             existingItem.Status = status;
             existingItem.IsActive = isActive;
-            existingItem.UpdatedAt = DateTime.UtcNow;
+            existingItem.UpdatedAt = VietnamTime.Now;
 
             var updatedItem = await _voucherService.UpdateAsync(id, existingItem);
             if (updatedItem == null)
@@ -127,34 +136,34 @@ namespace MyGarage.Controllers
 
         private static string ResolveStatus(Voucher voucher)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
 
             if (voucher.IsDeleted == true)
             {
-                return nameof(VoucherStatusCode.ARCHIVED);
+                return VoucherStatusArchived;
             }
 
             if (voucher.IsActive == false)
             {
-                return nameof(VoucherStatusCode.PAUSED);
+                return VoucherStatusPaused;
             }
 
             if (voucher.EndDate < now)
             {
-                return nameof(VoucherStatusCode.EXPIRED);
+                return VoucherStatusExpired;
             }
 
             if (voucher.StartDate > now)
             {
-                return nameof(VoucherStatusCode.SCHEDULED);
+                return VoucherStatusScheduled;
             }
 
             if (voucher.UsageLimit.HasValue && voucher.UsageLimit > 0 && voucher.UsedCount.HasValue && voucher.UsedCount >= voucher.UsageLimit)
             {
-                return nameof(VoucherStatusCode.EXHAUSTED);
+                return VoucherStatusExhausted;
             }
 
-            return nameof(VoucherStatusCode.ACTIVE);
+            return VoucherStatusActive;
         }
     }
 }

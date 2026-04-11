@@ -11,7 +11,7 @@ public partial class WorkSlot
 
     public long BranchId { get; set; }
 
-    public long BayId { get; set; }
+    public long? BayId { get; set; }
 
     public long? TechnicianId { get; set; }
 
@@ -25,6 +25,14 @@ public partial class WorkSlot
 
     public long? VehicleId { get; set; }
 
+    public long? AppointmentId { get; set; }
+
+    public long? ServiceOrderId { get; set; }
+
+    public bool IsAdditional { get; set; }
+
+    public int SequenceOrder { get; set; }
+
     public long? ServiceStaffAssignmentId { get; set; }
 
     public string Status { get; set; } = null!;
@@ -37,7 +45,9 @@ public partial class WorkSlot
 
     public string? Notes { get; set; }
 
-    public virtual Bay Bay { get; set; } = null!;
+    public virtual Appointment? Appointment { get; set; }
+
+    public virtual Bay? Bay { get; set; }
 
     public virtual Branch Branch { get; set; } = null!;
 
@@ -46,6 +56,8 @@ public partial class WorkSlot
     public virtual ICollection<WorkSlot> InverseParentSlot { get; set; } = new List<WorkSlot>();
 
     public virtual WorkSlot? ParentSlot { get; set; }
+
+    public virtual ServiceOrder? ServiceOrder { get; set; }
 
     public virtual Staff? Technician { get; set; }
 

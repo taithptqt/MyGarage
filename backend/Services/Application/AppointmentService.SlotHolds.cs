@@ -12,24 +12,32 @@ namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        private const int SlotHoldMinutes = 5;
+        private const int SlotHoldMinutes = 15;
 
         public async Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto)
         {
             if (dto.BranchId <= 0)
                 throw new InvalidOperationException("Chi nh\u00E1nh kh\u00F4ng h\u1EE3p l\u1EC7.");
 
-            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds);
+            var opHour = await _context.BranchOperatingHours
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)dto.StartTime.DayOfWeek);
+            var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+
+            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds, dto.RequestedPackageIds);
+            var plannedDuration = await ResolveScheduledDurationAsync(dto.RequestedServiceIds, slotStepMinutes, false, dto.RequestedPackageIds);
+
             var holdEndTime = dto.EndTime;
 
             if (flow == BookingFlowType.Flexible && holdEndTime <= dto.StartTime)
             {
-                var opHour = await _context.BranchOperatingHours
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)dto.StartTime.DayOfWeek);
-                var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
-                var flexibleDuration = await ResolveScheduledDurationAsync(dto.RequestedServiceIds, slotStepMinutes, isParallel: false);
-                holdEndTime = dto.StartTime.AddMinutes(flexibleDuration);
+                var flexibleWindow = ResolveFlexibleWindowMinutes(slotStepMinutes);
+                holdEndTime = dto.StartTime.AddMinutes(flexibleWindow);
+            }
+
+            if (flow == BookingFlowType.Fixed && holdEndTime <= dto.StartTime)
+            {
+                holdEndTime = dto.StartTime.AddMinutes(plannedDuration);
             }
 
             if (holdEndTime <= dto.StartTime)
@@ -41,6 +49,7 @@ namespace MyGarage.Services
                 holdEndTime,
                 flow == BookingFlowType.Flexible ? AppointmentBookingFlows.Flexible : AppointmentBookingFlows.Fixed,
                 dto.RequestedServiceIds,
+                dto.RequestedPackageIds,
                 Math.Max(1, dto.VehicleCount));
 
             return new SlotHoldResponseDto
@@ -73,6 +82,7 @@ namespace MyGarage.Services
                         StartTime = hold.StartTime,
                         EndTime = hold.EndTime,
                         RequestedServiceIds = hold.RequestedServiceIds,
+                        RequestedPackageIds = hold.RequestedPackageIds,
                         CustomerNotes = null,
                         Status = nameof(AppointmentStatus.PENDING)
                     });

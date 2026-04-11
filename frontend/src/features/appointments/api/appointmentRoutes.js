@@ -1,4 +1,4 @@
-﻿export const APPOINTMENTS_BASE = "/api/appointments";
+export const APPOINTMENTS_BASE = "/api/appointments";
 
 export const APPOINTMENTS_ROUTES = {
   base: APPOINTMENTS_BASE,
@@ -7,9 +7,15 @@ export const APPOINTMENTS_ROUTES = {
   slotHolds: `${APPOINTMENTS_BASE}/slot-holds`,
   slotHoldDetail: (holdToken) => `${APPOINTMENTS_BASE}/slot-holds/${holdToken}`,
   guest: `${APPOINTMENTS_BASE}/public-bookings`,
+  receptionBookings: `${APPOINTMENTS_BASE}/reception-bookings`,
+  insuranceAssets: `${APPOINTMENTS_BASE}/insurance-assets`,
   branches: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}`,
   detail: (id) => `${APPOINTMENTS_BASE}/${id}`,
+  editCapabilities: (id) => `${APPOINTMENTS_BASE}/${id}/edit-capabilities`,
+  editRequests: (id) => `${APPOINTMENTS_BASE}/${id}/edit-requests`,
+  editRequestDecision: (id, requestId) => `${APPOINTMENTS_BASE}/${id}/edit-requests/${requestId}`,
   status: (id) => `${APPOINTMENTS_BASE}/${id}`,
+  nearestSlot: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/nearest-slot`,
   autoNoShow: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/no-show-cycles`,
   bookingHealth: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/health-metrics`,
   dispatchDashboard: (branchId) => `${APPOINTMENTS_BASE}/branches/${branchId}/allocation-metrics`,

@@ -17,5 +17,6 @@ namespace MyGarage.Interfaces
         Task<VehicleConditionLog> CreateRequestAsync(long serviceOrderId, string logType);
         Task MarkRequestAssignedAsync(VehicleConditionLog requestLog, long technicianId);
         Task MarkActiveRequestCompletedAsync(long serviceOrderId, string logType);
+        Task MarkServiceOrderCheckedInAsync(long serviceOrderId);
     }
 }

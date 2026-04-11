@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -15,7 +15,7 @@ namespace MyGarage.Services
                 return BuildFail("VCH_NOT_FOUND", "Voucher not found.");
             }
 
-            var now = DateTime.Now;
+            var now = VietnamTime.Now;
             var stateCheck = ValidateVoucherState(voucher, now);
             if (stateCheck != null)
             {

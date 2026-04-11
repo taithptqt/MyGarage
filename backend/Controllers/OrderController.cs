@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
-using System.Threading;
+using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Enums;
@@ -26,7 +26,11 @@ public class OrderController(
     IOrderTransactionStore orderTransactionStore,
     IOrderInvoiceStore orderInvoiceStore) : ControllerBase
 {
-    private static long _orderCodeSeed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+    private const string RetailOrderStatusConfirmed = nameof(RetailOrderStatus.CONFIRMED);
+    private const string RetailOrderStatusDraft = nameof(RetailOrderStatus.DRAFT);
+    private const string PaymentStatusPending = nameof(PaymentStatusCode.PENDING);
+    private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
+    private const string PaymentStatusCanceled = nameof(PaymentStatusCode.CANCELED);
 
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
@@ -82,8 +86,8 @@ public class OrderController(
             return;
         }
 
-        retailOrder.Status = isPaid ? nameof(RetailOrderStatus.CONFIRMED) : nameof(RetailOrderStatus.DRAFT);
-        retailOrder.UpdatedAt = DateTime.UtcNow;
+        retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
+        retailOrder.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
 
         if (isPaid)
@@ -135,7 +139,7 @@ public class OrderController(
             return method.Id;
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         method = new PaymentMethod
         {
             MethodName = "PayOS",
@@ -241,7 +245,7 @@ public class OrderController(
                     Amount = t.Amount,
                     AccountNumber = t.AccountNumber,
                     Description = t.Description,
-                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : DateTimeOffset.Now,
+                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : VietnamTime.OffsetNow,
                     VirtualAccountName = t.VirtualAccountName,
                     VirtualAccountNumber = t.VirtualAccountNumber,
                     CounterAccountBankId = t.CounterAccountBankId,
@@ -251,7 +255,7 @@ public class OrderController(
                 }).ToList();
 
                 _orderTransactionStore.CreateTransactions(transactions);
-                order.LastTransactionUpdate = DateTimeOffset.Now;
+                order.LastTransactionUpdate = VietnamTime.OffsetNow;
             }
 
             _orderStore.UpdateOrder(order.Id, order);
@@ -261,8 +265,8 @@ public class OrderController(
             {
                 var payOsStatus = paymentLink.Status.ToString();
                 var targetStatus = payOsStatus.Contains("CANCEL", StringComparison.OrdinalIgnoreCase)
-                    ? nameof(PaymentStatusCode.CANCELED)
-                    : (order.AmountRemaining > 0 ? nameof(PaymentStatusCode.PENDING) : nameof(PaymentStatusCode.COMPLETED));
+                    ? PaymentStatusCanceled
+                    : (order.AmountRemaining > 0 ? PaymentStatusPending : PaymentStatusCompleted);
                 var amountPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
                 await _paymentConfirmationService.ApplyOutcomeAsync(payment, amountPaid, targetStatus);
             }
@@ -314,7 +318,7 @@ public class OrderController(
             });
         }
 
-        var orderCode = GenerateOrderCode();
+        var orderCode = VietnamTime.OffsetNow.ToUnixTimeSeconds();
         var returnUrl = request.ReturnUrl ?? "https://your-domain.com/success";
         var cancelUrl = request.CancelUrl ?? "https://your-domain.com/cancel";
         var payOsDescription = BuildPayOsDescription(request.Description, orderCode);
@@ -374,7 +378,7 @@ public class OrderController(
                 Currency = paymentResponse.Currency,
                 ReturnUrl = returnUrl,
                 CancelUrl = cancelUrl,
-                CreatedAt = DateTimeOffset.Now,
+                CreatedAt = VietnamTime.OffsetNow,
                 BuyerName = request.BuyerName,
                 BuyerCompanyName = request.BuyerCompanyName,
                 BuyerEmail = request.BuyerEmail,
@@ -407,10 +411,9 @@ public class OrderController(
                 Amount = request.TotalAmount,
                 TransactionCode = paymentResponse.PaymentLinkId,
                 Type = normalizedPaymentType,
-                Status = nameof(PaymentStatusCode.PENDING),
-                Direction = paymentDirection,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                Status = PaymentStatusPending,
+                CreatedAt = VietnamTime.Now,
+                UpdatedAt = VietnamTime.Now
             };
 
             try
@@ -483,7 +486,7 @@ public class OrderController(
                     Amount = t.Amount,
                     AccountNumber = t.AccountNumber,
                     Description = t.Description,
-                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : DateTimeOffset.Now,
+                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : VietnamTime.OffsetNow,
                     VirtualAccountName = t.VirtualAccountName,
                     VirtualAccountNumber = t.VirtualAccountNumber,
                     CounterAccountBankId = t.CounterAccountBankId,
@@ -493,14 +496,14 @@ public class OrderController(
                 }).ToList();
 
                 _orderTransactionStore.CreateTransactions(transactions);
-                order.LastTransactionUpdate = DateTimeOffset.Now;
+                order.LastTransactionUpdate = VietnamTime.OffsetNow;
             }
 
             _orderStore.UpdateOrder(order.Id, order);
             var payment = await ResolvePaymentAsync(order);
             if (payment is not null)
             {
-                await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, nameof(PaymentStatusCode.CANCELED));
+                await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, PaymentStatusCanceled);
             }
             else if (order.RetailOrderId.HasValue)
             {

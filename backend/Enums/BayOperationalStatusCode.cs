@@ -1,8 +1,9 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum BayOperationalStatusCode
 {
-    ACTIVE,
+    BROKEN,
     UNDER_MAINTENANCE,
-    BROKEN
+    ACTIVE
 }
+

@@ -35,6 +35,8 @@ public partial class ServiceOrderDetail
 
     public decimal Quantity { get; set; }
 
+    public int? EstimatedMinutes { get; set; }
+
     public decimal? IssuedQuantity { get; set; }
 
     public decimal? CostPriceAtTime { get; set; }

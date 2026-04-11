@@ -15,7 +15,7 @@ namespace MyGarage.Services
                 return new SlotEvaluation(false, 0, 0, 0, 0);
             }
 
-            int quickBooked = overlap.Count(a => ResolveFlowByRequestedServices(a.RequestedServiceIds, a.CustomerNotes) == ServiceCluster.Quick);
+            int quickBooked = overlap.Count(a => ResolveFlowByRequestedServices(a.RequestedServiceIds, a.RequestedPackageIds, a.CustomerNotes) == ServiceCluster.Quick);
             int heavyBooked = overlap.Count - quickBooked;
             int totalBooked = overlap.Count;
             int remainingByOnlineCap = Math.Max(0, onlineLimit - totalBooked);
@@ -24,7 +24,13 @@ namespace MyGarage.Services
             int heavyMax = clusterCaps.repairCap;
             int heavyRemaining = Math.Min(Math.Max(0, heavyMax - heavyBooked), remainingByOnlineCap);
 
-            int quickOverflow = Math.Max(0, clusterCaps.repairCap - heavyBooked - ReservedRepairForQuickOverflow);
+            int repairFree = Math.Max(0, clusterCaps.repairCap - heavyBooked);
+            double repairFreeRatio = clusterCaps.repairCap > 0
+                ? repairFree / (double)clusterCaps.repairCap
+                : 0d;
+            bool quickFullyBooked = quickBooked >= clusterCaps.quickCap;
+            bool allowQuickOverflow = quickFullyBooked && repairFreeRatio > 0.5d;
+            int quickOverflow = allowQuickOverflow ? repairFree : 0;
             int quickMax = clusterCaps.quickCap + quickOverflow;
             int quickRemaining = Math.Min(Math.Max(0, quickMax - quickBooked), remainingByOnlineCap);
 
@@ -38,14 +44,10 @@ namespace MyGarage.Services
 
         private static (int quickCap, int repairCap) ComputeClusterOnlineCaps(CapacityProfile capacity, int onlineLimit)
         {
-            var quickCap = capacity.Quick <= 0
-                ? 0
-                : (int)Math.Round(capacity.Quick * 0.85m, MidpointRounding.AwayFromZero);
-            var repairCap = capacity.Repair <= 0
-                ? 0
-                : (int)Math.Round(capacity.Repair * 0.85m, MidpointRounding.AwayFromZero);
+            var quickCap = Math.Max(0, capacity.Quick);
+            var repairCap = Math.Max(0, capacity.Repair);
 
-            // Defensive guard: keep cluster caps not exceeding overall online limit.
+            // Keep cluster caps bounded by the effective online limit.
             if (quickCap + repairCap > onlineLimit)
             {
                 var excess = (quickCap + repairCap) - onlineLimit;

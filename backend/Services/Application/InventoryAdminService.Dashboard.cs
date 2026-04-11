@@ -8,9 +8,13 @@ namespace MyGarage.Services
 {
     public partial class InventoryAdminService
     {
+        private const string ApprovalRequestStatusPending = nameof(ApprovalRequestStatusCode.PENDING);
+        private const string InventoryAuditStatusDraft = nameof(InventoryAuditStatusCode.DRAFT);
+        private const string InventoryAuditStatusReviewing = nameof(InventoryAuditStatusCode.REVIEWING);
+
         public async Task<object> GetOverviewAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var staleCutoff = now.AddDays(-90);
 
             var inventoryRows = await _context.Inventories
@@ -26,11 +30,11 @@ namespace MyGarage.Services
 
             var pendingApprovals = await _context.ApprovalRequests
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && a.Status.ToUpper() == nameof(AccountingStatus.PENDING));
+                .CountAsync(a => a.Status != null && a.Status.ToUpper() == ApprovalRequestStatusPending);
 
             var pendingAudits = await _context.InventoryAudits
                 .AsNoTracking()
-                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == nameof(AccountingStatus.DRAFT) || a.Status.ToUpper() == nameof(AccountingStatus.PENDING)));
+                .CountAsync(a => a.Status != null && (a.Status.ToUpper() == InventoryAuditStatusDraft || a.Status.ToUpper() == InventoryAuditStatusReviewing));
 
             var lastTransactionByProduct = transactions
                 .Where(t => t.ProductId > 0)

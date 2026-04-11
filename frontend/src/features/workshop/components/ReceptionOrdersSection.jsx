@@ -18,6 +18,14 @@ function parseBranchId(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function toDateText(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function toStartOfDay(dateText) {
   if (!dateText) return null;
   const d = new Date(`${dateText}T00:00:00`);
@@ -34,13 +42,78 @@ function normalizeStatus(status) {
   return String(status || "").trim().toUpperCase();
 }
 
-function toDateText(dateObj) {
-  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
-  const y = dateObj.getFullYear();
-  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const d = String(dateObj.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+const ORDER_VIEW_MODE = {
+  SINGLE: "SINGLE",
+  GROUP: "GROUP",
+};
+
+const GROUP_STATUS_PRIORITY = [
+  "WAITING_APPROVAL",
+  "QUOTING",
+  "DIAGNOSING",
+  "IN_PROGRESS",
+  "REPAIRING",
+  "READY",
+  "WAITING_PAYMENT",
+  "CHECKED_IN",
+  "RECEPTION",
+  "NEW",
+  "CLOSED",
+  "COMPLETED",
+  "CANCELLED",
+  "CANCELED",
+];
+
+function resolveGroupStatus(statuses) {
+  if (!Array.isArray(statuses) || statuses.length === 0) return "NEW";
+  const normalized = statuses.map((status) => normalizeStatus(status)).filter(Boolean);
+  if (normalized.length === 0) return "NEW";
+
+  const sorted = [...normalized].sort((a, b) => {
+    const idxA = GROUP_STATUS_PRIORITY.indexOf(a);
+    const idxB = GROUP_STATUS_PRIORITY.indexOf(b);
+    const rankA = idxA >= 0 ? idxA : GROUP_STATUS_PRIORITY.length + 1;
+    const rankB = idxB >= 0 ? idxB : GROUP_STATUS_PRIORITY.length + 1;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.localeCompare(b);
+  });
+  return sorted[0];
 }
+
+function formatOrderDate(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString("vi-VN");
+}
+
+function formatOrderTime(value) {
+  if (!value) return "--:--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "--:--";
+  return parsed.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function buildOrderRowInteraction(order, onOrderClick) {
+  if (!onOrderClick) return {};
+  const openDetail = () => onOrderClick(order);
+  return {
+    role: "button",
+    tabIndex: 0,
+    onClick: openDetail,
+    onKeyDown: (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDetail();
+      }
+    },
+  };
+}
+
 
 export default function ReceptionOrdersSection() {
   const navigate = useNavigate();
@@ -60,14 +133,16 @@ export default function ReceptionOrdersSection() {
   const [selectedOrderForView, setSelectedOrderForView] = useState(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState("ALL");
   const [orderSortBy, setOrderSortBy] = useState("CREATED_DESC");
+  const [orderViewMode, setOrderViewMode] = useState(ORDER_VIEW_MODE.SINGLE);
   const [dateFrom, setDateFrom] = useState(() => toDateText(new Date()));
   const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
+  const [actingGroup, setActingGroup] = useState(null);
 
-  const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
   const contextBranchId = parseBranchId(selectedBranchId);
-  const effectiveBranchId = userBranchId || contextBranchId;
+  const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
+  const effectiveBranchId = contextBranchId || userBranchId;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -110,6 +185,12 @@ export default function ReceptionOrdersSection() {
     return customer?.fullName || "-";
   }, [customers]);
 
+  const getOrderCustomerPhone = useCallback((order) => {
+    if (order.customerPhone) return order.customerPhone;
+    const customer = customers.find((c) => Number(c.id) === Number(order.customerId));
+    return customer?.phone || "--";
+  }, [customers]);
+
   const getOrderVehiclePlate = useCallback((order) => {
     if (order.vehicleLicensePlate) return order.vehicleLicensePlate;
     const vehicle = vehicles.find((v) => Number(v.id) === Number(order.vehicleId));
@@ -142,6 +223,7 @@ export default function ReceptionOrdersSection() {
         !query ||
         String(order.code || "").toLowerCase().includes(query) ||
         getOrderCustomerName(order).toLowerCase().includes(query) ||
+        String(getOrderCustomerPhone(order) || "").toLowerCase().includes(query) ||
         String(order.status || "").toLowerCase().includes(query) ||
         plate.includes(query) ||
         (queryCompact && plateCompact.includes(queryCompact));
@@ -171,17 +253,79 @@ export default function ReceptionOrdersSection() {
 
       return Number(b.id || 0) - Number(a.id || 0);
     });
-  }, [orders, searchQuery, getOrderCustomerName, getOrderVehiclePlate, orderStatusFilter, orderSortBy, dateFrom, dateTo]);
+  }, [orders, searchQuery, getOrderCustomerName, getOrderCustomerPhone, getOrderVehiclePlate, orderStatusFilter, orderSortBy, dateFrom, dateTo]);
 
-  const pagedOrders = useMemo(() => {
+  const singleOrders = useMemo(
+    () => filteredOrders.filter((order) => Number(order.groupSessionId ?? order.GroupSessionId ?? 0) <= 0),
+    [filteredOrders]
+  );
+
+  const groupedOrders = useMemo(() => {
+    const map = new Map();
+
+    filteredOrders.forEach((order, index) => {
+      const groupSessionId = Number(order.groupSessionId ?? order.GroupSessionId ?? 0);
+      if (!Number.isFinite(groupSessionId) || groupSessionId <= 0) return;
+
+      if (!map.has(groupSessionId)) {
+        map.set(groupSessionId, {
+          id: groupSessionId,
+          groupCode: `GS-${groupSessionId}`,
+          orders: [],
+          firstIndex: index,
+        });
+      }
+
+      const group = map.get(groupSessionId);
+      group.orders.push(order);
+      if (index < group.firstIndex) group.firstIndex = index;
+    });
+
+    return Array.from(map.values())
+      .map((group) => {
+        const customerName =
+          group.orders
+            .map((order) => getOrderCustomerName(order))
+            .find((name) => String(name || "").trim() && String(name || "").trim() !== "-") || "-";
+
+        const customerPhone =
+          group.orders
+            .map((order) => getOrderCustomerPhone(order))
+            .find((phone) => String(phone || "").trim() && String(phone || "").trim() !== "--") || "--";
+
+        const statuses = group.orders.map((order) => normalizeStatus(order.status)).filter(Boolean);
+
+        return {
+          ...group,
+          customerName,
+          customerPhone,
+          status: resolveGroupStatus(statuses),
+        };
+      })
+      .sort((a, b) => a.firstIndex - b.firstIndex);
+  }, [filteredOrders, getOrderCustomerName, getOrderCustomerPhone]);
+
+  const pagedSingleOrders = useMemo(() => {
     const start = (ordersPage - 1) * ordersPageSize;
-    return filteredOrders.slice(start, start + ordersPageSize);
-  }, [filteredOrders, ordersPage, ordersPageSize]);
+    return singleOrders.slice(start, start + ordersPageSize);
+  }, [singleOrders, ordersPage, ordersPageSize]);
+
+  const pagedGroupedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * ordersPageSize;
+    return groupedOrders.slice(start, start + ordersPageSize);
+  }, [groupedOrders, ordersPage, ordersPageSize]);
+
+  const ordersTotalItems = orderViewMode === ORDER_VIEW_MODE.GROUP ? groupedOrders.length : singleOrders.length;
+
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [orderViewMode, orderStatusFilter, orderSortBy, dateFrom, dateTo, searchQuery]);
 
   const activeOrdersCount = useMemo(
     () => orders.filter((order) => !["COMPLETED", "CANCELED", "CANCELLED"].includes(normalizeStatus(order.status))).length,
     [orders]
   );
+
 
   const statusPermitUpdate = useCallback(
     (status) => !["COMPLETED", "CANCELED", "CANCELLED"].includes(normalizeStatus(status)),
@@ -226,6 +370,41 @@ export default function ReceptionOrdersSection() {
     }
   }, [fetchData]);
 
+  const handleCancelGroupOrders = useCallback(async (group) => {
+    const cancellableOrders = (group?.orders || []).filter((order) => statusPermitUpdate(order?.status));
+    if (cancellableOrders.length === 0) return;
+
+    const warningMessage = cancellableOrders.length === (group?.orders || []).length
+      ? "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y to\u00e0n b\u1ed9 nh\u00f3m l\u1ec7nh n\u00e0y kh\u00f4ng?"
+      : "Nh\u00f3m n\u00e0y c\u00f3 m\u1ed9t s\u1ed1 l\u1ec7nh kh\u00f4ng th\u1ec3 h\u1ee7y theo tr\u1ea1ng th\u00e1i hi\u1ec7n t\u1ea1i. B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y c\u00e1c l\u1ec7nh c\u00f2n l\u1ea1i kh\u00f4ng?";
+    if (!window.confirm(warningMessage)) return;
+
+    const reasonInput = window.prompt(
+      "Nh\u1eadp l\u00fd do h\u1ee7y (b\u1eaft bu\u1ed9c):",
+      "Kh\u00e1ch h\u00e0ng y\u00eau c\u1ea7u h\u1ee7y",
+    );
+    if (reasonInput === null) return;
+    const reason = String(reasonInput || "").trim();
+    if (!reason) {
+      alert("L\u00fd do h\u1ee7y l\u00e0 b\u1eaft bu\u1ed9c.");
+      return;
+    }
+
+    setActingGroup(group.id);
+    setSaving(true);
+    try {
+      await Promise.all(
+        cancellableOrders.map((order) => serviceOrderApi.update(order.id, { ...order, status: "CANCELLED", cancelReason: reason })),
+      );
+      await fetchData();
+    } catch (err) {
+      setError("L\u1ed7i khi h\u1ee7y nh\u00f3m l\u1ec7nh: " + (err?.message || "Kh\u00f4ng r\u00f5 l\u1ed7i"));
+    } finally {
+      setActingGroup(null);
+      setSaving(false);
+    }
+  }, [fetchData, statusPermitUpdate]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const viewOrderId = Number(params.get("viewOrderId") || 0);
@@ -248,19 +427,18 @@ export default function ReceptionOrdersSection() {
     setModal("date_range");
   }, []);
 
+  const applyDateRange = useCallback(({ dateFrom: nextDateFrom, dateTo: nextDateTo }) => {
+    setDateFrom(nextDateFrom || "");
+    setDateTo(nextDateTo || "");
+    setModal(null);
+  }, []);
+
   const defaultDateFilter = useMemo(() => toDateText(new Date()), []);
   const dateFilterButtonLabel = useMemo(
     () => getDateRangeButtonLabel(dateFrom, dateTo, { todayDateText: defaultDateFilter }),
     [dateFrom, dateTo, defaultDateFilter]
   );
-  const canResetToolbarFilters =
-    orderStatusFilter !== "ALL" || orderSortBy !== "CREATED_DESC" || Boolean(dateFrom || dateTo);
-
-  const handleApplyDateRange = useCallback(({ dateFrom: nextDateFrom, dateTo: nextDateTo }) => {
-    setDateFrom(nextDateFrom || "");
-    setDateTo(nextDateTo || "");
-    setModal(null);
-  }, []);
+  const canResetToolbarFilters = orderStatusFilter !== "ALL" || orderSortBy !== "CREATED_DESC" || Boolean(dateFrom || dateTo);
 
   const resetToolbarFilters = useCallback(() => {
     setOrderStatusFilter("ALL");
@@ -290,6 +468,7 @@ export default function ReceptionOrdersSection() {
         </div>
       </div>
 
+
       {error && (
         <div style={{ padding: "12px", background: "#fee", color: "#e6522c", borderRadius: "8px", marginBottom: "16px", fontWeight: 600 }}>
           Lỗi: {error}
@@ -308,17 +487,26 @@ export default function ReceptionOrdersSection() {
         canResetToolbarFilters={canResetToolbarFilters}
         onResetToolbarFilters={resetToolbarFilters}
         filteredOrders={filteredOrders}
+        singleOrders={singleOrders}
+        groupedOrders={groupedOrders}
+        orderViewMode={orderViewMode}
+        setOrderViewMode={setOrderViewMode}
         loading={loading}
-        pagedOrders={pagedOrders}
+        pagedSingleOrders={pagedSingleOrders}
+        pagedGroupedOrders={pagedGroupedOrders}
         setSelectedOrderForView={setSelectedOrderForView}
         setModal={setModal}
         getOrderCustomerName={getOrderCustomerName}
+        getOrderCustomerPhone={getOrderCustomerPhone}
         getOrderVehiclePlate={getOrderVehiclePlate}
         statusPermitUpdate={statusPermitUpdate}
         handleCompleteOrder={handleCompleteOrder}
         handleCancelOrder={handleCancelOrder}
+        handleCancelGroupOrders={handleCancelGroupOrders}
+        actingGroup={actingGroup}
         ordersPage={ordersPage}
         ordersPageSize={ordersPageSize}
+        ordersTotalItems={ordersTotalItems}
         setOrdersPage={setOrdersPage}
         setOrdersPageSize={setOrdersPageSize}
         getStatusBadge={getStatusBadge}
@@ -330,7 +518,7 @@ export default function ReceptionOrdersSection() {
           onClose={() => setModal(null)}
           initialDateFrom={dateFrom}
           initialDateTo={dateTo}
-          onApply={handleApplyDateRange}
+          onApply={applyDateRange}
         />
       )}
 
@@ -347,7 +535,6 @@ export default function ReceptionOrdersSection() {
     </div>
   );
 }
-
 function OrdersTableContent({
   navigate,
   orderStatusFilter,
@@ -360,17 +547,26 @@ function OrdersTableContent({
   canResetToolbarFilters,
   onResetToolbarFilters,
   filteredOrders,
+  singleOrders,
+  groupedOrders,
+  orderViewMode,
+  setOrderViewMode,
   loading,
-  pagedOrders,
+  pagedSingleOrders,
+  pagedGroupedOrders,
   setSelectedOrderForView,
   setModal,
   getOrderCustomerName,
+  getOrderCustomerPhone,
   getOrderVehiclePlate,
   statusPermitUpdate,
   handleCompleteOrder,
   handleCancelOrder,
+  handleCancelGroupOrders,
+  actingGroup,
   ordersPage,
   ordersPageSize,
+  ordersTotalItems,
   setOrdersPage,
   setOrdersPageSize,
   getStatusBadge,
@@ -383,6 +579,58 @@ function OrdersTableContent({
     { value: "CHECKIN_DESC", label: "Check-in mới nhất" },
     { value: "CHECKIN_ASC", label: "Check-in cũ nhất" },
   ];
+
+  const isGroupMode = orderViewMode === ORDER_VIEW_MODE.GROUP;
+
+  const openOrderDetail = useCallback((order) => {
+    setSelectedOrderForView(order);
+    setModal("order_detail");
+  }, [setModal, setSelectedOrderForView]);
+
+  const renderOrderActionButtons = useCallback((order) => (
+    <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", width: "100%" }}>
+      {normalizeStatus(order.status) === "WAITING_APPROVAL" ? (
+        <button
+          className="btn-primary btn-sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            navigate(`/workshop/reception/orders/${order.id}/quote`);
+          }}
+        >
+          ✍ Báo giá
+        </button>
+      ) : null}
+      {normalizeStatus(order.status) === "READY" ? (
+        <button
+          className="btn-success btn-sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleCompleteOrder(order);
+          }}
+        >
+          🚗 Bàn giao
+        </button>
+      ) : null}
+      {statusPermitUpdate(order.status) ? (
+        <button
+          type="button"
+          className="btn-icon btn-action-pill btn-action-cancel"
+          style={{
+            width: "auto",
+            minWidth: 74,
+            margin: 0,
+          }}
+          title={"H\u1ee7y l\u1ec7nh"}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleCancelOrder(order);
+          }}
+        >
+          {"H\u1ee7y"}
+        </button>
+      ) : null}
+    </div>
+  ), [handleCancelOrder, handleCompleteOrder, navigate, statusPermitUpdate]);
 
   return (
     <>
@@ -406,100 +654,260 @@ function OrdersTableContent({
             minWidth={220}
           />
           <button type="button" className="toolbar-action-btn toolbar-action-outline" onClick={openDateRangePicker}>
-            {dateFilterButtonLabel}
+            {dateFilterButtonLabel || "Chọn khoảng ngày"}
           </button>
-          <button
-            type="button"
-            className="toolbar-action-btn toolbar-action-ghost"
-            onClick={onResetToolbarFilters}
-            disabled={!canResetToolbarFilters}
-          >
+          <button type="button" className="toolbar-action-btn toolbar-action-ghost" onClick={onResetToolbarFilters} disabled={!canResetToolbarFilters}>
             Xóa lọc
           </button>
         </div>
-        <span className="result-count">{filteredOrders.length} lệnh sửa chữa</span>
+        <span className="result-count">
+          {isGroupMode ? `${groupedOrders.length} nhóm lệnh` : `${singleOrders.length} lệnh thường`}
+        </span>
+      </div>
+
+      <p className="appointment-row-hint">Nhấn vào một dòng để xem chi tiết lệnh sửa chữa.</p>
+
+      <div
+        style={{
+          display: "inline-grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: 8,
+          background: "#edf3fb",
+          border: "1px solid #d3e0f1",
+          borderRadius: 12,
+          padding: 6,
+          marginBottom: 14,
+        }}
+      >
+        <button
+          type="button"
+          className="toolbar-action-btn"
+          style={{
+            minWidth: 170,
+            borderRadius: 10,
+            border: orderViewMode === ORDER_VIEW_MODE.SINGLE ? "1px solid #c3d4ed" : "1px solid transparent",
+            background: orderViewMode === ORDER_VIEW_MODE.SINGLE ? "#ffffff" : "transparent",
+            color: orderViewMode === ORDER_VIEW_MODE.SINGLE ? "#173c73" : "#446286",
+            boxShadow: orderViewMode === ORDER_VIEW_MODE.SINGLE ? "0 3px 10px rgba(23, 60, 115, 0.12)" : "none",
+          }}
+          onClick={() => setOrderViewMode(ORDER_VIEW_MODE.SINGLE)}
+        >
+          Lệnh thường ({singleOrders.length})
+        </button>
+        <button
+          type="button"
+          className="toolbar-action-btn"
+          style={{
+            minWidth: 170,
+            borderRadius: 10,
+            border: orderViewMode === ORDER_VIEW_MODE.GROUP ? "1px solid #c3d4ed" : "1px solid transparent",
+            background: orderViewMode === ORDER_VIEW_MODE.GROUP ? "#ffffff" : "transparent",
+            color: orderViewMode === ORDER_VIEW_MODE.GROUP ? "#173c73" : "#446286",
+            boxShadow: orderViewMode === ORDER_VIEW_MODE.GROUP ? "0 3px 10px rgba(23, 60, 115, 0.12)" : "none",
+          }}
+          onClick={() => setOrderViewMode(ORDER_VIEW_MODE.GROUP)}
+        >
+          Lệnh nhóm ({groupedOrders.length})
+        </button>
       </div>
 
       <div className="workshop-table-card">
         {loading ? (
           <div className="loading-state"><div className="spinner" /><p>Đang tải danh sách lệnh...</p></div>
+        ) : filteredOrders.length === 0 ? (
+          <table className="admin-table">
+            <tbody>
+              <tr>
+                <td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
+                  Chưa có lệnh sửa chữa nào.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        ) : isGroupMode ? (
+          groupedOrders.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#a3aed0" }}>Không có lệnh nhóm nào.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 16, padding: 14 }}>
+              {pagedGroupedOrders.map((group) => {
+                const hasCancelableOrders = (group.orders || []).some((order) => statusPermitUpdate(order.status));
+                const groupActionDisabled = actingGroup === group.id || !hasCancelableOrders;
+                return (
+                  <article
+                    key={group.id}
+                    style={{
+                      border: "2px solid #c3d6f2",
+                      borderRadius: 14,
+                      background: "#f5f9ff",
+                      boxShadow: "0 6px 20px rgba(23, 60, 115, 0.08)",
+                      padding: 14,
+                    }}
+                  >
+                    <header
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                        marginBottom: 12,
+                        paddingBottom: 10,
+                        borderBottom: "1px solid #d9e6fb",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <h4 style={{ margin: 0, color: "#17325b" }}>{group.groupCode || `GS-${group.id}`}</h4>
+                        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#5b6f8c" }}>
+                          {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.orders.length} lệnh
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span className={`badge ${getStatusBadge(group.status)}`} style={{ height: 30, display: "inline-flex", alignItems: "center" }}>
+                          {getStatusLabelVi(group.status, group.status)}
+                        </span>
+                        <button
+                          className={`btn-icon btn-action-pill btn-action-cancel ${groupActionDisabled ? "is-disabled-action" : ""}`}
+                          title={"H\u1ee7y nh\u00f3m l\u1ec7nh"}
+                          style={{
+                            height: 30,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                            margin: 0,
+                          }}
+                          disabled={groupActionDisabled}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCancelGroupOrders(group);
+                          }}
+                        >
+                          {"Hủy"}
+                        </button>
+                      </div>
+                    </header>
+
+                    <div
+                      style={{
+                        overflowX: "auto",
+                        border: "1px solid #dbe7f8",
+                        borderRadius: 12,
+                        background: "#ffffff",
+                      }}
+                    >
+                      <table className="admin-table reception-group-orders-table">
+                        <colgroup>
+                          <col className="col-order-code" />
+                          <col className="col-plate" />
+                          <col className="col-checkin" />
+                          <col className="col-handover" />
+                          <col className="col-status" />
+                          <col className="col-actions" />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Mã lệnh</th>
+                            <th>Biển số</th>
+                            <th>Thời điểm vào</th>
+                            <th>Hẹn trả</th>
+                            <th className="th-center">Trạng thái</th>
+                            <th className="col-actions col-actions-wide th-center">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.orders.map((order) => {
+                            const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
+                            return (
+                              <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
+                                <td className="td-id">{order.code}</td>
+                                <td>{getOrderVehiclePlate(order)}</td>
+                                <td>
+                                  {order.checkInTime
+                                    ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
+                                    : "-"}
+                                </td>
+                                <td>
+                                  {order.estimatedHandover
+                                    ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
+                                    : "Chưa hẹn"}
+                                </td>
+                                <td className="th-center">
+                                  <span className={`badge ${getStatusBadge(order.status)}`}>
+                                    {getStatusLabelVi(order.status, order.status)}
+                                  </span>
+                                </td>
+                                <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
+                                  {renderOrderActionButtons(order)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
                 <th>Mã lệnh</th>
                 <th>Khách hàng</th>
+                <th>SĐT</th>
                 <th>Biển số</th>
                 <th>Trạng thái</th>
                 <th>Thời điểm vào</th>
                 <th>Hẹn trả</th>
-                <th className="th-center" style={{ width: "120px" }}>Thao tác</th>
+                <th className="col-actions col-actions-wide th-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.length === 0 ? (
-                <tr><td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>Chưa có lệnh sửa chữa nào.</td></tr>
-              ) : pagedOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  onClick={() => {
-                    setSelectedOrderForView(order);
-                    setModal("order_detail");
-                  }}
-                  className="clickable-row"
-                  style={{ cursor: "pointer" }}
-                >
-                  <td className="td-id">{order.code}</td>
-                  <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
-                  <td>{getOrderVehiclePlate(order)}</td>
-                  <td>
-                    <span className={`badge ${getStatusBadge(order.status)}`}>
-                      {getStatusLabelVi(order.status, order.status)}
-                    </span>
-                  </td>
-                  <td>{order.checkInTime ? new Date(order.checkInTime).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "-"}</td>
-                  <td>{order.estimatedHandover ? new Date(order.estimatedHandover).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Chưa hẹn"}</td>
-                  <td className="td-center" onClick={(e) => e.stopPropagation()} style={{ width: "120px" }}>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", width: "100%" }}>
-                      {order.status === "WAITING_APPROVAL" && (
-                        <button className="btn-primary btn-sm" onClick={() => navigate(`/workshop/reception/orders/${order.id}/quote`)}>✍ Báo giá</button>
-                      )}
-                      {order.status === "READY" && (
-                        <button className="btn-success btn-sm" onClick={() => handleCompleteOrder(order)}>🚗 Bàn giao</button>
-                      )}
-                      {statusPermitUpdate(order.status) && (
-                        <button
-                          type="button"
-                          style={{
-                            color: "#ee5d50",
-                            border: "none",
-                            background: "transparent",
-                            padding: "0 6px",
-                            margin: 0,
-                            height: 30,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            lineHeight: 1,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                          title="Hủy lệnh"
-                          onClick={() => handleCancelOrder(order)}
-                        >
-                          Hủy
-                        </button>
-                      )}
-                    </div>
+              {singleOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
+                    Không có lệnh thường nào.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                pagedSingleOrders.map((order) => {
+                  const rowInteraction = buildOrderRowInteraction(order, openOrderDetail);
+                  return (
+                    <tr key={order.id} className="appointment-click-row" {...rowInteraction}>
+                      <td className="td-id">{order.code}</td>
+                      <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
+                      <td>{getOrderCustomerPhone(order)}</td>
+                      <td>{getOrderVehiclePlate(order)}</td>
+                      <td>
+                        <span className={`badge ${getStatusBadge(order.status)}`}>
+                          {getStatusLabelVi(order.status, order.status)}
+                        </span>
+                      </td>
+                      <td>
+                        {order.checkInTime
+                          ? `${formatOrderDate(order.checkInTime)} ${formatOrderTime(order.checkInTime)}`
+                          : "-"}
+                      </td>
+                      <td>
+                        {order.estimatedHandover
+                          ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
+                          : "Chưa hẹn"}
+                      </td>
+                      <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
+                        {renderOrderActionButtons(order)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         )}
       </div>
       <TablePagination
-        totalItems={filteredOrders.length}
+        totalItems={ordersTotalItems}
         currentPage={ordersPage}
         pageSize={ordersPageSize}
         onPageChange={setOrdersPage}

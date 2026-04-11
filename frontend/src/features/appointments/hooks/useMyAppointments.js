@@ -1,19 +1,19 @@
-﻿import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { cancelAppointment, getMyAppointments } from "@features/appointments/api/appointmentApi";
-import { getMyBookingGroupDetail, getMyBookingGroups } from "@features/appointments/api/bookingGroupApi";
+import { getMyGroupSessionDetail, getMyGroupSessions } from "@features/appointments/api/groupSessionApi";
 import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
 import {
   normalizeAppointment,
   normalizeAppointmentsResponse,
-  normalizeBookingGroup,
-  normalizeBookingGroupsResponse,
+  normalizeGroupSession,
+  normalizeGroupSessionsResponse,
   sortAppointments,
   toDateTime,
 } from "@features/appointments/utils/myAppointmentsData";
 
 export function useMyAppointments() {
   const [appointments, setAppointments] = useState([]);
-  const [bookingGroups, setBookingGroups] = useState([]);
+  const [GroupSessions, setGroupSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,24 +26,24 @@ export function useMyAppointments() {
     setLoading(true);
     setError("");
     try {
-      const [appointmentsPayload, bookingGroupsPayload] = await Promise.all([
+      const [appointmentsPayload, GroupSessionsPayload] = await Promise.all([
         getMyAppointments(),
-        getMyBookingGroups(),
+        getMyGroupSessions(),
       ]);
       const list = normalizeAppointmentsResponse(appointmentsPayload)
         .map(normalizeAppointment)
         .filter((item) => item.id !== undefined && item.id !== null);
 
-      const groupsHeader = normalizeBookingGroupsResponse(bookingGroupsPayload)
-        .map(normalizeBookingGroup)
+      const groupsHeader = normalizeGroupSessionsResponse(GroupSessionsPayload)
+        .map(normalizeGroupSession)
         .filter((item) => item.id !== undefined && item.id !== null);
 
       const groups = await Promise.all(
         groupsHeader.map(async (group) => {
           if (!group.id) return group;
           try {
-            const detailPayload = await getMyBookingGroupDetail(group.id);
-            return normalizeBookingGroup(detailPayload);
+            const detailPayload = await getMyGroupSessionDetail(group.id);
+            return normalizeGroupSession(detailPayload);
           } catch {
             return group;
           }
@@ -59,10 +59,10 @@ export function useMyAppointments() {
       const standaloneAppointments = list.filter((item) => !groupedAppointmentIds.has(item.id));
 
       setAppointments(sortAppointments(standaloneAppointments));
-      setBookingGroups(groups);
+      setGroupSessions(groups);
     } catch (err) {
       setAppointments([]);
-      setBookingGroups([]);
+      setGroupSessions([]);
       setError(err?.message || "Không thể tải lịch hẹn. Vui lòng thử lại.");
     } finally {
       setLoading(false);
@@ -98,9 +98,9 @@ export function useMyAppointments() {
   const allAppointments = useMemo(() => {
     return [
       ...appointments,
-      ...bookingGroups.flatMap((group) => (Array.isArray(group.appointments) ? group.appointments : [])),
+      ...GroupSessions.flatMap((group) => (Array.isArray(group.appointments) ? group.appointments : [])),
     ];
-  }, [appointments, bookingGroups]);
+  }, [appointments, GroupSessions]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -117,13 +117,13 @@ export function useMyAppointments() {
     };
   }, [allAppointments]);
 
-  const bookingGroupsSorted = useMemo(() => {
-    return [...bookingGroups].sort((a, b) => {
+  const GroupSessionsSorted = useMemo(() => {
+    return [...GroupSessions].sort((a, b) => {
       const ta = toDateTime(a.createdAt)?.getTime() || 0;
       const tb = toDateTime(b.createdAt)?.getTime() || 0;
       return tb - ta;
     });
-  }, [bookingGroups]);
+  }, [GroupSessions]);
 
   const matchSearchTerm = useCallback((item, term) => {
     if (!term) return true;
@@ -149,10 +149,10 @@ export function useMyAppointments() {
     });
   }, [appointments, filter, searchTerm, matchSearchTerm]);
 
-  const filteredBookingGroups = useMemo(() => {
+  const filteredGroupSessions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return bookingGroupsSorted
+    return GroupSessionsSorted
       .map((group) => {
         const groupCodeMatches = String(group.groupCode || "").toLowerCase().includes(term);
         const groupBranchMatches = String(group.branchName || "").toLowerCase().includes(term);
@@ -170,7 +170,7 @@ export function useMyAppointments() {
         };
       })
       .filter((group) => group.appointments.length > 0 || (!filter && !term));
-  }, [bookingGroupsSorted, filter, searchTerm, matchSearchTerm]);
+  }, [GroupSessionsSorted, filter, searchTerm, matchSearchTerm]);
 
   return {
     loading,
@@ -181,9 +181,9 @@ export function useMyAppointments() {
     cancelTarget,
     cancelReason,
     stats,
-    bookingGroups: bookingGroupsSorted,
+    GroupSessions: GroupSessionsSorted,
     filteredAppointments,
-    filteredBookingGroups,
+    filteredGroupSessions,
     setFilter,
     setSearchTerm,
     setCancelReason,
