@@ -38,6 +38,10 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<Appointment> Appointments { get; set; }
 
+    public virtual DbSet<AppointmentInsuranceAsset> AppointmentInsuranceAssets { get; set; }
+
+    public virtual DbSet<AppointmentInsuranceUpload> AppointmentInsuranceUploads { get; set; }
+
     public virtual DbSet<GroupSession> GroupSessions { get; set; }
 
     public virtual DbSet<ApprovalRequest> ApprovalRequests { get; set; }
@@ -45,6 +49,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
     public virtual DbSet<Bay> Bays { get; set; }
+
+    public virtual DbSet<CapacityConfig> CapacityConfigs { get; set; }
 
     public virtual DbSet<Branch> Branches { get; set; }
 
@@ -110,6 +116,12 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<PaymentMethod> PaymentMethods { get; set; }
 
+    public virtual DbSet<Package> Packages { get; set; }
+
+    public virtual DbSet<PackageItem> PackageItems { get; set; }
+
+    public virtual DbSet<PartInventoryReservation> PartInventoryReservations { get; set; }
+
     public virtual DbSet<Product> Products { get; set; }
 
     public virtual DbSet<ProductImage> ProductImages { get; set; }
@@ -140,6 +152,10 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<ServiceOrderDiscount> ServiceOrderDiscounts { get; set; }
 
+    public virtual DbSet<ServiceOrderInsuranceAsset> ServiceOrderInsuranceAssets { get; set; }
+
+    public virtual DbSet<ServiceOrderInsuranceUpload> ServiceOrderInsuranceUploads { get; set; }
+
     public virtual DbSet<ServiceOrderSnapshot> ServiceOrderSnapshots { get; set; }
 
     public virtual DbSet<ServiceRefund> ServiceRefunds { get; set; }
@@ -159,6 +175,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<StaffTier> StaffTiers { get; set; }
 
     public virtual DbSet<StandardService> StandardServices { get; set; }
+
+    public virtual DbSet<ServiceBom> ServiceBoms { get; set; }
 
     public virtual DbSet<StockTransaction> StockTransactions { get; set; }
 
@@ -361,6 +379,16 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.Property(e => e.CancelReason).HasMaxLength(500);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.InsuranceClaimMode)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.InsuranceDeductibleAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InsuranceDeductibleOption)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.InsuranceQuoteState)
+                .HasMaxLength(30)
+                .IsUnicode(false);
             entity.Property(e => e.IsReminderSent).HasDefaultValue(false);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
@@ -389,9 +417,61 @@ public partial class GarageContext : DbContext, IGarageContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__Appointme__Custo__1C1D2798");
 
+            entity.HasOne(d => d.InsuranceCompany).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.InsuranceCompanyId)
+                .HasConstraintName("FK_Appointments_InsuranceCompanyId");
+
             entity.HasOne(d => d.Vehicle).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("FK__Appointme__Vehic__1D114BD1");
+        });
+
+        modelBuilder.Entity<AppointmentInsuranceAsset>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_AppointmentInsuranceAssets");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.AssetType, e.SortOrder }, "IX_AppointmentInsuranceAssets_Appointment_Type_Order");
+
+            entity.Property(e => e.AssetType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.InsuranceAssets)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_AppointmentInsuranceAssets_Appointments");
+        });
+
+        modelBuilder.Entity<AppointmentInsuranceUpload>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_AppointmentInsuranceUploads");
+
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_AppointmentInsuranceUploads_Status_CreatedAt");
+
+            entity.Property(e => e.AssetType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.BlobPath)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.InsuranceUploads)
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("FK_AppointmentInsuranceUploads_Appointments");
         });
 
         modelBuilder.Entity<GroupSession>(entity =>
@@ -533,10 +613,12 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.MaxTonnage).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.Name).HasMaxLength(255);
+            entity.Property(e => e.SequenceOrder).HasDefaultValue(0);
             entity.Property(e => e.OperationalStatus)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasDefaultValue(nameof(BayOperationalStatusCode.ACTIVE));
+            entity.Property(e => e.ReservationStatus).HasDefaultValue(0);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Bays)
@@ -559,6 +641,28 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.BayUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK__Bays__UpdatedBy__278EDA44");
+        });
+
+        modelBuilder.Entity<CapacityConfig>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_CapacityConfigs");
+
+            entity.Property(e => e.BookingThresholdPercent).HasColumnType("decimal(5, 4)");
+            entity.Property(e => e.CreateAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.UpdateAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Branch).WithMany()
+                .HasForeignKey(d => d.BranchId)
+                .HasConstraintName("FK_CapacityConfigs_Branch");
+
+            entity.HasOne(d => d.CreateByNavigation).WithMany()
+                .HasForeignKey(d => d.CreateBy)
+                .HasConstraintName("FK_CapacityConfigs_CreateBy");
+
+            entity.HasOne(d => d.UpdateByNavigation).WithMany()
+                .HasForeignKey(d => d.UpdateBy)
+                .HasConstraintName("FK_CapacityConfigs_UpdateBy");
         });
 
         modelBuilder.Entity<Branch>(entity =>
@@ -1665,6 +1769,89 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__PaymentMe__Updat__1352D76D");
         });
 
+        modelBuilder.Entity<PartInventoryReservation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_PartInventoryReservations");
+
+            entity.Property(e => e.CreateAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.ReservedQuantity).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("RESERVED");
+            entity.Property(e => e.UpdateAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.CreateByNavigation).WithMany()
+                .HasForeignKey(d => d.CreateBy)
+                .HasConstraintName("FK_PartInventoryReservations_CreateBy");
+
+            entity.HasOne(d => d.Product).WithMany()
+                .HasForeignKey(d => d.ProductId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PartInventoryReservations_Product");
+
+            entity.HasOne(d => d.UpdateByNavigation).WithMany()
+                .HasForeignKey(d => d.UpdateBy)
+                .HasConstraintName("FK_PartInventoryReservations_UpdateBy");
+
+            entity.HasOne(d => d.WorkSlot).WithMany()
+                .HasForeignKey(d => d.WorkSlotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PartInventoryReservations_WorkSlot");
+        });
+
+        modelBuilder.Entity<Package>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_Packages");
+
+            entity.HasIndex(e => e.Code, "UQ_Packages_Code").IsUnique();
+
+            entity.Property(e => e.BasePrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Code)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.ImageUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.Name).HasMaxLength(255);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Category).WithMany()
+                .HasForeignKey(d => d.CategoryId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Packages_ServiceCategories");
+        });
+
+        modelBuilder.Entity<PackageItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_PackageItems");
+
+            entity.HasIndex(e => new { e.PackageId, e.StandardServiceId }, "UQ_PackageItems_Package_Service").IsUnique();
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsDefault).HasDefaultValue(true);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.Quantity)
+                .HasDefaultValue(1m)
+                .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Package).WithMany(p => p.PackageItems)
+                .HasForeignKey(d => d.PackageId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_PackageItems_Packages");
+
+            entity.HasOne(d => d.StandardService).WithMany()
+                .HasForeignKey(d => d.StandardServiceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PackageItems_StandardServices");
+        });
+
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Products__3214EC07968B91BC");
@@ -2084,6 +2271,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasIndex(e => e.Code, "UQ__ServiceO__A25C5AA7FBF72344").IsUnique();
 
             entity.Property(e => e.CancellationReason).HasMaxLength(500);
+            entity.Property(e => e.ArrivalTime).HasColumnType("datetime2");
             entity.Property(e => e.Code)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -2101,6 +2289,16 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.FinalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InsuranceClaimMode)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.InsuranceDeductibleAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InsuranceDeductibleOption)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.InsuranceQuoteState)
+                .HasMaxLength(30)
+                .IsUnicode(false);
             entity.Property(e => e.OldPartsReturnOption)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -2121,6 +2319,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.RequiredDepositAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.RequestedPackageIds).HasMaxLength(500);
             entity.Property(e => e.RevisionNumber).HasDefaultValue(1);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
@@ -2215,6 +2414,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.DiscountValue)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.EstimatedMinutes);
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.GarageAbsorbedAmount)
                 .HasDefaultValue(0m)
@@ -2330,6 +2530,54 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.Voucher).WithMany(p => p.ServiceOrderDiscounts)
                 .HasForeignKey(d => d.VoucherId)
                 .HasConstraintName("FK_ServiceOrderDiscounts_VoucherId");
+        });
+
+        modelBuilder.Entity<ServiceOrderInsuranceAsset>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_ServiceOrderInsuranceAssets");
+
+            entity.HasIndex(e => new { e.ServiceOrderId, e.AssetType, e.SortOrder }, "IX_ServiceOrderInsuranceAssets_ServiceOrder_Type_Order");
+
+            entity.Property(e => e.AssetType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.ServiceOrder).WithMany(p => p.InsuranceAssets)
+                .HasForeignKey(d => d.ServiceOrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ServiceOrderInsuranceAssets_ServiceOrders");
+        });
+
+        modelBuilder.Entity<ServiceOrderInsuranceUpload>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_ServiceOrderInsuranceUploads");
+
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "IX_ServiceOrderInsuranceUploads_Status_CreatedAt");
+
+            entity.Property(e => e.AssetType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.BlobPath)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.ServiceOrder).WithMany(p => p.InsuranceUploads)
+                .HasForeignKey(d => d.ServiceOrderId)
+                .HasConstraintName("FK_ServiceOrderInsuranceUploads_ServiceOrders");
         });
 
         modelBuilder.Entity<ServiceOrderSnapshot>(entity =>
@@ -2658,6 +2906,42 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__StandardS__Updat__76818E95");
         });
 
+        modelBuilder.Entity<ServiceBom>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_ServiceBOMs");
+
+            entity.ToTable("ServiceBOMs");
+
+            entity.Property(e => e.CreateAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsMandatory).HasDefaultValue(true);
+            entity.Property(e => e.Quantity).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Unit).HasMaxLength(50);
+            entity.Property(e => e.UpdateAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.CreateByNavigation).WithMany()
+                .HasForeignKey(d => d.CreateBy)
+                .HasConstraintName("FK_ServiceBOMs_CreateBy");
+
+            entity.HasOne(d => d.Product).WithMany()
+                .HasForeignKey(d => d.ProductId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ServiceBOMs_Product");
+
+            entity.HasOne(d => d.Service).WithMany()
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ServiceBOMs_Service");
+
+            entity.HasOne(d => d.UpdateByNavigation).WithMany()
+                .HasForeignKey(d => d.UpdateBy)
+                .HasConstraintName("FK_ServiceBOMs_UpdateBy");
+
+            entity.HasOne(d => d.VehicleModel).WithMany()
+                .HasForeignKey(d => d.VehicleModelId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ServiceBOMs_VehicleModel");
+        });
+
         modelBuilder.Entity<StockTransaction>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__StockTra__3214EC07104DE41B");
@@ -2861,17 +3145,11 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasKey(e => e.Id).HasName("PK__VehicleM__3214EC0789BEED56");
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.CylinderCapacity)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.FuelType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
+            entity.Property(e => e.CylinderCapacity).HasMaxLength(50);
+            entity.Property(e => e.FuelType).HasMaxLength(50);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.ModelName).HasMaxLength(100);
-            entity.Property(e => e.Segment)
-                .HasMaxLength(50)
-                .IsUnicode(false);
+            entity.Property(e => e.Segment).HasMaxLength(50);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.HasOne(d => d.Brand).WithMany(p => p.VehicleModels)
@@ -2974,17 +3252,22 @@ public partial class GarageContext : DbContext, IGarageContext
         {
             entity.HasKey(e => e.Id).HasName("PK__WorkSlot__3214EC0774196CAC");
 
+            entity.Property(e => e.IsAdditional).HasDefaultValue(false);
+            entity.Property(e => e.SequenceOrder).HasDefaultValue(1);
             entity.Property(e => e.SlotType)
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasDefaultValue(nameof(WorkSlotStatus.AVAILABLE));
+                .HasDefaultValue(nameof(WorkSlotStatus.RESERVED));
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.WorkSlots)
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("FK_WorkSlots_AppointmentId");
 
             entity.HasOne(d => d.Bay).WithMany(p => p.WorkSlots)
                 .HasForeignKey(d => d.BayId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__WorkSlots__BayId__19CACAD2");
 
             entity.HasOne(d => d.Branch).WithMany(p => p.WorkSlots)
@@ -3000,6 +3283,10 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.ParentSlotId)
                 .HasConstraintName("FK__WorkSlots__Paren__17E28260");
 
+            entity.HasOne(d => d.ServiceOrder).WithMany(p => p.WorkSlots)
+                .HasForeignKey(d => d.ServiceOrderId)
+                .HasConstraintName("FK_WorkSlots_ServiceOrderId");
+
             entity.HasOne(d => d.Technician).WithMany(p => p.WorkSlots)
                 .HasForeignKey(d => d.TechnicianId)
                 .HasConstraintName("FK__WorkSlots__Techn__1ABEEF0B");
@@ -3014,7 +3301,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
     private void UpdateAuditFields()
     {
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentStaffId();
 
         ChangeTracker.DetectChanges();

@@ -45,7 +45,7 @@ namespace MyGarage.Services
                 {
                     SourceWorkSlotId = source.Id,
                     LockedWorkSlotId = lockSlot.Id,
-                    BayId = source.BayId,
+                    BayId = source.BayId!.Value,
                     LockedFrom = lockSlot.StartTime,
                     LockedTo = lockSlot.EndTime,
                     VehicleId = source.VehicleId

@@ -225,7 +225,7 @@ namespace MyGarage.Services
                     .ToDictionaryAsync(x => x.Id, x => string.IsNullOrWhiteSpace(x.Code) ? (x.Name ?? string.Empty) : x.Code);
 
             var orderMap = orderRows.ToDictionary(x => x.Id, x => x);
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
 
             var board = diagnoses
                 .GroupBy(x => x.ServiceOrderId)

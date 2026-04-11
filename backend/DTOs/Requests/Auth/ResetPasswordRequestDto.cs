@@ -4,7 +4,7 @@ namespace MyGarage.DTOs.Requests.Auth
     public class ResetPasswordRequestDto
     {
         [Required]
-        [EmailAddress]
+        [EmailAddress(ErrorMessage = ValidationMessages.Email)]
         public string Email { get; set; } = string.Empty;
 
         [Required]

@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Responses
         public long BranchId { get; set; }
         public DateTime RequestedCheckInAt { get; set; }
         public string? RequestedServiceIds { get; set; }
+        public string? RequestedPackageIds { get; set; }
         public int ServiceMinutes { get; set; }
         public int SetupMinutes { get; set; }
         public int BufferMinutes { get; set; }

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using MyGarage.Common;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
@@ -26,7 +27,6 @@ namespace MyGarage.Services
         private const string WorkshopDetailItemType = "LABOR";
         private const string WorkshopDetailDescription = "Dịch vụ khách yêu cầu trước";
         private const string WorkshopDetailUnit = "Lần";
-        private const string WorkshopDetailPayerType = "CUSTOMER";
         private const string WorkshopDetailStatus = nameof(ServiceOrderDetailStatusCode.APPROVED);
         private const string WorkshopEditWindowPassedMessage = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
         private static readonly HashSet<string> WorkshopMilestoneLockedStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -187,8 +187,16 @@ namespace MyGarage.Services
                 var createdOrders = new List<ServiceOrder>(items.Count);
                 foreach (var item in items)
                 {
+                    var selection = await BuildWorkshopServiceSelectionAsync(item.ServiceIds, item.PackageIds);
                     var prepared = await PrepareWorkshopOrderEntityAsync(item, actorStaffId, groupSessionId);
+                    await EnsureWorkshopSelectionCompatibleWithVehicleAsync(selection, prepared.VehicleId);
+                    prepared.RequestedPackageIds = selection.RequestedPackageIds;
                     var createdOrder = await AddAsync(prepared);
+                    await AddWorkshopServiceDetailsAsync(createdOrder, selection, actorStaffId, item.InsuranceCompanyId);
+                    await PersistServiceOrderInsuranceAssetsAsync(
+                        createdOrder.Id,
+                        item.InsuranceCardImageUrls,
+                        item.InsuranceDamageImageUrls);
                     createdOrders.Add(createdOrder);
                 }
 
@@ -226,15 +234,14 @@ namespace MyGarage.Services
 
             await EnsureWorkshopEditableAsync(id);
 
-            var selectedServiceIds = dto.ServiceIds?
-                .Select(NumberToPositiveLong)
-                .Where(serviceId => serviceId > 0)
-                .Distinct()
-                .ToList() ?? new List<long>();
-            if (selectedServiceIds.Count == 0)
+            var selection = await BuildWorkshopServiceSelectionAsync(dto.ServiceIds, dto.PackageIds);
+            var selectedServiceIds = selection.EffectiveServiceIds;
+            if (!selection.HasSelection)
             {
                 throw new InvalidOperationException("Vui lòng chọn ít nhất một dịch vụ.");
             }
+
+            await EnsureWorkshopSelectionCompatibleWithVehicleAsync(selection, order.VehicleId);
 
             var normalizedOrderCategory = NormalizeToken(dto.OrderCategory);
             if (!string.IsNullOrWhiteSpace(normalizedOrderCategory) &&
@@ -243,20 +250,23 @@ namespace MyGarage.Services
                 throw new InvalidOperationException($"Phân loại lệnh sửa chữa không hợp lệ: {dto.OrderCategory}.");
             }
 
-            var serviceMap = await _context.StandardServices
-                .AsNoTracking()
-                .Where(s => selectedServiceIds.Contains(s.Id) && s.IsDeleted != true && s.IsActive != false)
-                .ToDictionaryAsync(s => s.Id);
-            if (serviceMap.Count != selectedServiceIds.Count)
-            {
-                throw new InvalidOperationException("Có dịch vụ đã chọn không còn hợp lệ hoặc đã bị xóa.");
-            }
+            var serviceMap = selection.ServiceMap;
 
             var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
+            var insuranceCompanyId = await ResolveOrderInsuranceCompanyIdAsync(order, dto.InsuranceCompanyId);
+            var currentOrderCategory = !string.IsNullOrWhiteSpace(normalizedOrderCategory)
+                ? normalizedOrderCategory
+                : NormalizeToken(order.OrderCategory);
+            var hasInsuranceSignalService = selectedServiceIds.Any(serviceId => InsuranceBillingRules.IsInsuranceSignalService(serviceMap[serviceId]));
+            var insuranceOrderContext = insuranceCompanyId.HasValue &&
+                (string.Equals(currentOrderCategory, InsuranceBillingRules.InsuranceRepairCategoryCode, StringComparison.OrdinalIgnoreCase) ||
+                 hasInsuranceSignalService ||
+                 selection.HasInsuranceSignalPackage);
+
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var checkInTime = dto.CheckInTime ?? order.CheckInTime ?? DateTime.Now;
+                var checkInTime = dto.CheckInTime ?? order.CheckInTime ?? VietnamTime.Now;
                 var estimatedHandover = dto.EstimatedHandover ?? order.EstimatedHandover;
                 var promisedHandover = dto.PromisedHandoverTime ?? order.PromisedHandoverTime;
 
@@ -274,6 +284,10 @@ namespace MyGarage.Services
                 {
                     order.OrderCategory = normalizedOrderCategory;
                 }
+                else if (insuranceOrderContext || selection.HasInsuranceSignalPackage)
+                {
+                    order.OrderCategory = InsuranceBillingRules.InsuranceRepairCategoryCode;
+                }
                 order.ServiceAdvisorId = dto.ServiceAdvisorId;
                 order.OldPartsReturnOption = NormalizeText(dto.OldPartsReturnOption) ?? order.OldPartsReturnOption;
                 order.RequiredDepositAmount = Math.Max(dto.RequiredDepositAmount ?? 0m, 0m);
@@ -282,8 +296,17 @@ namespace MyGarage.Services
                 order.PromisedHandoverTime = promisedHandover;
                 order.Status = ResolveOrderStatus(dto.Status ?? order.Status);
                 order.CustomerNotes = BuildSymptomsJson(dto.SymptomNotes, order.CustomerNotes);
+                order.RequestedPackageIds = selection.RequestedPackageIds;
+                ApplyInsuranceSnapshot(
+                    order,
+                    insuranceOrderContext,
+                    insuranceCompanyId,
+                    dto.InsuranceDeductibleAmount,
+                    dto.InsuranceDeductibleOption,
+                    dto.InsuranceClaimMode,
+                    dto.InsuranceQuoteState);
 
-                var now = DateTime.UtcNow;
+                var now = VietnamTime.Now;
                 order.UpdatedAt = now;
                 order.UpdatedBy = actorStaffId;
 
@@ -321,7 +344,13 @@ namespace MyGarage.Services
                     }
 
                     var keep = rows[0];
-                    ApplyWorkshopServiceDetailValues(keep, serviceMap[serviceId], actorStaffId, now);
+                    ApplyWorkshopServiceDetailValues(
+                        keep,
+                        serviceMap[serviceId],
+                        actorStaffId,
+                        now,
+                        insuranceCompanyId,
+                        insuranceOrderContext);
                     if (rows.Count > 1)
                     {
                         foreach (var duplicate in rows.Skip(1))
@@ -344,7 +373,13 @@ namespace MyGarage.Services
                         UpdatedAt = now,
                         UpdatedBy = actorStaffId
                     };
-                    ApplyWorkshopServiceDetailValues(detail, service, actorStaffId, now);
+                    ApplyWorkshopServiceDetailValues(
+                        detail,
+                        service,
+                        actorStaffId,
+                        now,
+                        insuranceCompanyId,
+                        insuranceOrderContext);
                     _context.ServiceOrderDetails.Add(detail);
                 }
 
@@ -356,6 +391,10 @@ namespace MyGarage.Services
                 order.FinalAmount = subTotal + taxAmount - (order.TotalDiscount ?? 0m);
 
                 await _context.SaveChangesAsync();
+                await ReplaceServiceOrderInsuranceAssetsAsync(
+                    order.Id,
+                    dto.InsuranceCardImageUrls,
+                    dto.InsuranceDamageImageUrls);
                 await transaction.CommitAsync();
                 return order;
             }
@@ -381,7 +420,7 @@ namespace MyGarage.Services
                 return;
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             _context.VehicleConditionLogs.Add(new VehicleConditionLog
             {
                 ServiceOrderId = serviceOrderId,
@@ -464,21 +503,33 @@ namespace MyGarage.Services
             if (executeBranchId <= 0) executeBranchId = originBranchId;
             if (originBranchId <= 0) originBranchId = executeBranchId;
 
-            var now = DateTime.UtcNow;
-            return new ServiceOrder
+            var requestedInsuranceCompanyId = item.InsuranceCompanyId.GetValueOrDefault();
+            if (requestedInsuranceCompanyId > 0)
+            {
+                await EnsureInsuranceCompanyExistsAsync(requestedInsuranceCompanyId);
+            }
+
+            var normalizedOrderCategory = NormalizeToken(item.OrderCategory);
+            if (requestedInsuranceCompanyId > 0 && string.IsNullOrWhiteSpace(normalizedOrderCategory))
+            {
+                normalizedOrderCategory = InsuranceBillingRules.InsuranceRepairCategoryCode;
+            }
+
+            var now = VietnamTime.Now;
+            var order = new ServiceOrder
             {
                 CustomerId = customerId,
                 VehicleId = vehicleId,
                 GroupSessionId = forcedGroupSessionId ?? item.GroupSessionId,
                 OriginBranchId = originBranchId,
                 ExecuteBranchId = executeBranchId,
-                OrderCategory = NormalizeToken(item.OrderCategory),
+                OrderCategory = normalizedOrderCategory,
                 ServiceAdvisorId = item.ServiceAdvisorId,
                 ReceptionistId = actorStaffId,
                 CustomerNotes = NormalizeText(item.CustomerNotes),
                 RequiredDepositAmount = item.RequiredDepositAmount,
                 OldPartsReturnOption = NormalizeText(item.OldPartsReturnOption),
-                CheckInTime = item.CheckInTime ?? DateTime.Now,
+                CheckInTime = item.CheckInTime ?? VietnamTime.Now,
                 EstimatedHandover = item.EstimatedHandover,
                 PromisedHandoverTime = item.PromisedHandoverTime,
                 Status = ResolveOrderStatus(item.Status),
@@ -487,6 +538,17 @@ namespace MyGarage.Services
                 CreatedAt = now,
                 UpdatedAt = now
             };
+
+            ApplyInsuranceSnapshot(
+                order,
+                requestedInsuranceCompanyId > 0,
+                requestedInsuranceCompanyId > 0 ? requestedInsuranceCompanyId : null,
+                item.InsuranceDeductibleAmount,
+                item.InsuranceDeductibleOption,
+                item.InsuranceClaimMode,
+                item.InsuranceQuoteState);
+
+            return order;
         }
 
         private async Task<long> ResolveOrCreateQuickCustomerAsync(WorkshopServiceOrderCreateDto item, long? actorStaffId)
@@ -540,7 +602,7 @@ namespace MyGarage.Services
 
                 if (changed)
                 {
-                    existing.UpdatedAt = DateTime.UtcNow;
+                    existing.UpdatedAt = VietnamTime.Now;
                     existing.UpdatedBy = actorStaffId;
                     await _context.SaveChangesAsync();
                 }
@@ -548,7 +610,7 @@ namespace MyGarage.Services
                 return existing.Id;
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var created = new Customer
             {
                 FullName = guestName,
@@ -587,6 +649,11 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Vui lòng chọn dòng xe hợp lệ.");
             }
 
+            if (!rawYear.HasValue || rawYear.Value <= 0)
+            {
+                throw new InvalidOperationException("Vui lòng chọn năm sản xuất.");
+            }
+
             var existing = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.LicensePlate == licensePlate);
             if (existing != null)
@@ -623,7 +690,7 @@ namespace MyGarage.Services
 
                 if (changed)
                 {
-                    existing.UpdatedAt = DateTime.UtcNow;
+                    existing.UpdatedAt = VietnamTime.Now;
                     existing.UpdatedBy = actorStaffId;
                     await _context.SaveChangesAsync();
                 }
@@ -631,7 +698,7 @@ namespace MyGarage.Services
                 return existing.Id;
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var created = new Vehicle
             {
                 LicensePlate = licensePlate,
@@ -663,10 +730,10 @@ namespace MyGarage.Services
                     CustomerId = customerId,
                     VehicleId = vehicleId,
                     IsCurrentOwner = true,
-                    OwnershipStartDate = DateOnly.FromDateTime(DateTime.Now),
+                    OwnershipStartDate = DateOnly.FromDateTime(VietnamTime.Now),
                     IsDeleted = false,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
+                    CreatedAt = VietnamTime.Now,
+                    UpdatedAt = VietnamTime.Now,
                     CreatedBy = actorStaffId,
                     UpdatedBy = actorStaffId
                 });
@@ -691,7 +758,7 @@ namespace MyGarage.Services
 
             if (changed)
             {
-                existing.UpdatedAt = DateTime.UtcNow;
+                existing.UpdatedAt = VietnamTime.Now;
                 existing.UpdatedBy = actorStaffId;
                 await _context.SaveChangesAsync();
             }
@@ -722,15 +789,156 @@ namespace MyGarage.Services
             }
         }
 
+        private async Task<WorkshopServiceSelection> BuildWorkshopServiceSelectionAsync(
+            IEnumerable<long>? serviceIds,
+            IEnumerable<long>? packageIds)
+        {
+            var directServiceIds = NormalizePositiveLongList(serviceIds);
+            var requestedPackageIds = NormalizePositiveLongList(packageIds);
+            if (directServiceIds.Count == 0 && requestedPackageIds.Count == 0)
+            {
+                return WorkshopServiceSelection.Empty;
+            }
+
+            var packages = requestedPackageIds.Count == 0
+                ? new List<Package>()
+                : await _context.Packages
+                    .AsNoTracking()
+                    .Include(package => package.Category)
+                    .Include(package => package.PackageItems.Where(item => item.IsDeleted != true && item.IsActive != false))
+                        .ThenInclude(item => item.StandardService)
+                    .Where(package =>
+                        requestedPackageIds.Contains(package.Id) &&
+                        package.IsDeleted != true &&
+                        package.IsActive != false)
+                    .ToListAsync();
+
+            if (packages.Count != requestedPackageIds.Count)
+            {
+                throw new InvalidOperationException("Có gói dịch vụ đã chọn không còn hợp lệ hoặc đã bị xóa.");
+            }
+
+            var packageServiceIds = packages
+                .SelectMany(package => package.PackageItems ?? new List<PackageItem>())
+                .Where(item =>
+                    item.StandardServiceId > 0 &&
+                    item.StandardService != null &&
+                    item.StandardService.IsDeleted != true &&
+                    item.StandardService.IsActive != false)
+                .Select(item => item.StandardServiceId);
+
+            var effectiveServiceIds = directServiceIds
+                .Concat(packageServiceIds)
+                .Distinct()
+                .ToList();
+
+            var serviceMap = effectiveServiceIds.Count == 0
+                ? new Dictionary<long, StandardService>()
+                : await _context.StandardServices
+                    .AsNoTracking()
+                    .Where(service =>
+                        effectiveServiceIds.Contains(service.Id) &&
+                        service.IsDeleted != true &&
+                        service.IsActive != false)
+                    .ToDictionaryAsync(service => service.Id);
+
+            if (serviceMap.Count != effectiveServiceIds.Count)
+            {
+                throw new InvalidOperationException("Có dịch vụ trong gói hoặc dịch vụ đã chọn không còn hợp lệ hoặc đã bị xóa.");
+            }
+
+            return new WorkshopServiceSelection(
+                directServiceIds,
+                requestedPackageIds,
+                effectiveServiceIds,
+                serviceMap,
+                packages);
+        }
+
+        private async Task AddWorkshopServiceDetailsAsync(
+            ServiceOrder serviceOrder,
+            WorkshopServiceSelection selection,
+            long? actorStaffId,
+            long? requestedInsuranceCompanyId)
+        {
+            if (serviceOrder == null || serviceOrder.Id <= 0)
+            {
+                return;
+            }
+
+            var now = VietnamTime.Now;
+            var insuranceCompanyId = await ResolveOrderInsuranceCompanyIdAsync(serviceOrder, requestedInsuranceCompanyId);
+            var currentOrderCategory = NormalizeToken(serviceOrder.OrderCategory);
+            var hasInsuranceSignalService = selection.EffectiveServiceIds.Any(serviceId =>
+                selection.ServiceMap.TryGetValue(serviceId, out var service) &&
+                InsuranceBillingRules.IsInsuranceSignalService(service));
+            var insuranceOrderContext = insuranceCompanyId.HasValue &&
+                (string.Equals(currentOrderCategory, InsuranceBillingRules.InsuranceRepairCategoryCode, StringComparison.OrdinalIgnoreCase) ||
+                 hasInsuranceSignalService ||
+                 selection.HasInsuranceSignalPackage);
+
+            if (insuranceOrderContext || selection.HasInsuranceSignalPackage)
+            {
+                serviceOrder.OrderCategory = InsuranceBillingRules.InsuranceRepairCategoryCode;
+            }
+
+            serviceOrder.RequestedPackageIds = selection.RequestedPackageIds;
+
+            var details = new List<ServiceOrderDetail>(selection.EffectiveServiceIds.Count);
+            foreach (var serviceId in selection.EffectiveServiceIds)
+            {
+                if (!selection.ServiceMap.TryGetValue(serviceId, out var service))
+                {
+                    continue;
+                }
+
+                var detail = new ServiceOrderDetail
+                {
+                    ServiceOrderId = serviceOrder.Id,
+                    StandardServiceId = service.Id,
+                    CreatedAt = now,
+                    CreatedBy = actorStaffId,
+                    UpdatedAt = now,
+                    UpdatedBy = actorStaffId
+                };
+                ApplyWorkshopServiceDetailValues(
+                    detail,
+                    service,
+                    actorStaffId,
+                    now,
+                    insuranceCompanyId,
+                    insuranceOrderContext);
+                details.Add(detail);
+            }
+
+            if (details.Count > 0)
+            {
+                _context.ServiceOrderDetails.AddRange(details);
+            }
+
+            var subTotal = details.Sum(detail => detail.SubTotal);
+            var taxAmount = details.Sum(detail => detail.TaxAmount);
+            serviceOrder.SubTotalAmount = subTotal;
+            serviceOrder.TaxAmount = taxAmount;
+            serviceOrder.FinalAmount = subTotal + taxAmount - (serviceOrder.TotalDiscount ?? 0m);
+            serviceOrder.UpdatedAt = now;
+            serviceOrder.UpdatedBy = actorStaffId;
+
+            await _context.SaveChangesAsync();
+        }
+
         private void ApplyWorkshopServiceDetailValues(
             ServiceOrderDetail detail,
             StandardService service,
             long? actorStaffId,
-            DateTime nowUtc)
+            DateTime nowUtc,
+            long? insuranceCompanyId,
+            bool insuranceOrderContext)
         {
             var taxRate = service.TaxRate ?? 0m;
             var subTotal = service.BasePrice;
             var taxAmount = CalculateTaxAmount(subTotal, taxRate);
+            var finalAmount = subTotal + taxAmount;
 
             detail.ItemType = WorkshopDetailItemType;
             detail.ItemName = service.Name;
@@ -741,12 +949,78 @@ namespace MyGarage.Services
             detail.SubTotal = subTotal;
             detail.TaxRate = taxRate;
             detail.TaxAmount = taxAmount;
-            detail.FinalAmount = subTotal + taxAmount;
-            detail.PayerType = WorkshopDetailPayerType;
+            detail.FinalAmount = finalAmount;
+            ApplyInsuranceBilling(detail, service, insuranceCompanyId, insuranceOrderContext);
             detail.Status = WorkshopDetailStatus;
             detail.StandardServiceId = service.Id;
             detail.UpdatedAt = nowUtc;
             detail.UpdatedBy = actorStaffId;
+        }
+
+        private static void ApplyInsuranceBilling(
+            ServiceOrderDetail detail,
+            StandardService service,
+            long? insuranceCompanyId,
+            bool insuranceOrderContext)
+        {
+            if (InsuranceBillingRules.ShouldBillInsurance(service, insuranceOrderContext) && insuranceCompanyId.HasValue)
+            {
+                detail.PayerType = InsuranceBillingRules.PayerTypeInsurance;
+                detail.InsuranceCompanyId = insuranceCompanyId.Value;
+                detail.InsuranceRequestedAmount = detail.FinalAmount;
+                detail.InsuranceApprovedAmount = 0m;
+                detail.CustomerCoPayAmount = 0m;
+                detail.GarageAbsorbedAmount = 0m;
+                detail.InsuranceStatus = nameof(ServiceOrderDetailInsuranceStatusCode.PENDING_SUBMISSION);
+                return;
+            }
+
+            detail.PayerType = InsuranceBillingRules.PayerTypeCustomer;
+            detail.InsuranceCompanyId = null;
+            detail.InsuranceRequestedAmount = 0m;
+            detail.InsuranceApprovedAmount = 0m;
+            detail.CustomerCoPayAmount = detail.FinalAmount;
+            detail.GarageAbsorbedAmount = 0m;
+            detail.InsuranceStatus = nameof(ServiceOrderDetailInsuranceStatusCode.NOT_APPLICABLE);
+        }
+
+        private async Task<long?> ResolveOrderInsuranceCompanyIdAsync(ServiceOrder order, long? requestedInsuranceCompanyId)
+        {
+            if (requestedInsuranceCompanyId.HasValue && requestedInsuranceCompanyId.Value > 0)
+            {
+                await EnsureInsuranceCompanyExistsAsync(requestedInsuranceCompanyId.Value);
+                return requestedInsuranceCompanyId.Value;
+            }
+
+            if (!order.AppointmentId.HasValue || order.AppointmentId.Value <= 0)
+            {
+                return null;
+            }
+
+            var appointmentInsuranceCompanyId = await _context.Appointments
+                .AsNoTracking()
+                .Where(a => a.Id == order.AppointmentId.Value)
+                .Select(a => a.InsuranceCompanyId)
+                .FirstOrDefaultAsync();
+
+            if (appointmentInsuranceCompanyId.HasValue && appointmentInsuranceCompanyId.Value > 0)
+            {
+                await EnsureInsuranceCompanyExistsAsync(appointmentInsuranceCompanyId.Value);
+                return appointmentInsuranceCompanyId.Value;
+            }
+
+            return null;
+        }
+
+        private async Task EnsureInsuranceCompanyExistsAsync(long insuranceCompanyId)
+        {
+            var exists = await _context.InsuranceCompanies
+                .AsNoTracking()
+                .AnyAsync(company => company.Id == insuranceCompanyId && company.IsDeleted != true);
+            if (!exists)
+            {
+                throw new InvalidOperationException("Không tìm thấy công ty bảo hiểm đã chọn.");
+            }
         }
 
         private static decimal CalculateTaxAmount(decimal amount, decimal taxRate)
@@ -778,6 +1052,48 @@ namespace MyGarage.Services
         private static long NumberToPositiveLong(long value)
         {
             return value > 0 ? value : 0;
+        }
+
+        private static List<long> NormalizePositiveLongList(IEnumerable<long>? values)
+        {
+            return values?
+                .Select(NumberToPositiveLong)
+                .Where(value => value > 0)
+                .Distinct()
+                .ToList() ?? new List<long>();
+        }
+
+        private sealed class WorkshopServiceSelection
+        {
+            public WorkshopServiceSelection(
+                List<long> directServiceIds,
+                List<long> packageIds,
+                List<long> effectiveServiceIds,
+                Dictionary<long, StandardService> serviceMap,
+                List<Package> packages)
+            {
+                DirectServiceIds = directServiceIds;
+                PackageIds = packageIds;
+                EffectiveServiceIds = effectiveServiceIds;
+                ServiceMap = serviceMap;
+                Packages = packages;
+            }
+
+            public static WorkshopServiceSelection Empty { get; } = new(
+                new List<long>(),
+                new List<long>(),
+                new List<long>(),
+                new Dictionary<long, StandardService>(),
+                new List<Package>());
+
+            public List<long> DirectServiceIds { get; }
+            public List<long> PackageIds { get; }
+            public List<long> EffectiveServiceIds { get; }
+            public Dictionary<long, StandardService> ServiceMap { get; }
+            public List<Package> Packages { get; }
+            public bool HasSelection => DirectServiceIds.Count > 0 || PackageIds.Count > 0;
+            public bool HasInsuranceSignalPackage => Packages.Any(InsuranceBillingRules.IsInsuranceSignalPackage);
+            public string? RequestedPackageIds => PackageIds.Count > 0 ? string.Join(",", PackageIds) : null;
         }
 
         private static bool TryParsePositiveServiceOrderId(object id, out long serviceOrderId)
@@ -822,7 +1138,7 @@ namespace MyGarage.Services
         }
         private static string GenerateServiceOrderCode()
         {
-            var timestamp = DateTime.UtcNow.ToString("yyMMddHHmmssfff", CultureInfo.InvariantCulture);
+            var timestamp = VietnamTime.Now.ToString("yyMMddHHmmssfff", CultureInfo.InvariantCulture);
             var entropy = Guid.NewGuid().ToString("N")[..4].ToUpperInvariant();
             return $"SO-{timestamp}-{entropy}";
         }
@@ -868,6 +1184,78 @@ namespace MyGarage.Services
             }
 
             return token;
+        }
+
+        private static void ApplyInsuranceSnapshot(
+            ServiceOrder order,
+            bool insuranceEnabled,
+            long? insuranceCompanyId,
+            decimal? deductibleAmount,
+            string? deductibleOption,
+            string? claimMode,
+            string? quoteState)
+        {
+            if (!insuranceEnabled || !insuranceCompanyId.HasValue || insuranceCompanyId.Value <= 0)
+            {
+                order.InsuranceDeductibleAmount = null;
+                order.InsuranceDeductibleOption = null;
+                order.InsuranceClaimMode = null;
+                order.InsuranceQuoteState = null;
+                return;
+            }
+
+            var normalizedDeductibleOption = NormalizeToken(deductibleOption);
+            var normalizedClaimMode = NormalizeToken(claimMode);
+            order.InsuranceDeductibleAmount = NormalizeInsuranceDeductibleAmount(normalizedDeductibleOption, deductibleAmount);
+            order.InsuranceDeductibleOption = normalizedDeductibleOption;
+            order.InsuranceClaimMode = normalizedClaimMode;
+            order.InsuranceQuoteState = ResolveInsuranceQuoteState(normalizedDeductibleOption, normalizedClaimMode, quoteState);
+        }
+
+        private static decimal? NormalizeInsuranceDeductibleAmount(string? deductibleOption, decimal? rawAmount)
+        {
+            var normalizedOption = NormalizeToken(deductibleOption);
+            if (string.Equals(normalizedOption, "500K", StringComparison.OrdinalIgnoreCase))
+            {
+                return 500000m;
+            }
+
+            if (string.Equals(normalizedOption, "1000K", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1000000m;
+            }
+
+            if (string.Equals(normalizedOption, "CONSULT", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return rawAmount.HasValue && rawAmount.Value >= 0m ? rawAmount.Value : null;
+        }
+
+        private static string? ResolveInsuranceQuoteState(string? deductibleOption, string? claimMode, string? rawQuoteState)
+        {
+            var normalizedQuoteState = NormalizeToken(rawQuoteState);
+            if (!string.IsNullOrWhiteSpace(normalizedQuoteState))
+            {
+                return normalizedQuoteState;
+            }
+
+            var normalizedDeductibleOption = NormalizeToken(deductibleOption);
+            var normalizedClaimMode = NormalizeToken(claimMode);
+            if (string.Equals(normalizedDeductibleOption, "CONSULT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedClaimMode, "ADVISOR", StringComparison.OrdinalIgnoreCase))
+            {
+                return "NEEDS_ADVISOR";
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedDeductibleOption) &&
+                !string.IsNullOrWhiteSpace(normalizedClaimMode))
+            {
+                return "PENDING_REVIEW";
+            }
+
+            return null;
         }
 
         private static string? NormalizeToken(string? value)

@@ -76,6 +76,8 @@ builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembl
 builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
 builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
+builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
+builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
@@ -275,6 +277,9 @@ builder.Services.AddScoped<ISalaryCoefficientService, SalaryCoefficientService>(
 
 builder.Services.AddScoped<IStandardServiceRepository, StandardServiceRepository>();
 builder.Services.AddScoped<IStandardServiceService, StandardServiceService>();
+
+builder.Services.AddScoped<IPackageRepository, PackageRepository>();
+builder.Services.AddScoped<IPackageService, PackageService>();
 
 builder.Services.AddScoped<IStockTransactionRepository, StockTransactionRepository>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();

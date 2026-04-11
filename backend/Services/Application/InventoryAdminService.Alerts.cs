@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,7 +10,7 @@ namespace MyGarage.Services
     {
         public async Task<IReadOnlyList<object>> GetAlertsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var lowStocks = await _context.Inventories
                 .AsNoTracking()
                 .Include(i => i.Product)
@@ -22,7 +22,7 @@ namespace MyGarage.Services
                 .Select(i => new AlertViewModel(
                     "LOW_STOCK",
                     "HIGH",
-                    i.Product.Sku + " - " + i.Product.Name + " thấp hơn Min.",
+                    i.Product.Sku + " - " + i.Product.Name + " th?p hon Min.",
                     i.Warehouse.Branch.Name,
                     i.Warehouse.Name,
                     i.Id,
@@ -43,7 +43,7 @@ namespace MyGarage.Services
                 .Select(t => new AlertViewModel(
                     "TX_NO_SOURCE",
                     "HIGH",
-                    "Giao dịch kho #" + t.Id + " không có chứng từ nguồn.",
+                    "Giao d?ch kho #" + t.Id + " kh�ng c� ch?ng t? ngu?n.",
                     "",
                     "",
                     t.Id,

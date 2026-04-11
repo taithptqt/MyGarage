@@ -8,7 +8,7 @@ namespace MyGarage.Services
 {
     public sealed class SlotHoldService : ISlotHoldService
     {
-        private const int HoldMinutes = 5;
+        private const int HoldMinutes = 15;
         private readonly ConcurrentDictionary<string, SlotHoldRecord> _holds = new();
 
         public SlotHoldRecord CreateHold(
@@ -17,10 +17,11 @@ namespace MyGarage.Services
             DateTime endTime,
             string bookingFlow,
             string? requestedServiceIds,
+            string? requestedPackageIds,
             int vehicleCount)
         {
-            PurgeExpired(DateTime.Now);
-            var now = DateTime.Now;
+            PurgeExpired(VietnamTime.Now);
+            var now = VietnamTime.Now;
             var token = Guid.NewGuid().ToString("N");
             var record = new SlotHoldRecord
             {
@@ -30,6 +31,7 @@ namespace MyGarage.Services
                 EndTime = endTime,
                 BookingFlow = string.IsNullOrWhiteSpace(bookingFlow) ? "FIXED" : bookingFlow.Trim().ToUpperInvariant(),
                 RequestedServiceIds = requestedServiceIds,
+                RequestedPackageIds = requestedPackageIds,
                 VehicleCount = Math.Max(1, vehicleCount),
                 CreatedAt = now,
                 ExpiresAt = now.AddMinutes(HoldMinutes)
@@ -49,7 +51,7 @@ namespace MyGarage.Services
             hold = null;
             if (string.IsNullOrWhiteSpace(token)) return false;
 
-            PurgeExpired(DateTime.Now);
+            PurgeExpired(VietnamTime.Now);
             if (!_holds.TryGetValue(token.Trim(), out var found))
             {
                 return false;
@@ -62,7 +64,7 @@ namespace MyGarage.Services
         public bool ConsumeHold(string token)
         {
             if (string.IsNullOrWhiteSpace(token)) return false;
-            PurgeExpired(DateTime.Now);
+            PurgeExpired(VietnamTime.Now);
             return _holds.TryRemove(token.Trim(), out _);
         }
 
@@ -73,7 +75,7 @@ namespace MyGarage.Services
             string bookingFlow,
             string? excludeToken = null)
         {
-            PurgeExpired(DateTime.Now);
+            PurgeExpired(VietnamTime.Now);
             var flow = string.IsNullOrWhiteSpace(bookingFlow) ? "FIXED" : bookingFlow.Trim().ToUpperInvariant();
             var excluded = string.IsNullOrWhiteSpace(excludeToken) ? null : excludeToken.Trim();
             return _holds.Values

@@ -6,6 +6,8 @@ import { getAllStaff } from "@features/admin/api/staffApi";
 import { Modal } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
 import {
+  Alert,
+  AlertIcon,
   Badge,
   Box,
   Button,
@@ -15,6 +17,7 @@ import {
   HStack,
   Icon,
   SimpleGrid,
+  Spinner,
   Stack,
   Text,
   Textarea,
@@ -22,6 +25,7 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import {
+  MdAutorenew,
   MdBuild,
   MdCancel,
   MdCheckCircle,
@@ -31,12 +35,25 @@ import {
   MdPlayArrow,
   MdPriorityHigh,
   MdSupportAgent,
+  MdTimer,
 } from "react-icons/md";
 import { request } from "@app/apiClient";
 
 const TAB_DIAGNOSIS = "DIAGNOSIS";
 const TAB_REPAIR = "REPAIR";
 const INTERNAL_ASSIGNMENT_STATUS_REJECTED = "REJECTED";
+
+const KPI_FILTER_DIAGNOSIS_ALL = "DIAGNOSIS_ALL";
+const KPI_FILTER_DIAGNOSIS_RED = "DIAGNOSIS_RED";
+const KPI_FILTER_DIAGNOSIS_SUPPORT = "DIAGNOSIS_SUPPORT";
+const KPI_FILTER_REPAIR_ACTIVE = "REPAIR_ACTIVE";
+
+const QUEUE_CARD_META = {
+  WHITE: { accent: "#94a3b8", bg: "#ffffff", badge: "gray" },
+  YELLOW: { accent: "#d69e2e", bg: "#fffdf3", badge: "yellow" },
+  RED: { accent: "#ef4444", bg: "#fff7f7", badge: "red" },
+  GREEN: { accent: "#22c55e", bg: "#f3fff8", badge: "green" },
+};
 
 function toText(value) {
   if (value === null || value === undefined) return "";
@@ -120,6 +137,11 @@ function resolveCurrentStaff(staffs, user) {
   return null;
 }
 
+function getQueueCardMeta(queueColor) {
+  const normalized = normalizeCode(queueColor);
+  return QUEUE_CARD_META[normalized] || QUEUE_CARD_META.WHITE;
+}
+
 export default function TechnicianDashboard() {
   const { searchQuery } = useSearch();
   const { user } = useAuth();
@@ -127,6 +149,7 @@ export default function TechnicianDashboard() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState(TAB_DIAGNOSIS);
+  const [activeKpiFilter, setActiveKpiFilter] = useState(KPI_FILTER_DIAGNOSIS_ALL);
   const [staffId, setStaffId] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [diagnosisTasks, setDiagnosisTasks] = useState([]);
@@ -292,6 +315,16 @@ export default function TechnicianDashboard() {
 
   const handleStartDiagnosis = async (task) => {
     if (!task || !staffId) return;
+    if (!task.assignedBayId) {
+      toast({
+        title: "Chưa có khoang được phân công",
+        description: "Tổ trưởng cần phân công khoang trước khi kỹ thuật viên nhận yêu cầu.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
 
     try {
       await serviceOrderApi.startDiagnosis(task.serviceOrderId, {
@@ -330,9 +363,8 @@ export default function TechnicianDashboard() {
 
     return assignments.filter((item) => {
       const orderCode = toText(readValue(item.order, "code", "Code")).toLowerCase();
-      const customerName = toText(readValue(item.order, "customerName", "CustomerName")).toLowerCase();
       const itemName = toText(readValue(item.detail, "itemName", "ItemName")).toLowerCase();
-      return orderCode.includes(query) || customerName.includes(query) || itemName.includes(query);
+      return orderCode.includes(query) || itemName.includes(query);
     });
   }, [assignments, searchQuery]);
 
@@ -341,7 +373,7 @@ export default function TechnicianDashboard() {
     if (!query) return diagnosisTasks;
 
     return diagnosisTasks.filter((task) => {
-      const haystack = [task.serviceOrderCode, task.vehicleLicensePlate, task.customerName]
+      const haystack = [task.serviceOrderCode, task.vehicleLicensePlate]
         .map((value) => toText(value).toLowerCase())
         .join(" ");
       return haystack.includes(query);
@@ -354,140 +386,194 @@ export default function TechnicianDashboard() {
   });
 
   const activeAssignments = filteredAssignments.filter((item) => normalizeCode(readValue(item, "status", "Status")) === "IN_PROGRESS");
+  const diagnosisWaitingToStart = filteredDiagnosisTasks.filter(
+    (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt
+  ).length;
+  const diagnosisUrgentCount = filteredDiagnosisTasks.filter((task) => task.queueColor === "RED").length;
+  const diagnosisSupportCount = filteredDiagnosisTasks.filter((task) => task.isSupportRequested).length;
+  const visibleDiagnosisTasks = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
+      return filteredDiagnosisTasks.filter((task) => task.queueColor === "RED");
+    }
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) {
+      return filteredDiagnosisTasks.filter((task) => task.isSupportRequested);
+    }
+    return filteredDiagnosisTasks;
+  }, [activeKpiFilter, filteredDiagnosisTasks]);
+
+  const activeViewLabel = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) return "Ca ưu tiên";
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) return "Đang chờ hỗ trợ";
+    if (activeKpiFilter === KPI_FILTER_REPAIR_ACTIVE) return "Sửa chữa đang làm";
+    return "Ca chuẩn đoán";
+  }, [activeKpiFilter]);
+
+  const diagnosisEmptyMessage = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
+      return "Không có ca ưu tiên RED trong bộ lọc hiện tại.";
+    }
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) {
+      return "Không có ca nào đang chờ hỗ trợ hội chẩn.";
+    }
+    return "Hiện chưa có ca chuẩn đoán được giao cho bạn.";
+  }, [activeKpiFilter]);
+
+  const handleSelectKpiFilter = useCallback((nextFilter) => {
+    if (nextFilter === KPI_FILTER_REPAIR_ACTIVE) {
+      setActiveTab(TAB_REPAIR);
+      setActiveKpiFilter(KPI_FILTER_REPAIR_ACTIVE);
+      return;
+    }
+
+    setActiveTab(TAB_DIAGNOSIS);
+    setActiveKpiFilter(nextFilter);
+  }, []);
 
   return (
-    <Box p={6} bg="#f4f7fe" minH="100vh">
-      <VStack align="stretch" spacing={8}>
-        <Box>
-          <Heading size="lg" color="#2b3674" mb={2}>Bảng điều khiển Kỹ thuật viên</Heading>
-          <Text color="gray.500">Nhận ca từ tổ trưởng, bắt đầu chuẩn đoán tại cầu nâng và báo hỗ trợ khi cần.</Text>
-        </Box>
-
-        <HStack spacing={3} align="center" flexWrap="wrap">
-          <Button variant={activeTab === TAB_DIAGNOSIS ? "solid" : "outline"} colorScheme="purple" onClick={() => setActiveTab(TAB_DIAGNOSIS)}>
-            Chuẩn đoán ({filteredDiagnosisTasks.length})
-          </Button>
-          <Button variant={activeTab === TAB_REPAIR ? "solid" : "outline"} colorScheme="teal" onClick={() => setActiveTab(TAB_REPAIR)}>
-            Sửa chữa ({activeAssignments.length})
+    <Box p={{ base: 4, md: 6 }} minH="100vh" bg="linear-gradient(180deg, #f4f7ff 0%, #eef4ff 100%)">
+      <VStack align="stretch" spacing={5}>
+        <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={3} flexWrap="wrap">
+          <Box>
+            <Heading size="lg" color="#1b2559">Bảng điều khiển Kỹ thuật viên</Heading>
+            <Text color="gray.600" mt={1}>
+              Theo dõi ca chuẩn đoán, nhận việc đúng khoang và phối hợp hội chẩn khi cần.
+            </Text>
+          </Box>
+          <Button
+            leftIcon={<MdAutorenew />}
+            colorScheme="blue"
+            variant="outline"
+            borderRadius="full"
+            onClick={fetchData}
+            isLoading={loading}
+          >
+            Làm mới bảng
           </Button>
         </HStack>
 
+        {error && (
+          <Alert status="error" borderRadius="xl">
+            <AlertIcon />
+            {error}
+          </Alert>
+        )}
+
+        <Box
+          bg="white"
+          borderRadius="2xl"
+          border="1px solid"
+          borderColor="#d9e2f1"
+          p={{ base: 3, md: 4 }}
+          boxShadow="0 12px 30px rgba(15, 23, 42, 0.08)"
+        >
+          <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={2} mb={3} flexWrap="wrap">
+            <Box>
+              <Text fontSize="sm" fontWeight="700" color="#1e3a8a">Tổng quan công việc</Text>
+              <Text fontSize="xs" color="gray.500">Bấm vào bất kỳ ô nào để lọc nhanh theo đúng trạng thái.</Text>
+            </Box>
+            <Badge borderRadius="full" px={3} py={1} bg="#eef4ff" color="#1d4ed8" fontSize="xs">
+              Đang xem: {activeViewLabel}
+            </Badge>
+          </HStack>
+
+          <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} spacing={3}>
+            <MetricCard
+              title="Ca chuẩn đoán"
+              value={filteredDiagnosisTasks.length}
+              description={`${diagnosisWaitingToStart} ca chờ nhận`}
+              color="#5b4af7"
+              isInteractive
+              isActive={activeKpiFilter === KPI_FILTER_DIAGNOSIS_ALL}
+              onClick={() => handleSelectKpiFilter(KPI_FILTER_DIAGNOSIS_ALL)}
+            />
+            <MetricCard
+              title="Ca ưu tiên"
+              value={diagnosisUrgentCount}
+              description="Màu RED cần xử lý sớm"
+              color="#dc2626"
+              isInteractive
+              isActive={activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED}
+              onClick={() => handleSelectKpiFilter(KPI_FILTER_DIAGNOSIS_RED)}
+            />
+            <MetricCard
+              title="Đang chờ hỗ trợ"
+              value={diagnosisSupportCount}
+              description="Có yêu cầu hội chẩn"
+              color="#d97706"
+              isInteractive
+              isActive={activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT}
+              onClick={() => handleSelectKpiFilter(KPI_FILTER_DIAGNOSIS_SUPPORT)}
+            />
+            <MetricCard
+              title="Sửa chữa đang làm"
+              value={activeAssignments.length}
+              description={`${newAssignments.length} yêu cầu mới`}
+              color="#0f766e"
+              isInteractive
+              isActive={activeKpiFilter === KPI_FILTER_REPAIR_ACTIVE}
+              onClick={() => handleSelectKpiFilter(KPI_FILTER_REPAIR_ACTIVE)}
+            />
+          </SimpleGrid>
+        </Box>
+
         {loading ? (
-          <Flex justify="center" py={20}><Text>Đang tải...</Text></Flex>
-        ) : error ? (
-          <Box bg="red.50" p={4} borderRadius="lg"><Text color="red.500">{error}</Text></Box>
+          <Box bg="white" borderRadius="2xl" border="1px solid" borderColor="gray.100" p={10} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+            <VStack spacing={3}>
+              <Spinner color="blue.500" />
+              <Text color="gray.500">Đang tải dữ liệu kỹ thuật viên...</Text>
+            </VStack>
+          </Box>
         ) : (
           <>
             {activeTab === TAB_DIAGNOSIS && (
-              <Box>
-                <HStack mb={4}><Icon as={MdInfo} color="purple.400" /><Heading size="md" color="#2b3674">Ca chuẩn đoán đã phân công</Heading></HStack>
-                {filteredDiagnosisTasks.length === 0 ? (
-                  <Box bg="white" p={10} textAlign="center" borderRadius="2xl" border="2px dashed" borderColor="gray.100">
-                    <Text color="gray.400">Hiện chưa có ca chuẩn đoán được giao cho bạn.</Text>
+              <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" overflow="hidden" boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+                <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={3} p={4} borderBottom="1px solid" borderColor="gray.100" bg="gray.50" flexWrap="wrap">
+                  <HStack spacing={2}>
+                    <Icon as={MdInfo} color="purple.500" />
+                    <Heading size="md" color="#1b2559">Ca chuẩn đoán đã phân công</Heading>
+                  </HStack>
+                  <Badge borderRadius="full" px={3} py={1} colorScheme="blue">
+                    {visibleDiagnosisTasks.length} ca
+                  </Badge>
+                </HStack>
+
+                {visibleDiagnosisTasks.length === 0 ? (
+                  <Box p={10} textAlign="center">
+                    <Text color="gray.400">{diagnosisEmptyMessage}</Text>
                   </Box>
                 ) : (
-                  <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
-                    {filteredDiagnosisTasks.map((task) => {
-                      const canStart = !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt;
-                      const teammateName = task.roleInPair === "Thợ chính" ? task.assistantName : task.leadName;
-                      const waitingFinal = task.technicalApprovedAt && !task.finalApprovedAt;
-                      const finalized = Boolean(task.finalApprovedAt);
-
-                      return (
-                        <Box key={`diag-task-${task.serviceOrderId}`} bg="white" p={4} borderRadius="2xl" border="1px solid" borderColor="gray.200" boxShadow="sm">
-                          <HStack justify="space-between" align="start" mb={3}>
-                            <Box>
-                              <Text fontSize="xs" color="gray.500" mb={1}>Mã lệnh</Text>
-                              <Heading size="sm" color="#2b3674">{task.serviceOrderCode}</Heading>
-                            </Box>
-                            <VStack spacing={1} align="end">
-                              <Badge colorScheme={task.queueColor === "RED" ? "red" : task.queueColor === "YELLOW" ? "yellow" : task.queueColor === "GREEN" ? "green" : "gray"}>
-                                {task.queueColor}
-                              </Badge>
-                              <Badge variant="subtle" colorScheme="blue">{task.roleInPair}</Badge>
-                            </VStack>
-                          </HStack>
-
-                          <VStack align="stretch" spacing={2} mb={4}>
-                            <HStack spacing={2}><Icon as={MdDirectionsCar} color="gray.500" /><Text fontSize="sm">{task.vehicleLicensePlate || "--"}</Text></HStack>
-                            <HStack spacing={2}><Icon as={MdPerson} color="gray.500" /><Text fontSize="sm">{task.customerName || "Khách hàng chưa rõ"}</Text></HStack>
-                            <Text fontSize="sm" color="gray.600">Đồng đội: {teammateName || "--"}</Text>
-                            <Text fontSize="sm" color="gray.600">Cầu nâng: {task.assignedBayCode || "Chưa chỉ định"}</Text>
-                            <Text fontSize="sm" color="gray.600">Nhận ca: {formatDateTime(task.assignedAt)}</Text>
-                            <Text fontSize="sm" color="gray.600">Bắt đầu: {formatDateTime(task.startedAt)}</Text>
-                            <Text fontSize="sm" color="gray.600">Thời gian chờ: {formatMinutes(task.pendingMinutes)}</Text>
-                            <Text fontSize="sm" color="gray.600">Thời gian xử lý: {formatMinutes(task.assignedMinutes)}</Text>
-                          </VStack>
-
-                          {task.queueColor === "RED" && (
-                            <HStack mb={3} color="red.500" fontSize="sm">
-                              <Icon as={MdPriorityHigh} />
-                              <Text>Cảnh báo đỏ, ưu tiên xử lý ngay.</Text>
-                            </HStack>
-                          )}
-
-                          {waitingFinal && (
-                            <HStack mb={3} color="blue.500" fontSize="sm">
-                              <Icon as={MdInfo} />
-                              <Text>Đã duyệt kỹ thuật, đang chờ quản đốc duyệt cuối.</Text>
-                            </HStack>
-                          )}
-
-                          {finalized && (
-                            <HStack mb={3} color="green.500" fontSize="sm">
-                              <Icon as={MdCheckCircle} />
-                              <Text>Đã duyệt cuối lúc {formatDateTime(task.finalApprovedAt)}.</Text>
-                            </HStack>
-                          )}
-
-                          <HStack spacing={2} flexWrap="wrap">
-                            <Button
-                              size="sm"
-                              leftIcon={<MdPlayArrow />}
-                              colorScheme="green"
-                              onClick={() => handleStartDiagnosis(task)}
-                              isDisabled={!canStart}
-                            >
-                              Bắt đầu chuẩn đoán
-                            </Button>
-                            <Button
-                              size="sm"
-                              leftIcon={<MdBuild />}
-                              colorScheme="blue"
-                              variant="outline"
-                              onClick={() => navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`)}
-                            >
-                              Mở phiếu chuẩn đoán
-                            </Button>
-                            <Button
-                              size="sm"
-                              leftIcon={<MdSupportAgent />}
-                              colorScheme="orange"
-                              variant="ghost"
-                              onClick={() => {
-                                setSupportTarget(task);
-                                setSupportNote("");
-                              }}
-                            >
-                              Yêu cầu hỗ trợ
-                            </Button>
-                          </HStack>
-                        </Box>
-                      );
-                    })}
-                  </SimpleGrid>
+                  <VStack align="stretch" spacing={3} p={3} bg="#f8fafc">
+                    {visibleDiagnosisTasks.map((task) => (
+                      <DiagnosisTaskCard
+                        key={`diag-task-${task.serviceOrderId}`}
+                        task={task}
+                        onStart={() => handleStartDiagnosis(task)}
+                        onOpenDiagnosis={() => navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`)}
+                        onRequestSupport={() => {
+                          setSupportTarget(task);
+                          setSupportNote("");
+                        }}
+                      />
+                    ))}
+                  </VStack>
                 )}
               </Box>
             )}
 
             {activeTab === TAB_REPAIR && (
-              <>
-                <Box>
-                  <HStack mb={4}><Icon as={MdInfo} color="orange.400" /><Heading size="md" color="#2b3674">Yêu cầu sửa chữa mới</Heading></HStack>
+              <VStack align="stretch" spacing={4}>
+                <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+                  <HStack mb={4} spacing={2}>
+                    <Icon as={MdInfo} color="orange.500" />
+                    <Heading size="md" color="#1b2559">Yêu cầu sửa chữa mới</Heading>
+                    <Badge borderRadius="full" colorScheme="orange">{newAssignments.length}</Badge>
+                  </HStack>
                   {newAssignments.length === 0 ? (
-                    <Box bg="white" p={10} textAlign="center" borderRadius="2xl" border="2px dashed" borderColor="gray.100"><Text color="gray.400">Không có yêu cầu sửa chữa mới.</Text></Box>
+                    <Box bg="gray.50" p={8} textAlign="center" borderRadius="xl" border="1px dashed" borderColor="gray.200">
+                      <Text color="gray.500">Không có yêu cầu sửa chữa mới.</Text>
+                    </Box>
                   ) : (
-                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
                       {newAssignments.map((assignment) => (
                         <AssignmentCard
                           key={readValue(assignment, "id", "Id")}
@@ -502,12 +588,18 @@ export default function TechnicianDashboard() {
 
                 <Divider />
 
-                <Box>
-                  <HStack mb={4}><Icon as={MdBuild} color="teal.400" /><Heading size="md" color="#2b3674">Đang sửa chữa</Heading></HStack>
+                <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
+                  <HStack mb={4} spacing={2}>
+                    <Icon as={MdBuild} color="teal.500" />
+                    <Heading size="md" color="#1b2559">Đang sửa chữa</Heading>
+                    <Badge borderRadius="full" colorScheme="teal">{activeAssignments.length}</Badge>
+                  </HStack>
                   {activeAssignments.length === 0 ? (
-                    <Box bg="white" p={10} textAlign="center" borderRadius="2xl" border="2px dashed" borderColor="gray.100"><Text color="gray.400">Bạn chưa bắt đầu công việc sửa chữa nào.</Text></Box>
+                    <Box bg="gray.50" p={8} textAlign="center" borderRadius="xl" border="1px dashed" borderColor="gray.200">
+                      <Text color="gray.500">Bạn chưa bắt đầu công việc sửa chữa nào.</Text>
+                    </Box>
                   ) : (
-                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
                       {activeAssignments.map((assignment) => (
                         <AssignmentCard
                           key={readValue(assignment, "id", "Id")}
@@ -520,7 +612,7 @@ export default function TechnicianDashboard() {
                     </SimpleGrid>
                   )}
                 </Box>
-              </>
+              </VStack>
             )}
           </>
         )}
@@ -529,18 +621,19 @@ export default function TechnicianDashboard() {
       {rejectingAssignment && (
         <Modal title="Từ chối công việc" onClose={() => setRejectingAssignment(null)}>
           <VStack align="stretch" spacing={4} p={2}>
-            <Box bg="orange.50" p={3} borderRadius="md" borderLeft="4px solid" borderColor="orange.400">
-              <Text fontSize="sm" fontWeight="bold">Công việc: {toText(readValue(rejectingAssignment.detail, "itemName", "ItemName")) || "N/A"}</Text>
+            <Box bg="orange.50" p={3} borderRadius="xl" borderLeft="4px solid" borderColor="orange.400">
+              <Text fontSize="sm" fontWeight="700">Công việc: {toText(readValue(rejectingAssignment.detail, "itemName", "ItemName")) || "N/A"}</Text>
               <Text fontSize="xs" color="gray.600">Lệnh: {toText(readValue(rejectingAssignment.order, "code", "Code")) || "N/A"}</Text>
             </Box>
             <Box>
-              <Text fontWeight="bold" mb={2}>Lý do từ chối *</Text>
-              <Textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} />
+              <Text fontWeight="700" mb={2}>Lý do từ chối *</Text>
+              <Textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} minH="120px" />
             </Box>
             <HStack justify="flex-end" spacing={3}>
-              <Button variant="ghost" onClick={() => setRejectingAssignment(null)}>Hủy</Button>
+              <Button variant="ghost" borderRadius="full" onClick={() => setRejectingAssignment(null)}>Hủy</Button>
               <Button
                 colorScheme="red"
+                borderRadius="full"
                 isDisabled={!toText(rejectReason)}
                 onClick={() => {
                   handleUpdateAssignmentStatus(readValue(rejectingAssignment, "id", "Id"), INTERNAL_ASSIGNMENT_STATUS_REJECTED, rejectReason);
@@ -558,21 +651,22 @@ export default function TechnicianDashboard() {
       {supportTarget && (
         <Modal title="Yêu cầu hỗ trợ hội chẩn" onClose={() => setSupportTarget(null)}>
           <VStack align="stretch" spacing={4} p={2}>
-            <Box bg="blue.50" p={3} borderRadius="md" borderLeft="4px solid" borderColor="blue.400">
-              <Text fontSize="sm" fontWeight="bold">Lệnh: {supportTarget.serviceOrderCode}</Text>
+            <Box bg="orange.50" p={3} borderRadius="xl" borderLeft="4px solid" borderColor="orange.400">
+              <Text fontSize="sm" fontWeight="700">Lệnh: {supportTarget.serviceOrderCode}</Text>
               <Text fontSize="xs" color="gray.600">Xe: {supportTarget.vehicleLicensePlate || "--"}</Text>
             </Box>
             <Box>
-              <Text fontWeight="bold" mb={2}>Nội dung cần hỗ trợ *</Text>
+              <Text fontWeight="700" mb={2}>Nội dung cần hỗ trợ *</Text>
               <Textarea
                 value={supportNote}
                 onChange={(event) => setSupportNote(event.target.value)}
                 placeholder="Mô tả vấn đề kỹ thuật cần tổ trưởng/quản đốc hỗ trợ..."
+                minH="120px"
               />
             </Box>
             <HStack justify="flex-end" spacing={3}>
-              <Button variant="ghost" onClick={() => setSupportTarget(null)}>Hủy</Button>
-              <Button colorScheme="orange" isDisabled={!toText(supportNote)} onClick={handleSubmitSupport}>Gửi hỗ trợ</Button>
+              <Button variant="ghost" borderRadius="full" onClick={() => setSupportTarget(null)}>Hủy</Button>
+              <Button colorScheme="orange" borderRadius="full" isDisabled={!toText(supportNote)} onClick={handleSubmitSupport}>Gửi hỗ trợ</Button>
             </HStack>
           </VStack>
         </Modal>
@@ -581,46 +675,298 @@ export default function TechnicianDashboard() {
   );
 }
 
+function MetricCard({ title, value, description, color, isInteractive = false, isActive = false, onClick = null }) {
+  const handleKeyDown = (event) => {
+    if (!isInteractive || typeof onClick !== "function") return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <Box
+      role={isInteractive ? "button" : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-pressed={isInteractive ? isActive : undefined}
+      onClick={isInteractive ? onClick : undefined}
+      onKeyDown={handleKeyDown}
+      border="2px solid"
+      borderColor={isActive ? color : "#dbe4f2"}
+      borderRadius="xl"
+      bg={isActive ? "linear-gradient(150deg, #ffffff 0%, #f8fafc 70%, #eef4ff 100%)" : "white"}
+      p={4}
+      minH="112px"
+      boxShadow={isActive ? "0 12px 24px rgba(59, 130, 246, 0.18)" : "0 4px 14px rgba(30, 64, 175, 0.08)"}
+      textAlign="left"
+      transition="all 0.16s ease"
+      cursor={isInteractive ? "pointer" : "default"}
+      _hover={isInteractive ? { transform: "translateY(-2px)", borderColor: color, boxShadow: "0 10px 20px rgba(30, 64, 175, 0.14)" } : undefined}
+      _focusVisible={isInteractive ? { outline: "2px solid #93c5fd", outlineOffset: "2px" } : undefined}
+    >
+      <HStack justify="space-between" align="start">
+        <Text fontSize="xs" fontWeight="700" textTransform="uppercase" color="gray.500">
+          {title}
+        </Text>
+        <Badge colorScheme="blue" borderRadius="full" px={2} visibility={isActive ? "visible" : "hidden"}>
+          Lọc
+        </Badge>
+      </HStack>
+      <Text mt={2} fontSize="3xl" lineHeight="1" fontWeight="800" color={color}>
+        {value}
+      </Text>
+      <HStack mt={2} spacing={1.5}>
+        <Icon as={MdTimer} color="gray.400" boxSize={4} />
+        <Text fontSize="xs" color="gray.500">{description}</Text>
+      </HStack>
+    </Box>
+  );
+}
+
+function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport }) {
+  const canStart = !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt;
+  const canOpenDiagnosis = Boolean(task.startedAt);
+  const teammateName = task.roleInPair === "Thợ chính" ? task.assistantName : task.leadName;
+  const waitingFinal = task.technicalApprovedAt && !task.finalApprovedAt;
+  const finalized = Boolean(task.finalApprovedAt);
+  const queueMeta = getQueueCardMeta(task.queueColor);
+  const roleColorScheme = task.roleInPair === "Thợ chính" ? "blue" : "purple";
+  const isMissingBayAssignment = !task.assignedBayId;
+
+  return (
+    <Box
+      border="1px solid"
+      borderColor="gray.200"
+      borderLeftWidth="6px"
+      borderLeftColor={queueMeta.accent}
+      borderRadius="xl"
+      bg={queueMeta.bg}
+      p={4}
+      boxShadow="0 8px 20px rgba(15, 23, 42, 0.08)"
+    >
+      <HStack justify="space-between" align="start" spacing={3} flexWrap="wrap">
+        <Box minW={0}>
+          <Text
+            as="button"
+            type="button"
+            fontSize="lg"
+            fontWeight="800"
+            color={canOpenDiagnosis ? "#1d4ed8" : "#1b2559"}
+            textDecoration={canOpenDiagnosis ? "underline" : "none"}
+            textDecorationThickness="1.5px"
+            textUnderlineOffset="3px"
+            cursor={canOpenDiagnosis ? "pointer" : "not-allowed"}
+            opacity={canOpenDiagnosis ? 1 : 0.9}
+            onClick={canOpenDiagnosis ? onOpenDiagnosis : undefined}
+            title={canOpenDiagnosis ? "Mở phiếu chuẩn đoán" : "Bấm Nhận yêu cầu trước khi mở phiếu"}
+            _hover={canOpenDiagnosis ? { color: "#1e40af" } : undefined}
+          >
+            {task.serviceOrderCode}
+          </Text>
+          <Text fontSize="sm" color="gray.600" noOfLines={1}>
+            Biển số: {task.vehicleLicensePlate || "--"}
+          </Text>
+          {!canOpenDiagnosis && (
+            <Text mt={0.5} fontSize="xs" color="orange.600">
+              Nhấn "Nhận yêu cầu" để mở phiếu chuẩn đoán.
+            </Text>
+          )}
+        </Box>
+        <HStack spacing={1.5} flexWrap="wrap" justify="flex-end">
+          <Badge colorScheme={queueMeta.badge} borderRadius="full">{task.queueColor}</Badge>
+          <Badge variant="subtle" colorScheme={roleColorScheme} borderRadius="full">{task.roleInPair}</Badge>
+          {task.isSupportRequested && <Badge colorScheme="orange" borderRadius="full">Đang chờ hỗ trợ</Badge>}
+        </HStack>
+      </HStack>
+
+      <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={2.5} mt={3}>
+        <InfoTile
+          title="Xe"
+          icon={MdDirectionsCar}
+          lines={[
+            `Biển số: ${task.vehicleLicensePlate || "--"}`,
+          ]}
+        />
+        <InfoTile
+          title="Phân công"
+          icon={MdPerson}
+          lines={[
+            `Đồng đội: ${teammateName || "--"}`,
+            `Khoang: ${task.assignedBayCode || "Chưa chỉ định"}`,
+          ]}
+          footer={isMissingBayAssignment ? (
+            <Text fontSize="xs" color="red.600">Cần tổ trưởng chỉ định khoang trước khi nhận yêu cầu.</Text>
+          ) : null}
+        />
+        <InfoTile
+          title="Mốc thời gian"
+          icon={MdTimer}
+          lines={[
+            `Nhận: ${formatDateTime(task.assignedAt)}`,
+            `Bắt đầu: ${formatDateTime(task.startedAt)}`,
+          ]}
+        />
+        <InfoTile
+          title="Trạng thái"
+          icon={MdInfo}
+          lines={[
+            `Chờ: ${formatMinutes(task.pendingMinutes)}`,
+            `Xử lý: ${formatMinutes(task.assignedMinutes)}`,
+          ]}
+          footer={(
+            <>
+              {task.queueColor === "RED" && (
+                <HStack spacing={1} color="red.500">
+                  <Icon as={MdPriorityHigh} boxSize={4} />
+                  <Text fontSize="xs">Ưu tiên xử lý ngay</Text>
+                </HStack>
+              )}
+              {waitingFinal && (
+                <Text fontSize="xs" color="blue.600">Đã duyệt kỹ thuật, chờ quản đốc duyệt cuối</Text>
+              )}
+              {finalized && (
+                <Text fontSize="xs" color="green.600">Đã duyệt cuối lúc {formatDateTime(task.finalApprovedAt)}</Text>
+              )}
+            </>
+          )}
+        />
+      </SimpleGrid>
+
+      <HStack mt={3} pt={3} borderTop="1px solid" borderColor="gray.200" justify="flex-end" align="center" spacing={2} flexWrap="wrap">
+        <Button
+          size="sm"
+          borderRadius="full"
+          h="36px"
+          minH="36px"
+          leftIcon={<MdPlayArrow />}
+          colorScheme="green"
+          onClick={onStart}
+          isDisabled={!canStart}
+        >
+          {canStart ? "Nhận yêu cầu" : "Đã nhận yêu cầu"}
+        </Button>
+        <Button
+          size="sm"
+          borderRadius="full"
+          h="36px"
+          minH="36px"
+          leftIcon={<MdSupportAgent />}
+          colorScheme="orange"
+          variant="ghost"
+          onClick={onRequestSupport}
+        >
+          Yêu cầu hỗ trợ
+        </Button>
+      </HStack>
+    </Box>
+  );
+}
+
+function InfoTile({ title, icon, lines, footer = null }) {
+  return (
+    <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="lg" bg="white">
+      <HStack spacing={1.5} mb={1}>
+        <Icon as={icon} color="gray.500" boxSize={4} />
+        <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+          {title}
+        </Text>
+      </HStack>
+      <Stack spacing={1}>
+        {(Array.isArray(lines) ? lines : []).map((line) => (
+          <Text key={`${title}-${line}`} fontSize="sm" color="gray.700">
+            {line}
+          </Text>
+        ))}
+        {footer}
+      </Stack>
+    </Box>
+  );
+}
+
 const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagnosis, onFinish }) => {
   const order = assignment.order;
   const detail = assignment.detail;
   const isDiagnosing = normalizeCode(readValue(order, "status", "Status")) === "DIAGNOSING";
+  const accentColor = isActive ? "#0ea5e9" : "#94a3b8";
 
   return (
-    <Box bg="white" p={5} borderRadius="2xl" boxShadow="0px 8px 24px rgba(17, 38, 146, 0.04)" border="1px solid" borderColor="gray.50">
-      <Flex justify="space-between" mb={4}>
-        <Badge colorScheme={isActive ? "blue" : "gray"} variant="subtle" borderRadius="full" px={3}>{toText(readValue(assignment, "roleInTask", "RoleInTask")) || "Phụ trách"}</Badge>
-        <Text fontSize="xs" fontWeight="bold" color="blue.500">{toText(readValue(order, "code", "Code")) || "N/A"}</Text>
+    <Box
+      bg="white"
+      p={4}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor="gray.200"
+      borderLeftWidth="5px"
+      borderLeftColor={accentColor}
+      boxShadow="0 8px 20px rgba(15, 23, 42, 0.08)"
+    >
+      <Flex justify="space-between" align="start" mb={4} gap={2}>
+        <Badge colorScheme={isActive ? "blue" : "gray"} variant="subtle" borderRadius="full" px={3}>
+          {toText(readValue(assignment, "roleInTask", "RoleInTask")) || "Phụ trách"}
+        </Badge>
+        <Text fontSize="xs" fontWeight="700" color="blue.600">
+          {toText(readValue(order, "code", "Code")) || "N/A"}
+        </Text>
       </Flex>
 
-      <VStack align="stretch" spacing={3} mb={6}>
-        <HStack spacing={3} align="center"><Icon as={MdBuild} color="blue.400" /><Text fontWeight="extrabold" fontSize="md" color="#2b3674" noOfLines={1}>{toText(readValue(detail, "itemName", "ItemName")) || "Dịch vụ không xác định"}</Text></HStack>
+      <VStack align="stretch" spacing={3} mb={5}>
+        <HStack spacing={2} align="start">
+          <Icon as={MdBuild} color="blue.500" mt={0.5} />
+          <Text fontWeight="800" fontSize="md" color="#1b2559" noOfLines={2}>
+            {toText(readValue(detail, "itemName", "ItemName")) || "Dịch vụ không xác định"}
+          </Text>
+        </HStack>
 
-        <Stack spacing={2} bg="gray.50" p={3} borderRadius="xl">
-          <HStack justify="space-between"><HStack spacing={2}><Icon as={MdDirectionsCar} color="gray.400" /><Text fontSize="sm" fontWeight="bold">{toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) || "N/A"}</Text></HStack><Badge variant="outline" fontSize="2xs">{toText(readValue(order, "status", "Status")) || "--"}</Badge></HStack>
-          <HStack spacing={2}><Icon as={MdPerson} color="gray.400" /><Text fontSize="sm" color="gray.600">{toText(readValue(order, "customerName", "CustomerName")) || "-"}</Text></HStack>
-        </Stack>
+        <Box bg="gray.50" p={3} borderRadius="lg" border="1px solid" borderColor="gray.100">
+          <HStack justify="space-between" spacing={2} align="start">
+            <HStack spacing={2} minW={0}>
+              <Icon as={MdDirectionsCar} color="gray.500" />
+              <Text fontSize="sm" fontWeight="700" noOfLines={1}>
+                {toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) || "N/A"}
+              </Text>
+            </HStack>
+            <Badge variant="outline" fontSize="2xs">
+              {toText(readValue(order, "status", "Status")) || "--"}
+            </Badge>
+          </HStack>
+        </Box>
 
         <Box>
-          <Text fontSize="xs" color="gray.400" fontWeight="bold" mb={1}>GHI CHÚ DỊCH VỤ:</Text>
-          <Text fontSize="sm" color="gray.600" noOfLines={2}>{toText(readValue(detail, "note", "Note")) || toText(readValue(order, "customerNotes", "CustomerNotes")) || "Không có ghi chú"}</Text>
+          <Text fontSize="xs" color="gray.500" fontWeight="700" mb={1}>GHI CHÚ DỊCH VỤ</Text>
+          <Text fontSize="sm" color="gray.600" noOfLines={2}>
+            {toText(readValue(detail, "note", "Note")) || toText(readValue(order, "customerNotes", "CustomerNotes")) || "Không có ghi chú"}
+          </Text>
         </Box>
       </VStack>
 
       <Stack spacing={2}>
         {!isActive ? (
-          <HStack spacing={3}>
-            <Button flex={1} colorScheme="green" size="sm" leftIcon={<MdCheckCircle />} onClick={onConfirm}>Xác nhận</Button>
-            <Button flex={1} colorScheme="red" variant="ghost" size="sm" leftIcon={<MdCancel />} onClick={onReject}>Từ chối</Button>
+          <HStack spacing={2}>
+            <Button flex={1} colorScheme="green" size="sm" h="36px" minH="36px" borderRadius="full" leftIcon={<MdCheckCircle />} onClick={onConfirm}>
+              Xác nhận
+            </Button>
+            <Button flex={1} colorScheme="red" variant="ghost" size="sm" h="36px" minH="36px" borderRadius="full" leftIcon={<MdCancel />} onClick={onReject}>
+              Từ chối
+            </Button>
           </HStack>
         ) : (
           <>
             {isDiagnosing ? (
-              <Button colorScheme="blue" color="white" size="sm" onClick={() => onOpenDiagnosis?.(toPositiveNumber(readValue(order, "id", "Id")))}>
+              <Button
+                colorScheme="blue"
+                color="white"
+                size="sm"
+                h="36px"
+                minH="36px"
+                borderRadius="full"
+                onClick={() => onOpenDiagnosis?.(toPositiveNumber(readValue(order, "id", "Id")))}
+              >
                 Mở màn hình chuẩn đoán
               </Button>
             ) : (
-              <Button colorScheme="green" size="sm" onClick={onFinish}>Hoàn thành hạng mục</Button>
+              <Button colorScheme="green" size="sm" h="36px" minH="36px" borderRadius="full" onClick={onFinish}>
+                Hoàn thành hạng mục
+              </Button>
             )}
           </>
         )}

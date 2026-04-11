@@ -1,5 +1,9 @@
 import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
+import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import { buildCustomerNotesPayload } from "@features/appointments/utils/bookingCommon";
+import { buildInsuranceSnapshotPayload } from "@features/appointments/utils/bookingInsurance";
+import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
+import { sumServiceMinutes } from "@shared/utils/serviceDurationUtils";
 
 const VEHICLE_KEY_GUEST = "guest";
 const VEHICLE_KEY_NEW = "new-customer";
@@ -20,7 +24,7 @@ function toNumberList(value) {
     new Set(
       value
         .map(Number)
-        .filter((id) => Number.isFinite(id) && id > 0)
+        .filter((id) => Number.isFinite(id) && id !== 0)
     )
   );
 }
@@ -30,18 +34,54 @@ function readText(value) {
   return text || null;
 }
 
+function normalizeBookingFlow(value, fallback = BOOKING_FLOW.FIXED) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.includes("flex")) return BOOKING_FLOW.FLEXIBLE;
+  if (raw.includes("fixed")) return BOOKING_FLOW.FIXED;
+  return fallback;
+}
+
+function isFlexibleTriggerServiceCode(rawCode) {
+  const normalizedCode = String(rawCode || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]/g, "");
+  return normalizedCode.startsWith("dg");
+}
+
 function normalizeServiceLookup(services) {
   const map = new Map();
   (services || []).forEach((service) => {
     const id = Number(service?.id ?? service?.Id);
-    if (!Number.isFinite(id) || id <= 0) return;
+    if (!Number.isFinite(id) || id === 0) return;
     map.set(id, {
       ...service,
       id,
+      code: String(service?.code ?? service?.Code ?? ""),
       minutes: Math.max(0, Number(service?.standardMinutes ?? service?.StandardMinutes ?? 0) || 0),
     });
   });
   return map;
+}
+
+function buildFlexibleTriggerServiceIdSet(serviceLookup) {
+  const set = new Set();
+  serviceLookup.forEach((service, id) => {
+    if (isFlexibleTriggerServiceCode(service?.code)) {
+      set.add(Number(id));
+    }
+  });
+  return set;
+}
+
+function resolveVehicleBookingFlow(planFlow, serviceIds, flexibleTriggerServiceIdSet) {
+  const explicitFlow = normalizeBookingFlow(planFlow, "");
+  if (explicitFlow === BOOKING_FLOW.FLEXIBLE || explicitFlow === BOOKING_FLOW.FIXED) {
+    return explicitFlow;
+  }
+  return (serviceIds || []).some((serviceId) => flexibleTriggerServiceIdSet.has(Number(serviceId)))
+    ? BOOKING_FLOW.FLEXIBLE
+    : BOOKING_FLOW.FIXED;
 }
 
 function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
@@ -51,19 +91,29 @@ function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
   (Array.isArray(vehicleServicePlans) ? vehicleServicePlans : []).forEach((rawPlan) => {
     const vehicleKey = String(rawPlan?.vehicleKey || "").trim() || null;
     const vehicleId = Number(rawPlan?.vehicleId);
-    const serviceIds = toNumberList(rawPlan?.serviceIds);
-    const computedMinutes = serviceIds.reduce((sum, serviceId) => {
-      const service = serviceLookup.get(serviceId);
-      return sum + Number(service?.minutes || 0);
-    }, 0);
+    const allServiceIds = toNumberList(rawPlan?.serviceIds);
+    const split = splitBookingItemIds(allServiceIds);
+    const serviceIds = split.serviceIds;
+    const packageIds = split.packageIds;
+    const selectedServices = serviceIds
+      .map((serviceId) => serviceLookup.get(serviceId))
+      .filter(Boolean);
+    const selectedPackages = packageIds
+      .map((packageId) => serviceLookup.get(-packageId))
+      .filter(Boolean);
+    const computedMinutes = sumServiceMinutes(selectedServices);
+    const packageMinutes = sumServiceMinutes(selectedPackages);
     const totalMinutes = Number(rawPlan?.totalMinutes);
-    const resolvedMinutes = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : computedMinutes;
+    const resolvedMinutes = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : computedMinutes + packageMinutes;
 
     const plan = {
-      serviceIds,
+      serviceIds: allServiceIds,
       requestedServiceIds: serviceIds.length > 0 ? serviceIds.join(",") : null,
+      requestedPackageIds: packageIds.length > 0 ? packageIds.join(",") : null,
       totalMinutes: Math.max(resolvedMinutes, 30),
+      bookingFlow: normalizeBookingFlow(rawPlan?.bookingFlow, ""),
       customerNotes: readText(rawPlan?.customerNotes),
+      ...buildInsuranceSnapshotPayload(rawPlan),
     };
 
     if (vehicleKey) byVehicleKey.set(vehicleKey, plan);
@@ -73,20 +123,44 @@ function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
   return { byVehicleKey, byVehicleId };
 }
 
-function resolveVehiclePlan({ vehicleKey, vehicleId, defaultServiceIds, defaultDuration, planMaps }) {
+function resolveVehiclePlan({
+  vehicleKey,
+  vehicleId,
+  defaultServiceIds,
+  defaultDuration,
+  planMaps,
+  flexibleTriggerServiceIdSet,
+  slotBookingFlow,
+}) {
   const byKeyPlan = vehicleKey ? planMaps.byVehicleKey.get(vehicleKey) : null;
   const byIdPlan = Number.isFinite(vehicleId) && vehicleId > 0 ? planMaps.byVehicleId.get(vehicleId) : null;
   const plan = byKeyPlan || byIdPlan;
 
   const serviceIds = plan?.serviceIds?.length > 0 ? plan.serviceIds : defaultServiceIds;
-  const requestedServiceIds = serviceIds.length > 0 ? serviceIds.join(",") : null;
+  const split = splitBookingItemIds(serviceIds);
+  const requestedServiceIds = split.serviceIds.length > 0 ? split.serviceIds.join(",") : null;
+  const requestedPackageIds = split.packageIds.length > 0 ? split.packageIds.join(",") : null;
   const totalMinutes = Math.max(Number(plan?.totalMinutes || defaultDuration || 30), 30);
+  const bookingFlow = resolveVehicleBookingFlow(
+    plan?.bookingFlow || slotBookingFlow,
+    serviceIds,
+    flexibleTriggerServiceIdSet
+  );
 
   return {
     serviceIds,
     requestedServiceIds,
+    requestedPackageIds,
     totalMinutes,
+    bookingFlow,
     customerNotes: readText(plan?.customerNotes),
+    insuranceCompanyId: plan?.insuranceCompanyId || null,
+    insuranceDeductibleAmount: plan?.insuranceDeductibleAmount ?? null,
+    insuranceDeductibleOption: readText(plan?.insuranceDeductibleOption),
+    insuranceClaimMode: readText(plan?.insuranceClaimMode),
+    insuranceQuoteState: readText(plan?.insuranceQuoteState),
+    insuranceCardImageUrls: Array.isArray(plan?.insuranceCardImageUrls) ? plan.insuranceCardImageUrls : [],
+    insuranceDamageImageUrls: Array.isArray(plan?.insuranceDamageImageUrls) ? plan.insuranceDamageImageUrls : [],
   };
 }
 
@@ -100,6 +174,9 @@ function parseSlotSelectionByVehicle(slotSelections) {
     const normalized = {
       startTime: readText(item?.startTime),
       endTime: readText(item?.endTime),
+      bookingFlow: normalizeBookingFlow(item?.bookingFlow, ""),
+      checkInWindowStart: readText(item?.checkInWindowStart),
+      checkInWindowEnd: readText(item?.checkInWindowEnd),
       slotHoldToken: readText(item?.slotHoldToken),
     };
     if (vehicleKey) byVehicleKey.set(vehicleKey, normalized);
@@ -183,6 +260,7 @@ export async function saveReceptionAppointment({
   if (!effectiveBranchId) throw new Error(ERRORS.invalidBranch);
 
   const serviceLookup = normalizeServiceLookup(services);
+  const flexibleTriggerServiceIdSet = buildFlexibleTriggerServiceIdSet(serviceLookup);
   const fallbackServiceIds = toNumberList(formData.serviceIds);
   const fallbackDuration = Math.max(Number(formData.totalMinutes || 0), 30);
   const splitCustomerNotes = splitCustomerNotesInput(formData.customerNotes);
@@ -211,21 +289,42 @@ export async function saveReceptionAppointment({
       defaultServiceIds: fallbackServiceIds,
       defaultDuration: fallbackDuration,
       planMaps,
+      flexibleTriggerServiceIdSet,
+      slotBookingFlow: slotSelection?.bookingFlow,
     });
 
     const totalMinutes = resolveDurationMinutes(slotSelection, plan.totalMinutes);
     const requestedServiceIds = normalizeRequestedServiceIds(plan.requestedServiceIds);
+    const requestedPackageIds = normalizeRequestedServiceIds(plan.requestedPackageIds);
     const vehicleNotes = vehicleNoteMap.get(vehicleKey);
     const customerNotes = vehicleNotes || plan.customerNotes || normalizedCustomerNotes;
+    const bookingFlow = normalizeBookingFlow(plan.bookingFlow, BOOKING_FLOW.FIXED);
+    const checkInWindowStart = bookingFlow === BOOKING_FLOW.FLEXIBLE
+      ? readText(slotSelection?.checkInWindowStart || slotSelection?.startTime || startTime)
+      : null;
+    const checkInWindowEnd = bookingFlow === BOOKING_FLOW.FLEXIBLE
+      ? readText(slotSelection?.checkInWindowEnd || slotSelection?.endTime || startTime)
+      : null;
 
     return {
       vehicleKey,
       vehicleId: vehicleId > 0 ? vehicleId : null,
+      bookingFlow,
       startTime,
       endTime: readText(slotSelection?.endTime),
+      checkInWindowStart,
+      checkInWindowEnd,
       totalMinutes,
       requestedServiceIds,
+      requestedPackageIds,
       customerNotes,
+      insuranceCompanyId: plan.insuranceCompanyId,
+      insuranceDeductibleAmount: plan.insuranceDeductibleAmount,
+      insuranceDeductibleOption: plan.insuranceDeductibleOption,
+      insuranceClaimMode: plan.insuranceClaimMode,
+      insuranceQuoteState: plan.insuranceQuoteState,
+      insuranceCardImageUrls: Array.isArray(plan.insuranceCardImageUrls) ? plan.insuranceCardImageUrls : [],
+      insuranceDamageImageUrls: Array.isArray(plan.insuranceDamageImageUrls) ? plan.insuranceDamageImageUrls : [],
       slotHoldToken: readText(slotSelection?.slotHoldToken),
       licensePlate:
         vehicleKey === VEHICLE_KEY_GUEST
@@ -251,6 +350,11 @@ export async function saveReceptionAppointment({
           : vehicleKey === VEHICLE_KEY_NEW
             ? readText(formData.vehicleColor)
             : null,
+      insuranceCompanyId: plan?.insuranceCompanyId || null,
+      insuranceDeductibleAmount: plan?.insuranceDeductibleAmount ?? null,
+      insuranceDeductibleOption: plan?.insuranceDeductibleOption || null,
+      insuranceClaimMode: plan?.insuranceClaimMode || null,
+      insuranceQuoteState: plan?.insuranceQuoteState || null,
     };
   });
 
@@ -294,6 +398,7 @@ export async function saveReceptionAppointment({
     vehicleColor: readText(formData.vehicleColor),
     vehicleVin: readText(formData.vehicleVin),
     vehicleYear: Number(formData.vehicleYear || 0) || null,
+    ...buildInsuranceSnapshotPayload(formData),
     customerNotes: normalizedCustomerNotes,
     replaceAppointmentId: Number(replaceAppointmentId) > 0 ? Number(replaceAppointmentId) : null,
     vehiclePlans,

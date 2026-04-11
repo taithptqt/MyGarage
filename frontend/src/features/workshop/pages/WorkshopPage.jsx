@@ -14,6 +14,7 @@ import { ChakraProvider } from "@chakra-ui/react";
 import initialTheme from "@horizon/theme/theme";
 
 const ROLES_META = {
+  ADMIN: { path: "reception", label: "Admin Workshop", icon: "🛠️", description: "Toàn quyền điều phối xưởng" },
   RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📝", description: "Tiếp nhận, Báo giá & Thanh toán" },
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
   FOREMAN: { path: "foreman", label: "Quản đốc", icon: "🛡️", description: "Điều phối & Phê duyệt kỹ thuật" },
@@ -241,7 +242,7 @@ export default function WorkshopPage() {
   const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
-  const isReceptionDashboard = userRole === "RECEPTIONIST" && location.pathname.startsWith("/workshop/reception");
+  const isReceptionDashboard = (userRole === "RECEPTIONIST" || userRole === "ADMIN") && location.pathname.startsWith("/workshop/reception");
   const receptionTab = location.pathname.startsWith("/workshop/reception/appointments")
     ? "appointments"
     : "orders";

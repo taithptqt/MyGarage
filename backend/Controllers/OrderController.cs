@@ -62,7 +62,7 @@ public class OrderController(
         }
 
         retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
-        retailOrder.UpdatedAt = DateTime.UtcNow;
+        retailOrder.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
     }
 
@@ -102,7 +102,7 @@ public class OrderController(
             return method.Id;
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         method = new PaymentMethod
         {
             MethodName = "PayOS",
@@ -208,7 +208,7 @@ public class OrderController(
                     Amount = t.Amount,
                     AccountNumber = t.AccountNumber,
                     Description = t.Description,
-                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : DateTimeOffset.Now,
+                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : VietnamTime.OffsetNow,
                     VirtualAccountName = t.VirtualAccountName,
                     VirtualAccountNumber = t.VirtualAccountNumber,
                     CounterAccountBankId = t.CounterAccountBankId,
@@ -218,7 +218,7 @@ public class OrderController(
                 }).ToList();
 
                 _orderTransactionStore.CreateTransactions(transactions);
-                order.LastTransactionUpdate = DateTimeOffset.Now;
+                order.LastTransactionUpdate = VietnamTime.OffsetNow;
             }
 
             _orderStore.UpdateOrder(order.Id, order);
@@ -273,7 +273,7 @@ public class OrderController(
             });
         }
 
-        var orderCode = DateTimeOffset.Now.ToUnixTimeSeconds();
+        var orderCode = VietnamTime.OffsetNow.ToUnixTimeSeconds();
         var returnUrl = request.ReturnUrl ?? "https://your-domain.com/success";
         var cancelUrl = request.CancelUrl ?? "https://your-domain.com/cancel";
         var payOsDescription = BuildPayOsDescription(request.Description, orderCode);
@@ -333,7 +333,7 @@ public class OrderController(
                 Currency = paymentResponse.Currency,
                 ReturnUrl = returnUrl,
                 CancelUrl = cancelUrl,
-                CreatedAt = DateTimeOffset.Now,
+                CreatedAt = VietnamTime.OffsetNow,
                 BuyerName = request.BuyerName,
                 BuyerCompanyName = request.BuyerCompanyName,
                 BuyerEmail = request.BuyerEmail,
@@ -364,8 +364,8 @@ public class OrderController(
                 TransactionCode = paymentResponse.PaymentLinkId,
                 Type = normalizedPaymentType,
                 Status = PaymentStatusPending,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = VietnamTime.Now,
+                UpdatedAt = VietnamTime.Now
             };
 
             try
@@ -438,7 +438,7 @@ public class OrderController(
                     Amount = t.Amount,
                     AccountNumber = t.AccountNumber,
                     Description = t.Description,
-                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : DateTimeOffset.Now,
+                    TransactionDateTime = DateTimeOffset.TryParse(t.TransactionDateTime, out var transactionDateTime) ? transactionDateTime : VietnamTime.OffsetNow,
                     VirtualAccountName = t.VirtualAccountName,
                     VirtualAccountNumber = t.VirtualAccountNumber,
                     CounterAccountBankId = t.CounterAccountBankId,
@@ -448,7 +448,7 @@ public class OrderController(
                 }).ToList();
 
                 _orderTransactionStore.CreateTransactions(transactions);
-                order.LastTransactionUpdate = DateTimeOffset.Now;
+                order.LastTransactionUpdate = VietnamTime.OffsetNow;
             }
 
             _orderStore.UpdateOrder(order.Id, order);

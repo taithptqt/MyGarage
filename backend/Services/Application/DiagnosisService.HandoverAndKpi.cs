@@ -43,8 +43,8 @@ namespace MyGarage.Services
             public int MainServiceMinutes { get; set; }
             public int PackageEffectiveMinutes { get; set; }
             public DateTime T1EstimatedHandover { get; set; }
-            public string IntakePackageCode { get; set; } = MiniPackage.Code;
-            public string IntakePackageName { get; set; } = MiniPackage.Name;
+            public string IntakePackageCode { get; set; } = string.Empty;
+            public string IntakePackageName { get; set; } = string.Empty;
             public bool RequiresCustomerConsent { get; set; }
             public bool CustomerConsentAccepted { get; set; }
             public string? CustomerConsentChannel { get; set; }
@@ -122,10 +122,10 @@ namespace MyGarage.Services
                 PackageEffectiveMinutes = intakeSuggestion.PackageEffectiveMinutes,
                 T1EstimatedHandover = intakeSuggestion.T1EstimatedHandover,
                 IntakePackageCode = string.IsNullOrWhiteSpace(intakeSuggestion.FinalPackageCode)
-                    ? MiniPackage.Code
+                    ? string.Empty
                     : intakeSuggestion.FinalPackageCode.Trim().ToUpperInvariant(),
                 IntakePackageName = string.IsNullOrWhiteSpace(intakeSuggestion.FinalPackageName)
-                    ? ResolvePackageName(intakeSuggestion.FinalPackageCode)
+                    ? (intakeSuggestion.FinalPackageCode ?? string.Empty)
                     : intakeSuggestion.FinalPackageName,
                 RequiresCustomerConsent = intakeSuggestion.RequiresCustomerConsent,
                 CustomerConsentAccepted = customerConsentAccepted,
@@ -137,7 +137,7 @@ namespace MyGarage.Services
                 AssignedTeamId = newestDiagnosis?.AssignedTeamId ?? intakeSuggestion.SuggestedTeamId,
                 LeadTechnicianId = newestDiagnosis?.TechnicianId > 0 ? newestDiagnosis.TechnicianId : intakeSuggestion.SuggestedLeadTechnicianId,
                 AssistantTechnicianId = newestDiagnosis?.AssistantTechnicianId ?? intakeSuggestion.SuggestedAssistantTechnicianId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = VietnamTime.Now
             };
 
             var createdBy = serviceOrder.ReceptionistId ?? serviceOrder.ServiceAdvisorId;
@@ -177,7 +177,7 @@ namespace MyGarage.Services
                 QuoteChannel = NormalizeText(request.QuoteChannel),
                 QuoteSummary = NormalizeText(request.QuoteSummary),
                 QuoteAttachmentUrl = NormalizeText(request.QuoteAttachmentUrl),
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = VietnamTime.Now,
                 CreatedByStaffId = request.CreatedByStaffId
             };
 
@@ -187,7 +187,7 @@ namespace MyGarage.Services
                 request.CreatedByStaffId ?? serviceOrder.ReceptionistId ?? serviceOrder.ServiceAdvisorId);
 
             serviceOrder.Status = ServiceOrderStatusWaitingApproval;
-            serviceOrder.UpdatedAt = DateTime.UtcNow;
+            serviceOrder.UpdatedAt = VietnamTime.Now;
             _context.ServiceOrders.Update(serviceOrder);
             await _context.SaveChangesAsync();
 
@@ -236,7 +236,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Khong tim thay lenh sua chua.");
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             payload.CustomerApproved = request.Approved;
             payload.ApprovalState = request.Approved ? ApprovalStateApproved : ApprovalStateRejected;
             payload.DecisionChannel = NormalizeText(request.DecisionChannel);
@@ -267,8 +267,8 @@ namespace MyGarage.Services
 
         public async Task<DiagnosisIntakeKpiResponseDto> GetIntakeConversionKpiAsync(long? branchId, DateTime? startDate, DateTime? endDate)
         {
-            var utcStart = (startDate ?? DateTime.UtcNow.Date.AddDays(-30)).Date;
-            var utcEndDate = (endDate ?? DateTime.UtcNow.Date).Date;
+            var utcStart = (startDate ?? VietnamTime.Now.Date.AddDays(-30)).Date;
+            var utcEndDate = (endDate ?? VietnamTime.Now.Date).Date;
             if (utcEndDate < utcStart)
             {
                 (utcStart, utcEndDate) = (utcEndDate, utcStart);
@@ -326,9 +326,9 @@ namespace MyGarage.Services
                 }
             }
 
-            var packageCodes = new[] { MiniPackage.Code, QuickPackage.Code, FullPackage.Code };
-            var packageBuckets = packageCodes.ToDictionary(
-                code => code,
+            var intakePackages = await GetIntakePackageProfilesAsync();
+            var packageBuckets = intakePackages.ToDictionary(
+                package => package.Code,
                 _ => new IntakeKpiBucket(),
                 StringComparer.OrdinalIgnoreCase);
 
@@ -339,7 +339,7 @@ namespace MyGarage.Services
                 latestHandoverByOrder.TryGetValue(serviceOrderId, out var handoverPayload);
                 var decisionState = ResolveDecisionState(handoverPayload);
 
-                var packageCode = NormalizePackageCode(intakePayload.IntakePackageCode);
+                var packageCode = NormalizePackageCode(intakePayload.IntakePackageCode, intakePackages);
                 if (!packageBuckets.TryGetValue(packageCode, out var packageBucket))
                 {
                     packageBucket = new IntakeKpiBucket();
@@ -368,14 +368,14 @@ namespace MyGarage.Services
                 .Select(pair => new DiagnosisIntakePackageKpiItemDto
                 {
                     PackageCode = pair.Key,
-                    PackageName = ResolvePackageName(pair.Key),
+                    PackageName = ResolvePackageName(pair.Key, intakePackages),
                     TotalOrders = pair.Value.Total,
                     ApprovedAdditionalRepairOrders = pair.Value.Approved,
                     RejectedAdditionalRepairOrders = pair.Value.Rejected,
                     PendingDecisionOrders = pair.Value.Pending,
                     ApprovalRatePercent = ComputePercent(pair.Value.Approved, pair.Value.Total)
                 })
-                .OrderBy(x => ResolvePackageRank(x.PackageCode))
+                .OrderBy(x => ResolvePackageRank(x.PackageCode, intakePackages))
                 .ToList();
 
             var teamConversions = teamBuckets
@@ -433,7 +433,7 @@ namespace MyGarage.Services
                 ?? serviceOrder.PromisedHandoverTime
                 ?? serviceOrder.CheckInTime
                 ?? serviceOrder.CreatedAt
-                ?? DateTime.UtcNow;
+                ?? VietnamTime.Now;
         }
 
         private async Task<ServiceOrderSnapshot> PersistSnapshotAsync(long serviceOrderId, object payload, long? createdBy)
@@ -449,7 +449,7 @@ namespace MyGarage.Services
                 RevisionNumber = maxRevision + 1,
                 SnapshotData = JsonSerializer.Serialize(payload, SnapshotWriteOptions),
                 CreatedBy = createdBy,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = VietnamTime.Now
             };
 
             _context.ServiceOrderSnapshots.Add(snapshot);
@@ -570,39 +570,41 @@ namespace MyGarage.Services
             };
         }
 
-        private static int ResolvePackageRank(string? packageCode)
+        private static int ResolvePackageRank(string? packageCode, IReadOnlyList<DiagnosisPackageProfile> packages)
         {
-            var normalized = NormalizePackageCode(packageCode);
-            return normalized switch
-            {
-                "MINI_10" => 1,
-                "QUICK_30" => 2,
-                "FULL_60" => 3,
-                _ => 4
-            };
+            var normalized = NormalizePackageCode(packageCode, packages);
+            var matched = packages.FirstOrDefault(package => package.Code.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+            return matched?.Rank ?? int.MaxValue;
         }
 
-        private static string NormalizePackageCode(string? packageCode)
+        private static string NormalizePackageCode(string? packageCode, IReadOnlyList<DiagnosisPackageProfile> packages)
         {
             var normalized = (packageCode ?? string.Empty).Trim().ToUpperInvariant();
+
+            if (packages.Count == 0)
+            {
+                return normalized;
+            }
+
+            if (packages.Any(package => package.Code.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                return normalized;
+            }
+
             return normalized switch
             {
-                "MINI" => "MINI_10",
-                "QUICK" => "QUICK_30",
-                "FULL" => "FULL_60",
-                _ => string.IsNullOrWhiteSpace(normalized) ? "MINI_10" : normalized
+                "MINI" or LegacyMiniPackageCode => packages[0].Code,
+                "QUICK" or LegacyQuickPackageCode => packages[Math.Min(1, packages.Count - 1)].Code,
+                "FULL" or LegacyFullPackageCode => packages[Math.Max(0, packages.Count - 1)].Code,
+                _ => string.IsNullOrWhiteSpace(normalized) ? packages[0].Code : normalized
             };
         }
 
-        private static string ResolvePackageName(string? packageCode)
+        private static string ResolvePackageName(string? packageCode, IReadOnlyList<DiagnosisPackageProfile> packages)
         {
-            return NormalizePackageCode(packageCode) switch
-            {
-                "MINI_10" => MiniPackage.Name,
-                "QUICK_30" => QuickPackage.Name,
-                "FULL_60" => FullPackage.Name,
-                var other => other
-            };
+            var normalized = NormalizePackageCode(packageCode, packages);
+            var matched = packages.FirstOrDefault(package => package.Code.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+            return matched?.Name ?? normalized;
         }
 
         private static string? NormalizeText(string? value)

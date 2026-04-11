@@ -13,7 +13,7 @@ namespace MyGarage.Services
     public partial class AuthService
     {
         private const string PhoneRequestCode = "PHONE_REQUEST";
-        private static readonly Regex GooglePhoneRegex = new(@"^(0\d{9,10}|\+84\d{9,10})$", RegexOptions.Compiled);
+        private static readonly Regex GooglePhoneRegex = new(@"^(0\d{9}|\+84\d{9})$", RegexOptions.Compiled);
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginRequestDto request)
         {

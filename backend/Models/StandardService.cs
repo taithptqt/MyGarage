@@ -15,7 +15,7 @@ public partial class StandardService
 
     public decimal BasePrice { get; set; }
 
-    public long? VehicleClassId { get; set; }
+    public string? EngineType { get; set; }
 
     public int StandardMinutes { get; set; }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -54,7 +54,7 @@ namespace MyGarage.Services
 
             request.Status = ApprovalStatusApproved;
             request.ApproverId = approverId;
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
             if (!string.IsNullOrWhiteSpace(note)) request.Reason = note.Trim();
 
             await _context.SaveChangesAsync();
@@ -69,7 +69,7 @@ namespace MyGarage.Services
             request.Status = ApprovalStatusRejected;
             request.ApproverId = approverId;
             request.RejectReason = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
 
             await _context.SaveChangesAsync();
             return true;
@@ -115,7 +115,7 @@ namespace MyGarage.Services
 
             audit.Status = AuditStatusCompleted;
             audit.ApprovedBy = approverId;
-            audit.UpdatedAt = DateTime.UtcNow;
+            audit.UpdatedAt = VietnamTime.Now;
             audit.UpdatedBy = approverId;
             await _context.SaveChangesAsync();
             return true;
@@ -127,7 +127,7 @@ namespace MyGarage.Services
             if (audit == null) return false;
 
             audit.Status = AuditStatusCanceled;
-            audit.UpdatedAt = DateTime.UtcNow;
+            audit.UpdatedAt = VietnamTime.Now;
             audit.UpdatedBy = approverId;
             await _context.SaveChangesAsync();
             return true;

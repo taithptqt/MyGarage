@@ -17,6 +17,8 @@ namespace MyGarage.Services
             TimeOnly closeTime,
             int slotStepMinutes,
             string? effectiveRequestedServiceIds,
+            string? effectiveRequestedPackageIds,
+            BookingFlowType flow,
             int requiredDurationMinutes,
             int vehicleCount = 1,
             bool ignoreMinLeadTime = false)
@@ -26,13 +28,22 @@ namespace MyGarage.Services
                 .Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true)
                 .ToListAsync();
             var capacity = ComputeCapacity(activeBays);
+            var capacityConfigs = await LoadCapacityConfigsForDayAsync(branchId, date);
 
-            var requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, null);
+            var requestedCluster = ServiceCluster.Quick;
+            if (flow == BookingFlowType.Fixed)
+            {
+                requestedCluster = await ResolveServiceClusterAsync(effectiveRequestedServiceIds, effectiveRequestedPackageIds, null);
+            }
 
-            var appointments = await LoadAppointmentsForDateAsync(branchId, date);
-            var overnightLocks = await LoadOvernightLocksForDateAsync(branchId, date);
             var dayStart = date.ToDateTime(TimeOnly.MinValue);
             var dayEnd = dayStart.AddDays(1);
+            var appointments = await LoadAppointmentsForDateAsync(branchId, date);
+            if (flow == BookingFlowType.Fixed)
+            {
+                appointments.AddRange(await LoadProjectedRepairReservationsAsync(branchId, dayStart, dayEnd));
+            }
+            var overnightLocks = await LoadOvernightLocksForDateAsync(branchId, date);
             var fixedHolds = _slotHoldService.GetActiveHolds(branchId, dayStart, dayEnd, AppointmentBookingFlows.Fixed);
             var flexibleHolds = _slotHoldService.GetActiveHolds(branchId, dayStart, dayEnd, AppointmentBookingFlows.Flexible);
             var mergedHolds = fixedHolds.Concat(flexibleHolds).ToList();
@@ -50,17 +61,34 @@ namespace MyGarage.Services
                     continue;
                 }
 
-                var candidate = EvaluateFixedSlotCandidate(
-                    current,
-                    requiredDurationMinutes,
-                    date.ToDateTime(openTime),
-                    appointments,
-                    syntheticHoldAppointments,
-                    activeBays,
-                    overnightLocks,
-                    capacity,
-                    requestedCluster,
-                    vehicleCount);
+                var candidate = flow == BookingFlowType.Flexible
+                    ? EvaluateFlexibleSlotCandidate(
+                        branchId,
+                        current,
+                        requiredDurationMinutes,
+                        date.ToDateTime(openTime),
+                        appointments,
+                        syntheticHoldAppointments,
+                        activeBays,
+                        overnightLocks,
+                        capacityConfigs,
+                        capacity,
+                        vehicleCount,
+                        slotStepMinutes)
+                    : EvaluateFixedSlotCandidate(
+                        branchId,
+                        current,
+                        requiredDurationMinutes,
+                        date.ToDateTime(openTime),
+                        appointments,
+                        syntheticHoldAppointments,
+                        activeBays,
+                        overnightLocks,
+                        capacityConfigs,
+                        capacity,
+                        requestedCluster,
+                        vehicleCount,
+                        slotStepMinutes);
 
                 if (candidate != null)
                 {

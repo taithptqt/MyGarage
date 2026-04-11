@@ -18,6 +18,7 @@ namespace MyGarage.Services
 
         private sealed class DiagnosisPackageProfile
         {
+            public long StandardServiceId { get; init; }
             public string Code { get; init; } = string.Empty;
             public string Name { get; init; } = string.Empty;
             public int NominalMinutes { get; init; }
@@ -25,6 +26,14 @@ namespace MyGarage.Services
             public bool RequiresCustomerConsent { get; init; }
             public bool RequiresBayBlock { get; init; }
             public int Rank { get; init; }
+        }
+
+        private sealed class DiagnosisPackageCandidate
+        {
+            public long Id { get; init; }
+            public string Code { get; init; } = string.Empty;
+            public string Name { get; init; } = string.Empty;
+            public int StandardMinutes { get; init; }
         }
 
         private sealed class AppointmentConflictProbe
@@ -37,38 +46,27 @@ namespace MyGarage.Services
             public string ConflictLevel { get; init; } = "GREEN";
         }
 
-        private static readonly DiagnosisPackageProfile MiniPackage = new()
-        {
-            Code = "MINI_10",
-            Name = "Mini Check (10p)",
-            NominalMinutes = 10,
-            EffectiveMinutes = 0,
-            RequiresCustomerConsent = false,
-            RequiresBayBlock = false,
-            Rank = 1
-        };
+        private const string LegacyMiniPackageCode = "MINI_10";
+        private const string LegacyQuickPackageCode = "QUICK_30";
+        private const string LegacyFullPackageCode = "FULL_60";
 
-        private static readonly DiagnosisPackageProfile QuickPackage = new()
+        public async Task<IReadOnlyList<DiagnosisIntakePackageOptionDto>> GetIntakePackagesAsync()
         {
-            Code = "QUICK_30",
-            Name = "Kiểm tra nhanh (30p)",
-            NominalMinutes = 30,
-            EffectiveMinutes = 30,
-            RequiresCustomerConsent = true,
-            RequiresBayBlock = false,
-            Rank = 2
-        };
-
-        private static readonly DiagnosisPackageProfile FullPackage = new()
-        {
-            Code = "FULL_60",
-            Name = "Kiểm tra tổng quát (60p)",
-            NominalMinutes = 60,
-            EffectiveMinutes = 60,
-            RequiresCustomerConsent = true,
-            RequiresBayBlock = true,
-            Rank = 3
-        };
+            var packages = await GetIntakePackageProfilesAsync();
+            return packages
+                .Select(package => new DiagnosisIntakePackageOptionDto
+                {
+                    StandardServiceId = package.StandardServiceId,
+                    Code = package.Code,
+                    Name = package.Name,
+                    NominalMinutes = package.NominalMinutes,
+                    EffectiveMinutes = package.EffectiveMinutes,
+                    RequiresCustomerConsent = package.RequiresCustomerConsent,
+                    RequiresBayBlock = package.RequiresBayBlock,
+                    Rank = package.Rank
+                })
+                .ToList();
+        }
 
         public async Task<DiagnosisIntakeSuggestionDto> BuildIntakeSuggestionAsync(
             long serviceOrderId,
@@ -96,7 +94,7 @@ namespace MyGarage.Services
             }
 
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
-            var checkInTime = serviceOrder.CheckInTime ?? serviceOrder.CreatedAt ?? DateTime.UtcNow;
+            var checkInTime = serviceOrder.CheckInTime ?? serviceOrder.CreatedAt ?? VietnamTime.Now;
             var bufferMinutes = NormalizeBufferMinutes(bufferMinutesOverride);
             var mainServiceMinutes = await EstimateMainServiceMinutesAsync(serviceOrderId, serviceOrder.OrderCategory);
             var requestedServiceCount = await _context.ServiceOrderDetails.AsNoTracking()
@@ -118,10 +116,16 @@ namespace MyGarage.Services
             var isMinorQuickFlow = IsMinorQuickFlow(serviceOrder.OrderCategory, mainServiceMinutes, requestedServiceCount);
             if (isMinorQuickFlow)
             {
-                reasons.Add("Xe thuộc nhóm quick service nhẹ, ưu tiên Mini Check lồng ghép.");
+                reasons.Add("Xe thuộc nhóm quick service nhẹ, ưu tiên gói intake mức cơ bản.");
             }
 
-            var scoredPolicy = ResolveScoredPackage(riskScore, isMinorQuickFlow, requestedPackageCode, reasons);
+            var packageProfiles = await GetIntakePackageProfilesAsync();
+            if (packageProfiles.Count == 0)
+            {
+                throw new InvalidOperationException("Chua cau hinh goi chan doan trong StandardServices.");
+            }
+
+            var scoredPolicy = ResolveScoredPackage(packageProfiles, riskScore, isMinorQuickFlow, requestedPackageCode, reasons);
             var finalPolicy = scoredPolicy;
             var usedFallback = false;
 
@@ -132,7 +136,7 @@ namespace MyGarage.Services
                 bufferMinutes,
                 finalPolicy.EffectiveMinutes);
 
-            while (probe.ConflictLevel == "RED" && TryGetLowerPackage(finalPolicy.Code, out var lowerPolicy))
+            while (probe.ConflictLevel == "RED" && TryGetLowerPackage(packageProfiles, finalPolicy.Code, out var lowerPolicy))
             {
                 reasons.Add($"Gói {finalPolicy.Code} gây xung đột lịch > {IntakeConflictRedThresholdMinutes} phút, hạ về {lowerPolicy.Code}.");
                 finalPolicy = lowerPolicy;
@@ -159,7 +163,7 @@ namespace MyGarage.Services
                 }
             }
 
-            if (finalPolicy.RequiresBayBlock && dispatchSuggestion?.SuggestedBayId == null && TryGetLowerPackage(finalPolicy.Code, out var lowerByBay))
+            if (finalPolicy.RequiresBayBlock && dispatchSuggestion?.SuggestedBayId == null && TryGetLowerPackage(packageProfiles, finalPolicy.Code, out var lowerByBay))
             {
                 reasons.Add($"Không còn cầu nâng trống cho gói {finalPolicy.Code}, hạ về {lowerByBay.Code}.");
                 finalPolicy = lowerByBay;
@@ -224,6 +228,70 @@ namespace MyGarage.Services
             };
         }
 
+        private async Task<IReadOnlyList<DiagnosisPackageProfile>> GetIntakePackageProfilesAsync()
+        {
+            var candidates = await _context.StandardServices.AsNoTracking()
+                .Where(service => service.IsDeleted != true && service.IsActive != false)
+                .Select(service => new DiagnosisPackageCandidate
+                {
+                    Id = service.Id,
+                    Code = service.Code,
+                    Name = service.Name,
+                    StandardMinutes = service.StandardMinutes
+                })
+                .ToListAsync();
+            var packageCandidates = candidates
+                .Where(IsDiagnosisPackageCandidate)
+                .OrderBy(service => Math.Max(0, service.StandardMinutes))
+                .ThenBy(service => service.Id)
+                .ToList();
+
+            if (packageCandidates.Count == 0)
+            {
+                return Array.Empty<DiagnosisPackageProfile>();
+            }
+
+            var selectedCandidates = packageCandidates
+                .DistinctBy(candidate => candidate.Id)
+                .ToList();
+
+            return selectedCandidates
+                .Select((candidate, index) => BuildPackageProfile(candidate, index + 1, selectedCandidates.Count))
+                .ToList();
+        }
+
+        private static DiagnosisPackageProfile BuildPackageProfile(
+            DiagnosisPackageCandidate candidate,
+            int rank,
+            int totalPackages)
+        {
+            var nominalMinutes = Math.Max(0, candidate.StandardMinutes);
+            var code = string.IsNullOrWhiteSpace(candidate.Code)
+                ? $"DG-PKG-{candidate.Id}"
+                : candidate.Code.Trim().ToUpperInvariant();
+            var name = string.IsNullOrWhiteSpace(candidate.Name)
+                ? $"Goi chan doan #{candidate.Id}"
+                : candidate.Name.Trim();
+            var hasMultiplePackages = totalPackages > 1;
+            var isBasePackage = hasMultiplePackages && rank == 1;
+            return new DiagnosisPackageProfile
+            {
+                StandardServiceId = candidate.Id,
+                Code = code,
+                Name = name,
+                NominalMinutes = nominalMinutes,
+                EffectiveMinutes = isBasePackage ? 0 : nominalMinutes,
+                RequiresCustomerConsent = hasMultiplePackages && rank > 1,
+                RequiresBayBlock = nominalMinutes >= 45,
+                Rank = rank
+            };
+        }
+
+        private static bool IsDiagnosisPackageCandidate(DiagnosisPackageCandidate candidate)
+        {
+            return !string.IsNullOrWhiteSpace(candidate.Code)
+                && candidate.Code.Trim().StartsWith("DG", StringComparison.OrdinalIgnoreCase);
+        }
         private async Task<int> ComputeIntakeRiskScoreAsync(
             long serviceOrderId,
             long vehicleId,
@@ -453,7 +521,7 @@ namespace MyGarage.Services
                     .Where(x =>
                     {
                         var specialty = NormalizeDispatchTag(x.SpecialtyTag);
-                        return specialty != null && dispatchTags.Contains(specialty, StringComparer.OrdinalIgnoreCase);
+                        return specialty != null && dispatchTags.Any(tag => DispatchTagMatchesSpecialty(tag, specialty));
                     })
                     .OrderBy(x => x.Id)
                     .FirstOrDefault();
@@ -488,86 +556,107 @@ namespace MyGarage.Services
         }
 
         private static DiagnosisPackageProfile ResolveScoredPackage(
+            IReadOnlyList<DiagnosisPackageProfile> packages,
             int score,
             bool isMinorQuickFlow,
             string? requestedPackageCode,
             List<string> reasons)
         {
-            if (TryResolvePackage(requestedPackageCode, out var requestedPackage))
+            if (TryResolvePackage(packages, requestedPackageCode, out var requestedPackage))
             {
-                reasons.Add($"Lễ tân chọn gói {requestedPackage.Code}.");
+                reasons.Add($"Le tan chon goi {requestedPackage.Code}.");
                 return requestedPackage;
             }
 
             if (isMinorQuickFlow)
             {
-                return MiniPackage;
+                return packages[0];
             }
 
             if (score >= 70)
             {
-                return FullPackage;
+                return packages[Math.Max(0, packages.Count - 1)];
             }
 
             if (score >= 35)
             {
-                return QuickPackage;
+                return packages[ResolveQuickPackageIndex(packages.Count)];
             }
 
-            return MiniPackage;
+            return packages[0];
         }
 
-        private static bool TryResolvePackage(string? rawCode, out DiagnosisPackageProfile package)
+        private static bool TryResolvePackage(
+            IReadOnlyList<DiagnosisPackageProfile> packages,
+            string? rawCode,
+            out DiagnosisPackageProfile package)
         {
             var normalized = (rawCode ?? string.Empty).Trim().ToUpperInvariant();
-            package = MiniPackage;
+            package = packages[0];
 
             if (string.IsNullOrWhiteSpace(normalized))
             {
                 return false;
             }
 
-            if (normalized == "MINI" || normalized == "MINI_10")
+            var exactMatch = packages.FirstOrDefault(item => item.Code.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+            if (exactMatch != null)
             {
-                package = MiniPackage;
+                package = exactMatch;
                 return true;
             }
 
-            if (normalized == "QUICK" || normalized == "QUICK_30")
+            if (normalized == "MINI" || normalized == LegacyMiniPackageCode)
             {
-                package = QuickPackage;
+                package = packages[0];
                 return true;
             }
 
-            if (normalized == "FULL" || normalized == "FULL_60")
+            if (normalized == "QUICK" || normalized == LegacyQuickPackageCode)
             {
-                package = FullPackage;
+                package = packages[ResolveQuickPackageIndex(packages.Count)];
+                return true;
+            }
+
+            if (normalized == "FULL" || normalized == LegacyFullPackageCode)
+            {
+                package = packages[Math.Max(0, packages.Count - 1)];
                 return true;
             }
 
             return false;
         }
 
-        private static bool TryGetLowerPackage(string currentCode, out DiagnosisPackageProfile lowerPackage)
+        private static bool TryGetLowerPackage(
+            IReadOnlyList<DiagnosisPackageProfile> packages,
+            string currentCode,
+            out DiagnosisPackageProfile lowerPackage)
         {
             var normalized = (currentCode ?? string.Empty).Trim().ToUpperInvariant();
-            lowerPackage = MiniPackage;
+            var currentIndex = packages
+                .Select((package, index) => new { package, index })
+                .FirstOrDefault(item => item.package.Code.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                ?.index ?? -1;
+            lowerPackage = packages[0];
 
-            if (normalized == FullPackage.Code)
+            if (currentIndex <= 0)
             {
-                lowerPackage = QuickPackage;
-                return true;
+                return false;
             }
 
-            if (normalized == QuickPackage.Code)
-            {
-                lowerPackage = MiniPackage;
-                return true;
-            }
-
-            return false;
+            lowerPackage = packages[currentIndex - 1];
+            return true;
         }
 
+        private static int ResolveQuickPackageIndex(int packageCount)
+        {
+            if (packageCount <= 1)
+            {
+                return 0;
+            }
+
+            return Math.Min(1, packageCount - 1);
+        }
         private static bool IsMinorQuickFlow(string? orderCategory, int mainServiceMinutes, int requestedServiceCount)
         {
             var normalized = NormalizeOrderCategory(orderCategory);

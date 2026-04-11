@@ -1,4 +1,4 @@
-﻿// Mục đích: Xử lý các bươc chuyển trạng thái phê duyệt voucher như duyệt hoặc từ chđi.
+// M?c d�ch: X? l� c�c buoc chuy?n tr?ng th�i ph� duy?t voucher nhu duy?t ho?c t? chdi.
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -37,7 +37,7 @@ namespace MyGarage.Services
 
         public override async Task<VoucherApprovalRequest> AddAsync(VoucherApprovalRequest entity)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             entity.RequestType = (entity.RequestType ?? string.Empty).Trim().ToUpperInvariant();
             entity.Status = string.IsNullOrWhiteSpace(entity.Status) ? StatusPending : entity.Status!.Trim().ToUpperInvariant();
             entity.RiskLevel = string.IsNullOrWhiteSpace(entity.RiskLevel) ? "MEDIUM" : entity.RiskLevel!.Trim().ToUpperInvariant();

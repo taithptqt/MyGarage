@@ -29,23 +29,9 @@ export function buildSlotsBySession(availableSlots) {
 export function buildDisplayedSlots({ slotsBySession, activeSession, bookingFlow, showOddSlots }) {
   const sessionSlots = slotsBySession?.[activeSession] || [];
   if (sessionSlots.length === 0) return [];
-
-  if (bookingFlow === BOOKING_FLOW.FLEXIBLE) {
-    return sessionSlots;
-  }
-
-  const roundedTopPicks = sessionSlots.filter(
-    (slot) =>
-      extractField(slot, ["isRoundedHour", "IsRoundedHour"], false) &&
-      extractField(slot, ["isTopPick", "IsTopPick"], false)
-  );
-  const roundedAll = sessionSlots.filter((slot) => extractField(slot, ["isRoundedHour", "IsRoundedHour"], false));
-  const shouldExpand = showOddSlots?.[activeSession] || roundedTopPicks.length === 0;
-
+  const shouldExpand = Boolean(showOddSlots?.[activeSession]);
   if (shouldExpand) return sessionSlots;
-
-  const preferred = roundedTopPicks.length > 0 ? roundedTopPicks : roundedAll;
-  return preferred.slice(0, 5);
+  return buildCollapsedSlots(sessionSlots, bookingFlow);
 }
 
 export function resolveFirstActiveSession(sessionTabs, slotsBySession) {
@@ -66,4 +52,35 @@ export function getAutoExpandOddStateForFixedFlow(sessionTabs, slotsBySession, p
     }
   }
   return next;
+}
+
+export function buildCollapsedSlots(sessionSlots, bookingFlow = BOOKING_FLOW.FIXED) {
+  if (!Array.isArray(sessionSlots) || sessionSlots.length === 0) return [];
+
+  const roundedTopPicks = sessionSlots.filter(
+    (slot) =>
+      extractField(slot, ["isRoundedHour", "IsRoundedHour"], false) &&
+      extractField(slot, ["isTopPick", "IsTopPick"], false)
+  );
+  const roundedAll = sessionSlots.filter((slot) => extractField(slot, ["isRoundedHour", "IsRoundedHour"], false));
+
+  if (bookingFlow === BOOKING_FLOW.FLEXIBLE) {
+    const preferredFlexible = roundedAll.length > 0 ? roundedAll : roundedTopPicks;
+    return preferredFlexible.length > 0 ? preferredFlexible.slice(0, 5) : sessionSlots.slice(0, 5);
+  }
+
+  const preferredFixed =
+    roundedTopPicks.length > 0
+      ? roundedTopPicks
+      : roundedAll.length > 0
+        ? roundedAll
+        : sessionSlots;
+  return preferredFixed.slice(0, 5);
+}
+
+export function canToggleOddSlotsForSession({ slotsBySession, activeSession, bookingFlow = BOOKING_FLOW.FIXED }) {
+  const sessionSlots = slotsBySession?.[activeSession] || [];
+  if (!Array.isArray(sessionSlots) || sessionSlots.length === 0) return false;
+  const collapsedSlots = buildCollapsedSlots(sessionSlots, bookingFlow);
+  return sessionSlots.length > collapsedSlots.length;
 }

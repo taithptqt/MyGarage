@@ -1,14 +1,14 @@
-﻿namespace MyGarage.Enums;
+namespace MyGarage.Enums;
 
 public enum WorkSlotStatus
 {
-    CANCELED,
+    LOCKED,
+    RESERVED,
+    ARRIVED,
+    IN_PROGRESS,
+    DIAGNOSED_WAITING,
     COMPLETED,
     OVERNIGHT_HOLD,
-    NO_SHOW,
-    CHECKED_IN,
-    BOOKED,
-    LOCKED,
-    AVAILABLE
+    NOSHOW,
+    CANCELLED
 }
-

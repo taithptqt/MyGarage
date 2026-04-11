@@ -937,6 +937,7 @@ export default function DispatchOpsDashboard({
   const [managerDecisionNote, setManagerDecisionNote] = useState("");
   const [managerFinalApprovalNote, setManagerFinalApprovalNote] = useState("");
   const [managerCancelDecisionModalOpen, setManagerCancelDecisionModalOpen] = useState(false);
+  const [isManagerSupportSectionExpanded, setIsManagerSupportSectionExpanded] = useState(false);
 
   const [suggestion, setSuggestion] = useState(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -1046,7 +1047,11 @@ export default function DispatchOpsDashboard({
     [activeTechnicians]
   );
 
-  const leaderTechnicianOptions = useMemo(() => getTechniciansByTeam(leaderTeamId), [getTechniciansByTeam, leaderTeamId]);
+  const leaderTeamIdForAssignment = toPositiveNumber(leaderTeamId) || currentStaffTeamId;
+  const hasLeaderTeamSelected = Boolean(leaderTeamIdForAssignment);
+  const hasManagerTeamSelected = Boolean(toPositiveNumber(managerTeamId));
+
+  const leaderTechnicianOptions = useMemo(() => getTechniciansByTeam(leaderTeamIdForAssignment), [getTechniciansByTeam, leaderTeamIdForAssignment]);
   const managerTechnicianOptions = useMemo(() => getTechniciansByTeam(managerTeamId), [getTechniciansByTeam, managerTeamId]);
 
   const assignmentTeamBranchId = assignmentBranchId;
@@ -1196,20 +1201,44 @@ export default function DispatchOpsDashboard({
   }, [managerSupportingTeamOptions, buildTechnicianOptionsForTeam]);
 
   useEffect(() => {
+    if (hasLeaderTeamSelected) return;
+    if (toText(leaderLeadTechnicianId)) setLeaderLeadTechnicianId("");
+    if (toText(leaderAssistantTechnicianId)) setLeaderAssistantTechnicianId("");
+    if (toText(leaderBayId)) setLeaderBayId("");
+  }, [hasLeaderTeamSelected, leaderLeadTechnicianId, leaderAssistantTechnicianId, leaderBayId]);
+
+  useEffect(() => {
+    if (hasManagerTeamSelected) return;
+    if (toText(managerLeadTechnicianId)) setManagerLeadTechnicianId("");
+    if (toText(managerAssistantTechnicianId)) setManagerAssistantTechnicianId("");
+    if (toText(managerBayId)) setManagerBayId("");
+  }, [hasManagerTeamSelected, managerLeadTechnicianId, managerAssistantTechnicianId, managerBayId]);
+
+  useEffect(() => {
     const leadId = toPositiveNumber(leaderLeadTechnicianId);
+    if (!leadId) {
+      if (toText(leaderAssistantTechnicianId)) setLeaderAssistantTechnicianId("");
+      if (toText(leaderBayId)) setLeaderBayId("");
+      return;
+    }
     const assistantId = toPositiveNumber(leaderAssistantTechnicianId);
-    if (leadId && assistantId && leadId === assistantId) {
+    if (assistantId && assistantId === leadId) {
       setLeaderAssistantTechnicianId("");
     }
-  }, [leaderLeadTechnicianId, leaderAssistantTechnicianId]);
+  }, [leaderLeadTechnicianId, leaderAssistantTechnicianId, leaderBayId]);
 
   useEffect(() => {
     const leadId = toPositiveNumber(managerLeadTechnicianId);
+    if (!leadId) {
+      if (toText(managerAssistantTechnicianId)) setManagerAssistantTechnicianId("");
+      if (toText(managerBayId)) setManagerBayId("");
+      return;
+    }
     const assistantId = toPositiveNumber(managerAssistantTechnicianId);
-    if (leadId && assistantId && leadId === assistantId) {
+    if (assistantId && assistantId === leadId) {
       setManagerAssistantTechnicianId("");
     }
-  }, [managerLeadTechnicianId, managerAssistantTechnicianId]);
+  }, [managerLeadTechnicianId, managerAssistantTechnicianId, managerBayId]);
 
   useEffect(() => {
     const leadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
@@ -1543,6 +1572,7 @@ export default function DispatchOpsDashboard({
     setManagerLeadTechnicianId(selectedItem.technicianId ? String(selectedItem.technicianId) : "");
     setManagerAssistantTechnicianId(selectedItem.assistantTechnicianId ? String(selectedItem.assistantTechnicianId) : "");
     setManagerBayId(selectedItem.assignedBayId ? String(selectedItem.assignedBayId) : "");
+    setIsManagerSupportSectionExpanded(nextManagerSupportingTeamIds.length > 0);
   }, [selectedItem?.serviceOrderId]);
 
   useEffect(() => {
@@ -1749,7 +1779,7 @@ export default function DispatchOpsDashboard({
         return;
       }
 
-      const teamId = targetMode === "team_leader" ? toPositiveNumber(leaderTeamId) : toPositiveNumber(managerTeamId);
+      const teamId = targetMode === "team_leader" ? leaderTeamIdForAssignment : toPositiveNumber(managerTeamId);
       if (!teamId) {
         toast({ title: "Vui lòng chọn tổ trước khi lấy gợi ý", status: "warning", duration: 2600, isClosable: true });
         return;
@@ -1777,7 +1807,7 @@ export default function DispatchOpsDashboard({
         setSuggestionLoading(false);
       }
     },
-    [selectedItem, leaderTeamId, managerTeamId, toast]
+    [selectedItem, leaderTeamIdForAssignment, managerTeamId, toast]
   );
 
   const handleLeaderSupportRequestedCountChange = useCallback((teamId, value) => {
@@ -1958,6 +1988,11 @@ export default function DispatchOpsDashboard({
     const supportingTeamIds = normalizeTeamIds(managerSupportingTeamIds, teamId);
     const supportingAssignments = buildSupportingAssignmentsPayload(supportingTeamIds, managerSupportingAssignmentMap);
     const bayId = toPositiveNumber(managerBayId);
+
+    if (!teamId) {
+      toast({ title: "Vui lòng chọn tổ trước khi chọn thợ", status: "warning", duration: 2500, isClosable: true });
+      return;
+    }
 
     if (!leadId) {
       toast({ title: "Vui lòng chọn thợ chính", status: "warning", duration: 2500, isClosable: true });
@@ -2172,7 +2207,7 @@ export default function DispatchOpsDashboard({
     Boolean(selectedItem) &&
     canCurrentTeamLeadPrimaryFlow &&
     !isLeaderAssignmentLocked &&
-    Boolean(toPositiveNumber(leaderTeamId));
+    hasLeaderTeamSelected;
 
   const canLeaderAssign =
     Boolean(selectedItem) &&
@@ -2189,6 +2224,7 @@ export default function DispatchOpsDashboard({
     canCurrentTeamLeadPrimaryFlow &&
     !selectedItem?.isCancelPendingApproval;
   const canManagerOverride = Boolean(selectedItem);
+  const canManagerConfigureSupportingTeams = Boolean(toPositiveNumber(managerTeamId)) || managerSupportingTeamIds.length > 0;
   const canManagerCancelDecision = Boolean(selectedItem?.isCancelPendingApproval);
   const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.finalApprovedByManagerId;
   const canShowManagerQuoteSection = Boolean(selectedItem && isDiagnosisCompletedItem(selectedItem));
@@ -2625,7 +2661,14 @@ export default function DispatchOpsDashboard({
                                 id="leader-assignment-team"
                                 value={leaderTeamId}
                                 options={assignmentTeamOptions}
-                                onChange={setLeaderTeamId}
+                                onChange={(nextValue) => {
+                                  if (String(nextValue || "") !== String(leaderTeamId || "")) {
+                                    setLeaderLeadTechnicianId("");
+                                    setLeaderAssistantTechnicianId("");
+                                    setLeaderBayId("");
+                                  }
+                                  setLeaderTeamId(nextValue);
+                                }}
                                 minWidth={300}
                                 disabled={Boolean(currentStaffTeamId)}
                               />
@@ -2646,7 +2689,7 @@ export default function DispatchOpsDashboard({
                                   }
                                 }}
                                 minWidth="100%"
-                                disabled={isLeaderAssignmentLocked}
+                                disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected}
                               />
                             </FormControl>
 
@@ -2666,7 +2709,7 @@ export default function DispatchOpsDashboard({
                                   setLeaderAssistantTechnicianId(nextValue);
                                 }}
                                 minWidth="100%"
-                                disabled={isLeaderAssignmentLocked}
+                                disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected || !toPositiveNumber(leaderLeadTechnicianId)}
                               />
                             </FormControl>
 
@@ -2678,7 +2721,7 @@ export default function DispatchOpsDashboard({
                                 options={baySelectionOptions}
                                 onChange={setLeaderBayId}
                                 minWidth="100%"
-                                disabled={isLeaderAssignmentLocked}
+                                disabled={isLeaderAssignmentLocked || !hasLeaderTeamSelected || !toPositiveNumber(leaderLeadTechnicianId)}
                               />
                             </FormControl>
 
@@ -2944,18 +2987,25 @@ export default function DispatchOpsDashboard({
                       <Divider />
 
                       <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>1) Override phân công</Text>
+                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và override phân công</Text>
 
                         <FormControl>
                           <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
-                          <FilterDropdown
-                            id="manager-assignment-team"
-                            value={managerTeamId}
-                            options={assignmentTeamOptions}
-                            onChange={setManagerTeamId}
-                            minWidth={300}
-                          />
-                        </FormControl>
+                              <FilterDropdown
+                                id="manager-assignment-team"
+                                value={managerTeamId}
+                                options={assignmentTeamOptions}
+                                onChange={(nextValue) => {
+                                  if (String(nextValue || "") !== String(managerTeamId || "")) {
+                                    setManagerLeadTechnicianId("");
+                                    setManagerAssistantTechnicianId("");
+                                    setManagerBayId("");
+                                  }
+                                  setManagerTeamId(nextValue);
+                                }}
+                                minWidth={300}
+                              />
+                            </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
@@ -2963,17 +3013,18 @@ export default function DispatchOpsDashboard({
                             id="manager-main-tech"
                             value={managerLeadTechnicianId}
                             options={managerPrimaryTechnicianOptions}
-                            onChange={(nextValue) => {
-                              const nextLeadId = toPositiveNumber(nextValue);
-                              const currentAssistantId = toPositiveNumber(managerAssistantTechnicianId);
-                              setManagerLeadTechnicianId(nextValue);
-                              if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
-                                setManagerAssistantTechnicianId("");
-                              }
-                            }}
-                            minWidth="100%"
-                          />
-                        </FormControl>
+                                onChange={(nextValue) => {
+                                  const nextLeadId = toPositiveNumber(nextValue);
+                                  const currentAssistantId = toPositiveNumber(managerAssistantTechnicianId);
+                                  setManagerLeadTechnicianId(nextValue);
+                                  if (nextLeadId && currentAssistantId && nextLeadId === currentAssistantId) {
+                                    setManagerAssistantTechnicianId("");
+                                  }
+                                }}
+                                minWidth="100%"
+                                disabled={!hasManagerTeamSelected}
+                              />
+                            </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
@@ -2981,43 +3032,31 @@ export default function DispatchOpsDashboard({
                             id="manager-assistant-tech"
                             value={managerAssistantTechnicianId}
                             options={managerAssistantTechnicianOptions}
-                            onChange={(nextValue) => {
-                              const nextAssistantId = toPositiveNumber(nextValue);
-                              const currentLeadId = toPositiveNumber(managerLeadTechnicianId);
-                              if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
-                                setManagerAssistantTechnicianId("");
-                                return;
-                              }
-                              setManagerAssistantTechnicianId(nextValue);
-                            }}
-                            minWidth="100%"
-                          />
-                        </FormControl>
+                                onChange={(nextValue) => {
+                                  const nextAssistantId = toPositiveNumber(nextValue);
+                                  const currentLeadId = toPositiveNumber(managerLeadTechnicianId);
+                                  if (nextAssistantId && currentLeadId && nextAssistantId === currentLeadId) {
+                                    setManagerAssistantTechnicianId("");
+                                    return;
+                                  }
+                                  setManagerAssistantTechnicianId(nextValue);
+                                }}
+                                minWidth="100%"
+                                disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
+                              />
+                            </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Tổ phối hợp (tuỳ chọn)</FormLabel>
-                          <SupportingTeamSelector
-                            value={managerSupportingTeamIds}
-                            onChange={(values) => setManagerSupportingTeamIds((values || []).map((value) => String(value)))}
-                            options={managerSupportingTeamOptions}
-                            assignmentMap={managerSupportingAssignmentMap}
-                            onAssignmentChange={handleManagerSupportingAssignmentChange}
-                            technicianOptionsByTeam={managerSupportingTechnicianOptionsByTeam}
-                            emptyText="Chưa có tổ phối hợp phù hợp."
-                            helperText="Tổ chính là tổ được giao trách nhiệm chính thức."
-                          />
-                        </FormControl>
-
-                        <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Khoang</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Khoang (bắt buộc)</FormLabel>
                           <FilterDropdown
                             id="manager-bay-select"
-                            value={managerBayId}
-                            options={baySelectionOptions}
-                            onChange={setManagerBayId}
-                            minWidth="100%"
-                          />
-                        </FormControl>
+                                value={managerBayId}
+                                options={baySelectionOptions}
+                                onChange={setManagerBayId}
+                                minWidth="100%"
+                                disabled={!hasManagerTeamSelected || !toPositiveNumber(managerLeadTechnicianId)}
+                              />
+                            </FormControl>
 
                         <FormControl mt={2}>
                           <FormLabel fontSize="sm" mb={1}>Lý do override</FormLabel>
@@ -3029,6 +3068,15 @@ export default function DispatchOpsDashboard({
                             placeholder="Ví dụ: xe chờ quá 10 phút, cần điều tải..."
                           />
                         </FormControl>
+
+                        <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
+                          <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
+                            Lưu ý phân quyền
+                          </Text>
+                          <Text mt={1} fontSize="sm" color="blue.700">
+                            Quản đốc có quyền override tổ, cặp thợ, khoang và chỉ định tổ phối hợp để cân tải nhanh theo thực tế xưởng.
+                          </Text>
+                        </Box>
 
                         <HStack mt={3} spacing={2} align="stretch">
                           <Button
@@ -3055,7 +3103,7 @@ export default function DispatchOpsDashboard({
                             _hover={{ bg: "#1d4ed8" }}
                             onClick={handleManagerOverride}
                             isLoading={saving}
-                            isDisabled={!canManagerOverride || !toPositiveNumber(managerLeadTechnicianId)}
+                            isDisabled={!canManagerOverride || !toPositiveNumber(managerTeamId) || !toPositiveNumber(managerLeadTechnicianId)}
                           >
                             Giao lại ngay
                           </Button>
@@ -3066,8 +3114,47 @@ export default function DispatchOpsDashboard({
                         </Box>
                       </Box>
 
+                      <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
+                        <Text fontWeight="700" color="gray.700" mb={2}>2) Chỉ định tổ phối hợp (tuỳ chọn)</Text>
+                        <HStack justify="space-between" align="center" mb={2}>
+                          <Button
+                            size="sm"
+                            colorScheme="blue"
+                            variant="outline"
+                            onClick={() => setIsManagerSupportSectionExpanded((prev) => !prev)}
+                            isDisabled={!canManagerConfigureSupportingTeams}
+                          >
+                            {isManagerSupportSectionExpanded ? "Thu gọn tổ phối hợp" : "Thêm tổ phối hợp"}
+                          </Button>
+                          {managerSupportingTeamIds.length > 0 && (
+                            <Badge colorScheme="blue" borderRadius="full" px={2.5}>
+                              {managerSupportingTeamIds.length} tổ đã chọn
+                            </Badge>
+                          )}
+                        </HStack>
+
+                        {isManagerSupportSectionExpanded ? (
+                          <SupportingTeamSelector
+                            value={managerSupportingTeamIds}
+                            onChange={(values) => setManagerSupportingTeamIds((values || []).map((value) => String(value)))}
+                            options={managerSupportingTeamOptions}
+                            assignmentMap={managerSupportingAssignmentMap}
+                            onAssignmentChange={handleManagerSupportingAssignmentChange}
+                            technicianOptionsByTeam={managerSupportingTechnicianOptionsByTeam}
+                            emptyText="Chưa có tổ phối hợp phù hợp."
+                            helperText="Tổ chính là tổ được giao trách nhiệm chính thức."
+                          />
+                        ) : (
+                          <Text mt={1} fontSize="sm" color="gray.500">
+                            {canManagerConfigureSupportingTeams
+                              ? 'Nhấn "Thêm tổ phối hợp" để chọn tổ phụ và chỉ định cặp thợ cho từng tổ.'
+                              : "Vui lòng chọn tổ thực hiện trước khi chỉ định tổ phối hợp."}
+                          </Text>
+                        )}
+                      </Box>
+
                       <Box ref={cancelRequestSectionRef} border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>2) Duyệt/Từ chối yêu cầu hủy</Text>
+                        <Text fontWeight="700" color="gray.700" mb={2}>3) Duyệt/Từ chối yêu cầu hủy</Text>
                         {selectedItem.isCancelPendingApproval ? (
                           <VStack align="stretch" spacing={3}>
                             <Box p={3} border="1px solid" borderColor="orange.200" borderRadius="lg" bg="orange.50">
@@ -3102,7 +3189,7 @@ export default function DispatchOpsDashboard({
 
                       {canShowManagerQuoteSection && (
                         <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                          <Text fontWeight="700" color="gray.700" mb={2}>3) Duyệt báo giá cuối cùng</Text>
+                          <Text fontWeight="700" color="gray.700" mb={2}>4) Duyệt báo giá cuối cùng</Text>
                           <Textarea
                             size="sm"
                             value={managerFinalApprovalNote}

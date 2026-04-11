@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -103,7 +103,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         PayrollBatchCalculationCommand command,
         CancellationToken cancellationToken = default)
     {
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var period = await ResolvePayrollPeriodAsync(command, cancellationToken);
 
         if (!string.Equals(NormalizeKey(period.Status), PayrollPeriodStatusOpen, StringComparison.Ordinal))
@@ -456,7 +456,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             .MaxAsync(cancellationToken);
         var nextRunNo = Math.Max(1, (maxRunNo ?? 0) + 1);
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var run = new PayrollRun
         {
             PayrollPeriodId = payrollPeriodId,

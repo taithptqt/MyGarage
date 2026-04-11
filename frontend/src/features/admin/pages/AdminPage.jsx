@@ -47,6 +47,15 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearch } from "@shared/core/context/SearchContext";
 import { useBranch } from "@shared/core/context/BranchContext";
+import { VIETNAM_PHONE_PATTERN, isOptionalEmailValid, isValidVietnamesePhone } from "@shared/utils/contactValidation";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+import {
+  filterPackageManagedStandardServices,
+  getPackageManagedStandardServiceMessage,
+  isPackageManagedStandardServiceCode,
+  normalizeStandardServiceCode,
+} from "@shared/utils/standardServiceCodeRules";
 import ImageCropper from "@features/workshop/components/ImageCropper";
 import TablePagination from "@shared/components/TablePagination";
 import "./AdminPage.css";
@@ -235,7 +244,16 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group">
         <label>Phone *</label>
-        <input name="phone" value={form.phone || ""} onChange={handleChange} required />
+        <input
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.phone || ""}
+          onChange={handleChange}
+          required
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
@@ -303,6 +321,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
       if (name === "brandId") {
         return { ...prev, brandId: value, modelId: "" };
       }
+      if (name === "licensePlate") {
+        return { ...prev, licensePlate: formatLicensePlateByFieldName(name, value) };
+      }
       return { ...prev, [name]: value };
     });
   };
@@ -327,7 +348,16 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
       </div>
       <div className="form-group">
         <label>Phone *</label>
-        <input name="phone" value={form.phone || ""} onChange={handleChange} required />
+        <input
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.phone || ""}
+          onChange={handleChange}
+          required
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
@@ -356,7 +386,14 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
       </div>
       <div className="form-group">
         <label>Biển số xe</label>
-        <input name="licensePlate" value={form.licensePlate || ""} onChange={handleChange} />
+        <input
+          name="licensePlate"
+          value={form.licensePlate || ""}
+          onChange={handleChange}
+          pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+          title={VIETNAM_LICENSE_PLATE_TITLE}
+          style={{ textTransform: "uppercase" }}
+        />
       </div>
       <div className="form-group">
         <label>Hãng xe</label>
@@ -606,16 +643,29 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
     categoryId: initial.categoryId ? String(initial.categoryId) : "",
     isActive: initial.isActive ?? true
   });
+  const [codeError, setCodeError] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const nextValue = name === "code" ? normalizeStandardServiceCode(value) : value;
+    setForm((prev) => ({ ...prev, [name]: nextValue }));
+
+    if (name === "code") {
+      setCodeError(isPackageManagedStandardServiceCode(value) ? getPackageManagedStandardServiceMessage() : "");
+    }
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const normalizedCode = normalizeStandardServiceCode(form.code);
+    if (isPackageManagedStandardServiceCode(normalizedCode)) {
+      setCodeError(getPackageManagedStandardServiceMessage());
+      return;
+    }
+
     onSubmit({
       ...form,
+      code: normalizedCode,
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       basePrice: form.basePrice === "" ? null : Number(form.basePrice),
       standardMinutes: form.standardMinutes === "" ? null : Number(form.standardMinutes),
@@ -628,6 +678,8 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       <div className="form-group">
         <label>Service Code *</label>
         <input name="code" value={form.code || ""} onChange={handleChange} required />
+        <small className="form-helper">Codes starting with PKG- belong to Packages and should not be created here.</small>
+        {codeError ? <small className="form-error-text">{codeError}</small> : null}
       </div>
       <div className="form-group">
         <label>Service Name *</label>
@@ -686,7 +738,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         <button className="btn-ghost" type="button" onClick={onCancel}>
           Cancel
         </button>
-        <button className="btn-primary" type="submit" disabled={loading}>
+        <button className="btn-primary" type="submit" disabled={loading || Boolean(codeError)}>
           {loading ? "Saving..." : "Save"}
         </button>
       </div>
@@ -728,7 +780,15 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group">
         <label>Hotline</label>
-        <input name="hotline" value={form.hotline || ""} onChange={handleChange} />
+        <input
+          name="hotline"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.hotline || ""}
+          onChange={handleChange}
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
@@ -856,7 +916,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     []
   );
   const fetchServices = useCallback(
-    async () => setServices((await getAllStandardServices(selectedBranchId)) || []),
+    async () => setServices(filterPackageManagedStandardServices((await getAllStandardServices(selectedBranchId)) || [])),
     [selectedBranchId]
   );
 
@@ -1165,11 +1225,20 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
     try {
       if (modal.entity === "branch") {
+        const hotline = String(formData.hotline || "").trim();
+        const email = String(formData.email || "").trim();
+        if (hotline && !isValidVietnamesePhone(hotline)) {
+          throw new Error("Hotline chi nhánh phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email chi nhánh không đúng định dạng.");
+        }
+
         const payload = {
           name: formData.name,
           address: formData.address || null,
-          hotline: formData.hotline || null,
-          email: formData.email || null,
+          hotline: hotline || null,
+          email: email || null,
           status: formData.status || "active",
           maxWorkSlots: formData.maxWorkSlots ?? null,
           description: formData.description || null
@@ -1181,10 +1250,19 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (!selectedBranchId) {
           throw new Error("Please select a branch before creating/updating staff.");
         }
+        const phone = String(formData.phone || "").trim();
+        const email = String(formData.email || "").trim();
+        if (!isValidVietnamesePhone(phone)) {
+          throw new Error("Số điện thoại nhân viên phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email nhân viên không đúng định dạng.");
+        }
+
         const payload = {
           fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
+          phone,
+          email: email || null,
           roleId: formData.roleId || null,
           status: formData.status || "active",
           branchId: selectedBranchId || null
@@ -1194,19 +1272,34 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (modal.mode === "create") await createStaff(payload);
         else await updateStaff(modal.item.id, payload);
       } else if (modal.entity === "customer") {
+        const phone = String(formData.phone || "").trim();
+        const email = String(formData.email || "").trim();
+        if (!isValidVietnamesePhone(phone)) {
+          throw new Error("Số điện thoại khách hàng phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email khách hàng không đúng định dạng.");
+        }
+
         const payload = {
           fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
+          phone,
+          email: email || null,
           tierId: formData.tierId || null,
           note: formData.note,
           isActive: formData.isActive === true || formData.isActive === "true"
         };
         if (formData.password?.trim()) payload.password = formData.password.trim();
 
-        const hasVehicleInput = Boolean(
-          String(formData.licensePlate || "").trim() || Number(formData.modelId)
-        );
+        const formattedLicensePlate = formatLicensePlateByFieldName("licensePlate", formData.licensePlate || "");
+        if (formattedLicensePlate && !isValidVietnameseLicensePlate(formattedLicensePlate)) {
+          throw new Error("Biển số xe không đúng định dạng Việt Nam.");
+        }
+
+        const hasVehicleInput = Boolean(formattedLicensePlate || Number(formData.modelId));
+        if (hasVehicleInput && !formattedLicensePlate) {
+          throw new Error("Vui lòng nhập biển số xe.");
+        }
         if (hasVehicleInput && !formData.modelId) {
           throw new Error("Vui lòng chọn dòng xe khi nhập thông tin xe.");
         }
@@ -1217,7 +1310,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
         if (hasVehicleInput) {
           const vehiclePayload = {
-            licensePlate: String(formData.licensePlate || "").trim(),
+            licensePlate: formattedLicensePlate,
             modelId: Number(formData.modelId),
             color: String(formData.color || "").trim() || null,
             manufactureYear: formData.manufactureYear || null
@@ -1718,7 +1811,3 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     </div>
   );
 }
-
-
-
-

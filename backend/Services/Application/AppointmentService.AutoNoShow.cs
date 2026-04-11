@@ -154,6 +154,15 @@ namespace MyGarage.Services
                 {
                     await _groupSessionService.SyncCountersAsync(groupId);
                 }
+
+                foreach (var autoNoShow in autoNoShowAppointments)
+                {
+                    await ReleaseBookingReservationArtifactsAsync(
+                        autoNoShow.Id,
+                        autoNoShow.BranchId,
+                        actorStaffId: null,
+                        releasedAt: at);
+                }
             }
 
             return autoNoShowAppointments.Count;
@@ -370,17 +379,21 @@ namespace MyGarage.Services
             var bays = await _context.Bays
                 .AsNoTracking()
                 .Where(b => b.BranchId == branchId && b.IsActive == true && b.IsDeleted != true)
-                .OrderBy(b => b.Code)
+                .OrderBy(b => b.SequenceOrder)
+                .ThenBy(b => b.Code)
                 .ToListAsync();
 
             var activeSlotBayIds = await _context.WorkSlots
                 .AsNoTracking()
                 .Where(s => s.BranchId == branchId
+                    && s.BayId.HasValue
                     && s.StartTime <= now
                     && (s.ActualReleaseTime ?? s.EndTime) > now
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
-                .Select(s => s.BayId)
+                .Select(s => s.BayId!.Value)
                 .Distinct()
                 .ToListAsync();
             var occupiedBayIds = activeSlotBayIds.ToHashSet();

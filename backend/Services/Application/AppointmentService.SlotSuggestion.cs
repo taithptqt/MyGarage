@@ -14,6 +14,8 @@ namespace MyGarage.Services
             long branchId,
             DateTime requestedCheckInAt,
             string? requestedServiceIds = null,
+            string? requestedPackageIds = null,
+            string? bookingFlow = null,
             int vehicleCount = 1,
             bool isParallel = false,
             int searchDays = 3)
@@ -30,21 +32,27 @@ namespace MyGarage.Services
                 : requestedCheckInAt;
 
             var effectiveRequestedServiceIds = requestedServiceIds;
+            var effectiveRequestedPackageIds = requestedPackageIds;
             if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
             {
-                effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null);
+                effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null, effectiveRequestedPackageIds);
             }
 
-            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
+            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds) && string.IsNullOrWhiteSpace(effectiveRequestedPackageIds))
             {
                 return new NearestSlotSuggestionResponseDto
                 {
                     BranchId = branchId,
                     RequestedCheckInAt = baselineCheckInAt,
                     RequestedServiceIds = requestedServiceIds,
+                    RequestedPackageIds = requestedPackageIds,
                     Message = "Ch\u01B0a x\u00E1c \u0111\u1ECBnh \u0111\u01B0\u1EE3c d\u1ECBch v\u1EE5 \u0111\u1EC3 g\u1EE3i \u00FD khung gi\u1EDD."
                 };
             }
+            var resolvedFlow = await ResolveFlowAsync(bookingFlow, effectiveRequestedServiceIds, effectiveRequestedPackageIds);
+            var effectiveBookingFlow = resolvedFlow == BookingFlowType.Flexible
+                ? AppointmentBookingFlows.Flexible
+                : AppointmentBookingFlows.Fixed;
 
             var opHour = await _context.BranchOperatingHours
                 .AsNoTracking()
@@ -55,7 +63,8 @@ namespace MyGarage.Services
             var breakdown = await ResolveDurationBreakdownAsync(
                 effectiveRequestedServiceIds,
                 slotStepMinutes,
-                isParallel);
+                isParallel,
+                effectiveRequestedPackageIds);
 
             var candidateSlots = new List<AvailableSlotResponseDto>();
             var effectiveSearchDays = Math.Clamp(searchDays, 1, 7);
@@ -69,7 +78,8 @@ namespace MyGarage.Services
                         branchId,
                         date,
                         effectiveRequestedServiceIds,
-                        AppointmentBookingFlows.Fixed,
+                        effectiveRequestedPackageIds,
+                        effectiveBookingFlow,
                         effectiveVehicleCount,
                         isParallel,
                         ignoreMinLeadTime: true))
@@ -112,6 +122,7 @@ namespace MyGarage.Services
                     BranchId = branchId,
                     RequestedCheckInAt = baselineCheckInAt,
                     RequestedServiceIds = requestedServiceIds,
+                    RequestedPackageIds = requestedPackageIds,
                     ServiceMinutes = breakdown.ServiceMinutes,
                     SetupMinutes = breakdown.SetupMinutes,
                     BufferMinutes = breakdown.BufferMinutes,
@@ -132,6 +143,7 @@ namespace MyGarage.Services
                 BranchId = branchId,
                 RequestedCheckInAt = baselineCheckInAt,
                 RequestedServiceIds = requestedServiceIds,
+                RequestedPackageIds = requestedPackageIds,
                 ServiceMinutes = breakdown.ServiceMinutes,
                 SetupMinutes = breakdown.SetupMinutes,
                 BufferMinutes = breakdown.BufferMinutes,

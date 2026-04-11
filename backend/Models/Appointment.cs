@@ -27,6 +27,18 @@ public partial class Appointment : IAuditEntity
 
     public string? RequestedServiceIds { get; set; }
 
+    public string? RequestedPackageIds { get; set; }
+
+    public long? InsuranceCompanyId { get; set; }
+
+    public decimal? InsuranceDeductibleAmount { get; set; }
+
+    public string? InsuranceDeductibleOption { get; set; }
+
+    public string? InsuranceClaimMode { get; set; }
+
+    public string? InsuranceQuoteState { get; set; }
+
     public string? CustomerNotes { get; set; }
 
     public bool? IsReminderSent { get; set; }
@@ -45,9 +57,17 @@ public partial class Appointment : IAuditEntity
 
     public virtual Staff? CreatedByNavigation { get; set; }
 
+    public virtual ICollection<AppointmentInsuranceAsset> InsuranceAssets { get; set; } = new List<AppointmentInsuranceAsset>();
+
+    public virtual ICollection<AppointmentInsuranceUpload> InsuranceUploads { get; set; } = new List<AppointmentInsuranceUpload>();
+
     public virtual Customer Customer { get; set; } = null!;
 
+    public virtual InsuranceCompany? InsuranceCompany { get; set; }
+
     public virtual ICollection<ServiceOrder> ServiceOrders { get; set; } = new List<ServiceOrder>();
+
+    public virtual ICollection<WorkSlot> WorkSlots { get; set; } = new List<WorkSlot>();
 
     public virtual Vehicle? Vehicle { get; set; }
 

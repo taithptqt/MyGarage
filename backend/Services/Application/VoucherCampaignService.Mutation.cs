@@ -11,7 +11,7 @@ namespace MyGarage.Services
     {
         public override async Task<VoucherCampaign> AddAsync(VoucherCampaign entity)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             NormalizeAndValidate(entity, now);
             if (entity.CreatedAt == default) entity.CreatedAt = now;
             if (entity.UpdatedAt == default) entity.UpdatedAt = now;
@@ -38,7 +38,7 @@ namespace MyGarage.Services
                 return null;
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             NormalizeAndValidate(entity, now);
             entity.Id = campaignId;
             entity.CreatedAt = existing.CreatedAt;
@@ -70,7 +70,7 @@ namespace MyGarage.Services
                 return false;
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             foreach (var voucher in campaign.Vouchers)
             {
                 voucher.CampaignId = null;

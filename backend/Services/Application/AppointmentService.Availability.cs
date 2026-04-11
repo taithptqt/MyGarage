@@ -14,6 +14,7 @@ namespace MyGarage.Services
             long branchId,
             DateOnly date,
             string? requestedServiceIds = null,
+            string? requestedPackageIds = null,
             string? bookingFlow = null,
             int vehicleCount = 1,
             bool isParallel = true,
@@ -24,7 +25,7 @@ namespace MyGarage.Services
                 return Enumerable.Empty<AvailableSlotResponseDto>();
             }
 
-            var flow = await ResolveFlowAsync(bookingFlow, requestedServiceIds);
+            var flow = await ResolveFlowAsync(bookingFlow, requestedServiceIds, requestedPackageIds);
             var dayOfWeek = (int)date.DayOfWeek;
 
             var opHour = await _context.BranchOperatingHours
@@ -48,12 +49,13 @@ namespace MyGarage.Services
             if (exception?.EndTime.HasValue == true) closeTime = exception.EndTime.Value;
 
             var effectiveRequestedServiceIds = requestedServiceIds;
+            var effectiveRequestedPackageIds = requestedPackageIds;
             if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
             {
-                effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null);
+                effectiveRequestedServiceIds = await ResolveRequestedServiceIdsForBookingAsync(null, effectiveRequestedPackageIds);
             }
 
-            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds))
+            if (string.IsNullOrWhiteSpace(effectiveRequestedServiceIds) && string.IsNullOrWhiteSpace(effectiveRequestedPackageIds))
             {
                 return Enumerable.Empty<AvailableSlotResponseDto>();
             }
@@ -64,8 +66,19 @@ namespace MyGarage.Services
             var durationBreakdown = await ResolveDurationBreakdownAsync(
                 effectiveRequestedServiceIds,
                 slotStepMinutes,
-                useParallel);
-            var requiredDuration = durationBreakdown.TotalMinutes;
+                useParallel,
+                effectiveRequestedPackageIds);
+            var plannedDuration = durationBreakdown.TotalMinutes;
+
+            if (flow == BookingFlowType.Fixed &&
+                ShouldFallbackToFlexibleFlowForLongDuration(plannedDuration, openTime, closeTime))
+            {
+                flow = BookingFlowType.Flexible;
+            }
+
+            var slotWindowDuration = flow == BookingFlowType.Flexible
+                ? ResolveFlexibleWindowMinutes(slotStepMinutes)
+                : plannedDuration;
 
             var slots = await BuildScheduledSlotsAsync(
                 branchId,
@@ -74,19 +87,24 @@ namespace MyGarage.Services
                 closeTime,
                 slotStepMinutes,
                 effectiveRequestedServiceIds,
-                requiredDuration,
+                effectiveRequestedPackageIds,
+                flow,
+                slotWindowDuration,
                 effectiveVehicleCount,
                 ignoreMinLeadTime);
 
             if (!slots.Any() &&
+                flow == BookingFlowType.Fixed &&
                 useParallel &&
-                HasGroupedRequestedServices(effectiveRequestedServiceIds))
+                HasGroupedRequestedServices(effectiveRequestedServiceIds, effectiveRequestedPackageIds))
             {
                 durationBreakdown = await ResolveDurationBreakdownAsync(
                     effectiveRequestedServiceIds,
                     slotStepMinutes,
-                    isParallel: false);
-                requiredDuration = durationBreakdown.TotalMinutes;
+                    false,
+                    effectiveRequestedPackageIds);
+                plannedDuration = durationBreakdown.TotalMinutes;
+                slotWindowDuration = plannedDuration;
 
                 slots = await BuildScheduledSlotsAsync(
                     branchId,
@@ -95,23 +113,27 @@ namespace MyGarage.Services
                     closeTime,
                     slotStepMinutes,
                     effectiveRequestedServiceIds,
-                    requiredDuration,
+                    effectiveRequestedPackageIds,
+                    flow,
+                    slotWindowDuration,
                     effectiveVehicleCount,
                     ignoreMinLeadTime);
-                        }
+            }
 
             var dynamicNotice = flow == BookingFlowType.Flexible
                 ? BuildFlexibleDynamicNotice(
                     durationBreakdown.ServiceMinutes,
                     durationBreakdown.SetupMinutes,
                     durationBreakdown.BufferMinutes,
-                    requiredDuration)
+                    plannedDuration)
                 : null;
 
             foreach (var slot in slots)
             {
-                slot.BookingFlow = AppointmentBookingFlows.Fixed;
-                slot.EstimatedDurationMinutes = requiredDuration;
+                slot.BookingFlow = flow == BookingFlowType.Flexible
+                    ? AppointmentBookingFlows.Flexible
+                    : AppointmentBookingFlows.Fixed;
+                slot.EstimatedDurationMinutes = plannedDuration;
                 slot.ServiceMinutes = durationBreakdown.ServiceMinutes;
                 slot.SetupMinutes = durationBreakdown.SetupMinutes;
                 slot.BufferMinutes = durationBreakdown.BufferMinutes;
@@ -121,10 +143,12 @@ namespace MyGarage.Services
             return slots.OrderBy(s => s.StartTime);
         }
 
-        private static bool HasGroupedRequestedServices(string? requestedServiceIds)
+        private static bool HasGroupedRequestedServices(string? requestedServiceIds, string? requestedPackageIds = null)
         {
-            return !string.IsNullOrWhiteSpace(requestedServiceIds)
-                   && requestedServiceIds.Contains('|', StringComparison.Ordinal);
+            return (!string.IsNullOrWhiteSpace(requestedServiceIds)
+                    && requestedServiceIds.Contains('|', StringComparison.Ordinal)) ||
+                   (!string.IsNullOrWhiteSpace(requestedPackageIds)
+                    && requestedPackageIds.Contains('|', StringComparison.Ordinal));
         }
 
     }

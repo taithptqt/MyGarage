@@ -15,7 +15,7 @@ namespace MyGarage.Services
 
             request.Status = StatusApproved;
             request.ApproverId = decision.ApproverId;
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
 
             if (!string.IsNullOrWhiteSpace(decision.Note))
             {
@@ -34,7 +34,7 @@ namespace MyGarage.Services
             request.Status = StatusRejected;
             request.ApproverId = decision.ApproverId;
             request.RejectReason = string.IsNullOrWhiteSpace(decision.Reason) ? decision.Note : decision.Reason;
-            request.UpdatedAt = DateTime.UtcNow;
+            request.UpdatedAt = VietnamTime.Now;
 
             await _context.SaveChangesAsync();
             return await _voucherApprovalRequestRepository.GetDetailedByIdAsync(id);

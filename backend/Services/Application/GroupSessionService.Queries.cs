@@ -29,8 +29,9 @@ namespace MyGarage.Services
                 .ToListAsync();
 
             var serviceNameMap = await BuildServiceNameMapAsync(appointments);
+            var packageNameMap = await BuildPackageNameMapAsync(appointments);
             var dto = MapHeaderOnly(group);
-            dto.Appointments = appointments.Select(a => MapAppointment(a, serviceNameMap)).ToList();
+            dto.Appointments = appointments.Select(a => MapAppointment(a, serviceNameMap, packageNameMap)).ToList();
             return dto;
         }
 

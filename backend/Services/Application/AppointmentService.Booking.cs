@@ -36,7 +36,7 @@ namespace MyGarage.Services
             var fixedLeadViolations = new List<string>();
             foreach (var item in dto.Items)
             {
-                var flow = await ResolveFlowAsync(item.BookingFlow, item.RequestedServiceIds);
+                var flow = await ResolveFlowAsync(item.BookingFlow, item.RequestedServiceIds, item.RequestedPackageIds);
                 var (requestedStartAt, _) = ResolveRequestedWindow(flow, item);
                 var opHour = await _context.BranchOperatingHours
                     .AsNoTracking()
@@ -74,8 +74,19 @@ namespace MyGarage.Services
                 var response = await _groupSessionService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
                 if (response != null)
                 {
-                    response.Appointments = response.Appointments
+                    var createdAppointments = await _context.Appointments
+                        .AsNoTracking()
+                        .Include(a => a.Branch)
+                        .Include(a => a.Customer)
+                        .Include(a => a.GroupSession)
+                        .Include(a => a.Vehicle)
+                            .ThenInclude(v => v!.Model)
+                                .ThenInclude(m => m.Brand)
                         .Where(a => createdAppointmentIds.Contains(a.Id))
+                        .OrderBy(a => a.StartTime)
+                        .ToListAsync();
+
+                    response.Appointments = (await _appointmentDetailAssembler.AssembleManyAsync(createdAppointments))
                         .ToList();
                     return response;
                 }

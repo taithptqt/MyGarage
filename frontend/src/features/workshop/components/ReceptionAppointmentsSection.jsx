@@ -35,6 +35,37 @@ function canCancelAppointment(status) {
   return normalized === "PENDING" || normalized === "CONFIRMED" || normalized === "LATE";
 }
 
+function hasDispatchReview(appointment) {
+  return Boolean(appointment?.requiresDispatchReview || appointment?.RequiresDispatchReview);
+}
+
+function hasPartsFollowUp(appointment) {
+  return Boolean(appointment?.requiresPartsFollowUp || appointment?.RequiresPartsFollowUp);
+}
+
+function getAppointmentIssueLabel(appointment) {
+  if (hasPartsFollowUp(appointment)) {
+    return "Thiếu phụ tùng, cần gọi khách";
+  }
+  return "";
+}
+
+function AppointmentIssueIndicator({ appointment }) {
+  const issueLabel = getAppointmentIssueLabel(appointment);
+  const isVisible = Boolean(issueLabel);
+
+  return (
+    <span
+      className={`appointment-issue-indicator${isVisible ? "" : " is-hidden"}`}
+      title={isVisible ? issueLabel : undefined}
+      aria-label={isVisible ? issueLabel : undefined}
+      aria-hidden={!isVisible}
+    >
+      !
+    </span>
+  );
+}
+
 function AppointmentActionButtons({ appointment, actingAppt, handleApptAction }) {
   const isActing = actingAppt === appointment.id;
   const canConfirm = canConfirmAppointment(appointment.status);
@@ -119,7 +150,7 @@ function GroupBlock({
             {group.customerName || "Khách hàng"} - {group.customerPhone || "--"} - {group.appointments.length} lịch
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             className={`badge ${getApptStatusBadge(group.status)}`}
             style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 30 }}
@@ -158,7 +189,14 @@ function GroupBlock({
           background: "#ffffff",
         }}
       >
-        <table className="admin-table">
+        <table className="admin-table reception-group-appointments-table">
+          <colgroup>
+            <col className="col-date" />
+            <col className="col-time" />
+            <col className="col-vehicle" />
+            <col className="col-status" />
+            <col className="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th>Ngày</th>
@@ -175,9 +213,19 @@ function GroupBlock({
                 <tr key={appt.id} className="appointment-click-row" {...rowInteraction}>
                   <td>{formatApptDate(appt.startTime)}</td>
                   <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
-                  <td>{appt.vehicleLicensePlate || "--"}</td>
+                  <td>
+                    <div>{appt.vehicleLicensePlate || "--"}</div>
+                    {hasDispatchReview(appt) ? (
+                      <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#b42318" }}>
+                        Cần điều phối khoang
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="th-center">
-                    <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
+                    <div className="appointment-status-cell">
+                      <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
+                      <AppointmentIssueIndicator appointment={appt} />
+                    </div>
                   </td>
                   <td className="col-actions col-actions-wide th-center">
                     <AppointmentActionButtons appointment={appt} actingAppt={actingAppt} handleApptAction={handleApptAction} />
@@ -341,47 +389,68 @@ export default function ReceptionAppointmentsSection({
             </div>
           )
         ) : (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Khách hàng</th>
-                <th>SĐT</th>
-                <th>Ngày</th>
-                <th>Giờ</th>
-                <th>Xe</th>
-                <th className="th-center">Trạng thái</th>
-                <th className="col-actions col-actions-wide th-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {totalSingle === 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table className="admin-table reception-appointments-table">
+              <colgroup>
+                <col className="col-customer" />
+                <col className="col-phone" />
+                <col className="col-date" />
+                <col className="col-time" />
+                <col className="col-vehicle" />
+                <col className="col-status" />
+                <col className="col-actions" />
+              </colgroup>
+              <thead>
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
-                    Không có lịch hẹn thường nào.
-                  </td>
+                  <th>Khách hàng</th>
+                  <th>SĐT</th>
+                  <th>Ngày</th>
+                  <th>Giờ</th>
+                  <th>Xe</th>
+                  <th className="th-center">Trạng thái</th>
+                  <th className="col-actions col-actions-wide th-center">Thao tác</th>
                 </tr>
-              ) : (
-                pagedSingleAppts.map((appt) => {
-                  const rowInteraction = buildRowInteraction(appt, onAppointmentClick);
-                  return (
-                    <tr key={appt.id} className="appointment-click-row" {...rowInteraction}>
-                      <td style={{ fontWeight: 600 }}>{appt.customerName}</td>
-                      <td>{appt.customerPhone}</td>
-                      <td>{formatApptDate(appt.startTime)}</td>
-                      <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
-                      <td>{appt.vehicleLicensePlate}</td>
-                      <td className="th-center">
-                        <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
-                      </td>
-                      <td className="col-actions col-actions-wide th-center">
-                        <AppointmentActionButtons appointment={appt} actingAppt={actingAppt} handleApptAction={handleApptAction} />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {totalSingle === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#a3aed0" }}>
+                      Không có lịch hẹn thường nào.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedSingleAppts.map((appt) => {
+                    const rowInteraction = buildRowInteraction(appt, onAppointmentClick);
+                    return (
+                      <tr key={appt.id} className="appointment-click-row" {...rowInteraction}>
+                        <td style={{ fontWeight: 600 }}>{appt.customerName}</td>
+                        <td>{appt.customerPhone}</td>
+                        <td>{formatApptDate(appt.startTime)}</td>
+                        <td>{formatApptTime(appt.startTime)} - {formatApptTime(appt.endTime)}</td>
+                        <td>
+                          <div>{appt.vehicleLicensePlate || "--"}</div>
+                          {hasDispatchReview(appt) ? (
+                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: "#b42318" }}>
+                              Cần điều phối khoang
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="th-center">
+                          <div className="appointment-status-cell">
+                            <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
+                            <AppointmentIssueIndicator appointment={appt} />
+                          </div>
+                        </td>
+                        <td className="col-actions col-actions-wide th-center">
+                          <AppointmentActionButtons appointment={appt} actingAppt={actingAppt} handleApptAction={handleApptAction} />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

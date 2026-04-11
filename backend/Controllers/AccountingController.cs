@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -413,7 +413,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
-        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
+        var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
         var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
 
         return Ok(new
@@ -437,7 +437,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
         var hireDate = await ResolveStaffHireDateAsync(staff.Id, staff.HireDate);
-        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
+        var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
         decimal coefficient = 1.0000m;
         int yearsOfService = 0;
 
@@ -491,7 +491,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
-        var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? DateTime.UtcNow).Date);
+        var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? VietnamTime.Now).Date);
         var existingBaseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, effectiveFromDate);
         if (existingBaseSalary.HasValue && existingBaseSalary.Value > 0m)
         {
@@ -528,11 +528,11 @@ public class AccountingController : ControllerBase
             effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
             note = request.Note?.Trim() ?? "",
             requestedBy = access.UserId,
-            requestedAt = DateTime.UtcNow.ToString("O")
+            requestedAt = VietnamTime.Now.ToString("O")
         };
         var payloadJson = JsonSerializer.Serialize(payloadObject);
         var reason = string.IsNullOrWhiteSpace(request.Reason)
-            ? $"Yêu cầu tạo lương khởi điểm cho nhân sự {staff.FullName} (#{staff.Id})."
+            ? $"Y�u c?u t?o luong kh?i di?m cho nh�n s? {staff.FullName} (#{staff.Id})."
             : request.Reason.Trim();
 
         var createdId = await _crud.ScalarAsync<long?>(
@@ -598,8 +598,8 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Dashboard([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
-        var from = fromDate ?? DateTime.UtcNow.Date.AddDays(-30);
-        var to = toDate ?? DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+        var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
+        var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
         var revenue = (await _crud.QueryAsync(
             "SELECT ISNULL(SUM(TotalRevenue),0) AS revenue, ISNULL(SUM(NetProfit),0) AS net_profit, ISNULL(SUM(NetCashFlow),0) AS cash_flow FROM dbo.RevenueSnapshots WHERE SnapshotDate BETWEEN @f AND @t AND (@branchId IS NULL OR BranchId=@branchId);",
             [
@@ -1624,7 +1624,7 @@ public class AccountingController : ControllerBase
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase)
+                   roleNameUpper.Contains("K? TO�N", StringComparison.OrdinalIgnoreCase)
                );
     }
 

@@ -219,7 +219,7 @@ public class TransferController(
             PayoutId = payout.Id,
             Category = payout.Category,
             ApprovalState = payout.ApprovalState,
-            CreatedAt = DateTimeOffset.TryParse(payout.CreatedAt, out var createdAt) ? createdAt : DateTimeOffset.Now,
+            CreatedAt = DateTimeOffset.TryParse(payout.CreatedAt, out var createdAt) ? createdAt : VietnamTime.OffsetNow,
             Transactions = [.. payout.Transactions.Select(MapPayoutTransactionToTransferTransaction)]
         };
     }

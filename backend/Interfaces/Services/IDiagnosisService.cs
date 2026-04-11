@@ -18,6 +18,7 @@ namespace MyGarage.Interfaces
             string? dispatchTag,
             int? bufferMinutesOverride = null,
             string? requestedPackageCode = null);
+        Task<IReadOnlyList<DiagnosisIntakePackageOptionDto>> GetIntakePackagesAsync();
         Task RemoveRecommendationsByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds);
         Task RemoveDiagnosesAsync(IEnumerable<Diagnosis> diagnoses);
         Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null);
@@ -48,6 +49,7 @@ namespace MyGarage.Interfaces
         Task<bool> IsTechnicianInTeamAsync(long technicianId, long teamId);
         Task<bool> IsDispatchTagCompatibleAsync(string? dispatchTag, long? teamId);
         Task<bool> IsBayInBranchAsync(long bayId, long branchId);
+        Task<(bool IsCompatible, string Reason)> ValidateTeamBayCompatibilityAsync(long serviceOrderId, long? teamId, long bayId);
         Task AssignDiagnosesAsync(
             IEnumerable<Diagnosis> diagnoses,
             long technicianId,

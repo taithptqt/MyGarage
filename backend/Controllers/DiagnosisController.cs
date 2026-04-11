@@ -72,6 +72,17 @@ namespace MyGarage.Controllers
                 "rua xe",
                 "son"
             },
+            ["CAR_CARE"] = new[]
+            {
+                "cham soc",
+                "rua xe",
+                "detail",
+                "detailing",
+                "noi that",
+                "ngoai that",
+                "ceramic",
+                "ppf"
+            },
             ["MAINTENANCE"] = new[]
             {
                 "bao duong",
@@ -165,6 +176,13 @@ namespace MyGarage.Controllers
                 intakePackageCode);
 
             return Ok(suggestion);
+        }
+
+        [HttpGet("intake-packages")]
+        public async Task<ActionResult<IEnumerable<DiagnosisIntakePackageOptionDto>>> GetIntakePackages()
+        {
+            var packages = await _diagnosisService.GetIntakePackagesAsync();
+            return Ok(packages);
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/handover-snapshots")]
@@ -287,7 +305,7 @@ namespace MyGarage.Controllers
             _mapper.Map(itemDto, existingItem);
             existingItem.Status = status;
             existingItem.DispatchTag = NormalizeDispatchTag(existingItem.DispatchTag);
-            existingItem.UpdatedAt = DateTime.UtcNow;
+            existingItem.UpdatedAt = VietnamTime.Now;
 
             var updatedItem = await _diagnosisService.UpdateAsync(id, existingItem);
             if (updatedItem == null)
@@ -405,8 +423,6 @@ namespace MyGarage.Controllers
                     diagnoses: newDiagnosis);
             }
 
-            await _diagnosisService.UpdateServiceOrderStatusAsync(serviceOrder, ServiceOrderStatusDiagnosing);
-
             var dto = _mapper.Map<DiagnosisResponseDto>(newDiagnosis.First());
             return Ok(dto);
         }
@@ -451,6 +467,28 @@ namespace MyGarage.Controllers
                 if (!bayInBranch)
                 {
                     return BadRequest(new { message = "Cau nang duoc chon khong thuoc chi nhanh dang xu ly." });
+                }
+
+                var assignedTeamIds = activeDiagnosis
+                    .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
+                    .Select(x => x.AssignedTeamId!.Value)
+                    .Distinct()
+                    .ToList();
+                var hasPreApprovedBayAssignment = activeDiagnosis.Any(x => x.AssignedBayId.HasValue && x.AssignedBayId.Value == request.BayId.Value);
+
+                if (!hasPreApprovedBayAssignment)
+                {
+                    foreach (var assignedTeamId in assignedTeamIds)
+                    {
+                        var (isCompatible, reason) = await _diagnosisService.ValidateTeamBayCompatibilityAsync(
+                            serviceOrderId,
+                            assignedTeamId,
+                            request.BayId.Value);
+                        if (!isCompatible)
+                        {
+                            return Conflict(new { message = reason });
+                        }
+                    }
                 }
             }
 
@@ -1343,6 +1381,21 @@ namespace MyGarage.Controllers
                     if (!isCompatible)
                     {
                         return Conflict(new { message = "Co to duoc chon khong dung chuyen mon cua lenh chan doan." });
+                    }
+                }
+
+                if (request.BayId.HasValue)
+                {
+                    foreach (var dispatchTeamId in dispatchTeamIds.Distinct())
+                    {
+                        var compatibility = await _diagnosisService.ValidateTeamBayCompatibilityAsync(
+                            serviceOrder!.Id,
+                            dispatchTeamId,
+                            request.BayId.Value);
+                        if (!compatibility.IsCompatible)
+                        {
+                            return Conflict(new { message = compatibility.Reason });
+                        }
                     }
                 }
             }

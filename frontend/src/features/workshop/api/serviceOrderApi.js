@@ -18,6 +18,17 @@ export const serviceOrderApi = {
   create: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshop: (data) => request({ url: "/api/service-orders", method: "POST", data }),
   createWorkshopBatch: (data) => request({ url: "/api/service-orders/batches", method: "POST", data }),
+  uploadInsuranceAsset: (file, assetType) => {
+    const formData = new FormData();
+    formData.append("file", file, file?.name || "insurance-image.jpg");
+    formData.append("assetType", assetType);
+    return request({
+      url: "/api/service-orders/insurance-assets",
+      method: "POST",
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
   createGroupSession: (data) => request({ url: "/api/group-sessions/service-orders", method: "POST", data }),
   update: (id, data) => request({ url: `/api/service-orders/${id}`, method: "PUT", data }),
   updateWorkshop: (id, data) => request({ url: `/api/service-orders/${id}/workshop`, method: "PUT", data }),
@@ -108,6 +119,11 @@ export const serviceOrderApi = {
       url: `/api/diagnoses/service-orders/${serviceOrderId}/intake-suggestions`,
       method: "GET",
       params,
+    }),
+  getDiagnosisIntakePackages: () =>
+    request({
+      url: "/api/diagnoses/intake-packages",
+      method: "GET",
     }),
   createDiagnosisHandoverSnapshot: (serviceOrderId, data) =>
     request({

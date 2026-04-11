@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "../../admin/components/AdminModals";
 import { bayApi } from "../api/bayApi";
 import { useSearch } from "@context/SearchContext";
@@ -98,6 +98,7 @@ function normalizeTabId(value) {
 }
 
 const EMPTY_BAY_FORM = {
+  sequenceOrder: "",
   code: "",
   name: "",
   branchId: "",
@@ -160,6 +161,7 @@ function FormRow({ children }) {
 function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
   const [form, setForm] = useState({
     ...initial,
+    sequenceOrder: initial.sequenceOrder ?? "",
     branchId: initial.branchId ? String(initial.branchId) : "",
     capacity: initial.capacity ?? 1,
     maxTonnage: initial.maxTonnage ?? "",
@@ -175,7 +177,9 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const sequenceOrder = Number(form.sequenceOrder);
     onSubmit({
+      sequenceOrder: Number.isFinite(sequenceOrder) && sequenceOrder > 0 ? Math.floor(sequenceOrder) : null,
       code: String(form.code || "").trim(),
       name: String(form.name || "").trim(),
       branchId: Number(form.branchId),
@@ -218,8 +222,15 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
           </select>
         </div>
         <div className="form-group">
-          <label>Khu vực</label>
-          <input name="area" value={form.area || ""} onChange={handleChange} />
+          <label>Thứ tự khoang</label>
+          <input
+            name="sequenceOrder"
+            type="number"
+            min="1"
+            value={form.sequenceOrder ?? ""}
+            onChange={handleChange}
+            placeholder="Tự tăng nếu bỏ trống"
+          />
         </div>
       </FormRow>
 
@@ -264,6 +275,11 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
           </select>
         </div>
       </FormRow>
+
+      <div className="form-group">
+        <label>Khu vực</label>
+        <input name="area" value={form.area || ""} onChange={handleChange} />
+      </div>
 
       <div className="form-group">
         <label>Phân khúc xe phù hợp (cách nhau bằng dấu phẩy)</label>
@@ -325,7 +341,7 @@ export default function BayManagementPage({ section }) {
     branchId: "",
     area: "",
     status: "",
-    sortBy: "code",
+    sortBy: "sequence",
     sortDirection: "asc",
     includeHidden: false,
   });
@@ -480,6 +496,7 @@ export default function BayManagementPage({ section }) {
       mode: "edit",
       item: {
         id: item.id,
+        sequenceOrder: item.sequenceOrder ?? "",
         code: item.code || "",
         name: item.name || "",
         branchId: item.branchId || "",
@@ -487,7 +504,7 @@ export default function BayManagementPage({ section }) {
         maxTonnage: item.maxTonnage ?? "",
         operationalStatus: item.operationalStatus || "EMPTY",
         isActive: !item.isLocked,
-        area: item.area || "Chua phan khu",
+        area: item.area || "Chưa phân khu",
         capacity: item.capacity || 1,
         supportedSegmentsText: (item.supportedSegments || []).join(", "),
       },
@@ -662,6 +679,7 @@ export default function BayManagementPage({ section }) {
           value={filters.sortBy}
           onChange={(event) => setFilters((prev) => ({ ...prev, sortBy: event.target.value }))}
         >
+          <option value="sequence">Sắp xếp: Thứ tự khoang</option>
           <option value="code">Sắp xếp: Mã khoang</option>
           <option value="usage">Sắp xếp: Mức sử dụng</option>
         </select>
@@ -714,6 +732,7 @@ export default function BayManagementPage({ section }) {
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th>STT</th>
                     <th>Mã</th>
                     <th>Tên khoang</th>
                     <th>Chi nhánh</th>
@@ -727,7 +746,7 @@ export default function BayManagementPage({ section }) {
                 </thead>
                 <tbody>
                   {visibleRows.length === 0 ? (
-                    <tr><td colSpan={9}><div className="empty-state"><p>Chưa có khoang nào.</p></div></td></tr>
+                    <tr><td colSpan={10}><div className="empty-state"><p>Chưa có khoang nào.</p></div></td></tr>
                   ) : (
                     visibleRows.map((item) => (
                       <tr
@@ -735,6 +754,7 @@ export default function BayManagementPage({ section }) {
                         className={Number(selectedBayId) === Number(item.id) ? "bay-row-selected" : ""}
                         onClick={() => setSelectedBayId(item.id)}
                       >
+                        <td className="td-center">{item.sequenceOrder || "-"}</td>
                         <td className="td-id">{item.code}</td>
                         <td>{item.name}</td>
                         <td>{item.branchName}</td>
@@ -904,7 +924,7 @@ export default function BayManagementPage({ section }) {
                     suggestions.map((item) => (
                       <div key={item.id} className="bay-suggestion-item">
                         <div>
-                          <strong>{item.code} - {item.name}</strong>
+                          <strong>#{item.sequenceOrder || "-"} | {item.code} - {item.name}</strong>
                           <p>{item.branchName} | {item.area} | {item.occupiedCount}/{item.capacity}</p>
                           <p>Điểm gợi ý: {toNumber(item.score, 0).toFixed(2)}</p>
                         </div>
@@ -1009,6 +1029,7 @@ export default function BayManagementPage({ section }) {
                           >
                             <div className="bay-layout-code">{bay.code}</div>
                             <div>{bay.name}</div>
+                            <div className="bay-layout-meta">Thứ tự: {bay.sequenceOrder || "-"}</div>
                             <div className="bay-layout-meta">{bay.occupiedCount}/{bay.capacity} xe</div>
                             <div className="bay-layout-meta">{STATUS_LABELS[bay.status] || bay.status}</div>
                           </button>
@@ -1124,4 +1145,5 @@ export default function BayManagementPage({ section }) {
     </div>
   );
 }
+
 

@@ -2430,6 +2430,35 @@
   transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.appointment-status-cell {
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto) 18px;
+  align-items: center;
+  justify-content: center;
+  column-gap: 8px;
+  width: 100%;
+}
+
+.appointment-issue-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fee4e2;
+  color: #d92d20;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(217, 45, 32, 0.18);
+}
+
+.appointment-issue-indicator.is-hidden {
+  visibility: hidden;
+}
+
 .appointment-click-row:hover {
   background-color: #ffffff !important;
   transform: translateY(-3px) scale(1.005);
@@ -2826,6 +2855,98 @@
 
 .reception-dashboard .admin-table th.col-actions-wide {
   text-align: center !important;
+}
+
+.reception-dashboard .reception-appointments-table,
+.reception-dashboard .reception-group-appointments-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.reception-dashboard .reception-appointments-table {
+  min-width: 1120px;
+}
+
+.reception-dashboard .reception-group-appointments-table {
+  min-width: 920px;
+}
+
+.reception-dashboard .reception-appointments-table col.col-customer {
+  width: 19%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-phone {
+  width: 13%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-date {
+  width: 11%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-time {
+  width: 13%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-vehicle {
+  width: 13%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-status {
+  width: 11%;
+}
+
+.reception-dashboard .reception-appointments-table col.col-actions {
+  width: 20%;
+}
+
+.reception-dashboard .reception-group-appointments-table col.col-date {
+  width: 15%;
+}
+
+.reception-dashboard .reception-group-appointments-table col.col-time {
+  width: 24%;
+}
+
+.reception-dashboard .reception-group-appointments-table col.col-vehicle {
+  width: 18%;
+}
+
+.reception-dashboard .reception-group-appointments-table col.col-status {
+  width: 18%;
+}
+
+.reception-dashboard .reception-group-appointments-table col.col-actions {
+  width: 25%;
+}
+
+.reception-dashboard .reception-appointments-table th,
+.reception-dashboard .reception-appointments-table td,
+.reception-dashboard .reception-group-appointments-table th,
+.reception-dashboard .reception-group-appointments-table td {
+  vertical-align: middle;
+}
+
+.reception-dashboard .reception-appointments-table td:not(.col-actions-wide),
+.reception-dashboard .reception-group-appointments-table td:not(.col-actions-wide) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reception-dashboard .reception-appointments-table .appt-action-row,
+.reception-dashboard .reception-group-appointments-table .appt-action-row {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.reception-dashboard .reception-appointments-table .appointment-click-row:hover,
+.reception-dashboard .reception-group-appointments-table .appointment-click-row:hover {
+  transform: none;
+  box-shadow: none;
+  background-color: #f8fbff !important;
+  border-radius: 0;
 }
 
 .reception-dashboard .reception-group-orders-table {
@@ -3459,6 +3580,21 @@
   margin-bottom: 14px;
 }
 
+.slot-flow-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.slot-flow-note.repair {
+  color: #1f4f92;
+}
+
+.slot-flow-note.checkin {
+  color: #256f4b;
+}
+
 .reception-slot-section .booking-empty {
   border: 1px dashed #d3dfef;
   border-radius: 10px;
@@ -3519,6 +3655,11 @@
   color: #1d376b;
   font-size: 14px;
   font-weight: 800;
+}
+
+.reception-summary-inline-warning {
+  padding: 6px 2px 8px;
+  border-bottom: 1px dashed #d5e0f2;
 }
 
 .reception-plan-summary-grid {
@@ -4267,6 +4408,10 @@
 .reception-service-card-main {
   display: grid;
   gap: 5px;
+}
+
+.reception-service-card-main strong {
+  text-transform: none;
 }
 
 .reception-service-card-main small {
@@ -5603,6 +5748,14 @@
   color: #ffb7b7;
 }
 
+.workshop-page.dark .slot-flow-note.repair {
+  color: #b8d0ff;
+}
+
+.workshop-page.dark .slot-flow-note.checkin {
+  color: #9ce5bf;
+}
+
 .workshop-page.dark .reception-sidebar-hint {
   color: #a3aed0;
 }
@@ -5659,6 +5812,423 @@
   color: #ffffff;
 }
 
+.workshop-insurance-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #d7e4f7;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+}
+
+.workshop-insurance-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workshop-insurance-panel-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.workshop-insurance-panel-kicker {
+  margin: 0;
+  color: #3a5f96;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workshop-insurance-panel-title {
+  margin: 0;
+  color: #1f3e71;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.workshop-insurance-panel-note,
+.workshop-insurance-helper {
+  margin: 0;
+  color: #5f7398;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.workshop-insurance-toggle {
+  margin-left: auto;
+  align-self: center;
+}
+
+.workshop-insurance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.workshop-insurance-core-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.9fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.workshop-insurance-summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #d4e0f2;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.workshop-insurance-summary-card span {
+  color: #61779f;
+  font-size: 13px;
+}
+
+.workshop-insurance-summary-card strong {
+  color: #173867;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.workshop-insurance-company-field {
+  display: grid;
+  gap: 8px;
+}
+
+.workshop-insurance-company-dropdown {
+  max-width: 420px;
+}
+
+.workshop-insurance-company-dropdown .filter-dropdown-button {
+  min-height: 52px;
+}
+
+.workshop-insurance-company-dropdown .filter-dropdown-label {
+  font-weight: 700;
+}
+
+.workshop-insurance-snapshot {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed #dcc089;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.78);
+}
+
+.workshop-insurance-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workshop-insurance-summary-row span {
+  color: #7b6a4d;
+  font-size: 13px;
+}
+
+.workshop-insurance-summary-row strong {
+  color: #173867;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.workshop-insurance-choice-group {
+  display: grid;
+  gap: 10px;
+}
+
+.workshop-insurance-choice-group > span {
+  color: #173867;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.workshop-insurance-choice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.workshop-insurance-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d7e4f7;
+  border-radius: 16px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.workshop-insurance-choice:hover {
+  border-color: #c8ab70;
+  box-shadow: 0 10px 20px rgba(192, 154, 88, 0.12);
+  transform: translateY(-1px);
+}
+
+.workshop-insurance-choice input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.workshop-insurance-choice span {
+  display: grid;
+  gap: 4px;
+}
+
+.workshop-insurance-choice strong {
+  color: #173867;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.workshop-insurance-choice small {
+  color: #5f7398;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workshop-insurance-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.workshop-insurance-upload-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 100%;
+  padding: 14px;
+  border: 1px solid #d7e4f7;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.workshop-insurance-upload-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workshop-insurance-upload-head strong {
+  display: block;
+  color: #173867;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.workshop-insurance-upload-head p {
+  margin: 4px 0 0;
+  color: #5f7398;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.workshop-insurance-upload-count {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f3f7ff;
+  color: #8a6a23;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workshop-insurance-upload-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid #e0c48d;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: #7b5418;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.workshop-insurance-upload-trigger:hover {
+  background: #fff6e3;
+  border-color: #d3aa5a;
+}
+
+.workshop-insurance-upload-trigger.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.workshop-insurance-upload-input {
+  display: none;
+}
+
+.workshop-insurance-upload-hint,
+.workshop-insurance-upload-empty {
+  margin: 0;
+  color: #7b6a4d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workshop-insurance-upload-feedback {
+  margin: 0;
+  color: #0f766e;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.workshop-insurance-upload-preview-list {
+  display: grid;
+  gap: 12px;
+}
+
+.workshop-insurance-upload-preview-item {
+  display: grid;
+  gap: 8px;
+}
+
+.workshop-insurance-upload-preview-link {
+  display: block;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.workshop-insurance-upload-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid #d7e4f7;
+  border-radius: 14px;
+  background: #eef4ff;
+}
+
+.workshop-insurance-upload-preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #5f7398;
+  font-size: 13px;
+}
+
+.workshop-insurance-upload-preview-actions button {
+  border: none;
+  background: transparent;
+  color: #c2410c;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workshop-insurance-upload-preview-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.so-detail-service-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.so-detail-service-copy small {
+  color: #6b7f9f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workshop-page.dark .workshop-insurance-panel,
+.workshop-page.dark .workshop-insurance-summary-card {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1a274f;
+}
+
+.workshop-page.dark .workshop-insurance-panel-kicker {
+  color: #c6d4ff;
+}
+
+.workshop-page.dark .workshop-insurance-panel-title,
+.workshop-page.dark .workshop-insurance-summary-card strong {
+  color: #ffffff;
+}
+
+.workshop-page.dark .workshop-insurance-snapshot,
+.workshop-page.dark .workshop-insurance-choice {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1a274f;
+}
+
+.workshop-page.dark .workshop-insurance-panel-note,
+.workshop-page.dark .workshop-insurance-helper,
+.workshop-page.dark .workshop-insurance-summary-card span,
+.workshop-page.dark .so-detail-service-copy small {
+  color: #a3aed0;
+}
+
+.workshop-page.dark .workshop-insurance-summary-row span,
+.workshop-page.dark .workshop-insurance-choice small {
+  color: #a3aed0;
+}
+
+.workshop-page.dark .workshop-insurance-summary-row strong,
+.workshop-page.dark .workshop-insurance-choice-group > span,
+.workshop-page.dark .workshop-insurance-choice strong {
+  color: #ffffff;
+}
+
+.workshop-page.dark .workshop-insurance-upload-card {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1a274f;
+}
+
+.workshop-page.dark .workshop-insurance-upload-head strong,
+.workshop-page.dark .workshop-insurance-upload-preview-actions {
+  color: #ffffff;
+}
+
+.workshop-page.dark .workshop-insurance-upload-head p,
+.workshop-page.dark .workshop-insurance-upload-hint,
+.workshop-page.dark .workshop-insurance-upload-empty {
+  color: #a3aed0;
+}
+
+.workshop-page.dark .workshop-insurance-upload-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2d18b;
+}
+
+.workshop-page.dark .workshop-insurance-upload-trigger {
+  border-color: rgba(242, 209, 139, 0.42);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5ddb0;
+}
+
+.workshop-page.dark .workshop-insurance-upload-trigger:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.workshop-page.dark .workshop-insurance-upload-preview-image {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 @media (max-width: 768px) {
   .workshop-page.dark .service-summary-item:not(:last-child) {
     border-bottom-color: rgba(255, 255, 255, 0.12);
@@ -5676,6 +6246,20 @@
     left: auto;
     bottom: auto;
     width: 100%;
+  }
+
+  .workshop-insurance-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workshop-insurance-core-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workshop-insurance-toggle {
+    margin-left: 0;
+    align-self: flex-start;
   }
 
   .workshop-sidebar-body {

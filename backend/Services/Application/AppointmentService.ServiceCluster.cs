@@ -11,10 +11,19 @@ namespace MyGarage.Services
 {
         public partial class AppointmentService
     {
-        private async Task<BookingFlowType> ResolveFlowAsync(string? bookingFlow, string? requestedServiceIds)
+        private async Task<BookingFlowType> ResolveFlowAsync(
+            string? bookingFlow,
+            string? requestedServiceIds,
+            string? requestedPackageIds = null)
         {
             var explicitFlow = ParseExplicitFlow(bookingFlow);
+            if (explicitFlow.HasValue)
+            {
+                return explicitFlow.Value;
+            }
+
             var services = await LoadRequestedServicesAsync(requestedServiceIds);
+            var packages = await LoadRequestedPackagesAsync(requestedPackageIds);
 
             if (services.Count > 0)
             {
@@ -23,10 +32,19 @@ namespace MyGarage.Services
                     : BookingFlowType.Fixed;
             }
 
-            return explicitFlow ?? BookingFlowType.Flexible;
+            if (packages.Count > 0)
+            {
+                return packages.Any(IsInspectionPackage)
+                    ? BookingFlowType.Flexible
+                    : BookingFlowType.Fixed;
+            }
+
+            return BookingFlowType.Flexible;
         }
 
-        private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(string? requestedServiceIds)
+        private async Task<string?> ResolveRequestedServiceIdsForBookingAsync(
+            string? requestedServiceIds,
+            string? requestedPackageIds = null)
         {
             var normalizedIds = ParseServiceIds(requestedServiceIds)
                 .Distinct()
@@ -35,6 +53,11 @@ namespace MyGarage.Services
             if (normalizedIds.Count > 0)
             {
                 return string.Join(",", normalizedIds);
+            }
+
+            if (ParsePackageIds(requestedPackageIds).Any())
+            {
+                return null;
             }
 
             var defaultDiagnosticServiceId = await ResolveDefaultDiagnosticServiceIdAsync();
@@ -136,22 +159,50 @@ namespace MyGarage.Services
 
         private static bool IsInspectionService(StandardService service)
         {
-            var text = NormalizeText($"{service.Code} {service.Name} {service.Category?.Name}");
-            return text.Contains("kiem tra")
-                   || text.Contains("chuan doan")
-                   || text.Contains("diagnostic")
-                   || text.Contains("general check")
-                   || text.Contains("quick check")
-                   || text.Contains("checkup")
-                   || text.Contains("check-up");
+            var code = NormalizeText(service.Code ?? string.Empty)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+            return code.StartsWith("dg", StringComparison.Ordinal);
+        }
+
+        private static bool IsMiniCheckService(string? code, string? name, string? categoryName = null)
+        {
+            var normalizedCode = NormalizeText(code ?? string.Empty)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+
+            if (normalizedCode is "mini10" or "minicheck" or "mini" || normalizedCode.StartsWith("mnc", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var text = NormalizeText($"{code} {name} {categoryName}");
+            return text.Contains("mini check")
+                   || text.Contains("mini-check")
+                   || text.Contains("minicheck");
         }
 
         private async Task<ServiceCluster> ResolveServiceClusterAsync(string? requestedServiceIds, string? notes)
         {
-            var services = await LoadRequestedServicesAsync(requestedServiceIds);
-            if (services.Count == 0) return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
+            return await ResolveServiceClusterAsync(requestedServiceIds, null, notes);
+        }
+
+        private async Task<ServiceCluster> ResolveServiceClusterAsync(
+            string? requestedServiceIds,
+            string? requestedPackageIds,
+            string? notes)
+        {
+            var services = await LoadRequestedServicesWithPackageItemsAsync(requestedServiceIds, requestedPackageIds);
+            var packages = await LoadRequestedPackagesAsync(requestedPackageIds);
+            if (services.Count == 0 && packages.Count == 0)
+            {
+                return IsHeavyHint(notes) ? ServiceCluster.Heavy : ServiceCluster.Quick;
+            }
 
             var heavy = services.Any(s => IsHeavyHint(s.Name) || IsHeavyHint(s.Category?.Name));
+            heavy = heavy || packages.Any(IsPackageHeavySignal);
             return heavy ? ServiceCluster.Heavy : ServiceCluster.Quick;
         }
     }

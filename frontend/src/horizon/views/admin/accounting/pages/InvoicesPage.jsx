@@ -36,6 +36,7 @@ import {
   sumBy,
   toNumber
 } from "../utils/accountingHelpers";
+import { isOptionalEmailValid } from "@shared/utils/contactValidation";
 
 function fieldOf(item, ...candidates) {
   for (const key of candidates) {
@@ -265,12 +266,21 @@ export default function InvoicesPage() {
 
   async function handleSaveAdjustment() {
     if (!selectedInvoice) return;
+    const receiveEmail = String(editForm.receiveEmail || "").trim();
+    if (!isOptionalEmailValid(receiveEmail)) {
+      toast({
+        status: "error",
+        title: "Email nhận hóa đơn không đúng định dạng"
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = invoicePayloadFrom(selectedInvoice.raw, {
         companyName: editForm.companyName,
         companyAddress: editForm.companyAddress,
-        receiveEmail: editForm.receiveEmail,
+        receiveEmail: receiveEmail || null,
         taxCode: editForm.taxCode,
         creditNote: editForm.creditNote
       });
@@ -531,6 +541,7 @@ export default function InvoicesPage() {
                 <FormControl>
                   <FormLabel mb='4px' fontSize='xs'>Receive email</FormLabel>
                   <Input
+                    type='email'
                     value={editForm.receiveEmail}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, receiveEmail: e.target.value }))}
                   />

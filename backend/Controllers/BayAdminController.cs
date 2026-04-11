@@ -21,6 +21,9 @@ public class BayAdminController : ControllerBase
     private const string DbBayStatusActive = nameof(BayOperationalStatusCode.ACTIVE);
     private const string DbBayStatusBroken = nameof(BayOperationalStatusCode.BROKEN);
     private const string DbBayStatusUnderMaintenance = nameof(BayOperationalStatusCode.UNDER_MAINTENANCE);
+    private const int ReservationStatusAvailable = 0;
+    private const int ReservationStatusReserved = 1;
+    private const int ReservationStatusOccupied = 2;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -102,7 +105,7 @@ public class BayAdminController : ControllerBase
         [FromQuery] string? search,
         [FromQuery] string? area,
         [FromQuery] string? status,
-        [FromQuery] string? sortBy = "code",
+        [FromQuery] string? sortBy = "sequence",
         [FromQuery] string? sortDirection = "asc",
         [FromQuery] bool includeHidden = false)
     {
@@ -145,8 +148,11 @@ public class BayAdminController : ControllerBase
         query = normalizedSort switch
         {
             "USAGE" => direction == "desc"
-                ? query.OrderByDescending(x => x.SessionCount).ThenByDescending(x => x.TotalUsageHours).ThenBy(x => x.Code)
-                : query.OrderBy(x => x.SessionCount).ThenBy(x => x.TotalUsageHours).ThenBy(x => x.Code),
+                ? query.OrderByDescending(x => x.SessionCount).ThenByDescending(x => x.TotalUsageHours).ThenBy(x => x.SequenceOrder).ThenBy(x => x.Code)
+                : query.OrderBy(x => x.SessionCount).ThenBy(x => x.TotalUsageHours).ThenBy(x => x.SequenceOrder).ThenBy(x => x.Code),
+            "SEQUENCE" or "ORDER" => direction == "desc"
+                ? query.OrderByDescending(x => x.SequenceOrder).ThenByDescending(x => x.Code).ThenByDescending(x => x.Name)
+                : query.OrderBy(x => x.SequenceOrder).ThenBy(x => x.Code).ThenBy(x => x.Name),
             _ => direction == "desc"
                 ? query.OrderByDescending(x => x.Code).ThenByDescending(x => x.Name)
                 : query.OrderBy(x => x.Code).ThenBy(x => x.Name)
@@ -286,10 +292,12 @@ public class BayAdminController : ControllerBase
         var byBay = rows
             .OrderByDescending(x => x.SessionCount)
             .ThenByDescending(x => x.TotalUsageHours)
+            .ThenBy(x => x.SequenceOrder)
             .ThenBy(x => x.Code)
             .Select(x => new
             {
                 id = x.Id,
+                sequenceOrder = x.SequenceOrder,
                 code = x.Code,
                 name = x.Name,
                 branchId = x.BranchId,
@@ -311,7 +319,7 @@ public class BayAdminController : ControllerBase
         {
             byBay,
             mostUsed = byBay.Take(5),
-            leastUsed = byBay.OrderBy(x => x.sessionCount).ThenBy(x => x.totalUsageHours).ThenBy(x => x.code).Take(5),
+            leastUsed = byBay.OrderBy(x => x.sessionCount).ThenBy(x => x.totalUsageHours).ThenBy(x => x.sequenceOrder).ThenBy(x => x.code).Take(5),
             frequentOverload = byBay.Where(x => x.occupiedCount > x.capacity).OrderByDescending(x => x.occupiedCount - x.capacity).Take(5),
             longestOccupied = byBay.Where(x => x.longestActiveHours > 0).OrderByDescending(x => x.longestActiveHours).Take(5)
         });
@@ -348,10 +356,12 @@ public class BayAdminController : ControllerBase
                             occupiedVehicles = areaOccupied,
                             densityPercent = areaCapacity > 0 ? Math.Round(areaOccupied * 100d / areaCapacity, 2) : 0d,
                             bays = ag
-                                .OrderBy(x => x.Code)
+                                .OrderBy(x => x.SequenceOrder)
+                                .ThenBy(x => x.Code)
                                 .Select(x => new
                                 {
                                     id = x.Id,
+                                    sequenceOrder = x.SequenceOrder,
                                     code = x.Code,
                                     name = x.Name,
                                     status = x.OperationalStatus,
@@ -379,7 +389,7 @@ public class BayAdminController : ControllerBase
     [HttpGet("~/api/admin/bays/alerts")]
     public async Task<IActionResult> GetAlerts([FromQuery] long? branchId)
     {
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var settings = await ReadSettingsAsync();
         var rows = await BuildBayRowsAsync(includeHidden: false, settings: settings, nowUtc: now);
         if (branchId.HasValue)
@@ -534,7 +544,7 @@ public class BayAdminController : ControllerBase
             .ToList();
 
         var vehicleMap = await LoadVehicleMapAsync(sessions.Select(s => s.VehicleId));
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         var items = sessions.Select(s =>
         {
@@ -659,11 +669,13 @@ public class BayAdminController : ControllerBase
                 };
             })
             .OrderByDescending(x => x.score)
+            .ThenBy(x => x.bay.SequenceOrder)
             .ThenBy(x => x.bay.Code)
             .Take(10)
             .Select(x => new
             {
                 id = x.bay.Id,
+                sequenceOrder = x.bay.SequenceOrder,
                 code = x.bay.Code,
                 name = x.bay.Name,
                 branchId = x.bay.BranchId,
@@ -710,17 +722,37 @@ public class BayAdminController : ControllerBase
             .AnyAsync(b => b.IsDeleted != true && b.Code == normalizedCode);
         if (duplicatedCode) return BadRequest(new { message = "Bay code already exists." });
 
-        var now = DateTime.UtcNow;
+        var sequenceOrder = request.SequenceOrder.GetValueOrDefault();
+        if (sequenceOrder <= 0)
+        {
+            sequenceOrder = await GetNextSequenceOrderAsync(request.BranchId);
+        }
+
+        var duplicatedSequence = await _context.Bays
+            .AsNoTracking()
+            .AnyAsync(b =>
+                b.IsDeleted != true &&
+                b.BranchId == request.BranchId &&
+                b.SequenceOrder == sequenceOrder);
+        if (duplicatedSequence)
+        {
+            return BadRequest(new { message = "Sequence order already exists in this branch." });
+        }
+
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
 
         var bay = new Bay
         {
             BranchId = request.BranchId,
+            SequenceOrder = sequenceOrder,
             Code = normalizedCode,
             Name = request.Name.Trim(),
             BayType = string.IsNullOrWhiteSpace(request.BayType) ? "GENERAL" : request.BayType.Trim(),
             MaxTonnage = request.MaxTonnage,
             OperationalStatus = NormalizeOperationalStatus(request.OperationalStatus),
+            LastStatusChangedAt = now,
+            ReservationStatus = ReservationStatusAvailable,
             IsActive = request.IsActive ?? true,
             IsDeleted = false,
             CreatedAt = now,
@@ -745,7 +777,8 @@ public class BayAdminController : ControllerBase
         return Ok(new
         {
             message = "Bay created successfully.",
-            id = bay.Id
+            id = bay.Id,
+            sequenceOrder = bay.SequenceOrder
         });
     }
 
@@ -768,14 +801,45 @@ public class BayAdminController : ControllerBase
         var branchExists = await _context.Branches.AnyAsync(b => b.Id == request.BranchId && b.IsDeleted != true);
         if (!branchExists) return BadRequest(new { message = "Branch does not exist." });
 
+        var targetSequenceOrder = request.SequenceOrder.HasValue && request.SequenceOrder.Value > 0
+            ? request.SequenceOrder.Value
+            : bay.SequenceOrder > 0
+                ? bay.SequenceOrder
+                : await GetNextSequenceOrderAsync(request.BranchId, id);
+
+        if (request.BranchId != bay.BranchId &&
+            (!request.SequenceOrder.HasValue || request.SequenceOrder.Value <= 0))
+        {
+            targetSequenceOrder = await GetNextSequenceOrderAsync(request.BranchId, id);
+        }
+
+        var duplicatedSequence = await _context.Bays
+            .AsNoTracking()
+            .AnyAsync(b =>
+                b.Id != id &&
+                b.IsDeleted != true &&
+                b.BranchId == request.BranchId &&
+                b.SequenceOrder == targetSequenceOrder);
+        if (duplicatedSequence)
+        {
+            return BadRequest(new { message = "Sequence order already exists in this branch." });
+        }
+
         bay.BranchId = request.BranchId;
+        bay.SequenceOrder = targetSequenceOrder;
         bay.Code = request.Code.Trim();
         bay.Name = request.Name.Trim();
         bay.BayType = string.IsNullOrWhiteSpace(request.BayType) ? "GENERAL" : request.BayType.Trim();
         bay.MaxTonnage = request.MaxTonnage;
-        bay.OperationalStatus = NormalizeOperationalStatus(request.OperationalStatus);
+        var normalizedStatus = NormalizeOperationalStatus(request.OperationalStatus);
+        var previousStatus = NormalizeOperationalStatus(bay.OperationalStatus);
+        bay.OperationalStatus = normalizedStatus;
+        if (!string.Equals(previousStatus, normalizedStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            bay.LastStatusChangedAt = VietnamTime.Now;
+        }
         bay.IsActive = request.IsActive ?? bay.IsActive;
-        bay.UpdatedAt = DateTime.UtcNow;
+        bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
 
         var settings = await ReadSettingsAsync();
@@ -789,7 +853,11 @@ public class BayAdminController : ControllerBase
         await _context.SaveChangesAsync();
         await WriteSettingsAsync(settings);
 
-        return Ok(new { message = "Bay updated successfully." });
+        return Ok(new
+        {
+            message = "Bay updated successfully.",
+            sequenceOrder = bay.SequenceOrder
+        });
     }
 
     [HttpPost("bays/{id:long}/hide")]
@@ -800,10 +868,12 @@ public class BayAdminController : ControllerBase
         if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
 
         var userId = ResolveCurrentUserId();
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         bay.IsDeleted = true;
         bay.IsActive = false;
+        bay.ReservationStatus = ReservationStatusAvailable;
+        bay.LastStatusChangedAt = now;
         bay.DeletedAt = now;
         bay.DeletedBy = userId;
         bay.UpdatedAt = now;
@@ -822,7 +892,8 @@ public class BayAdminController : ControllerBase
         if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
 
         bay.IsActive = false;
-        bay.UpdatedAt = DateTime.UtcNow;
+        bay.LastStatusChangedAt = VietnamTime.Now;
+        bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
         await _context.SaveChangesAsync();
 
@@ -837,7 +908,8 @@ public class BayAdminController : ControllerBase
         if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
 
         bay.IsActive = true;
-        bay.UpdatedAt = DateTime.UtcNow;
+        bay.LastStatusChangedAt = VietnamTime.Now;
+        bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
         await _context.SaveChangesAsync();
 
@@ -872,7 +944,16 @@ public class BayAdminController : ControllerBase
         }
 
         bay.OperationalStatus = normalizedStatus;
-        bay.UpdatedAt = DateTime.UtcNow;
+        bay.LastStatusChangedAt = VietnamTime.Now;
+        if (normalizedStatus == StatusEmpty)
+        {
+            bay.ReservationStatus = ReservationStatusAvailable;
+        }
+        else if (normalizedStatus == StatusInUse && bay.CurrentOccupiedVehicleId.HasValue)
+        {
+            bay.ReservationStatus = ReservationStatusOccupied;
+        }
+        bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
         await _context.SaveChangesAsync();
 
@@ -893,7 +974,7 @@ public class BayAdminController : ControllerBase
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveMetadata(settings, bay.Id);
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         var status = NormalizeOperationalStatus(bay.OperationalStatus);
         var invalidStateMessage = ValidateBayForAssign(bay, status);
@@ -955,6 +1036,8 @@ public class BayAdminController : ControllerBase
             bay.OperationalStatus = StatusInUse;
         }
 
+        bay.ReservationStatus = ReservationStatusOccupied;
+        bay.LastStatusChangedAt = now;
         bay.UpdatedAt = now;
         bay.UpdatedBy = ResolveCurrentUserId();
 
@@ -972,7 +1055,7 @@ public class BayAdminController : ControllerBase
         if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
 
         var settings = await ReadSettingsAsync();
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         var activeSessions = settings.Sessions
             .Where(s => s.BayId == id && s.ReleasedAt == null)
@@ -1007,16 +1090,19 @@ public class BayAdminController : ControllerBase
         if (remainingVehicleIds.Count > 0)
         {
             bay.CurrentOccupiedVehicleId = remainingVehicleIds[0];
+            bay.ReservationStatus = ReservationStatusOccupied;
         }
         else
         {
             bay.CurrentOccupiedVehicleId = null;
+            bay.ReservationStatus = ReservationStatusAvailable;
             if (NormalizeOperationalStatus(bay.OperationalStatus) == StatusInUse)
             {
                 bay.OperationalStatus = StatusEmpty;
             }
         }
 
+        bay.LastStatusChangedAt = now;
         bay.UpdatedAt = now;
         bay.UpdatedBy = ResolveCurrentUserId();
 
@@ -1047,7 +1133,7 @@ public class BayAdminController : ControllerBase
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveMetadata(settings, toBay.Id);
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         var sourceSession = settings.Sessions
             .Where(s => s.BayId == fromBay.Id && s.VehicleId == request.VehicleId && s.ReleasedAt == null)
@@ -1133,6 +1219,9 @@ public class BayAdminController : ControllerBase
         {
             fromBay.OperationalStatus = StatusEmpty;
         }
+        fromBay.ReservationStatus = fromBay.CurrentOccupiedVehicleId.HasValue
+            ? ReservationStatusOccupied
+            : ReservationStatusAvailable;
 
         if (!toBay.CurrentOccupiedVehicleId.HasValue)
         {
@@ -1142,10 +1231,13 @@ public class BayAdminController : ControllerBase
         {
             toBay.OperationalStatus = StatusInUse;
         }
+        toBay.ReservationStatus = ReservationStatusOccupied;
 
         var userId = ResolveCurrentUserId();
+        fromBay.LastStatusChangedAt = now;
         fromBay.UpdatedAt = now;
         fromBay.UpdatedBy = userId;
+        toBay.LastStatusChangedAt = now;
         toBay.UpdatedAt = now;
         toBay.UpdatedBy = userId;
 
@@ -1161,7 +1253,7 @@ public class BayAdminController : ControllerBase
         DateTime? nowUtc = null)
     {
         settings ??= await ReadSettingsAsync();
-        var now = nowUtc ?? DateTime.UtcNow;
+        var now = nowUtc ?? VietnamTime.Now;
 
         var bays = await _context.Bays
             .AsNoTracking()
@@ -1249,6 +1341,7 @@ public class BayAdminController : ControllerBase
                 Id = bay.Id,
                 BranchId = bay.BranchId,
                 BranchName = bay.Branch?.Name ?? $"Branch #{bay.BranchId}",
+                SequenceOrder = bay.SequenceOrder,
                 Code = bay.Code,
                 Name = bay.Name,
                 BayType = bay.BayType,
@@ -1381,6 +1474,7 @@ public class BayAdminController : ControllerBase
             id = x.Id,
             branchId = x.BranchId,
             branchName = x.BranchName,
+            sequenceOrder = x.SequenceOrder,
             code = x.Code,
             name = x.Name,
             bayType = x.BayType,
@@ -1556,7 +1650,7 @@ public class BayAdminController : ControllerBase
     private async Task WriteSettingsAsync(BayAdminSettings settings)
     {
         settings.Normalize();
-        settings.UpdatedAt = DateTime.UtcNow;
+        settings.UpdatedAt = VietnamTime.Now;
 
         await using var stream = System.IO.File.Create(SettingsPath);
         await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
@@ -1577,6 +1671,24 @@ public class BayAdminController : ControllerBase
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return long.TryParse(claim, out var userId) ? userId : null;
+    }
+
+    private async Task<int> GetNextSequenceOrderAsync(long branchId, long? excludeBayId = null)
+    {
+        var query = _context.Bays
+            .AsNoTracking()
+            .Where(b => b.BranchId == branchId && b.IsDeleted != true);
+
+        if (excludeBayId.HasValue)
+        {
+            query = query.Where(b => b.Id != excludeBayId.Value);
+        }
+
+        var maxOrder = await query
+            .Select(b => (int?)b.SequenceOrder)
+            .MaxAsync() ?? 0;
+
+        return Math.Max(1, maxOrder + 1);
     }
 
     private static string NormalizeOperationalStatus(string? status)
@@ -1642,6 +1754,7 @@ public class BayAdminController : ControllerBase
     public sealed class BayUpsertRequest
     {
         public long BranchId { get; set; }
+        public int? SequenceOrder { get; set; }
         public string? Code { get; set; }
         public string? Name { get; set; }
         public string? BayType { get; set; }
@@ -1696,7 +1809,7 @@ public class BayAdminController : ControllerBase
                     LongOccupancyHours = 24,
                     InactiveDays = 30
                 },
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = VietnamTime.Now
             };
         }
 
@@ -1805,6 +1918,7 @@ public class BayAdminController : ControllerBase
         public long Id { get; set; }
         public long BranchId { get; set; }
         public string BranchName { get; set; } = "";
+        public int SequenceOrder { get; set; }
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
         public string BayType { get; set; } = "";

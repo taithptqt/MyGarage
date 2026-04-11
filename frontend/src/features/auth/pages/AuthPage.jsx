@@ -8,6 +8,7 @@ import { isLoginFormValid } from "@features/auth/login/loginValidation";
 import RegisterForm from "@features/auth/register/RegisterForm";
 import { isRegisterFormValid } from "@features/auth/register/registerValidation";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import "./AuthPage.css";
 
 const AUTH_HIGHLIGHTS = [
@@ -33,7 +34,6 @@ const GOOGLE_PHONE_ROLE = {
 };
 
 function AuthPage() {
-  const phoneRegex = /^(0\d{9,10}|\+84\d{9,10})$/;
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -219,7 +219,7 @@ function AuthPage() {
   const handleGooglePhoneConfirm = async (event) => {
     if (event) event.preventDefault();
     if (!googlePhone.trim() || !pendingGoogleToken) return;
-    if (!phoneRegex.test(googlePhone.trim())) {
+    if (!isValidVietnamesePhone(googlePhone.trim())) {
       setError("Số điện thoại không đúng định dạng (0xxxxxxxxx hoặc +84xxxxxxxxx).");
       return;
     }
@@ -408,7 +408,7 @@ function AuthPage() {
                 value={googlePhone}
                 onChange={(e) => setGooglePhone(e.target.value)}
                 placeholder="0900000000"
-                pattern="^(0[0-9]{9,10}|\+84[0-9]{9,10})$"
+                pattern="^(0[0-9]{9}|\+84[0-9]{9})$"
                 title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
                 required
                 autoFocus

@@ -54,7 +54,7 @@ function parseSymptomItems(customerNotes) {
       .filter(Boolean);
     if (normalizedGrouped.length > 0) return normalizedGrouped;
   } catch {
-    // Continue with legacy plain-text parsing below.
+    // Fallback to legacy plain text below.
   }
 
   return raw
@@ -63,11 +63,64 @@ function parseSymptomItems(customerNotes) {
     .filter(Boolean);
 }
 
+function normalizePartsFollowUpServices(rawValue) {
+  if (!Array.isArray(rawValue)) return [];
+
+  return rawValue
+    .map((service, serviceIndex) => {
+      const rawParts = service?.missingParts ?? service?.MissingParts;
+      const missingParts = Array.isArray(rawParts)
+        ? rawParts
+            .map((part, partIndex) => ({
+              key: `${service?.serviceId ?? service?.ServiceId ?? serviceIndex}-${part?.productId ?? part?.ProductId ?? partIndex}`,
+              productName: normalizeDisplayText(part?.productName ?? part?.ProductName ?? ""),
+              requiredQuantity: Number(part?.requiredQuantity ?? part?.RequiredQuantity ?? 0),
+              availableQuantity: Number(part?.availableQuantity ?? part?.AvailableQuantity ?? 0),
+              unit: normalizeDisplayText(part?.unit ?? part?.Unit ?? ""),
+            }))
+            .filter((part) => part.productName)
+        : [];
+
+      return {
+        key: `${service?.serviceId ?? service?.ServiceId ?? serviceIndex}`,
+        serviceName: normalizeDisplayText(service?.serviceName ?? service?.ServiceName ?? ""),
+        missingParts,
+      };
+    })
+    .filter((service) => service.serviceName && service.missingParts.length > 0);
+}
+
 function DetailField({ label, value }) {
   return (
     <div className="appt-detail-field">
       <span className="appt-detail-field-label">{label}</span>
       <span className="appt-detail-field-value">{value || "--"}</span>
+    </div>
+  );
+}
+
+function ImageGallery({ title, urls }) {
+  const items = Array.isArray(urls) ? urls.filter(Boolean) : [];
+  return (
+    <div className="appt-detail-insurance-gallery-block">
+      <h5>{title}</h5>
+      {items.length > 0 ? (
+        <div className="appt-detail-insurance-gallery">
+          {items.map((url, index) => (
+            <a
+              key={`${title}-${index}-${url}`}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="appt-detail-insurance-image-link"
+            >
+              <img src={url} alt={title} className="appt-detail-insurance-image" />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="appt-detail-empty">Chưa có ảnh.</p>
+      )}
     </div>
   );
 }
@@ -93,34 +146,44 @@ export default function AppointmentDetailModal({
   const vehiclePlate = appointment.vehicleLicensePlate || appointment.VehicleLicensePlate || "--";
   const vehicleModel = appointment.vehicleModelName || appointment.VehicleModelName || "--";
   const branchName = appointment.branchName || appointment.BranchName || "--";
-  const GroupSessionCode = appointment.GroupSessionCode || appointment.GroupSessionCode || "";
+  const groupSessionCode = appointment.groupSessionCode || appointment.GroupSessionCode || "";
   const customerNotes = appointment.customerNotes || appointment.CustomerNotes || "";
+  const requiresDispatchReview = Boolean(appointment.requiresDispatchReview || appointment.RequiresDispatchReview);
+  const dispatchReviewNote = appointment.dispatchReviewNote || appointment.DispatchReviewNote || "";
+  const requiresPartsFollowUp = Boolean(appointment.requiresPartsFollowUp || appointment.RequiresPartsFollowUp);
+  const partsFollowUpNote = normalizeDisplayText(appointment.partsFollowUpNote || appointment.PartsFollowUpNote || "");
+  const partsFollowUpServices = useMemo(
+    () => normalizePartsFollowUpServices(appointment.partsFollowUpServices || appointment.PartsFollowUpServices),
+    [appointment],
+  );
   const cancelReason = appointment.cancelReason || appointment.CancelReason || "";
   const symptomItems = useMemo(() => parseSymptomItems(customerNotes), [customerNotes]);
   const displayCancelReason = useMemo(() => formatAppointmentCancelReason(cancelReason), [cancelReason]);
   const createdAt = appointment.createdAt || appointment.CreatedAt;
   const statusText = appointment.status || appointment.Status || "PENDING";
   const statusLabel = getStatusLabelVi(statusText, statusText);
-  const canEditAppointment = Boolean(onEdit);
-  const modalTitle = canEditAppointment ? (
-    <div className="appt-detail-title-wrap">
-      <span className="appt-detail-title-text">Chi tiết lịch hẹn</span>
-      <button
-        type="button"
-        className="btn-primary-large appt-detail-header-edit-btn"
-        onClick={() => onEdit(appointment)}
-        disabled={onEditDisabled}
-        title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
-      >
-        Sửa lịch hẹn
-      </button>
-    </div>
-  ) : (
-    "Chi tiết lịch hẹn"
-  );
+  const insuranceCompanyName = appointment.insuranceCompanyName || appointment.InsuranceCompanyName || "--";
+  const insuranceCardImageUrls = appointment.insuranceCardImageUrls || appointment.InsuranceCardImageUrls || [];
+  const insuranceDamageImageUrls = appointment.insuranceDamageImageUrls || appointment.InsuranceDamageImageUrls || [];
+  const hasInsuranceEvidence = insuranceCompanyName !== "--" || insuranceCardImageUrls.length > 0 || insuranceDamageImageUrls.length > 0;
 
   return (
-    <Modal title={modalTitle} onClose={onClose} className="appt-detail-modal">
+    <Modal
+      title="Chi tiết lịch hẹn"
+      onClose={onClose}
+      className="appt-detail-modal"
+      headerActions={onEdit ? (
+        <button
+          type="button"
+          className="btn-primary-large appt-detail-header-edit-btn"
+          onClick={() => onEdit(appointment)}
+          disabled={onEditDisabled}
+          title={onEditDisabled ? "Không thể sửa lịch khi xe đã đến hoặc lịch đã kết thúc." : "Sửa lịch hẹn"}
+        >
+          Sửa lịch hẹn
+        </button>
+      ) : null}
+    >
       <div className="appt-detail-shell">
         <section className="appt-detail-hero">
           <div className="appt-detail-hero-content">
@@ -130,17 +193,15 @@ export default function AppointmentDetailModal({
           </div>
           <div className="appt-detail-hero-side">
             <span className={`badge ${getApptStatusBadge(statusText)}`}>{statusLabel}</span>
-            {GroupSessionCode ? (
-              <span className="appt-detail-group-chip">{GroupSessionCode}</span>
+            {groupSessionCode ? (
+              <span className="appt-detail-group-chip">{groupSessionCode}</span>
             ) : (
               <span className="appt-detail-group-chip muted">Lịch thường</span>
             )}
           </div>
         </section>
 
-        {error ? (
-          <div className="appt-detail-alert">{error}</div>
-        ) : null}
+        {error ? <div className="appt-detail-alert">{error}</div> : null}
 
         {loading ? (
           <div className="loading-state appt-detail-loading">
@@ -181,23 +242,75 @@ export default function AppointmentDetailModal({
                 {serviceNames.length > 0 ? (
                   <div className="appt-detail-service-list">
                     {serviceNames.map((name) => (
-                      <span key={`${appointment.id}-${name}`} className="appt-detail-service-chip">
+                      <span key={`${appointment.id || appointment.Id}-${name}`} className="appt-detail-service-chip">
                         {name}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p className="appt-detail-empty">Chưa có dịch vụ chỉ định.</p>
+                  <p className="appt-detail-empty">Chưa có dịch vụ được chỉ định.</p>
                 )}
               </article>
             </section>
+
+            {requiresPartsFollowUp ? (
+              <section className="appt-detail-issue-card">
+                <div className="appt-detail-issue-icon" aria-hidden="true">!</div>
+                <div className="appt-detail-issue-copy">
+                  <h4>Cảnh báo phụ tùng</h4>
+                  <p>
+                    {partsFollowUpNote || "Lịch hẹn đang thiếu phụ tùng bắt buộc. Lễ tân cần gọi khách để xác nhận thời gian xử lý."}
+                  </p>
+                  {partsFollowUpServices.length > 0 ? (
+                    <div className="appt-detail-issue-service-list">
+                      {partsFollowUpServices.map((service) => (
+                        <div key={service.key} className="appt-detail-issue-service-block">
+                          <h5>{service.serviceName}</h5>
+                          <ul className="appt-detail-issue-part-list">
+                            {service.missingParts.map((part) => (
+                              <li key={part.key}>
+                                <strong>{part.productName}</strong>
+                                <span>
+                                  {`Cần ${part.requiredQuantity.toLocaleString("vi-VN")}, còn ${part.availableQuantity.toLocaleString("vi-VN")}`}
+                                  {part.unit ? ` ${part.unit}` : ""}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
+            {hasInsuranceEvidence ? (
+              <section className="appt-detail-notes">
+                <h4>Hồ sơ bảo hiểm khách đã gửi</h4>
+                <DetailField label="Công ty bảo hiểm" value={insuranceCompanyName} />
+                <div className="appt-detail-insurance-grid">
+                  <ImageGallery title="Ảnh thẻ bảo hiểm" urls={insuranceCardImageUrls} />
+                  <ImageGallery title="Ảnh hiện trạng xe" urls={insuranceDamageImageUrls} />
+                </div>
+              </section>
+            ) : null}
+
+            {requiresDispatchReview ? (
+              <section className="appt-detail-notes">
+                <h4>Điều phối khoang</h4>
+                <p style={{ color: "#9f2d13", fontWeight: 700 }}>
+                  {dispatchReviewNote || "Lịch này đang chờ điều phối khoang thủ công. Lễ tân báo quản đốc để gán khoang trước giờ xe vào xưởng."}
+                </p>
+              </section>
+            ) : null}
 
             <section className="appt-detail-notes">
               <h4>Mô tả thêm</h4>
               {symptomItems.length > 0 ? (
                 <ul className="appt-detail-notes-list">
                   {symptomItems.map((item, index) => (
-                    <li key={`${appointment.id || "appt"}-symptom-${index}`}>{item}</li>
+                    <li key={`${appointment.id || appointment.Id || "appt"}-symptom-${index}`}>{item}</li>
                   ))}
                 </ul>
               ) : (

@@ -39,7 +39,7 @@ public class WebhookController(
         }
 
         retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
-        retailOrder.UpdatedAt = DateTime.UtcNow;
+        retailOrder.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
     }
 
@@ -58,7 +58,7 @@ public class WebhookController(
         }
 
         // Fallback to current time if parsing fails
-        return DateTimeOffset.Now;
+        return VietnamTime.OffsetNow;
     }
 
     [HttpPost("payment")]
@@ -112,7 +112,7 @@ public class WebhookController(
                 order.AmountPaid = totalAmountPaid;
                 order.AmountRemaining = order.Amount - totalAmountPaid;
                 order.Status = order.AmountRemaining > 0 ? PaymentLinkStatus.Underpaid : PaymentLinkStatus.Paid;
-                order.LastTransactionUpdate = DateTimeOffset.Now;
+                order.LastTransactionUpdate = VietnamTime.OffsetNow;
 
                 _orderStore.UpdateOrder(order.Id, order);
 

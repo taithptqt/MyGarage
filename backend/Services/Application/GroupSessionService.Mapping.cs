@@ -31,7 +31,10 @@ namespace MyGarage.Services
             };
         }
 
-        private static AppointmentDetailResponseDto MapAppointment(Appointment appointment, IReadOnlyDictionary<long, string> serviceNameMap)
+        private static AppointmentDetailResponseDto MapAppointment(
+            Appointment appointment,
+            IReadOnlyDictionary<long, string> serviceNameMap,
+            IReadOnlyDictionary<long, string> packageNameMap)
         {
             var response = new AppointmentDetailResponseDto
             {
@@ -54,6 +57,7 @@ namespace MyGarage.Services
                 EndTime = appointment.EndTime,
                 CreatedAt = appointment.CreatedAt,
                 RequestedServiceIds = appointment.RequestedServiceIds,
+                RequestedPackageIds = appointment.RequestedPackageIds,
                 CustomerNotes = appointment.CustomerNotes,
                 IsReminderSent = appointment.IsReminderSent,
                 Status = appointment.Status,
@@ -64,6 +68,13 @@ namespace MyGarage.Services
             foreach (var id in ParseRequestedServiceIds(appointment.RequestedServiceIds))
             {
                 response.ServiceNames.Add(serviceNameMap.TryGetValue(id, out var name) ? name : $"#{id}");
+            }
+
+            foreach (var id in ParseRequestedServiceIds(appointment.RequestedPackageIds))
+            {
+                var packageName = packageNameMap.TryGetValue(id, out var name) ? name : $"#{id}";
+                response.PackageNames.Add(packageName);
+                response.ServiceNames.Add(packageName);
             }
 
             return response;
@@ -89,6 +100,28 @@ namespace MyGarage.Services
                 .AsNoTracking()
                 .Where(s => serviceIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id, s => s.Name ?? $"#{s.Id}");
+        }
+
+        private async Task<IReadOnlyDictionary<long, string>> BuildPackageNameMapAsync(IEnumerable<Appointment> appointments)
+        {
+            var packageIds = appointments
+                .Where(a => !string.IsNullOrWhiteSpace(a.RequestedPackageIds))
+                .SelectMany(a => a.RequestedPackageIds!
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => long.TryParse(s.Trim(), out var parsed) ? parsed : 0L))
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (packageIds.Count == 0)
+            {
+                return new Dictionary<long, string>();
+            }
+
+            return await _context.Packages
+                .AsNoTracking()
+                .Where(package => packageIds.Contains(package.Id))
+                .ToDictionaryAsync(package => package.Id, package => package.Name ?? $"#{package.Id}");
         }
 
         private string GenerateGroupSessionCode()

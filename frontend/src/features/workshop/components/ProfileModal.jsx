@@ -2,6 +2,7 @@
 import { Modal } from "@features/admin/components/AdminModals";
 import { updateStaff, uploadStaffAvatar } from "@features/admin/api/staffApi";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { VIETNAM_PHONE_PATTERN, isOptionalEmailValid, isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import { API_BASE_URL } from "@app/apiClient";
 import ImageCropper from "@features/workshop/components/ImageCropper";
 
@@ -93,13 +94,11 @@ export default function ProfileModal({ user, onClose }) {
 
     // Validation
     const errors = {};
-    const phoneRegex = /^\d{10}$/;
-    if (!phoneRegex.test(formData.phone)) {
+    if (!isValidVietnamesePhone(formData.phone)) {
       errors.phone = "Sđ điện thoại phải bao gôm đúng 10 chữ sđ.";
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
+    if (!isOptionalEmailValid(formData.email)) {
       errors.email = "Email không đúng định dạng.";
     }
 
@@ -216,7 +215,7 @@ export default function ProfileModal({ user, onClose }) {
 
             <div className="form-group">
               <label>Sđ điện thoại *</label>
-              <input type="text" name="phone" value={formData.phone} onChange={handleChange} required />
+              <input type="tel" inputMode="tel" pattern={VIETNAM_PHONE_PATTERN} title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx" name="phone" value={formData.phone} onChange={handleChange} required />
               {fieldErrors.phone && <p className="field-error-msg" style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>{fieldErrors.phone}</p>}
             </div>
 

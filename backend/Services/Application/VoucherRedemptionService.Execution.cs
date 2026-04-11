@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Requests;
@@ -54,7 +54,7 @@ namespace MyGarage.Services
                 };
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var discount = validation.DiscountPreview.GetValueOrDefault(0m);
             var eligibleAmount = validation.EligibleAmount.GetValueOrDefault(0m);
 

@@ -1,17 +1,59 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
+import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
+import {
+  buildFlexibleCompletionWarningMessage,
+  buildFlexibleTriggerServiceIdSet,
+  buildSlotSelectionGuide,
+  resolveBookingFlowByServicesAndDuration,
+  WORKING_DAY_MINUTES,
+} from "@features/appointments/utils/bookingFlowRules";
+import {
+  INSURANCE_ASSET_TYPE,
+  resolveInsuranceDeductibleAmount,
+  resolveInsuranceQuoteState,
+} from "@features/appointments/utils/bookingInsurance";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
+import WorkshopInsurancePanel from "@features/workshop/components/WorkshopInsurancePanel";
 import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
+import {
+  buildWorkshopEditPayload,
+  calculateRoundedOccupancyMinutes,
+} from "@features/workshop/utils/serviceOrderWorkflow";
+import {
+  buildInsuranceDraftBreakdown,
+  INSURANCE_ORDER_CATEGORY,
+  isInsuranceOrderActive,
+  isInsuranceSignalService,
+} from "@features/workshop/utils/insuranceOrderUi";
+import { SERVICE_PRICE_DISCLAIMER, SERVICE_PRICE_LABEL } from "@shared/constants/servicePricing";
+import { getInspectionTriadDisplayName, sumServiceMinutes } from "@shared/utils/serviceDurationUtils";
+import {
+  collectCompatibleCategoryIds,
+  filterBookableItemsForVehicleModels,
+} from "@shared/utils/serviceEngineCompatibility";
+import { addMinutesWithinWorkingHours } from "@shared/utils/workingHoursSchedule";
+import { mergeBookableServicesAndPackages, splitBookingItemIds, toPackageSelectableId } from "@features/appointments/utils/bookingPackages";
 import "./Workshop.css";
 
 const DEFAULT_FORM_DATA = {
   orderCategory: "GENERAL_REPAIR",
+  insuranceEnabled: false,
+  insuranceCompanyId: "",
+  insuranceDeductibleAmount: null,
+  insuranceDeductibleOption: "",
+  insuranceClaimMode: "",
+  insuranceQuoteState: "",
+  insuranceCardImageUrls: [],
+  insuranceDamageImageUrls: [],
   serviceAdvisorId: "",
   oldPartsReturnOption: "DISPOSE_ALL",
   requiredDepositAmount: 0,
@@ -41,7 +83,7 @@ function toNumberList(value) {
     new Set(
       value
         .map(Number)
-        .filter((id) => Number.isFinite(id) && id > 0)
+        .filter((id) => Number.isFinite(id) && id !== 0)
     )
   );
 }
@@ -135,12 +177,16 @@ function getRequestStatusColor(status) {
 function normalizeService(service) {
   const id = Number(readField(service, ["id", "Id"], 0));
   const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
+  const rawName = String(readField(service, ["name", "Name"], "") || "").trim();
   return {
     id,
     categoryId,
-    name: String(readField(service, ["name", "Name"], "") || "").trim(),
+    code: String(readField(service, ["code", "Code"], "") || ""),
+    name: getInspectionTriadDisplayName(service, rawName),
+    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
     minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
     price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0)),
+    items: readField(service, ["items", "Items"], []),
   };
 }
 
@@ -274,52 +320,13 @@ function getApiErrorMessage(err) {
 
 function calculateEstimatedFinish(checkInText, totalMinutes) {
   if (!checkInText || totalMinutes <= 0) return { finishIso: "", finishText: "" };
-  const current = new Date(checkInText);
-  if (Number.isNaN(current.getTime())) return { finishIso: "", finishText: "" };
+  const finishDate = addMinutesWithinWorkingHours(checkInText, totalMinutes, {
+    openHour: 8,
+    closeHour: 20,
+  });
+  if (!finishDate) return { finishIso: "", finishText: "" };
 
-  const alignToWindow = (value) => {
-    const next = new Date(value);
-    while (next.getDay() === 0) {
-      next.setDate(next.getDate() + 1);
-      next.setHours(8, 0, 0, 0);
-    }
-    const openMinutes = 8 * 60;
-    const closeMinutes = 20 * 60;
-    const currentMinutes = next.getHours() * 60 + next.getMinutes();
-    if (currentMinutes < openMinutes) next.setHours(8, 0, 0, 0);
-    if (currentMinutes >= closeMinutes) {
-      next.setDate(next.getDate() + 1);
-      next.setHours(8, 0, 0, 0);
-      while (next.getDay() === 0) {
-        next.setDate(next.getDate() + 1);
-        next.setHours(8, 0, 0, 0);
-      }
-    }
-    return next;
-  };
-
-  let cursor = alignToWindow(current);
-  let remaining = Number(totalMinutes);
-  while (remaining > 0) {
-    cursor = alignToWindow(cursor);
-    const closeToday = new Date(cursor);
-    closeToday.setHours(20, 0, 0, 0);
-    const available = Math.max(0, Math.floor((closeToday.getTime() - cursor.getTime()) / 60000));
-    if (available <= 0) {
-      cursor.setDate(cursor.getDate() + 1);
-      cursor.setHours(8, 0, 0, 0);
-      continue;
-    }
-    const consume = Math.min(remaining, available);
-    cursor.setMinutes(cursor.getMinutes() + consume);
-    remaining -= consume;
-    if (remaining > 0) {
-      cursor.setDate(cursor.getDate() + 1);
-      cursor.setHours(8, 0, 0, 0);
-    }
-  }
-
-  const finishIso = toLocalDateTimeValue(cursor);
+  const finishIso = toLocalDateTimeValue(finishDate);
   const finishText = formatDateTimeValue(finishIso);
   return { finishIso, finishText };
 }
@@ -348,12 +355,15 @@ export default function ServiceOrderEditPage() {
   const [staff, setStaff] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [services, setServices] = useState([]);
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [models, setModels] = useState([]);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [insuranceUploadState, setInsuranceUploadState] = useState({});
   const [symptomInputs, setSymptomInputs] = useState([""]);
   const pickerMinDate = useMemo(() => new Date(2000, 0, 1), []);
   const roleCode = String(user?.roleCode ?? user?.RoleCode ?? "").trim();
@@ -376,7 +386,7 @@ export default function ServiceOrderEditPage() {
   );
 
   const normalizedServices = useMemo(() => {
-    return (services || []).map(normalizeService).filter((service) => service.id > 0 && service.name);
+    return (services || []).map(normalizeService).filter((service) => service.id !== 0 && service.name);
   }, [services]);
 
   const categoryOptions = useMemo(
@@ -386,6 +396,10 @@ export default function ServiceOrderEditPage() {
 
   const serviceById = useMemo(
     () => new Map(normalizedServices.map((service) => [Number(service.id), service])),
+    [normalizedServices]
+  );
+  const flexibleTriggerServiceIdSet = useMemo(
+    () => buildFlexibleTriggerServiceIdSet(normalizedServices),
     [normalizedServices]
   );
 
@@ -407,31 +421,117 @@ export default function ServiceOrderEditPage() {
     return map;
   }, [vehicles]);
 
+  const modelInfoById = useMemo(() => {
+    const map = new Map();
+    (models || []).forEach((item) => {
+      const id = Number(readField(item, ["id", "Id"], 0));
+      if (!Number.isFinite(id) || id <= 0) return;
+      map.set(id, {
+        fuelType: String(readField(item, ["fuelType", "FuelType"], "") || "").trim(),
+      });
+    });
+    return map;
+  }, [models]);
+
+  const currentVehicleModelIds = useMemo(() => {
+    const vehicleId = parsePositiveId(order?.vehicleId ?? order?.VehicleId);
+    const vehicle = vehicleById.get(vehicleId) || null;
+    const modelId = Number(
+      readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0)
+        || readField(readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null), ["id", "Id"], 0)
+    );
+    return Number.isFinite(modelId) && modelId > 0 ? [modelId] : [];
+  }, [order?.VehicleId, order?.vehicleId, vehicleById]);
+
   const selectedServices = useMemo(() => {
     return toNumberList(formData.serviceIds)
       .map((serviceId) => serviceById.get(serviceId))
       .filter(Boolean);
   }, [formData.serviceIds, serviceById]);
 
+  const hasInsuranceSignalServiceSelected = useMemo(
+    () => selectedServices.some((service) => isInsuranceSignalService(service)),
+    [selectedServices]
+  );
+
+  const isInsuranceOrderEnabled = useMemo(
+    () =>
+      isInsuranceOrderActive({
+        insuranceEnabled: formData.insuranceEnabled,
+        orderCategory: formData.orderCategory,
+        insuranceCompanyId: formData.insuranceCompanyId,
+        services: selectedServices,
+      }),
+    [formData.insuranceCompanyId, formData.insuranceEnabled, formData.orderCategory, selectedServices]
+  );
+
+  const insuranceDraftBreakdown = useMemo(
+    () =>
+      buildInsuranceDraftBreakdown({
+        services: selectedServices,
+        enabled: isInsuranceOrderEnabled,
+      }),
+    [isInsuranceOrderEnabled, selectedServices]
+  );
+
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
     const activeCategory = parsePositiveId(activeCategoryId);
+    const compatibleServices = filterBookableItemsForVehicleModels(
+      normalizedServices,
+      currentVehicleModelIds,
+      modelInfoById,
+      serviceById
+    );
 
-    return normalizedServices
+    return compatibleServices
       .filter((service) => (activeCategory > 0 ? Number(service.categoryId) === activeCategory : true))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
-  }, [activeCategoryId, normalizedServices, serviceSearch]);
+  }, [activeCategoryId, currentVehicleModelIds, modelInfoById, normalizedServices, serviceById, serviceSearch]);
 
-  const { totalMinutes, totalPrice, suggestedFinish } = useMemo(() => {
-    const minutes = selectedServices.reduce((sum, service) => sum + Number(service?.minutes || 0), 0);
+  const compatibleCategoryIds = useMemo(
+    () =>
+      collectCompatibleCategoryIds(
+        normalizedServices,
+        currentVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [currentVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
+  const visibleCategoryOptions = useMemo(
+    () => categoryOptions.filter((category) => compatibleCategoryIds.has(Number(category.id))),
+    [categoryOptions, compatibleCategoryIds]
+  );
+
+  const {
+    totalMinutes,
+    totalPrice,
+    bookingFlow,
+    suggestedFinish,
+    isLongDurationFlow,
+    isServiceDrivenFlexibleFlow,
+  } = useMemo(() => {
+    const serviceMinutes = sumServiceMinutes(selectedServices);
+    const executionMinutesValue = calculateRoundedOccupancyMinutes(serviceMinutes);
+    const flowState = resolveBookingFlowByServicesAndDuration({
+      serviceIds: selectedServices.map((service) => Number(service?.id || 0)),
+      flexibleTriggerServiceIdSet,
+      executionMinutes: executionMinutesValue,
+      workingDayMinutes: WORKING_DAY_MINUTES,
+    });
     const price = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
     return {
-      totalMinutes: minutes,
+      totalMinutes: serviceMinutes,
       totalPrice: price,
-      suggestedFinish: calculateEstimatedFinish(formData.checkInTime, minutes),
+      bookingFlow: flowState.bookingFlow,
+      isLongDurationFlow: flowState.isLongDurationFlow,
+      isServiceDrivenFlexibleFlow: flowState.isServiceDrivenFlexibleFlow,
+      suggestedFinish: calculateEstimatedFinish(formData.checkInTime, executionMinutesValue),
     };
-  }, [formData.checkInTime, selectedServices]);
+  }, [flexibleTriggerServiceIdSet, formData.checkInTime, selectedServices]);
 
   const customerDisplay = useMemo(() => {
     const customerId = parsePositiveId(order?.customerId ?? order?.CustomerId);
@@ -452,17 +552,43 @@ export default function ServiceOrderEditPage() {
     const color = String(readField(vehicle, ["color", "Color"], "") || "").trim();
     const descriptor = [modelName, color].filter(Boolean).join(" - ");
     return {
-      plate: plate ? formatLicensePlate(plate) : "Chưa có biển số",
-      descriptor: descriptor || "Chưa rõ dòng xe",
+      plate: plate ? formatLicensePlate(plate) : "Chua c? bi?n s?",
+      descriptor: descriptor || "Chua r? d?ng xe",
     };
   }, [order?.VehicleId, order?.vehicleId, vehicleById]);
+
+  const slotSelectionGuide = useMemo(
+    () =>
+      buildSlotSelectionGuide({
+        bookingFlow,
+        isLongDurationFlow,
+        isServiceDrivenFlexibleFlow,
+        inProgress: true,
+      }),
+    [bookingFlow, isLongDurationFlow, isServiceDrivenFlexibleFlow]
+  );
+
+  const completionWarningText = useMemo(() => {
+    if (bookingFlow !== BOOKING_FLOW.FLEXIBLE) return "";
+    if (!suggestedFinish?.finishIso) return "";
+    return buildFlexibleCompletionWarningMessage({
+      vehicleLabel: vehicleDisplay.plate,
+      completionValue: suggestedFinish.finishIso,
+    });
+  }, [bookingFlow, suggestedFinish?.finishIso, vehicleDisplay.plate]);
+
+  useEffect(() => {
+    const nextOrderCategory = isInsuranceOrderEnabled ? INSURANCE_ORDER_CATEGORY : "GENERAL_REPAIR";
+    if (String(formData.orderCategory || "").trim().toUpperCase() === nextOrderCategory) return;
+    setFormData((prev) => ({ ...prev, orderCategory: nextOrderCategory }));
+  }, [formData.orderCategory, isInsuranceOrderEnabled]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadingEditRequests(true);
     setError("");
     try {
-      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, detailsRes, customerRes, vehicleRes] = await Promise.all([
+      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, packageRes, detailsRes, insuranceRes, customerRes, vehicleRes, modelRes] = await Promise.all([
         serviceOrderApi.getById(orderId),
         serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
         serviceOrderApi.getEditRequests(orderId).catch(() => []),
@@ -470,9 +596,12 @@ export default function ServiceOrderEditPage() {
         getAllRoles(),
         getAllServiceCategories(),
         getAllStandardServices(),
+        getAllPackages().catch(() => []),
         serviceOrderApi.getDetails(orderId).catch(() => []),
+        insuranceCompanyApi.getAll().catch(() => []),
         getAllCustomers(),
         getAllVehicles(),
+        getVehicleModels().catch(() => []),
       ]);
 
       if (!orderRes) {
@@ -518,14 +647,48 @@ export default function ServiceOrderEditPage() {
       const promisedHandoverTime = toLocalDateTimeValue(readField(orderRes, ["promisedHandoverTime", "PromisedHandoverTime"], null));
       const normalizedCategory = String(readField(orderRes, ["orderCategory", "OrderCategory"], "GENERAL_REPAIR") || "GENERAL_REPAIR").toUpperCase();
       const normalizedStatus = String(readField(orderRes, ["status", "Status"], "NEW") || "NEW").toUpperCase();
+      const insuranceCompanyId = parsePositiveId(
+        readField(orderRes, ["insuranceCompanyId", "InsuranceCompanyId"], 0)
+          || readField(
+            editableDetails.find((detail) => parsePositiveId(readField(detail, ["insuranceCompanyId", "InsuranceCompanyId"], 0)) > 0),
+            ["insuranceCompanyId", "InsuranceCompanyId"],
+            0
+          )
+      );
+      const insuranceCardImageUrls = Array.isArray(readField(orderRes, ["insuranceCardImageUrls", "InsuranceCardImageUrls"], []))
+        ? readField(orderRes, ["insuranceCardImageUrls", "InsuranceCardImageUrls"], [])
+        : [];
+      const insuranceDamageImageUrls = Array.isArray(readField(orderRes, ["insuranceDamageImageUrls", "InsuranceDamageImageUrls"], []))
+        ? readField(orderRes, ["insuranceDamageImageUrls", "InsuranceDamageImageUrls"], [])
+        : [];
+      const insuranceDeductibleOption = String(
+        readField(orderRes, ["insuranceDeductibleOption", "InsuranceDeductibleOption"], "") || ""
+      ).trim();
+      const insuranceClaimMode = String(
+        readField(orderRes, ["insuranceClaimMode", "InsuranceClaimMode"], "") || ""
+      ).trim();
+      const insuranceQuoteState = String(
+        readField(orderRes, ["insuranceQuoteState", "InsuranceQuoteState"], "") || ""
+      ).trim();
+      const insuranceDeductibleAmountRaw = Number(
+        readField(orderRes, ["insuranceDeductibleAmount", "InsuranceDeductibleAmount"], null)
+      );
+      const initialPackageIds = String(readField(orderRes, ["requestedPackageIds", "RequestedPackageIds"], "") || "")
+        .split(",")
+        .map((item) => Number(item))
+        .filter((packageId) => Number.isFinite(packageId) && packageId > 0)
+        .map(toPackageSelectableId);
+      const insuranceEnabled = normalizedCategory === INSURANCE_ORDER_CATEGORY || insuranceCompanyId > 0;
 
       setOrder(orderRes);
       setEditCapability(normalizeServiceOrderEditCapability(capabilityRes));
       setStaff(filteredStaff);
       setServiceCategories(Array.isArray(categoryRes) ? categoryRes : []);
-      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setServices(mergeBookableServicesAndPackages(Array.isArray(serviceRes) ? serviceRes : [], Array.isArray(packageRes) ? packageRes : []));
+      setInsuranceCompanies(Array.isArray(insuranceRes) ? insuranceRes : []);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
+      setModels(Array.isArray(modelRes) ? modelRes : []);
       setEditRequests(
         (Array.isArray(requestRes) ? requestRes : [])
           .map(normalizeServiceOrderEditRequestItem)
@@ -534,6 +697,14 @@ export default function ServiceOrderEditPage() {
 
       setFormData({
         orderCategory: normalizedCategory,
+        insuranceEnabled,
+        insuranceCompanyId: insuranceCompanyId || "",
+        insuranceDeductibleAmount: Number.isFinite(insuranceDeductibleAmountRaw) ? insuranceDeductibleAmountRaw : null,
+        insuranceDeductibleOption,
+        insuranceClaimMode,
+        insuranceQuoteState,
+        insuranceCardImageUrls,
+        insuranceDamageImageUrls,
         serviceAdvisorId: parsePositiveId(readField(orderRes, ["serviceAdvisorId", "ServiceAdvisorId"], 0)) || "",
         oldPartsReturnOption: String(readField(orderRes, ["oldPartsReturnOption", "OldPartsReturnOption"], "DISPOSE_ALL") || "DISPOSE_ALL"),
         requiredDepositAmount: Number(readField(orderRes, ["requiredDepositAmount", "RequiredDepositAmount"], 0) || 0),
@@ -541,13 +712,14 @@ export default function ServiceOrderEditPage() {
         estimatedHandover,
         promisedHandoverTime,
         status: normalizedStatus,
-        serviceIds: initialServiceIds,
+        serviceIds: [...initialServiceIds, ...initialPackageIds],
       });
+      setInsuranceUploadState({});
 
       setSymptomInputs(parsedSymptoms.length > 0 ? [...parsedSymptoms, ""] : [""]);
 
-      const firstService = initialServiceIds.length > 0 ? Number(initialServiceIds[0]) : 0;
-      const firstNormalized = (Array.isArray(serviceRes) ? serviceRes : [])
+      const firstService = [...initialServiceIds, ...initialPackageIds].length > 0 ? Number([...initialServiceIds, ...initialPackageIds][0]) : 0;
+      const firstNormalized = mergeBookableServicesAndPackages(Array.isArray(serviceRes) ? serviceRes : [], Array.isArray(packageRes) ? packageRes : [])
         .map(normalizeService)
         .find((service) => service.id === firstService);
       setActiveCategoryId(firstNormalized?.categoryId ? String(firstNormalized.categoryId) : "");
@@ -564,10 +736,41 @@ export default function ServiceOrderEditPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (!activeCategoryId && categoryOptions.length > 0) {
-      setActiveCategoryId(String(categoryOptions[0].id));
+    if (!activeCategoryId && visibleCategoryOptions.length > 0) {
+      setActiveCategoryId(String(visibleCategoryOptions[0].id));
+      return;
     }
-  }, [activeCategoryId, categoryOptions]);
+    if (
+      activeCategoryId &&
+      !visibleCategoryOptions.some((category) => String(category.id) === String(activeCategoryId))
+    ) {
+      setActiveCategoryId(visibleCategoryOptions[0] ? String(visibleCategoryOptions[0].id) : "");
+    }
+  }, [activeCategoryId, visibleCategoryOptions]);
+
+  useEffect(() => {
+    const compatibleServiceIds = new Set(
+      filterBookableItemsForVehicleModels(
+        normalizedServices,
+        currentVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ).map((service) => Number(service.id))
+    );
+    const nextServiceIds = toNumberList(formData.serviceIds).filter((serviceId) => compatibleServiceIds.has(Number(serviceId)));
+    const nextPackageIds = toNumberList(formData.requestedPackageIds).filter((packageId) => compatibleServiceIds.has(Number(packageId)));
+    if (
+      nextServiceIds.length === toNumberList(formData.serviceIds).length &&
+      nextPackageIds.length === toNumberList(formData.requestedPackageIds).length
+    ) {
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      serviceIds: nextServiceIds,
+      requestedPackageIds: nextPackageIds,
+    }));
+  }, [currentVehicleModelIds, formData.requestedPackageIds, formData.serviceIds, modelInfoById, normalizedServices, serviceById]);
 
   const showError = useCallback(
     (fieldName) => submitAttempted && Boolean(fieldErrors[fieldName]),
@@ -598,17 +801,132 @@ export default function ServiceOrderEditPage() {
         errors.requiredDepositAmount = "Số tiền cọc không được nhỏ hơn 0.";
       }
 
+      if (isInsuranceOrderEnabled && !parsePositiveId(data.insuranceCompanyId)) {
+        errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm trước khi lưu thay đổi.";
+      }
+
+      if (isInsuranceOrderEnabled && !String(data.insuranceDeductibleOption || "").trim()) {
+        errors.insuranceDeductibleOption = "Vui lòng chọn mức miễn thường hoặc tư vấn.";
+      }
+
+      if (isInsuranceOrderEnabled && !String(data.insuranceClaimMode || "").trim()) {
+        errors.insuranceClaimMode = "Vui lòng chọn hình thức xử lý bảo hiểm.";
+      }
+
       if (toNumberList(data.serviceIds).length === 0) {
         errors.serviceIds = "Vui lòng chọn ít nhất một dịch vụ.";
       }
 
       return errors;
     },
-    [suggestedFinish.finishIso]
+    [isInsuranceOrderEnabled, suggestedFinish.finishIso]
   );
 
   const handleFieldValueChange = useCallback((fieldName, value) => {
     setFormData((prev) => ({ ...prev, [fieldName]: value }));
+  }, []);
+
+  const handleInsuranceToggle = useCallback((enabled) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceEnabled: Boolean(enabled),
+      insuranceCompanyId: enabled ? prev.insuranceCompanyId : "",
+      insuranceDeductibleAmount: enabled ? prev.insuranceDeductibleAmount : null,
+      insuranceDeductibleOption: enabled ? prev.insuranceDeductibleOption : "",
+      insuranceClaimMode: enabled ? prev.insuranceClaimMode : "",
+      insuranceQuoteState: enabled ? prev.insuranceQuoteState : "",
+      insuranceCardImageUrls: enabled ? prev.insuranceCardImageUrls : [],
+      insuranceDamageImageUrls: enabled ? prev.insuranceDamageImageUrls : [],
+    }));
+    if (!enabled) {
+      setInsuranceUploadState({});
+    }
+  }, []);
+
+  const handleInsuranceDeductibleOptionChange = useCallback((value) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceDeductibleOption: value,
+      insuranceDeductibleAmount: resolveInsuranceDeductibleAmount(value),
+      insuranceQuoteState: resolveInsuranceQuoteState(value, prev.insuranceClaimMode),
+    }));
+  }, []);
+
+  const handleInsuranceClaimModeChange = useCallback((value) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceClaimMode: value,
+      insuranceQuoteState: resolveInsuranceQuoteState(prev.insuranceDeductibleOption, value),
+    }));
+  }, []);
+
+  const handleInsuranceAssetUpload = useCallback(async (assetType, files) => {
+    if (!Array.isArray(files) || files.length === 0) return;
+
+    setInsuranceUploadState((prev) => ({
+      ...prev,
+      [assetType]: {
+        uploading: true,
+        successMessage: "",
+      },
+    }));
+
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const response = await serviceOrderApi.uploadInsuranceAsset(file, assetType);
+        const url = String(response?.url || response?.Url || "").trim();
+        if (url) {
+          uploadedUrls.push(url);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        const targetField =
+          assetType === INSURANCE_ASSET_TYPE.CARD ? "insuranceCardImageUrls" : "insuranceDamageImageUrls";
+        setFormData((prev) => ({
+          ...prev,
+          [targetField]: [...(Array.isArray(prev?.[targetField]) ? prev[targetField] : []), ...uploadedUrls],
+        }));
+      }
+
+      setInsuranceUploadState((prev) => ({
+        ...prev,
+        [assetType]: {
+          uploading: false,
+          successMessage: uploadedUrls.length > 0 ? "?? t?i ?nh b?o hi?m." : "",
+        },
+      }));
+      setError("");
+    } catch (uploadError) {
+      setInsuranceUploadState((prev) => ({
+        ...prev,
+        [assetType]: {
+          uploading: false,
+          successMessage: "",
+        },
+      }));
+      setError(uploadError?.response?.data?.message || uploadError?.message || "Kh?ng th? t?i ?nh b?o hi?m l?n m?y ch?.");
+    }
+  }, []);
+
+  const handleInsuranceAssetRemove = useCallback((assetType, index) => {
+    if (index < 0) return;
+    const targetField =
+      assetType === INSURANCE_ASSET_TYPE.CARD ? "insuranceCardImageUrls" : "insuranceDamageImageUrls";
+    setFormData((prev) => ({
+      ...prev,
+      [targetField]: Array.isArray(prev?.[targetField])
+        ? prev[targetField].filter((_, currentIndex) => currentIndex !== index)
+        : [],
+    }));
+    setInsuranceUploadState((prev) => ({
+      ...prev,
+      [assetType]: {
+        uploading: false,
+        successMessage: "",
+      },
+    }));
   }, []);
 
   const handleChange = useCallback((event) => {
@@ -618,7 +936,7 @@ export default function ServiceOrderEditPage() {
 
   const handleServiceToggle = useCallback((serviceId) => {
     const normalizedId = Number(serviceId);
-    if (!Number.isFinite(normalizedId) || normalizedId <= 0) return;
+    if (!Number.isFinite(normalizedId) || normalizedId === 0) return;
 
     setFormData((prev) => {
       const current = toNumberList(prev.serviceIds);
@@ -670,6 +988,9 @@ export default function ServiceOrderEditPage() {
       setError("");
 
       const errors = validateForm(formData);
+      if (isInsuranceOrderEnabled && !parsePositiveId(formData.insuranceCompanyId)) {
+        errors.insuranceCompanyId = "Vui l?ng ch?n c?ng ty b?o hi?m tru?c khi luu thay d?i.";
+      }
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) {
         setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
@@ -678,22 +999,12 @@ export default function ServiceOrderEditPage() {
 
       setSaving(true);
       try {
-        const normalizedSymptoms = symptomInputs
-          .map((line) => String(line || "").trim())
-          .filter(Boolean);
-
-        const payload = {
-          orderCategory: formData.orderCategory || null,
-          serviceAdvisorId: parsePositiveId(formData.serviceAdvisorId) || null,
-          oldPartsReturnOption: formData.oldPartsReturnOption || "DISPOSE_ALL",
-          requiredDepositAmount: Math.max(0, Number(formData.requiredDepositAmount || 0)),
-          checkInTime: formData.checkInTime || null,
-          estimatedHandover: formData.estimatedHandover || suggestedFinish.finishIso || null,
-          promisedHandoverTime: formData.promisedHandoverTime || null,
-          status: formData.status || "NEW",
-          serviceIds: toNumberList(formData.serviceIds),
-          symptomNotes: normalizedSymptoms,
-        };
+        const payload = buildWorkshopEditPayload({
+          formData,
+          suggestedFinishIso: suggestedFinish.finishIso,
+          insuranceActive: isInsuranceOrderEnabled,
+          symptomInputs,
+        });
 
         await serviceOrderApi.updateWorkshop(orderId, payload);
         navigate(`/workshop/reception?viewOrderId=${orderId}`);
@@ -703,7 +1014,7 @@ export default function ServiceOrderEditPage() {
         setSaving(false);
       }
     },
-    [formData, navigate, order, orderId, saving, suggestedFinish.finishIso, symptomInputs, validateForm]
+    [formData, isInsuranceOrderEnabled, navigate, order, orderId, saving, suggestedFinish.finishIso, symptomInputs, validateForm]
   );
 
 
@@ -1019,7 +1330,7 @@ export default function ServiceOrderEditPage() {
                 <div className="reception-service-type-col">
                   <h5 className="reception-service-col-title">Lọc theo loại dịch vụ</h5>
                   <div className="reception-category-grid">
-                    {categoryOptions.map((category) => (
+                    {visibleCategoryOptions.map((category) => (
                       <button
                         key={category.id}
                         type="button"
@@ -1103,6 +1414,29 @@ export default function ServiceOrderEditPage() {
                 {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
               </div>
 
+              <WorkshopInsurancePanel
+                enabled={isInsuranceOrderEnabled}
+                locked={hasInsuranceSignalServiceSelected}
+                companies={insuranceCompanies}
+                selectedCompanyId={formData.insuranceCompanyId}
+                onToggle={handleInsuranceToggle}
+                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
+                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
+                insuranceDeductibleOption={formData.insuranceDeductibleOption}
+                insuranceClaimMode={formData.insuranceClaimMode}
+                insuranceQuoteState={formData.insuranceQuoteState}
+                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
+                onClaimModeChange={handleInsuranceClaimModeChange}
+                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
+                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
+                draftBreakdown={insuranceDraftBreakdown}
+                insuranceCardImageUrls={formData.insuranceCardImageUrls}
+                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
+                uploadingState={insuranceUploadState}
+                onUploadAsset={handleInsuranceAssetUpload}
+                onRemoveAsset={handleInsuranceAssetRemove}
+              />
+
               <div className="form-group">
                 <label>Xử lý phụ tùng cũ</label>
                 <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
@@ -1145,6 +1479,9 @@ export default function ServiceOrderEditPage() {
               <div className="timeline-grid timeline-grid-vertical">
                 <div className="form-group">
                   <label>Thời điểm xe vào xưởng *</label>
+                  <p className={`slot-flow-note ${bookingFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
+                    {slotSelectionGuide}
+                  </p>
                   <DateTimePicker
                     value={formData.checkInTime}
                     onChange={(value) => handleFieldValueChange("checkInTime", value)}
@@ -1187,14 +1524,36 @@ export default function ServiceOrderEditPage() {
                   <strong>{`${totalMinutes} phút`}</strong>
                 </div>
                 <div className="reception-summary-inline-row">
-                  <span>Tổng giá tạm tính</span>
+                  <span>{SERVICE_PRICE_LABEL}</span>
                   <strong>{formatCurrency(totalPrice)}</strong>
                 </div>
+                <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
                 <div className="reception-summary-inline-row">
-                  <span>Dự kiến hoàn thành</span>
-                  <strong>{suggestedFinish.finishText || "--"}</strong>
+                  <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
+                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
+                </div>
+                {isInsuranceOrderEnabled ? (
+                  <>
+                    <div className="reception-summary-inline-row">
+                      <span>Bảo hiểm dự kiến trả</span>
+                      <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
+                    </div>
+                    <div className="reception-summary-inline-row">
+                      <span>Khách dự kiến trả</span>
+                      <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
+                    </div>
+                  </>
+                ) : null}
+                <div className="reception-summary-inline-row">
+                  <span>Luồng tiếp nhận</span>
+                  <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Khung giờ sửa chữa"}</strong>
                 </div>
               </div>
+              {completionWarningText ? (
+                <p className="reception-plan-summary-warning">
+                  {`* ${completionWarningText}`}
+                </p>
+              ) : null}
             </section>
           </div>
           </div>

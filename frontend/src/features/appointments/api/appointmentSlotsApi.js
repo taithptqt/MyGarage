@@ -6,6 +6,9 @@ export async function getAvailableSlots(branchId, date, options = {}) {
   if (options.requestedServiceIds) {
     params.requestedServiceIds = options.requestedServiceIds;
   }
+  if (options.requestedPackageIds) {
+    params.requestedPackageIds = options.requestedPackageIds;
+  }
   if (options.bookingFlow) {
     params.bookingFlow = options.bookingFlow;
   }
@@ -27,6 +30,12 @@ export async function getNearestSlotSuggestion(branchId, checkInAt, options = {}
   const params = { checkInAt };
   if (options.requestedServiceIds) {
     params.requestedServiceIds = options.requestedServiceIds;
+  }
+  if (options.requestedPackageIds) {
+    params.requestedPackageIds = options.requestedPackageIds;
+  }
+  if (options.bookingFlow) {
+    params.bookingFlow = options.bookingFlow;
   }
   if (Number.isFinite(Number(options.vehicleCount)) && Number(options.vehicleCount) > 0) {
     params.vehicleCount = Number(options.vehicleCount);

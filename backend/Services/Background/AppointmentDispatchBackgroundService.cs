@@ -43,6 +43,7 @@ namespace MyGarage.Services
                     var service = scope.ServiceProvider.GetRequiredService<IAppointmentService>();
 
                     var now = _clock.LocalNow;
+                    await service.ReleaseExpiredLockedSlotsAsync(now);
                     var branchIds = await context.Branches
                         .AsNoTracking()
                         .Where(b => b.IsDeleted != true)

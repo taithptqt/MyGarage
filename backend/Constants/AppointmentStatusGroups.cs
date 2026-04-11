@@ -14,6 +14,8 @@ namespace MyGarage.Constants
         public static readonly HashSet<string> Queueing = new(System.StringComparer.OrdinalIgnoreCase)
         {
             nameof(AppointmentStatus.PENDING),
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.LATE),
             nameof(AppointmentStatus.ARRIVED),
             nameof(AppointmentStatus.ARRIVED_LATE),
         };

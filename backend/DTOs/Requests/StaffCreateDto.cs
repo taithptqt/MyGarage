@@ -1,11 +1,14 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace MyGarage.DTOs.Requests
 {
     public class StaffCreateDto
     {
         public string? FullName { get; set; }
+        [RegularExpression(ValidationPatterns.VietnamPhone10, ErrorMessage = ValidationMessages.VietnamPhone10)]
         public string? Phone { get; set; }
+        [EmailAddress(ErrorMessage = ValidationMessages.Email)]
         public string? Email { get; set; }
         public string? Password { get; set; }
         public long? RoleId { get; set; }

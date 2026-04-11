@@ -1,6 +1,7 @@
 const STATUS_LABELS_VI = Object.freeze({
   ALL: "T\u1ea5t c\u1ea3",
   PENDING: "Ch\u1edd x\u00e1c nh\u1eadn",
+  PARTS_PENDING: "Ch\u1edd x\u1eed l\u00fd ph\u1ee5 t\u00f9ng",
   LATE: "Tr\u1ec5 h\u1eb9n",
   QUEUED: "X\u1ebfp h\u00e0ng",
   CONFIRMED: "\u0110\u00e3 x\u00e1c nh\u1eadn",

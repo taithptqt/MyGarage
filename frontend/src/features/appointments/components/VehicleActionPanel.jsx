@@ -1,5 +1,19 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { extractField, formatStoredVehicleLabel } from "@features/appointments/utils/bookingCommon";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE } from "@shared/utils/licensePlateValidation";
+import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE } from "@shared/utils/vinValidation";
+
+function splitVehicleDisplayLabel(label) {
+  const normalized = String(label || "").trim();
+  if (!normalized) {
+    return { plate: "Không biển số", descriptor: "" };
+  }
+
+  const parts = normalized.split(" - ");
+  const plate = String(parts.shift() || "").trim() || normalized;
+  const descriptor = parts.join(" - ").trim();
+  return { plate, descriptor };
+}
 
 export default function VehicleActionPanel({
   linkedVehicles,
@@ -19,9 +33,11 @@ export default function VehicleActionPanel({
   const savedVehiclePopupRef = useRef(null);
 
   const selectedExistingKeys = useMemo(
-    () => new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
+    () =>
+      new Set((selectedVehicles || []).filter((item) => item.source === "existing").map((item) => item.key)),
     [selectedVehicles]
   );
+
   const selectableLinkedVehicles = useMemo(
     () =>
       (linkedVehicles || []).filter((vehicle) => {
@@ -38,6 +54,7 @@ export default function VehicleActionPanel({
       ),
     [draftVehicle.brandId, models]
   );
+
   const manufactureYearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -65,14 +82,6 @@ export default function VehicleActionPanel({
     };
   }, [isOpen]);
 
-  function handleOpenNewVehicleForm() {
-    setIsNewVehicleFormVisible(true);
-  }
-
-  function handleCancelNewVehicleForm() {
-    setIsNewVehicleFormVisible(false);
-  }
-
   function handleSubmitNewVehicle(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -94,13 +103,13 @@ export default function VehicleActionPanel({
   function handleOpenNewVehicle(event) {
     event.preventDefault();
     event.stopPropagation();
-    handleOpenNewVehicleForm();
+    setIsNewVehicleFormVisible(true);
   }
 
   function handleCancelNewVehicle(event) {
     event.preventDefault();
     event.stopPropagation();
-    handleCancelNewVehicleForm();
+    setIsNewVehicleFormVisible(false);
   }
 
   function handlePickExistingVehicle(event, vehicle) {
@@ -157,10 +166,14 @@ export default function VehicleActionPanel({
               {(linkedVehicles || []).length === 0 ? (
                 <p className="booking-empty">Chưa có xe đã lưu để chọn.</p>
               ) : selectableLinkedVehicles.length === 0 ? (
-                <p className="booking-empty">Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.</p>
+                <p className="booking-empty">
+                  Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.
+                </p>
               ) : (
                 selectableLinkedVehicles.map((vehicle) => {
                   const key = `existing-${Number(extractField(vehicle, ["id", "Id"]))}`;
+                  const vehicleLabel = formatStoredVehicleLabel(vehicle);
+                  const { plate, descriptor } = splitVehicleDisplayLabel(vehicleLabel);
                   return (
                     <button
                       key={key}
@@ -172,8 +185,8 @@ export default function VehicleActionPanel({
                         +
                       </span>
                       <div className="vehicle-popup-item-content">
-                        <strong>{formatStoredVehicleLabel(vehicle)}</strong>
-                        <small>Nhấn để thêm xe vào lịch hẹn</small>
+                        <strong>{plate}</strong>
+                        <small>{descriptor || "Nhấn để thêm xe vào lịch hẹn"}</small>
                       </div>
                       <span className="vehicle-popup-item-action">Thêm xe</span>
                     </button>
@@ -194,6 +207,9 @@ export default function VehicleActionPanel({
                 type="text"
                 value={draftVehicle.licensePlate}
                 onChange={(e) => onDraftChange("licensePlate", e.target.value)}
+                pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                title={VIETNAM_LICENSE_PLATE_TITLE}
+                style={{ textTransform: "uppercase" }}
                 placeholder="VD: 30A-12345"
               />
             </label>
@@ -231,7 +247,7 @@ export default function VehicleActionPanel({
             </label>
             <div className="vehicle-new-row-bottom">
               <label className="vehicle-new-field vehicle-new-field-color">
-                Màu sắc
+                Màu sắc (tùy chọn)
                 <input
                   type="text"
                   value={draftVehicle.color || ""}
@@ -239,7 +255,7 @@ export default function VehicleActionPanel({
                 />
               </label>
               <label className="vehicle-new-field vehicle-new-field-year">
-                Năm sản xuất (tùy chọn)
+                Năm sản xuất <span>*</span>
                 <select
                   value={draftVehicle.manufactureYear || ""}
                   onChange={(e) => onDraftChange("manufactureYear", e.target.value)}
@@ -253,11 +269,15 @@ export default function VehicleActionPanel({
                 </select>
               </label>
               <label className="vehicle-new-field vehicle-new-field-vin">
-                <span className="vehicle-new-label">VIN <em>*</em></span>
+                <span className="vehicle-new-label">VIN (tùy chọn)</span>
                 <input
                   type="text"
                   value={draftVehicle.vin}
                   onChange={(e) => onDraftChange("vin", e.target.value)}
+                  pattern={VIETNAM_VIN_PATTERN}
+                  title={VIETNAM_VIN_TITLE}
+                  maxLength={17}
+                  style={{ textTransform: "uppercase" }}
                 />
               </label>
             </div>
@@ -276,26 +296,31 @@ export default function VehicleActionPanel({
 
       {(selectedVehicles || []).length > 0 ? (
         <div className="vehicle-batch-list">
-          {selectedVehicles.map((vehicle) => (
-            <article
-              key={vehicle.key}
-              className={`vehicle-batch-item ${activeVehicleKey === vehicle.key ? "active" : ""}`}
-            >
-              <button
-                type="button"
-                className="vehicle-batch-select"
-                onClick={(event) => handleSelectVehicle(event, vehicle.key)}
+          {selectedVehicles.map((vehicle) => {
+            const { plate, descriptor } = splitVehicleDisplayLabel(vehicle.displayLabel);
+            return (
+              <article
+                key={vehicle.key}
+                className={`vehicle-batch-item ${activeVehicleKey === vehicle.key ? "active" : ""}`}
               >
-                <strong>{vehicle.displayLabel}</strong>
-              </button>
-              <button type="button" onClick={(event) => handleRemoveVehicle(event, vehicle.key)}>
-                Xóa
-              </button>
-            </article>
-          ))}
+                <button
+                  type="button"
+                  className="vehicle-batch-select"
+                  onClick={(event) => handleSelectVehicle(event, vehicle.key)}
+                >
+                  <span className="vehicle-batch-label">
+                    <strong>{plate}</strong>
+                    {descriptor ? <small>{descriptor}</small> : null}
+                  </span>
+                </button>
+                <button type="button" onClick={(event) => handleRemoveVehicle(event, vehicle.key)}>
+                  Xóa
+                </button>
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </section>
   );
 }
-

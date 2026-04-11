@@ -29,7 +29,8 @@ import AdminPage from "@features/admin/pages/AdminPage";
 import InventoryAdminPage from "@features/inventory/pages/InventoryAdminPage";
 import ServicesPage from "@features/services/pages/ServicesPage";
 import ServiceCategoriesPage from "@features/services/pages/ServiceCategoriesPage";
-import AppointmentManagementPage from "@features/appointments/pages/AppointmentManagementPage";
+import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
+import ReceptionOrdersSection from "@features/workshop/components/ReceptionOrdersSection";
 import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
 import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
@@ -266,7 +267,14 @@ const routes = [
     layout: '/admin',
     path: '/appointments',
     icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
-    component: <AppointmentManagementPage />,
+    component: <ReceptionAppointmentsPage />,
+  },
+  {
+    name: 'Lệnh sửa chữa',
+    layout: '/admin',
+    path: '/service-orders',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    component: <ReceptionOrdersSection />,
   },
   {
     name: 'Chi nhánh',

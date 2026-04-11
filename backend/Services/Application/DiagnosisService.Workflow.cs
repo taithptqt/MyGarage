@@ -27,6 +27,34 @@ namespace MyGarage.Services
         private const int GoldenCancelWindowMinutes = 10;
         private const int DiagnosisSlaMinutes = 45;
         private const string DispatchCollaborationPrefix = "[DISPATCH_COLLAB]";
+        private const string TeamCodeFastMaint = "FAST_MAINT";
+        private const string TeamCodeEngChas1 = "ENG_CHAS_1";
+        private const string TeamCodeEngChas2 = "ENG_CHAS_2";
+        private const string TeamCodeElecAc = "ELEC_AC";
+        private const string TeamCodeBodyCare = "BODY_CARE";
+        private const string TeamCodeCarCare = "CAR_CARE";
+
+        private const string BayTypeQsLift = "QS_LIFT";
+        private const string BayTypeQsFlat = "QS_FLAT";
+        private const string BayTypeGrLift = "GR_LIFT";
+        private const string BayTypeGrAlign = "GR_ALIGN";
+        private const string BayTypeGrElectrical = "GR_ELECTRICAL";
+        private const string BayTypeSpDiagnose = "SP_DIAGNOSE";
+        private const string BayTypeSpBodyPaint = "SP_BODY_PAINT";
+        private const string BayTypeSpDetailing = "SP_DETAILING";
+
+        private static readonly string[] QuickOrderCategories =
+        [
+            "MAINTENANCE",
+            "QUICK_SERVICE"
+        ];
+
+        private static readonly string[] DiagnoseFirstStatuses =
+        [
+            nameof(ServiceOrderLifecycleStatus.NEW),
+            nameof(ServiceOrderLifecycleStatus.CHECKED_IN),
+            nameof(ServiceOrderLifecycleStatus.DIAGNOSING)
+        ];
 
         private sealed class DispatchCollaborationTeamAssignmentMeta
         {
@@ -401,7 +429,7 @@ namespace MyGarage.Services
 
         public async Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(long serviceOrderId, long technicianId, IReadOnlyList<string> symptoms, string? dispatchTag = null)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
 
             var items = (symptoms ?? Array.Empty<string>())
@@ -444,7 +472,7 @@ namespace MyGarage.Services
         public async Task UpdateServiceOrderStatusAsync(ServiceOrder serviceOrder, string status)
         {
             serviceOrder.Status = status;
-            serviceOrder.UpdatedAt = DateTime.UtcNow;
+            serviceOrder.UpdatedAt = VietnamTime.Now;
             _context.ServiceOrders.Update(serviceOrder);
             await _context.SaveChangesAsync();
         }
@@ -516,7 +544,219 @@ namespace MyGarage.Services
                 return true;
             }
 
-            return dispatchTags.Contains(teamSpecialtyTag, StringComparer.OrdinalIgnoreCase);
+            return dispatchTags.Any(tag => DispatchTagMatchesSpecialty(tag, teamSpecialtyTag));
+        }
+
+        public async Task<(bool IsCompatible, string Reason)> ValidateTeamBayCompatibilityAsync(long serviceOrderId, long? teamId, long bayId)
+        {
+            if (!teamId.HasValue || teamId.Value <= 0 || bayId <= 0)
+            {
+                return (true, "OK");
+            }
+
+            var team = await _context.Teams.AsNoTracking()
+                .Where(x => x.Id == teamId.Value && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Name,
+                    x.Code,
+                    x.BranchId,
+                    x.SpecialtyTag
+                })
+                .FirstOrDefaultAsync();
+
+            if (team == null)
+            {
+                return (false, $"Khong tim thay to #{teamId.Value}.");
+            }
+
+            var bay = await _context.Bays.AsNoTracking()
+                .Where(x => x.Id == bayId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
+                    x.Name,
+                    x.BranchId,
+                    x.BayType
+                })
+                .FirstOrDefaultAsync();
+
+            if (bay == null)
+            {
+                return (false, $"Khong tim thay khoang #{bayId}.");
+            }
+
+            if (bay.BranchId != team.BranchId)
+            {
+                return (false, "Khoang va to khong thuoc cung chi nhanh.");
+            }
+
+            var normalizedBayType = NormalizeToken(bay.BayType);
+            if (string.IsNullOrWhiteSpace(normalizedBayType))
+            {
+                return (true, "OK");
+            }
+
+            if (normalizedBayType == BayTypeSpDiagnose)
+            {
+                return (true, "OK");
+            }
+
+            var allowedBayTypes = ResolveBaseBayTypesForTeam(team.Code, team.SpecialtyTag);
+            if (allowedBayTypes.Contains(normalizedBayType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (true, "OK");
+            }
+
+            if (string.Equals(NormalizeToken(team.Code), TeamCodeFastMaint, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(normalizedBayType, BayTypeGrLift, StringComparison.OrdinalIgnoreCase))
+            {
+                var allowOverflow = await CanQuickTeamOverflowToGeneralRepairAsync(serviceOrderId, team.BranchId);
+                if (allowOverflow)
+                {
+                    return (true, "OK");
+                }
+            }
+
+            return (false, $"To '{team.Name}' khong duoc phep vao khoang {normalizedBayType} neu chua co phe duyet dieu chuyen.");
+        }
+
+        private static bool DispatchTagMatchesSpecialty(string dispatchTag, string specialtyTag)
+        {
+            var dispatch = NormalizeDispatchTag(dispatchTag);
+            var specialty = NormalizeDispatchTag(specialtyTag);
+            if (dispatch == null || specialty == null)
+            {
+                return true;
+            }
+
+            if (string.Equals(dispatch, specialty, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if ((dispatch == "QUICK_SERVICE" && specialty == "MAINTENANCE") ||
+                (dispatch == "MAINTENANCE" && specialty == "QUICK_SERVICE"))
+            {
+                return true;
+            }
+
+            if ((dispatch == "INSURANCE_REPAIR" && specialty == "BODY_PAINT") ||
+                (dispatch == "BODY_PAINT" && specialty == "INSURANCE_REPAIR"))
+            {
+                return true;
+            }
+
+            if ((dispatch == "DETAILING" && specialty == "CAR_CARE") ||
+                (dispatch == "CAR_CARE" && specialty == "DETAILING") ||
+                (dispatch == "BODY_PAINT" && specialty == "CAR_CARE") ||
+                (dispatch == "CAR_CARE" && specialty == "BODY_PAINT"))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static IReadOnlyList<string> ResolveBaseBayTypesForTeam(string? teamCode, string? specialtyTag)
+        {
+            var code = NormalizeToken(teamCode);
+            var specialty = NormalizeDispatchTag(specialtyTag);
+
+            if (string.Equals(code, TeamCodeFastMaint, StringComparison.OrdinalIgnoreCase) ||
+                specialty == "MAINTENANCE" ||
+                specialty == "QUICK_SERVICE")
+            {
+                return [BayTypeQsLift, BayTypeQsFlat];
+            }
+
+            if (string.Equals(code, TeamCodeEngChas1, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(code, TeamCodeEngChas2, StringComparison.OrdinalIgnoreCase) ||
+                specialty == "ENGINE_CHASSIS")
+            {
+                return [BayTypeGrLift, BayTypeGrAlign];
+            }
+
+            if (string.Equals(code, TeamCodeElecAc, StringComparison.OrdinalIgnoreCase) || specialty == "ELECTRICAL_AC")
+            {
+                return [BayTypeGrElectrical];
+            }
+
+            if (string.Equals(code, TeamCodeBodyCare, StringComparison.OrdinalIgnoreCase) ||
+                specialty == "BODY_PAINT" ||
+                specialty == "INSURANCE_REPAIR")
+            {
+                return [BayTypeSpBodyPaint];
+            }
+
+            if (string.Equals(code, TeamCodeCarCare, StringComparison.OrdinalIgnoreCase) ||
+                specialty == "CAR_CARE" ||
+                specialty == "DETAILING")
+            {
+                return [BayTypeSpDetailing];
+            }
+
+            return [BayTypeSpDiagnose];
+        }
+
+        private async Task<bool> CanQuickTeamOverflowToGeneralRepairAsync(long serviceOrderId, long branchId)
+        {
+            if (branchId <= 0)
+            {
+                return false;
+            }
+
+            var orderCategory = NormalizeToken(await _context.ServiceOrders.AsNoTracking()
+                .Where(x => x.Id == serviceOrderId)
+                .Select(x => x.OrderCategory)
+                .FirstOrDefaultAsync());
+
+            if (!QuickOrderCategories.Contains(orderCategory, StringComparer.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var bayRows = await _context.Bays.AsNoTracking()
+                .Where(x => x.BranchId == branchId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
+                .Where(x => x.IsActive == true)
+                .Select(x => new
+                {
+                    x.BayType,
+                    x.CurrentOccupiedVehicleId,
+                    x.OperationalStatus
+                })
+                .ToListAsync();
+
+            if (bayRows.Count == 0)
+            {
+                return false;
+            }
+
+            var quickRows = bayRows
+                .Where(x =>
+                    string.Equals(NormalizeToken(x.BayType), BayTypeQsLift, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(NormalizeToken(x.BayType), BayTypeQsFlat, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var repairRows = bayRows
+                .Where(x =>
+                    string.Equals(NormalizeToken(x.BayType), BayTypeGrLift, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(NormalizeToken(x.BayType), BayTypeGrAlign, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(NormalizeToken(x.BayType), BayTypeGrElectrical, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (quickRows.Count == 0 || repairRows.Count == 0)
+            {
+                return false;
+            }
+
+            var quickBusy = quickRows.Count(x => x.CurrentOccupiedVehicleId.HasValue || !IsOperationalBayAvailable(x.OperationalStatus));
+            var repairBusy = repairRows.Count(x => x.CurrentOccupiedVehicleId.HasValue || !IsOperationalBayAvailable(x.OperationalStatus));
+
+            var quickFull = quickBusy >= quickRows.Count;
+            var repairFreeRatio = (repairRows.Count - repairBusy) / (double)repairRows.Count;
+            return quickFull && repairFreeRatio > 0.5d;
         }
 
         private async Task<long?> ResolveDefaultTechnicianForTeamAsync(long teamId)
@@ -562,7 +802,7 @@ namespace MyGarage.Services
             long? bayId,
             bool managerOverride)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -699,7 +939,7 @@ namespace MyGarage.Services
 
         public async Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -721,6 +961,35 @@ namespace MyGarage.Services
                 diagnosis.UpdatedAt = now;
             }
 
+            var serviceOrderIds = list
+                .Select(x => x.ServiceOrderId)
+                .Distinct()
+                .ToList();
+            if (serviceOrderIds.Count > 0)
+            {
+                var diagnoseSlots = await _context.WorkSlots
+                    .Where(s =>
+                        s.ServiceOrderId.HasValue &&
+                        serviceOrderIds.Contains(s.ServiceOrderId.Value) &&
+                        (s.SlotType == nameof(WorkSlotType.DIAGNOSE) || s.SequenceOrder <= 1) &&
+                        (s.Status == nameof(WorkSlotStatus.ARRIVED) ||
+                         s.Status == nameof(WorkSlotStatus.RESERVED) ||
+                         s.Status == nameof(WorkSlotStatus.LOCKED)))
+                    .ToListAsync();
+
+                foreach (var slot in diagnoseSlots)
+                {
+                    if (bayId.HasValue && bayId.Value > 0)
+                    {
+                        slot.BayId = bayId.Value;
+                    }
+
+                    slot.Status = nameof(WorkSlotStatus.IN_PROGRESS);
+                    slot.ActualStartTime ??= now;
+                    slot.TechnicianId ??= technicianId;
+                }
+            }
+
             _context.Diagnoses.UpdateRange(list);
             await _context.SaveChangesAsync();
         }
@@ -729,12 +998,28 @@ namespace MyGarage.Services
         {
             var team = await _context.Teams.AsNoTracking()
                 .Where(x => x.Id == teamId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false))
-                .Select(x => new { x.Id, x.Name, x.BranchId })
+                .Select(x => new { x.Id, x.Name, x.Code, x.SpecialtyTag, x.BranchId })
                 .FirstOrDefaultAsync();
 
             if (team == null)
             {
                 throw new InvalidOperationException("Khong tim thay to ky thuat duoc chon.");
+            }
+
+            var serviceOrder = await _context.ServiceOrders.AsNoTracking()
+                .Where(x => x.Id == serviceOrderId)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.ExecuteBranchId,
+                    x.OrderCategory,
+                    x.Status
+                })
+                .FirstOrDefaultAsync();
+
+            if (serviceOrder == null)
+            {
+                throw new InvalidOperationException("Khong tim thay lenh sua chua.");
             }
 
             var technicians = await _context.Staffs.AsNoTracking()
@@ -801,9 +1086,113 @@ namespace MyGarage.Services
             var suggestedLead = sortedTechnicians.FirstOrDefault();
             var suggestedAssistant = sortedTechnicians.Skip(1).FirstOrDefault();
 
+            var serviceSignals = await _context.ServiceOrderDetails.AsNoTracking()
+                .Where(x => x.ServiceOrderId == serviceOrderId && x.StandardServiceId.HasValue)
+                .Join(
+                    _context.StandardServices.AsNoTracking(),
+                    detail => detail.StandardServiceId!.Value,
+                    standard => standard.Id,
+                    (detail, standard) => new
+                    {
+                        standard.Code,
+                        standard.Name
+                    })
+                .ToListAsync();
+
+            var needsAlignment = serviceSignals.Any(x =>
+                NormalizeToken(x.Code).Contains("ALIGN", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Code).Contains("SC_G04", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("CAN_CHINH_THUOC_LAI", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("DO_CHUM", StringComparison.OrdinalIgnoreCase));
+
+            var needsElectrical = serviceSignals.Any(x =>
+                NormalizeToken(x.Code).StartsWith("SC_D", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Code).Contains("ELEC", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("DIEN", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("MAY_LANH", StringComparison.OrdinalIgnoreCase));
+
+            var needsDetailing = serviceSignals.Any(x =>
+                NormalizeToken(x.Code).StartsWith("DT_", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("DETAIL", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("CERAMIC", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("PPF", StringComparison.OrdinalIgnoreCase) ||
+                NormalizeToken(x.Name).Contains("CHAM_SOC", StringComparison.OrdinalIgnoreCase));
+
+            var normalizedOrderStatus = NormalizeToken(serviceOrder.Status);
+            var normalizedOrderCategory = NormalizeToken(serviceOrder.OrderCategory);
+            var normalizedTeamCode = NormalizeToken(team.Code);
+
+            var preferredBayTypes = new List<string>();
+
+            if (DiagnoseFirstStatuses.Contains(normalizedOrderStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                preferredBayTypes.Add(BayTypeSpDiagnose);
+            }
+
+            switch (normalizedOrderCategory)
+            {
+                case "MAINTENANCE":
+                case "QUICK_SERVICE":
+                    preferredBayTypes.Add(BayTypeQsLift);
+                    preferredBayTypes.Add(BayTypeQsFlat);
+                    if (await CanQuickTeamOverflowToGeneralRepairAsync(serviceOrderId, team.BranchId))
+                    {
+                        preferredBayTypes.Add(BayTypeGrLift);
+                    }
+                    break;
+
+                case "GENERAL_REPAIR":
+                    if (needsElectrical)
+                    {
+                        preferredBayTypes.Add(BayTypeGrElectrical);
+                    }
+                    preferredBayTypes.Add(BayTypeGrLift);
+                    if (needsAlignment)
+                    {
+                        preferredBayTypes.Add(BayTypeGrAlign);
+                    }
+                    break;
+
+                case "INSURANCE_REPAIR":
+                    preferredBayTypes.Add(BayTypeSpBodyPaint);
+                    break;
+
+                case "REWORK":
+                case "WARRANTLY":
+                case "WARRANTY":
+                    preferredBayTypes.Add(BayTypeGrLift);
+                    if (needsAlignment)
+                    {
+                        preferredBayTypes.Add(BayTypeGrAlign);
+                    }
+                    if (needsElectrical)
+                    {
+                        preferredBayTypes.Add(BayTypeGrElectrical);
+                    }
+                    break;
+            }
+
+            if (needsDetailing || string.Equals(normalizedTeamCode, TeamCodeCarCare, StringComparison.OrdinalIgnoreCase))
+            {
+                preferredBayTypes.Add(BayTypeSpDetailing);
+            }
+
+            preferredBayTypes.AddRange(ResolveBaseBayTypesForTeam(team.Code, team.SpecialtyTag));
+            preferredBayTypes.Add(BayTypeSpDiagnose);
+            preferredBayTypes = preferredBayTypes
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(NormalizeToken)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var preferredBayTypeOrder = preferredBayTypes
+                .Select((value, index) => new { value, index })
+                .ToDictionary(x => x.value, x => x.index, StringComparer.OrdinalIgnoreCase);
+
             var suggestedBay = await _context.Bays.AsNoTracking()
                 .Where(x => x.BranchId == team.BranchId)
                 .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => x.IsActive == true)
                 .OrderBy(x => x.CurrentOccupiedVehicleId.HasValue ? 1 : 0)
                 .ThenBy(x => x.Code)
                 .Select(x => new
@@ -811,6 +1200,7 @@ namespace MyGarage.Services
                     x.Id,
                     x.Code,
                     x.Name,
+                    x.BayType,
                     x.CurrentOccupiedVehicleId,
                     x.OperationalStatus
                 })
@@ -818,7 +1208,12 @@ namespace MyGarage.Services
 
             var freeBay = suggestedBay
                 .Where(x => !x.CurrentOccupiedVehicleId.HasValue && IsOperationalBayAvailable(x.OperationalStatus))
-                .OrderBy(x => x.Code ?? x.Name ?? string.Empty)
+                .OrderBy(x =>
+                {
+                    var bayType = NormalizeToken(x.BayType);
+                    return preferredBayTypeOrder.TryGetValue(bayType, out var order) ? order : int.MaxValue;
+                })
+                .ThenBy(x => x.Code ?? x.Name ?? string.Empty)
                 .FirstOrDefault();
 
             return new DiagnosisDispatchSuggestionDto
@@ -842,7 +1237,7 @@ namespace MyGarage.Services
             string? note,
             IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments = null)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -1029,7 +1424,7 @@ namespace MyGarage.Services
                 NormalizeRequestedTechnicianCount(x.RequestedTechnicianCount).GetValueOrDefault() > 0 &&
                 (!x.TechnicianId.HasValue || x.TechnicianId.Value <= 0));
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             foreach (var diagnosis in list)
             {
                 if (diagnosis.Status == DiagnosisStatusCompleted)
@@ -1059,7 +1454,7 @@ namespace MyGarage.Services
 
         public async Task RequestCancellationAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string reason)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -1094,7 +1489,7 @@ namespace MyGarage.Services
 
         public async Task ApplyCancellationDecisionAsync(ServiceOrder serviceOrder, IEnumerable<Diagnosis> diagnoses, bool approve, long managerId, string? note)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -1149,7 +1544,7 @@ namespace MyGarage.Services
 
         public async Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -1174,7 +1569,7 @@ namespace MyGarage.Services
 
         public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long managerId, string? note)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
             if (list.Count == 0)
             {
@@ -1213,7 +1608,7 @@ namespace MyGarage.Services
                 serviceOrder.Status = ServiceOrderStatusCheckedIn;
             }
 
-            serviceOrder.UpdatedAt = DateTime.UtcNow;
+            serviceOrder.UpdatedAt = VietnamTime.Now;
             _context.ServiceOrders.Update(serviceOrder);
             await _context.SaveChangesAsync();
         }
@@ -1225,11 +1620,50 @@ namespace MyGarage.Services
 
         public async Task CompleteDiagnosisAsync(Diagnosis diagnosis)
         {
+            var now = VietnamTime.Now;
             diagnosis.Status = DiagnosisStatusCompleted;
-            diagnosis.DiagnosedAt = DateTime.UtcNow;
+            diagnosis.DiagnosedAt = now;
             diagnosis.CancellationStatus = CancellationStatusNone;
-            diagnosis.UpdatedAt = DateTime.UtcNow;
+            diagnosis.UpdatedAt = now;
             _context.Diagnoses.Update(diagnosis);
+            await _context.SaveChangesAsync();
+
+            var allStatuses = await _context.Diagnoses
+                .Where(x => x.ServiceOrderId == diagnosis.ServiceOrderId)
+                .Select(x => x.Status)
+                .ToListAsync();
+            var isAllCompleted = allStatuses.Count > 0 &&
+                                 allStatuses.All(s => s == DiagnosisStatusCompleted);
+            if (isAllCompleted)
+            {
+                var diagnoseSlots = await _context.WorkSlots
+                    .Where(s =>
+                        s.ServiceOrderId == diagnosis.ServiceOrderId &&
+                        (s.SlotType == nameof(WorkSlotType.DIAGNOSE) || s.SequenceOrder <= 1) &&
+                        s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                        s.Status != nameof(WorkSlotStatus.NOSHOW) &&
+                        s.Status != nameof(WorkSlotStatus.COMPLETED))
+                    .ToListAsync();
+
+                foreach (var slot in diagnoseSlots)
+                {
+                    slot.Status = nameof(WorkSlotStatus.DIAGNOSED_WAITING);
+                    slot.SlotType = nameof(WorkSlotType.BUFFER);
+                    slot.BayId = null;
+                    slot.ActualReleaseTime ??= now;
+                    slot.EndTime = now > slot.StartTime ? now : slot.EndTime;
+
+                    if (string.IsNullOrWhiteSpace(slot.Notes))
+                    {
+                        slot.Notes = "[DIAGNOSED_WAITING_RELEASED]";
+                    }
+                    else if (!slot.Notes.Contains("[DIAGNOSED_WAITING_RELEASED]", StringComparison.OrdinalIgnoreCase))
+                    {
+                        slot.Notes += " [DIAGNOSED_WAITING_RELEASED]";
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
         }
 
@@ -1256,6 +1690,15 @@ namespace MyGarage.Services
                 nameof(BayOperationalStatusCode.UNDER_MAINTENANCE) => false,
                 _ => true,
             };
+        }
+
+        private static string NormalizeToken(string? rawValue)
+        {
+            return (rawValue ?? string.Empty)
+                .Trim()
+                .ToUpperInvariant()
+                .Replace("-", "_")
+                .Replace(" ", "_");
         }
 
         private static bool IsCancellationPending(Diagnosis diagnosis)

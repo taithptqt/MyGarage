@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  getAllAppointments,
   getBranchAppointments,
   getAppointmentDetail,
   confirmAppointment,
@@ -18,6 +19,27 @@ import AppointmentDetailModal from "@features/workshop/components/AppointmentDet
 function parseBranchId(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function normalizeRoleCode(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function normalizeRoleName(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Đ/g, "D")
+    .replace(/-/g, "_")
+    .replace(/\s+/g, "_");
+}
+
+function isAdminRole(roleCode, roleName) {
+  const code = normalizeRoleCode(roleCode);
+  const name = normalizeRoleName(roleName);
+  return code === "ADMIN" || name.includes("ADMIN");
 }
 
 function normalizeStatus(status) {
@@ -58,6 +80,7 @@ function normalizeAppointmentItem(item) {
     return Number.isFinite(parsed) ? parsed : 0;
   };
   const text = (value) => (value === undefined || value === null ? "" : String(value));
+  const list = (value) => (Array.isArray(value) ? value : []);
 
   return {
     ...source,
@@ -80,6 +103,11 @@ function normalizeAppointmentItem(item) {
       ? pick("serviceNames", "ServiceNames").map((name) => String(name || "").trim()).filter(Boolean)
       : [],
     customerNotes: text(pick("customerNotes", "CustomerNotes")),
+    requiresDispatchReview: Boolean(pick("requiresDispatchReview", "RequiresDispatchReview")),
+    dispatchReviewNote: text(pick("dispatchReviewNote", "DispatchReviewNote")),
+    requiresPartsFollowUp: Boolean(pick("requiresPartsFollowUp", "RequiresPartsFollowUp")),
+    partsFollowUpNote: text(pick("partsFollowUpNote", "PartsFollowUpNote")),
+    partsFollowUpServices: list(pick("partsFollowUpServices", "PartsFollowUpServices")),
     cancelReason: text(pick("cancelReason", "CancelReason")),
     GroupSessionId: numeric(pick("groupSessionId", "GroupSessionId")),
     GroupSessionCode: text(pick("groupSessionCode", "GroupSessionCode")),
@@ -89,6 +117,7 @@ function normalizeAppointmentItem(item) {
 
 function getApptStatusBadge(status) {
   const normalized = normalizeStatus(status);
+  if (normalized === "PARTS_PENDING") return "badge-warning";
   if (normalized === "PENDING" || normalized === "LATE") return "badge-warning";
   if (normalized === "CONFIRMED" || normalized === "PARTIAL_CONFIRMED") return "badge-active";
   if (normalized === "ARRIVED" || normalized === "ARRIVED_LATE") return "badge-success";
@@ -131,6 +160,17 @@ function formatApptTime(value) {
     : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
+function getAppointmentFilterTimestamp(appt) {
+  // Date filter for Appointments must follow scheduled appointment time, not createdAt.
+  const start = new Date(appt?.startTime || appt?.StartTime || 0).getTime();
+  if (Number.isFinite(start) && start > 0) {
+    return start;
+  }
+
+  const end = new Date(appt?.endTime || appt?.EndTime || 0).getTime();
+  return Number.isFinite(end) ? end : 0;
+}
+
 export default function ReceptionAppointmentsPage() {
   const navigate = useNavigate();
   const { searchQuery } = useSearch();
@@ -157,6 +197,7 @@ export default function ReceptionAppointmentsPage() {
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
   const contextBranchId = parseBranchId(selectedBranchId);
   const effectiveBranchId = contextBranchId || userBranchId;
+  const canViewAllBranches = isAdminRole(user?.roleCode ?? user?.RoleCode, user?.roleName ?? user?.RoleName);
 
   const normalizeAppointments = useCallback((payload) => {
     const list = Array.isArray(payload)
@@ -173,50 +214,58 @@ export default function ReceptionAppointmentsPage() {
 
     return list
       .map(normalizeAppointmentItem)
-      .filter((item) => item.id > 0 && (!effectiveBranchId || item.branchId === 0 || item.branchId === effectiveBranchId));
-  }, [effectiveBranchId]);
+      .filter((item) => {
+        if (item.id <= 0) return false;
+        if (!effectiveBranchId && canViewAllBranches) return true;
+        return !effectiveBranchId || item.branchId === 0 || item.branchId === effectiveBranchId;
+      });
+  }, [canViewAllBranches, effectiveBranchId]);
 
   const fetchAppointments = useCallback(async () => {
-    if (!effectiveBranchId) {
+    if (!effectiveBranchId && !canViewAllBranches) {
       setAppointments([]);
       return;
     }
     setApptLoading(true);
     setError("");
     try {
-      const data = await getBranchAppointments(effectiveBranchId);
+      const data = effectiveBranchId
+        ? await getBranchAppointments(effectiveBranchId)
+        : await getAllAppointments();
       setAppointments(normalizeAppointments(data));
     } catch (err) {
       setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
     } finally {
       setApptLoading(false);
     }
-  }, [effectiveBranchId, normalizeAppointments]);
+  }, [canViewAllBranches, effectiveBranchId, normalizeAppointments]);
 
   const fetchAppointmentsSilent = useCallback(async () => {
-    if (!effectiveBranchId) {
+    if (!effectiveBranchId && !canViewAllBranches) {
       setAppointments([]);
       return;
     }
     try {
-      const data = await getBranchAppointments(effectiveBranchId);
+      const data = effectiveBranchId
+        ? await getBranchAppointments(effectiveBranchId)
+        : await getAllAppointments();
       setAppointments(normalizeAppointments(data));
     } catch (err) {
       setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
     }
-  }, [effectiveBranchId, normalizeAppointments]);
+  }, [canViewAllBranches, effectiveBranchId, normalizeAppointments]);
 
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
   useEffect(() => {
-    if (!effectiveBranchId) return undefined;
+    if (!effectiveBranchId && !canViewAllBranches) return undefined;
     const timer = setInterval(() => {
       fetchAppointmentsSilent();
     }, 15000);
     return () => clearInterval(timer);
-  }, [effectiveBranchId, fetchAppointmentsSilent]);
+  }, [canViewAllBranches, effectiveBranchId, fetchAppointmentsSilent]);
 
   const apptStatusOptions = useMemo(() => {
     const statuses = Array.from(
@@ -233,7 +282,7 @@ export default function ReceptionAppointmentsPage() {
 
     const list = (appointments || []).filter((appt) => {
       const byStatus = apptStatusFilter === "ALL" || normalizeStatus(appt.status) === apptStatusFilter;
-      const scheduledTime = new Date(appt.startTime || 0).getTime();
+      const scheduledTime = getAppointmentFilterTimestamp(appt);
       const byDate =
         (!startDate || scheduledTime >= startDate.getTime()) &&
         (!endDate || scheduledTime <= endDate.getTime());
@@ -252,8 +301,8 @@ export default function ReceptionAppointmentsPage() {
     });
 
     return list.sort((a, b) => {
-      const aTime = new Date(a.startTime || 0).getTime();
-      const bTime = new Date(b.startTime || 0).getTime();
+      const aTime = getAppointmentFilterTimestamp(a);
+      const bTime = getAppointmentFilterTimestamp(b);
       const aName = String(a.customerName || "");
       const bName = String(b.customerName || "");
 

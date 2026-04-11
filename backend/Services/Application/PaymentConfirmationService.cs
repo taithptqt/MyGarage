@@ -1,4 +1,4 @@
-Ôªøusing Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -32,7 +32,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
         payment.Amount = amountPaid;
         payment.Status = normalizedStatus;
-        payment.UpdatedAt = DateTime.UtcNow;
+        payment.UpdatedAt = VietnamTime.Now;
         await _db.SaveChangesAsync();
 
         await UpdateRelatedDocumentsAsync(payment);
@@ -69,7 +69,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 invoice.PaidAmount = paidAmount;
                 var invoiceTotal = invoice.TotalAmount ?? 0m;
                 invoice.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, invoiceTotal);
-                invoice.UpdatedAt = DateTime.UtcNow;
+                invoice.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -84,7 +84,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
                 var serviceTotal = serviceOrder.FinalAmount ?? 0m;
                 serviceOrder.PaymentStatus = ResolveDocumentPaymentStatus(paidAmount, serviceTotal);
-                serviceOrder.UpdatedAt = DateTime.UtcNow;
+                serviceOrder.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -99,7 +99,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
                 // Retail order status follows existing DB check constraint.
                 retailOrder.Status = paidAmount >= retailOrder.FinalAmount ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
-                retailOrder.UpdatedAt = DateTime.UtcNow;
+                retailOrder.UpdatedAt = VietnamTime.Now;
             }
         }
 
@@ -118,17 +118,17 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
             var amount = payment.Amount.ToString("N0");
             var body = $@"
-                <h3>MyGarage - Thanh to√°n th√†nh c√¥ng</h3>
-                <p>Xin ch√†o {recipient.Value.FullName},</p>
-                <p>Ch√∫ng t√¥i ƒë√£ nh·∫≠n thanh to√°n th√†nh c√¥ng cho giao d·ªãch <b>{payment.TransactionCode}</b>.</p>
+                <h3>MyGarage - Thanh to·n th‡nh cÙng</h3>
+                <p>Xin ch‡o {recipient.Value.FullName},</p>
+                <p>Ch˙ng tÙi d„ nh?n thanh to·n th‡nh cÙng cho giao d?ch <b>{payment.TransactionCode}</b>.</p>
                 <ul>
-                  <li>S·ªë ti·ªÅn: <b>{amount} VND</b></li>
-                  <li>Tr·∫°ng th√°i: <b>{payment.Status}</b></li>
-                  <li>Th·ªùi gian: <b>{DateTime.Now:dd/MM/yyyy HH:mm:ss}</b></li>
+                  <li>S? ti?n: <b>{amount} VND</b></li>
+                  <li>Tr?ng th·i: <b>{payment.Status}</b></li>
+                  <li>Th?i gian: <b>{VietnamTime.Now:dd/MM/yyyy HH:mm:ss}</b></li>
                 </ul>
-                <p>C·∫£m ∆°n b·∫°n ƒë√£ s·ª≠ d·ª•ng d·ªãch v·ª• MyGarage.</p>";
+                <p>C?m on b?n d„ s? d?ng d?ch v? MyGarage.</p>";
 
-            await _emailService.SendEmailAsync(recipient.Value.Email, "MyGarage - Thanh to√°n th√†nh c√¥ng", body);
+            await _emailService.SendEmailAsync(recipient.Value.Email, "MyGarage - Thanh to·n th‡nh cÙng", body);
         }
         catch (Exception ex)
         {
@@ -163,7 +163,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == payment.PayerId.Value);
             if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
             {
-                return (customer.Email!, customer.FullName ?? "Kh√°ch h√†ng");
+                return (customer.Email!, customer.FullName ?? "Kh·ch h‡ng");
             }
         }
 
@@ -174,7 +174,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 .FirstOrDefaultAsync(s => s.Id == payment.ServiceOrderId.Value);
             if (serviceOrder?.Customer is not null && !string.IsNullOrWhiteSpace(serviceOrder.Customer.Email))
             {
-                return (serviceOrder.Customer.Email!, serviceOrder.Customer.FullName ?? "Kh√°ch h√†ng");
+                return (serviceOrder.Customer.Email!, serviceOrder.Customer.FullName ?? "Kh·ch h‡ng");
             }
         }
 
@@ -185,7 +185,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 .FirstOrDefaultAsync(r => r.Id == payment.RetailOrderId.Value);
             if (retailOrder?.Customer is not null && !string.IsNullOrWhiteSpace(retailOrder.Customer.Email))
             {
-                return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Kh√°ch h√†ng");
+                return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Kh·ch h‡ng");
             }
         }
 
@@ -199,13 +199,13 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == invoice.PayerId.Value);
                 if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
                 {
-                    return (customer.Email!, customer.FullName ?? "Kh√°ch h√†ng");
+                    return (customer.Email!, customer.FullName ?? "Kh·ch h‡ng");
                 }
             }
 
             if (invoice is not null && !string.IsNullOrWhiteSpace(invoice.ReceiveEmail))
             {
-                return (invoice.ReceiveEmail!, "Kh√°ch h√†ng");
+                return (invoice.ReceiveEmail!, "Kh·ch h‡ng");
             }
         }
 

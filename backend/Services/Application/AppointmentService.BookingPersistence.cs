@@ -21,7 +21,12 @@ namespace MyGarage.Services
             DateTime requestedEndAt,
             BookingFlowType flow,
             string? effectiveRequestedServiceIds,
-            ServiceCluster requestedCluster)
+            string? effectiveRequestedPackageIds,
+            ServiceCluster requestedCluster,
+            long? validatedVehicleModelId,
+            int plannedDurationMinutes,
+            int slotStepMinutes,
+            PartAvailabilityEvaluation partAvailability)
         {
             var ownTransaction = externalTransaction == null;
             using var tx = ownTransaction ? await _context.Database.BeginTransactionAsync() : null;
@@ -45,6 +50,14 @@ namespace MyGarage.Services
                     StartTime = requestedStartAt,
                     EndTime = requestedEndAt,
                     RequestedServiceIds = effectiveRequestedServiceIds,
+                    RequestedPackageIds = effectiveRequestedPackageIds,
+                    InsuranceCompanyId = dto.InsuranceCompanyId.HasValue && dto.InsuranceCompanyId.Value > 0
+                        ? dto.InsuranceCompanyId
+                        : null,
+                    InsuranceDeductibleAmount = NormalizeInsuranceDeductibleAmount(dto.InsuranceDeductibleAmount),
+                    InsuranceDeductibleOption = NormalizeInsuranceToken(dto.InsuranceDeductibleOption),
+                    InsuranceClaimMode = NormalizeInsuranceToken(dto.InsuranceClaimMode),
+                    InsuranceQuoteState = NormalizeInsuranceToken(dto.InsuranceQuoteState),
                     CustomerNotes = AppendClusterMarker(
                         AppendFlowMarker(dto.CustomerNotes, flow),
                         requestedCluster),
@@ -53,6 +66,30 @@ namespace MyGarage.Services
                 };
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
+
+                await PersistAppointmentInsuranceAssetsAsync(appointment, dto);
+
+                var effectiveVehicleModelId = validatedVehicleModelId;
+                if (!effectiveVehicleModelId.HasValue && vehicleId.HasValue)
+                {
+                    effectiveVehicleModelId = await _context.Vehicles
+                        .AsNoTracking()
+                        .Where(v => v.Id == vehicleId.Value)
+                        .Select(v => (long?)v.ModelId)
+                        .FirstOrDefaultAsync();
+                }
+
+                await ApplyBookingReservationArtifactsAsync(
+                    appointment,
+                    flow,
+                    requestedCluster,
+                    effectiveVehicleModelId,
+                    effectiveRequestedServiceIds,
+                    effectiveRequestedPackageIds,
+                    actorStaffId,
+                    plannedDurationMinutes,
+                    slotStepMinutes,
+                    partAvailability);
 
                 if (groupSessionId.HasValue)
                     await _groupSessionService.SyncCountersAsync(groupSessionId.Value, actorStaffId);
@@ -99,6 +136,34 @@ namespace MyGarage.Services
             await EnsureCustomerVehicleLinkAsync(customerId, vehicleId.Value, actorStaffId);
 
             return vehicleId;
+        }
+
+        private static decimal? NormalizeInsuranceDeductibleAmount(decimal? value)
+        {
+            if (!value.HasValue)
+            {
+                return null;
+            }
+
+            if (value.Value < 0m)
+            {
+                throw new InvalidOperationException("Mức miễn thường không hợp lệ.");
+            }
+
+            return decimal.Round(value.Value, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private static string? NormalizeInsuranceToken(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var normalized = value.Trim().ToUpperInvariant();
+            return normalized.Length <= 30
+                ? normalized
+                : normalized.Substring(0, 30);
         }
     }
 }

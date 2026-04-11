@@ -5,12 +5,19 @@ import { releaseBookingSlotHold } from "@features/appointments/api/bookingFormAp
 import {
   buildDisplayedSlots,
   buildSlotsBySession,
-  getAutoExpandOddStateForFixedFlow,
   resolveFirstActiveSession
 } from "@features/appointments/utils/bookingSlots";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
 import { timeLabel } from "@features/appointments/utils/bookingCommon";
-import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE, formatVinInput, isValidVin } from "@shared/utils/vinValidation";
+import {
+  buildInspectionTriadTypeByServiceId,
+  getInspectionTriadDisplayName,
+  getConflictingInspectionTriadServiceIds,
+  sumServiceMinutes,
+} from "@shared/utils/serviceDurationUtils";
 
 const SERVICE_MODE = {
   SHARED: "SHARED",
@@ -56,6 +63,53 @@ const EMPTY_FORM_DATA = {
   customerNotes: ""
 };
 
+const VN_PHONE_PATTERN = "^(0[0-9]{9}|\\+84[0-9]{9})$";
+const SLOT_DURATION_MINUTES = 15;
+const CHECK_IN_SETUP_MINUTES = 15;
+const EXECUTION_BUFFER_MINUTES = 15;
+
+function resolveSlotDateTime(rawValue, fallbackDate = "") {
+  if (!rawValue) return null;
+  const parsed = new Date(rawValue);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+
+  const match = String(rawValue).match(/^(\d{1,2}):(\d{2})/);
+  if (!match || !fallbackDate) return null;
+
+  const hours = String(match[1]).padStart(2, "0");
+  const minutes = String(match[2]).padStart(2, "0");
+  const composed = new Date(`${fallbackDate}T${hours}:${minutes}:00`);
+  return Number.isNaN(composed.getTime()) ? null : composed;
+}
+
+function buildFixedFlowSchedule(startTimeRaw, serviceMinutes, fallbackDate = "") {
+  const startDate = resolveSlotDateTime(startTimeRaw, fallbackDate);
+  if (!startDate) {
+    return {
+      startDate: null,
+      endDate: null,
+      completionMs: null,
+      roundedTotalMinutes: 0
+    };
+  }
+
+  const normalizedServiceMinutes = Number(serviceMinutes || 0);
+  const safeServiceMinutes = Number.isFinite(normalizedServiceMinutes) && normalizedServiceMinutes > 0
+    ? normalizedServiceMinutes
+    : 0;
+  const occupancyMinutes = CHECK_IN_SETUP_MINUTES + safeServiceMinutes + EXECUTION_BUFFER_MINUTES;
+  const slotCount = Math.max(1, Math.ceil(occupancyMinutes / SLOT_DURATION_MINUTES));
+  const roundedTotalMinutes = slotCount * SLOT_DURATION_MINUTES;
+  const completionMs = startDate.getTime() + roundedTotalMinutes * 60 * 1000;
+
+  return {
+    startDate,
+    endDate: new Date(completionMs),
+    completionMs,
+    roundedTotalMinutes
+  };
+}
+
 function normalizePhone(phone) {
   return String(phone || "").replace(/\s+/g, "");
 }
@@ -70,7 +124,7 @@ function normalizeSearchText(value) {
 }
 
 function isValidPhone(phone) {
-  return /^(0\d{9,10}|\+84\d{9,10})$/.test(normalizePhone(phone));
+  return /^(0\d{9}|\+84\d{9})$/.test(normalizePhone(phone));
 }
 
 function toDateTimeParts(value) {
@@ -190,10 +244,12 @@ function normalizePlan(plan) {
 function normalizeService(service) {
   const id = Number(readField(service, ["id", "Id"], 0));
   const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
+  const rawName = String(readField(service, ["name", "Name"], "") || "");
   return {
     id,
     categoryId,
-    name: String(readField(service, ["name", "Name"], "") || ""),
+    code: String(readField(service, ["code", "Code"], "") || ""),
+    name: getInspectionTriadDisplayName(service, rawName),
     minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
     price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0))
   };
@@ -251,6 +307,18 @@ function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelI
   return "Chưa rõ hãng - chưa rõ dòng xe";
 }
 
+function toVehicleTabLabel(vehicleLabel, fallback = "") {
+  const normalizedLabel = String(vehicleLabel || "").trim();
+  if (!normalizedLabel) {
+    const normalizedFallback = String(fallback || "").trim();
+    return normalizedFallback || "Kh\u00f4ng bi\u1ec3n s\u1ed1";
+  }
+
+  const [platePart] = normalizedLabel.split(" - ");
+  const plate = String(platePart || "").trim();
+  return plate || normalizedLabel;
+}
+
 function toIsoDate(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
@@ -277,14 +345,16 @@ function formatDateTimeWithFullDate(value) {
   return `${hour}:${minute} (${day}/${month}/${year})`;
 }
 
-function formatInspectionEta(value, durationMinutes) {
-  if (!value) return "";
-  const parsedStart = new Date(value);
-  if (Number.isNaN(parsedStart.getTime())) return "";
-
-  const safeDuration = Math.max(0, Number(durationMinutes || 0));
-  const expected = new Date(parsedStart.getTime() + safeDuration * 60 * 1000);
-  return formatDateTimeWithFullDate(expected);
+function formatCompletionWarningTime(value) {
+  if (!value) return "chưa xác định";
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "chưa xác định";
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = String(parsed.getFullYear());
+  return `${hour} giờ ${minute} phút ngày ${day}/${month}/${year}`;
 }
 
 function normalizeSlotSelection(slot) {
@@ -448,41 +518,44 @@ export default function ReceptionCreateAppointmentForm({
     return map;
   }, [normalizedServices]);
 
+  const flexibleTriggerServiceIdSet = useMemo(
+    () =>
+      new Set(
+        normalizedServices
+          .filter((service) => {
+            const normalizedCode = String(service?.code || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[_\-\s]/g, "");
+            return normalizedCode.startsWith("dg");
+          })
+          .map((service) => Number(service.id))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      ),
+    [normalizedServices]
+  );
+
   const serviceCategoryMap = useMemo(() => {
     const map = new Map();
     normalizedServices.forEach((service) => map.set(service.id, service.categoryId));
     return map;
   }, [normalizedServices]);
 
-  const inspectionExclusiveTypeByServiceId = useMemo(() => {
-    const map = new Map();
-    normalizedServices.forEach((service) => {
-      const id = Number(service.id);
-      if (!Number.isFinite(id)) return;
-      const normalizedName = normalizeSearchText(service.name);
-      if (normalizedName.includes("kiem tra nhanh")) {
-        map.set(id, "quick");
-        return;
-      }
-      if (normalizedName.includes("kiem tra tong quat")) {
-        map.set(id, "general");
-      }
-    });
-    return map;
-  }, [normalizedServices]);
+  const inspectionTriadTypeByServiceId = useMemo(
+    () => buildInspectionTriadTypeByServiceId(normalizedServices),
+    [normalizedServices]
+  );
 
-  const getOppositeInspectionServiceIds = useCallback(
-    (serviceIds, targetServiceId) => {
-      const targetType = inspectionExclusiveTypeByServiceId.get(Number(targetServiceId));
-      if (!targetType) return [];
-      const oppositeType = targetType === "quick" ? "general" : "quick";
-      return toNumberList(
-        (serviceIds || []).filter(
-          (serviceId) => inspectionExclusiveTypeByServiceId.get(Number(serviceId)) === oppositeType
+  const getConflictingInspectionServiceIds = useCallback(
+    (serviceIds, targetServiceId) =>
+      toNumberList(
+        getConflictingInspectionTriadServiceIds(
+          serviceIds,
+          targetServiceId,
+          inspectionTriadTypeByServiceId
         )
-      );
-    },
-    [inspectionExclusiveTypeByServiceId]
+      ),
+    [inspectionTriadTypeByServiceId]
   );
 
   const categoryOptions = useMemo(
@@ -687,7 +760,7 @@ export default function ReceptionCreateAppointmentForm({
   }, [formData.isQuickOrder, formData.isNewVehicle, formData.selectedVehicleIds]);
 
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
-  const showServiceModeSwitch = selectedVehicleKeys.length > 0 && !formData.isQuickOrder;
+  const showServiceModeSwitch = hasMultipleSelectedVehicles && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
 
   const vehicleLabelByKey = useMemo(() => {
@@ -697,12 +770,12 @@ export default function ReceptionCreateAppointmentForm({
     customerVehiclesFiltered.forEach((vehicle) => {
       const key = getVehicleKeyFromId(vehicle.id);
       const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-      const model = String(vehicle.modelName || "").trim();
-      const label = model ? `${plate} - ${model}` : plate;
+      const descriptor = describeSavedVehicle(vehicle);
+      const label = descriptor ? `${plate} - ${descriptor}` : plate;
       map.set(key, label);
     });
     return map;
-  }, [customerVehiclesFiltered]);
+  }, [customerVehiclesFiltered, describeSavedVehicle]);
 
   useEffect(() => {
     setVehiclePlans((prev) => {
@@ -1015,7 +1088,7 @@ export default function ReceptionCreateAppointmentForm({
           });
         });
       } else {
-        const oppositeSharedIds = getOppositeInspectionServiceIds(sharedPlan.serviceIds, numericId);
+        const oppositeSharedIds = getConflictingInspectionServiceIds(sharedPlan.serviceIds, numericId);
         setSharedPlan((prev) => {
           const normalized = normalizePlan(prev);
           const nextServiceIds = toNumberList([
@@ -1036,7 +1109,7 @@ export default function ReceptionCreateAppointmentForm({
           selectedVehicleKeys.forEach((vehicleKey) => {
             const rawVehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
             const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
-            const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+            const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
             if (oppositeServiceIds.length === 0) return;
 
             const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
@@ -1090,7 +1163,7 @@ export default function ReceptionCreateAppointmentForm({
             };
           }
 
-          const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+          const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
           const nextExcludedSet = new Set(
             (rawVehiclePlan.excludedSharedServiceIds || []).filter((item) => Number(item) !== numericId).map(Number)
           );
@@ -1126,7 +1199,7 @@ export default function ReceptionCreateAppointmentForm({
           };
         }
 
-        const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+        const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
         const nextVehicleServiceIds = toNumberList([
           ...(rawVehiclePlan.serviceIds || []).filter(
             (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
@@ -1188,30 +1261,31 @@ export default function ReceptionCreateAppointmentForm({
       const selectedServices = serviceIds
         .map((id) => serviceById.get(id))
         .filter(Boolean);
-      const minutes = selectedServices.reduce((sum, item) => sum + Number(item.minutes || 0), 0);
+      const minutes = sumServiceMinutes(selectedServices);
       const price = selectedServices.reduce((sum, item) => sum + Number(item.price || 0), 0);
+      const bookingFlow = serviceIds.some((id) => flexibleTriggerServiceIdSet.has(Number(id)))
+        ? BOOKING_FLOW.FLEXIBLE
+        : BOOKING_FLOW.FIXED;
       const slot = slotMode === SLOT_MODE.PARALLEL ? parallelSlot : selectedSlotsByVehicle[vehicleKey];
       const startRaw = readField(slot, ["startTime", "StartTime"], "");
       const endRaw = readField(slot, ["endTime", "EndTime"], "");
-      const parsedStart = startRaw ? new Date(startRaw) : null;
+      const fallbackDate = slotMode === SLOT_MODE.INDIVIDUAL
+        ? (selectedDatesByVehicle[vehicleKey] || formData.appointmentDate || "")
+        : (formData.appointmentDate || "");
+      const schedule = buildFixedFlowSchedule(startRaw, minutes, fallbackDate);
+      const parsedStart = schedule.startDate || (startRaw ? new Date(startRaw) : null);
       const parsedSlotEnd = endRaw ? new Date(endRaw) : null;
       const hasValidStart = Boolean(parsedStart) && !Number.isNaN(parsedStart.getTime());
-      const durationMinutes = Math.max(0, Number(minutes || 0));
-      const computedEnd = hasValidStart
-        ? new Date(parsedStart.getTime() + durationMinutes * 60 * 1000)
-        : null;
-      const hasInspectionService = serviceIds.some((id) =>
-        Boolean(inspectionExclusiveTypeByServiceId.get(Number(id)))
-      );
-      const inspectionEtaLabel = hasInspectionService
-        ? formatInspectionEta(startRaw, Math.max(Number(minutes || 0), 30))
-        : "";
+      const hasValidSlotEnd = Boolean(parsedSlotEnd) && !Number.isNaN(parsedSlotEnd.getTime());
+      const resolvedEnd = schedule.endDate || (hasValidSlotEnd ? parsedSlotEnd : null);
       const startTimeLabel = hasValidStart ? formatDateTimeWithFullDate(parsedStart) : "Chưa chọn";
-      const endTimeLabel = computedEnd
-        ? formatDateTimeWithFullDate(computedEnd)
-        : (endRaw ? formatDateTimeWithFullDate(endRaw) : "Chưa chọn");
-      const endAtMs = computedEnd && !Number.isNaN(computedEnd.getTime()) ? computedEnd.getTime() : null;
-      const slotEndAtMs = parsedSlotEnd && !Number.isNaN(parsedSlotEnd.getTime()) ? parsedSlotEnd.getTime() : null;
+      const endTimeLabel = resolvedEnd ? formatDateTimeWithFullDate(resolvedEnd) : "Chưa chọn";
+      const completionMs = Number.isFinite(schedule.completionMs)
+        ? schedule.completionMs
+        : (hasValidSlotEnd ? parsedSlotEnd.getTime() : null);
+      const flowWarningLabel = bookingFlow === BOOKING_FLOW.FLEXIBLE && Number.isFinite(completionMs)
+        ? `Thời gian hoàn thành dự kiến cho xe ${vehicleLabelByKey.get(vehicleKey) || vehicleKey} là ${formatCompletionWarningTime(new Date(completionMs))}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`
+        : "";
 
       return {
         vehicleKey,
@@ -1221,26 +1295,27 @@ export default function ReceptionCreateAppointmentForm({
         categoryNames: categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`),
         serviceIds,
         serviceNames: selectedServices.map((item) => item.name),
+        bookingFlow,
         startTimeLabel,
         endTimeLabel,
-        endAtMs,
-        slotEndAtMs,
-        hasInspectionService,
-        inspectionEtaLabel,
+        completionMs,
+        flowWarningLabel,
         totalMinutes: minutes,
         totalPrice: price
       };
     });
   }, [
-    plansByVehicleKey,
-    selectedVehicleKeys,
-    serviceById,
-    inspectionExclusiveTypeByServiceId,
-    vehicleLabelByKey,
-    categoryNameById,
-    slotMode,
+    formData.appointmentDate,
     parallelSlot,
-    selectedSlotsByVehicle
+    plansByVehicleKey,
+    selectedDatesByVehicle,
+    selectedSlotsByVehicle,
+    selectedVehicleKeys,
+    categoryNameById,
+    flexibleTriggerServiceIdSet,
+    serviceById,
+    slotMode,
+    vehicleLabelByKey
   ]);
 
   const missingSpecificServiceByVehicle = useMemo(
@@ -1268,7 +1343,7 @@ export default function ReceptionCreateAppointmentForm({
   const fleetCompletionDateTimeLabel = useMemo(() => {
     if (!Array.isArray(planSummaries) || planSummaries.length === 0) return "Chưa chọn";
     const endTimes = planSummaries
-      .map((item) => Number(item.slotEndAtMs))
+      .map((item) => Number(item.completionMs))
       .filter((value) => Number.isFinite(value) && value > 0);
     if (endTimes.length !== planSummaries.length) return "Chưa chọn";
     return formatDateTimeWithFullDate(new Date(Math.max(...endTimes)));
@@ -1282,6 +1357,27 @@ export default function ReceptionCreateAppointmentForm({
     });
     return map;
   }, [selectedVehicleKeys, plansByVehicleKey]);
+
+  const getVehicleFlow = useCallback((vehicleKey) => {
+    const serviceIds = serviceIdsByVehicleKey.get(vehicleKey) || [];
+    return serviceIds.some((id) => flexibleTriggerServiceIdSet.has(Number(id)))
+      ? BOOKING_FLOW.FLEXIBLE
+      : BOOKING_FLOW.FIXED;
+  }, [flexibleTriggerServiceIdSet, serviceIdsByVehicleKey]);
+
+  const resolveSlotFlow = useCallback((slot, fallbackFlow = BOOKING_FLOW.FIXED) => {
+    const rawFlow = String(readField(slot, ["bookingFlow", "BookingFlow"], fallbackFlow) || "")
+      .trim()
+      .toLowerCase();
+    if (rawFlow.includes("flex")) return BOOKING_FLOW.FLEXIBLE;
+    if (rawFlow.includes("fixed")) return BOOKING_FLOW.FIXED;
+    return fallbackFlow;
+  }, []);
+
+  const hasAnyFlexibleVehicle = useMemo(
+    () => selectedVehicleKeys.some((vehicleKey) => getVehicleFlow(vehicleKey) === BOOKING_FLOW.FLEXIBLE),
+    [getVehicleFlow, selectedVehicleKeys]
+  );
 
   const effectiveSelectedDate = useMemo(() => {
     if (slotMode === SLOT_MODE.INDIVIDUAL && activeSlotVehicleKey) {
@@ -1303,6 +1399,21 @@ export default function ReceptionCreateAppointmentForm({
         : selectedVehicleKeys.filter((vehicleKey) => Boolean(selectedSlotsByVehicle[vehicleKey])).length,
     [parallelSlot, selectedSlotsByVehicle, selectedVehicleKeys, slotMode]
   );
+
+  const effectiveSlotFlow = useMemo(() => {
+    if (slotMode === SLOT_MODE.INDIVIDUAL) {
+      const targetVehicleKey = activeSlotVehicleKey || selectedVehicleKeys[0] || "";
+      if (targetVehicleKey) return getVehicleFlow(targetVehicleKey);
+    }
+    return hasAnyFlexibleVehicle ? BOOKING_FLOW.FLEXIBLE : BOOKING_FLOW.FIXED;
+  }, [activeSlotVehicleKey, getVehicleFlow, hasAnyFlexibleVehicle, selectedVehicleKeys, slotMode]);
+
+  const slotSelectionGuide = useMemo(() => {
+    if (effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE) {
+      return "Chọn khung giờ check-in (tiếp nhận).";
+    }
+    return "Chọn khung giờ sửa chữa.";
+  }, [effectiveSlotFlow]);
 
   const availableSlots = useMemo(() => {
     const resolveSlotTimeMs = (rawValue) => {
@@ -1345,8 +1456,8 @@ export default function ReceptionCreateAppointmentForm({
 
   const slotsBySession = useMemo(() => buildSlotsBySession(availableSlots), [availableSlots]);
   const displayedSlots = useMemo(
-    () => buildDisplayedSlots({ slotsBySession, activeSession, bookingFlow: BOOKING_FLOW.FIXED, showOddSlots }),
-    [activeSession, showOddSlots, slotsBySession]
+    () => buildDisplayedSlots({ slotsBySession, activeSession, bookingFlow: effectiveSlotFlow, showOddSlots }),
+    [activeSession, effectiveSlotFlow, showOddSlots, slotsBySession]
   );
 
   const appointmentSummary = useMemo(() => {
@@ -1445,10 +1556,6 @@ export default function ReceptionCreateAppointmentForm({
     }
   }, [errorText]);
 
-  useEffect(() => {
-    setShowOddSlots((prev) => getAutoExpandOddStateForFixedFlow(SESSION_TABS, slotsBySession, prev));
-  }, [slotsBySession]);
-
   const releaseHoldTokenIfAny = useCallback(async (vehicleKey) => {
     const token = slotHoldTokens?.[vehicleKey];
     if (!token) return;
@@ -1494,7 +1601,7 @@ export default function ReceptionCreateAppointmentForm({
 
     try {
       let data = await getAvailableSlots(effectiveBranchId, effectiveSelectedDate, {
-        bookingFlow: BOOKING_FLOW.FIXED,
+        bookingFlow: effectiveSlotFlow,
         vehicleCount: slotMode === SLOT_MODE.PARALLEL ? selectedVehicleKeys.length : 1,
         isParallel: slotMode === SLOT_MODE.PARALLEL,
         requestedServiceIds
@@ -1513,7 +1620,7 @@ export default function ReceptionCreateAppointmentForm({
           .filter(Boolean)
           .join(",");
         data = await getAvailableSlots(effectiveBranchId, effectiveSelectedDate, {
-          bookingFlow: BOOKING_FLOW.FIXED,
+          bookingFlow: effectiveSlotFlow,
           vehicleCount: slotMode === SLOT_MODE.PARALLEL ? selectedVehicleKeys.length : 1,
           isParallel: slotMode === SLOT_MODE.PARALLEL,
           requestedServiceIds: fallbackRequestedServiceIds
@@ -1531,6 +1638,7 @@ export default function ReceptionCreateAppointmentForm({
     activeSlotVehicleKey,
     branchId,
     effectiveSelectedDate,
+    effectiveSlotFlow,
     selectedVehicleKeys,
     serviceIdsByVehicleKey,
     slotMode
@@ -1545,7 +1653,7 @@ export default function ReceptionCreateAppointmentForm({
   };
 
   const createHoldForVehicle = useCallback(
-    async (slot, vehicleKey) => {
+    async (slot, vehicleKey, vehicleFlow) => {
       const startTime = readField(slot, ["startTime", "StartTime"], "");
       const endTime = readField(slot, ["endTime", "EndTime"], "");
       const requestedServiceIds = (serviceIdsByVehicleKey.get(vehicleKey) || []).join(",");
@@ -1554,7 +1662,7 @@ export default function ReceptionCreateAppointmentForm({
         branchId: Number(branchId),
         startTime,
         endTime,
-        bookingFlow: BOOKING_FLOW.FIXED,
+        bookingFlow: vehicleFlow,
         requestedServiceIds,
         vehicleCount: 1
       });
@@ -1627,8 +1735,9 @@ export default function ReceptionCreateAppointmentForm({
           // Release previous hold then keep a new hold for each vehicle.
           // eslint-disable-next-line no-await-in-loop
           await releaseHoldTokenIfAny(vehicleKey);
+          const vehicleFlow = resolveSlotFlow(slot, getVehicleFlow(vehicleKey));
           // eslint-disable-next-line no-await-in-loop
-          await createHoldForVehicle(slot, vehicleKey);
+          await createHoldForVehicle(slot, vehicleKey, vehicleFlow);
         }
         setParallelSlot(slot);
         const selection = normalizeSlotSelection(slot);
@@ -1642,7 +1751,8 @@ export default function ReceptionCreateAppointmentForm({
 
       if (!activeSlotVehicleKey) return;
       await releaseHoldTokenIfAny(activeSlotVehicleKey);
-      await createHoldForVehicle(slot, activeSlotVehicleKey);
+      const vehicleFlow = resolveSlotFlow(slot, getVehicleFlow(activeSlotVehicleKey));
+      await createHoldForVehicle(slot, activeSlotVehicleKey, vehicleFlow);
       setSelectedSlotsByVehicle((prev) => ({ ...prev, [activeSlotVehicleKey]: slot }));
 
       const selection = normalizeSlotSelection(slot);
@@ -1661,12 +1771,16 @@ export default function ReceptionCreateAppointmentForm({
   const handleChange = (event) => {
     const { name, value } = event.target;
     setErrorText("");
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const nextValue =
+      name === "vehicleVin" || name === "guestVehicleVin"
+        ? formatVinInput(value)
+        : formatLicensePlateByFieldName(name, value);
+    setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 
   const handlePlateBlur = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: formatLicensePlate(value) }));
+    setFormData((prev) => ({ ...prev, [name]: formatLicensePlateByFieldName(name, value) }));
   };
 
   const toggleQuickOrder = () => {
@@ -1815,16 +1929,20 @@ export default function ReceptionCreateAppointmentForm({
       if (!String(formData.guestName || "").trim()) return "Vui lòng nhập tên khách vãng lai.";
       if (!isValidPhone(formData.guestPhone)) return "Số điện thoại khách vãng lai không hợp lệ.";
       if (!String(formData.guestVehiclePlate || "").trim()) return "Vui lòng nhập biển số xe.";
+      if (!isValidVietnameseLicensePlate(formData.guestVehiclePlate)) return "Biển số xe không đúng định dạng Việt Nam.";
       if (!formData.guestVehicleModelId) return "Vui lòng chọn dòng xe cho khách vãng lai.";
       if (!String(formData.guestVehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe vãng lai.";
+      if (!isValidVin(formData.guestVehicleVin)) return "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
     } else {
       if (!formData.customerId) return "Vui lòng chọn khách hàng.";
       if (!isValidPhone(formData.customerPhone)) return "Số điện thoại khách hàng không hợp lệ.";
 
       if (formData.isNewVehicle) {
         if (!String(formData.vehicleLicensePlate || "").trim()) return "Vui lòng nhập biển số xe mới.";
+        if (!isValidVietnameseLicensePlate(formData.vehicleLicensePlate)) return "Biển số xe mới không đúng định dạng Việt Nam.";
         if (!formData.vehicleModelId) return "Vui lòng chọn dòng xe mới.";
         if (!String(formData.vehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe mới.";
+        if (!isValidVin(formData.vehicleVin)) return "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
       } else if (toNumberList(formData.selectedVehicleIds).length === 0) {
         return "Vui lòng chọn ít nhất 1 xe của khách.";
       }
@@ -1899,11 +2017,15 @@ export default function ReceptionCreateAppointmentForm({
         const slot = slotMode === SLOT_MODE.PARALLEL ? parallelSlot : selectedSlotsByVehicle[vehicleKey];
         const selection = normalizeSlotSelection(slot);
         if (!selection.startTime || !selection.endTime) return null;
+        const vehicleFlow = resolveSlotFlow(slot, getVehicleFlow(vehicleKey));
         return {
           vehicleKey,
           vehicleId: getVehicleIdFromKey(vehicleKey),
           startTime: selection.startTime,
           endTime: selection.endTime,
+          bookingFlow: vehicleFlow,
+          checkInWindowStart: vehicleFlow === BOOKING_FLOW.FLEXIBLE ? selection.startTime : null,
+          checkInWindowEnd: vehicleFlow === BOOKING_FLOW.FLEXIBLE ? selection.endTime : null,
           slotHoldToken: slotHoldTokens?.[vehicleKey] || null
         };
       })
@@ -1953,6 +2075,7 @@ export default function ReceptionCreateAppointmentForm({
         vehicleId: plan.vehicleId,
         categoryIds: plan.categoryIds,
         serviceIds: plan.serviceIds,
+        bookingFlow: plan.bookingFlow,
         totalMinutes: plan.totalMinutes,
         totalPrice: plan.totalPrice
       })),
@@ -2167,6 +2290,9 @@ export default function ReceptionCreateAppointmentForm({
                         value={formData.vehicleLicensePlate}
                         onChange={handleChange}
                         onBlur={handlePlateBlur}
+                        pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                        title={VIETNAM_LICENSE_PLATE_TITLE}
+                        style={{ textTransform: "uppercase" }}
                         placeholder="VD: 30A-12345"
                       />
                     </div>
@@ -2219,7 +2345,15 @@ export default function ReceptionCreateAppointmentForm({
                       </div>
                       <div className="form-group">
                         <label>VIN *</label>
-                        <input name="vehicleVin" value={formData.vehicleVin} onChange={handleChange} />
+                        <input
+                          name="vehicleVin"
+                          value={formData.vehicleVin}
+                          onChange={handleChange}
+                          pattern={VIETNAM_VIN_PATTERN}
+                          title={VIETNAM_VIN_TITLE}
+                          maxLength={17}
+                          style={{ textTransform: "uppercase" }}
+                        />
                       </div>
                     </div>
                     <div className="reception-new-vehicle-actions">
@@ -2246,7 +2380,15 @@ export default function ReceptionCreateAppointmentForm({
                   </div>
                   <div className="form-group">
                     <label>Số điện thoại *</label>
-                    <input name="guestPhone" value={formData.guestPhone} onChange={handleChange} />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    name="guestPhone"
+                    value={formData.guestPhone}
+                    onChange={handleChange}
+                    pattern={VN_PHONE_PATTERN}
+                    title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                  />
                   </div>
                 </div>
                 <div className="form-group">
@@ -2256,6 +2398,9 @@ export default function ReceptionCreateAppointmentForm({
                     value={formData.guestVehiclePlate}
                     onChange={handleChange}
                     onBlur={handlePlateBlur}
+                    pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                    title={VIETNAM_LICENSE_PLATE_TITLE}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
                 <div className="reception-grid reception-grid-2">
@@ -2307,7 +2452,15 @@ export default function ReceptionCreateAppointmentForm({
                   </div>
                   <div className="form-group">
                     <label>VIN *</label>
-                    <input name="guestVehicleVin" value={formData.guestVehicleVin} onChange={handleChange} />
+                    <input
+                      name="guestVehicleVin"
+                      value={formData.guestVehicleVin}
+                      onChange={handleChange}
+                      pattern={VIETNAM_VIN_PATTERN}
+                      title={VIETNAM_VIN_TITLE}
+                      maxLength={17}
+                      style={{ textTransform: "uppercase" }}
+                    />
                   </div>
                 </div>
               </div>
@@ -2364,7 +2517,7 @@ export default function ReceptionCreateAppointmentForm({
                         }
                       }}
                     >
-                      {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                      {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
                     </button>
                     <button
                       type="button"
@@ -2544,7 +2697,7 @@ export default function ReceptionCreateAppointmentForm({
                       className="reception-selected-tab-main"
                       onClick={() => setActiveSlotVehicleKey(vehicleKey)}
                     >
-                      {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                      {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
                     </button>
                   </div>
                 ))}
@@ -2586,6 +2739,9 @@ export default function ReceptionCreateAppointmentForm({
                 <div className="booking-empty">Đang tải khung giờ...</div>
               ) : (
                 <>
+                  <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
+                    {slotSelectionGuide}
+                  </p>
                   <div className="session-tabs">
                     {SESSION_TABS.map((tab) => (
                       <button
@@ -2653,7 +2809,7 @@ export default function ReceptionCreateAppointmentForm({
             </div>
 
             <div className="form-group">
-              <label>Ghi chú</label>
+              <label>Mô tả thêm theo từng xe</label>
               {selectedVehicleKeys.length > 0 ? (
                 <div className="reception-note-editor">
                   {selectedVehicleKeys.length > 1 ? (
@@ -2668,12 +2824,12 @@ export default function ReceptionCreateAppointmentForm({
                             className="reception-selected-tab-main"
                             onClick={() => setActiveNoteVehicleKey(vehicleKey)}
                           >
-                            {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                            {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
                           </button>
                           <button
                             type="button"
                             className="reception-selected-tab-remove"
-                            aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                              aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               const vehicleId = getVehicleIdFromKey(vehicleKey);
@@ -2706,13 +2862,13 @@ export default function ReceptionCreateAppointmentForm({
                   ) : null}
                 </div>
               ) : (
-                <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
+                <div className="reception-muted-note">Hãy chọn xe trước khi nhập mô tả.</div>
               )}
             </div>
 
             <div className="reception-summary-inline" role="status" aria-live="polite">
               <div className="reception-summary-inline-row">
-                <span>Thời gian hoàn tất toàn bộ xe</span>
+                <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
                 <strong>{fleetCompletionDateTimeLabel}</strong>
               </div>
               <div className="reception-summary-inline-row">
@@ -2757,9 +2913,9 @@ export default function ReceptionCreateAppointmentForm({
                       </div>
                     </div>
 
-                    {plan.hasInspectionService && plan.inspectionEtaLabel ? (
+                    {plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && plan.flowWarningLabel ? (
                       <p className="reception-plan-summary-warning">
-                        {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.inspectionEtaLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
+                        {`* ${plan.flowWarningLabel}`}
                       </p>
                     ) : null}
 
@@ -2788,5 +2944,3 @@ export default function ReceptionCreateAppointmentForm({
     </form>
   );
 }
-
-

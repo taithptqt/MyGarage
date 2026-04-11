@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<GroupSessionResponseDto>> Create([FromBody] BookAppointmentBatchRequestDto dto)
+        public async Task<ActionResult> Create([FromBody] BookAppointmentBatchRequestDto dto)
         {
             var actorUserId = this.GetCurrentUserId();
             if (!actorUserId.HasValue)
@@ -44,7 +45,7 @@ namespace MyGarage.Controllers
             try
             {
                 var result = await _appointmentService.BookBatchForCustomerAsync(actorUserId.Value, customerId, dto);
-                return CreatedAtAction(nameof(GetMyGroupDetail), new { id = result.Id }, result);
+                return CreatedAtAction(nameof(GetMyGroupDetail), new { id = result.Id }, MapGroupResponse(result, forceCustomerShape: isCustomer));
             }
             catch (InvalidOperationException ex)
             {
@@ -53,7 +54,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("customers/current")]
-        public async Task<ActionResult<IEnumerable<GroupSessionResponseDto>>> GetMyGroups()
+        public async Task<ActionResult> GetMyGroups()
         {
             var customerId = this.GetCurrentUserId();
             if (!customerId.HasValue)
@@ -62,7 +63,7 @@ namespace MyGarage.Controllers
             }
 
             var groups = await _groupSessionService.GetByCustomerAsync(customerId.Value);
-            return Ok(groups);
+            return Ok(MapGroupsResponse(groups, forceCustomerShape: true));
         }
 
         [HttpPost("service-orders")]
@@ -92,7 +93,7 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet("customers/current/{id:long}")]
-        public async Task<ActionResult<GroupSessionResponseDto>> GetMyGroupDetail(long id)
+        public async Task<ActionResult> GetMyGroupDetail(long id)
         {
             var customerId = this.GetCurrentUserId();
             if (!customerId.HasValue)
@@ -106,18 +107,18 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            return Ok(group);
+            return Ok(MapGroupResponse(group, forceCustomerShape: true));
         }
 
         [HttpGet("branches/{branchId:long}")]
-        public async Task<ActionResult<IEnumerable<GroupSessionResponseDto>>> GetByBranch(long branchId)
+        public async Task<ActionResult> GetByBranch(long branchId)
         {
             var groups = await _groupSessionService.GetByBranchAsync(branchId);
-            return Ok(groups);
+            return Ok(MapGroupsResponse(groups));
         }
 
         [HttpGet("branches/{branchId:long}/{id:long}")]
-        public async Task<ActionResult<GroupSessionResponseDto>> GetByBranchDetail(long branchId, long id)
+        public async Task<ActionResult> GetByBranchDetail(long branchId, long id)
         {
             var group = await _groupSessionService.GetByBranchAndIdAsync(branchId, id);
             if (group == null)
@@ -125,7 +126,7 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            return Ok(group);
+            return Ok(MapGroupResponse(group));
         }
 
         [HttpPost("{id:long}/cancellations")]
@@ -158,6 +159,41 @@ namespace MyGarage.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private object MapGroupsResponse(IEnumerable<GroupSessionResponseDto> groups, bool forceCustomerShape = false)
+        {
+            var list = groups?.ToList() ?? new List<GroupSessionResponseDto>();
+            if (!ShouldHidePartsFollowUp(forceCustomerShape))
+            {
+                return list;
+            }
+
+            return list.Select(group => group.ToCustomerResponse()).ToList();
+        }
+
+        private object? MapGroupResponse(GroupSessionResponseDto? group, bool forceCustomerShape = false)
+        {
+            if (group == null)
+            {
+                return null;
+            }
+
+            return ShouldHidePartsFollowUp(forceCustomerShape)
+                ? group.ToCustomerResponse()
+                : group;
+        }
+
+        private bool ShouldHidePartsFollowUp(bool forceCustomerShape = false)
+        {
+            if (forceCustomerShape)
+            {
+                return true;
+            }
+
+            var claimRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            return string.Equals(claimRole, "Customer", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(claimRole, "CUSTOMER", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

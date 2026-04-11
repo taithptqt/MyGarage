@@ -80,6 +80,11 @@ namespace MyGarage.Services
                     createdAppointments.Add(created);
                 }
 
+                if (replaceAppointmentId > 0 && createdAppointments.Count == 1)
+                {
+                    await CopyAppointmentInsuranceAssetsAsync(replaceAppointmentId, createdAppointments[0].Id);
+                }
+
                 if (replaceAppointmentId > 0)
                 {
                     var canceled = await CancelAsync(replaceAppointmentId, ReceptionReplaceReason, actorUserId);
@@ -246,19 +251,31 @@ namespace MyGarage.Services
             }
 
             var start = plan.StartTime.Value;
-            var totalMinutes = plan.TotalMinutes.GetValueOrDefault();
-            if (totalMinutes <= 0 && plan.EndTime.HasValue && plan.EndTime.Value > start)
+            var requestedServiceIds = NormalizeRequestedServiceIds(plan.RequestedServiceIds);
+            var requestedPackageIds = NormalizeRequestedServiceIds(plan.RequestedPackageIds);
+            var flow = await ResolveFlowAsync(plan.BookingFlow, requestedServiceIds, requestedPackageIds);
+            var end = plan.EndTime;
+            if (!end.HasValue)
             {
-                totalMinutes = (int)Math.Ceiling((plan.EndTime.Value - start).TotalMinutes);
+                var totalMinutes = plan.TotalMinutes.GetValueOrDefault();
+                if (totalMinutes > 0)
+                {
+                    end = start.AddMinutes(totalMinutes);
+                }
             }
-            if (totalMinutes <= 0)
+            if (end.HasValue && end.Value < start)
             {
-                totalMinutes = 30;
+                throw new InvalidOperationException("Ngày giờ hẹn không hợp lệ.");
             }
-            totalMinutes = Math.Max(totalMinutes, 30);
+
+            var checkInWindowStart = plan.CheckInWindowStart ?? start;
+            var checkInWindowEnd = plan.CheckInWindowEnd ?? end ?? checkInWindowStart;
+            if (checkInWindowEnd < checkInWindowStart)
+            {
+                throw new InvalidOperationException("Khung giờ check-in không hợp lệ.");
+            }
 
             var customerNotes = NormalizeReceptionText(plan.CustomerNotes) ?? NormalizeReceptionText(dto.CustomerNotes);
-            var requestedServiceIds = NormalizeRequestedServiceIds(plan.RequestedServiceIds);
             var booking = new BookAppointmentRequestDto
             {
                 BranchId = dto.BranchId,
@@ -269,10 +286,26 @@ namespace MyGarage.Services
                 CustomerPhone = dto.IsQuickOrder
                     ? NormalizeReceptionPhone(dto.GuestPhone)
                     : NormalizeReceptionPhone(dto.CustomerPhone),
-                BookingFlow = "FIXED",
+                BookingFlow = flow == BookingFlowType.Flexible ? "FLEXIBLE" : "FIXED",
                 StartTime = start,
-                EndTime = start.AddMinutes(totalMinutes),
+                EndTime = end ?? start,
+                CheckInWindowStart = flow == BookingFlowType.Flexible ? checkInWindowStart : null,
+                CheckInWindowEnd = flow == BookingFlowType.Flexible ? checkInWindowEnd : null,
                 RequestedServiceIds = requestedServiceIds,
+                RequestedPackageIds = requestedPackageIds,
+                InsuranceCompanyId = (plan.InsuranceCompanyId ?? dto.InsuranceCompanyId) > 0
+                    ? (plan.InsuranceCompanyId ?? dto.InsuranceCompanyId)
+                    : null,
+                InsuranceDeductibleAmount = plan.InsuranceDeductibleAmount ?? dto.InsuranceDeductibleAmount,
+                InsuranceDeductibleOption = NormalizeReceptionText(plan.InsuranceDeductibleOption ?? dto.InsuranceDeductibleOption),
+                InsuranceClaimMode = NormalizeReceptionText(plan.InsuranceClaimMode ?? dto.InsuranceClaimMode),
+                InsuranceQuoteState = NormalizeReceptionText(plan.InsuranceQuoteState ?? dto.InsuranceQuoteState),
+                InsuranceCardImageUrls = plan.InsuranceCardImageUrls?.Count > 0
+                    ? new List<string>(plan.InsuranceCardImageUrls)
+                    : new List<string>(dto.InsuranceCardImageUrls ?? new List<string>()),
+                InsuranceDamageImageUrls = plan.InsuranceDamageImageUrls?.Count > 0
+                    ? new List<string>(plan.InsuranceDamageImageUrls)
+                    : new List<string>(dto.InsuranceDamageImageUrls ?? new List<string>()),
                 CustomerNotes = customerNotes,
                 SlotHoldToken = NormalizeReceptionText(plan.SlotHoldToken),
                 CreatedBy = actorStaffId
@@ -285,6 +318,7 @@ namespace MyGarage.Services
                 booking.LicensePlate = NormalizeReceptionPlate(plan.LicensePlate ?? dto.GuestVehiclePlate);
                 booking.Vin = NormalizeReceptionText(plan.Vin ?? dto.GuestVehicleVin);
                 booking.Color = NormalizeReceptionText(plan.Color ?? dto.GuestVehicleColor);
+                booking.ManufactureYear = dto.GuestVehicleYear;
             }
             else if (dto.IsNewVehicle)
             {
@@ -293,6 +327,7 @@ namespace MyGarage.Services
                 booking.LicensePlate = NormalizeReceptionPlate(plan.LicensePlate ?? dto.VehicleLicensePlate);
                 booking.Vin = NormalizeReceptionText(plan.Vin ?? dto.VehicleVin);
                 booking.Color = NormalizeReceptionText(plan.Color ?? dto.VehicleColor);
+                booking.ManufactureYear = dto.VehicleYear;
             }
             else
             {

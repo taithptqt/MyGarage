@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -314,7 +315,7 @@ public class VehicleAdminController : ControllerBase
             .ThenBy(x => x.staffName)
             .ToList();
 
-        var today = DateTime.UtcNow.Date;
+        var today = VietnamTime.Now.Date;
         var checkInByDay = Enumerable.Range(0, 14)
             .Select(offset => today.AddDays(-offset))
             .OrderBy(d => d)
@@ -372,7 +373,7 @@ public class VehicleAdminController : ControllerBase
     [HttpGet("~/api/admin/vehicles/alerts")]
     public async Task<IActionResult> GetAlerts([FromQuery] long? branchId)
     {
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var settings = await ReadSettingsAsync();
         var rows = await BuildVehicleRowsAsync(includeHidden: false, settings: settings, nowUtc: now);
         if (branchId.HasValue)
@@ -481,7 +482,7 @@ public class VehicleAdminController : ControllerBase
                 x.BayId,
                 x.AssignedAt,
                 x.ReleasedAt,
-                durationHours = Math.Round(Math.Max(0, ((x.ReleasedAt ?? DateTime.UtcNow) - x.AssignedAt).TotalHours), 2),
+                durationHours = Math.Round(Math.Max(0, ((x.ReleasedAt ?? VietnamTime.Now) - x.AssignedAt).TotalHours), 2),
                 x.ServiceStatus,
                 x.Note,
                 isActive = x.ReleasedAt == null
@@ -585,6 +586,10 @@ public class VehicleAdminController : ControllerBase
     {
         if (request == null) return BadRequest(new { message = "Payload is required." });
         if (request.ModelId <= 0) return BadRequest(new { message = "ModelId is required." });
+        if (!request.ManufactureYear.HasValue || request.ManufactureYear.Value <= 0)
+        {
+            return BadRequest(new { message = "Vui lòng nhập năm sản xuất." });
+        }
 
         var modelExists = await _context.VehicleModels.AsNoTracking().AnyAsync(m => m.Id == request.ModelId && m.IsDeleted != true);
         if (!modelExists) return BadRequest(new { message = "Vehicle model does not exist." });
@@ -604,7 +609,7 @@ public class VehicleAdminController : ControllerBase
             if (duplicatedVin) return BadRequest(new { message = "VIN already exists." });
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         var vehicle = new Vehicle
         {
@@ -698,11 +703,11 @@ public class VehicleAdminController : ControllerBase
         if (request.Odo.HasValue)
         {
             vehicle.Odo = request.Odo;
-            vehicle.OdoLastUpdatedAt = DateTime.UtcNow;
+            vehicle.OdoLastUpdatedAt = VietnamTime.Now;
         }
         if (request.ManufactureYear.HasValue) vehicle.ManufactureYear = request.ManufactureYear;
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         vehicle.UpdatedAt = now;
         vehicle.UpdatedBy = userId;
@@ -737,9 +742,9 @@ public class VehicleAdminController : ControllerBase
         var settings = await ReadSettingsAsync();
         var metadata = ResolveVehicleMetadata(settings, id);
         metadata.IsEditLocked = true;
-        metadata.UpdatedAt = DateTime.UtcNow;
+        metadata.UpdatedAt = VietnamTime.Now;
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         AppendVehicleAudit(settings, id, "LOCK_EDIT", "Lock edit vehicle", userId, ResolveCurrentUserDisplayName(), now);
         await WriteSettingsAsync(settings);
@@ -757,9 +762,9 @@ public class VehicleAdminController : ControllerBase
         var settings = await ReadSettingsAsync();
         var metadata = ResolveVehicleMetadata(settings, id);
         metadata.IsEditLocked = false;
-        metadata.UpdatedAt = DateTime.UtcNow;
+        metadata.UpdatedAt = VietnamTime.Now;
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         AppendVehicleAudit(settings, id, "UNLOCK_EDIT", "Unlock edit vehicle", userId, ResolveCurrentUserDisplayName(), now);
         await WriteSettingsAsync(settings);
@@ -774,7 +779,7 @@ public class VehicleAdminController : ControllerBase
         var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == id);
         if (vehicle == null) return NotFound(new { message = "Vehicle not found." });
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         vehicle.IsDeleted = true;
         vehicle.DeletedAt = now;
@@ -806,7 +811,7 @@ public class VehicleAdminController : ControllerBase
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveVehicleMetadata(settings, id);
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         var actorName = ResolveCurrentUserDisplayName();
 
@@ -830,7 +835,7 @@ public class VehicleAdminController : ControllerBase
             if (!customerExists) return BadRequest(new { message = "Customer does not exist." });
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         await SetCurrentOwnerAsync(id, request.CustomerId, request.Note, now, userId);
 
@@ -869,7 +874,7 @@ public class VehicleAdminController : ControllerBase
                 .FirstOrDefaultAsync();
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         var actorName = ResolveCurrentUserDisplayName();
 
@@ -915,7 +920,7 @@ public class VehicleAdminController : ControllerBase
         var assignResult = await AssignVehicleToBayAsync(vehicle, bay, baySettings, request.ServiceStatus, request.Note);
         if (!assignResult.Success) return BadRequest(new { message = assignResult.Message });
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var userId = ResolveCurrentUserId();
         var actorName = ResolveCurrentUserDisplayName();
         var settings = await ReadSettingsAsync();
@@ -959,7 +964,7 @@ public class VehicleAdminController : ControllerBase
             .Where(s => s.VehicleId == id && s.ReleasedAt == null)
             .ToList();
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
 
         foreach (var session in activeSessions)
         {
@@ -1028,7 +1033,7 @@ public class VehicleAdminController : ControllerBase
         if (!exists) return NotFound(new { message = "Vehicle not found." });
 
         var baySettings = await ReadBaySettingsAsync();
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         var activeSessions = baySettings.Sessions.Where(s => s.VehicleId == id && s.ReleasedAt == null).ToList();
 
         foreach (var session in activeSessions)
@@ -1113,7 +1118,7 @@ public class VehicleAdminController : ControllerBase
             return AssignBayResult.Fail("Bay is not compatible with this vehicle segment.");
         }
 
-        var now = DateTime.UtcNow;
+        var now = VietnamTime.Now;
         baySettings.Sessions.Add(new BaySessionSnapshot
         {
             SessionId = Guid.NewGuid().ToString("N"),
@@ -1141,7 +1146,7 @@ public class VehicleAdminController : ControllerBase
     {
         settings ??= await ReadSettingsAsync();
         baySettings ??= await ReadBaySettingsAsync();
-        var now = nowUtc ?? DateTime.UtcNow;
+        var now = nowUtc ?? VietnamTime.Now;
 
         var query = _context.Vehicles.AsNoTracking()
             .Include(v => v.Model)
@@ -1593,7 +1598,7 @@ public class VehicleAdminController : ControllerBase
     private async Task WriteSettingsAsync(VehicleAdminSettings settings)
     {
         settings.Normalize();
-        settings.UpdatedAt = DateTime.UtcNow;
+        settings.UpdatedAt = VietnamTime.Now;
 
         await using var stream = System.IO.File.Create(VehicleSettingsPath);
         await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
@@ -1743,11 +1748,14 @@ public class VehicleAdminController : ControllerBase
 
     public sealed class VehicleUpsertRequest
     {
+        [RegularExpression(ValidationPatterns.VietnamLicensePlate, ErrorMessage = ValidationMessages.VietnamLicensePlate)]
         public string? LicensePlate { get; set; }
+        [RegularExpression(ValidationPatterns.Vin17, ErrorMessage = ValidationMessages.Vin17)]
         public string? Vin { get; set; }
         public long ModelId { get; set; }
         public string? Color { get; set; }
         public int? Odo { get; set; }
+        [Range(1900, 2100, ErrorMessage = "NÃ„Æ’m sÃ¡ÂºÂ£n xuÃ¡ÂºÂ¥t khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡.")]
         public int? ManufactureYear { get; set; }
         public long? CustomerId { get; set; }
         public long? BranchId { get; set; }
@@ -1823,7 +1831,7 @@ public class VehicleAdminController : ControllerBase
                     BayOccupiedTooLongHours = 48,
                     MaxVehiclesPerStaff = 8
                 },
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = VietnamTime.Now
             };
         }
 

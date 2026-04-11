@@ -55,4 +55,17 @@ public class AzureBlobStorageService : ICloudStorageService
         await blobClient.UploadAsync(stream, options, cancellationToken);
         return blobClient.Uri.ToString();
     }
+
+    public async Task DeleteAsync(string blobPath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(blobPath))
+        {
+            return;
+        }
+
+        await _containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: cancellationToken);
+        var normalizedBlobPath = blobPath.Trim('/').Replace("\\", "/");
+        var blobClient = _containerClient.GetBlobClient(normalizedBlobPath);
+        await blobClient.DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    }
 }

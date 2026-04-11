@@ -14,6 +14,7 @@ namespace MyGarage.Interfaces
             long branchId,
             DateOnly date,
             string? requestedServiceIds = null,
+            string? requestedPackageIds = null,
             string? bookingFlow = null,
             int vehicleCount = 1,
             bool isParallel = true,
@@ -34,10 +35,13 @@ namespace MyGarage.Interfaces
         Task<DispatchDashboardResponseDto> GetDispatchDashboardAsync(long branchId, DateTime? at = null);
         Task<DispatchCycleResponseDto> RunDispatchCycleAsync(long branchId, DateTime? at = null);
         Task<OvernightLockResponseDto> LockOvernightSlotsAsync(long branchId, DateOnly? businessDate = null);
+        Task<int> ReleaseExpiredLockedSlotsAsync(DateTime? now = null);
         Task<NearestSlotSuggestionResponseDto> SuggestNearestSlotAsync(
             long branchId,
             DateTime requestedCheckInAt,
             string? requestedServiceIds = null,
+            string? requestedPackageIds = null,
+            string? bookingFlow = null,
             int vehicleCount = 1,
             bool isParallel = false,
             int searchDays = 3);

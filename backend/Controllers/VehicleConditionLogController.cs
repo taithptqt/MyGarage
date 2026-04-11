@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -135,7 +135,7 @@ namespace MyGarage.Controllers
         {
             if (itemDto == null)
             {
-                return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
+                return BadRequest(new { message = "D? li?u ki?m tra xe kh�ng h?p l?." });
             }
 
             var logType = NormalizeLogType(itemDto.LogType);
@@ -144,7 +144,7 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
                 if (!hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "Chỉ được tạo CHECK_OUT sau khi khách đã ký CHECK_IN." });
+                    return BadRequest(new { message = "Ch? du?c t?o CHECK_OUT sau khi kh�ch d� k� CHECK_IN." });
                 }
             }
             else if (logType == LogTypeCheckIn)
@@ -152,13 +152,13 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
                 if (hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "CHECK_IN đã được khách hàng ký xác nhận, không thể tạo mới." });
+                    return BadRequest(new { message = "CHECK_IN d� du?c kh�ch h�ng k� x�c nh?n, kh�ng th? t?o m?i." });
                 }
 
                 if (!string.IsNullOrWhiteSpace(itemDto.CustomerSignatureUrl) &&
                     !HasRequiredCornerImages(itemDto.DefectsAndImages))
                 {
-                    return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
+                    return BadRequest(new { message = "C?n ch?p d? 4 g�c xe (tru?c tr�i, tru?c ph?i, sau tr�i, sau ph?i) tru?c khi kh�ch k� CHECK_IN." });
                 }
             }
 
@@ -191,14 +191,14 @@ namespace MyGarage.Controllers
 
             if (itemDto == null)
             {
-                return BadRequest(new { message = "Dữ liệu kiểm tra xe không hợp lệ." });
+                return BadRequest(new { message = "D? li?u ki?m tra xe kh�ng h?p l?." });
             }
             var updateDto = itemDto;
 
             var existingType = NormalizeLogType(existingItem.LogType);
             if (existingType == LogTypeCheckIn && !string.IsNullOrWhiteSpace(existingItem.CustomerSignatureUrl))
             {
-                return BadRequest(new { message = "CHECK_IN đã được khách ký, không thể chỉnh sửa." });
+                return BadRequest(new { message = "CHECK_IN d� du?c kh�ch k�, kh�ng th? ch?nh s?a." });
             }
 
             var targetType = NormalizeLogType(updateDto.LogType);
@@ -212,7 +212,7 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(updateDto.ServiceOrderId);
                 if (!hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "Chỉ được cập nhật CHECK_OUT sau khi khách đã ký CHECK_IN." });
+                    return BadRequest(new { message = "Ch? du?c c?p nh?t CHECK_OUT sau khi kh�ch d� k� CHECK_IN." });
                 }
             }
 
@@ -228,7 +228,7 @@ namespace MyGarage.Controllers
                 !string.IsNullOrWhiteSpace(effectiveSignature) &&
                 !HasRequiredCornerImages(effectiveDefects))
             {
-                return BadRequest(new { message = "Cần chụp đủ 4 góc xe (trước trái, trước phải, sau trái, sau phải) trước khi khách ký CHECK_IN." });
+                return BadRequest(new { message = "C?n ch?p d? 4 g�c xe (tru?c tr�i, tru?c ph?i, sau tr�i, sau ph?i) tru?c khi kh�ch k� CHECK_IN." });
             }
 
             _mapper.Map(updateDto, existingItem);
@@ -262,14 +262,14 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Dữ liệu ảnh không hợp lệ." });
+                return BadRequest(new { message = "D? li?u ?nh kh�ng h?p l?." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) ||
                 (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
                  !file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
             {
-                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh hoặc video." });
+                return BadRequest(new { message = "Ch? h? tr? t?p ?nh ho?c video." });
             }
 
             try
@@ -279,7 +279,7 @@ namespace MyGarage.Controllers
             }
             catch
             {
-                return BadRequest(new { message = "Không thể tải tệp lên máy chủ." });
+                return BadRequest(new { message = "Kh�ng th? t?i t?p l�n m�y ch?." });
             }
         }
 
@@ -288,13 +288,13 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Dữ liệu chữ ký không hợp lệ." });
+                return BadRequest(new { message = "D? li?u ch? k� kh�ng h?p l?." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) ||
                 !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho chữ ký." });
+                return BadRequest(new { message = "Ch? h? tr? t?p ?nh cho ch? k�." });
             }
 
             try
@@ -304,7 +304,7 @@ namespace MyGarage.Controllers
             }
             catch
             {
-                return BadRequest(new { message = "Không thể tải chữ ký lên máy chủ." });
+                return BadRequest(new { message = "Kh�ng th? t?i ch? k� l�n m�y ch?." });
             }
         }
 
@@ -316,7 +316,7 @@ namespace MyGarage.Controllers
                 extension = file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? ".mp4" : ".png";
             }
 
-            var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
             await using var stream = file.OpenReadStream();
             return await _cloudStorageService.UploadAsync(
                 stream,
@@ -331,7 +331,7 @@ namespace MyGarage.Controllers
             var orderExists = await _vehicleConditionLogService.ServiceOrderExistsAsync(serviceOrderId);
             if (!orderExists)
             {
-                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
+                return NotFound(new { message = "Kh�ng t�m th?y l?nh s?a ch?a." });
             }
 
             var existing = await _vehicleConditionLogService.GetActiveRequestAsync(serviceOrderId, requestType);
@@ -344,8 +344,8 @@ namespace MyGarage.Controllers
             if (hasCompletedLog)
             {
                 var message = requestType == "CHECK_IN"
-                    ? "Xe đã được check-in."
-                    : "Xe đã được checkout.";
+                    ? "Xe d� du?c check-in."
+                    : "Xe d� du?c checkout.";
                 return BadRequest(new { message });
             }
 
@@ -358,7 +358,7 @@ namespace MyGarage.Controllers
             _ = serviceOrderId;
             _ = requestType;
             _ = technicianId;
-            return BadRequest(new { message = "Yêu cầu CHECK_IN/CHECK_OUT do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên." });
+            return BadRequest(new { message = "Y�u c?u CHECK_IN/CHECK_OUT do l? t�n x? l� tr?c ti?p, kh�ng ph�n c�ng cho k? thu?t vi�n." });
         }
 
         private static string NormalizeLogType(string? logType)
@@ -804,8 +804,8 @@ namespace MyGarage.Controllers
 
             return builder.ToString()
                 .Normalize(NormalizationForm.FormC)
-                .Replace('đ', 'd')
-                .Replace('Đ', 'd');
+                .Replace('d', 'd')
+                .Replace('�', 'd');
         }
     }
 }

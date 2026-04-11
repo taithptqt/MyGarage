@@ -1,13 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Interfaces;
@@ -19,6 +23,8 @@ namespace MyGarage.Controllers
     [ApiController]
     public class AppointmentsController : ControllerBase
     {
+        private const long MaxInsuranceAssetBytes = 10 * 1024 * 1024;
+
         public sealed record AppointmentStatusPatchRequestDto
         {
             public string? Status { get; init; }
@@ -33,15 +39,18 @@ namespace MyGarage.Controllers
 
         private readonly IAppointmentService _appointmentService;
         private readonly IAuditLogService _auditLogService;
+        private readonly ICloudStorageService _cloudStorageService;
         private readonly IGarageContext _context;
 
         public AppointmentsController(
             IAppointmentService appointmentService,
             IAuditLogService auditLogService,
+            ICloudStorageService cloudStorageService,
             IGarageContext context)
         {
             _appointmentService = appointmentService;
             _auditLogService = auditLogService;
+            _cloudStorageService = cloudStorageService;
             _context = context;
         }
 
@@ -50,11 +59,12 @@ namespace MyGarage.Controllers
             [FromQuery] long branchId,
             [FromQuery] DateOnly date,
             [FromQuery] string? requestedServiceIds = null,
+            [FromQuery] string? requestedPackageIds = null,
             [FromQuery] string? bookingFlow = null,
             [FromQuery] int vehicleCount = 1,
             [FromQuery] bool isParallel = true)
         {
-            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, bookingFlow, vehicleCount, isParallel);
+            var slots = await _appointmentService.GetAvailableSlotsAsync(branchId, date, requestedServiceIds, requestedPackageIds, bookingFlow, vehicleCount, isParallel);
             return Ok(slots);
         }
 
@@ -64,6 +74,8 @@ namespace MyGarage.Controllers
             long branchId,
             [FromQuery] DateTime checkInAt,
             [FromQuery] string? requestedServiceIds = null,
+            [FromQuery] string? requestedPackageIds = null,
+            [FromQuery] string? bookingFlow = null,
             [FromQuery] int vehicleCount = 1,
             [FromQuery] bool isParallel = false,
             [FromQuery] int searchDays = 3)
@@ -74,6 +86,8 @@ namespace MyGarage.Controllers
                     branchId,
                     checkInAt,
                     requestedServiceIds,
+                    requestedPackageIds,
+                    bookingFlow,
                     vehicleCount,
                     isParallel,
                     searchDays);
@@ -114,38 +128,38 @@ namespace MyGarage.Controllers
 
         [Authorize]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetAll([FromQuery] string? status = null)
+        public async Task<ActionResult> GetAll([FromQuery] string? status = null)
         {
             var appointments = await _appointmentService.GetAllDetailedAsync(status);
-            return Ok(appointments);
+            return Ok(MapAppointmentsResponse(appointments));
         }
 
         [Authorize]
         [HttpGet("customers/current")]
-        public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetMine()
+        public async Task<ActionResult> GetMine()
         {
             var customerId = this.GetCurrentUserId();
             if (customerId == null) return Unauthorized();
 
             var appointments = await _appointmentService.GetCustomerAppointmentsAsync(customerId.Value);
-            return Ok(appointments);
+            return Ok(MapAppointmentsResponse(appointments, forceCustomerShape: true));
         }
 
         [Authorize]
         [HttpGet("branches/{branchId:long}")]
-        public async Task<ActionResult<IEnumerable<AppointmentDetailResponseDto>>> GetByBranch(long branchId, [FromQuery] string? status = null)
+        public async Task<ActionResult> GetByBranch(long branchId, [FromQuery] string? status = null)
         {
             var appointments = await _appointmentService.GetBranchAppointmentsAsync(branchId, status);
-            return Ok(appointments);
+            return Ok(MapAppointmentsResponse(appointments));
         }
 
         [Authorize]
         [HttpGet("{id:long}")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> GetById(long id)
+        public async Task<ActionResult> GetById(long id)
         {
             var dto = await _appointmentService.GetDetailedAsync(id);
             if (dto == null) return NotFound();
-            return Ok(dto);
+            return Ok(MapAppointmentResponse(dto));
         }
 
         [Authorize]
@@ -218,18 +232,18 @@ namespace MyGarage.Controllers
             var capability = await _appointmentService.GetEditCapabilityAsync(id);
             if (capability == null)
             {
-                return NotFound(new { message = "Không tìm thấy lịch hẹn." });
+                return NotFound(new { message = "Không tìm th?y l?ch h?n." });
             }
 
             if (capability.CanEdit)
             {
-                return BadRequest(new { message = "Lịch hẹn hiện chưa bị khóa, không cần gửi yêu cầu sửa." });
+                return BadRequest(new { message = "L?ch h?n hi?n chua b? khóa, không c?n g?i yêu c?u s?a." });
             }
 
             var reason = (dto?.Reason ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(reason))
             {
-                return BadRequest(new { message = "Vui lòng nhập lý do yêu cầu sửa." });
+                return BadRequest(new { message = "Vui lòng nh?p lý do yêu c?u s?a." });
             }
 
             var actorUserId = this.GetCurrentUserId() ?? dto?.RequestedByUserId;
@@ -239,7 +253,7 @@ namespace MyGarage.Controllers
             }
 
             var appointment = await _appointmentService.GetByIdAsync(id);
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var requestedSection = NormalizeSection(dto?.Section, "APPOINTMENT");
             var payload = new EditRequestPayload
             {
@@ -265,7 +279,7 @@ namespace MyGarage.Controllers
 
             return Ok(new
             {
-                message = "Đã ghi nhận yêu cầu sửa lịch hẹn.",
+                message = "Ðã ghi nh?n yêu c?u s?a l?ch h?n.",
                 requestId = created.Id
             });
         }
@@ -277,7 +291,7 @@ namespace MyGarage.Controllers
             var decision = NormalizeToken(dto?.Decision);
             if (decision is not ("APPROVE" or "REJECT"))
             {
-                return BadRequest(new { message = "Decision phải là APPROVE hoặc REJECT." });
+                return BadRequest(new { message = "Decision ph?i là APPROVE ho?c REJECT." });
             }
 
             var actorUserId = this.GetCurrentUserId();
@@ -292,19 +306,19 @@ namespace MyGarage.Controllers
                 !string.Equals(requestLog.TableName, "APPOINTMENTS", StringComparison.OrdinalIgnoreCase) ||
                 requestLog.RecordId != id)
             {
-                return NotFound(new { message = "Không tìm thấy yêu cầu sửa cần xử lý." });
+                return NotFound(new { message = "Không tìm th?y yêu c?u s?a c?n x? lý." });
             }
 
             var payload = DeserializeEditRequestPayload(requestLog.NewValue);
             if (payload == null)
             {
-                return BadRequest(new { message = "Dữ liệu yêu cầu sửa không hợp lệ." });
+                return BadRequest(new { message = "D? li?u yêu c?u s?a không h?p l?." });
             }
 
             var currentStatus = NormalizeToken(payload.Status);
             if (!string.Equals(currentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Yêu cầu sửa này đã được xử lý trước đó." });
+                return BadRequest(new { message = "Yêu c?u s?a này dã du?c x? lý tru?c dó." });
             }
 
             var requestedSection = NormalizeSection(payload.Section, "APPOINTMENT");
@@ -317,10 +331,10 @@ namespace MyGarage.Controllers
             var note = string.IsNullOrWhiteSpace(dto?.Note) ? null : dto!.Note!.Trim();
             if (decision == "REJECT" && string.IsNullOrWhiteSpace(note))
             {
-                return BadRequest(new { message = "Vui lòng nhập lý do từ chối yêu cầu sửa." });
+                return BadRequest(new { message = "Vui lòng nh?p lý do t? ch?i yêu c?u s?a." });
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             payload.Section = requestedSection;
             payload.Status = decision == "APPROVE" ? "APPROVED" : "REJECTED";
             payload.DecisionNote = note;
@@ -364,14 +378,14 @@ namespace MyGarage.Controllers
                 decision = payload.Status,
                 overrideUntilUtc = payload.OverrideUntilUtc,
                 message = decision == "APPROVE"
-                    ? "Đã duyệt yêu cầu sửa lịch hẹn."
-                    : "Đã từ chối yêu cầu sửa lịch hẹn."
+                    ? "Ðã duy?t yêu c?u s?a l?ch h?n."
+                    : "Ðã t? ch?i yêu c?u s?a l?ch h?n."
             });
         }
 
         [Authorize]
         [HttpPost]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> Create([FromBody] BookAppointmentRequestDto dto)
+        public async Task<ActionResult> Create([FromBody] BookAppointmentRequestDto dto)
         {
             var authUserId = this.GetCurrentUserId();
             if (authUserId == null) return Unauthorized();
@@ -382,7 +396,7 @@ namespace MyGarage.Controllers
             {
                 var appointment = await _appointmentService.BookAsync(authUserId.Value, dto);
                 var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
-                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, detail);
+                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, MapAppointmentResponse(detail));
             }
             catch (InvalidOperationException ex)
             {
@@ -411,13 +425,63 @@ namespace MyGarage.Controllers
             }
         }
 
+        [Authorize]
+        [HttpPost("insurance-assets")]
+        public async Task<ActionResult<object>> UploadInsuranceAsset([FromForm] IFormFile file, [FromForm] string? assetType)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "Dữ liệu ảnh bảo hiểm không hợp lệ." });
+            }
+
+            if (file.Length > MaxInsuranceAssetBytes)
+            {
+                return BadRequest(new { message = "Ảnh bảo hiểm vượt quá dung lượng 10MB." });
+            }
+
+            if (string.IsNullOrWhiteSpace(file.ContentType) ||
+                !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho hồ sơ bảo hiểm." });
+            }
+
+            var normalizedAssetType = NormalizeInsuranceAssetType(assetType);
+            if (normalizedAssetType == null)
+            {
+                return BadRequest(new { message = "Loại ảnh bảo hiểm không hợp lệ." });
+            }
+
+            try
+            {
+                var uploaded = await SaveInsuranceAssetFileAsync(file, normalizedAssetType);
+                _context.AppointmentInsuranceUploads.Add(new AppointmentInsuranceUpload
+                {
+                    AssetType = normalizedAssetType,
+                    BlobPath = uploaded.BlobPath,
+                    FileUrl = uploaded.Url,
+                    Status = AppointmentInsuranceUploadStatuses.Staged
+                });
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    url = uploaded.Url,
+                    assetType = normalizedAssetType
+                });
+            }
+            catch
+            {
+                return BadRequest(new { message = "Không thể tải ảnh bảo hiểm lên máy chủ." });
+            }
+        }
+
         [AllowAnonymous]
         [HttpPost("public-bookings")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> CreateGuest([FromBody] BookAppointmentRequestDto dto)
+        public async Task<ActionResult> CreateGuest([FromBody] BookAppointmentRequestDto dto)
         {
             if (!dto.CustomerId.HasValue)
             {
-                return BadRequest(new { message = "Vui lòng cung cấp CustomerId cho luồng guest." });
+                return BadRequest(new { message = "Vui lòng cung c?p CustomerId cho lu?ng guest." });
             }
 
             try
@@ -425,7 +489,7 @@ namespace MyGarage.Controllers
                 dto.CreatedBy = null;
                 var appointment = await _appointmentService.BookAsync(dto.CustomerId.Value, dto);
                 var detail = await _appointmentService.GetDetailedAsync(appointment.Id);
-                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, detail);
+                return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, MapAppointmentResponse(detail, forceCustomerShape: true));
             }
             catch (InvalidOperationException ex)
             {
@@ -435,7 +499,7 @@ namespace MyGarage.Controllers
 
         [Authorize]
         [HttpPatch("{id:long}")]
-        public async Task<ActionResult<AppointmentDetailResponseDto>> UpdateStatus(long id, [FromBody] AppointmentStatusPatchRequestDto dto)
+        public async Task<ActionResult> UpdateStatus(long id, [FromBody] AppointmentStatusPatchRequestDto dto)
         {
             var requested = (dto?.Status ?? string.Empty).Trim().ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(requested))
@@ -466,7 +530,7 @@ namespace MyGarage.Controllers
                 }
 
                 var detail = await _appointmentService.GetDetailedAsync(id);
-                return Ok(detail);
+                return Ok(MapAppointmentResponse(detail));
             }
             catch (InvalidOperationException ex)
             {
@@ -529,6 +593,43 @@ namespace MyGarage.Controllers
             {
                 return null;
             }
+        }
+
+        private async Task<(string Url, string BlobPath)> SaveInsuranceAssetFileAsync(IFormFile file, string assetType)
+        {
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                extension = ".png";
+            }
+
+            var folderName = string.Equals(assetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase)
+                ? "appointments/insurance-cards"
+                : "appointments/insurance-damage";
+            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            var blobPath = $"{folderName.Trim('/')}/{fileName}";
+            await using var stream = file.OpenReadStream();
+            var url = await _cloudStorageService.UploadAsync(
+                stream,
+                folderName,
+                fileName,
+                file.ContentType,
+                HttpContext.RequestAborted);
+            return (url, blobPath);
+        }
+
+        private static string? NormalizeInsuranceAssetType(string? assetType)
+        {
+            var normalized = string.IsNullOrWhiteSpace(assetType)
+                ? string.Empty
+                : assetType.Trim().ToUpperInvariant();
+
+            return normalized switch
+            {
+                AppointmentInsuranceAssetTypes.Card => AppointmentInsuranceAssetTypes.Card,
+                AppointmentInsuranceAssetTypes.Damage => AppointmentInsuranceAssetTypes.Damage,
+                _ => null
+            };
         }
 
         private async Task<(string RoleCode, string RoleName)> ResolveRoleInfoAsync(long staffId)
@@ -600,8 +701,8 @@ namespace MyGarage.Controllers
             return builder
                 .ToString()
                 .Normalize(NormalizationForm.FormC)
-                .Replace('đ', 'd')
-                .Replace('Đ', 'D')
+                .Replace('d', 'd')
+                .Replace('Ð', 'D')
                 .ToUpperInvariant()
                 .Replace('-', '_')
                 .Replace(' ', '_');
@@ -626,6 +727,57 @@ namespace MyGarage.Controllers
                     .ToUpperInvariant()
                     .Replace("-", "_")
                     .Replace(" ", "_");
+        }
+
+        private object MapAppointmentsResponse(IEnumerable<AppointmentDetailResponseDto> appointments, bool forceCustomerShape = false)
+        {
+            var list = appointments?.ToList() ?? new List<AppointmentDetailResponseDto>();
+            if (!ShouldHidePartsFollowUp(forceCustomerShape))
+            {
+                return list;
+            }
+
+            return list.Select(item => item.ToCustomerResponse()).ToList();
+        }
+
+        private object? MapAppointmentResponse(AppointmentDetailResponseDto? appointment, bool forceCustomerShape = false)
+        {
+            if (appointment == null)
+            {
+                return null;
+            }
+
+            return ShouldHidePartsFollowUp(forceCustomerShape)
+                ? appointment.ToCustomerResponse()
+                : appointment;
+        }
+
+        private bool ShouldHidePartsFollowUp(bool forceCustomerShape = false)
+        {
+            if (forceCustomerShape)
+            {
+                return true;
+            }
+
+            var claimRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            if (IsCustomerRole(claimRole))
+            {
+                return true;
+            }
+
+            return IsCustomerRole(this.GetCurrentRoleCode()) || IsCustomerRole(this.GetCurrentRoleName());
+        }
+
+        private static bool IsCustomerRole(string? roleValue)
+        {
+            if (string.IsNullOrWhiteSpace(roleValue))
+            {
+                return false;
+            }
+
+            var normalized = NormalizeSearchToken(roleValue);
+            return normalized.Contains("CUSTOMER", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Contains("KHACH_HANG", StringComparison.OrdinalIgnoreCase);
         }
 
         private sealed class EditRequestPayload

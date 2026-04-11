@@ -1,15 +1,63 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
-import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { getNearestSlotSuggestion } from "@features/appointments/api/appointmentSlotsApi";
+import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import DateTimePicker from "@features/workshop/components/DateTimePicker";
+import WorkshopInsurancePanel from "@features/workshop/components/WorkshopInsurancePanel";
 import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
+import {
+  buildWorkshopBatchCreatePayload,
+  calculateRoundedOccupancyMinutes,
+} from "@features/workshop/utils/serviceOrderWorkflow";
+import {
+  buildInsuranceDraftBreakdown,
+  INSURANCE_ORDER_CATEGORY,
+  isInsuranceOrderActive,
+  isInsuranceSignalService,
+} from "@features/workshop/utils/insuranceOrderUi";
+import {
+  buildFlexibleCompletionWarningMessage,
+  buildFlexibleTriggerServiceIdSet,
+  buildSlotSelectionGuide,
+  formatCompletionWarningTime,
+  resolveBookingFlowByServicesAndDuration,
+  WORKING_DAY_MINUTES,
+} from "@features/appointments/utils/bookingFlowRules";
+import {
+  INSURANCE_ASSET_TYPE,
+  resolveInsuranceDeductibleAmount,
+  resolveInsuranceQuoteState,
+} from "@features/appointments/utils/bookingInsurance";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE, formatVinInput, isValidVin } from "@shared/utils/vinValidation";
+import {
+  buildInspectionTriadTypeByServiceId,
+  getInspectionTriadDisplayName,
+  getConflictingInspectionTriadServiceIds,
+  sumServiceMinutes,
+} from "@shared/utils/serviceDurationUtils";
+import { addMinutesWithinWorkingHours } from "@shared/utils/workingHoursSchedule";
+import { mergeBookableServicesAndPackages, splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
+import {
+  FLEET_SERVICE_PRICE_LABEL,
+  SERVICE_PRICE_DISCLAIMER,
+  SERVICE_PRICE_LABEL,
+} from "@shared/constants/servicePricing";
+import {
+  arePlanSelectionsEqual,
+  collectCompatibleCategoryIds,
+  filterBookableItemsForVehicleModels,
+  prunePlanByVehicleCompatibility,
+} from "@shared/utils/serviceEngineCompatibility";
 import "./Workshop.css";
 
 const SERVICE_MODE = {
@@ -26,8 +74,7 @@ const EMPTY_PLAN = {
 
 const VEHICLE_KEY_GUEST = "guest";
 const VEHICLE_KEY_NEW = "new-customer";
-const CHECK_IN_SETUP_MINUTES = 10;
-const EXECUTION_BUFFER_MINUTES = 15;
+const VN_PHONE_PATTERN = "^(0[0-9]{9}|\\+84[0-9]{9})$";
 
 const EMPTY_FORM_DATA = {
   customerId: "",
@@ -46,6 +93,14 @@ const EMPTY_FORM_DATA = {
   guestVehicleYear: "",
   serviceAdvisorId: "",
   orderCategory: "GENERAL_REPAIR",
+  insuranceEnabled: false,
+  insuranceCompanyId: "",
+  insuranceDeductibleAmount: null,
+  insuranceDeductibleOption: "",
+  insuranceClaimMode: "",
+  insuranceQuoteState: "",
+  insuranceCardImageUrls: [],
+  insuranceDamageImageUrls: [],
   oldPartsReturnOption: "DISPOSE_ALL",
   requiredDepositAmount: 0,
   checkInTime: "",
@@ -61,7 +116,7 @@ function toNumberList(value) {
     new Set(
       value
         .map(Number)
-        .filter((id) => Number.isFinite(id) && id > 0)
+        .filter((id) => Number.isFinite(id) && id !== 0)
     )
   );
 }
@@ -87,7 +142,7 @@ function normalizeSearchText(value) {
 }
 
 function validateVietnamesePhone(phone) {
-  return /^(0\d{9,10}|\+84\d{9,10})$/.test(normalizePhone(phone));
+  return /^(0\d{9}|\+84\d{9})$/.test(normalizePhone(phone));
 }
 
 function getVehicleKeyFromId(vehicleId) {
@@ -156,12 +211,16 @@ function buildMissingSpecificServiceMessage(missingByVehicle) {
 function normalizeService(service) {
   const id = Number(readField(service, ["id", "Id"], 0));
   const categoryId = Number(readField(service, ["categoryId", "CategoryId"], 0));
+  const rawName = String(readField(service, ["name", "Name"], "") || "").trim();
   return {
     id,
     categoryId,
-    name: String(readField(service, ["name", "Name"], "") || "").trim(),
+    code: String(readField(service, ["code", "Code"], "") || ""),
+    name: getInspectionTriadDisplayName(service, rawName),
+    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
     minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
     price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0)),
+    items: readField(service, ["items", "Items"], []),
   };
 }
 
@@ -180,7 +239,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `Nh�m ${service.categoryId}` });
     }
   });
 
@@ -226,19 +285,20 @@ function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelI
   return "Chưa rõ hãng - chưa rõ dòng xe";
 }
 
+function toVehicleTabLabel(vehicleLabel, fallback = "") {
+  const normalizedLabel = String(vehicleLabel || "").trim();
+  if (!normalizedLabel) {
+    const normalizedFallback = String(fallback || "").trim();
+    return normalizedFallback || "Kh\u00f4ng bi\u1ec3n s\u1ed1";
+  }
+
+  const [platePart] = normalizedLabel.split(" - ");
+  const plate = String(platePart || "").trim();
+  return plate || normalizedLabel;
+}
+
 function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
-}
-
-function normalizeNoteLines(lines) {
-  if (!Array.isArray(lines)) return [];
-  return lines.map((line) => String(line || "").trim()).filter(Boolean);
-}
-
-function buildCustomerNotes(lines) {
-  const normalized = normalizeNoteLines(lines);
-  const payload = normalized.length > 0 ? normalized : ["Không có ghi chú gì"];
-  return JSON.stringify({ symptoms: payload });
 }
 
 function parsePositiveId(value) {
@@ -278,18 +338,7 @@ function formatTimeWithDateInBrackets(value) {
   return `${time} (${date})`;
 }
 
-function formatCompletionWarningTime(value) {
-  if (!value) return "chưa xác định";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "chưa xác định";
 
-  const hour = String(parsed.getHours()).padStart(2, "0");
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const year = String(parsed.getFullYear());
-  return `${hour} giờ ${minute} phút ngày ${day}/${month}/${year}`;
-}
 
 function toMinuteEpoch(value) {
   if (!value) return null;
@@ -367,7 +416,7 @@ function buildCheckInTimeWindowMap(now, rangeMinutes = 30) {
 
 function hasPlanCompletionWarning(plan) {
   if (!plan) return false;
-  return Boolean(plan.hasInspectionService && Number(plan.executionMinutes || 0) > 0 && plan.endTimeIso);
+  return Boolean(plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && Number(plan.executionMinutes || 0) > 0 && plan.completionWarningText);
 }
 
 export default function CreateServiceOrderPage() {
@@ -387,6 +436,7 @@ export default function CreateServiceOrderPage() {
   const [staff, setStaff] = useState([]);
   const [orderCategories, setOrderCategories] = useState([]);
   const [services, setServices] = useState([]);
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
 
@@ -400,6 +450,7 @@ export default function CreateServiceOrderPage() {
     ...EMPTY_FORM_DATA,
     serviceAdvisorId: user?.id || "",
   }));
+  const [insuranceUploadState, setInsuranceUploadState] = useState({});
 
   const [serviceMode, setServiceMode] = useState(SERVICE_MODE.SHARED);
   const [sharedPlan, setSharedPlan] = useState({ ...EMPTY_PLAN });
@@ -496,7 +547,7 @@ export default function CreateServiceOrderPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, brandsRes, modelsRes] = await Promise.all([
+      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes] = await Promise.all([
         getAllCustomers(),
         getAllVehicles(),
         getAllCustomerVehicles(),
@@ -504,6 +555,8 @@ export default function CreateServiceOrderPage() {
         getAllRoles(),
         getAllServiceCategories(),
         getAllStandardServices(),
+        getAllPackages().catch(() => []),
+        insuranceCompanyApi.getAll().catch(() => []),
         getVehicleBrands(),
         getVehicleModels(),
       ]);
@@ -512,7 +565,8 @@ export default function CreateServiceOrderPage() {
       setVehicles(Array.isArray(vRes) ? vRes : []);
       setCustomerVehicles(Array.isArray(cvRes) ? cvRes : []);
       setOrderCategories(Array.isArray(catRes) ? catRes : []);
-      setServices(Array.isArray(srvRes) ? srvRes : []);
+      setServices(mergeBookableServicesAndPackages(Array.isArray(srvRes) ? srvRes : [], Array.isArray(packageRes) ? packageRes : []));
+      setInsuranceCompanies(Array.isArray(insuranceRes) ? insuranceRes : []);
       setBrands(Array.isArray(brandsRes) ? brandsRes : []);
       setModels(Array.isArray(modelsRes) ? modelsRes : []);
 
@@ -566,14 +620,34 @@ export default function CreateServiceOrderPage() {
       const name = String(readField(model, ["modelName", "ModelName", "name", "Name"], "") || "").trim();
       const brandId = Number(readField(model, ["brandId", "BrandId"], 0));
       const brandName = String(readField(model, ["brandName", "BrandName"], "") || "").trim();
+      const fuelType = String(readField(model, ["fuelType", "FuelType"], "") || "").trim();
       map.set(id, {
         name,
         brandId: Number.isFinite(brandId) && brandId > 0 ? brandId : 0,
         brandName,
+        fuelType,
       });
     });
     return map;
   }, [models]);
+
+  const vehicleModelIdByKey = useMemo(() => {
+    const map = new Map();
+    if (Number(formData.guestVehicleModelId || 0) > 0) {
+      map.set(VEHICLE_KEY_GUEST, Number(formData.guestVehicleModelId));
+    }
+    if (Number(formData.vehicleModelId || 0) > 0) {
+      map.set(VEHICLE_KEY_NEW, Number(formData.vehicleModelId));
+    }
+    customerVehiclesFiltered.forEach((vehicle) => {
+      const key = getVehicleKeyFromId(vehicle.id);
+      const modelId = Number(readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0));
+      if (Number.isFinite(modelId) && modelId > 0) {
+        map.set(key, modelId);
+      }
+    });
+    return map;
+  }, [customerVehiclesFiltered, formData.guestVehicleModelId, formData.vehicleModelId]);
 
   const describeSavedVehicle = useCallback(
     (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
@@ -622,8 +696,15 @@ export default function CreateServiceOrderPage() {
   }, [formData.isNewVehicle, formData.isQuickOrder, formData.selectedVehicleIds]);
 
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
-  const showServiceModeSwitch = selectedVehicleKeys.length > 0 && !formData.isQuickOrder;
+  const showServiceModeSwitch = hasMultipleSelectedVehicles && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
+  const selectedVehicleModelIds = useMemo(
+    () =>
+      selectedVehicleKeys
+        .map((vehicleKey) => Number(vehicleModelIdByKey.get(vehicleKey) || 0))
+        .filter((modelId) => Number.isFinite(modelId) && modelId > 0),
+    [selectedVehicleKeys, vehicleModelIdByKey]
+  );
 
   const vehicleLabelByKey = useMemo(() => {
     const map = new Map();
@@ -637,12 +718,12 @@ export default function CreateServiceOrderPage() {
     customerVehiclesFiltered.forEach((vehicle) => {
       const key = getVehicleKeyFromId(vehicle.id);
       const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-      const model = String(vehicle.modelName || "").trim();
-      map.set(key, model ? `${plate} - ${model}` : plate);
+      const descriptor = describeSavedVehicle(vehicle);
+      map.set(key, descriptor ? `${plate} - ${descriptor}` : plate);
     });
 
     return map;
-  }, [customerVehiclesFiltered, formData.guestVehiclePlate, formData.vehicleLicensePlate]);
+  }, [customerVehiclesFiltered, describeSavedVehicle, formData.guestVehiclePlate, formData.vehicleLicensePlate]);
 
   useEffect(() => {
     setVehiclePlans((prev) => {
@@ -702,7 +783,7 @@ export default function CreateServiceOrderPage() {
         .filter(
           (service) =>
             Number.isFinite(service.id) &&
-            service.id > 0 &&
+            service.id !== 0 &&
             Number.isFinite(service.categoryId) &&
             service.categoryId > 0
         ),
@@ -715,39 +796,32 @@ export default function CreateServiceOrderPage() {
     return map;
   }, [normalizedServices]);
 
+  const flexibleTriggerServiceIdSet = useMemo(
+    () => buildFlexibleTriggerServiceIdSet(normalizedServices),
+    [normalizedServices]
+  );
+
   const serviceCategoryMap = useMemo(() => {
     const map = new Map();
     normalizedServices.forEach((service) => map.set(Number(service.id), Number(service.categoryId)));
     return map;
   }, [normalizedServices]);
 
-  const inspectionExclusiveTypeByServiceId = useMemo(() => {
-    const map = new Map();
-    normalizedServices.forEach((service) => {
-      const normalizedName = normalizeSearchText(service.name);
-      if (normalizedName.includes("kiem tra nhanh")) {
-        map.set(Number(service.id), "quick");
-        return;
-      }
-      if (normalizedName.includes("kiem tra tong quat")) {
-        map.set(Number(service.id), "general");
-      }
-    });
-    return map;
-  }, [normalizedServices]);
+  const inspectionTriadTypeByServiceId = useMemo(
+    () => buildInspectionTriadTypeByServiceId(normalizedServices),
+    [normalizedServices]
+  );
 
-  const getOppositeInspectionServiceIds = useCallback(
-    (serviceIds, targetServiceId) => {
-      const targetType = inspectionExclusiveTypeByServiceId.get(Number(targetServiceId));
-      if (!targetType) return [];
-      const oppositeType = targetType === "quick" ? "general" : "quick";
-      return toNumberList(
-        (serviceIds || []).filter(
-          (serviceId) => inspectionExclusiveTypeByServiceId.get(Number(serviceId)) === oppositeType
+  const getConflictingInspectionServiceIds = useCallback(
+    (serviceIds, targetServiceId) =>
+      toNumberList(
+        getConflictingInspectionTriadServiceIds(
+          serviceIds,
+          targetServiceId,
+          inspectionTriadTypeByServiceId
         )
-      );
-    },
-    [inspectionExclusiveTypeByServiceId]
+      ),
+    [inspectionTriadTypeByServiceId]
   );
 
   const categoryOptions = useMemo(
@@ -765,6 +839,13 @@ export default function CreateServiceOrderPage() {
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return "shared";
     return activePlanVehicleKey || selectedVehicleKeys[0] || "";
   }, [effectiveServiceMode, activePlanVehicleKey, selectedVehicleKeys]);
+  const activePlanVehicleModelIds = useMemo(() => {
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+      return selectedVehicleModelIds;
+    }
+    const modelId = Number(vehicleModelIdByKey.get(activePlanKey || "") || 0);
+    return Number.isFinite(modelId) && modelId > 0 ? [modelId] : [];
+  }, [activePlanKey, effectiveServiceMode, selectedVehicleModelIds, vehicleModelIdByKey]);
 
   const resolveEffectivePlan = useCallback(
     (rawVehiclePlan, sharedSource = sharedPlan) => {
@@ -835,6 +916,48 @@ export default function CreateServiceOrderPage() {
   }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey, resolveEffectivePlan]);
 
   useEffect(() => {
+    setSharedPlan((prev) => {
+      const next = prunePlanByVehicleCompatibility(
+        normalizePlan(prev),
+        normalizedServices,
+        selectedVehicleModelIds,
+        modelInfoById,
+        serviceById
+      );
+      return arePlanSelectionsEqual(prev, next) ? prev : normalizePlan(next);
+    });
+
+    setVehiclePlans((prev) => {
+      let hasChanges = false;
+      const next = { ...prev };
+
+      selectedVehicleKeys.forEach((vehicleKey) => {
+        const modelId = Number(vehicleModelIdByKey.get(vehicleKey) || 0);
+        const nextPlan = prunePlanByVehicleCompatibility(
+          normalizePlan(prev[vehicleKey] || EMPTY_PLAN),
+          normalizedServices,
+          modelId > 0 ? [modelId] : [],
+          modelInfoById,
+          serviceById
+        );
+        if (!arePlanSelectionsEqual(prev[vehicleKey] || EMPTY_PLAN, nextPlan)) {
+          next[vehicleKey] = normalizePlan(nextPlan);
+          hasChanges = true;
+        }
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [
+    modelInfoById,
+    normalizedServices,
+    selectedVehicleKeys,
+    selectedVehicleModelIds,
+    serviceById,
+    vehicleModelIdByKey,
+  ]);
+
+  useEffect(() => {
     const selectedCategories = activePlan.categoryIds || [];
     if (selectedCategories.length === 0) {
       setActiveCategoryId("");
@@ -845,17 +968,44 @@ export default function CreateServiceOrderPage() {
     }
   }, [activeCategoryId, activePlan.categoryIds]);
 
+  const compatibleCategoryIds = useMemo(
+    () =>
+      collectCompatibleCategoryIds(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
+  const visibleCategoryOptions = useMemo(
+    () => categoryOptions.filter((category) => compatibleCategoryIds.has(Number(category.id))),
+    [categoryOptions, compatibleCategoryIds]
+  );
+
+  const compatibleServicesForActivePlan = useMemo(
+    () =>
+      filterBookableItemsForVehicleModels(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
     const selectedCategories = new Set(activePlan.categoryIds || []);
     if (selectedCategories.size === 0) return [];
 
-    return normalizedServices
+    return compatibleServicesForActivePlan
       .filter((service) => selectedCategories.has(Number(service.categoryId)))
       .filter((service) => (!activeCategoryId ? true : String(service.categoryId) === String(activeCategoryId)))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
-  }, [activePlan.categoryIds, activeCategoryId, normalizedServices, serviceSearch]);
+  }, [activePlan.categoryIds, activeCategoryId, compatibleServicesForActivePlan, serviceSearch]);
 
   const plansByVehicleKey = useMemo(() => {
     const map = new Map();
@@ -872,65 +1022,20 @@ export default function CreateServiceOrderPage() {
   const calculateEstimatedFinish = useCallback((startText, totalMinutes) => {
     if (!startText || !totalMinutes || totalMinutes <= 0) return { finishText: "", finishIso: "" };
 
-    const current = new Date(startText);
-    if (Number.isNaN(current.getTime())) return { finishText: "", finishIso: "" };
+    const finishDate = addMinutesWithinWorkingHours(startText, totalMinutes, {
+      openHour: 8,
+      closeHour: 20,
+    });
+    if (!finishDate) return { finishText: "", finishIso: "" };
 
-    const alignToWindow = (value) => {
-      const next = new Date(value);
-      while (next.getDay() === 0) {
-        next.setDate(next.getDate() + 1);
-        next.setHours(8, 0, 0, 0);
-      }
-
-      const openMinutes = 8 * 60;
-      const closeMinutes = 20 * 60;
-      const currentMinutes = next.getHours() * 60 + next.getMinutes();
-
-      if (currentMinutes < openMinutes) next.setHours(8, 0, 0, 0);
-      if (currentMinutes >= closeMinutes) {
-        next.setDate(next.getDate() + 1);
-        next.setHours(8, 0, 0, 0);
-        while (next.getDay() === 0) {
-          next.setDate(next.getDate() + 1);
-          next.setHours(8, 0, 0, 0);
-        }
-      }
-      return next;
-    };
-
-    let cursor = alignToWindow(current);
-    let remaining = Number(totalMinutes);
-
-    while (remaining > 0) {
-      cursor = alignToWindow(cursor);
-      const closeToday = new Date(cursor);
-      closeToday.setHours(20, 0, 0, 0);
-
-      const available = Math.max(0, Math.floor((closeToday.getTime() - cursor.getTime()) / 60000));
-      if (available <= 0) {
-        cursor.setDate(cursor.getDate() + 1);
-        cursor.setHours(8, 0, 0, 0);
-        continue;
-      }
-
-      const consume = Math.min(remaining, available);
-      cursor.setMinutes(cursor.getMinutes() + consume);
-      remaining -= consume;
-
-      if (remaining > 0) {
-        cursor.setDate(cursor.getDate() + 1);
-        cursor.setHours(8, 0, 0, 0);
-      }
-    }
-
-    const hh = String(cursor.getHours()).padStart(2, "0");
-    const mm = String(cursor.getMinutes()).padStart(2, "0");
-    const dd = String(cursor.getDate()).padStart(2, "0");
-    const mo = String(cursor.getMonth() + 1).padStart(2, "0");
-    const yy = cursor.getFullYear();
+    const hh = String(finishDate.getHours()).padStart(2, "0");
+    const mm = String(finishDate.getMinutes()).padStart(2, "0");
+    const dd = String(finishDate.getDate()).padStart(2, "0");
+    const mo = String(finishDate.getMonth() + 1).padStart(2, "0");
+    const yy = finishDate.getFullYear();
 
     return {
-      finishText: formatTimeWithDateInBrackets(cursor),
+      finishText: formatTimeWithDateInBrackets(finishDate),
       finishIso: `${yy}-${mo}-${dd}T${hh}:${mm}:00`,
     };
   }, []);
@@ -946,35 +1051,49 @@ export default function CreateServiceOrderPage() {
       const categoryIds = toNumberList(plan.categoryIds);
       const serviceIds = toNumberList(plan.serviceIds);
       const selectedServices = serviceIds.map((serviceId) => serviceById.get(Number(serviceId))).filter(Boolean);
-      const hasInspectionService = selectedServices.some((service) =>
-        normalizeSearchText(String(service?.name || "")).includes("kiem tra")
-      );
-      const serviceMinutes = selectedServices.reduce((sum, service) => sum + Number(service?.minutes || 0), 0);
-      const executionMinutes = serviceMinutes > 0
-        ? serviceMinutes + CHECK_IN_SETUP_MINUTES + EXECUTION_BUFFER_MINUTES
-        : 0;
+      const serviceMinutes = sumServiceMinutes(selectedServices);
+      const executionMinutes = calculateRoundedOccupancyMinutes(serviceMinutes);
+      const flowState = resolveBookingFlowByServicesAndDuration({
+        serviceIds,
+        flexibleTriggerServiceIdSet,
+        executionMinutes,
+      });
+      const { bookingFlow, isLongDurationFlow, isServiceDrivenFlexibleFlow } = flowState;
       const totalPrice = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
       const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `Nhóm ${id}`);
       const { finishText, finishIso } = calculateEstimatedFinish(calculationStartTime, executionMinutes);
+      const resolvedEndIso = finishIso || "";
+      const resolvedEndLabel = resolvedEndIso
+        ? formatTimeWithDateInBrackets(resolvedEndIso)
+        : (finishText || "Chưa chọn");
 
       return {
         vehicleKey,
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
+        selectedServices,
         serviceIds,
         serviceNames: selectedServices.map((service) => String(service?.name || "").trim()).filter(Boolean),
         categoryIds,
         categoryNames,
         startTimeLabel: calculationStartTime ? formatTimeWithDateInBrackets(calculationStartTime) : "Chưa chọn",
-        endTimeLabel: finishText || "Chưa chọn",
-        endTimeIso: finishIso || "",
-        completionWarningTimeLabel: formatCompletionWarningTime(finishIso),
-        hasInspectionService,
+        endTimeLabel: resolvedEndLabel,
+        endTimeIso: resolvedEndIso,
+        completionWarningTimeLabel: formatCompletionWarningTime(resolvedEndIso),
+        completionWarningText: bookingFlow === BOOKING_FLOW.FLEXIBLE
+          ? buildFlexibleCompletionWarningMessage({
+            vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
+            completionValue: resolvedEndIso,
+          })
+          : "",
+        bookingFlow,
+        isLongDurationFlow,
+        isServiceDrivenFlexibleFlow,
         serviceMinutes,
         executionMinutes,
         totalPrice,
       };
     });
-  }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
+  }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, flexibleTriggerServiceIdSet, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
 
   const missingSpecificServiceByVehicle = useMemo(
     () => getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById),
@@ -994,37 +1113,109 @@ export default function CreateServiceOrderPage() {
     return toLocalDateTimeValue(formData.checkInTime);
   }, [formData.checkInTime, hasCheckInInput]);
 
-  const totalServiceMinutes = useMemo(
-    () => planSummaries.reduce((sum, plan) => sum + Number(plan.serviceMinutes || 0), 0),
-    [planSummaries]
-  );
-  const totalExecutionMinutes = useMemo(
-    () => planSummaries.reduce((sum, plan) => sum + Number(plan.executionMinutes || 0), 0),
-    [planSummaries]
-  );
   const totalPrice = useMemo(
     () => planSummaries.reduce((sum, plan) => sum + Number(plan.totalPrice || 0), 0),
     [planSummaries]
+  );
+  const selectedServicesForInsurance = useMemo(
+    () => planSummaries.flatMap((plan) => (Array.isArray(plan.selectedServices) ? plan.selectedServices : [])),
+    [planSummaries]
+  );
+  const hasInsuranceSignalServiceSelected = useMemo(
+    () => selectedServicesForInsurance.some((service) => isInsuranceSignalService(service)),
+    [selectedServicesForInsurance]
+  );
+  const isInsuranceOrderEnabled = useMemo(
+    () =>
+      isInsuranceOrderActive({
+        insuranceEnabled: formData.insuranceEnabled,
+        orderCategory: formData.orderCategory,
+        insuranceCompanyId: formData.insuranceCompanyId,
+        services: selectedServicesForInsurance,
+      }),
+    [formData.insuranceCompanyId, formData.insuranceEnabled, formData.orderCategory, selectedServicesForInsurance]
+  );
+  const insuranceDraftBreakdown = useMemo(
+    () =>
+      buildInsuranceDraftBreakdown({
+        services: selectedServicesForInsurance,
+        enabled: isInsuranceOrderEnabled,
+      }),
+    [isInsuranceOrderEnabled, selectedServicesForInsurance]
   );
   const completionMinutes = useMemo(
     () => Math.max(...planSummaries.map((plan) => Number(plan.executionMinutes || 0)), 0),
     [planSummaries]
   );
 
+  useEffect(() => {
+    const nextOrderCategory = isInsuranceOrderEnabled ? INSURANCE_ORDER_CATEGORY : "GENERAL_REPAIR";
+    if (String(formData.orderCategory || "").trim().toUpperCase() === nextOrderCategory) return;
+    setFormData((prev) => ({ ...prev, orderCategory: nextOrderCategory }));
+  }, [formData.orderCategory, isInsuranceOrderEnabled]);
+
   const suggestedFinish = useMemo(
     () => calculateEstimatedFinish(calculationStartTime, completionMinutes),
     [calculateEstimatedFinish, calculationStartTime, completionMinutes]
   );
 
+  const hasAnyServiceDrivenFlexibleFlow = useMemo(
+    () => planSummaries.some((plan) => Boolean(plan.isServiceDrivenFlexibleFlow)),
+    [planSummaries]
+  );
+  const hasAnyLongDurationVehicle = useMemo(
+    () => planSummaries.some((plan) => Number(plan.executionMinutes || 0) > WORKING_DAY_MINUTES),
+    [planSummaries]
+  );
+
+  const effectiveSlotFlow = useMemo(
+    () => (hasAnyServiceDrivenFlexibleFlow || hasAnyLongDurationVehicle ? BOOKING_FLOW.FLEXIBLE : BOOKING_FLOW.FIXED),
+    [hasAnyLongDurationVehicle, hasAnyServiceDrivenFlexibleFlow]
+  );
+
+  const slotSelectionGuide = useMemo(
+    () =>
+      buildSlotSelectionGuide({
+        bookingFlow: effectiveSlotFlow,
+        isLongDurationFlow: hasAnyLongDurationVehicle,
+        isServiceDrivenFlexibleFlow: hasAnyServiceDrivenFlexibleFlow,
+        inProgress: true,
+      }),
+    [effectiveSlotFlow, hasAnyLongDurationVehicle, hasAnyServiceDrivenFlexibleFlow]
+  );
+
+  const suggestedFleetCompletionIso = useMemo(
+    () => suggestedFinish.finishIso || "",
+    [suggestedFinish.finishIso]
+  );
+
   const requestedServiceIdsForSlotSuggestion = useMemo(() => {
-    return Array.from(
-      new Set(
-        planSummaries
-          .flatMap((plan) => toNumberList(plan.serviceIds))
-          .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0)
-      )
-    ).join(",");
-  }, [planSummaries]);
+    const groups = selectedVehicleKeys.map((vehicleKey) => {
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      return splitBookingItemIds(toNumberList(plan.serviceIds)).serviceIds;
+    });
+
+    if (groups.length === 0) return "";
+    if (groups.length > 1) {
+      return groups.map((group) => group.join(",")).join("|");
+    }
+
+    return (groups[0] || []).join(",");
+  }, [plansByVehicleKey, selectedVehicleKeys]);
+
+  const requestedPackageIdsForSlotSuggestion = useMemo(() => {
+    const groups = selectedVehicleKeys.map((vehicleKey) => {
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      return splitBookingItemIds(toNumberList(plan.serviceIds)).packageIds;
+    });
+
+    if (groups.length === 0) return "";
+    if (groups.length > 1) {
+      return groups.map((group) => group.join(",")).join("|");
+    }
+
+    return (groups[0] || []).join(",");
+  }, [plansByVehicleKey, selectedVehicleKeys]);
 
   useEffect(() => {
     if (!effectiveBranchId || !slotSuggestionBaseTime) {
@@ -1046,6 +1237,8 @@ export default function CreateServiceOrderPage() {
           slotSuggestionBaseTime,
           {
             requestedServiceIds: requestedServiceIdsForSlotSuggestion || undefined,
+            requestedPackageIds: requestedPackageIdsForSlotSuggestion || undefined,
+            bookingFlow: effectiveSlotFlow,
             vehicleCount: Math.max(1, selectedVehicleKeys.length),
             isParallel: selectedVehicleKeys.length > 1,
             searchDays: 3,
@@ -1057,7 +1250,7 @@ export default function CreateServiceOrderPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setNearestSlotError(err?.message || "Khong the goi y khung gio gan nhat.");
+          setNearestSlotError(err?.message || "Không thể gợi ý khung giờ gần nhất.");
         }
       } finally {
         if (!cancelled) {
@@ -1072,6 +1265,8 @@ export default function CreateServiceOrderPage() {
     };
   }, [
     effectiveBranchId,
+    effectiveSlotFlow,
+    requestedPackageIdsForSlotSuggestion,
     requestedServiceIdsForSlotSuggestion,
     selectedVehicleKeys.length,
     slotSuggestionBaseTime,
@@ -1096,6 +1291,18 @@ export default function CreateServiceOrderPage() {
       const checkIn = data.checkInTime ? new Date(data.checkInTime) : null;
       const checkInWindowStart = new Date(now.getTime() - 30 * 60 * 1000);
       const checkInWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
+
+      if (isInsuranceOrderEnabled && !parsePositiveId(data.insuranceCompanyId)) {
+        errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm trước khi lưu lệnh.";
+      }
+
+      if (isInsuranceOrderEnabled && !String(data.insuranceDeductibleOption || "").trim()) {
+        errors.insuranceDeductibleOption = "Vui lòng chọn mức miễn thường hoặc tư vấn.";
+      }
+
+      if (isInsuranceOrderEnabled && !String(data.insuranceClaimMode || "").trim()) {
+        errors.insuranceClaimMode = "Vui lòng chọn hình thức xử lý bảo hiểm.";
+      }
 
       if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
       if (!data.orderCategory) errors.orderCategory = "Vui lòng chọn phân loại lệnh sửa chữa.";
@@ -1132,9 +1339,11 @@ export default function CreateServiceOrderPage() {
           errors.guestPhone = "Số điện thoại không đúng định dạng Việt Nam.";
         }
         if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lòng nhập biển số xe.";
+        else if (!isValidVietnameseLicensePlate(data.guestVehiclePlate)) errors.guestVehiclePlate = "Biển số xe không đúng định dạng Việt Nam.";
         if (!guestSelectedBrandId) errors.guestBrandId = "Vui lòng chọn hãng xe.";
         if (!data.guestVehicleModelId) errors.guestVehicleModelId = "Vui lòng chọn dòng xe.";
-        if (!String(data.guestVehicleVin || "").trim()) errors.guestVehicleVin = "Vui lòng nhập số VIN.";
+        if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lòng chọn năm sản xuất.";
+        if (String(data.guestVehicleVin || "").trim() && !isValidVin(data.guestVehicleVin)) errors.guestVehicleVin = "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
       } else {
         if (!data.customerId) errors.customerId = "Vui lòng chọn khách hàng.";
 
@@ -1144,9 +1353,11 @@ export default function CreateServiceOrderPage() {
           }
         } else {
           if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lòng nhập biển số xe mới.";
+          else if (!isValidVietnameseLicensePlate(data.vehicleLicensePlate)) errors.vehicleLicensePlate = "Biển số xe mới không đúng định dạng Việt Nam.";
           if (!selectedBrandId) errors.brandId = "Vui lòng chọn hãng xe.";
           if (!data.vehicleModelId) errors.vehicleModelId = "Vui lòng chọn dòng xe.";
-          if (!String(data.vehicleVin || "").trim()) errors.vehicleVin = "Vui lòng nhập số VIN.";
+          if (!data.vehicleYear) errors.vehicleYear = "Vui lòng chọn năm sản xuất.";
+          if (String(data.vehicleVin || "").trim() && !isValidVin(data.vehicleVin)) errors.vehicleVin = "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
         }
       }
 
@@ -1195,6 +1406,7 @@ export default function CreateServiceOrderPage() {
       categoryNameById,
       effectiveBranchId,
       guestSelectedBrandId,
+      isInsuranceOrderEnabled,
       plansByVehicleKey,
       selectedBrandId,
       selectedVehicleKeys,
@@ -1212,13 +1424,124 @@ export default function CreateServiceOrderPage() {
 
   const handleChange = useCallback((event) => {
     const { name, value, type, checked } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+    const inputValue = type === "checkbox" ? checked : value;
+    const nextValue =
+      name === "guestVehicleVin" || name === "vehicleVin"
+          ? formatVinInput(inputValue)
+        : formatLicensePlateByFieldName(name, inputValue);
+    setFormData((prev) => ({ ...prev, [name]: nextValue }));
     setError("");
   }, []);
 
   const handleFieldValueChange = useCallback((name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError("");
+  }, []);
+
+  const handleInsuranceToggle = useCallback((enabled) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceEnabled: Boolean(enabled),
+      insuranceCompanyId: enabled ? prev.insuranceCompanyId : "",
+      insuranceDeductibleAmount: enabled ? prev.insuranceDeductibleAmount : null,
+      insuranceDeductibleOption: enabled ? prev.insuranceDeductibleOption : "",
+      insuranceClaimMode: enabled ? prev.insuranceClaimMode : "",
+      insuranceQuoteState: enabled ? prev.insuranceQuoteState : "",
+      insuranceCardImageUrls: enabled ? prev.insuranceCardImageUrls : [],
+      insuranceDamageImageUrls: enabled ? prev.insuranceDamageImageUrls : [],
+    }));
+    if (!enabled) {
+      setInsuranceUploadState({});
+    }
+    setError("");
+  }, []);
+
+  const handleInsuranceDeductibleOptionChange = useCallback((value) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceDeductibleOption: value,
+      insuranceDeductibleAmount: resolveInsuranceDeductibleAmount(value),
+      insuranceQuoteState: resolveInsuranceQuoteState(value, prev.insuranceClaimMode),
+    }));
+    setError("");
+  }, []);
+
+  const handleInsuranceClaimModeChange = useCallback((value) => {
+    setFormData((prev) => ({
+      ...prev,
+      insuranceClaimMode: value,
+      insuranceQuoteState: resolveInsuranceQuoteState(prev.insuranceDeductibleOption, value),
+    }));
+    setError("");
+  }, []);
+
+  const handleInsuranceAssetUpload = useCallback(async (assetType, files) => {
+    if (!Array.isArray(files) || files.length === 0) return;
+
+    setInsuranceUploadState((prev) => ({
+      ...prev,
+      [assetType]: {
+        uploading: true,
+        successMessage: "",
+      },
+    }));
+
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const response = await serviceOrderApi.uploadInsuranceAsset(file, assetType);
+        const url = String(response?.url || response?.Url || "").trim();
+        if (url) {
+          uploadedUrls.push(url);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        const targetField =
+          assetType === INSURANCE_ASSET_TYPE.CARD ? "insuranceCardImageUrls" : "insuranceDamageImageUrls";
+        setFormData((prev) => ({
+          ...prev,
+          [targetField]: [...(Array.isArray(prev?.[targetField]) ? prev[targetField] : []), ...uploadedUrls],
+        }));
+      }
+
+      setInsuranceUploadState((prev) => ({
+        ...prev,
+        [assetType]: {
+          uploading: false,
+          successMessage: uploadedUrls.length > 0 ? "Đã tải ảnh bảo hiểm." : "",
+        },
+      }));
+      setError("");
+    } catch (uploadError) {
+      setInsuranceUploadState((prev) => ({
+        ...prev,
+        [assetType]: {
+          uploading: false,
+          successMessage: "",
+        },
+      }));
+      setError(uploadError?.response?.data?.message || uploadError?.message || "Không thể tải ảnh bảo hiểm lên máy chủ.");
+    }
+  }, []);
+
+  const handleInsuranceAssetRemove = useCallback((assetType, index) => {
+    if (index < 0) return;
+    const targetField =
+      assetType === INSURANCE_ASSET_TYPE.CARD ? "insuranceCardImageUrls" : "insuranceDamageImageUrls";
+    setFormData((prev) => ({
+      ...prev,
+      [targetField]: Array.isArray(prev?.[targetField])
+        ? prev[targetField].filter((_, currentIndex) => currentIndex !== index)
+        : [],
+    }));
+    setInsuranceUploadState((prev) => ({
+      ...prev,
+      [assetType]: {
+        uploading: false,
+        successMessage: "",
+      },
+    }));
   }, []);
 
   const suggestedAlternativeSlots = useMemo(() => {
@@ -1281,7 +1604,7 @@ export default function CreateServiceOrderPage() {
     const normalizedStartTime = toLocalDateTimeValue(slotStart);
     if (!normalizedStartTime) return;
     setSelectedSuggestedSlotStart(normalizedStartTime);
-    // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chế độ tự tính theo khung giờ.
+    // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chờ để tự tính theo khung giờ.
     setFormData((prev) => ({ ...prev, estimatedHandover: "" }));
   }, [missingSpecificServiceByVehicle.length, missingSpecificServiceMessage]);
 
@@ -1304,7 +1627,7 @@ export default function CreateServiceOrderPage() {
   const handlePlateBlur = useCallback((event) => {
     const { name, value } = event.target;
     if (name !== "guestVehiclePlate" && name !== "vehicleLicensePlate") return;
-    setFormData((prev) => ({ ...prev, [name]: formatLicensePlate(value) }));
+    setFormData((prev) => ({ ...prev, [name]: formatLicensePlateByFieldName(name, value) }));
   }, []);
 
   const selectCustomer = useCallback(
@@ -1556,7 +1879,7 @@ export default function CreateServiceOrderPage() {
             });
           });
         } else {
-          const oppositeSharedIds = getOppositeInspectionServiceIds(sharedPlan.serviceIds, numericId);
+          const oppositeSharedIds = getConflictingInspectionServiceIds(sharedPlan.serviceIds, numericId);
           setSharedPlan((prev) => {
             const normalized = normalizePlan(prev);
             const nextServiceIds = toNumberList([
@@ -1577,7 +1900,7 @@ export default function CreateServiceOrderPage() {
             selectedVehicleKeys.forEach((vehicleKey) => {
               const rawVehiclePlan = normalizePlan(prev[vehicleKey] || EMPTY_PLAN);
               const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
-              const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+              const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
               if (oppositeServiceIds.length === 0) return;
 
               const nextVehicleServiceIds = (rawVehiclePlan.serviceIds || []).filter(
@@ -1631,7 +1954,7 @@ export default function CreateServiceOrderPage() {
               };
             }
 
-            const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+            const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
             const nextExcludedSet = new Set(
               (rawVehiclePlan.excludedSharedServiceIds || [])
                 .filter((item) => Number(item) !== numericId)
@@ -1669,7 +1992,7 @@ export default function CreateServiceOrderPage() {
             };
           }
 
-          const oppositeServiceIds = getOppositeInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
+          const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
           const nextVehicleServiceIds = toNumberList([
             ...(rawVehiclePlan.serviceIds || []).filter(
               (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
@@ -1702,7 +2025,7 @@ export default function CreateServiceOrderPage() {
     [
       activePlanKey,
       effectiveServiceMode,
-      getOppositeInspectionServiceIds,
+      getConflictingInspectionServiceIds,
       resolveEffectivePlan,
       selectedVehicleKeys,
       serviceCategoryMap,
@@ -1738,92 +2061,20 @@ export default function CreateServiceOrderPage() {
 
       setSaving(true);
       setError("");
-      const shouldCreateGroupSession =
-        hasMultipleSelectedVehicles &&
-        !formData.isQuickOrder &&
-        !formData.isNewVehicle;
-
-      const basePayload = {
-        customerId: formData.customerId ? Number(formData.customerId) : null,
-        serviceAdvisorId: formData.serviceAdvisorId ? Number(formData.serviceAdvisorId) : null,
-        orderCategory: formData.orderCategory || null,
-        groupSessionId: null,
-        oldPartsReturnOption: formData.oldPartsReturnOption || "DISPOSE_ALL",
-        requiredDepositAmount: Number(formData.requiredDepositAmount || 0),
-        checkInTime: formData.checkInTime || toLocalDateTimeValue(new Date()),
-        estimatedHandover: formData.estimatedHandover || suggestedFinish.finishIso || null,
-        promisedHandoverTime: formData.promisedHandoverTime || null,
-        status: "NEW",
-        executeBranchId: effectiveBranchId || null,
-        originBranchId: effectiveBranchId || null,
-        guestName: formData.guestName || "",
-        guestPhone: formData.guestPhone || "",
-        guestVehiclePlate: formatLicensePlate(formData.guestVehiclePlate || ""),
-        guestVehicleModelId: formData.guestVehicleModelId ? Number(formData.guestVehicleModelId) : null,
-        guestVehicleColor: formData.guestVehicleColor || "",
-        guestVehicleVin: formData.guestVehicleVin || "",
-        guestVehicleYear: formData.guestVehicleYear ? Number(formData.guestVehicleYear) : null,
-        vehicleLicensePlate: formatLicensePlate(formData.vehicleLicensePlate || ""),
-        vehicleModelId: formData.vehicleModelId ? Number(formData.vehicleModelId) : null,
-        vehicleColor: formData.vehicleColor || "",
-        vehicleVin: formData.vehicleVin || "",
-        vehicleYear: formData.vehicleYear ? Number(formData.vehicleYear) : null,
-      };
-
-      const createTargets = selectedVehicleKeys.map((vehicleKey) => {
-        const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
-        const payload = {
-          ...basePayload,
-          serviceIds: toNumberList(plan.serviceIds),
-          customerNotes: buildCustomerNotes(vehicleNotesByKey[vehicleKey]),
-        };
-
-        if (vehicleKey === VEHICLE_KEY_GUEST) {
-          payload.customerId = null;
-          payload.vehicleId = null;
-          payload.isQuickOrder = true;
-          payload.isNewVehicle = false;
-          payload.vehicleLicensePlate = "";
-          payload.vehicleModelId = null;
-          payload.vehicleColor = "";
-          payload.vehicleVin = "";
-          payload.vehicleYear = null;
-        } else if (vehicleKey === VEHICLE_KEY_NEW) {
-          payload.vehicleId = null;
-          payload.isQuickOrder = false;
-          payload.isNewVehicle = true;
-          payload.guestVehiclePlate = "";
-          payload.guestVehicleModelId = null;
-          payload.guestVehicleColor = "";
-          payload.guestVehicleVin = "";
-          payload.guestVehicleYear = null;
-        } else {
-          payload.vehicleId = getVehicleIdFromKey(vehicleKey);
-          payload.isQuickOrder = false;
-          payload.isNewVehicle = false;
-          payload.guestVehiclePlate = "";
-          payload.guestVehicleModelId = null;
-          payload.guestVehicleColor = "";
-          payload.guestVehicleVin = "";
-          payload.guestVehicleYear = null;
-          payload.vehicleLicensePlate = "";
-          payload.vehicleModelId = null;
-          payload.vehicleColor = "";
-          payload.vehicleVin = "";
-          payload.vehicleYear = null;
-        }
-
-        return payload;
+      const batchPayload = buildWorkshopBatchCreatePayload({
+        formData,
+        suggestedFleetCompletionIso,
+        effectiveBranchId,
+        insuranceActive: isInsuranceOrderEnabled,
+        hasMultipleSelectedVehicles,
+        selectedVehicleKeys,
+        plansByVehicleKey,
+        vehicleNotesByKey,
       });
+      const createTargets = Array.isArray(batchPayload.items) ? batchPayload.items : [];
 
       try {
-        const batchResponse = await serviceOrderApi.createWorkshopBatch({
-          createGroupSession: shouldCreateGroupSession,
-          customerId: shouldCreateGroupSession ? Number(formData.customerId || 0) : null,
-          branchId: shouldCreateGroupSession ? Number(effectiveBranchId || 0) : null,
-          customerNote: null,
-          items: createTargets,
-        });
+        const batchResponse = await serviceOrderApi.createWorkshopBatch(batchPayload);
         const createdCount = Number(
           batchResponse?.totalCreated ??
           batchResponse?.TotalCreated ??
@@ -1846,11 +2097,11 @@ export default function CreateServiceOrderPage() {
       effectiveBranchId,
       formData,
       getApiErrorMessage,
-      navigate,
+      hasMultipleSelectedVehicles,
       plansByVehicleKey,
       saving,
       selectedVehicleKeys,
-      suggestedFinish.finishIso,
+      suggestedFleetCompletionIso,
       scrollToPageTop,
       validateForm,
       vehicleNotesByKey,
@@ -2041,7 +2292,7 @@ export default function CreateServiceOrderPage() {
                                                 <strong>{plate}</strong>
                                                 <small>{describeSavedVehicle(vehicle)}</small>
                                               </span>
-                                              <span className="reception-vehicle-popup-item-action">Thêm xe</span>
+                                                <span className="reception-vehicle-popup-item-action">Thêm xe</span>
                                             </button>
                                           );
                                         })
@@ -2078,6 +2329,9 @@ export default function CreateServiceOrderPage() {
                           value={formData.vehicleLicensePlate}
                           onChange={handleChange}
                           onBlur={handlePlateBlur}
+                          pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                          title={VIETNAM_LICENSE_PLATE_TITLE}
+                          style={{ textTransform: "uppercase" }}
                         />
                         {showError("vehicleLicensePlate") ? <div className="field-error">{fieldErrors.vehicleLicensePlate}</div> : null}
                       </div>
@@ -2124,13 +2378,14 @@ export default function CreateServiceOrderPage() {
                       </div>
                       <div className="reception-grid reception-grid-3">
                         <div className="form-group">
-                          <label>Màu sắc</label>
+                          <label>Màu sắc (tùy chọn)</label>
                           <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
                         </div>
                         <div className="form-group">
-                          <label>Năm sản xuất</label>
+                          <label>Năm sản xuất *</label>
                           <select
                             name="vehicleYear"
+                            className={showError("vehicleYear") ? "input-invalid" : ""}
                             value={formData.vehicleYear}
                             onChange={handleChange}
                           >
@@ -2141,18 +2396,23 @@ export default function CreateServiceOrderPage() {
                               </option>
                             ))}
                           </select>
+                          {showError("vehicleYear") ? <div className="field-error">{fieldErrors.vehicleYear}</div> : null}
                         </div>
                         <div className="form-group">
-                          <label>VIN *</label>
+                          <label>VIN (tùy chọn)</label>
                           <input
                             name="vehicleVin"
                             className={showError("vehicleVin") ? "input-invalid" : ""}
                             value={formData.vehicleVin}
                             onChange={handleChange}
+                            pattern={VIETNAM_VIN_PATTERN}
+                            title={VIETNAM_VIN_TITLE}
+                            maxLength={17}
+                            style={{ textTransform: "uppercase" }}
                           />
                           {showError("vehicleVin") ? <div className="field-error">{fieldErrors.vehicleVin}</div> : null}
                         </div>
-                      </div>
+                        </div>
                       <div className="reception-new-vehicle-actions">
                         <button
                           type="button"
@@ -2183,12 +2443,16 @@ export default function CreateServiceOrderPage() {
                     </div>
                     <div className="form-group">
                       <label>Số điện thoại *</label>
-                      <input
-                        name="guestPhone"
-                        className={showError("guestPhone") ? "input-invalid" : ""}
-                        value={formData.guestPhone}
-                        onChange={handleChange}
-                      />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    name="guestPhone"
+                    className={showError("guestPhone") ? "input-invalid" : ""}
+                    value={formData.guestPhone}
+                    onChange={handleChange}
+                    pattern={VN_PHONE_PATTERN}
+                    title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                  />
                       {showError("guestPhone") ? <div className="field-error">{fieldErrors.guestPhone}</div> : null}
                     </div>
                   </div>
@@ -2201,6 +2465,9 @@ export default function CreateServiceOrderPage() {
                       value={formData.guestVehiclePlate}
                       onChange={handleChange}
                       onBlur={handlePlateBlur}
+                      pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+                      title={VIETNAM_LICENSE_PLATE_TITLE}
+                      style={{ textTransform: "uppercase" }}
                     />
                     {showError("guestVehiclePlate") ? <div className="field-error">{fieldErrors.guestVehiclePlate}</div> : null}
                   </div>
@@ -2248,31 +2515,37 @@ export default function CreateServiceOrderPage() {
                   </div>
                     <div className="reception-grid reception-grid-3">
                       <div className="form-group">
-                        <label>Màu sắc</label>
+                        <label>Màu sắc (tùy chọn)</label>
                         <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
                       </div>
                       <div className="form-group">
-                        <label>Năm sản xuất</label>
+                        <label>Năm sản xuất *</label>
                         <select
                           name="guestVehicleYear"
+                          className={showError("guestVehicleYear") ? "input-invalid" : ""}
                           value={formData.guestVehicleYear}
                           onChange={handleChange}
                         >
                           <option value="">-- Chọn năm --</option>
                           {years.map((year) => (
-                          <option key={year} value={year}>
+                            <option key={year} value={year}>
                               {year}
                             </option>
                           ))}
                         </select>
+                        {showError("guestVehicleYear") ? <div className="field-error">{fieldErrors.guestVehicleYear}</div> : null}
                       </div>
                       <div className="form-group">
-                        <label>VIN *</label>
+                        <label>VIN (tùy chọn)</label>
                         <input
                           name="guestVehicleVin"
                           className={showError("guestVehicleVin") ? "input-invalid" : ""}
                           value={formData.guestVehicleVin}
                           onChange={handleChange}
+                          pattern={VIETNAM_VIN_PATTERN}
+                          title={VIETNAM_VIN_TITLE}
+                          maxLength={17}
+                          style={{ textTransform: "uppercase" }}
                         />
                         {showError("guestVehicleVin") ? <div className="field-error">{fieldErrors.guestVehicleVin}</div> : null}
                       </div>
@@ -2327,7 +2600,7 @@ export default function CreateServiceOrderPage() {
                           }
                         }}
                       >
-                        {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                        {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
                       </button>
                       <button
                         type="button"
@@ -2341,7 +2614,7 @@ export default function CreateServiceOrderPage() {
                           }
                         }}
                       >
-                        ×
+                        x
                       </button>
                     </div>
                   ))}
@@ -2363,7 +2636,7 @@ export default function CreateServiceOrderPage() {
                 </button>
                 {!isServicePickerCollapsed ? (
                   <div className="reception-category-grid">
-                    {categoryOptions.map((category) => {
+                    {visibleCategoryOptions.map((category) => {
                       const selected = activePlan.categoryIds.includes(Number(category.id));
                       return (
                         <button
@@ -2415,7 +2688,7 @@ export default function CreateServiceOrderPage() {
                               toggleCategory(categoryId);
                             }}
                           >
-                            ×
+                            x
                           </button>
                         </div>
                       ))}
@@ -2488,6 +2761,29 @@ export default function CreateServiceOrderPage() {
                 {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
               </div>
 
+              <WorkshopInsurancePanel
+                enabled={isInsuranceOrderEnabled}
+                locked={hasInsuranceSignalServiceSelected}
+                companies={insuranceCompanies}
+                selectedCompanyId={formData.insuranceCompanyId}
+                onToggle={handleInsuranceToggle}
+                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
+                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
+                insuranceDeductibleOption={formData.insuranceDeductibleOption}
+                insuranceClaimMode={formData.insuranceClaimMode}
+                insuranceQuoteState={formData.insuranceQuoteState}
+                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
+                onClaimModeChange={handleInsuranceClaimModeChange}
+                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
+                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
+                draftBreakdown={insuranceDraftBreakdown}
+                insuranceCardImageUrls={formData.insuranceCardImageUrls}
+                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
+                uploadingState={insuranceUploadState}
+                onUploadAsset={handleInsuranceAssetUpload}
+                onRemoveAsset={handleInsuranceAssetRemove}
+              />
+
               <div className="form-group">
                 <label>Xử lý phụ tùng cũ</label>
                 <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
@@ -2532,6 +2828,9 @@ export default function CreateServiceOrderPage() {
                   />
                   {hasCheckInInput && suggestedAlternativeSlots.length > 0 ? (
                     <div className="reception-slot-picker">
+                      <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
+                        {slotSelectionGuide}
+                      </p>
                       <div className="reception-muted-note" style={{ marginTop: 0 }}>
                         Chọn 1 trong 5 khung giờ khả dụng:
                       </div>
@@ -2589,7 +2888,7 @@ export default function CreateServiceOrderPage() {
                 <div className="form-group">
                   <label>Dự kiến hoàn thành</label>
                   <DateTimePicker
-                    value={formData.estimatedHandover || suggestedFinish.finishIso}
+                    value={formData.estimatedHandover || suggestedFleetCompletionIso}
                     onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
                   />
                   {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
@@ -2611,7 +2910,7 @@ export default function CreateServiceOrderPage() {
                               className="reception-selected-tab-main"
                               onClick={() => setActiveNoteVehicleKey(vehicleKey)}
                             >
-                              {vehicleLabelByKey.get(vehicleKey) || vehicleKey}
+                              {toVehicleTabLabel(vehicleLabelByKey.get(vehicleKey), vehicleKey)}
                             </button>
                             <button
                               type="button"
@@ -2625,7 +2924,7 @@ export default function CreateServiceOrderPage() {
                                 }
                               }}
                             >
-                              ×
+                              x
                             </button>
                           </div>
                         ))}
@@ -2654,13 +2953,26 @@ export default function CreateServiceOrderPage() {
 
               <div className="reception-summary-inline" role="status" aria-live="polite">
                 <div className="reception-summary-inline-row">
-                  <span>Thời gian hoàn tất toàn bộ xe</span>
-                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
-                </div>
-                <div className="reception-summary-inline-row">
-                  <span>Tổng giá ước tính</span>
+                  <span>{FLEET_SERVICE_PRICE_LABEL}</span>
                   <strong>{formatCurrency(totalPrice)}</strong>
                 </div>
+                <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
+                <div className="reception-summary-inline-row">
+                  <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
+                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFleetCompletionIso)}</strong>
+                </div>
+                {isInsuranceOrderEnabled ? (
+                  <>
+                    <div className="reception-summary-inline-row">
+                      <span>Bảo hiểm dự kiến trả</span>
+                      <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
+                    </div>
+                    <div className="reception-summary-inline-row">
+                      <span>Khách dự kiến trả</span>
+                      <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
+                    </div>
+                  </>
+                ) : null}
                 <div className="reception-summary-inline-row">
                   <span>Số xe</span>
                   <strong>
@@ -2677,7 +2989,7 @@ export default function CreateServiceOrderPage() {
                       <div className="reception-plan-summary-head">
                         <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
                         <span className="reception-plan-summary-badge">
-                          {`${plan.categoryIds.length} loại · ${plan.serviceIds.length} dịch vụ`}
+                          {`${plan.categoryIds.length} loại - ${plan.serviceIds.length} dịch vụ`}
                         </span>
                       </div>
 
@@ -2711,12 +3023,12 @@ export default function CreateServiceOrderPage() {
 
                       {hasPlanCompletionWarning(plan) ? (
                         <p className="reception-plan-summary-warning">
-                          {`Thời gian hoàn thành dự kiến cho xe ${plan.vehicleLabel} là ${plan.completionWarningTimeLabel}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`}
+                          {`* ${plan.completionWarningText}`}
                         </p>
                       ) : null}
 
                       <div className="reception-plan-summary-footer">
-                        <span>{`${plan.executionMinutes} phút`}</span>
+                        <span>{`${SERVICE_PRICE_LABEL} - ${plan.serviceMinutes} phút`}</span>
                         <strong>{formatCurrency(plan.totalPrice)}</strong>
                       </div>
                     </article>
@@ -2757,4 +3069,5 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
+
 

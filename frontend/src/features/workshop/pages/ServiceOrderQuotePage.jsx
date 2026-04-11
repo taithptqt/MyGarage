@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
+import InsuranceBillingOverview from "@features/workshop/components/InsuranceBillingOverview";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useServiceOrderDetailData } from "@features/workshop/hooks/useServiceOrderDetailData";
 import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
+import { summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
+import "./Workshop.css";
 
 function resolveBackConfig(pathname) {
   const normalizedPath = String(pathname || "").toLowerCase();
@@ -90,6 +94,7 @@ export default function ServiceOrderQuotePage() {
   const [handoverSnapshot, setHandoverSnapshot] = useState(null);
   const [loadingHandoverSnapshot, setLoadingHandoverSnapshot] = useState(false);
   const [handoverError, setHandoverError] = useState("");
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
 
   const [additionalRepairMinutes, setAdditionalRepairMinutes] = useState(30);
   const [quoteChannel, setQuoteChannel] = useState("APP");
@@ -134,6 +139,29 @@ export default function ServiceOrderQuotePage() {
     loadLatestHandoverSnapshot();
   }, [loadLatestHandoverSnapshot]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadInsuranceCompanies = async () => {
+      try {
+        const response = await insuranceCompanyApi.getAll();
+        if (active) {
+          setInsuranceCompanies(Array.isArray(response) ? response : []);
+        }
+      } catch {
+        if (active) {
+          setInsuranceCompanies([]);
+        }
+      }
+    };
+
+    void loadInsuranceCompanies();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const fallbackT1 = order?.estimatedHandover || order?.promisedHandoverTime || order?.checkInTime || null;
   const effectiveT1 = handoverSnapshot?.t1EstimatedHandover || fallbackT1;
   const draftT2 = useMemo(
@@ -142,6 +170,24 @@ export default function ServiceOrderQuotePage() {
   );
   const hasPendingCustomerDecision =
     String(handoverSnapshot?.approvalState || "").toUpperCase() === "PENDING";
+  const insuranceSummary = useMemo(
+    () => summarizeInsuranceOrderDetails(details),
+    [details]
+  );
+  const insuranceCompanyNames = useMemo(() => {
+    if (!insuranceSummary.hasInsurance) return [];
+
+    const companyNameById = new Map(
+      (Array.isArray(insuranceCompanies) ? insuranceCompanies : []).map((company) => [
+        Number(company?.id || company?.Id || 0),
+        String(company?.name || company?.Name || "").trim(),
+      ])
+    );
+
+    return insuranceSummary.companyIds
+      .map((companyId) => companyNameById.get(Number(companyId)) || `Công ty #${companyId}`)
+      .filter(Boolean);
+  }, [insuranceCompanies, insuranceSummary]);
 
   const canShowTechnicalApprovalSection = useMemo(() => {
     const normalizedPath = String(location.pathname || "").toLowerCase();
@@ -278,6 +324,13 @@ export default function ServiceOrderQuotePage() {
               <strong>{formatOrderDateTime(order?.estimatedHandover)}</strong>
             </article>
           </section>
+
+          <InsuranceBillingOverview
+            summary={insuranceSummary}
+            companyNames={insuranceCompanyNames}
+            title="Tách bill bảo hiểm"
+            note="Giá trị khách trả bên dưới đã tính theo payer của từng hạng mục, không cộng chồng lên tổng giá trị sửa chữa."
+          />
 
           <section className="reception-quote-timeline-card">
             <div className="reception-quote-timeline-row">

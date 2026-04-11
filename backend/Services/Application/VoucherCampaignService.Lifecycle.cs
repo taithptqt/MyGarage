@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +12,7 @@ namespace MyGarage.Services
 
         public async Task<int> SyncLifecycleStatusesAsync(DateTime? now = null)
         {
-            var current = now ?? DateTime.UtcNow;
+            var current = now ?? VietnamTime.Now;
             var campaigns = await _context.VoucherCampaigns
                 .Where(x => x.IsDeleted != true && (x.Status == null || x.Status != VoucherCampaignStatusArchived))
                 .ToListAsync();

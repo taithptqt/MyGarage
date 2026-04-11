@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 namespace MyGarage.DTOs.Responses
 {
     public class ServiceOrderResponseDto
@@ -18,7 +19,15 @@ namespace MyGarage.DTOs.Responses
         public string? OrderCategory { get; set; }
         public long? ServiceAdvisorId { get; set; }
         public long? ReceptionistId { get; set; }
+        public long? InsuranceCompanyId { get; set; }
+        public decimal? InsuranceDeductibleAmount { get; set; }
+        public string? InsuranceDeductibleOption { get; set; }
+        public string? InsuranceClaimMode { get; set; }
+        public string? InsuranceQuoteState { get; set; }
+        public List<string> InsuranceCardImageUrls { get; set; } = new();
+        public List<string> InsuranceDamageImageUrls { get; set; } = new();
         public string? CustomerNotes { get; set; }
+        public string? RequestedPackageIds { get; set; }
         public int? RevisionNumber { get; set; }
         public decimal? SubTotalAmount { get; set; }
         public decimal? TotalDiscount { get; set; }

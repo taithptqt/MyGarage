@@ -1,0 +1,346 @@
+﻿.booking-insurance-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(197, 149, 40, 0.28);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 251, 240, 0.98) 0%, rgba(250, 244, 226, 0.96) 100%);
+}
+
+.booking-insurance-header {
+  display: grid;
+  gap: 4px;
+}
+
+.booking-insurance-eyebrow {
+  margin: 0;
+  color: #946615;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.booking-insurance-title {
+  margin: 0;
+  color: #3d2c0f;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.booking-insurance-copy {
+  margin: 0;
+  color: #6f6045;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.booking-insurance-vehicle-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.booking-insurance-vehicle-tab {
+  border: 1px solid rgba(195, 150, 59, 0.3);
+  border-radius: 999px;
+  background: #fffdfa;
+  color: #5d4c2f;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.booking-insurance-vehicle-tab.active {
+  border-color: #c89d42;
+  background: #f2e3bd;
+  color: #7c5411;
+}
+
+.booking-insurance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.booking-insurance-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  align-self: start;
+}
+
+.booking-insurance-field label,
+.booking-insurance-choice-group > span {
+  color: #4e3c22;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.booking-insurance-company-dropdown {
+  width: 100%;
+}
+
+.booking-insurance-choice-group {
+  display: grid;
+  gap: 10px;
+}
+
+.booking-insurance-choice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.booking-insurance-choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(191, 165, 113, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.booking-insurance-choice input {
+  margin-top: 2px;
+}
+
+.booking-insurance-choice strong {
+  display: block;
+  color: #3b2e1a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.booking-insurance-choice small {
+  display: block;
+  margin-top: 4px;
+  color: #6d604a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.booking-insurance-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(195, 150, 59, 0.55);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.booking-insurance-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.booking-insurance-summary-row span {
+  color: #6f6045;
+  font-size: 13px;
+}
+
+.booking-insurance-summary-row strong {
+  color: #3d2c0f;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.booking-insurance-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.booking-insurance-upload-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(191, 165, 113, 0.34);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  align-content: start;
+  align-self: start;
+}
+
+.booking-insurance-upload-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.booking-insurance-upload-head strong {
+  display: block;
+  color: #3b2e1a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.booking-insurance-upload-head p {
+  margin: 3px 0 0;
+  color: #6d604a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.booking-insurance-upload-count {
+  min-width: 42px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(200, 157, 66, 0.12);
+  color: #7c5411;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.booking-insurance-upload-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(195, 150, 59, 0.36);
+  border-radius: 12px;
+  background: #fffdfa;
+  color: #6c4b14;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  align-self: start;
+  overflow: hidden;
+}
+
+.booking-insurance-upload-trigger.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.booking-insurance-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.booking-insurance-upload-trigger.disabled .booking-insurance-upload-input {
+  pointer-events: none;
+}
+
+.booking-insurance-upload-hint {
+  color: #7a6b53;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.booking-insurance-upload-feedback {
+  margin: 0;
+  color: #0f7660;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.booking-insurance-upload-empty {
+  margin: 0;
+  color: #8b7b61;
+  font-size: 13px;
+}
+
+.booking-insurance-upload-preview-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.booking-insurance-upload-preview-item {
+  display: grid;
+  gap: 8px;
+}
+
+.booking-insurance-upload-preview-link {
+  display: block;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(195, 150, 59, 0.25);
+  background: #fff;
+  aspect-ratio: 4 / 3;
+}
+
+.booking-insurance-upload-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.booking-insurance-upload-preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.booking-insurance-upload-preview-actions span {
+  color: #6d604a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.booking-insurance-upload-preview-actions button {
+  border: none;
+  background: transparent;
+  color: #b34331;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.booking-insurance-note {
+  margin: 0;
+  color: #7a4d17;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .booking-insurance-panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .booking-insurance-grid,
+  .booking-insurance-upload-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-insurance-summary-row,
+  .booking-insurance-upload-head,
+  .booking-insurance-upload-preview-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .booking-insurance-summary-row strong {
+    text-align: left;
+  }
+}

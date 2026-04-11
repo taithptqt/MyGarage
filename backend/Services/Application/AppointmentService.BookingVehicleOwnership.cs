@@ -31,9 +31,23 @@ namespace MyGarage.Services
             var existing = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == plate);
             if (existing != null)
             {
+                var changed = false;
                 if (existing.Vin == null && !string.IsNullOrWhiteSpace(dto.Vin))
                 {
                     existing.Vin = dto.Vin.Trim();
+                    changed = true;
+                }
+
+                if (!existing.ManufactureYear.HasValue && dto.ManufactureYear.HasValue && dto.ManufactureYear.Value > 0)
+                {
+                    existing.ManufactureYear = dto.ManufactureYear.Value;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    existing.UpdatedAt = _clock.UtcNow;
+                    existing.UpdatedBy = actorStaffId;
                     await _context.SaveChangesAsync();
                 }
 
@@ -46,6 +60,7 @@ namespace MyGarage.Services
                 Vin = dto.Vin,
                 ModelId = dto.VehicleModelId!.Value,
                 Color = dto.Color,
+                ManufactureYear = dto.ManufactureYear,
                 CreatedBy = actorStaffId,
                 CreatedAt = _clock.UtcNow
             };

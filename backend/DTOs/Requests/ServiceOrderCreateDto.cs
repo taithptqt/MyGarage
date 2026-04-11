@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 namespace MyGarage.DTOs.Requests
 {
     public class ServiceOrderCreateDto
@@ -7,6 +8,7 @@ namespace MyGarage.DTOs.Requests
         public long CustomerId { get; set; }
         public long VehicleId { get; set; }
         public string? GuestName { get; set; }
+        [RegularExpression(ValidationPatterns.VietnamPhone10, ErrorMessage = ValidationMessages.VietnamPhone10)]
         public string? GuestPhone { get; set; }
         public string? GuestVehicleInfo { get; set; }
         public long? AppointmentId { get; set; }

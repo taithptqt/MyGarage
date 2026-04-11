@@ -26,6 +26,7 @@ namespace MyGarage.Services
                     appointment.BranchId,
                     DateOnly.FromDateTime(appointment.StartTime),
                     appointment.RequestedServiceIds,
+                    appointment.RequestedPackageIds,
                     AppointmentBookingFlows.Fixed))
                 .Where(s => s.StartTime >= arriveTime && s.StartTime < appointment.StartTime)
                 .OrderByDescending(s => s.IsTopPick)
@@ -60,6 +61,7 @@ namespace MyGarage.Services
                     appointment.BranchId,
                     DateOnly.FromDateTime(appointment.StartTime),
                     appointment.RequestedServiceIds,
+                    appointment.RequestedPackageIds,
                     AppointmentBookingFlows.Fixed))
                 .Where(s => s.StartTime >= arriveTime)
                 .OrderByDescending(s => s.IsTopPick)

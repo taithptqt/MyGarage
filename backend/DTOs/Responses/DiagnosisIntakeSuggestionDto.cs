@@ -13,10 +13,10 @@ namespace MyGarage.DTOs.Responses
         public DateTime BaseFinishAt { get; set; }
         public DateTime PredictedFinishAt { get; set; }
         public DateTime T1EstimatedHandover { get; set; }
-        public string ScoredPackageCode { get; set; } = "MINI_10";
-        public string ScoredPackageName { get; set; } = "Mini Check (10p)";
-        public string FinalPackageCode { get; set; } = "MINI_10";
-        public string FinalPackageName { get; set; } = "Mini Check (10p)";
+        public string ScoredPackageCode { get; set; } = string.Empty;
+        public string ScoredPackageName { get; set; } = string.Empty;
+        public string FinalPackageCode { get; set; } = string.Empty;
+        public string FinalPackageName { get; set; } = string.Empty;
         public int PackageNominalMinutes { get; set; }
         public int PackageEffectiveMinutes { get; set; }
         public bool RequiresCustomerConsent { get; set; }

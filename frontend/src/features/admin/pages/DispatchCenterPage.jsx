@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   autoMarkNoShows,
   getAllBranches,
@@ -90,7 +90,15 @@ export default function DispatchCenterPage() {
 
   const sortedBays = useMemo(() => {
     const bays = dashboard?.bays || dashboard?.Bays || [];
-    return [...bays].sort((a, b) => String(a.bayCode || a.BayCode || "").localeCompare(String(b.bayCode || b.BayCode || "")));
+    return [...bays].sort((a, b) => {
+      const aOrder = Number(a?.sequenceOrder ?? a?.SequenceOrder ?? 0);
+      const bOrder = Number(b?.sequenceOrder ?? b?.SequenceOrder ?? 0);
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      return String(a.bayCode || a.BayCode || "").localeCompare(String(b.bayCode || b.BayCode || ""));
+    });
   }, [dashboard]);
 
   async function handleRunCycle() {
@@ -221,6 +229,7 @@ export default function DispatchCenterPage() {
           <table>
             <thead>
               <tr>
+                <th>STT</th>
                 <th>Khoang</th>
                 <th>Loại</th>
                 <th>Trạng thái</th>
@@ -231,13 +240,14 @@ export default function DispatchCenterPage() {
             <tbody>
               {sortedBays.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>Chưa có dữ liệu khoang.</td>
+                  <td colSpan={6}>Chưa có dữ liệu khoang.</td>
                 </tr>
               ) : (
                 sortedBays.map((bay) => {
                   const status = bay?.status || bay?.Status || "-";
                   return (
                     <tr key={bay?.bayId || bay?.BayId}>
+                      <td>{bay?.sequenceOrder ?? bay?.SequenceOrder ?? "-"}</td>
                       <td>{bay?.bayCode || bay?.BayCode || bay?.bayName || bay?.BayName || "-"}</td>
                       <td>{bay?.serviceArea || bay?.ServiceArea || "-"}</td>
                       <td><span className={`pill ${statusTone(status)}`}>{status}</span></td>
@@ -254,5 +264,6 @@ export default function DispatchCenterPage() {
     </div>
   );
 }
+
 
 

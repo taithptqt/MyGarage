@@ -5,9 +5,10 @@ import {
   getAllCustomerVehicles,
   getAllVehicles,
 } from "@features/admin/api/customerApi";
-import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
+import { getAllPackages, getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";
 import ReceptionCreateAppointmentForm from "@features/workshop/components/ReceptionCreateAppointmentForm";
 import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
+import { mergeBookableServicesAndPackages } from "@features/appointments/utils/bookingPackages";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import "./Workshop.css";
@@ -56,17 +57,18 @@ export default function ReceptionCreateAppointmentPage() {
     setLoading(true);
     setError("");
     try {
-      const [customerRes, vehicleRes, customerVehicleRes, serviceRes, serviceCategoryRes] = await Promise.all([
+      const [customerRes, vehicleRes, customerVehicleRes, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
         getAllCustomers(),
         getAllVehicles(),
         getAllCustomerVehicles(),
         getAllStandardServices(),
+        getAllPackages().catch(() => []),
         getAllServiceCategories(),
       ]);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setCustomerVehicles(Array.isArray(customerVehicleRes) ? customerVehicleRes : []);
-      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setServices(mergeBookableServicesAndPackages(Array.isArray(serviceRes) ? serviceRes : [], Array.isArray(packageRes) ? packageRes : []));
       setServiceCategories(Array.isArray(serviceCategoryRes) ? serviceCategoryRes : []);
     } catch (err) {
       setError(err?.message || TEXT.loadError);

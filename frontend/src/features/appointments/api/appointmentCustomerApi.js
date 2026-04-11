@@ -29,6 +29,21 @@ export async function saveReceptionBooking(payload) {
   });
 }
 
+export async function uploadAppointmentInsuranceAsset(file, assetType) {
+  const formData = new FormData();
+  formData.append("file", file, file?.name || "insurance-image.jpg");
+  formData.append("assetType", assetType);
+
+  return request({
+    url: APPOINTMENTS_ROUTES.insuranceAssets,
+    method: "POST",
+    data: formData,
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+}
+
 export async function cancelAppointment(id, reason) {
   return request({
     url: APPOINTMENTS_ROUTES.status(id),

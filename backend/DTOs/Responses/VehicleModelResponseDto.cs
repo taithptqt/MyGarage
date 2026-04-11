@@ -9,6 +9,7 @@ namespace MyGarage.DTOs.Responses
         public string? Segment { get; set; }
         public string? FuelType { get; set; }
         public string? CylinderCapacity { get; set; }
+        public int? VehicleClassId { get; set; }
         public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }

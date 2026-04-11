@@ -7,6 +7,7 @@ import {
 } from "@features/admin/api/customerApi";
 import {
   getAllServiceCategories,
+  getAllPackages,
   getAllStandardServices,
   getAppointmentDetail,
   getAppointmentEditCapabilities,
@@ -16,6 +17,7 @@ import {
 } from "@features/appointments/api/appointmentApi";
 import ReceptionCreateAppointmentForm from "@features/workshop/components/ReceptionCreateAppointmentForm";
 import { saveReceptionAppointment } from "@features/workshop/utils/receptionAppointmentBooking";
+import { mergeBookableServicesAndPackages, toPackageSelectableId } from "@features/appointments/utils/bookingPackages";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import "./Workshop.css";
@@ -191,6 +193,10 @@ function normalizeAppointmentItem(item) {
     return Number.isFinite(parsed) ? parsed : 0;
   };
   const text = (value) => (value === undefined || value === null ? "" : String(value));
+  const stringList = (value) =>
+    Array.isArray(value)
+      ? value.map((entry) => String(entry || "").trim()).filter(Boolean)
+      : [];
 
   return {
     ...source,
@@ -204,7 +210,15 @@ function normalizeAppointmentItem(item) {
     status: text(pick("status", "Status")),
     vehicleId: numeric(pick("vehicleId", "VehicleId")),
     requestedServiceIds: text(pick("requestedServiceIds", "RequestedServiceIds")),
+    requestedPackageIds: text(pick("requestedPackageIds", "RequestedPackageIds")),
     customerNotes: text(pick("customerNotes", "CustomerNotes")),
+    insuranceCompanyId: numeric(pick("insuranceCompanyId", "InsuranceCompanyId")),
+    insuranceDeductibleAmount: pick("insuranceDeductibleAmount", "InsuranceDeductibleAmount"),
+    insuranceDeductibleOption: text(pick("insuranceDeductibleOption", "InsuranceDeductibleOption")),
+    insuranceClaimMode: text(pick("insuranceClaimMode", "InsuranceClaimMode")),
+    insuranceQuoteState: text(pick("insuranceQuoteState", "InsuranceQuoteState")),
+    insuranceCardImageUrls: stringList(pick("insuranceCardImageUrls", "InsuranceCardImageUrls")),
+    insuranceDamageImageUrls: stringList(pick("insuranceDamageImageUrls", "InsuranceDamageImageUrls")),
   };
 }
 
@@ -223,15 +237,40 @@ function buildEditInitialValues(appointment) {
   if (!appointment) return null;
 
   const serviceIds = parseRequestedServiceIds(appointment.requestedServiceIds);
+  const packageSelectableIds = parseRequestedServiceIds(appointment.requestedPackageIds)
+    .map(toPackageSelectableId)
+    .filter((id) => id !== 0);
+  const selectedItemIds = [...serviceIds, ...packageSelectableIds];
   const vehicleId = Number(appointment.vehicleId || 0);
   const selectedVehicleIds = vehicleId > 0 ? [vehicleId] : [];
   const vehicleServicePlans = vehicleId > 0
     ? [{
       vehicleKey: `existing-${vehicleId}`,
       vehicleId,
-      serviceIds,
+      serviceIds: selectedItemIds,
     }]
     : [];
+  const vehicleInsurancePlans =
+    vehicleId > 0 && (
+      Number(appointment.insuranceCompanyId || 0) > 0 ||
+      String(appointment.insuranceDeductibleOption || "").trim() ||
+      String(appointment.insuranceClaimMode || "").trim() ||
+      String(appointment.insuranceQuoteState || "").trim() ||
+      (Array.isArray(appointment.insuranceCardImageUrls) && appointment.insuranceCardImageUrls.length > 0) ||
+      (Array.isArray(appointment.insuranceDamageImageUrls) && appointment.insuranceDamageImageUrls.length > 0)
+    )
+      ? [{
+        vehicleKey: `existing-${vehicleId}`,
+        vehicleId,
+        insuranceCompanyId: Number(appointment.insuranceCompanyId || 0) || "",
+        insuranceDeductibleAmount: appointment.insuranceDeductibleAmount ?? null,
+        insuranceDeductibleOption: appointment.insuranceDeductibleOption || "",
+        insuranceClaimMode: appointment.insuranceClaimMode || "",
+        insuranceQuoteState: appointment.insuranceQuoteState || "",
+        insuranceCardImageUrls: Array.isArray(appointment.insuranceCardImageUrls) ? appointment.insuranceCardImageUrls : [],
+        insuranceDamageImageUrls: Array.isArray(appointment.insuranceDamageImageUrls) ? appointment.insuranceDamageImageUrls : [],
+      }]
+      : [];
 
   return {
     customerId: Number(appointment.customerId || 0) || "",
@@ -241,8 +280,10 @@ function buildEditInitialValues(appointment) {
     startTime: appointment.startTime || "",
     endTime: appointment.endTime || "",
     requestedServiceIds: appointment.requestedServiceIds || "",
-    serviceIds,
+    requestedPackageIds: appointment.requestedPackageIds || "",
+    serviceIds: selectedItemIds,
     vehicleServicePlans,
+    vehicleInsurancePlans,
     customerNotes: appointment.customerNotes || "",
   };
 }
@@ -319,7 +360,7 @@ export default function ReceptionEditAppointmentPage() {
     setLoadingEditRequests(true);
     setError("");
     try {
-      const [detailRes, capabilityRes, requestRes, customerRes, vehicleRes, customerVehicleRes, serviceRes, serviceCategoryRes] = await Promise.all([
+      const [detailRes, capabilityRes, requestRes, customerRes, vehicleRes, customerVehicleRes, serviceRes, packageRes, serviceCategoryRes] = await Promise.all([
         getAppointmentDetail(appointmentId),
         getAppointmentEditCapabilities(appointmentId).catch(() => null),
         getAppointmentEditRequests(appointmentId).catch(() => []),
@@ -327,6 +368,7 @@ export default function ReceptionEditAppointmentPage() {
         getAllVehicles(),
         getAllCustomerVehicles(),
         getAllStandardServices(),
+        getAllPackages().catch(() => []),
         getAllServiceCategories(),
       ]);
 
@@ -341,7 +383,7 @@ export default function ReceptionEditAppointmentPage() {
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setCustomerVehicles(Array.isArray(customerVehicleRes) ? customerVehicleRes : []);
-      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setServices(mergeBookableServicesAndPackages(Array.isArray(serviceRes) ? serviceRes : [], Array.isArray(packageRes) ? packageRes : []));
       setServiceCategories(Array.isArray(serviceCategoryRes) ? serviceCategoryRes : []);
       setEditRequests(
         (Array.isArray(requestRes) ? requestRes : [])

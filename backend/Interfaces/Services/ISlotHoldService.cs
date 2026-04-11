@@ -6,7 +6,7 @@ namespace MyGarage.Interfaces
 {
     public interface ISlotHoldService
     {
-        SlotHoldRecord CreateHold(long branchId, DateTime startTime, DateTime endTime, string bookingFlow, string? requestedServiceIds, int vehicleCount);
+        SlotHoldRecord CreateHold(long branchId, DateTime startTime, DateTime endTime, string bookingFlow, string? requestedServiceIds, string? requestedPackageIds, int vehicleCount);
         bool ReleaseHold(string token);
         bool TryGetActiveHold(string token, out SlotHoldRecord? hold);
         bool ConsumeHold(string token);

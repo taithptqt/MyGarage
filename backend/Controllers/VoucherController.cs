@@ -1,4 +1,4 @@
-﻿// Mục đích: Cung cấp API CRUD và các thao tác vòng đời cho bản ghi voucher chính.
+// M?c d�ch: Cung c?p API CRUD v� c�c thao t�c v�ng d?i cho b?n ghi voucher ch�nh.
 using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
@@ -123,7 +123,7 @@ namespace MyGarage.Controllers
 
             existingItem.Status = status;
             existingItem.IsActive = isActive;
-            existingItem.UpdatedAt = DateTime.UtcNow;
+            existingItem.UpdatedAt = VietnamTime.Now;
 
             var updatedItem = await _voucherService.UpdateAsync(id, existingItem);
             if (updatedItem == null)
@@ -136,7 +136,7 @@ namespace MyGarage.Controllers
 
         private static string ResolveStatus(Voucher voucher)
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
 
             if (voucher.IsDeleted == true)
             {

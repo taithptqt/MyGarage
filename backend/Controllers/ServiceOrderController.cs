@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
@@ -21,6 +23,8 @@ namespace MyGarage.Controllers
     [ApiController]
     public class ServiceOrderController : ControllerBase
     {
+        private const long MaxInsuranceAssetBytes = 10 * 1024 * 1024;
+
         private static readonly HashSet<string> AllowedServiceOrderStatuses =
             new(Enum.GetNames<ServiceOrderLifecycleStatus>(), StringComparer.OrdinalIgnoreCase);
 
@@ -50,17 +54,20 @@ namespace MyGarage.Controllers
 
         private readonly IServiceOrderService _serviceOrderService;
         private readonly IAuditLogService _auditLogService;
+        private readonly ICloudStorageService _cloudStorageService;
         private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
         public ServiceOrderController(
             IServiceOrderService serviceOrderService,
             IAuditLogService auditLogService,
+            ICloudStorageService cloudStorageService,
             IGarageContext context,
             IMapper mapper)
         {
             _serviceOrderService = serviceOrderService;
             _auditLogService = auditLogService;
+            _cloudStorageService = cloudStorageService;
             _context = context;
             _mapper = mapper;
         }
@@ -69,7 +76,7 @@ namespace MyGarage.Controllers
         public async Task<ActionResult<IEnumerable<ServiceOrderResponseDto>>> GetAll()
         {
             var items = await _serviceOrderService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<ServiceOrderResponseDto>>(items);
+            var dtos = await MapServiceOrderResponsesAsync(items);
             return Ok(dtos);
         }
 
@@ -82,7 +89,7 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
 
-            var dto = _mapper.Map<ServiceOrderResponseDto>(item);
+            var dto = await MapServiceOrderResponseAsync(item);
             return Ok(dto);
         }
 
@@ -155,18 +162,18 @@ namespace MyGarage.Controllers
             var capability = await _serviceOrderService.GetEditCapabilityAsync(id);
             if (capability == null)
             {
-                return NotFound(new { message = "Không tìm thấy service order." });
+                return NotFound(new { message = "Không tìm th?y service order." });
             }
 
             if (capability.CanEditWorkshop)
             {
-                return BadRequest(new { message = "Service order hiện chưa bị khóa, không cần gửi yêu cầu sửa." });
+                return BadRequest(new { message = "Service order hi?n chua b? khóa, không c?n g?i yêu c?u s?a." });
             }
 
             var reason = (dto?.Reason ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(reason))
             {
-                return BadRequest(new { message = "Vui lòng nhập lý do yêu cầu sửa." });
+                return BadRequest(new { message = "Vui lòng nh?p lý do yêu c?u s?a." });
             }
 
             var actorUserId = this.GetCurrentUserId() ?? dto?.RequestedByUserId;
@@ -177,7 +184,7 @@ namespace MyGarage.Controllers
 
             var requestedSection = NormalizeSection(dto?.Section, "WORKSHOP");
             var order = await _serviceOrderService.GetByIdAsync(id);
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var payload = new EditRequestPayload
             {
                 Section = requestedSection,
@@ -202,7 +209,7 @@ namespace MyGarage.Controllers
 
             return Ok(new
             {
-                message = "Đã ghi nhận yêu cầu sửa service order.",
+                message = "Ðã ghi nh?n yêu c?u s?a service order.",
                 requestId = created.Id
             });
         }
@@ -214,7 +221,7 @@ namespace MyGarage.Controllers
             var decision = NormalizeToken(dto?.Decision);
             if (decision is not ("APPROVE" or "REJECT"))
             {
-                return BadRequest(new { message = "Decision phải là APPROVE hoặc REJECT." });
+                return BadRequest(new { message = "Decision ph?i là APPROVE ho?c REJECT." });
             }
 
             var actorUserId = this.GetCurrentUserId();
@@ -229,19 +236,19 @@ namespace MyGarage.Controllers
                 !string.Equals(requestLog.TableName, "SERVICEORDERS", StringComparison.OrdinalIgnoreCase) ||
                 requestLog.RecordId != id)
             {
-                return NotFound(new { message = "Không tìm thấy yêu cầu sửa cần xử lý." });
+                return NotFound(new { message = "Không tìm th?y yêu c?u s?a c?n x? lý." });
             }
 
             var payload = DeserializeEditRequestPayload(requestLog.NewValue);
             if (payload == null)
             {
-                return BadRequest(new { message = "Dữ liệu yêu cầu sửa không hợp lệ." });
+                return BadRequest(new { message = "D? li?u yêu c?u s?a không h?p l?." });
             }
 
             var currentStatus = NormalizeToken(payload.Status);
             if (!string.Equals(currentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Yêu cầu sửa này đã được xử lý trước đó." });
+                return BadRequest(new { message = "Yêu c?u s?a này dã du?c x? lý tru?c dó." });
             }
 
             var requestedSection = NormalizeSection(payload.Section, "WORKSHOP");
@@ -254,10 +261,10 @@ namespace MyGarage.Controllers
             var note = string.IsNullOrWhiteSpace(dto?.Note) ? null : dto!.Note!.Trim();
             if (decision == "REJECT" && string.IsNullOrWhiteSpace(note))
             {
-                return BadRequest(new { message = "Vui lòng nhập lý do từ chối yêu cầu sửa." });
+                return BadRequest(new { message = "Vui lòng nh?p lý do t? ch?i yêu c?u s?a." });
             }
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             payload.Section = requestedSection;
             payload.Status = decision == "APPROVE" ? "APPROVED" : "REJECTED";
             payload.DecisionNote = note;
@@ -301,8 +308,8 @@ namespace MyGarage.Controllers
                 decision = payload.Status,
                 overrideUntilUtc = payload.OverrideUntilUtc,
                 message = decision == "APPROVE"
-                    ? "Đã duyệt yêu cầu sửa service order."
-                    : "Đã từ chối yêu cầu sửa service order."
+                    ? "Ðã duy?t yêu c?u s?a service order."
+                    : "Ðã t? ch?i yêu c?u s?a service order."
             });
         }
 
@@ -317,7 +324,7 @@ namespace MyGarage.Controllers
 
             var entity = _mapper.Map<ServiceOrder>(itemDto);
             var createdItem = await _serviceOrderService.AddAsync(entity);
-            var responseDto = _mapper.Map<ServiceOrderResponseDto>(createdItem);
+            var responseDto = await MapServiceOrderResponseAsync(createdItem);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
@@ -328,7 +335,7 @@ namespace MyGarage.Controllers
             {
                 var actorUserId = this.GetCurrentUserId();
                 var result = await _serviceOrderService.AddWorkshopBatchAsync(actorUserId, dto);
-                var mappedOrders = _mapper.Map<List<ServiceOrderResponseDto>>(result.Orders);
+                var mappedOrders = await MapServiceOrderResponsesAsync(result.Orders);
                 var response = new ServiceOrderBatchCreateResponseDto
                 {
                     GroupSessionId = result.GroupSessionId,
@@ -356,7 +363,7 @@ namespace MyGarage.Controllers
                     return NotFound();
                 }
 
-                var responseDto = _mapper.Map<ServiceOrderResponseDto>(updatedItem);
+                var responseDto = await MapServiceOrderResponseAsync(updatedItem);
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
@@ -391,7 +398,7 @@ namespace MyGarage.Controllers
                     return NotFound();
                 }
 
-                var responseDto = _mapper.Map<ServiceOrderResponseDto>(updatedItem);
+                var responseDto = await MapServiceOrderResponseAsync(updatedItem);
                 return Ok(responseDto);
             }
             catch (InvalidOperationException ex)
@@ -425,6 +432,186 @@ namespace MyGarage.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [Authorize]
+        [HttpPost("insurance-assets")]
+        public async Task<ActionResult<object>> UploadInsuranceAsset([FromForm] IFormFile file, [FromForm] string? assetType)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "Dữ liệu ảnh bảo hiểm không hợp lệ." });
+            }
+
+            if (file.Length > MaxInsuranceAssetBytes)
+            {
+                return BadRequest(new { message = "Ảnh bảo hiểm vượt quá dung lượng 10MB." });
+            }
+
+            if (string.IsNullOrWhiteSpace(file.ContentType) ||
+                !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Chỉ hỗ trợ tệp ảnh cho hồ sơ bảo hiểm." });
+            }
+
+            var normalizedAssetType = NormalizeInsuranceAssetType(assetType);
+            if (normalizedAssetType == null)
+            {
+                return BadRequest(new { message = "Loại ảnh bảo hiểm không hợp lệ." });
+            }
+
+            try
+            {
+                var uploaded = await SaveInsuranceAssetFileAsync(file, normalizedAssetType);
+                _context.ServiceOrderInsuranceUploads.Add(new ServiceOrderInsuranceUpload
+                {
+                    AssetType = normalizedAssetType,
+                    BlobPath = uploaded.BlobPath,
+                    FileUrl = uploaded.Url,
+                    Status = ServiceOrderInsuranceUploadStatuses.Staged
+                });
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    url = uploaded.Url,
+                    assetType = normalizedAssetType
+                });
+            }
+            catch
+            {
+                return BadRequest(new { message = "Không thể tải ảnh bảo hiểm lên máy chủ." });
+            }
+        }
+
+        private async Task<List<ServiceOrderResponseDto>> MapServiceOrderResponsesAsync(IEnumerable<ServiceOrder> items)
+        {
+            var serviceOrders = (items ?? Enumerable.Empty<ServiceOrder>()).ToList();
+            if (serviceOrders.Count == 0)
+            {
+                return new List<ServiceOrderResponseDto>();
+            }
+
+            var orderIds = serviceOrders
+                .Select(item => item.Id)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            var assetLookup = await _context.ServiceOrderInsuranceAssets
+                .AsNoTracking()
+                .Where(asset => orderIds.Contains(asset.ServiceOrderId))
+                .OrderBy(asset => asset.ServiceOrderId)
+                .ThenBy(asset => asset.AssetType)
+                .ThenBy(asset => asset.SortOrder)
+                .ThenBy(asset => asset.Id)
+                .ToListAsync();
+
+            var assetsByOrderId = assetLookup
+                .GroupBy(asset => asset.ServiceOrderId)
+                .ToDictionary(group => group.Key, group => group.ToList());
+            var insuranceCompanyByOrderId = await _context.ServiceOrderDetails
+                .AsNoTracking()
+                .Where(detail =>
+                    orderIds.Contains(detail.ServiceOrderId) &&
+                    detail.InsuranceCompanyId.HasValue &&
+                    detail.InsuranceCompanyId.Value > 0)
+                .GroupBy(detail => detail.ServiceOrderId)
+                .Select(group => new
+                {
+                    ServiceOrderId = group.Key,
+                    InsuranceCompanyId = group
+                        .OrderBy(detail => detail.Id)
+                        .Select(detail => detail.InsuranceCompanyId)
+                        .FirstOrDefault()
+                })
+                .ToDictionaryAsync(item => item.ServiceOrderId, item => item.InsuranceCompanyId);
+
+            return serviceOrders
+                .Select(item => MapServiceOrderResponse(
+                    item,
+                    assetsByOrderId.TryGetValue(item.Id, out var assets) ? assets : null,
+                    insuranceCompanyByOrderId.TryGetValue(item.Id, out var insuranceCompanyId) ? insuranceCompanyId : null))
+                .ToList();
+        }
+
+        private async Task<ServiceOrderResponseDto> MapServiceOrderResponseAsync(ServiceOrder item)
+        {
+            var assets = await _context.ServiceOrderInsuranceAssets
+                .AsNoTracking()
+                .Where(asset => asset.ServiceOrderId == item.Id)
+                .OrderBy(asset => asset.AssetType)
+                .ThenBy(asset => asset.SortOrder)
+                .ThenBy(asset => asset.Id)
+                .ToListAsync();
+            var insuranceCompanyId = await _context.ServiceOrderDetails
+                .AsNoTracking()
+                .Where(detail =>
+                    detail.ServiceOrderId == item.Id &&
+                    detail.InsuranceCompanyId.HasValue &&
+                    detail.InsuranceCompanyId.Value > 0)
+                .OrderBy(detail => detail.Id)
+                .Select(detail => detail.InsuranceCompanyId)
+                .FirstOrDefaultAsync();
+
+            return MapServiceOrderResponse(item, assets, insuranceCompanyId);
+        }
+
+        private ServiceOrderResponseDto MapServiceOrderResponse(
+            ServiceOrder item,
+            IReadOnlyCollection<ServiceOrderInsuranceAsset>? assets,
+            long? insuranceCompanyId)
+        {
+            var dto = _mapper.Map<ServiceOrderResponseDto>(item);
+            dto.InsuranceCompanyId = insuranceCompanyId > 0 ? insuranceCompanyId : null;
+            dto.InsuranceCardImageUrls = assets?
+                .Where(asset => string.Equals(asset.AssetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase))
+                .Select(asset => asset.FileUrl)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .ToList() ?? new List<string>();
+            dto.InsuranceDamageImageUrls = assets?
+                .Where(asset => string.Equals(asset.AssetType, AppointmentInsuranceAssetTypes.Damage, StringComparison.OrdinalIgnoreCase))
+                .Select(asset => asset.FileUrl)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .ToList() ?? new List<string>();
+            return dto;
+        }
+
+        private async Task<(string Url, string BlobPath)> SaveInsuranceAssetFileAsync(IFormFile file, string assetType)
+        {
+            var extension = Path.GetExtension(file.FileName);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                extension = ".png";
+            }
+
+            var folderName = string.Equals(assetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase)
+                ? "service-orders/insurance-cards"
+                : "service-orders/insurance-damage";
+            var fileName = $"{VietnamTime.Now:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+            var blobPath = $"{folderName.Trim('/')}/{fileName}";
+            await using var stream = file.OpenReadStream();
+            var url = await _cloudStorageService.UploadAsync(
+                stream,
+                folderName,
+                fileName,
+                file.ContentType,
+                HttpContext.RequestAborted);
+            return (url, blobPath);
+        }
+
+        private static string? NormalizeInsuranceAssetType(string? assetType)
+        {
+            var normalized = string.IsNullOrWhiteSpace(assetType)
+                ? string.Empty
+                : assetType.Trim().ToUpperInvariant();
+
+            return normalized switch
+            {
+                AppointmentInsuranceAssetTypes.Card => AppointmentInsuranceAssetTypes.Card,
+                AppointmentInsuranceAssetTypes.Damage => AppointmentInsuranceAssetTypes.Damage,
+                _ => null
+            };
         }
 
         private static string? NormalizeAndValidateFields(ServiceOrderCreateDto dto)
@@ -648,8 +835,8 @@ namespace MyGarage.Controllers
             return builder
                 .ToString()
                 .Normalize(NormalizationForm.FormC)
-                .Replace('đ', 'd')
-                .Replace('Đ', 'D')
+                .Replace('d', 'd')
+                .Replace('Ð', 'D')
                 .ToUpperInvariant()
                 .Replace('-', '_')
                 .Replace(' ', '_');

@@ -6,6 +6,7 @@ import {
   deleteStaff,
 } from "@features/staff/api/staffApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
+import { VIETNAM_PHONE_PATTERN, isOptionalEmailValid, isValidVietnamesePhone } from "@shared/utils/contactValidation";
 
 const EMPTY_FORM = {
   fullName: "",
@@ -42,9 +43,13 @@ function StaffForm({ initial, onSubmit, onCancel, loading }) {
       <div className="form-group">
         <label>Sđ điện thoại *</label>
         <input
+          type="tel"
+          inputMode="tel"
           name="phone"
           value={form.phone}
           onChange={handleChange}
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
           required
           placeholder="0912345678"
         />
@@ -152,9 +157,27 @@ export default function StaffManagement() {
     setFormError("");
   }
 
+  function validateContactForm(form) {
+    const phone = String(form.phone || "").trim();
+    const email = String(form.email || "").trim();
+    if (!isValidVietnamesePhone(phone)) {
+      return "Số điện thoại phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).";
+    }
+    if (email && !isOptionalEmailValid(email)) {
+      return "Email không đúng định dạng.";
+    }
+    return "";
+  }
+
   async function handleCreate(form) {
     setSaving(true);
     setFormError("");
+    const contactError = validateContactForm(form);
+    if (contactError) {
+      setFormError(contactError);
+      setSaving(false);
+      return;
+    }
     try {
       await createStaff(form);
       await fetchStaff();
@@ -169,6 +192,12 @@ export default function StaffManagement() {
   async function handleEdit(form) {
     setSaving(true);
     setFormError("");
+    const contactError = validateContactForm(form);
+    if (contactError) {
+      setFormError(contactError);
+      setSaving(false);
+      return;
+    }
     try {
       await updateStaff(selected.id, form);
       await fetchStaff();

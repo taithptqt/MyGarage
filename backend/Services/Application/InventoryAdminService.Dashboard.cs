@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +14,7 @@ namespace MyGarage.Services
 
         public async Task<object> GetOverviewAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
             var staleCutoff = now.AddDays(-90);
 
             var inventoryRows = await _context.Inventories

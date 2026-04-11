@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
@@ -16,22 +18,38 @@ namespace MyGarage.Controllers
     {
         private readonly IServiceOrderDetailService _serviceOrderDetailService;
         private readonly IServiceOrderService _serviceOrderService;
+        private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
         public ServiceOrderDetailController(
             IServiceOrderDetailService serviceOrderDetailService,
             IServiceOrderService serviceOrderService,
+            IGarageContext context,
             IMapper mapper)
         {
             _serviceOrderDetailService = serviceOrderDetailService;
             _serviceOrderService = serviceOrderService;
+            _context = context;
             _mapper = mapper;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ServiceOrderDetailResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<ServiceOrderDetailResponseDto>>> GetAll([FromQuery] long? serviceOrderId = null)
         {
-            var items = await _serviceOrderDetailService.GetAllAsync();
+            IEnumerable<ServiceOrderDetail> items;
+            if (serviceOrderId.HasValue && serviceOrderId.Value > 0)
+            {
+                items = await _context.ServiceOrderDetails
+                    .AsNoTracking()
+                    .Where(detail => detail.ServiceOrderId == serviceOrderId.Value)
+                    .OrderBy(detail => detail.Id)
+                    .ToListAsync();
+            }
+            else
+            {
+                items = await _serviceOrderDetailService.GetAllAsync();
+            }
+
             var dtos = _mapper.Map<IEnumerable<ServiceOrderDetailResponseDto>>(items);
             return Ok(dtos);
         }

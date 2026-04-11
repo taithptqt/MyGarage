@@ -18,6 +18,7 @@ namespace MyGarage.DTOs.Responses
     public class DispatchBayStatusDto
     {
         public long BayId { get; set; }
+        public int SequenceOrder { get; set; }
         public string BayCode { get; set; } = string.Empty;
         public string BayName { get; set; } = string.Empty;
         public string BayType { get; set; } = string.Empty;
