@@ -163,6 +163,7 @@ function formatDateTimeVi(value) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -293,9 +294,17 @@ function formatCurrentSlotText(appointment) {
   const end = new Date(appointment?.endTime || "");
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
 
-  const date = start.toLocaleDateString("vi-VN");
-  const startTime = start.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const endTime = end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const date = start.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const startTime = start.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+  const endTime = end.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
   return `Lịch hiện tại: ${date}, ${startTime} - ${endTime}`;
 }
 
@@ -457,7 +466,9 @@ export default function ReceptionEditAppointmentPage() {
         });
         setSuccessAppt(summary);
       } catch (err) {
-        setError(err?.message || TEXT.updateError);
+        const message = err?.message || TEXT.updateError;
+        setError(message);
+        throw err;
       } finally {
         setSaving(false);
       }
@@ -701,6 +712,7 @@ export default function ReceptionEditAppointmentPage() {
             services={services}
             branchId={targetBranchId}
             initialValues={initialValues}
+            onErrorMessage={setError}
             onSubmit={handleSubmit}
             onCancel={handleGoBack}
             loading={saving}

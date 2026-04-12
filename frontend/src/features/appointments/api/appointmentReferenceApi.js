@@ -5,6 +5,10 @@ export async function getAllBranches() {
   return request({ url: REFERENCE_ROUTES.branches, method: "GET" });
 }
 
+export async function getAllBranchOperatingHours() {
+  return request({ url: REFERENCE_ROUTES.branchOperatingHours, method: "GET" });
+}
+
 export async function getAllStandardServices() {
   return request({ url: REFERENCE_ROUTES.standardServices, method: "GET" });
 }

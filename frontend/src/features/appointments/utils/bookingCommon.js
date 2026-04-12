@@ -25,6 +25,7 @@ export function formatDateVi(dateString) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -45,7 +46,11 @@ export function timeLabel(value) {
   if (!value) return "";
   const parsed = new Date(value);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    return parsed.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Ho_Chi_Minh",
+    });
   }
   return String(value).slice(0, 5);
 }

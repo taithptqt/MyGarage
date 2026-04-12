@@ -21,6 +21,7 @@ export default function VehicleActionPanel({
   brands,
   models,
   activeVehicleKey,
+  forceNewVehicleWhenNoSaved = false,
   onSelectVehicle,
   draftVehicle,
   onDraftChange,
@@ -46,6 +47,7 @@ export default function VehicleActionPanel({
       }),
     [linkedVehicles, selectedExistingKeys]
   );
+  const hasLinkedVehicles = (linkedVehicles || []).length > 0;
 
   const modelOptions = useMemo(
     () =>
@@ -81,6 +83,14 @@ export default function VehicleActionPanel({
       document.removeEventListener("touchstart", handleOutsidePointerDown);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!forceNewVehicleWhenNoSaved) return;
+    if (!hasLinkedVehicles) {
+      setIsNewVehicleFormVisible(true);
+      setIsOpen(false);
+    }
+  }, [forceNewVehicleWhenNoSaved, hasLinkedVehicles]);
 
   function handleSubmitNewVehicle(event) {
     event?.preventDefault?.();
@@ -140,7 +150,7 @@ export default function VehicleActionPanel({
       </div>
 
       <div className="vehicle-action-toolbar">
-        <button type="button" className="ghost-btn" onClick={handleOpenSavedVehicles}>
+        <button type="button" className="ghost-btn" onClick={handleOpenSavedVehicles} disabled={!hasLinkedVehicles}>
           Chọn xe đã lưu lại
         </button>
         {!isNewVehicleFormVisible ? (
@@ -149,6 +159,7 @@ export default function VehicleActionPanel({
           </button>
         ) : null}
       </div>
+      {!hasLinkedVehicles ? <p className="booking-empty">Khách hàng chưa có xe đã lưu, vui lòng thêm xe mới.</p> : null}
 
       {isOpen ? (
         <div className="vehicle-popup-backdrop" onClick={() => setIsOpen(false)}>
@@ -202,7 +213,9 @@ export default function VehicleActionPanel({
         <>
           <div className="form-grid step4-form-grid vehicle-new-form-grid">
             <label className="vehicle-new-field vehicle-new-field-plate">
-              Biển số xe mới <span>*</span>
+              <span className="vehicle-new-label">
+                Biển số xe mới <em>*</em>
+              </span>
               <input
                 type="text"
                 value={draftVehicle.licensePlate}
@@ -214,7 +227,9 @@ export default function VehicleActionPanel({
               />
             </label>
             <label className="vehicle-new-field vehicle-new-field-brand">
-              Hãng xe <span>*</span>
+              <span className="vehicle-new-label">
+                Hãng xe <em>*</em>
+              </span>
               <select
                 value={draftVehicle.brandId}
                 onChange={(e) => {
@@ -231,7 +246,9 @@ export default function VehicleActionPanel({
               </select>
             </label>
             <label className="vehicle-new-field vehicle-new-field-model">
-              Dòng xe <span>*</span>
+              <span className="vehicle-new-label">
+                Dòng xe <em>*</em>
+              </span>
               <select
                 value={draftVehicle.modelId}
                 disabled={!draftVehicle.brandId}
@@ -255,7 +272,9 @@ export default function VehicleActionPanel({
                 />
               </label>
               <label className="vehicle-new-field vehicle-new-field-year">
-                Năm sản xuất <span>*</span>
+                <span className="vehicle-new-label">
+                  Năm sản xuất <em>*</em>
+                </span>
                 <select
                   value={draftVehicle.manufactureYear || ""}
                   onChange={(e) => onDraftChange("manufactureYear", e.target.value)}

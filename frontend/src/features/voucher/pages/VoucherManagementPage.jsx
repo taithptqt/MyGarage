@@ -77,7 +77,9 @@ const pct = (a, b) => (!b || b <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((
 const dt = (v) => {
   if (!v) return "-";
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString("vi-VN");
+  return Number.isNaN(d.getTime())
+    ? "-"
+    : d.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 };
 const money = (v) =>
   Number.isFinite(Number(v))

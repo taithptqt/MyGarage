@@ -122,7 +122,8 @@ namespace MyGarage.Controllers
             [FromQuery] long? teamId = null)
         {
             var items = await _diagnosisService.GetAllFilteredAsync(serviceOrderId, requestOnly, teamId);
-            var dtos = _mapper.Map<IEnumerable<DiagnosisResponseDto>>(items);
+            var mappedDtos = _mapper.Map<IEnumerable<DiagnosisResponseDto>>(items);
+            var dtos = await EnrichDiagnosisDtosAsync(mappedDtos);
             return Ok(dtos);
         }
 
@@ -271,6 +272,7 @@ namespace MyGarage.Controllers
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(item);
+            dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
 
@@ -288,6 +290,7 @@ namespace MyGarage.Controllers
             var entity = _mapper.Map<Diagnosis>(itemDto);
             var createdItem = await _diagnosisService.AddAsync(entity);
             var responseDto = _mapper.Map<DiagnosisResponseDto>(createdItem);
+            responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
 
@@ -314,6 +317,7 @@ namespace MyGarage.Controllers
             }
 
             var responseDto = _mapper.Map<DiagnosisResponseDto>(updatedItem);
+            responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(responseDto);
         }
 
@@ -341,72 +345,70 @@ namespace MyGarage.Controllers
             var activeDiagnosis = allDiagnosis.Where(x => x.Status != DiagnosisStatusCompleted).ToList();
             if (activeDiagnosis.Count > 0)
             {
-                var activeIds = activeDiagnosis.Select(x => x.Id).ToList();
-                await _diagnosisService.RemoveRecommendationsByDiagnosisIdsAsync(activeIds);
-                await _diagnosisService.RemoveDiagnosesAsync(activeDiagnosis);
+                await _diagnosisService.ArchiveDiagnosesAsSupersededAsync(activeDiagnosis);
             }
 
             var dispatchTag = NormalizeDispatchTag(request?.DispatchTag);
             var symptoms = FilterSymptomsByDispatchTag(
                 ExtractSymptomsFromNotes(serviceOrder.CustomerNotes),
                 dispatchTag);
-            DiagnosisIntakeSuggestionDto? intakeSuggestion = null;
-            var shouldBuildIntakeSuggestion =
-                (request?.AutoAssign ?? false) ||
-                (request?.EnforceCapacityGuard ?? false) ||
-                !string.IsNullOrWhiteSpace(request?.IntakePackageCode);
+            var intakeSuggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
+                serviceOrderId,
+                dispatchTag,
+                request?.BufferMinutes,
+                request?.IntakePackageCode);
 
-            if (shouldBuildIntakeSuggestion)
+            var bypassConflictGuard = request?.BypassConflictGuard ?? false;
+            if (!intakeSuggestion.CanApply && !bypassConflictGuard)
             {
-                intakeSuggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
-                    serviceOrderId,
-                    dispatchTag,
-                    request?.BufferMinutes,
-                    request?.IntakePackageCode);
-
-                var bypassConflictGuard = request?.BypassConflictGuard ?? false;
-                if (!intakeSuggestion.CanApply && !bypassConflictGuard)
+                return Conflict(new
                 {
-                    return Conflict(new
-                    {
-                        message = "Khung gio bi xung dot lich booking. Bat bypass de tiep tuc.",
-                        conflictLevel = intakeSuggestion.ConflictLevel,
-                        conflictMinutes = intakeSuggestion.ConflictMinutes,
-                        finalPackageCode = intakeSuggestion.FinalPackageCode,
-                        t1EstimatedHandover = intakeSuggestion.T1EstimatedHandover
-                    });
-                }
-
-                if (intakeSuggestion.RequiresCustomerConsent && request?.CustomerConsentAccepted != true)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Goi chan doan 30p/60p can xac nhan dong y cua khach truoc khi tao yeu cau."
-                    });
-                }
+                    message = "Khung gio bi xung dot lich booking. Bat bypass de tiep tuc.",
+                    conflictLevel = intakeSuggestion.ConflictLevel,
+                    conflictMinutes = intakeSuggestion.ConflictMinutes,
+                    finalPackageCode = intakeSuggestion.FinalPackageCode,
+                    t1EstimatedHandover = intakeSuggestion.T1EstimatedHandover,
+                    requiresDispatchReview = true
+                });
             }
 
-            var placeholderTechnicianId = await _diagnosisService.ResolvePlaceholderTechnicianIdAsync(serviceOrder, dispatchTag);
-            var newDiagnosis = await _diagnosisService.CreatePendingDiagnosesAsync(serviceOrderId, placeholderTechnicianId, symptoms, dispatchTag);
-
-            if ((request?.AutoAssign ?? false) && intakeSuggestion != null && intakeSuggestion.SuggestedLeadTechnicianId.HasValue)
+            if (intakeSuggestion.RequiresCustomerConsent && request?.CustomerConsentAccepted != true)
             {
-                var resolvedTeamId = intakeSuggestion.SuggestedTeamId;
-                if (!resolvedTeamId.HasValue)
+                return BadRequest(new
                 {
-                    resolvedTeamId = await _diagnosisService.ResolveTeamIdForTechnicianAsync(intakeSuggestion.SuggestedLeadTechnicianId.Value);
-                }
-
-                await _diagnosisService.AssignDiagnosesAsync(
-                    newDiagnosis,
-                    intakeSuggestion.SuggestedLeadTechnicianId.Value,
-                    assistantTechnicianId: intakeSuggestion.SuggestedAssistantTechnicianId,
-                    teamId: resolvedTeamId,
-                    supportingTeamIds: null,
-                    supportingAssignments: null,
-                    bayId: intakeSuggestion.SuggestedBayId,
-                    managerOverride: false);
+                    message = "Goi chan doan 30p/60p can xac nhan dong y cua khach truoc khi tao yeu cau."
+                });
             }
+
+            if (!intakeSuggestion.SuggestedTeamId.HasValue || intakeSuggestion.SuggestedTeamId.Value <= 0)
+            {
+                return Conflict(new
+                {
+                    message = "Khong the tu dong xac dinh to dung chuyen mon. Khong tao yeu cau chan doan.",
+                    requiresDispatchReview = true,
+                    dispatchTag = intakeSuggestion.DispatchTag,
+                    conflictLevel = intakeSuggestion.ConflictLevel,
+                    conflictMinutes = intakeSuggestion.ConflictMinutes
+                });
+            }
+
+            var resolvedTeamId = intakeSuggestion.SuggestedTeamId!.Value;
+            var resolvedDiagnoseBayId = await _diagnosisService.ResolveDiagnoseBayIdForBranchAsync(
+                serviceOrder.ExecuteBranchId,
+                intakeSuggestion.SuggestedBayId);
+            var scheduledSlot = await _diagnosisService.ScheduleDiagnosisQueueSlotAsync(
+                serviceOrderId,
+                intakeSuggestion.PackageEffectiveMinutes,
+                bufferMinutes: 15,
+                preferredBayId: resolvedDiagnoseBayId);
+            var finalAssignedBayId = scheduledSlot?.BayId ?? resolvedDiagnoseBayId;
+            var newDiagnosis = await _diagnosisService.CreatePendingDiagnosesAsync(
+                serviceOrderId,
+                technicianId: null,
+                symptoms,
+                dispatchTag,
+                assignedTeamId: resolvedTeamId,
+                assignedBayId: finalAssignedBayId);
 
             if (intakeSuggestion != null)
             {
@@ -424,6 +426,7 @@ namespace MyGarage.Controllers
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(newDiagnosis.First());
+            dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
 
@@ -498,7 +501,9 @@ namespace MyGarage.Controllers
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
-            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
+            var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
+            return Ok(responseDto);
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/technical-approval")]
@@ -895,6 +900,7 @@ namespace MyGarage.Controllers
                 .First();
 
             var dto = _mapper.Map<DiagnosisResponseDto>(response);
+            dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
 
@@ -976,7 +982,9 @@ namespace MyGarage.Controllers
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
-            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
+            var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
+            return Ok(responseDto);
         }
 
         [HttpPatch("{id:long}")]
@@ -1085,7 +1093,7 @@ namespace MyGarage.Controllers
 
         private static List<string> ExtractSymptomsFromNotes(string? customerNotes)
         {
-            var fallback = new List<string> { "Khong co ghi chu gi" };
+            var fallback = new List<string>();
             if (string.IsNullOrWhiteSpace(customerNotes))
             {
                 return fallback;
@@ -1102,8 +1110,8 @@ namespace MyGarage.Controllers
                     var values = root.EnumerateArray()
                         .Where(x => x.ValueKind == JsonValueKind.String)
                         .Select(x => (x.GetString() ?? string.Empty).Trim())
-                        .Where(x => !string.IsNullOrWhiteSpace(x))
-                        .Distinct()
+                        .Where(IsMeaningfulSymptom)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     return values.Count > 0 ? values : fallback;
                 }
@@ -1115,8 +1123,8 @@ namespace MyGarage.Controllers
                         var values = symptomsEl.EnumerateArray()
                             .Where(x => x.ValueKind == JsonValueKind.String)
                             .Select(x => (x.GetString() ?? string.Empty).Trim())
-                            .Where(x => !string.IsNullOrWhiteSpace(x))
-                            .Distinct()
+                            .Where(IsMeaningfulSymptom)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
                             .ToList();
                         return values.Count > 0 ? values : fallback;
                     }
@@ -1124,7 +1132,7 @@ namespace MyGarage.Controllers
                     if (root.TryGetProperty("note", out var noteEl) && noteEl.ValueKind == JsonValueKind.String)
                     {
                         var note = (noteEl.GetString() ?? string.Empty).Trim();
-                        return string.IsNullOrWhiteSpace(note) ? fallback : new List<string> { note };
+                        return IsMeaningfulSymptom(note) ? new List<string> { note } : fallback;
                     }
                 }
             }
@@ -1133,7 +1141,9 @@ namespace MyGarage.Controllers
                 // Legacy non-JSON format.
             }
 
-            return new List<string> { notes };
+            return IsMeaningfulSymptom(notes)
+                ? new List<string> { notes }
+                : fallback;
         }
 
         private static List<string> FilterSymptomsByDispatchTag(IReadOnlyList<string>? symptoms, string? dispatchTag)
@@ -1146,7 +1156,7 @@ namespace MyGarage.Controllers
 
             if (normalizedSymptoms.Count == 0)
             {
-                return new List<string> { "Khong co ghi chu gi" };
+                return new List<string>();
             }
 
             var dispatchTags = (dispatchTag ?? string.Empty)
@@ -1171,6 +1181,45 @@ namespace MyGarage.Controllers
                 .ToList();
 
             return filtered.Count > 0 ? filtered : normalizedSymptoms;
+        }
+
+        private static bool IsMeaningfulSymptom(string? text)
+        {
+            var value = (text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var normalized = NormalizeKeywordText(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized == "khong co" ||
+                normalized == "khong co ghi chu" ||
+                normalized == "khong co ghi chu gi" ||
+                normalized == "khong co mo ta")
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) &&
+                normalized.Contains("khong co", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith("[flow:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[cluster:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[dispatch", StringComparison.Ordinal) ||
+                normalized.StartsWith("[auto_dispatch", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static bool IsSymptomCompatibleWithDispatchTag(string normalizedSymptom, string dispatchTag)
@@ -1209,6 +1258,89 @@ namespace MyGarage.Controllers
             }
 
             return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private async Task<List<DiagnosisResponseDto>> EnrichDiagnosisDtosAsync(IEnumerable<DiagnosisResponseDto> source)
+        {
+            var list = source?.ToList() ?? new List<DiagnosisResponseDto>();
+            if (list.Count == 0)
+            {
+                return list;
+            }
+
+            var teamCache = new Dictionary<long, Team?>();
+            var staffCache = new Dictionary<long, Staff?>();
+            foreach (var dto in list)
+            {
+                await EnrichDiagnosisDtoAsync(dto, teamCache, staffCache);
+            }
+
+            return list;
+        }
+
+        private async Task<DiagnosisResponseDto> EnrichDiagnosisDtoAsync(
+            DiagnosisResponseDto dto,
+            IDictionary<long, Team?> teamCache,
+            IDictionary<long, Staff?> staffCache)
+        {
+            long? resolvedTeamId = dto.AssignedTeamId;
+            if ((!resolvedTeamId.HasValue || resolvedTeamId.Value <= 0) && dto.TechnicianId > 0)
+            {
+                resolvedTeamId = await _diagnosisService.ResolveTeamIdForTechnicianAsync(dto.TechnicianId!.Value);
+            }
+
+            if (resolvedTeamId.HasValue && resolvedTeamId.Value > 0)
+            {
+                dto.AssignedTeamId = resolvedTeamId.Value;
+
+                if (!teamCache.TryGetValue(resolvedTeamId.Value, out var team))
+                {
+                    team = await _diagnosisService.GetTeamByIdAsync(resolvedTeamId.Value);
+                    teamCache[resolvedTeamId.Value] = team;
+                }
+
+                if (team != null)
+                {
+                    if (string.IsNullOrWhiteSpace(dto.AssignedTeamName))
+                    {
+                        dto.AssignedTeamName = team.Name;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(dto.AssignedTeamSpecialtyTag))
+                    {
+                        dto.AssignedTeamSpecialtyTag = team.SpecialtyTag;
+                    }
+
+                    if ((!dto.AssignedTeamLeaderId.HasValue || dto.AssignedTeamLeaderId.Value <= 0) &&
+                        team.LeaderId.HasValue && team.LeaderId.Value > 0)
+                    {
+                        dto.AssignedTeamLeaderId = team.LeaderId.Value;
+                    }
+                }
+            }
+
+            long? leaderId = dto.AssignedTeamLeaderId;
+            if ((!leaderId.HasValue || leaderId.Value <= 0) && dto.TechnicianId > 0)
+            {
+                leaderId = dto.TechnicianId;
+                dto.AssignedTeamLeaderId = dto.TechnicianId;
+            }
+
+            if (leaderId.HasValue && leaderId.Value > 0)
+            {
+                if (!staffCache.TryGetValue(leaderId.Value, out var leader))
+                {
+                    leader = await _diagnosisService.GetStaffByIdAsync(leaderId.Value);
+                    staffCache[leaderId.Value] = leader;
+                }
+
+                if (leader != null && string.IsNullOrWhiteSpace(dto.AssignedTeamLeaderName))
+                {
+                    dto.AssignedTeamLeaderName = leader.FullName;
+                }
+            }
+
+            return dto;
         }
 
         private async Task<ActionResult<DiagnosisResponseDto>> AssignRequestAsync(long serviceOrderId, DiagnosisAcceptRequestDto request)
@@ -1413,7 +1545,9 @@ namespace MyGarage.Controllers
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
-            return Ok(_mapper.Map<DiagnosisResponseDto>(response));
+            var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
+            return Ok(responseDto);
         }
 
         private async Task<IActionResult> DeleteRequestAsync(long serviceOrderId)
@@ -1452,6 +1586,7 @@ namespace MyGarage.Controllers
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);
+            dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
     }

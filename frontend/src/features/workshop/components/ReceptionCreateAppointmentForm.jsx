@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createSlotHold, getAvailableSlots, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import {
+  createSlotHold,
+  getAllBranchOperatingHours,
+  getAllInsuranceCompanies,
+  getAvailableSlots,
+  getVehicleBrands,
+  getVehicleModels,
+  uploadAppointmentInsuranceAsset,
+} from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW, INITIAL_ODD_SLOT_VISIBILITY, SESSION_TABS } from "@features/appointments/constants/bookingConstants";
 import { releaseBookingSlotHold } from "@features/appointments/api/bookingFormApi";
+import BookingInsurancePanel from "@features/appointments/components/BookingInsurancePanel";
 import {
   buildDisplayedSlots,
   buildSlotsBySession,
@@ -18,6 +27,30 @@ import {
   getConflictingInspectionTriadServiceIds,
   sumServiceMinutes,
 } from "@shared/utils/serviceDurationUtils";
+import {
+  arePlanSelectionsEqual,
+  collectCompatibleCategoryIds,
+  filterBookableItemsForVehicleModels,
+  prunePlanByVehicleCompatibility,
+} from "@shared/utils/serviceEngineCompatibility";
+import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
+import {
+  buildFlexibleTriggerServiceIdSet,
+  buildInsuranceFlexiblePackageIdSet,
+  findUnresolvedPackageIds,
+  resolveBookingFlowByItemsAndDuration,
+} from "@features/appointments/utils/bookingFlowRules";
+import {
+  INSURANCE_ASSET_TYPE,
+  buildInsuranceSummary,
+  buildInsuranceSnapshotPayload,
+  createEmptyInsuranceSnapshot,
+  getInsuranceBookingItemNames,
+  normalizeInsuranceSnapshot,
+  resolveInsuranceVehicleKeys,
+  validateInsuranceSnapshotByMode,
+} from "@features/appointments/utils/bookingInsurance";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 
 const SERVICE_MODE = {
   SHARED: "SHARED",
@@ -127,6 +160,15 @@ function isValidPhone(phone) {
   return /^(0\d{9}|\+84\d{9})$/.test(normalizePhone(phone));
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .trim()
+    .toLowerCase();
+}
+
 function toDateTimeParts(value) {
   if (!value) return { appointmentDate: "", startTime: "" };
   const parsed = new Date(value);
@@ -149,15 +191,26 @@ function toNumberList(value) {
   );
 }
 
-function parseServiceIdsFromInput(value) {
-  if (Array.isArray(value)) return toNumberList(value);
-  if (Number.isFinite(Number(value)) && Number(value) > 0) return [Number(value)];
+function toSelectableItemIdList(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map(Number)
+        .filter((id) => Number.isFinite(id) && id !== 0)
+    )
+  );
+}
 
-  return toNumberList(
+function parseServiceIdsFromInput(value) {
+  if (Array.isArray(value)) return toSelectableItemIdList(value);
+  if (Number.isFinite(Number(value)) && Number(value) !== 0) return [Number(value)];
+
+  return toSelectableItemIdList(
     String(value || "")
       .split(/[,|]/g)
       .map((item) => Number(String(item || "").trim()))
-      .filter((id) => Number.isFinite(id) && id > 0)
+      .filter((id) => Number.isFinite(id) && id !== 0)
   );
 }
 
@@ -235,9 +288,9 @@ function readField(obj, keys, fallback = null) {
 
 function normalizePlan(plan) {
   const categoryIds = toNumberList(plan?.categoryIds || []);
-  const serviceIds = toNumberList(plan?.serviceIds || []);
+  const serviceIds = toSelectableItemIdList(plan?.serviceIds || []);
   const excludedSharedCategoryIds = toNumberList(plan?.excludedSharedCategoryIds || []);
-  const excludedSharedServiceIds = toNumberList(plan?.excludedSharedServiceIds || []);
+  const excludedSharedServiceIds = toSelectableItemIdList(plan?.excludedSharedServiceIds || []);
   return { categoryIds, serviceIds, excludedSharedCategoryIds, excludedSharedServiceIds };
 }
 
@@ -250,6 +303,7 @@ function normalizeService(service) {
     categoryId,
     code: String(readField(service, ["code", "Code"], "") || ""),
     name: getInspectionTriadDisplayName(service, rawName),
+    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
     minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
     price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0))
   };
@@ -415,7 +469,7 @@ function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, c
       if (categoryIds.length === 0) return null;
 
       const coveredCategoryIds = new Set(
-        toNumberList(plan?.serviceIds || [])
+        toSelectableItemIdList(plan?.serviceIds || [])
           .map((serviceId) => Number(serviceCategoryMap.get(Number(serviceId)) || 0))
           .filter((categoryId) => Number.isFinite(categoryId) && categoryId > 0)
       );
@@ -453,6 +507,7 @@ export default function ReceptionCreateAppointmentForm({
   branchId = 0,
   onSubmit,
   onCancel,
+  onErrorMessage,
   loading,
   services = [],
   initialValues = null,
@@ -465,8 +520,13 @@ export default function ReceptionCreateAppointmentForm({
   const [serviceSearch, setServiceSearch] = useState("");
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [guestSelectedBrandId, setGuestSelectedBrandId] = useState("");
+  const [insuranceByVehicleKey, setInsuranceByVehicleKey] = useState({});
+  const [insuranceUploadStateByVehicleKey, setInsuranceUploadStateByVehicleKey] = useState({});
+  const [activeInsuranceVehicleKey, setActiveInsuranceVehicleKey] = useState("");
   const [errorText, setErrorText] = useState("");
   const [isSavedVehiclePopupOpen, setIsSavedVehiclePopupOpen] = useState(false);
 
@@ -505,7 +565,7 @@ export default function ReceptionCreateAppointmentForm({
         .filter(
           (service) =>
             Number.isFinite(service.id) &&
-            service.id > 0 &&
+            service.id !== 0 &&
             Number.isFinite(service.categoryId) &&
             service.categoryId > 0
         ),
@@ -517,21 +577,23 @@ export default function ReceptionCreateAppointmentForm({
     normalizedServices.forEach((service) => map.set(service.id, service));
     return map;
   }, [normalizedServices]);
+  const insuranceCompanyNameById = useMemo(() => {
+    const map = new Map();
+    (insuranceCompanies || []).forEach((company) => {
+      const companyId = Number(readField(company, ["id", "Id"], 0));
+      const companyName = String(readField(company, ["name", "Name"], "") || "").trim();
+      if (!Number.isFinite(companyId) || companyId <= 0 || !companyName) return;
+      map.set(companyId, companyName);
+    });
+    return map;
+  }, [insuranceCompanies]);
 
   const flexibleTriggerServiceIdSet = useMemo(
-    () =>
-      new Set(
-        normalizedServices
-          .filter((service) => {
-            const normalizedCode = String(service?.code || "")
-              .trim()
-              .toLowerCase()
-              .replace(/[_\-\s]/g, "");
-            return normalizedCode.startsWith("dg");
-          })
-          .map((service) => Number(service.id))
-          .filter((id) => Number.isFinite(id) && id > 0)
-      ),
+    () => buildFlexibleTriggerServiceIdSet(normalizedServices),
+    [normalizedServices]
+  );
+  const insuranceFlexiblePackageIdSet = useMemo(
+    () => buildInsuranceFlexiblePackageIdSet(normalizedServices),
     [normalizedServices]
   );
 
@@ -589,14 +651,54 @@ export default function ReceptionCreateAppointmentForm({
       const name = String(readField(model, ["modelName", "ModelName", "name", "Name"], "") || "").trim();
       const brandId = Number(readField(model, ["brandId", "BrandId"], 0));
       const brandName = String(readField(model, ["brandName", "BrandName"], "") || "").trim();
+      const fuelType = String(readField(model, ["fuelType", "FuelType"], "") || "").trim();
       map.set(id, {
         name,
         brandId: Number.isFinite(brandId) && brandId > 0 ? brandId : 0,
-        brandName
+        brandName,
+        fuelType
       });
     });
     return map;
   }, [models]);
+
+  const vehicleModelIdByKey = useMemo(() => {
+    const map = new Map();
+
+    if (Number(formData.guestVehicleModelId || 0) > 0) {
+      map.set("guest", Number(formData.guestVehicleModelId));
+    }
+    if (Number(formData.vehicleModelId || 0) > 0) {
+      map.set("new-customer", Number(formData.vehicleModelId));
+    }
+
+    const customerId = Number(formData.customerId || 0);
+    if (customerId > 0) {
+      const linkedVehicleIds = new Set(
+        (customerVehicles || [])
+          .filter((item) => Number(item.customerId) === customerId)
+          .map((item) => Number(item.vehicleId))
+      );
+
+      (vehicles || [])
+        .filter((vehicle) => linkedVehicleIds.has(Number(vehicle.id)))
+        .forEach((vehicle) => {
+          const key = getVehicleKeyFromId(vehicle.id);
+          const modelId = Number(readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0));
+          if (Number.isFinite(modelId) && modelId > 0) {
+            map.set(key, modelId);
+          }
+        });
+    }
+
+    return map;
+  }, [
+    customerVehicles,
+    formData.customerId,
+    formData.guestVehicleModelId,
+    formData.vehicleModelId,
+    vehicles
+  ]);
 
   const describeSavedVehicle = useCallback(
     (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
@@ -608,14 +710,23 @@ export default function ReceptionCreateAppointmentForm({
 
     (async () => {
       try {
-        const [brandRes, modelRes] = await Promise.all([getVehicleBrands(), getVehicleModels()]);
+        const [brandRes, modelRes, insuranceCompanyRes, operatingHoursRes] = await Promise.all([
+          getVehicleBrands(),
+          getVehicleModels(),
+          getAllInsuranceCompanies().catch(() => []),
+          getAllBranchOperatingHours().catch(() => []),
+        ]);
         if (ignore) return;
         setBrands(Array.isArray(brandRes) ? brandRes : []);
         setModels(Array.isArray(modelRes) ? modelRes : []);
+        setInsuranceCompanies(Array.isArray(insuranceCompanyRes) ? insuranceCompanyRes : []);
+        setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
       } catch {
         if (!ignore) {
           setBrands([]);
           setModels([]);
+          setInsuranceCompanies([]);
+          setBranchOperatingHours([]);
         }
       }
     })();
@@ -638,6 +749,13 @@ export default function ReceptionCreateAppointmentForm({
         ? initialValues.serviceIds
         : initialValues?.requestedServiceIds
     );
+    const nextInsuranceByVehicleKey = {};
+    (Array.isArray(initialValues?.vehicleInsurancePlans) ? initialValues.vehicleInsurancePlans : []).forEach((rawPlan) => {
+      const vehicleId = Number(rawPlan?.vehicleId || 0);
+      const vehicleKey = String(rawPlan?.vehicleKey || "").trim() || (vehicleId > 0 ? getVehicleKeyFromId(vehicleId) : "");
+      if (!vehicleKey) return;
+      nextInsuranceByVehicleKey[vehicleKey] = normalizeInsuranceSnapshot(rawPlan);
+    });
 
     const planByVehicleKey = {};
     (Array.isArray(initialValues?.vehicleServicePlans) ? initialValues.vehicleServicePlans : []).forEach((rawPlan) => {
@@ -709,6 +827,9 @@ export default function ReceptionCreateAppointmentForm({
     setShowOddSlots({ ...INITIAL_ODD_SLOT_VISIBILITY });
     setSharedPlan(nextSharedPlan);
     setVehiclePlans(nextVehiclePlans);
+    setInsuranceByVehicleKey(nextInsuranceByVehicleKey);
+    setInsuranceUploadStateByVehicleKey({});
+    setActiveInsuranceVehicleKey("");
     setActivePlanVehicleKey("");
     setActiveCategoryId(initialCategoryForActivePlan ? String(initialCategoryForActivePlan) : "");
     setIsServicePickerCollapsed(false);
@@ -737,6 +858,22 @@ export default function ReceptionCreateAppointmentForm({
     );
     return (vehicles || []).filter((vehicle) => linkedVehicleIds.has(Number(vehicle.id)));
   }, [customerVehicles, vehicles, formData.customerId]);
+  const customerHasNoVehicles = Boolean(formData.customerId) && customerVehiclesFiltered.length === 0;
+
+  const hasSavedVehiclesByCustomerId = useCallback(
+    (customerId) => {
+      const numericCustomerId = Number(customerId);
+      if (!Number.isFinite(numericCustomerId) || numericCustomerId <= 0) return false;
+      const linkedVehicleIds = new Set(
+        (customerVehicles || [])
+          .filter((item) => Number(item.customerId) === numericCustomerId)
+          .map((item) => Number(item.vehicleId))
+      );
+      if (linkedVehicleIds.size === 0) return false;
+      return (vehicles || []).some((vehicle) => linkedVehicleIds.has(Number(vehicle.id)));
+    },
+    [customerVehicles, vehicles]
+  );
 
   const selectedVehicleIdSet = useMemo(
     () => new Set(toNumberList(formData.selectedVehicleIds)),
@@ -762,6 +899,13 @@ export default function ReceptionCreateAppointmentForm({
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
   const showServiceModeSwitch = hasMultipleSelectedVehicles && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
+  const selectedVehicleModelIds = useMemo(
+    () =>
+      selectedVehicleKeys
+        .map((vehicleKey) => Number(vehicleModelIdByKey.get(vehicleKey) || 0))
+        .filter((modelId) => Number.isFinite(modelId) && modelId > 0),
+    [selectedVehicleKeys, vehicleModelIdByKey]
+  );
 
   const vehicleLabelByKey = useMemo(() => {
     const map = new Map();
@@ -890,6 +1034,13 @@ export default function ReceptionCreateAppointmentForm({
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return "shared";
     return activePlanVehicleKey || selectedVehicleKeys[0] || "";
   }, [effectiveServiceMode, activePlanVehicleKey, selectedVehicleKeys]);
+  const activePlanVehicleModelIds = useMemo(() => {
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+      return selectedVehicleModelIds;
+    }
+    const modelId = Number(vehicleModelIdByKey.get(activePlanKey || "") || 0);
+    return Number.isFinite(modelId) && modelId > 0 ? [modelId] : [];
+  }, [activePlanKey, effectiveServiceMode, selectedVehicleModelIds, vehicleModelIdByKey]);
 
   const resolveEffectivePlan = useCallback(
     (rawVehiclePlan, sharedSource = sharedPlan) => {
@@ -903,7 +1054,7 @@ export default function ReceptionCreateAppointmentForm({
       const nextCategoryIds = toNumberList([...sharedCategoryIds, ...(raw.categoryIds || [])]);
 
       const sharedServiceIds = sharedNormalized.serviceIds.filter((id) => !excludedServiceSet.has(id));
-      const nextServiceIds = toNumberList([...sharedServiceIds, ...(raw.serviceIds || [])]).filter((serviceId) => {
+      const nextServiceIds = toSelectableItemIdList([...sharedServiceIds, ...(raw.serviceIds || [])]).filter((serviceId) => {
         const categoryId = Number(serviceCategoryMap.get(serviceId) || 0);
         return nextCategoryIds.includes(categoryId);
       });
@@ -954,6 +1105,48 @@ export default function ReceptionCreateAppointmentForm({
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return normalizePlan(sharedPlan);
     return resolveEffectivePlan(vehiclePlans[activePlanKey] || EMPTY_PLAN, sharedPlan);
   }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey, resolveEffectivePlan]);
+
+  useEffect(() => {
+    setSharedPlan((prev) => {
+      const next = prunePlanByVehicleCompatibility(
+        normalizePlan(prev),
+        normalizedServices,
+        selectedVehicleModelIds,
+        modelInfoById,
+        serviceById
+      );
+      return arePlanSelectionsEqual(prev, next) ? prev : normalizePlan(next);
+    });
+
+    setVehiclePlans((prev) => {
+      let hasChanges = false;
+      const next = { ...prev };
+
+      selectedVehicleKeys.forEach((vehicleKey) => {
+        const modelId = Number(vehicleModelIdByKey.get(vehicleKey) || 0);
+        const nextPlan = prunePlanByVehicleCompatibility(
+          normalizePlan(prev[vehicleKey] || EMPTY_PLAN),
+          normalizedServices,
+          modelId > 0 ? [modelId] : [],
+          modelInfoById,
+          serviceById
+        );
+        if (!arePlanSelectionsEqual(prev[vehicleKey] || EMPTY_PLAN, nextPlan)) {
+          next[vehicleKey] = normalizePlan(nextPlan);
+          hasChanges = true;
+        }
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [
+    modelInfoById,
+    normalizedServices,
+    selectedVehicleKeys,
+    selectedVehicleModelIds,
+    serviceById,
+    vehicleModelIdByKey
+  ]);
 
   useEffect(() => {
     const selectedCategories = activePlan.categoryIds || [];
@@ -1091,7 +1284,7 @@ export default function ReceptionCreateAppointmentForm({
         const oppositeSharedIds = getConflictingInspectionServiceIds(sharedPlan.serviceIds, numericId);
         setSharedPlan((prev) => {
           const normalized = normalizePlan(prev);
-          const nextServiceIds = toNumberList([
+          const nextServiceIds = toSelectableItemIdList([
             ...(normalized.serviceIds || []).filter((item) => !oppositeSharedIds.includes(Number(item))),
             numericId
           ]);
@@ -1140,7 +1333,7 @@ export default function ReceptionCreateAppointmentForm({
       setVehiclePlans((prev) => {
         const rawVehiclePlan = normalizePlan(prev[activePlanKey] || EMPTY_PLAN);
         const effectiveVehiclePlan = resolveEffectivePlan(rawVehiclePlan, sharedPlan);
-        const sharedServiceIds = toNumberList(sharedPlan.serviceIds);
+        const sharedServiceIds = toSelectableItemIdList(sharedPlan.serviceIds);
         const sharedServiceSet = new Set(sharedServiceIds);
         const sharedCategorySet = new Set(toNumberList(sharedPlan.categoryIds));
         const nextRawCategorySet = new Set(rawVehiclePlan.categoryIds || []);
@@ -1200,7 +1393,7 @@ export default function ReceptionCreateAppointmentForm({
         }
 
         const oppositeServiceIds = getConflictingInspectionServiceIds(effectiveVehiclePlan.serviceIds, numericId);
-        const nextVehicleServiceIds = toNumberList([
+        const nextVehicleServiceIds = toSelectableItemIdList([
           ...(rawVehiclePlan.serviceIds || []).filter(
             (serviceItemId) => !oppositeServiceIds.includes(Number(serviceItemId))
           ),
@@ -1229,17 +1422,44 @@ export default function ReceptionCreateAppointmentForm({
     }
   };
 
+  const compatibleCategoryIds = useMemo(
+    () =>
+      collectCompatibleCategoryIds(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
+  const visibleCategoryOptions = useMemo(
+    () => categoryOptions.filter((category) => compatibleCategoryIds.has(Number(category.id))),
+    [categoryOptions, compatibleCategoryIds]
+  );
+
+  const compatibleServicesForActivePlan = useMemo(
+    () =>
+      filterBookableItemsForVehicleModels(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
     const selectedCategories = new Set(activePlan.categoryIds || []);
     if (selectedCategories.size === 0) return [];
 
-    return normalizedServices
+    return compatibleServicesForActivePlan
       .filter((service) => selectedCategories.has(service.categoryId))
       .filter((service) => (!activeCategoryId ? true : String(service.categoryId) === String(activeCategoryId)))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-  }, [activePlan.categoryIds, activeCategoryId, normalizedServices, serviceSearch]);
+  }, [activePlan.categoryIds, activeCategoryId, compatibleServicesForActivePlan, serviceSearch]);
 
   const plansByVehicleKey = useMemo(() => {
     const map = new Map();
@@ -1257,15 +1477,32 @@ export default function ReceptionCreateAppointmentForm({
     return selectedVehicleKeys.map((vehicleKey) => {
       const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
       const categoryIds = toNumberList(plan.categoryIds);
-      const serviceIds = toNumberList(plan.serviceIds);
+      const serviceIds = toSelectableItemIdList(plan.serviceIds);
       const selectedServices = serviceIds
         .map((id) => serviceById.get(id))
         .filter(Boolean);
+      const serviceGroupsByCategory = Array.from(
+        selectedServices.reduce((map, service) => {
+          const categoryId = Number(service?.categoryId || 0);
+          const categoryName = categoryNameById.get(categoryId) || `Nhóm ${categoryId || "Khác"}`;
+          const serviceName = String(service?.name || "").trim();
+          if (!serviceName) return map;
+          if (!map.has(categoryName)) map.set(categoryName, []);
+          map.get(categoryName).push(serviceName);
+          return map;
+        }, new Map())
+      ).map(([categoryName, serviceNames]) => ({
+        categoryName,
+        serviceNames: Array.from(new Set(serviceNames)),
+      }));
       const minutes = sumServiceMinutes(selectedServices);
       const price = selectedServices.reduce((sum, item) => sum + Number(item.price || 0), 0);
-      const bookingFlow = serviceIds.some((id) => flexibleTriggerServiceIdSet.has(Number(id)))
-        ? BOOKING_FLOW.FLEXIBLE
-        : BOOKING_FLOW.FIXED;
+      const bookingFlow = resolveBookingFlowByItemsAndDuration({
+        itemIds: serviceIds,
+        flexibleTriggerServiceIdSet,
+        insuranceFlexiblePackageIdSet,
+        executionMinutes: 0,
+      }).bookingFlow;
       const slot = slotMode === SLOT_MODE.PARALLEL ? parallelSlot : selectedSlotsByVehicle[vehicleKey];
       const startRaw = readField(slot, ["startTime", "StartTime"], "");
       const endRaw = readField(slot, ["endTime", "EndTime"], "");
@@ -1293,6 +1530,7 @@ export default function ReceptionCreateAppointmentForm({
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
         categoryIds,
         categoryNames: categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`),
+        serviceGroupsByCategory,
         serviceIds,
         serviceNames: selectedServices.map((item) => item.name),
         bookingFlow,
@@ -1313,6 +1551,7 @@ export default function ReceptionCreateAppointmentForm({
     selectedVehicleKeys,
     categoryNameById,
     flexibleTriggerServiceIdSet,
+    insuranceFlexiblePackageIdSet,
     serviceById,
     slotMode,
     vehicleLabelByKey
@@ -1327,6 +1566,46 @@ export default function ReceptionCreateAppointmentForm({
     () => buildMissingSpecificServiceMessage(missingSpecificServiceByVehicle),
     [missingSpecificServiceByVehicle]
   );
+  const dateSelectionGuardMessage = useMemo(() => {
+    if (selectedVehicleKeys.length === 0) {
+      return "Vui lòng chọn xe trước khi chọn ngày đặt lịch.";
+    }
+
+    for (const vehicleKey of selectedVehicleKeys) {
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      const vehicleLabel = vehicleLabelByKey.get(vehicleKey) || vehicleKey;
+      const categoryCount = toNumberList(plan.categoryIds).length;
+      const serviceCount = toSelectableItemIdList(plan.serviceIds).length;
+      const unresolvedPackageIds = findUnresolvedPackageIds(
+        toSelectableItemIdList(plan.serviceIds),
+        serviceById
+      );
+      if (unresolvedPackageIds.length > 0) {
+        return `Vui lòng chọn lại gói dịch vụ cho ${vehicleLabel} (mã không hợp lệ: #${unresolvedPackageIds.join(", #")}) trước khi chọn ngày đặt lịch.`;
+      }
+
+      if (categoryCount === 0) {
+        return `Vui lòng chọn loại dịch vụ cho ${vehicleLabel} trước khi chọn ngày đặt lịch.`;
+      }
+
+      if (serviceCount === 0) {
+        return `Vui lòng chọn dịch vụ cụ thể cho ${vehicleLabel} trước khi chọn ngày đặt lịch.`;
+      }
+    }
+
+    if (missingSpecificServiceByVehicle.length > 0) {
+      return missingSpecificServiceMessage;
+    }
+
+    return "";
+  }, [
+    missingSpecificServiceByVehicle.length,
+    missingSpecificServiceMessage,
+    plansByVehicleKey,
+    selectedVehicleKeys,
+    serviceById,
+    vehicleLabelByKey
+  ]);
 
   const totalMinutes = useMemo(
     () => planSummaries.reduce((sum, item) => sum + Number(item.totalMinutes || 0), 0),
@@ -1349,21 +1628,223 @@ export default function ReceptionCreateAppointmentForm({
     return formatDateTimeWithFullDate(new Date(Math.max(...endTimes)));
   }, [planSummaries]);
 
-  const serviceIdsByVehicleKey = useMemo(() => {
+  const bookingItemIdsByVehicleKey = useMemo(() => {
     const map = new Map();
     selectedVehicleKeys.forEach((vehicleKey) => {
       const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
-      map.set(vehicleKey, toNumberList(plan.serviceIds));
+      map.set(vehicleKey, toSelectableItemIdList(plan.serviceIds));
     });
     return map;
   }, [selectedVehicleKeys, plansByVehicleKey]);
 
+  const serviceIdsByVehicleKey = useMemo(() => {
+    const map = new Map();
+    bookingItemIdsByVehicleKey.forEach((itemIds, vehicleKey) => {
+      map.set(vehicleKey, splitBookingItemIds(itemIds).serviceIds);
+    });
+    return map;
+  }, [bookingItemIdsByVehicleKey]);
+
+  const packageIdsByVehicleKey = useMemo(() => {
+    const map = new Map();
+    bookingItemIdsByVehicleKey.forEach((itemIds, vehicleKey) => {
+      map.set(vehicleKey, splitBookingItemIds(itemIds).packageIds);
+    });
+    return map;
+  }, [bookingItemIdsByVehicleKey]);
+  const insuranceItemNamesByVehicleKey = useMemo(() => {
+    const map = new Map();
+    selectedVehicleKeys.forEach((vehicleKey) => {
+      const itemIds = bookingItemIdsByVehicleKey.get(vehicleKey) || [];
+      map.set(vehicleKey, getInsuranceBookingItemNames(itemIds, serviceById));
+    });
+    return map;
+  }, [bookingItemIdsByVehicleKey, selectedVehicleKeys, serviceById]);
+  const insuranceVehicleOptions = useMemo(
+    () =>
+      resolveInsuranceVehicleKeys(selectedVehicleKeys, bookingItemIdsByVehicleKey, serviceById).map((vehicleKey) => ({
+        key: vehicleKey,
+        label: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
+        selectedInsuranceItemNames: insuranceItemNamesByVehicleKey.get(vehicleKey) || [],
+      })),
+    [bookingItemIdsByVehicleKey, insuranceItemNamesByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]
+  );
+  const insuranceVehicleKeySet = useMemo(
+    () => new Set(insuranceVehicleOptions.map((vehicle) => vehicle.key)),
+    [insuranceVehicleOptions]
+  );
+
+  useEffect(() => {
+    setInsuranceByVehicleKey((prev) => {
+      const next = {};
+      insuranceVehicleOptions.forEach((vehicle) => {
+        next[vehicle.key] = normalizeInsuranceSnapshot(prev[vehicle.key]);
+      });
+      return next;
+    });
+  }, [insuranceVehicleOptions]);
+
+  useEffect(() => {
+    setInsuranceUploadStateByVehicleKey((prev) => {
+      const next = {};
+      insuranceVehicleOptions.forEach((vehicle) => {
+        if (prev[vehicle.key]) {
+          next[vehicle.key] = prev[vehicle.key];
+        }
+      });
+      return next;
+    });
+  }, [insuranceVehicleOptions]);
+
+  useEffect(() => {
+    if (insuranceVehicleOptions.length === 0) {
+      setActiveInsuranceVehicleKey("");
+      return;
+    }
+
+    if (!insuranceVehicleOptions.some((vehicle) => vehicle.key === activeInsuranceVehicleKey)) {
+      setActiveInsuranceVehicleKey(insuranceVehicleOptions[0].key);
+    }
+  }, [activeInsuranceVehicleKey, insuranceVehicleOptions]);
+
+  const activeInsuranceSnapshot = useMemo(
+    () => normalizeInsuranceSnapshot(insuranceByVehicleKey[activeInsuranceVehicleKey]),
+    [activeInsuranceVehicleKey, insuranceByVehicleKey]
+  );
+  const insuranceSummaryByVehicleKey = useMemo(() => {
+    const map = new Map();
+    insuranceVehicleOptions.forEach((vehicle) => {
+      map.set(vehicle.key, {
+        selectedInsuranceItemNames: Array.isArray(vehicle.selectedInsuranceItemNames)
+          ? vehicle.selectedInsuranceItemNames.filter(Boolean)
+          : [],
+        summary: buildInsuranceSummary(insuranceByVehicleKey[vehicle.key], insuranceCompanyNameById, { mode: "booking" }),
+      });
+    });
+    return map;
+  }, [insuranceByVehicleKey, insuranceCompanyNameById, insuranceVehicleOptions]);
+
+  const handleInsuranceSnapshotChange = useCallback(
+    (field, value) => {
+      if (!activeInsuranceVehicleKey) return;
+      setInsuranceByVehicleKey((prev) => ({
+        ...prev,
+        [activeInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+          ...(prev[activeInsuranceVehicleKey] || createEmptyInsuranceSnapshot()),
+          [field]: value,
+        }),
+      }));
+    },
+    [activeInsuranceVehicleKey]
+  );
+
+  const setInsuranceUploadState = useCallback((vehicleKey, assetType, patch) => {
+    if (!vehicleKey || !assetType) return;
+    setInsuranceUploadStateByVehicleKey((prev) => ({
+      ...prev,
+      [vehicleKey]: {
+        ...(prev[vehicleKey] || {}),
+        [assetType]: {
+          ...(((prev[vehicleKey] || {})[assetType] || {})),
+          ...(patch || {}),
+        },
+      },
+    }));
+  }, []);
+
+  const handleInsuranceAssetUpload = useCallback(
+    async (assetType, files) => {
+      if (!activeInsuranceVehicleKey || !assetType) return;
+      const uploadFiles = Array.isArray(files) ? files.filter(Boolean) : [];
+      if (uploadFiles.length === 0) return;
+
+      setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
+        uploading: true,
+        successMessage: "",
+      });
+      try {
+        const uploadedUrls = [];
+        for (const file of uploadFiles) {
+          // Upload sequentially to keep response order stable.
+          // eslint-disable-next-line no-await-in-loop
+          const uploaded = await uploadAppointmentInsuranceAsset(file, assetType);
+          const uploadedUrl = readField(uploaded, ["url", "Url"], "");
+          if (uploadedUrl) uploadedUrls.push(uploadedUrl);
+        }
+
+        if (uploadedUrls.length > 0) {
+          const targetField =
+            assetType === INSURANCE_ASSET_TYPE.CARD
+              ? "insuranceCardImageUrls"
+              : "insuranceDamageImageUrls";
+
+          setInsuranceByVehicleKey((prev) => {
+            const currentSnapshot = normalizeInsuranceSnapshot(prev[activeInsuranceVehicleKey]);
+            return {
+              ...prev,
+              [activeInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+                ...currentSnapshot,
+                [targetField]: [...(currentSnapshot[targetField] || []), ...uploadedUrls],
+              }),
+            };
+          });
+
+          setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
+            successMessage:
+              assetType === INSURANCE_ASSET_TYPE.CARD
+                ? "Đã tải ảnh thẻ bảo hiểm."
+                : "Đã tải ảnh hiện trạng xe.",
+          });
+        }
+      } catch (uploadError) {
+        setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
+          successMessage: "",
+        });
+        setErrorText(uploadError?.message || "Không thể tải ảnh bảo hiểm. Vui lòng thử lại.");
+      } finally {
+        setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
+          uploading: false,
+        });
+      }
+    },
+    [activeInsuranceVehicleKey, setInsuranceUploadState]
+  );
+
+  const handleInsuranceAssetRemove = useCallback(
+    (assetType, index) => {
+      if (!activeInsuranceVehicleKey || !assetType || !Number.isInteger(index) || index < 0) return;
+      const targetField =
+        assetType === INSURANCE_ASSET_TYPE.CARD
+          ? "insuranceCardImageUrls"
+          : "insuranceDamageImageUrls";
+
+      setInsuranceByVehicleKey((prev) => {
+        const currentSnapshot = normalizeInsuranceSnapshot(prev[activeInsuranceVehicleKey]);
+        const nextUrls = (currentSnapshot[targetField] || []).filter((_, itemIndex) => itemIndex !== index);
+        return {
+          ...prev,
+          [activeInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+            ...currentSnapshot,
+            [targetField]: nextUrls,
+          }),
+        };
+      });
+      setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
+        successMessage: "",
+      });
+    },
+    [activeInsuranceVehicleKey, setInsuranceUploadState]
+  );
+
   const getVehicleFlow = useCallback((vehicleKey) => {
-    const serviceIds = serviceIdsByVehicleKey.get(vehicleKey) || [];
-    return serviceIds.some((id) => flexibleTriggerServiceIdSet.has(Number(id)))
-      ? BOOKING_FLOW.FLEXIBLE
-      : BOOKING_FLOW.FIXED;
-  }, [flexibleTriggerServiceIdSet, serviceIdsByVehicleKey]);
+    const bookingItemIds = bookingItemIdsByVehicleKey.get(vehicleKey) || [];
+    return resolveBookingFlowByItemsAndDuration({
+      itemIds: bookingItemIds,
+      flexibleTriggerServiceIdSet,
+      insuranceFlexiblePackageIdSet,
+      executionMinutes: 0,
+    }).bookingFlow;
+  }, [bookingItemIdsByVehicleKey, flexibleTriggerServiceIdSet, insuranceFlexiblePackageIdSet]);
 
   const resolveSlotFlow = useCallback((slot, fallbackFlow = BOOKING_FLOW.FIXED) => {
     const rawFlow = String(readField(slot, ["bookingFlow", "BookingFlow"], fallbackFlow) || "")
@@ -1419,7 +1900,13 @@ export default function ReceptionCreateAppointmentForm({
     const resolveSlotTimeMs = (rawValue) => {
       if (!rawValue) return null;
       const parsed = new Date(rawValue);
-      if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+      if (!Number.isNaN(parsed.getTime())) {
+        if (!effectiveSelectedDate) return parsed.getTime();
+        const hours = String(parsed.getHours()).padStart(2, "0");
+        const minutes = String(parsed.getMinutes()).padStart(2, "0");
+        const composed = new Date(`${effectiveSelectedDate}T${hours}:${minutes}:00`);
+        return Number.isNaN(composed.getTime()) ? parsed.getTime() : composed.getTime();
+      }
 
       const match = String(rawValue).match(/^(\d{1,2}):(\d{2})/);
       if (!match || !effectiveSelectedDate) return null;
@@ -1468,9 +1955,10 @@ export default function ReceptionCreateAppointmentForm({
       const start = new Date(selection.startTime);
       const end = new Date(selection.endTime);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-      return `${start.toLocaleString("vi-VN")} - ${end.toLocaleTimeString("vi-VN", {
+      return `${start.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} - ${end.toLocaleTimeString("vi-VN", {
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
       })}`;
     }
 
@@ -1479,7 +1967,7 @@ export default function ReceptionCreateAppointmentForm({
   }, [parallelSlot, selectedSlotCount, selectedVehicleKeys.length, slotMode]);
 
   const selectedServiceIdsUnion = useMemo(
-    () => toNumberList(planSummaries.flatMap((item) => item.serviceIds)),
+    () => toSelectableItemIdList(planSummaries.flatMap((item) => item.serviceIds)),
     [planSummaries]
   );
 
@@ -1556,6 +2044,12 @@ export default function ReceptionCreateAppointmentForm({
     }
   }, [errorText]);
 
+  useEffect(() => {
+    if (typeof onErrorMessage === "function") {
+      onErrorMessage(errorText || "");
+    }
+  }, [errorText, onErrorMessage]);
+
   const releaseHoldTokenIfAny = useCallback(async (vehicleKey) => {
     const token = slotHoldTokens?.[vehicleKey];
     if (!token) return;
@@ -1586,14 +2080,24 @@ export default function ReceptionCreateAppointmentForm({
       setSlots([]);
       return;
     }
+    if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, `${effectiveSelectedDate}T08:00:00`)) {
+      setSlots([]);
+      setErrorText(getBranchClosedMessage(`${effectiveSelectedDate}T08:00:00`));
+      return;
+    }
 
-    const groups = selectedVehicleKeys.map((vehicleKey) => serviceIdsByVehicleKey.get(vehicleKey) || []);
+    const serviceGroups = selectedVehicleKeys.map((vehicleKey) => serviceIdsByVehicleKey.get(vehicleKey) || []);
+    const packageGroups = selectedVehicleKeys.map((vehicleKey) => packageIdsByVehicleKey.get(vehicleKey) || []);
     const effectiveActiveSlotVehicleKey = activeSlotVehicleKey || selectedVehicleKeys[0] || "";
 
     const requestedServiceIds =
       slotMode === SLOT_MODE.PARALLEL
-        ? groups.map((group) => group.join(",")).join("|")
+        ? serviceGroups.map((group) => group.join(",")).join("|")
         : (serviceIdsByVehicleKey.get(effectiveActiveSlotVehicleKey) || []).join(",");
+    const requestedPackageIds =
+      slotMode === SLOT_MODE.PARALLEL
+        ? packageGroups.map((group) => group.join(",")).join("|")
+        : (packageIdsByVehicleKey.get(effectiveActiveSlotVehicleKey) || []).join(",");
 
     setSlotsLoading(true);
     setSlots([]);
@@ -1604,16 +2108,25 @@ export default function ReceptionCreateAppointmentForm({
         bookingFlow: effectiveSlotFlow,
         vehicleCount: slotMode === SLOT_MODE.PARALLEL ? selectedVehicleKeys.length : 1,
         isParallel: slotMode === SLOT_MODE.PARALLEL,
-        requestedServiceIds
+        requestedServiceIds,
+        requestedPackageIds
       });
 
       if (
         Array.isArray(data) &&
         data.length === 0 &&
-        typeof requestedServiceIds === "string" &&
-        requestedServiceIds.includes("|")
+        (
+          (typeof requestedServiceIds === "string" && requestedServiceIds.includes("|")) ||
+          (typeof requestedPackageIds === "string" && requestedPackageIds.includes("|"))
+        )
       ) {
         const fallbackRequestedServiceIds = requestedServiceIds
+          .split("|")
+          .flatMap((group) => String(group || "").split(","))
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+          .join(",");
+        const fallbackRequestedPackageIds = requestedPackageIds
           .split("|")
           .flatMap((group) => String(group || "").split(","))
           .map((item) => String(item || "").trim())
@@ -1623,7 +2136,8 @@ export default function ReceptionCreateAppointmentForm({
           bookingFlow: effectiveSlotFlow,
           vehicleCount: slotMode === SLOT_MODE.PARALLEL ? selectedVehicleKeys.length : 1,
           isParallel: slotMode === SLOT_MODE.PARALLEL,
-          requestedServiceIds: fallbackRequestedServiceIds
+          requestedServiceIds: fallbackRequestedServiceIds,
+          requestedPackageIds: fallbackRequestedPackageIds
         });
       }
 
@@ -1636,9 +2150,11 @@ export default function ReceptionCreateAppointmentForm({
     }
   }, [
     activeSlotVehicleKey,
+    branchOperatingHours,
     branchId,
     effectiveSelectedDate,
     effectiveSlotFlow,
+    packageIdsByVehicleKey,
     selectedVehicleKeys,
     serviceIdsByVehicleKey,
     slotMode
@@ -1657,6 +2173,7 @@ export default function ReceptionCreateAppointmentForm({
       const startTime = readField(slot, ["startTime", "StartTime"], "");
       const endTime = readField(slot, ["endTime", "EndTime"], "");
       const requestedServiceIds = (serviceIdsByVehicleKey.get(vehicleKey) || []).join(",");
+      const requestedPackageIds = (packageIdsByVehicleKey.get(vehicleKey) || []).join(",");
 
       const response = await createSlotHold({
         branchId: Number(branchId),
@@ -1664,13 +2181,14 @@ export default function ReceptionCreateAppointmentForm({
         endTime,
         bookingFlow: vehicleFlow,
         requestedServiceIds,
+        requestedPackageIds,
         vehicleCount: 1
       });
       const token = readField(response, ["holdToken", "HoldToken"], "");
       if (!token) throw new Error("Không thể giữ chỗ khung giờ đã chọn.");
       setSlotHoldTokens((prev) => ({ ...prev, [vehicleKey]: token }));
     },
-    [branchId, serviceIdsByVehicleKey]
+    [branchId, packageIdsByVehicleKey, serviceIdsByVehicleKey]
   );
 
   const handleSlotModeChange = async (mode) => {
@@ -1694,7 +2212,22 @@ export default function ReceptionCreateAppointmentForm({
   };
 
   const handleDateChange = async (value) => {
+    if (dateSelectionGuardMessage) {
+      setErrorText(dateSelectionGuardMessage);
+      return;
+    }
+
     const nextDate = String(value || "").slice(0, 10);
+    const effectiveBranchId = Number(branchId || 0);
+    if (
+      nextDate &&
+      Number.isFinite(effectiveBranchId) &&
+      effectiveBranchId > 0 &&
+      isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, `${nextDate}T08:00:00`)
+    ) {
+      setErrorText(getBranchClosedMessage(`${nextDate}T08:00:00`));
+      return;
+    }
 
     if (slotMode === SLOT_MODE.INDIVIDUAL && activeSlotVehicleKey) {
       await releaseHoldTokenIfAny(activeSlotVehicleKey);
@@ -1722,8 +2255,8 @@ export default function ReceptionCreateAppointmentForm({
       return;
     }
 
-    if (missingSpecificServiceByVehicle.length > 0) {
-      setErrorText(missingSpecificServiceMessage);
+    if (dateSelectionGuardMessage) {
+      setErrorText(dateSelectionGuardMessage);
       return;
     }
 
@@ -1767,6 +2300,69 @@ export default function ReceptionCreateAppointmentForm({
       setSelectingSlot(false);
     }
   };
+
+  const isSlotHoldStaleMessage = useCallback((message) => {
+    const normalized = normalizeText(message || "");
+    return (
+      normalized.includes("giu cho da het han") ||
+      normalized.includes("thong tin giu cho khong khop voi lich dang dat") ||
+      (normalized.includes("giu cho") && normalized.includes("khong khop")) ||
+      (normalized.includes("giu cho") && normalized.includes("khong con phu hop"))
+    );
+  }, []);
+
+  const refreshSelectedSlotHolds = useCallback(async () => {
+    const failedVehicles = [];
+
+    if (slotMode === SLOT_MODE.PARALLEL) {
+      const slot = parallelSlot;
+      if (!slot) return selectedVehicleKeys.map((vehicleKey) => vehicleLabelByKey.get(vehicleKey) || vehicleKey);
+
+      for (const vehicleKey of selectedVehicleKeys) {
+        const vehicleLabel = vehicleLabelByKey.get(vehicleKey) || vehicleKey;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await releaseHoldTokenIfAny(vehicleKey);
+          const vehicleFlow = resolveSlotFlow(slot, getVehicleFlow(vehicleKey));
+          // eslint-disable-next-line no-await-in-loop
+          await createHoldForVehicle(slot, vehicleKey, vehicleFlow);
+        } catch {
+          failedVehicles.push(vehicleLabel);
+        }
+      }
+      return failedVehicles;
+    }
+
+    for (const vehicleKey of selectedVehicleKeys) {
+      const vehicleLabel = vehicleLabelByKey.get(vehicleKey) || vehicleKey;
+      const slot = selectedSlotsByVehicle?.[vehicleKey];
+      if (!slot) {
+        failedVehicles.push(vehicleLabel);
+        continue;
+      }
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await releaseHoldTokenIfAny(vehicleKey);
+        const vehicleFlow = resolveSlotFlow(slot, getVehicleFlow(vehicleKey));
+        // eslint-disable-next-line no-await-in-loop
+        await createHoldForVehicle(slot, vehicleKey, vehicleFlow);
+      } catch {
+        failedVehicles.push(vehicleLabel);
+      }
+    }
+
+    return failedVehicles;
+  }, [
+    createHoldForVehicle,
+    getVehicleFlow,
+    parallelSlot,
+    releaseHoldTokenIfAny,
+    resolveSlotFlow,
+    selectedSlotsByVehicle,
+    selectedVehicleKeys,
+    slotMode,
+    vehicleLabelByKey
+  ]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -1855,12 +2451,13 @@ export default function ReceptionCreateAppointmentForm({
     setVehicleNotesByKey({});
     setShowOddSlots({ ...INITIAL_ODD_SLOT_VISIBILITY });
     const customerId = Number(customer.id);
+    const hasSavedVehicles = hasSavedVehiclesByCustomerId(customerId);
     setFormData((prev) => ({
       ...prev,
       customerId,
       customerName: customer.fullName || "",
       customerPhone: customer.phone || "",
-      isNewVehicle: false,
+      isNewVehicle: !hasSavedVehicles,
       selectedVehicleIds: [],
       vehicleLicensePlate: "",
       vehicleModelId: "",
@@ -1891,6 +2488,7 @@ export default function ReceptionCreateAppointmentForm({
   };
 
   const switchToSavedVehicleMode = () => {
+    if (customerHasNoVehicles) return;
     void releaseAllHoldTokens();
     setIsSavedVehiclePopupOpen(false);
     setParallelSlot(null);
@@ -2001,10 +2599,15 @@ export default function ReceptionCreateAppointmentForm({
       return missingSpecificServiceMessage;
     }
 
+    for (const vehicle of insuranceVehicleOptions) {
+      const issue = validateInsuranceSnapshotByMode(insuranceByVehicleKey[vehicle.key], { mode: "booking" });
+      if (issue) return `${vehicle.label}: ${issue}`;
+    }
+
     return "";
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const validationError = validateBeforeSubmit();
     if (validationError) {
@@ -2057,41 +2660,63 @@ export default function ReceptionCreateAppointmentForm({
         ? (vehicleNotePlans[0]?.customerNotes || null)
         : groupCustomerNotesPayload;
 
-    onSubmit({
-      ...formData,
-      appointmentDate: primarySlotParts?.appointmentDate || formData.appointmentDate,
-      startTime: primarySlotParts?.startTime || formData.startTime,
-      customerNotes: fallbackCustomerNotesPayload,
-      groupCustomerNotes: groupCustomerNotesPayload,
-      customerId: formData.customerId ? Number(formData.customerId) : null,
-      selectedVehicleIds: toNumberList(formData.selectedVehicleIds),
-      serviceIds: selectedServiceIdsUnion,
-      selectedCategoryIds: selectedCategoryIdsUnion,
-      slotMode,
-      vehicleSlotSelections,
-      vehicleNotePlans,
-      vehicleServicePlans: planSummaries.map((plan) => ({
-        vehicleKey: plan.vehicleKey,
-        vehicleId: plan.vehicleId,
-        categoryIds: plan.categoryIds,
-        serviceIds: plan.serviceIds,
-        bookingFlow: plan.bookingFlow,
-        totalMinutes: plan.totalMinutes,
-        totalPrice: plan.totalPrice
-      })),
-      servicePlanMode: effectiveServiceMode,
-      totalMinutes: Math.max(completionMinutes, 30),
-      fleetTotalMinutes: totalMinutes,
-      fleetCompletionMinutes: completionMinutes,
-      fleetTotalPrice: totalPrice
-    });
+    try {
+      await onSubmit({
+        ...formData,
+        appointmentDate: primarySlotParts?.appointmentDate || formData.appointmentDate,
+        startTime: primarySlotParts?.startTime || formData.startTime,
+        customerNotes: fallbackCustomerNotesPayload,
+        groupCustomerNotes: groupCustomerNotesPayload,
+        customerId: formData.customerId ? Number(formData.customerId) : null,
+        selectedVehicleIds: toNumberList(formData.selectedVehicleIds),
+        serviceIds: selectedServiceIdsUnion,
+        selectedCategoryIds: selectedCategoryIdsUnion,
+        slotMode,
+        vehicleSlotSelections,
+        vehicleNotePlans,
+        vehicleServicePlans: planSummaries.map((plan) => ({
+          ...(
+            insuranceVehicleKeySet.has(plan.vehicleKey)
+              ? buildInsuranceSnapshotPayload(insuranceByVehicleKey[plan.vehicleKey], { mode: "booking" })
+              : buildInsuranceSnapshotPayload(null, { mode: "booking" })
+          ),
+          vehicleKey: plan.vehicleKey,
+          vehicleId: plan.vehicleId,
+          categoryIds: plan.categoryIds,
+          serviceIds: plan.serviceIds,
+          bookingFlow: plan.bookingFlow,
+          totalMinutes: plan.totalMinutes,
+          totalPrice: plan.totalPrice
+        })),
+        servicePlanMode: effectiveServiceMode,
+        totalMinutes: Math.max(completionMinutes, 30),
+        fleetTotalMinutes: totalMinutes,
+        fleetCompletionMinutes: completionMinutes,
+        fleetTotalPrice: totalPrice
+      });
+    } catch (submitError) {
+      const message = submitError?.message || "Không thể đặt lịch. Vui lòng thử lại.";
+      if (isSlotHoldStaleMessage(message)) {
+        const failedVehicles = await refreshSelectedSlotHolds();
+        await loadSlots();
+        if (Array.isArray(failedVehicles) && failedVehicles.length > 0) {
+          setErrorText(
+            `Giữ chỗ đã hết hạn và không thể giữ lại cho: ${failedVehicles.join(", ")}. Vui lòng chọn lại khung giờ cho các xe này.`
+          );
+        } else {
+          setErrorText("Thông tin giữ chỗ đã được đồng bộ lại. Vui lòng bấm xác nhận lại.");
+        }
+      } else {
+        setErrorText(message);
+      }
+    }
   };
 
   const selectedVehicleCount = selectedVehicleKeys.length;
 
   return (
     <form id={formId || undefined} ref={formRef} className="admin-form reception-appt-form" onSubmit={handleSubmit}>
-      {errorText ? <div className="reception-error-banner">{errorText}</div> : null}
+      {errorText && typeof onErrorMessage !== "function" ? <div className="reception-error-banner">{errorText}</div> : null}
       <div className="reception-appt-layout">
         <div className="reception-appt-left-column">
           <section className="reception-appt-section">
@@ -2185,18 +2810,22 @@ export default function ReceptionCreateAppointmentForm({
                                 {selectedCustomerVehicles.map((vehicle) => {
                                   const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
                                   return (
-                                    <button
+                                    <div
                                       key={`selected-vehicle-${vehicle.id}`}
-                                      type="button"
                                       className="reception-selected-vehicle-chip"
-                                      onClick={() => toggleVehicleSelection(vehicle.id)}
                                     >
                                       <span className="reception-selected-vehicle-chip-main">
                                         <strong>{plate}</strong>
                                         <small>{describeSavedVehicle(vehicle)}</small>
                                       </span>
-                                      <span className="reception-selected-vehicle-chip-remove">Xóa</span>
-                                    </button>
+                                      <button
+                                        type="button"
+                                        className="reception-selected-vehicle-chip-remove"
+                                        onClick={() => toggleVehicleSelection(vehicle.id)}
+                                      >
+                                        Xóa
+                                      </button>
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -2266,14 +2895,15 @@ export default function ReceptionCreateAppointmentForm({
                   </div>
                 ) : (
                   <div className="reception-new-vehicle-box">
-                    <div className="reception-vehicle-popup-toolbar">
-                      <button
-                        type="button"
-                        className="reception-open-vehicle-popup-btn"
-                        onClick={switchToSavedVehicleMode}
-                      >
-                        Chọn xe đã lưu
-                      </button>
+                      <div className="reception-vehicle-popup-toolbar">
+                        <button
+                          type="button"
+                          className="reception-open-vehicle-popup-btn"
+                          onClick={switchToSavedVehicleMode}
+                          disabled={customerHasNoVehicles}
+                        >
+                          Chọn xe đã lưu
+                        </button>
                       <button
                         type="button"
                         className="reception-open-vehicle-popup-btn is-active"
@@ -2553,7 +3183,7 @@ export default function ReceptionCreateAppointmentForm({
               </button>
               {!isServicePickerCollapsed ? (
                 <div className="reception-category-grid">
-                  {categoryOptions.map((category) => {
+                  {visibleCategoryOptions.map((category) => {
                     const selected = activePlan.categoryIds.includes(Number(category.id));
                     return (
                       <button
@@ -2651,6 +3281,25 @@ export default function ReceptionCreateAppointmentForm({
                 <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
               )}
             </div>
+
+            {insuranceVehicleOptions.length > 0 ? (
+              <div className="reception-service-subsection">
+                <BookingInsurancePanel
+                  vehicleOptions={insuranceVehicleOptions}
+                  activeVehicleKey={activeInsuranceVehicleKey}
+                  onActiveVehicleChange={setActiveInsuranceVehicleKey}
+                  value={activeInsuranceSnapshot}
+                  onChange={handleInsuranceSnapshotChange}
+                  onUploadAsset={handleInsuranceAssetUpload}
+                  onRemoveAsset={handleInsuranceAssetRemove}
+                  uploadingState={insuranceUploadStateByVehicleKey[activeInsuranceVehicleKey] || {}}
+                  companies={insuranceCompanies}
+                  companyNameById={insuranceCompanyNameById}
+                  contextLabel="tiếp nhận xe"
+                  mode="booking"
+                />
+              </div>
+            ) : null}
           </section>
         </div>
 
@@ -2715,8 +3364,8 @@ export default function ReceptionCreateAppointmentForm({
                 showTime={false}
                 iconColor="#2f6bd8"
                 onOpenRequest={() => {
-                  if (missingSpecificServiceByVehicle.length > 0) {
-                    setErrorText(missingSpecificServiceMessage);
+                  if (dateSelectionGuardMessage) {
+                    setErrorText(dateSelectionGuardMessage);
                     return false;
                   }
                   return true;
@@ -2872,7 +3521,7 @@ export default function ReceptionCreateAppointmentForm({
                 <strong>{fleetCompletionDateTimeLabel}</strong>
               </div>
               <div className="reception-summary-inline-row">
-                <span>Tổng giá ước tính</span>
+                <span>Tổng giá dịch vụ tất cả xe</span>
                 <strong>{formatCurrency(totalPrice)}</strong>
               </div>
               <div className="reception-summary-inline-row">
@@ -2885,7 +3534,11 @@ export default function ReceptionCreateAppointmentForm({
 
             {planSummaries.length > 0 ? (
               <div className="reception-plan-summary-grid">
-                {planSummaries.map((plan) => (
+                {planSummaries.map((plan) => {
+                  const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
+                  const insuranceSummary = insuranceDetails?.summary || null;
+
+                  return (
                   <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
                     <div className="reception-plan-summary-head">
                       <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
@@ -2896,10 +3549,45 @@ export default function ReceptionCreateAppointmentForm({
 
                     <div className="reception-plan-summary-block">
                       <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                      <p className="reception-plan-summary-text">
-                        {plan.serviceNames.length > 0 ? plan.serviceNames.join(", ") : "Chưa có dịch vụ"}
-                      </p>
+                      {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0 ? (
+                        <ul className="reception-plan-summary-list">
+                          {plan.serviceGroupsByCategory.map((group) => (
+                            <li key={`${plan.vehicleKey}-${group.categoryName}`} className="reception-plan-summary-list-item">
+                              <span className="reception-plan-summary-list-group">{group.categoryName}</span>
+                              <ul className="reception-plan-summary-sublist">
+                                {(group.serviceNames || []).map((serviceName) => (
+                                  <li
+                                    key={`${plan.vehicleKey}-${group.categoryName}-${serviceName}`}
+                                    className="reception-plan-summary-sublist-item"
+                                  >
+                                    {serviceName}
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
+                      )}
                     </div>
+
+                    {insuranceSummary ? (
+                      <div className="reception-plan-summary-block">
+                        <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
+                        <div className="reception-plan-summary-time-row">
+                          <span>Công ty bảo hiểm:</span>
+                          <strong>{insuranceSummary.companyName}</strong>
+                        </div>
+                        <div className="reception-plan-summary-time-row">
+                          <span>Hồ sơ bảo hiểm:</span>
+                          <strong>{insuranceSummary.assetSummaryLabel}</strong>
+                        </div>
+                        <p className="reception-plan-summary-text">
+                          {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
+                        </p>
+                      </div>
+                    ) : null}
 
                     <div className="reception-plan-summary-block">
                       <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
@@ -2911,6 +3599,10 @@ export default function ReceptionCreateAppointmentForm({
                         <span>Giờ kết thúc:</span>
                         <strong>{plan.endTimeLabel}</strong>
                       </div>
+                      <div className="reception-plan-summary-time-row">
+                        <span>Tổng thời lượng:</span>
+                        <strong>{`${plan.totalMinutes} phút`}</strong>
+                      </div>
                     </div>
 
                     {plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && plan.flowWarningLabel ? (
@@ -2920,11 +3612,11 @@ export default function ReceptionCreateAppointmentForm({
                     ) : null}
 
                     <div className="reception-plan-summary-footer">
-                      <span>{`${plan.totalMinutes} phút`}</span>
+                      <span>Tổng giá dịch vụ</span>
                       <strong>{formatCurrency(plan.totalPrice)}</strong>
                     </div>
                   </article>
-                ))}
+                )})}
               </div>
             ) : null}
           </section>

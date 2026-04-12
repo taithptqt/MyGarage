@@ -665,6 +665,64 @@
   font-weight: 600;
 }
 
+.so-detail-image-block-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.so-detail-image-block {
+  border: 1px solid #dce6f8;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.so-detail-image-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.so-detail-image-head p {
+  margin: 0;
+  color: #5f769f;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.so-detail-image-head span {
+  color: #6b7f9f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.so-detail-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.so-detail-image-link {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #d6e3f8;
+  background: #edf3ff;
+}
+
+.so-detail-image-link img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
 .so-detail-action-row {
   display: flex;
   flex-wrap: wrap;
@@ -732,6 +790,18 @@
   color: #8a5f13;
   font-size: 13px;
   font-weight: 600;
+}
+
+.so-detail-diagnosis-warning {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid #f3b4ad;
+  background: #fff0ee;
+  color: #b42318;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .modal-box.so-diagnosis-request-modal {
@@ -981,7 +1051,8 @@
   }
 
   .so-detail-party-grid,
-  .so-detail-note-grid {
+  .so-detail-note-grid,
+  .so-detail-image-block-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2431,18 +2502,28 @@
 }
 
 .appointment-status-cell {
-  display: inline-grid;
-  grid-template-columns: minmax(0, auto) 18px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  column-gap: 8px;
   width: 100%;
+  min-height: 30px;
+}
+
+.appointment-status-main {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .appointment-issue-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -2451,12 +2532,7 @@
   font-size: 12px;
   font-weight: 900;
   line-height: 1;
-  flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(217, 45, 32, 0.18);
-}
-
-.appointment-issue-indicator.is-hidden {
-  visibility: hidden;
 }
 
 .appointment-click-row:hover {
@@ -2853,7 +2929,36 @@
   min-width: 336px;
 }
 
+.reception-dashboard .col-actions-compact {
+  width: 190px;
+  min-width: 190px;
+}
+
+.reception-dashboard .col-status-fixed {
+  width: 170px;
+  min-width: 170px;
+}
+
+.reception-dashboard .admin-table th.col-status-fixed,
+.reception-dashboard .admin-table td.col-status-fixed {
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.reception-dashboard .admin-table th.col-status-fixed .status-col-label {
+  display: block;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0 !important;
+}
+
 .reception-dashboard .admin-table th.col-actions-wide {
+  text-align: center !important;
+}
+
+.reception-dashboard .admin-table th.col-actions-compact,
+.reception-dashboard .admin-table th.col-status-fixed {
   text-align: center !important;
 }
 
@@ -3745,6 +3850,43 @@
   word-break: break-word;
 }
 
+.reception-plan-summary-text-bulleted {
+  white-space: pre-line;
+}
+
+.reception-plan-summary-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: #23406f;
+}
+
+.reception-plan-summary-list-item {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.reception-plan-summary-list-group {
+  color: #1f3f74;
+}
+
+.reception-plan-summary-sublist {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.reception-plan-summary-sublist-item {
+  color: #2b4b7f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .reception-plan-summary-warning {
   margin: 0;
   color: #cc2c2c;
@@ -4023,7 +4165,7 @@
   justify-content: space-between;
   gap: 10px;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
@@ -4048,11 +4190,15 @@
 }
 
 .reception-selected-vehicle-chip-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
   color: #7290bf;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .reception-vehicle-popup-backdrop {
@@ -4412,11 +4558,15 @@
 
 .reception-service-card-main strong {
   text-transform: none;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-variant-caps: normal;
 }
 
 .reception-service-card-main small {
   font-size: 12px;
   color: #6c7da3;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-variant-caps: normal;
 }
 
 .reception-selected-services {
@@ -5734,6 +5884,9 @@
 }
 
 .workshop-page.dark .reception-plan-summary-text,
+.workshop-page.dark .reception-plan-summary-list,
+.workshop-page.dark .reception-plan-summary-list-group,
+.workshop-page.dark .reception-plan-summary-sublist-item,
 .workshop-page.dark .reception-plan-summary-time-row strong,
 .workshop-page.dark .reception-plan-summary-footer,
 .workshop-page.dark .reception-plan-summary-footer strong {

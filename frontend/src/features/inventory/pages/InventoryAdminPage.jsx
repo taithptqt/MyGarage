@@ -1973,7 +1973,7 @@ export default function InventoryAdminPage({ section }) {
                       return (
                         <tr key={a.id}>
                           <td className="td-id">#{a.id}</td>
-                          <td>{a.auditDate ? new Date(a.auditDate).toLocaleDateString() : "-"}</td>
+                          <td>{a.auditDate ? new Date(a.auditDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                           <td>{a.branchName}</td>
                           <td>{a.warehouseName}</td>
                           <td><span className={`badge ${status.className}`}>{status.label}</span></td>
@@ -2089,7 +2089,7 @@ export default function InventoryAdminPage({ section }) {
                       (transactions.items || []).map((t) => (
                         <tr key={t.id}>
                           <td className="td-id">#{t.id}</td>
-                          <td>{t.createdAt ? new Date(t.createdAt).toLocaleString() : "-"}</td>
+                          <td>{t.createdAt ? new Date(t.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                           <td><span className="badge badge-inactive">{friendlyTransactionType(t.type)}</span></td>
                           <td>{t.branchName}</td>
                           <td>{t.warehouseName}</td>
@@ -2190,7 +2190,7 @@ export default function InventoryAdminPage({ section }) {
                           <td>{a.message}</td>
                           <td>{a.branchName || "-"}</td>
                           <td>{a.warehouseName || "-"}</td>
-                          <td>{a.createdAt ? new Date(a.createdAt).toLocaleString() : "-"}</td>
+                          <td>{a.createdAt ? new Date(a.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         </tr>
                       );
                     })
@@ -2271,7 +2271,7 @@ export default function InventoryAdminPage({ section }) {
                           <td>{log.action}</td>
                           <td>{log.tableName}</td>
                           <td>{log.recordId}</td>
-                          <td>{log.timestamp ? new Date(log.timestamp).toLocaleString() : "-"}</td>
+                          <td>{log.timestamp ? new Date(log.timestamp).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         </tr>
                       ))
                     )}

@@ -1563,7 +1563,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td><td>{item.fullName || "-"}</td><td>{item.phone || "-"}</td><td className="td-email">{item.email || "-"}</td>
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
-                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
+                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1597,7 +1597,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.brandName || "-"}</td>
                         <td>{item.modelName || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
+                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1613,7 +1613,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-"}</td>
+                        <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}

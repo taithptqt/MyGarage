@@ -5,15 +5,17 @@ import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi"
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
-import { getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getAllBranchOperatingHours, getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import {
   buildFlexibleCompletionWarningMessage,
   buildFlexibleTriggerServiceIdSet,
+  buildInsuranceFlexiblePackageIdSet,
   buildSlotSelectionGuide,
-  resolveBookingFlowByServicesAndDuration,
+  findUnresolvedPackageIds,
+  resolveBookingFlowByItemsAndDuration,
   WORKING_DAY_MINUTES,
 } from "@features/appointments/utils/bookingFlowRules";
 import {
@@ -40,6 +42,7 @@ import {
   collectCompatibleCategoryIds,
   filterBookableItemsForVehicleModels,
 } from "@shared/utils/serviceEngineCompatibility";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 import { addMinutesWithinWorkingHours } from "@shared/utils/workingHoursSchedule";
 import { mergeBookableServicesAndPackages, splitBookingItemIds, toPackageSelectableId } from "@features/appointments/utils/bookingPackages";
 import "./Workshop.css";
@@ -349,6 +352,10 @@ export default function ServiceOrderEditPage() {
   const [decisionNotesByRequestId, setDecisionNotesByRequestId] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const scrollToPageTop = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const [order, setOrder] = useState(null);
   const [editCapability, setEditCapability] = useState(null);
@@ -359,6 +366,7 @@ export default function ServiceOrderEditPage() {
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [models, setModels] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState("");
@@ -368,6 +376,11 @@ export default function ServiceOrderEditPage() {
   const pickerMinDate = useMemo(() => new Date(2000, 0, 1), []);
   const roleCode = String(user?.roleCode ?? user?.RoleCode ?? "").trim();
   const roleName = String(user?.roleName ?? user?.RoleName ?? "").trim();
+
+  useEffect(() => {
+    if (!String(error || "").trim()) return;
+    scrollToPageTop();
+  }, [error, scrollToPageTop]);
 
   const effectiveBranchId = useMemo(() => {
     const fromContext = parsePositiveId(selectedBranchId);
@@ -393,6 +406,15 @@ export default function ServiceOrderEditPage() {
     () => buildCategoryOptions(serviceCategories, normalizedServices),
     [serviceCategories, normalizedServices]
   );
+  const categoryNameById = useMemo(() => {
+    const map = new Map();
+    categoryOptions.forEach((category) => {
+      const id = Number(category?.id || 0);
+      if (!Number.isFinite(id) || id <= 0) return;
+      map.set(id, String(category?.name || "").trim() || `Nhóm ${id}`);
+    });
+    return map;
+  }, [categoryOptions]);
 
   const serviceById = useMemo(
     () => new Map(normalizedServices.map((service) => [Number(service.id), service])),
@@ -400,6 +422,10 @@ export default function ServiceOrderEditPage() {
   );
   const flexibleTriggerServiceIdSet = useMemo(
     () => buildFlexibleTriggerServiceIdSet(normalizedServices),
+    [normalizedServices]
+  );
+  const insuranceFlexiblePackageIdSet = useMemo(
+    () => buildInsuranceFlexiblePackageIdSet(normalizedServices),
     [normalizedServices]
   );
 
@@ -448,6 +474,24 @@ export default function ServiceOrderEditPage() {
       .map((serviceId) => serviceById.get(serviceId))
       .filter(Boolean);
   }, [formData.serviceIds, serviceById]);
+  const serviceGroupsByCategory = useMemo(
+    () =>
+      Array.from(
+        selectedServices.reduce((map, service) => {
+          const categoryId = Number(service?.categoryId || 0);
+          const categoryName = categoryNameById.get(categoryId) || `Nhóm ${categoryId || "Khác"}`;
+          const serviceName = String(service?.name || "").trim();
+          if (!serviceName) return map;
+          if (!map.has(categoryName)) map.set(categoryName, []);
+          map.get(categoryName).push(serviceName);
+          return map;
+        }, new Map())
+      ).map(([categoryName, serviceNames]) => ({
+        categoryName,
+        serviceNames: Array.from(new Set(serviceNames)),
+      })),
+    [categoryNameById, selectedServices]
+  );
 
   const hasInsuranceSignalServiceSelected = useMemo(
     () => selectedServices.some((service) => isInsuranceSignalService(service)),
@@ -516,9 +560,10 @@ export default function ServiceOrderEditPage() {
   } = useMemo(() => {
     const serviceMinutes = sumServiceMinutes(selectedServices);
     const executionMinutesValue = calculateRoundedOccupancyMinutes(serviceMinutes);
-    const flowState = resolveBookingFlowByServicesAndDuration({
-      serviceIds: selectedServices.map((service) => Number(service?.id || 0)),
+    const flowState = resolveBookingFlowByItemsAndDuration({
+      itemIds: selectedServices.map((service) => Number(service?.id || 0)),
       flexibleTriggerServiceIdSet,
+      insuranceFlexiblePackageIdSet,
       executionMinutes: executionMinutesValue,
       workingDayMinutes: WORKING_DAY_MINUTES,
     });
@@ -531,7 +576,7 @@ export default function ServiceOrderEditPage() {
       isServiceDrivenFlexibleFlow: flowState.isServiceDrivenFlexibleFlow,
       suggestedFinish: calculateEstimatedFinish(formData.checkInTime, executionMinutesValue),
     };
-  }, [flexibleTriggerServiceIdSet, formData.checkInTime, selectedServices]);
+  }, [flexibleTriggerServiceIdSet, formData.checkInTime, insuranceFlexiblePackageIdSet, selectedServices]);
 
   const customerDisplay = useMemo(() => {
     const customerId = parsePositiveId(order?.customerId ?? order?.CustomerId);
@@ -588,7 +633,7 @@ export default function ServiceOrderEditPage() {
     setLoadingEditRequests(true);
     setError("");
     try {
-      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, packageRes, detailsRes, insuranceRes, customerRes, vehicleRes, modelRes] = await Promise.all([
+      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, packageRes, detailsRes, insuranceRes, customerRes, vehicleRes, modelRes, operatingHoursRes] = await Promise.all([
         serviceOrderApi.getById(orderId),
         serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
         serviceOrderApi.getEditRequests(orderId).catch(() => []),
@@ -602,6 +647,7 @@ export default function ServiceOrderEditPage() {
         getAllCustomers(),
         getAllVehicles(),
         getVehicleModels().catch(() => []),
+        getAllBranchOperatingHours().catch(() => []),
       ]);
 
       if (!orderRes) {
@@ -689,6 +735,7 @@ export default function ServiceOrderEditPage() {
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setModels(Array.isArray(modelRes) ? modelRes : []);
+      setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
       setEditRequests(
         (Array.isArray(requestRes) ? requestRes : [])
           .map(normalizeServiceOrderEditRequestItem)
@@ -787,6 +834,8 @@ export default function ServiceOrderEditPage() {
       if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
       if (!checkIn || Number.isNaN(checkIn.getTime())) {
         errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
+      } else if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, checkIn)) {
+        errors.checkInTime = getBranchClosedMessage(checkIn);
       }
 
       if (estimated && checkIn && !Number.isNaN(estimated.getTime()) && estimated < checkIn) {
@@ -819,12 +868,39 @@ export default function ServiceOrderEditPage() {
 
       return errors;
     },
-    [isInsuranceOrderEnabled, suggestedFinish.finishIso]
+    [branchOperatingHours, effectiveBranchId, isInsuranceOrderEnabled, suggestedFinish.finishIso]
   );
 
+  const checkInSelectionGuardMessage = useMemo(() => {
+    if (toNumberList(formData.serviceIds).length === 0) {
+      return "Vui lòng chọn ít nhất một dịch vụ cụ thể trước khi chọn giờ.";
+    }
+    const unresolvedPackageIds = findUnresolvedPackageIds(toNumberList(formData.serviceIds), serviceById);
+    if (unresolvedPackageIds.length > 0) {
+      return `Vui lòng chọn lại gói dịch vụ (mã không hợp lệ: #${unresolvedPackageIds.join(", #")}) trước khi chọn giờ.`;
+    }
+    return "";
+  }, [formData.serviceIds, serviceById]);
+
   const handleFieldValueChange = useCallback((fieldName, value) => {
+    if (fieldName === "checkInTime" && checkInSelectionGuardMessage) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+      return;
+    }
+    if (fieldName === "checkInTime" && value && isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, value)) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: getBranchClosedMessage(value) }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [fieldName]: value }));
-  }, []);
+    if (fieldName === "checkInTime") {
+      setFieldErrors((prev) => {
+        if (!prev?.checkInTime) return prev;
+        const next = { ...prev };
+        delete next.checkInTime;
+        return next;
+      });
+    }
+  }, [branchOperatingHours, checkInSelectionGuardMessage, effectiveBranchId]);
 
   const handleInsuranceToggle = useCallback((enabled) => {
     setFormData((prev) => ({
@@ -1383,6 +1459,29 @@ export default function ServiceOrderEditPage() {
               </div>
 
               {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
+
+              <WorkshopInsurancePanel
+                enabled={isInsuranceOrderEnabled}
+                locked={hasInsuranceSignalServiceSelected}
+                companies={insuranceCompanies}
+                selectedCompanyId={formData.insuranceCompanyId}
+                onToggle={handleInsuranceToggle}
+                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
+                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
+                insuranceDeductibleOption={formData.insuranceDeductibleOption}
+                insuranceClaimMode={formData.insuranceClaimMode}
+                insuranceQuoteState={formData.insuranceQuoteState}
+                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
+                onClaimModeChange={handleInsuranceClaimModeChange}
+                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
+                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
+                draftBreakdown={insuranceDraftBreakdown}
+                insuranceCardImageUrls={formData.insuranceCardImageUrls}
+                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
+                uploadingState={insuranceUploadState}
+                onUploadAsset={handleInsuranceAssetUpload}
+                onRemoveAsset={handleInsuranceAssetRemove}
+              />
             </section>
           </div>
           <div className="reception-appt-right-column">
@@ -1413,29 +1512,6 @@ export default function ServiceOrderEditPage() {
                 </select>
                 {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
               </div>
-
-              <WorkshopInsurancePanel
-                enabled={isInsuranceOrderEnabled}
-                locked={hasInsuranceSignalServiceSelected}
-                companies={insuranceCompanies}
-                selectedCompanyId={formData.insuranceCompanyId}
-                onToggle={handleInsuranceToggle}
-                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
-                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
-                insuranceDeductibleOption={formData.insuranceDeductibleOption}
-                insuranceClaimMode={formData.insuranceClaimMode}
-                insuranceQuoteState={formData.insuranceQuoteState}
-                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
-                onClaimModeChange={handleInsuranceClaimModeChange}
-                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
-                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
-                draftBreakdown={insuranceDraftBreakdown}
-                insuranceCardImageUrls={formData.insuranceCardImageUrls}
-                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
-                uploadingState={insuranceUploadState}
-                onUploadAsset={handleInsuranceAssetUpload}
-                onRemoveAsset={handleInsuranceAssetRemove}
-              />
 
               <div className="form-group">
                 <label>Xử lý phụ tùng cũ</label>
@@ -1487,8 +1563,15 @@ export default function ServiceOrderEditPage() {
                     onChange={(value) => handleFieldValueChange("checkInTime", value)}
                     placeholder="Chọn ngày và giờ..."
                     minDate={pickerMinDate}
+                    onOpenRequest={() => {
+                      if (checkInSelectionGuardMessage) {
+                        setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+                        return false;
+                      }
+                      return true;
+                    }}
                   />
-                  {showError("checkInTime") ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
+                  {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                 </div>
 
                 <div className="form-group">
@@ -1519,6 +1602,16 @@ export default function ServiceOrderEditPage() {
                   <span>Tổng số dịch vụ</span>
                   <strong>{selectedServices.length}</strong>
                 </div>
+                <div className="reception-plan-summary-block">
+                  <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
+                  <p className="reception-plan-summary-text reception-plan-summary-text-bulleted">
+                    {serviceGroupsByCategory.length > 0
+                      ? serviceGroupsByCategory
+                        .map((group) => `- ${group.categoryName}\n  ${(group.serviceNames || []).map((name) => `+ ${name}`).join("\n  ")}`)
+                        .join("\n")
+                      : "Chưa có dịch vụ"}
+                  </p>
+                </div>
                 <div className="reception-summary-inline-row">
                   <span>Tổng thời lượng</span>
                   <strong>{`${totalMinutes} phút`}</strong>
@@ -1548,12 +1641,12 @@ export default function ServiceOrderEditPage() {
                   <span>Luồng tiếp nhận</span>
                   <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Khung giờ sửa chữa"}</strong>
                 </div>
+                {completionWarningText ? (
+                  <p className="reception-plan-summary-warning reception-summary-inline-warning">
+                    {`* ${completionWarningText}`}
+                  </p>
+                ) : null}
               </div>
-              {completionWarningText ? (
-                <p className="reception-plan-summary-warning">
-                  {`* ${completionWarningText}`}
-                </p>
-              ) : null}
             </section>
           </div>
           </div>

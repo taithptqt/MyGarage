@@ -1,5 +1,6 @@
 export const REFERENCE_ROUTES = {
   branches: "/api/branches",
+  branchOperatingHours: "/api/branch-operating-hours",
   standardServices: "/api/standard-services",
   packages: "/api/packages",
   vehicleBrands: "/api/vehicle-brands",

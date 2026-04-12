@@ -44,9 +44,8 @@ export function isInsuranceCustomerChargeService(service) {
   return CUSTOMER_CHARGE_SERVICE_CODES.has(normalizeServiceCode(service));
 }
 
-export function isInsuranceOrderActive({ insuranceEnabled, orderCategory, insuranceCompanyId, services }) {
+export function isInsuranceOrderActive({ insuranceEnabled, insuranceCompanyId, services }) {
   if (Boolean(insuranceEnabled)) return true;
-  if (String(orderCategory || "").trim().toUpperCase() === INSURANCE_ORDER_CATEGORY) return true;
   if (toPositiveNumber(insuranceCompanyId) > 0) return true;
   return Array.isArray(services) && services.some(isInsuranceSignalService);
 }

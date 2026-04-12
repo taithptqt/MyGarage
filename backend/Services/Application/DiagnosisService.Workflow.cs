@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
@@ -26,7 +29,11 @@ namespace MyGarage.Services
         private const int UnclaimedEscalationMinutes = 10;
         private const int GoldenCancelWindowMinutes = 10;
         private const int DiagnosisSlaMinutes = 45;
+        private const int DiagnosisQueueDefaultMinutes = 30;
+        private const int DiagnosisQueueDefaultBufferMinutes = 15;
+        private const string AutoDiagnosisQueueSlotMarker = "[AUTO_DIAG_QUEUE]";
         private const string DispatchCollaborationPrefix = "[DISPATCH_COLLAB]";
+        private const string AutoDispatchWarningPrefix = "[AUTO_DISPATCH_WARNING]";
         private const string TeamCodeFastMaint = "FAST_MAINT";
         private const string TeamCodeEngChas1 = "ENG_CHAS_1";
         private const string TeamCodeEngChas2 = "ENG_CHAS_2";
@@ -55,6 +62,17 @@ namespace MyGarage.Services
             nameof(ServiceOrderLifecycleStatus.CHECKED_IN),
             nameof(ServiceOrderLifecycleStatus.DIAGNOSING)
         ];
+
+        private static readonly IReadOnlyDictionary<string, string> DiagnosisCodeDispatchTagMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DG-MINI"] = "MAINTENANCE",
+            ["DG-GEN"] = "MAINTENANCE",
+            ["DG-SCAN"] = "ELECTRICAL_AC",
+            ["DG-ENG"] = "ENGINE_CHASSIS",
+            ["DG-ELEC"] = "ELECTRICAL_AC",
+            ["DG-AC"] = "ELECTRICAL_AC",
+            ["DG-NOISE"] = "ENGINE_CHASSIS"
+        };
 
         private sealed class DispatchCollaborationTeamAssignmentMeta
         {
@@ -361,89 +379,114 @@ namespace MyGarage.Services
 
         public async Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null)
         {
-            var dispatchTags = SplitDispatchTags(dispatchTag);
-            var hasDispatchFilter = dispatchTags.Count > 0;
+            _ = dispatchTag;
 
-            var candidateTeams = await _context.Teams.AsNoTracking()
-                .Where(x => x.BranchId == serviceOrder.ExecuteBranchId)
-                .Where(x => x.LeaderId.HasValue)
-                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
-                .OrderBy(x => x.Id)
-                .Select(x => new { x.LeaderId, x.SpecialtyTag })
-                .ToListAsync();
-
-            var leaderByDispatchTag = candidateTeams
-                .Where(x =>
-                {
-                    if (!hasDispatchFilter)
-                    {
-                        return true;
-                    }
-
-                    var specialty = NormalizeDispatchTag(x.SpecialtyTag);
-                    return specialty != null && dispatchTags.Contains(specialty, StringComparer.OrdinalIgnoreCase);
-                })
-                .Select(x => x.LeaderId)
-                .FirstOrDefault();
-
-            if (leaderByDispatchTag.HasValue)
+            if (serviceOrder.ReceptionistId.HasValue)
             {
-                var leaderExists = await _context.Staffs.AnyAsync(x => x.Id == leaderByDispatchTag.Value);
-                if (leaderExists)
+                var receptionistId = await TryResolveFrontOfficeStaffIdAsync(serviceOrder.ReceptionistId.Value);
+                if (receptionistId.HasValue)
                 {
-                    return leaderByDispatchTag.Value;
+                    return receptionistId.Value;
                 }
             }
 
             if (serviceOrder.ServiceAdvisorId.HasValue)
             {
-                var advisorExists = await _context.Staffs.AnyAsync(x => x.Id == serviceOrder.ServiceAdvisorId.Value);
-                if (advisorExists)
+                var advisorId = await TryResolveFrontOfficeStaffIdAsync(serviceOrder.ServiceAdvisorId.Value);
+                if (advisorId.HasValue)
                 {
-                    return serviceOrder.ServiceAdvisorId.Value;
+                    return advisorId.Value;
                 }
             }
 
-            var firstBranchStaffId = await _context.Staffs
+            if (serviceOrder.CreatedBy.HasValue)
+            {
+                var createdById = await TryResolveFrontOfficeStaffIdAsync(serviceOrder.CreatedBy.Value);
+                if (createdById.HasValue)
+                {
+                    return createdById.Value;
+                }
+            }
+
+            var branchFrontOfficeId = await _context.Staffs.AsNoTracking()
                 .Where(x => x.BranchId == serviceOrder.ExecuteBranchId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => string.IsNullOrEmpty(x.Status) || x.Status.ToUpper() == StaffStatusActive)
+                .Where(x => !x.TeamId.HasValue || x.TeamId.Value <= 0)
                 .OrderBy(x => x.Id)
                 .Select(x => x.Id)
                 .FirstOrDefaultAsync();
-            if (firstBranchStaffId > 0)
+            if (branchFrontOfficeId > 0)
             {
-                return firstBranchStaffId;
+                return branchFrontOfficeId;
             }
 
-            var firstStaffId = await _context.Staffs
-                .OrderBy(x => x.Id)
-                .Select(x => x.Id)
-                .FirstOrDefaultAsync();
-
-            if (firstStaffId <= 0)
-            {
-                throw new InvalidOperationException("Khong co nhan su trong he thong de khoi tao yeu cau chan doan.");
-            }
-
-            return firstStaffId;
+            throw new InvalidOperationException("Khong tim thay nhan su tiep nhan/CVDV de tao hang cho chan doan.");
         }
 
-        public async Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(long serviceOrderId, long technicianId, IReadOnlyList<string> symptoms, string? dispatchTag = null)
+        private async Task<long?> TryResolveFrontOfficeStaffIdAsync(long staffId)
+        {
+            if (staffId <= 0)
+            {
+                return null;
+            }
+
+            var candidate = await _context.Staffs.AsNoTracking()
+                .Where(x => x.Id == staffId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => string.IsNullOrEmpty(x.Status) || x.Status.ToUpper() == StaffStatusActive)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.TeamId
+                })
+                .FirstOrDefaultAsync();
+
+            if (candidate == null)
+            {
+                return null;
+            }
+
+            if (candidate.TeamId.HasValue && candidate.TeamId.Value > 0)
+            {
+                return null;
+            }
+
+            return candidate.Id;
+        }
+
+        public async Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(
+            long serviceOrderId,
+            long? technicianId,
+            IReadOnlyList<string> symptoms,
+            string? dispatchTag = null,
+            long? assignedTeamId = null,
+            long? assignedBayId = null)
         {
             var now = VietnamTime.Now;
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
+            var normalizedSymptoms = (symptoms ?? Array.Empty<string>())
+                .Select(symptom => (symptom ?? string.Empty).Trim())
+                .Where(IsMeaningfulQueueSymptom)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (normalizedSymptoms.Count == 0)
+            {
+                normalizedSymptoms.Add(string.Empty);
+            }
 
-            var items = (symptoms ?? Array.Empty<string>())
+            var items = normalizedSymptoms
                 .Select(symptom => new Diagnosis
                 {
                     ServiceOrderId = serviceOrderId,
-                    TechnicianId = technicianId,
+                    TechnicianId = technicianId.HasValue && technicianId.Value > 0 ? technicianId : null,
                     AssistantTechnicianId = null,
-                    AssignedBayId = null,
-                    Symptom = symptom,
+                    AssignedBayId = assignedBayId.HasValue && assignedBayId.Value > 0 ? assignedBayId : null,
+                    Symptom = string.IsNullOrWhiteSpace(symptom) ? null : symptom,
                     Status = DiagnosisStatusPending,
                     DispatchTag = normalizedDispatchTag,
-                    AssignedTeamId = null,
-                    AssignedAt = null,
+                    AssignedTeamId = assignedTeamId.HasValue && assignedTeamId.Value > 0 ? assignedTeamId : null,
+                    AssignedAt = (assignedTeamId.HasValue && assignedTeamId.Value > 0) || (assignedBayId.HasValue && assignedBayId.Value > 0) ? now : null,
                     StartedAt = null,
                     SupportRequestedAt = null,
                     SupportRequestedBy = null,
@@ -467,6 +510,45 @@ namespace MyGarage.Services
             _context.Diagnoses.AddRange(items);
             await _context.SaveChangesAsync();
             return items;
+        }
+
+        private static bool IsMeaningfulQueueSymptom(string? symptom)
+        {
+            var value = (symptom ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var normalized = value.ToLowerInvariant();
+            if (normalized.StartsWith("[flow:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[cluster:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[dispatch", StringComparison.Ordinal) ||
+                normalized.StartsWith("[auto_dispatch", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (normalized == "khong co" ||
+                normalized == "không có" ||
+                normalized == "khong co ghi chu" ||
+                normalized == "không có ghi chú" ||
+                normalized == "khong co ghi chu gi" ||
+                normalized == "không có ghi chú gì" ||
+                normalized == "khong co mo ta" ||
+                normalized == "không có mô tả")
+            {
+                return false;
+            }
+
+            if ((normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) ||
+                 normalized.StartsWith("[tiếp nhận]", StringComparison.Ordinal)) &&
+                (normalized.Contains("khong co", StringComparison.Ordinal) || normalized.Contains("không có", StringComparison.Ordinal)))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public async Task UpdateServiceOrderStatusAsync(ServiceOrder serviceOrder, string status)
@@ -519,6 +601,320 @@ namespace MyGarage.Services
         {
             return await _context.Bays.AsNoTracking()
                 .AnyAsync(x => x.Id == bayId && x.BranchId == branchId && (!x.IsDeleted.HasValue || x.IsDeleted.Value == false));
+        }
+
+        public async Task<long?> ResolveDiagnoseBayIdForBranchAsync(long branchId, long? preferredBayId = null)
+        {
+            if (branchId <= 0)
+            {
+                return null;
+            }
+
+            var configuredDiagnoseBayCodes = ResolveConfiguredDiagnoseBayCodes(branchId);
+            var hasConfiguredCodes = configuredDiagnoseBayCodes.Count > 0;
+            if (!hasConfiguredCodes)
+            {
+                return null;
+            }
+
+            long? validatedPreferredBayId = null;
+            if (preferredBayId.HasValue && preferredBayId.Value > 0)
+            {
+                validatedPreferredBayId = await _context.Bays.AsNoTracking()
+                    .Where(x => x.Id == preferredBayId.Value && x.BranchId == branchId)
+                    .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                    .Where(x => x.IsActive == true)
+                    .Where(x => !hasConfiguredCodes || configuredDiagnoseBayCodes.Contains((x.Code ?? string.Empty).Trim().ToUpper()))
+                    .Select(x => (long?)x.Id)
+                    .FirstOrDefaultAsync();
+            }
+
+            var branchBays = await _context.Bays.AsNoTracking()
+                .Where(x => x.BranchId == branchId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => x.IsActive == true)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
+                    x.Name,
+                    x.BayType,
+                    x.CurrentOccupiedVehicleId,
+                    x.OperationalStatus
+                })
+                .ToListAsync();
+
+            var diagnoseBays = branchBays
+                .Where(x => string.Equals(NormalizeToken(x.BayType), BayTypeSpDiagnose, StringComparison.OrdinalIgnoreCase))
+                .Where(x =>
+                {
+                    if (!hasConfiguredCodes)
+                    {
+                        return true;
+                    }
+
+                    var code = (x.Code ?? string.Empty).Trim().ToUpperInvariant();
+                    return configuredDiagnoseBayCodes.Contains(code, StringComparer.OrdinalIgnoreCase);
+                })
+                .OrderBy(x =>
+                {
+                    if (!hasConfiguredCodes)
+                    {
+                        return int.MaxValue;
+                    }
+
+                    var code = (x.Code ?? string.Empty).Trim().ToUpperInvariant();
+                    var index = configuredDiagnoseBayCodes.IndexOf(code);
+                    return index >= 0 ? index : int.MaxValue;
+                })
+                .ThenBy(x => x.Code ?? x.Name ?? string.Empty)
+                .Take(hasConfiguredCodes ? 2 : int.MaxValue)
+                .ToList();
+
+            var availableDiagnoseBay = diagnoseBays
+                .FirstOrDefault(x => !x.CurrentOccupiedVehicleId.HasValue && IsOperationalBayAvailable(x.OperationalStatus));
+            if (availableDiagnoseBay != null)
+            {
+                return availableDiagnoseBay.Id;
+            }
+
+            var firstDiagnoseBay = diagnoseBays.FirstOrDefault();
+            if (firstDiagnoseBay != null)
+            {
+                return firstDiagnoseBay.Id;
+            }
+
+            return validatedPreferredBayId;
+        }
+
+        public async Task<WorkSlot?> ScheduleDiagnosisQueueSlotAsync(long serviceOrderId, int diagnoseMinutes, int bufferMinutes = 15, long? preferredBayId = null)
+        {
+            if (serviceOrderId <= 0)
+            {
+                return null;
+            }
+
+            var serviceOrder = await _context.ServiceOrders.AsNoTracking()
+                .Where(x => x.Id == serviceOrderId)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.ExecuteBranchId,
+                    x.CustomerId,
+                    x.VehicleId,
+                    x.AppointmentId,
+                    x.CheckInTime,
+                    x.CreatedAt
+                })
+                .FirstOrDefaultAsync();
+            if (serviceOrder == null || serviceOrder.ExecuteBranchId <= 0)
+            {
+                return null;
+            }
+
+            var effectiveDiagnoseMinutes = Math.Max(5, diagnoseMinutes > 0 ? diagnoseMinutes : DiagnosisQueueDefaultMinutes);
+            var effectiveBufferMinutes = Math.Max(0, bufferMinutes > 0 ? bufferMinutes : DiagnosisQueueDefaultBufferMinutes);
+            var totalMinutes = effectiveDiagnoseMinutes + effectiveBufferMinutes;
+            var now = VietnamTime.Now;
+            var planningAnchor = now;
+
+            var configuredDiagnoseBayCodes = ResolveConfiguredDiagnoseBayCodes(serviceOrder.ExecuteBranchId);
+            var hasConfiguredCodes = configuredDiagnoseBayCodes.Count > 0;
+            if (!hasConfiguredCodes)
+            {
+                return null;
+            }
+
+            var diagnoseBays = await _context.Bays.AsNoTracking()
+                .Where(x => x.BranchId == serviceOrder.ExecuteBranchId)
+                .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
+                .Where(x => x.IsActive == true)
+                .Where(x => x.BayType == BayTypeSpDiagnose)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
+                    x.Name
+                })
+                .OrderBy(x => x.Code ?? x.Name ?? string.Empty)
+                .ToListAsync();
+            if (diagnoseBays.Count == 0)
+            {
+                return null;
+            }
+            if (hasConfiguredCodes)
+            {
+                diagnoseBays = diagnoseBays
+                    .Where(x => configuredDiagnoseBayCodes.Contains((x.Code ?? string.Empty).Trim().ToUpperInvariant(), StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+            }
+            if (diagnoseBays.Count == 0)
+            {
+                return null;
+            }
+            diagnoseBays = diagnoseBays
+                .OrderBy(x =>
+                {
+                    var code = (x.Code ?? string.Empty).Trim().ToUpperInvariant();
+                    var index = configuredDiagnoseBayCodes.IndexOf(code);
+                    return index >= 0 ? index : int.MaxValue;
+                })
+                .ThenBy(x => x.Code ?? x.Name ?? string.Empty)
+                .Take(2)
+                .ToList();
+            if (diagnoseBays.Count == 0)
+            {
+                return null;
+            }
+
+            var diagnoseBayIds = diagnoseBays.Select(x => x.Id).ToList();
+            var existingSlot = await _context.WorkSlots
+                .Where(x => x.ServiceOrderId == serviceOrderId)
+                .Where(x => x.SlotType == nameof(WorkSlotType.DIAGNOSE))
+                .Where(x =>
+                    x.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    x.Status != nameof(WorkSlotStatus.NOSHOW) &&
+                    x.Status != nameof(WorkSlotStatus.COMPLETED))
+                .OrderByDescending(x => x.ActualStartTime ?? x.StartTime)
+                .ThenByDescending(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            if (existingSlot != null && string.Equals(existingSlot.Status, nameof(WorkSlotStatus.IN_PROGRESS), StringComparison.OrdinalIgnoreCase))
+            {
+                return existingSlot;
+            }
+
+            var blockingSlots = await _context.WorkSlots.AsNoTracking()
+                .Where(x => x.BayId.HasValue && diagnoseBayIds.Contains(x.BayId.Value))
+                .Where(x => x.Id != (existingSlot != null ? existingSlot.Id : 0))
+                .Where(x =>
+                    x.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    x.Status != nameof(WorkSlotStatus.NOSHOW) &&
+                    x.Status != nameof(WorkSlotStatus.COMPLETED) &&
+                    x.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
+                .Select(x => new
+                {
+                    BayId = x.BayId!.Value,
+                    x.StartTime,
+                    x.EndTime
+                })
+                .ToListAsync();
+
+            var availableByBay = diagnoseBays
+                .Select(bay =>
+                {
+                    var maxEnd = blockingSlots
+                        .Where(x => x.BayId == bay.Id)
+                        .Select(x => x.EndTime)
+                        .DefaultIfEmpty(planningAnchor)
+                        .Max();
+                    var availableAt = maxEnd > planningAnchor ? maxEnd : planningAnchor;
+                    return new
+                    {
+                        bay.Id,
+                        bay.Code,
+                        bay.Name,
+                        AvailableAt = availableAt,
+                        IsPreferred = preferredBayId.HasValue && bay.Id == preferredBayId.Value
+                    };
+                })
+                .OrderBy(x => x.AvailableAt)
+                .ThenByDescending(x => x.IsPreferred)
+                .ThenBy(x => x.Code ?? x.Name ?? string.Empty)
+                .ToList();
+
+            var selectedBay = availableByBay.First();
+            var slotStart = selectedBay.AvailableAt;
+            var slotEnd = slotStart.AddMinutes(totalMinutes);
+
+            if (existingSlot == null)
+            {
+                existingSlot = new WorkSlot
+                {
+                    BranchId = serviceOrder.ExecuteBranchId,
+                    BayId = selectedBay.Id,
+                    TechnicianId = null,
+                    StartTime = slotStart,
+                    EndTime = slotEnd,
+                    SlotType = nameof(WorkSlotType.DIAGNOSE),
+                    CustomerId = serviceOrder.CustomerId,
+                    VehicleId = serviceOrder.VehicleId,
+                    AppointmentId = serviceOrder.AppointmentId,
+                    ServiceOrderId = serviceOrder.Id,
+                    IsAdditional = false,
+                    SequenceOrder = 1,
+                    Status = nameof(WorkSlotStatus.RESERVED),
+                    Notes = AutoDiagnosisQueueSlotMarker
+                };
+                _context.WorkSlots.Add(existingSlot);
+            }
+            else
+            {
+                existingSlot.BranchId = serviceOrder.ExecuteBranchId;
+                existingSlot.BayId = selectedBay.Id;
+                existingSlot.StartTime = slotStart;
+                existingSlot.EndTime = slotEnd;
+                existingSlot.SlotType = nameof(WorkSlotType.DIAGNOSE);
+                existingSlot.CustomerId = serviceOrder.CustomerId;
+                existingSlot.VehicleId = serviceOrder.VehicleId;
+                existingSlot.AppointmentId = serviceOrder.AppointmentId;
+                existingSlot.ServiceOrderId = serviceOrder.Id;
+                existingSlot.IsAdditional = false;
+                existingSlot.SequenceOrder = 1;
+                if (string.IsNullOrWhiteSpace(existingSlot.Status) ||
+                    string.Equals(existingSlot.Status, nameof(WorkSlotStatus.CANCELLED), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(existingSlot.Status, nameof(WorkSlotStatus.NOSHOW), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(existingSlot.Status, nameof(WorkSlotStatus.COMPLETED), StringComparison.OrdinalIgnoreCase))
+                {
+                    existingSlot.Status = nameof(WorkSlotStatus.RESERVED);
+                }
+
+                existingSlot.Notes = AppendDiagnosisSlotMarker(existingSlot.Notes, AutoDiagnosisQueueSlotMarker);
+                _context.WorkSlots.Update(existingSlot);
+            }
+
+            await _context.SaveChangesAsync();
+            return existingSlot;
+        }
+
+        private static string AppendDiagnosisSlotMarker(string? notes, string marker)
+        {
+            if (string.IsNullOrWhiteSpace(marker))
+            {
+                return notes ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(notes))
+            {
+                return marker;
+            }
+
+            return notes.Contains(marker, StringComparison.OrdinalIgnoreCase)
+                ? notes
+                : $"{notes} {marker}";
+        }
+
+        private List<string> ResolveConfiguredDiagnoseBayCodes(long branchId)
+        {
+            var section = _configuration.GetSection("DiagnosisQueueScheduling:BranchDiagnoseBayCodes");
+            if (!section.Exists())
+            {
+                return new List<string>();
+            }
+
+            var branchSection = section.GetSection(branchId.ToString());
+            if (!branchSection.Exists())
+            {
+                return new List<string>();
+            }
+
+            var rawCodes = branchSection.Get<string[]>() ?? Array.Empty<string>();
+            return rawCodes
+                .Select(x => (x ?? string.Empty).Trim().ToUpperInvariant())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
         }
 
         public async Task<bool> IsDispatchTagCompatibleAsync(string? dispatchTag, long? teamId)
@@ -621,6 +1017,49 @@ namespace MyGarage.Services
             }
 
             return (false, $"To '{team.Name}' khong duoc phep vao khoang {normalizedBayType} neu chua co phe duyet dieu chuyen.");
+        }
+
+        private static bool DispatchTagMatchesTeam(string dispatchTag, string? specialtyTag, string? teamCode)
+        {
+            if (DispatchTagMatchesSpecialty(dispatchTag, specialtyTag ?? string.Empty))
+            {
+                return true;
+            }
+
+            var dispatch = NormalizeDispatchTag(dispatchTag);
+            var code = NormalizeToken(teamCode);
+            if (dispatch == null || string.IsNullOrWhiteSpace(code))
+            {
+                return false;
+            }
+
+            if (dispatch == "ENGINE_CHASSIS")
+            {
+                return string.Equals(code, TeamCodeEngChas1, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(code, TeamCodeEngChas2, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (dispatch == "QUICK_SERVICE" || dispatch == "MAINTENANCE")
+            {
+                return string.Equals(code, TeamCodeFastMaint, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (dispatch == "ELECTRICAL_AC")
+            {
+                return string.Equals(code, TeamCodeElecAc, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (dispatch == "BODY_PAINT" || dispatch == "INSURANCE_REPAIR")
+            {
+                return string.Equals(code, TeamCodeBodyCare, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (dispatch == "CAR_CARE" || dispatch == "DETAILING")
+            {
+                return string.Equals(code, TeamCodeCarCare, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
         }
 
         private static bool DispatchTagMatchesSpecialty(string dispatchTag, string specialtyTag)
@@ -773,7 +1212,7 @@ namespace MyGarage.Services
                         x.Id == teamLeaderId.Value &&
                         x.TeamId == teamId &&
                         (!x.IsDeleted.HasValue || x.IsDeleted.Value == false) &&
-                        (string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase)));
+                        (string.IsNullOrEmpty(x.Status) || x.Status.ToUpper() == StaffStatusActive));
 
                 if (leaderIsValid)
                 {
@@ -784,7 +1223,7 @@ namespace MyGarage.Services
             var firstTeamTechnicianId = await _context.Staffs.AsNoTracking()
                 .Where(x => x.TeamId == teamId)
                 .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
-                .Where(x => string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrEmpty(x.Status) || x.Status.ToUpper() == StaffStatusActive)
                 .OrderBy(x => x.Id)
                 .Select(x => x.Id)
                 .FirstOrDefaultAsync();
@@ -1025,7 +1464,7 @@ namespace MyGarage.Services
             var technicians = await _context.Staffs.AsNoTracking()
                 .Where(x => x.TeamId == teamId)
                 .Where(x => !x.IsDeleted.HasValue || x.IsDeleted.Value == false)
-                .Where(x => string.IsNullOrEmpty(x.Status) || string.Equals(x.Status, StaffStatusActive, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.IsNullOrEmpty(x.Status) || x.Status.ToUpper() == StaffStatusActive)
                 .Select(x => new { x.Id, x.FullName, x.SkillLevel })
                 .ToListAsync();
 
@@ -1036,7 +1475,9 @@ namespace MyGarage.Services
             {
                 var loadRows = await _context.Diagnoses.AsNoTracking()
                     .Where(x => x.Status == DiagnosisStatusAssigned)
-                    .Where(x => technicianIds.Contains(x.TechnicianId) || (x.AssistantTechnicianId.HasValue && technicianIds.Contains(x.AssistantTechnicianId.Value)))
+                    .Where(x =>
+                        (x.TechnicianId.HasValue && technicianIds.Contains(x.TechnicianId.Value)) ||
+                        (x.AssistantTechnicianId.HasValue && technicianIds.Contains(x.AssistantTechnicianId.Value)))
                     .Select(x => new
                     {
                         x.ServiceOrderId,
@@ -1053,7 +1494,7 @@ namespace MyGarage.Services
 
                 foreach (var row in loadRows)
                 {
-                    if (loadBuckets.TryGetValue(row.TechnicianId, out var leadOrders))
+                    if (row.TechnicianId.HasValue && loadBuckets.TryGetValue(row.TechnicianId.Value, out var leadOrders))
                     {
                         leadOrders.Add(row.ServiceOrderId);
                     }

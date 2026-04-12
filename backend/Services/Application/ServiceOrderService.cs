@@ -64,6 +64,9 @@ namespace MyGarage.Services
             {
                 throw new ArgumentNullException(nameof(entity));
             }
+            var checkInTime = entity.CheckInTime ?? VietnamTime.Now;
+            var executeBranchId = entity.ExecuteBranchId > 0 ? entity.ExecuteBranchId : entity.OriginBranchId;
+            await EnsureBranchOpenForCheckInAsync(executeBranchId, checkInTime);
 
             Exception? lastDuplicateException = null;
             var hasExternalTransaction = _context.Database.CurrentTransaction != null;
@@ -136,6 +139,11 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Mã lệnh sửa chữa không hợp lệ.");
             }
 
+            var checkInTime = entity?.CheckInTime ?? VietnamTime.Now;
+            var executeBranchId = entity?.ExecuteBranchId > 0
+                ? entity.ExecuteBranchId
+                : (entity?.OriginBranchId ?? 0);
+            await EnsureBranchOpenForCheckInAsync(executeBranchId, checkInTime);
             await EnsureWorkshopEditableAsync(serviceOrderId);
             return await base.UpdateAsync(id, entity);
         }
@@ -269,6 +277,7 @@ namespace MyGarage.Services
                 var checkInTime = dto.CheckInTime ?? order.CheckInTime ?? VietnamTime.Now;
                 var estimatedHandover = dto.EstimatedHandover ?? order.EstimatedHandover;
                 var promisedHandover = dto.PromisedHandoverTime ?? order.PromisedHandoverTime;
+                await EnsureBranchOpenForCheckInAsync(order.ExecuteBranchId, checkInTime);
 
                 if (estimatedHandover.HasValue && estimatedHandover.Value < checkInTime)
                 {
@@ -502,6 +511,8 @@ namespace MyGarage.Services
             }
             if (executeBranchId <= 0) executeBranchId = originBranchId;
             if (originBranchId <= 0) originBranchId = executeBranchId;
+            var checkInTime = item.CheckInTime ?? VietnamTime.Now;
+            await EnsureBranchOpenForCheckInAsync(executeBranchId, checkInTime);
 
             var requestedInsuranceCompanyId = item.InsuranceCompanyId.GetValueOrDefault();
             if (requestedInsuranceCompanyId > 0)
@@ -529,7 +540,7 @@ namespace MyGarage.Services
                 CustomerNotes = NormalizeText(item.CustomerNotes),
                 RequiredDepositAmount = item.RequiredDepositAmount,
                 OldPartsReturnOption = NormalizeText(item.OldPartsReturnOption),
-                CheckInTime = item.CheckInTime ?? VietnamTime.Now,
+                CheckInTime = checkInTime,
                 EstimatedHandover = item.EstimatedHandover,
                 PromisedHandoverTime = item.PromisedHandoverTime,
                 Status = ResolveOrderStatus(item.Status),
@@ -549,6 +560,30 @@ namespace MyGarage.Services
                 item.InsuranceQuoteState);
 
             return order;
+        }
+
+        private async Task EnsureBranchOpenForCheckInAsync(long branchId, DateTime checkInTime)
+        {
+            if (branchId <= 0)
+            {
+                throw new InvalidOperationException("Thieu thong tin chi nhanh thuc hien lenh.");
+            }
+
+            var checkInVietnamTime = VietnamTime.ToVietnamTime(checkInTime);
+            var operatingHour = await _context.BranchOperatingHours
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.BranchId == branchId && h.DayOfWeek == (int)checkInVietnamTime.DayOfWeek);
+            if (operatingHour?.IsDayOff != true)
+            {
+                return;
+            }
+
+            var now = VietnamTime.Now;
+            var isToday = checkInVietnamTime.Date == now.Date;
+            throw new InvalidOperationException(
+                isToday
+                    ? "Gara không hoạt động vào hôm nay, vui lòng quay lại vào hôm sau."
+                    : "Gara không hoạt động vào ngày này, vui lòng chọn ngày khác.");
         }
 
         private async Task<long> ResolveOrCreateQuickCustomerAsync(WorkshopServiceOrderCreateDto item, long? actorStaffId)

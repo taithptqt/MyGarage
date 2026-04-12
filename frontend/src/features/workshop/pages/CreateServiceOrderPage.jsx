@@ -5,7 +5,7 @@ import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi"
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
-import { getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getAllBranchOperatingHours, getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { getNearestSlotSuggestion } from "@features/appointments/api/appointmentSlotsApi";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -26,15 +26,21 @@ import {
 import {
   buildFlexibleCompletionWarningMessage,
   buildFlexibleTriggerServiceIdSet,
+  buildInsuranceFlexiblePackageIdSet,
   buildSlotSelectionGuide,
+  findUnresolvedPackageIds,
   formatCompletionWarningTime,
-  resolveBookingFlowByServicesAndDuration,
+  resolveBookingFlowByItemsAndDuration,
   WORKING_DAY_MINUTES,
 } from "@features/appointments/utils/bookingFlowRules";
 import {
+  buildInsuranceSummary,
+  createEmptyInsuranceSnapshot,
   INSURANCE_ASSET_TYPE,
+  normalizeInsuranceSnapshot,
   resolveInsuranceDeductibleAmount,
   resolveInsuranceQuoteState,
+  validateInsuranceSnapshotByMode,
 } from "@features/appointments/utils/bookingInsurance";
 import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
 import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
@@ -58,6 +64,7 @@ import {
   filterBookableItemsForVehicleModels,
   prunePlanByVehicleCompatibility,
 } from "@shared/utils/serviceEngineCompatibility";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 import "./Workshop.css";
 
 const SERVICE_MODE = {
@@ -239,7 +246,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nh�m ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
     }
   });
 
@@ -316,6 +323,7 @@ function formatDateTimeValue(value) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -328,11 +336,13 @@ function formatTimeWithDateInBrackets(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
   const date = parsed.toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 
   return `${time} (${date})`;
@@ -370,6 +380,7 @@ function formatSlotTime(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -439,6 +450,7 @@ export default function CreateServiceOrderPage() {
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
 
   const [search, setSearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
@@ -451,6 +463,8 @@ export default function CreateServiceOrderPage() {
     serviceAdvisorId: user?.id || "",
   }));
   const [insuranceUploadState, setInsuranceUploadState] = useState({});
+  const [insuranceByVehicleKey, setInsuranceByVehicleKey] = useState({});
+  const [activeInsuranceVehicleKey, setActiveInsuranceVehicleKey] = useState("");
 
   const [serviceMode, setServiceMode] = useState(SERVICE_MODE.SHARED);
   const [sharedPlan, setSharedPlan] = useState({ ...EMPTY_PLAN });
@@ -481,6 +495,11 @@ export default function CreateServiceOrderPage() {
     if (typeof window === "undefined") return;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    if (!String(error || "").trim()) return;
+    scrollToPageTop();
+  }, [error, scrollToPageTop]);
 
   useEffect(() => {
     const timer = setInterval(() => setCheckInNow(new Date()), 30000);
@@ -547,7 +566,7 @@ export default function CreateServiceOrderPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes] = await Promise.all([
+      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes, operatingHoursRes] = await Promise.all([
         getAllCustomers(),
         getAllVehicles(),
         getAllCustomerVehicles(),
@@ -559,6 +578,7 @@ export default function CreateServiceOrderPage() {
         insuranceCompanyApi.getAll().catch(() => []),
         getVehicleBrands(),
         getVehicleModels(),
+        getAllBranchOperatingHours().catch(() => []),
       ]);
 
       setCustomers(Array.isArray(cRes) ? cRes : []);
@@ -569,6 +589,7 @@ export default function CreateServiceOrderPage() {
       setInsuranceCompanies(Array.isArray(insuranceRes) ? insuranceRes : []);
       setBrands(Array.isArray(brandsRes) ? brandsRes : []);
       setModels(Array.isArray(modelsRes) ? modelsRes : []);
+      setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
 
       const filteredStaff = (Array.isArray(sRes) ? sRes : []).filter((item) => {
         const role = (Array.isArray(rRes) ? rRes : []).find((r) => Number(r.id) === Number(item.roleId));
@@ -639,15 +660,25 @@ export default function CreateServiceOrderPage() {
     if (Number(formData.vehicleModelId || 0) > 0) {
       map.set(VEHICLE_KEY_NEW, Number(formData.vehicleModelId));
     }
-    customerVehiclesFiltered.forEach((vehicle) => {
-      const key = getVehicleKeyFromId(vehicle.id);
-      const modelId = Number(readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0));
-      if (Number.isFinite(modelId) && modelId > 0) {
-        map.set(key, modelId);
-      }
-    });
+    const customerId = Number(formData.customerId || 0);
+    if (customerId > 0) {
+      const linkedVehicleIds = new Set(
+        customerVehicles
+          .filter((item) => Number(item.customerId) === customerId)
+          .map((item) => Number(item.vehicleId))
+      );
+      vehicles
+        .filter((vehicle) => linkedVehicleIds.has(Number(vehicle.id)))
+        .forEach((vehicle) => {
+          const key = getVehicleKeyFromId(vehicle.id);
+          const modelId = Number(readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0));
+          if (Number.isFinite(modelId) && modelId > 0) {
+            map.set(key, modelId);
+          }
+        });
+    }
     return map;
-  }, [customerVehiclesFiltered, formData.guestVehicleModelId, formData.vehicleModelId]);
+  }, [customerVehicles, formData.customerId, formData.guestVehicleModelId, formData.vehicleModelId, vehicles]);
 
   const describeSavedVehicle = useCallback(
     (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
@@ -752,6 +783,23 @@ export default function CreateServiceOrderPage() {
 
     setActivePlanVehicleKey((prev) => (selectedVehicleKeys.includes(prev) ? prev : selectedVehicleKeys[0] || ""));
     setActiveNoteVehicleKey((prev) => (selectedVehicleKeys.includes(prev) ? prev : selectedVehicleKeys[0] || ""));
+    setInsuranceByVehicleKey((prev) => {
+      const next = {};
+      selectedVehicleKeys.forEach((key) => {
+        const fallbackSnapshot = createEmptyInsuranceSnapshot({
+          insuranceCompanyId: formData.insuranceCompanyId,
+          insuranceDeductibleOption: formData.insuranceDeductibleOption,
+          insuranceDeductibleAmount: formData.insuranceDeductibleAmount,
+          insuranceClaimMode: formData.insuranceClaimMode,
+          insuranceQuoteState: formData.insuranceQuoteState,
+          insuranceCardImageUrls: formData.insuranceCardImageUrls,
+          insuranceDamageImageUrls: formData.insuranceDamageImageUrls,
+        });
+        next[key] = normalizeInsuranceSnapshot(prev[key] || fallbackSnapshot);
+      });
+      return next;
+    });
+    setActiveInsuranceVehicleKey((prev) => (selectedVehicleKeys.includes(prev) ? prev : selectedVehicleKeys[0] || ""));
   }, [selectedVehicleKeys]);
 
   useEffect(() => {
@@ -759,6 +807,24 @@ export default function CreateServiceOrderPage() {
       setIsSavedVehiclePopupOpen(false);
     }
   }, [formData.customerId, formData.isNewVehicle, formData.isQuickOrder]);
+
+  useEffect(() => {
+    if (!activeInsuranceVehicleKey) return;
+    const snapshot = normalizeInsuranceSnapshot(
+      insuranceByVehicleKey[activeInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      insuranceCompanyId: snapshot.insuranceCompanyId || "",
+      insuranceDeductibleAmount: snapshot.insuranceDeductibleAmount,
+      insuranceDeductibleOption: snapshot.insuranceDeductibleOption || "",
+      insuranceClaimMode: snapshot.insuranceClaimMode || "",
+      insuranceQuoteState: snapshot.insuranceQuoteState || "",
+      insuranceCardImageUrls: Array.isArray(snapshot.insuranceCardImageUrls) ? snapshot.insuranceCardImageUrls : [],
+      insuranceDamageImageUrls: Array.isArray(snapshot.insuranceDamageImageUrls) ? snapshot.insuranceDamageImageUrls : [],
+    }));
+  }, [activeInsuranceVehicleKey, insuranceByVehicleKey]);
 
   useEffect(() => {
     if (effectiveServiceMode !== SERVICE_MODE.CUSTOM) return;
@@ -770,11 +836,6 @@ export default function CreateServiceOrderPage() {
       return next;
     });
   }, [effectiveServiceMode, selectedVehicleKeys]);
-
-  const selectedOrderCategoryOption = useMemo(
-    () => orderCategories.find((category) => String(category.code || category.name) === String(formData.orderCategory)) || null,
-    [orderCategories, formData.orderCategory]
-  );
 
   const normalizedServices = useMemo(
     () =>
@@ -800,6 +861,20 @@ export default function CreateServiceOrderPage() {
     () => buildFlexibleTriggerServiceIdSet(normalizedServices),
     [normalizedServices]
   );
+  const insuranceFlexiblePackageIdSet = useMemo(
+    () => buildInsuranceFlexiblePackageIdSet(normalizedServices),
+    [normalizedServices]
+  );
+  const insuranceCompanyNameById = useMemo(() => {
+    const map = new Map();
+    (insuranceCompanies || []).forEach((company) => {
+      const id = Number(readField(company, ["id", "Id"], 0));
+      const name = String(readField(company, ["name", "Name"], "") || "").trim();
+      if (!Number.isFinite(id) || id <= 0 || !name) return;
+      map.set(id, name);
+    });
+    return map;
+  }, [insuranceCompanies]);
 
   const serviceCategoryMap = useMemo(() => {
     const map = new Map();
@@ -1051,14 +1126,29 @@ export default function CreateServiceOrderPage() {
       const categoryIds = toNumberList(plan.categoryIds);
       const serviceIds = toNumberList(plan.serviceIds);
       const selectedServices = serviceIds.map((serviceId) => serviceById.get(Number(serviceId))).filter(Boolean);
+      const serviceGroupsByCategory = Array.from(
+        selectedServices.reduce((map, service) => {
+          const resolvedCategoryId = Number(service?.categoryId || 0);
+          const categoryName = categoryNameById.get(resolvedCategoryId) || `Nhóm ${resolvedCategoryId || "Khác"}`;
+          const serviceName = String(service?.name || "").trim();
+          if (!serviceName) return map;
+          if (!map.has(categoryName)) map.set(categoryName, []);
+          map.get(categoryName).push(serviceName);
+          return map;
+        }, new Map())
+      ).map(([categoryName, serviceNames]) => ({
+        categoryName,
+        serviceNames: Array.from(new Set(serviceNames)),
+      }));
       const serviceMinutes = sumServiceMinutes(selectedServices);
       const executionMinutes = calculateRoundedOccupancyMinutes(serviceMinutes);
-      const flowState = resolveBookingFlowByServicesAndDuration({
-        serviceIds,
+      const flowState = resolveBookingFlowByItemsAndDuration({
+        itemIds: serviceIds,
         flexibleTriggerServiceIdSet,
+        insuranceFlexiblePackageIdSet,
         executionMinutes,
       });
-      const { bookingFlow, isLongDurationFlow, isServiceDrivenFlexibleFlow } = flowState;
+      const { bookingFlow, isLongDurationFlow, isServiceDrivenFlexibleFlow, isInsurancePackageFlexibleFlow } = flowState;
       const totalPrice = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
       const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `Nhóm ${id}`);
       const { finishText, finishIso } = calculateEstimatedFinish(calculationStartTime, executionMinutes);
@@ -1073,6 +1163,7 @@ export default function CreateServiceOrderPage() {
         selectedServices,
         serviceIds,
         serviceNames: selectedServices.map((service) => String(service?.name || "").trim()).filter(Boolean),
+        serviceGroupsByCategory,
         categoryIds,
         categoryNames,
         startTimeLabel: calculationStartTime ? formatTimeWithDateInBrackets(calculationStartTime) : "Chưa chọn",
@@ -1088,12 +1179,13 @@ export default function CreateServiceOrderPage() {
         bookingFlow,
         isLongDurationFlow,
         isServiceDrivenFlexibleFlow,
+        isInsurancePackageFlexibleFlow,
         serviceMinutes,
         executionMinutes,
         totalPrice,
       };
     });
-  }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, flexibleTriggerServiceIdSet, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
+  }, [calculateEstimatedFinish, calculationStartTime, categoryNameById, flexibleTriggerServiceIdSet, insuranceFlexiblePackageIdSet, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
 
   const missingSpecificServiceByVehicle = useMemo(
     () => getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, categoryNameById),
@@ -1104,6 +1196,34 @@ export default function CreateServiceOrderPage() {
     () => buildMissingSpecificServiceMessage(missingSpecificServiceByVehicle),
     [missingSpecificServiceByVehicle]
   );
+  const checkInSelectionGuardMessage = useMemo(() => {
+    if (selectedVehicleKeys.length === 0) {
+      return "Vui lòng chọn xe trước khi chọn giờ check-in.";
+    }
+
+    for (const vehicleKey of selectedVehicleKeys) {
+      const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
+      const vehicleLabel = vehicleLabelByKey.get(vehicleKey) || vehicleKey;
+      const categoryCount = toNumberList(plan.categoryIds).length;
+      const serviceCount = toNumberList(plan.serviceIds).length;
+      const unresolvedPackageIds = findUnresolvedPackageIds(toNumberList(plan.serviceIds), serviceById);
+      if (unresolvedPackageIds.length > 0) {
+        return `Vui lòng chọn lại gói dịch vụ cho ${vehicleLabel} (mã không hợp lệ: #${unresolvedPackageIds.join(", #")}) trước khi chọn giờ check-in.`;
+      }
+      if (categoryCount === 0) {
+        return `Vui lòng chọn loại dịch vụ cho ${vehicleLabel} trước khi chọn giờ check-in.`;
+      }
+      if (serviceCount === 0) {
+        return `Vui lòng chọn dịch vụ cụ thể cho ${vehicleLabel} trước khi chọn giờ check-in.`;
+      }
+    }
+
+    if (missingSpecificServiceByVehicle.length > 0) {
+      return missingSpecificServiceMessage;
+    }
+
+    return "";
+  }, [missingSpecificServiceByVehicle.length, missingSpecificServiceMessage, plansByVehicleKey, selectedVehicleKeys, serviceById, vehicleLabelByKey]);
   const hasCheckInInput = useMemo(
     () => Boolean(String(formData.checkInTime || "").trim()),
     [formData.checkInTime]
@@ -1135,7 +1255,7 @@ export default function CreateServiceOrderPage() {
       }),
     [formData.insuranceCompanyId, formData.insuranceEnabled, formData.orderCategory, selectedServicesForInsurance]
   );
-  const insuranceDraftBreakdown = useMemo(
+  const insuranceDraftBreakdownBase = useMemo(
     () =>
       buildInsuranceDraftBreakdown({
         services: selectedServicesForInsurance,
@@ -1143,6 +1263,92 @@ export default function CreateServiceOrderPage() {
       }),
     [isInsuranceOrderEnabled, selectedServicesForInsurance]
   );
+  const insuranceVehicleKeys = useMemo(() => {
+    if (!isInsuranceOrderEnabled) return [];
+    return selectedVehicleKeys;
+  }, [isInsuranceOrderEnabled, selectedVehicleKeys]);
+
+  const insuranceVehicleOptions = useMemo(
+    () =>
+      insuranceVehicleKeys.map((vehicleKey) => ({
+        key: vehicleKey,
+        label: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
+      })),
+    [insuranceVehicleKeys, vehicleLabelByKey]
+  );
+  const insuranceSnapshotCustomerPayAmount = useMemo(() => {
+    if (!isInsuranceOrderEnabled || insuranceVehicleKeys.length === 0) return 0;
+    return insuranceVehicleKeys.reduce((sum, vehicleKey) => {
+      const snapshot = normalizeInsuranceSnapshot(
+        insuranceByVehicleKey[vehicleKey] || createEmptyInsuranceSnapshot()
+      );
+      const amountFromOption = resolveInsuranceDeductibleAmount(snapshot.insuranceDeductibleOption);
+      const amount = Number.isFinite(Number(amountFromOption))
+        ? Number(amountFromOption)
+        : Number(snapshot.insuranceDeductibleAmount || 0);
+      return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+    }, 0);
+  }, [insuranceByVehicleKey, insuranceVehicleKeys, isInsuranceOrderEnabled]);
+  const insuranceDraftBreakdown = useMemo(() => {
+    if (!isInsuranceOrderEnabled || insuranceVehicleKeys.length === 0) {
+      return insuranceDraftBreakdownBase;
+    }
+    const totalAmount = Number(insuranceDraftBreakdownBase.totalAmount || 0);
+    const customerPayAmount = Math.max(0, Number(insuranceSnapshotCustomerPayAmount || 0));
+    return {
+      ...insuranceDraftBreakdownBase,
+      customerPayAmount,
+      insuranceRequestedAmount: Math.max(0, totalAmount - customerPayAmount),
+    };
+  }, [
+    insuranceDraftBreakdownBase,
+    insuranceSnapshotCustomerPayAmount,
+    insuranceVehicleKeys.length,
+    isInsuranceOrderEnabled,
+  ]);
+
+  const effectiveActiveInsuranceVehicleKey = useMemo(
+    () => activeInsuranceVehicleKey || insuranceVehicleKeys[0] || "",
+    [activeInsuranceVehicleKey, insuranceVehicleKeys]
+  );
+
+  const activeInsuranceSnapshot = useMemo(
+    () =>
+      normalizeInsuranceSnapshot(
+        insuranceByVehicleKey[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+      ),
+    [effectiveActiveInsuranceVehicleKey, insuranceByVehicleKey]
+  );
+  const insuranceSummaryByVehicleKey = useMemo(() => {
+    const map = new Map();
+    if (!isInsuranceOrderEnabled) return map;
+
+    selectedVehicleKeys.forEach((vehicleKey) => {
+      const snapshot = normalizeInsuranceSnapshot(
+        insuranceByVehicleKey[vehicleKey] || createEmptyInsuranceSnapshot()
+      );
+      map.set(vehicleKey, {
+        summary: buildInsuranceSummary(snapshot, insuranceCompanyNameById, { mode: "workshop" }),
+      });
+    });
+
+    return map;
+  }, [
+    insuranceByVehicleKey,
+    insuranceCompanyNameById,
+    isInsuranceOrderEnabled,
+    selectedVehicleKeys,
+  ]);
+
+  useEffect(() => {
+    if (insuranceVehicleKeys.length === 0) {
+      setActiveInsuranceVehicleKey("");
+      return;
+    }
+    setActiveInsuranceVehicleKey((prev) =>
+      insuranceVehicleKeys.includes(prev) ? prev : insuranceVehicleKeys[0]
+    );
+  }, [insuranceVehicleKeys]);
   const completionMinutes = useMemo(
     () => Math.max(...planSummaries.map((plan) => Number(plan.executionMinutes || 0)), 0),
     [planSummaries]
@@ -1163,14 +1369,21 @@ export default function CreateServiceOrderPage() {
     () => planSummaries.some((plan) => Boolean(plan.isServiceDrivenFlexibleFlow)),
     [planSummaries]
   );
+  const hasAnyInsurancePackageFlexibleFlow = useMemo(
+    () => planSummaries.some((plan) => Boolean(plan.isInsurancePackageFlexibleFlow)),
+    [planSummaries]
+  );
   const hasAnyLongDurationVehicle = useMemo(
     () => planSummaries.some((plan) => Number(plan.executionMinutes || 0) > WORKING_DAY_MINUTES),
     [planSummaries]
   );
 
   const effectiveSlotFlow = useMemo(
-    () => (hasAnyServiceDrivenFlexibleFlow || hasAnyLongDurationVehicle ? BOOKING_FLOW.FLEXIBLE : BOOKING_FLOW.FIXED),
-    [hasAnyLongDurationVehicle, hasAnyServiceDrivenFlexibleFlow]
+    () =>
+      (hasAnyServiceDrivenFlexibleFlow || hasAnyInsurancePackageFlexibleFlow || hasAnyLongDurationVehicle
+        ? BOOKING_FLOW.FLEXIBLE
+        : BOOKING_FLOW.FIXED),
+    [hasAnyInsurancePackageFlexibleFlow, hasAnyLongDurationVehicle, hasAnyServiceDrivenFlexibleFlow]
   );
 
   const slotSelectionGuide = useMemo(
@@ -1292,16 +1505,40 @@ export default function CreateServiceOrderPage() {
       const checkInWindowStart = new Date(now.getTime() - 30 * 60 * 1000);
       const checkInWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
 
-      if (isInsuranceOrderEnabled && !parsePositiveId(data.insuranceCompanyId)) {
+      if (false && isInsuranceOrderEnabled && !parsePositiveId(data.insuranceCompanyId)) {
         errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm trước khi lưu lệnh.";
       }
 
-      if (isInsuranceOrderEnabled && !String(data.insuranceDeductibleOption || "").trim()) {
+      if (false && isInsuranceOrderEnabled && !String(data.insuranceDeductibleOption || "").trim()) {
         errors.insuranceDeductibleOption = "Vui lòng chọn mức miễn thường hoặc tư vấn.";
       }
 
-      if (isInsuranceOrderEnabled && !String(data.insuranceClaimMode || "").trim()) {
+      if (false && isInsuranceOrderEnabled && !String(data.insuranceClaimMode || "").trim()) {
         errors.insuranceClaimMode = "Vui lòng chọn hình thức xử lý bảo hiểm.";
+      }
+
+      if (isInsuranceOrderEnabled) {
+        for (const vehicleKey of insuranceVehicleKeys) {
+          const snapshot = normalizeInsuranceSnapshot(
+            insuranceByVehicleKey[vehicleKey] ||
+              (vehicleKey === effectiveActiveInsuranceVehicleKey
+                ? {
+                    insuranceCompanyId: data.insuranceCompanyId,
+                    insuranceDeductibleOption: data.insuranceDeductibleOption,
+                    insuranceDeductibleAmount: data.insuranceDeductibleAmount,
+                    insuranceClaimMode: data.insuranceClaimMode,
+                    insuranceQuoteState: data.insuranceQuoteState,
+                    insuranceCardImageUrls: data.insuranceCardImageUrls,
+                    insuranceDamageImageUrls: data.insuranceDamageImageUrls,
+                  }
+                : createEmptyInsuranceSnapshot())
+          );
+          const issue = validateInsuranceSnapshotByMode(snapshot);
+          if (issue) {
+            errors.insuranceCompanyId = `${vehicleLabelByKey.get(vehicleKey) || vehicleKey}: ${issue}`;
+            break;
+          }
+        }
       }
 
       if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
@@ -1311,6 +1548,8 @@ export default function CreateServiceOrderPage() {
         errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
       } else if (checkIn < checkInWindowStart || checkIn > checkInWindowEnd) {
         errors.checkInTime = "Thời điểm xe vào xưởng chỉ được trong khoảng ±30 phút so với hiện tại.";
+      } else if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, checkIn)) {
+        errors.checkInTime = getBranchClosedMessage(checkIn);
       }
 
       if (data.estimatedHandover && checkIn) {
@@ -1403,9 +1642,13 @@ export default function CreateServiceOrderPage() {
       return errors;
     },
     [
+      branchOperatingHours,
       categoryNameById,
+      effectiveActiveInsuranceVehicleKey,
       effectiveBranchId,
       guestSelectedBrandId,
+      insuranceByVehicleKey,
+      insuranceVehicleKeys,
       isInsuranceOrderEnabled,
       plansByVehicleKey,
       selectedBrandId,
@@ -1434,9 +1677,25 @@ export default function CreateServiceOrderPage() {
   }, []);
 
   const handleFieldValueChange = useCallback((name, value) => {
+    if (name === "checkInTime" && checkInSelectionGuardMessage) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+      return;
+    }
+    if (name === "checkInTime" && value && isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, value)) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: getBranchClosedMessage(value) }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === "checkInTime") {
+      setFieldErrors((prev) => {
+        if (!prev?.checkInTime) return prev;
+        const next = { ...prev };
+        delete next.checkInTime;
+        return next;
+      });
+    }
     setError("");
-  }, []);
+  }, [branchOperatingHours, checkInSelectionGuardMessage, effectiveBranchId]);
 
   const handleInsuranceToggle = useCallback((enabled) => {
     setFormData((prev) => ({
@@ -1451,29 +1710,96 @@ export default function CreateServiceOrderPage() {
       insuranceDamageImageUrls: enabled ? prev.insuranceDamageImageUrls : [],
     }));
     if (!enabled) {
+      setInsuranceByVehicleKey((prev) => {
+        const next = {};
+        Object.keys(prev || {}).forEach((vehicleKey) => {
+          next[vehicleKey] = createEmptyInsuranceSnapshot();
+        });
+        return next;
+      });
+    }
+    if (!enabled) {
       setInsuranceUploadState({});
     }
     setError("");
   }, []);
 
-  const handleInsuranceDeductibleOptionChange = useCallback((value) => {
-    setFormData((prev) => ({
-      ...prev,
-      insuranceDeductibleOption: value,
-      insuranceDeductibleAmount: resolveInsuranceDeductibleAmount(value),
-      insuranceQuoteState: resolveInsuranceQuoteState(value, prev.insuranceClaimMode),
-    }));
-    setError("");
-  }, []);
+  const handleInsuranceCompanyChange = useCallback(
+    (value) => {
+      const normalizedCompanyId = String(value || "");
+      setFormData((prev) => ({
+        ...prev,
+        insuranceCompanyId: normalizedCompanyId,
+      }));
+      if (effectiveActiveInsuranceVehicleKey) {
+        setInsuranceByVehicleKey((prev) => ({
+          ...prev,
+          [effectiveActiveInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+            ...(prev[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()),
+            insuranceCompanyId: normalizedCompanyId,
+          }),
+        }));
+      }
+      setError("");
+    },
+    [effectiveActiveInsuranceVehicleKey]
+  );
 
-  const handleInsuranceClaimModeChange = useCallback((value) => {
-    setFormData((prev) => ({
-      ...prev,
-      insuranceClaimMode: value,
-      insuranceQuoteState: resolveInsuranceQuoteState(prev.insuranceDeductibleOption, value),
-    }));
-    setError("");
-  }, []);
+  const handleInsuranceDeductibleOptionChange = useCallback(
+    (value) => {
+      setFormData((prev) => ({
+        ...prev,
+        insuranceDeductibleOption: value,
+        insuranceDeductibleAmount: resolveInsuranceDeductibleAmount(value),
+        insuranceQuoteState: resolveInsuranceQuoteState(value, prev.insuranceClaimMode),
+      }));
+      if (effectiveActiveInsuranceVehicleKey) {
+        setInsuranceByVehicleKey((prev) => {
+          const currentSnapshot = normalizeInsuranceSnapshot(
+            prev[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+          );
+          return {
+            ...prev,
+            [effectiveActiveInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+              ...currentSnapshot,
+              insuranceDeductibleOption: value,
+              insuranceDeductibleAmount: resolveInsuranceDeductibleAmount(value),
+              insuranceQuoteState: resolveInsuranceQuoteState(value, currentSnapshot.insuranceClaimMode),
+            }),
+          };
+        });
+      }
+      setError("");
+    },
+    [effectiveActiveInsuranceVehicleKey]
+  );
+
+  const handleInsuranceClaimModeChange = useCallback(
+    (value) => {
+      setFormData((prev) => ({
+        ...prev,
+        insuranceClaimMode: value,
+        insuranceQuoteState: resolveInsuranceQuoteState(prev.insuranceDeductibleOption, value),
+      }));
+      if (effectiveActiveInsuranceVehicleKey) {
+        setInsuranceByVehicleKey((prev) => {
+          const currentSnapshot = normalizeInsuranceSnapshot(
+            prev[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+          );
+          return {
+            ...prev,
+            [effectiveActiveInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+              ...currentSnapshot,
+              insuranceClaimMode: value,
+              insuranceQuoteState: resolveInsuranceQuoteState(currentSnapshot.insuranceDeductibleOption, value),
+            }),
+          };
+        });
+      }
+      setError("");
+    },
+    [effectiveActiveInsuranceVehicleKey]
+  );
 
   const handleInsuranceAssetUpload = useCallback(async (assetType, files) => {
     if (!Array.isArray(files) || files.length === 0) return;
@@ -1503,6 +1829,20 @@ export default function CreateServiceOrderPage() {
           ...prev,
           [targetField]: [...(Array.isArray(prev?.[targetField]) ? prev[targetField] : []), ...uploadedUrls],
         }));
+        if (effectiveActiveInsuranceVehicleKey) {
+          setInsuranceByVehicleKey((prev) => {
+            const currentSnapshot = normalizeInsuranceSnapshot(
+              prev[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+            );
+            return {
+              ...prev,
+              [effectiveActiveInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+                ...currentSnapshot,
+                [targetField]: [...(Array.isArray(currentSnapshot?.[targetField]) ? currentSnapshot[targetField] : []), ...uploadedUrls],
+              }),
+            };
+          });
+        }
       }
 
       setInsuranceUploadState((prev) => ({
@@ -1523,7 +1863,7 @@ export default function CreateServiceOrderPage() {
       }));
       setError(uploadError?.response?.data?.message || uploadError?.message || "Không thể tải ảnh bảo hiểm lên máy chủ.");
     }
-  }, []);
+  }, [effectiveActiveInsuranceVehicleKey]);
 
   const handleInsuranceAssetRemove = useCallback((assetType, index) => {
     if (index < 0) return;
@@ -1535,6 +1875,22 @@ export default function CreateServiceOrderPage() {
         ? prev[targetField].filter((_, currentIndex) => currentIndex !== index)
         : [],
     }));
+    if (effectiveActiveInsuranceVehicleKey) {
+      setInsuranceByVehicleKey((prev) => {
+        const currentSnapshot = normalizeInsuranceSnapshot(
+          prev[effectiveActiveInsuranceVehicleKey] || createEmptyInsuranceSnapshot()
+        );
+        return {
+          ...prev,
+          [effectiveActiveInsuranceVehicleKey]: normalizeInsuranceSnapshot({
+            ...currentSnapshot,
+            [targetField]: Array.isArray(currentSnapshot?.[targetField])
+              ? currentSnapshot[targetField].filter((_, currentIndex) => currentIndex !== index)
+              : [],
+          }),
+        };
+      });
+    }
     setInsuranceUploadState((prev) => ({
       ...prev,
       [assetType]: {
@@ -1542,7 +1898,7 @@ export default function CreateServiceOrderPage() {
         successMessage: "",
       },
     }));
-  }, []);
+  }, [effectiveActiveInsuranceVehicleKey]);
 
   const suggestedAlternativeSlots = useMemo(() => {
     if (!nearestSlotSuggestion || !Array.isArray(nearestSlotSuggestion.alternatives)) {
@@ -1594,8 +1950,8 @@ export default function CreateServiceOrderPage() {
   }, [selectedSuggestedSlotStart, suggestedAlternativeSlots]);
 
   const handleApplySuggestedSlot = useCallback((slot) => {
-    if (missingSpecificServiceByVehicle.length > 0) {
-      setError(missingSpecificServiceMessage);
+    if (checkInSelectionGuardMessage) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
       return;
     }
 
@@ -1606,7 +1962,7 @@ export default function CreateServiceOrderPage() {
     setSelectedSuggestedSlotStart(normalizedStartTime);
     // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chờ để tự tính theo khung giờ.
     setFormData((prev) => ({ ...prev, estimatedHandover: "" }));
-  }, [missingSpecificServiceByVehicle.length, missingSpecificServiceMessage]);
+  }, [checkInSelectionGuardMessage]);
 
   useEffect(() => {
     if (!selectedSuggestedSlotStart) return;
@@ -1633,7 +1989,12 @@ export default function CreateServiceOrderPage() {
   const selectCustomer = useCallback(
     (customer) => {
       const customerId = Number(customer.id);
-      const hasSavedVehicles = customerVehicles.some((item) => Number(item.customerId) === customerId);
+      const linkedVehicleIds = new Set(
+        customerVehicles
+          .filter((item) => Number(item.customerId) === customerId)
+          .map((item) => Number(item.vehicleId))
+      );
+      const hasSavedVehicles = vehicles.some((vehicle) => linkedVehicleIds.has(Number(vehicle.id)));
 
       resetPlanningState();
       setIsSavedVehiclePopupOpen(false);
@@ -1656,7 +2017,7 @@ export default function CreateServiceOrderPage() {
       }));
       setError("");
     },
-    [customerVehicles, resetPlanningState]
+    [customerVehicles, resetPlanningState, vehicles]
   );
 
   const toggleQuickOrder = useCallback(() => {
@@ -1713,6 +2074,7 @@ export default function CreateServiceOrderPage() {
   }, []);
 
   const switchToSavedVehicleMode = useCallback(() => {
+    if (customerHasNoVehicles) return;
     resetPlanningState();
     setIsSavedVehiclePopupOpen(false);
     setFormData((prev) => ({
@@ -1726,7 +2088,7 @@ export default function CreateServiceOrderPage() {
     }));
     setSelectedBrandId("");
     setError("");
-  }, [resetPlanningState]);
+  }, [customerHasNoVehicles, resetPlanningState]);
 
   const switchToNewVehicleMode = useCallback(() => {
     resetPlanningState();
@@ -2054,7 +2416,7 @@ export default function CreateServiceOrderPage() {
       const errors = validateForm(formData);
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) {
-        setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
+        setError("");
         scrollToPageTop();
         return;
       }
@@ -2066,6 +2428,7 @@ export default function CreateServiceOrderPage() {
         suggestedFleetCompletionIso,
         effectiveBranchId,
         insuranceActive: isInsuranceOrderEnabled,
+        insuranceByVehicleKey,
         hasMultipleSelectedVehicles,
         selectedVehicleKeys,
         plansByVehicleKey,
@@ -2098,6 +2461,8 @@ export default function CreateServiceOrderPage() {
       formData,
       getApiErrorMessage,
       hasMultipleSelectedVehicles,
+      insuranceByVehicleKey,
+      isInsuranceOrderEnabled,
       plansByVehicleKey,
       saving,
       selectedVehicleKeys,
@@ -2227,24 +2592,28 @@ export default function CreateServiceOrderPage() {
                             <>
                               {selectedCustomerVehicles.length > 0 ? (
                                 <div className="reception-selected-vehicle-list">
-                                  {selectedCustomerVehicles.map((vehicle) => {
-                                    const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
-                                    return (
+                                {selectedCustomerVehicles.map((vehicle) => {
+                                  const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+                                  return (
+                                    <div
+                                      key={`selected-vehicle-${vehicle.id}`}
+                                      className="reception-selected-vehicle-chip"
+                                    >
+                                      <span className="reception-selected-vehicle-chip-main">
+                                        <strong>{plate}</strong>
+                                        <small>{describeSavedVehicle(vehicle)}</small>
+                                      </span>
                                       <button
-                                        key={`selected-vehicle-${vehicle.id}`}
                                         type="button"
-                                        className="reception-selected-vehicle-chip"
+                                        className="reception-selected-vehicle-chip-remove"
                                         onClick={() => toggleVehicleSelection(vehicle.id)}
                                       >
-                                        <span className="reception-selected-vehicle-chip-main">
-                                          <strong>{plate}</strong>
-                                          <small>{describeSavedVehicle(vehicle)}</small>
-                                        </span>
-                                        <span className="reception-selected-vehicle-chip-remove">Xóa</span>
+                                        Xóa
                                       </button>
-                                    );
-                                  })}
-                                </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                               ) : null}
 
                               {isSavedVehiclePopupOpen ? (
@@ -2310,7 +2679,12 @@ export default function CreateServiceOrderPage() {
                   ) : (
                     <div className="reception-new-vehicle-box">
                       <div className="reception-vehicle-popup-toolbar">
-                        <button type="button" className="reception-open-vehicle-popup-btn" onClick={switchToSavedVehicleMode}>
+                        <button
+                          type="button"
+                          className="reception-open-vehicle-popup-btn"
+                          onClick={switchToSavedVehicleMode}
+                          disabled={customerHasNoVehicles}
+                        >
                           Chọn xe đã lưu
                         </button>
                         <button type="button" className="reception-open-vehicle-popup-btn is-active" onClick={switchToNewVehicleMode}>
@@ -2734,6 +3108,35 @@ export default function CreateServiceOrderPage() {
               </div>
 
               {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
+
+              <WorkshopInsurancePanel
+                enabled={isInsuranceOrderEnabled}
+                locked={hasInsuranceSignalServiceSelected}
+                insuranceVehicleOptions={insuranceVehicleOptions.map((vehicle) => ({
+                  key: vehicle.key,
+                  label: toVehicleTabLabel(vehicle.label, vehicle.key),
+                }))}
+                activeInsuranceVehicleKey={effectiveActiveInsuranceVehicleKey}
+                onInsuranceVehicleChange={setActiveInsuranceVehicleKey}
+                companies={insuranceCompanies}
+                selectedCompanyId={activeInsuranceSnapshot.insuranceCompanyId}
+                onToggle={handleInsuranceToggle}
+                onCompanyChange={handleInsuranceCompanyChange}
+                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
+                insuranceDeductibleOption={activeInsuranceSnapshot.insuranceDeductibleOption}
+                insuranceClaimMode={activeInsuranceSnapshot.insuranceClaimMode}
+                insuranceQuoteState={activeInsuranceSnapshot.insuranceQuoteState}
+                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
+                onClaimModeChange={handleInsuranceClaimModeChange}
+                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
+                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
+                draftBreakdown={insuranceDraftBreakdown}
+                insuranceCardImageUrls={activeInsuranceSnapshot.insuranceCardImageUrls}
+                insuranceDamageImageUrls={activeInsuranceSnapshot.insuranceDamageImageUrls}
+                uploadingState={insuranceUploadState}
+                onUploadAsset={handleInsuranceAssetUpload}
+                onRemoveAsset={handleInsuranceAssetRemove}
+              />
             </section>
           </div>
           <div className="reception-appt-right-column">
@@ -2760,29 +3163,6 @@ export default function CreateServiceOrderPage() {
                 </select>
                 {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
               </div>
-
-              <WorkshopInsurancePanel
-                enabled={isInsuranceOrderEnabled}
-                locked={hasInsuranceSignalServiceSelected}
-                companies={insuranceCompanies}
-                selectedCompanyId={formData.insuranceCompanyId}
-                onToggle={handleInsuranceToggle}
-                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
-                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
-                insuranceDeductibleOption={formData.insuranceDeductibleOption}
-                insuranceClaimMode={formData.insuranceClaimMode}
-                insuranceQuoteState={formData.insuranceQuoteState}
-                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
-                onClaimModeChange={handleInsuranceClaimModeChange}
-                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
-                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
-                draftBreakdown={insuranceDraftBreakdown}
-                insuranceCardImageUrls={formData.insuranceCardImageUrls}
-                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
-                uploadingState={insuranceUploadState}
-                onUploadAsset={handleInsuranceAssetUpload}
-                onRemoveAsset={handleInsuranceAssetRemove}
-              />
 
               <div className="form-group">
                 <label>Xử lý phụ tùng cũ</label>
@@ -2818,14 +3198,15 @@ export default function CreateServiceOrderPage() {
                     maxDate={checkInDayEnd}
                     availableTimeMap={checkInAvailableTimeMap}
                     onOpenRequest={() => {
-                      if (missingSpecificServiceByVehicle.length > 0) {
-                        setError(missingSpecificServiceMessage);
+                      if (checkInSelectionGuardMessage) {
+                        setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
                         return false;
                       }
                       return true;
                     }}
                     autoSelectNowOnOpen
                   />
+                  {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                   {hasCheckInInput && suggestedAlternativeSlots.length > 0 ? (
                     <div className="reception-slot-picker">
                       <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
@@ -2984,7 +3365,11 @@ export default function CreateServiceOrderPage() {
 
               {planSummaries.length > 0 ? (
                 <div className="reception-plan-summary-grid">
-                  {planSummaries.map((plan) => (
+                  {planSummaries.map((plan) => {
+                    const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
+                    const insuranceSummary = insuranceDetails?.summary || null;
+
+                    return (
                     <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
                       <div className="reception-plan-summary-head">
                         <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
@@ -2994,20 +3379,54 @@ export default function CreateServiceOrderPage() {
                       </div>
 
                       <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">LOẠI DỊCH VỤ</p>
-                        <p className="reception-plan-summary-text">
-                          {plan.categoryNames.length > 0
-                            ? plan.categoryNames.join(", ")
-                            : selectedOrderCategoryOption?.name || "Chưa chọn"}
-                        </p>
+                        <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
+                        {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0 ? (
+                          <ul className="reception-plan-summary-list">
+                            {plan.serviceGroupsByCategory.map((group) => (
+                              <li key={`${plan.vehicleKey}-${group.categoryName}`} className="reception-plan-summary-list-item">
+                                <span className="reception-plan-summary-list-group">{group.categoryName}</span>
+                                <ul className="reception-plan-summary-sublist">
+                                  {(group.serviceNames || []).map((serviceName) => (
+                                    <li
+                                      key={`${plan.vehicleKey}-${group.categoryName}-${serviceName}`}
+                                      className="reception-plan-summary-sublist-item"
+                                    >
+                                      {serviceName}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
+                        )}
                       </div>
 
-                      <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                        <p className="reception-plan-summary-text">
-                          {plan.serviceNames.length > 0 ? plan.serviceNames.join(", ") : "Chưa có dịch vụ"}
-                        </p>
-                      </div>
+                      {insuranceSummary ? (
+                        <div className="reception-plan-summary-block">
+                          <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Công ty bảo hiểm:</span>
+                            <strong>{insuranceSummary.companyName}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Mức miễn thường:</span>
+                            <strong>{insuranceSummary.deductibleLabel}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Hình thức xử lý:</span>
+                            <strong>{insuranceSummary.claimModeLabel}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Hồ sơ bảo hiểm:</span>
+                            <strong>{insuranceSummary.assetSummaryLabel}</strong>
+                          </div>
+                          <p className="reception-plan-summary-text">
+                            {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
+                          </p>
+                        </div>
+                      ) : null}
 
                       <div className="reception-plan-summary-block">
                         <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
@@ -3019,6 +3438,10 @@ export default function CreateServiceOrderPage() {
                           <span>Giờ kết thúc:</span>
                           <strong>{plan.endTimeLabel}</strong>
                         </div>
+                        <div className="reception-plan-summary-time-row">
+                          <span>Tổng thời lượng:</span>
+                          <strong>{`${plan.serviceMinutes} phút`}</strong>
+                        </div>
                       </div>
 
                       {hasPlanCompletionWarning(plan) ? (
@@ -3028,11 +3451,11 @@ export default function CreateServiceOrderPage() {
                       ) : null}
 
                       <div className="reception-plan-summary-footer">
-                        <span>{`${SERVICE_PRICE_LABEL} - ${plan.serviceMinutes} phút`}</span>
+                        <span>{SERVICE_PRICE_LABEL}</span>
                         <strong>{formatCurrency(plan.totalPrice)}</strong>
                       </div>
                     </article>
-                  ))}
+                  )})}
                 </div>
               ) : null}
             </section>
@@ -3069,5 +3492,6 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
+
 
 

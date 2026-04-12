@@ -1,6 +1,12 @@
 import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import { buildCustomerNotesPayload } from "@features/appointments/utils/bookingCommon";
+import {
+  buildFlexibleTriggerServiceIdSet,
+  buildInsuranceFlexiblePackageIdSet,
+  findUnresolvedPackageIds,
+  resolveBookingFlowByItemsAndDuration,
+} from "@features/appointments/utils/bookingFlowRules";
 import { buildInsuranceSnapshotPayload } from "@features/appointments/utils/bookingInsurance";
 import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
 import { sumServiceMinutes } from "@shared/utils/serviceDurationUtils";
@@ -16,6 +22,7 @@ const ERRORS = {
   missingNewVehicleModel: "Vui lòng chọn dòng xe mới.",
   missingVehicle: "Vui lòng chọn xe của khách.",
   vehicleNotFound: "Không tìm thấy xe đã chọn.",
+  invalidPackage: "Vui lòng chọn lại gói dịch vụ trước khi đặt lịch.",
 };
 
 function toNumberList(value) {
@@ -41,14 +48,6 @@ function normalizeBookingFlow(value, fallback = BOOKING_FLOW.FIXED) {
   return fallback;
 }
 
-function isFlexibleTriggerServiceCode(rawCode) {
-  const normalizedCode = String(rawCode || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_\-\s]/g, "");
-  return normalizedCode.startsWith("dg");
-}
-
 function normalizeServiceLookup(services) {
   const map = new Map();
   (services || []).forEach((service) => {
@@ -62,26 +61,6 @@ function normalizeServiceLookup(services) {
     });
   });
   return map;
-}
-
-function buildFlexibleTriggerServiceIdSet(serviceLookup) {
-  const set = new Set();
-  serviceLookup.forEach((service, id) => {
-    if (isFlexibleTriggerServiceCode(service?.code)) {
-      set.add(Number(id));
-    }
-  });
-  return set;
-}
-
-function resolveVehicleBookingFlow(planFlow, serviceIds, flexibleTriggerServiceIdSet) {
-  const explicitFlow = normalizeBookingFlow(planFlow, "");
-  if (explicitFlow === BOOKING_FLOW.FLEXIBLE || explicitFlow === BOOKING_FLOW.FIXED) {
-    return explicitFlow;
-  }
-  return (serviceIds || []).some((serviceId) => flexibleTriggerServiceIdSet.has(Number(serviceId)))
-    ? BOOKING_FLOW.FLEXIBLE
-    : BOOKING_FLOW.FIXED;
 }
 
 function normalizeVehicleServicePlanMaps(vehicleServicePlans, serviceLookup) {
@@ -129,7 +108,9 @@ function resolveVehiclePlan({
   defaultServiceIds,
   defaultDuration,
   planMaps,
+  serviceLookup,
   flexibleTriggerServiceIdSet,
+  insuranceFlexiblePackageIdSet,
   slotBookingFlow,
 }) {
   const byKeyPlan = vehicleKey ? planMaps.byVehicleKey.get(vehicleKey) : null;
@@ -141,11 +122,18 @@ function resolveVehiclePlan({
   const requestedServiceIds = split.serviceIds.length > 0 ? split.serviceIds.join(",") : null;
   const requestedPackageIds = split.packageIds.length > 0 ? split.packageIds.join(",") : null;
   const totalMinutes = Math.max(Number(plan?.totalMinutes || defaultDuration || 30), 30);
-  const bookingFlow = resolveVehicleBookingFlow(
-    plan?.bookingFlow || slotBookingFlow,
-    serviceIds,
-    flexibleTriggerServiceIdSet
-  );
+  const unresolvedPackageIds = findUnresolvedPackageIds(serviceIds, serviceLookup);
+  const flowState = resolveBookingFlowByItemsAndDuration({
+    itemIds: serviceIds,
+    flexibleTriggerServiceIdSet,
+    insuranceFlexiblePackageIdSet,
+    executionMinutes: totalMinutes,
+  });
+  const explicitFlow = normalizeBookingFlow(plan?.bookingFlow || slotBookingFlow, "");
+  const bookingFlow =
+    explicitFlow === BOOKING_FLOW.FLEXIBLE
+      ? BOOKING_FLOW.FLEXIBLE
+      : flowState.bookingFlow;
 
   return {
     serviceIds,
@@ -153,6 +141,7 @@ function resolveVehiclePlan({
     requestedPackageIds,
     totalMinutes,
     bookingFlow,
+    unresolvedPackageIds,
     customerNotes: readText(plan?.customerNotes),
     insuranceCompanyId: plan?.insuranceCompanyId || null,
     insuranceDeductibleAmount: plan?.insuranceDeductibleAmount ?? null,
@@ -260,7 +249,8 @@ export async function saveReceptionAppointment({
   if (!effectiveBranchId) throw new Error(ERRORS.invalidBranch);
 
   const serviceLookup = normalizeServiceLookup(services);
-  const flexibleTriggerServiceIdSet = buildFlexibleTriggerServiceIdSet(serviceLookup);
+  const flexibleTriggerServiceIdSet = buildFlexibleTriggerServiceIdSet(services);
+  const insuranceFlexiblePackageIdSet = buildInsuranceFlexiblePackageIdSet(services);
   const fallbackServiceIds = toNumberList(formData.serviceIds);
   const fallbackDuration = Math.max(Number(formData.totalMinutes || 0), 30);
   const splitCustomerNotes = splitCustomerNotesInput(formData.customerNotes);
@@ -289,9 +279,14 @@ export async function saveReceptionAppointment({
       defaultServiceIds: fallbackServiceIds,
       defaultDuration: fallbackDuration,
       planMaps,
+      serviceLookup,
       flexibleTriggerServiceIdSet,
+      insuranceFlexiblePackageIdSet,
       slotBookingFlow: slotSelection?.bookingFlow,
     });
+    if (Array.isArray(plan.unresolvedPackageIds) && plan.unresolvedPackageIds.length > 0) {
+      throw new Error(`${ERRORS.invalidPackage} (#${plan.unresolvedPackageIds.join(", #")})`);
+    }
 
     const totalMinutes = resolveDurationMinutes(slotSelection, plan.totalMinutes);
     const requestedServiceIds = normalizeRequestedServiceIds(plan.requestedServiceIds);

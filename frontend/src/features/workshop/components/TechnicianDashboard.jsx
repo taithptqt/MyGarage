@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllStaff } from "@features/admin/api/staffApi";
+import { getAllVehicles } from "@features/admin/api/customerApi";
+import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/vehicleCatalogApi";
 import { Modal } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
 import {
@@ -43,7 +45,7 @@ const TAB_DIAGNOSIS = "DIAGNOSIS";
 const TAB_REPAIR = "REPAIR";
 const INTERNAL_ASSIGNMENT_STATUS_REJECTED = "REJECTED";
 
-const KPI_FILTER_DIAGNOSIS_ALL = "DIAGNOSIS_ALL";
+const KPI_FILTER_DIAGNOSIS_NEW = "DIAGNOSIS_NEW";
 const KPI_FILTER_DIAGNOSIS_RED = "DIAGNOSIS_RED";
 const KPI_FILTER_DIAGNOSIS_SUPPORT = "DIAGNOSIS_SUPPORT";
 const KPI_FILTER_REPAIR_ACTIVE = "REPAIR_ACTIVE";
@@ -87,6 +89,7 @@ function formatDateTime(value) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -142,6 +145,73 @@ function getQueueCardMeta(queueColor) {
   return QUEUE_CARD_META[normalized] || QUEUE_CARD_META.WHITE;
 }
 
+function resolveVehicleDetails(item, order, vehicleMap, vehicleModelMap = new Map(), vehicleBrandMap = new Map()) {
+  const vehicleId =
+    toPositiveNumber(readValue(item, "vehicleId", "VehicleId")) ||
+    toPositiveNumber(readValue(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? (vehicleMap.get(vehicleId) || null) : null;
+  const vehicleModelId =
+    toPositiveNumber(readValue(item, "vehicleModelId", "VehicleModelId")) ||
+    toPositiveNumber(readValue(order, "vehicleModelId", "VehicleModelId")) ||
+    toPositiveNumber(readValue(vehicle, "modelId", "ModelId"));
+  const vehicleModel = vehicleModelId ? (vehicleModelMap.get(vehicleModelId) || null) : null;
+  const vehicleBrandId =
+    toPositiveNumber(readValue(item, "vehicleBrandId", "VehicleBrandId")) ||
+    toPositiveNumber(readValue(order, "vehicleBrandId", "VehicleBrandId")) ||
+    toPositiveNumber(readValue(vehicle, "brandId", "BrandId")) ||
+    toPositiveNumber(readValue(vehicleModel, "brandId", "BrandId"));
+  const vehicleBrand = vehicleBrandId ? (vehicleBrandMap.get(vehicleBrandId) || null) : null;
+
+  const vehicleLicensePlate =
+    toText(readValue(item, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+    toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+    toText(readValue(vehicle, "licensePlate", "LicensePlate")) ||
+    "--";
+
+  const brandName =
+    toText(readValue(item, "vehicleBrandName", "VehicleBrandName")) ||
+    toText(readValue(order, "vehicleBrandName", "VehicleBrandName")) ||
+    toText(readValue(vehicle, "brandName", "BrandName")) ||
+    toText(readValue(vehicleBrand, "name", "Name", "brandName", "BrandName", "code", "Code"));
+
+  const modelName =
+    toText(readValue(item, "vehicleModelName", "VehicleModelName")) ||
+    toText(readValue(order, "vehicleModelName", "VehicleModelName")) ||
+    toText(readValue(vehicle, "modelName", "ModelName")) ||
+    toText(readValue(vehicleModel, "modelName", "ModelName", "name", "Name"));
+
+  const vehicleDescriptor =
+    toText(readValue(item, "vehicleDescriptor", "VehicleDescriptor")) ||
+    toText(readValue(order, "vehicleDescriptor", "VehicleDescriptor")) ||
+    (brandName && modelName ? `${brandName} ${modelName}` : (modelName || brandName)) ||
+    "Chưa rõ dòng xe";
+
+  const vehicleVin =
+    toText(readValue(item, "vehicleVin", "VehicleVin", "vin", "Vin")) ||
+    toText(readValue(order, "vehicleVin", "VehicleVin")) ||
+    toText(readValue(vehicle, "vin", "Vin"));
+
+  const vehicleManufactureYear =
+    toText(readValue(item, "vehicleManufactureYear", "VehicleManufactureYear", "manufactureYear", "ManufactureYear")) ||
+    toText(readValue(order, "vehicleManufactureYear", "VehicleManufactureYear", "manufactureYear", "ManufactureYear")) ||
+    toText(readValue(vehicle, "manufactureYear", "ManufactureYear", "year", "Year")) ||
+    "--";
+
+  const vehicleColor =
+    toText(readValue(item, "vehicleColor", "VehicleColor", "color", "Color")) ||
+    toText(readValue(order, "vehicleColor", "VehicleColor", "color", "Color")) ||
+    toText(readValue(vehicle, "color", "Color")) ||
+    "--";
+
+  return {
+    vehicleLicensePlate,
+    vehicleDescriptor,
+    vehicleManufactureYear,
+    vehicleColor,
+    vehicleVin,
+  };
+}
+
 export default function TechnicianDashboard() {
   const { searchQuery } = useSearch();
   const { user } = useAuth();
@@ -149,8 +219,9 @@ export default function TechnicianDashboard() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState(TAB_DIAGNOSIS);
-  const [activeKpiFilter, setActiveKpiFilter] = useState(KPI_FILTER_DIAGNOSIS_ALL);
+  const [activeKpiFilter, setActiveKpiFilter] = useState(KPI_FILTER_DIAGNOSIS_NEW);
   const [staffId, setStaffId] = useState(null);
+  const [currentStaffTeamName, setCurrentStaffTeamName] = useState("");
   const [assignments, setAssignments] = useState([]);
   const [diagnosisTasks, setDiagnosisTasks] = useState([]);
 
@@ -168,12 +239,16 @@ export default function TechnicianDashboard() {
     setError("");
 
     try {
-      const [ordersRes, staffRes, assignmentsRes, detailsRes, boardRes] = await Promise.all([
+      const [ordersRes, staffRes, assignmentsRes, detailsRes, boardRes, vehiclesRes, vehicleModelsRes, vehicleBrandsRes, teamsRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllStaff(),
         request({ url: "/api/service-staff-assignments", method: "GET" }),
         request({ url: "/api/service-order-details", method: "GET" }),
         serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
+        getAllVehicles(),
+        getAllVehicleModels(),
+        getAllVehicleBrands(),
+        serviceOrderApi.getTeams(),
       ]);
 
       const orders = Array.isArray(ordersRes) ? ordersRes : [];
@@ -181,14 +256,39 @@ export default function TechnicianDashboard() {
       const allAssignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
       const allDetails = Array.isArray(detailsRes) ? detailsRes : [];
       const board = Array.isArray(boardRes) ? boardRes : [];
+      const vehicles = Array.isArray(vehiclesRes) ? vehiclesRes : [];
+      const vehicleModels = Array.isArray(vehicleModelsRes) ? vehicleModelsRes : [];
+      const vehicleBrands = Array.isArray(vehicleBrandsRes) ? vehicleBrandsRes : [];
+      const teams = Array.isArray(teamsRes) ? teamsRes : [];
+      const vehicleMap = new Map(
+        vehicles.map((vehicle) => [toPositiveNumber(readValue(vehicle, "id", "Id")) || 0, vehicle])
+      );
+      const vehicleModelMap = new Map(
+        vehicleModels.map((model) => [toPositiveNumber(readValue(model, "id", "Id")) || 0, model])
+      );
+      const vehicleBrandMap = new Map(
+        vehicleBrands.map((brand) => [toPositiveNumber(readValue(brand, "id", "Id")) || 0, brand])
+      );
+      const teamMap = new Map(
+        teams.map((team) => [toPositiveNumber(readValue(team, "id", "Id")) || 0, team])
+      );
 
       const currentStaff = resolveCurrentStaff(staffs, user);
       const currentStaffId = toPositiveNumber(readValue(currentStaff, "id", "Id"));
       setStaffId(currentStaffId);
+      const currentTeamName =
+        toText(readValue(currentStaff, "teamName", "TeamName")) ||
+        toText(readValue(
+          teamMap.get(toPositiveNumber(readValue(currentStaff, "teamId", "TeamId")) || 0),
+          "name",
+          "Name"
+        ));
+      setCurrentStaffTeamName(currentTeamName);
 
       if (!currentStaffId) {
         setAssignments([]);
         setDiagnosisTasks([]);
+        setCurrentStaffTeamName("");
         return;
       }
 
@@ -216,6 +316,7 @@ export default function TechnicianDashboard() {
         .map((item) => {
           const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId"));
           const order = orders.find((row) => toPositiveNumber(readValue(row, "id", "Id")) === serviceOrderId) || null;
+          const vehicle = resolveVehicleDetails(item, order, vehicleMap, vehicleModelMap, vehicleBrandMap);
 
           const leadId = toPositiveNumber(readValue(item, "technicianId", "TechnicianId"));
           const assistantId = toPositiveNumber(readValue(item, "assistantTechnicianId", "AssistantTechnicianId"));
@@ -227,7 +328,11 @@ export default function TechnicianDashboard() {
             serviceOrderId,
             serviceOrderCode: toText(readValue(item, "serviceOrderCode", "ServiceOrderCode")) || toText(readValue(order, "code", "Code")) || `SO-${serviceOrderId}`,
             customerName: toText(readValue(item, "customerName", "CustomerName")) || toText(readValue(order, "customerName", "CustomerName")) || "Khách hàng chưa rõ",
-            vehicleLicensePlate: toText(readValue(item, "vehicleLicensePlate", "VehicleLicensePlate")) || toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) || "--",
+            vehicleLicensePlate: vehicle.vehicleLicensePlate,
+            vehicleDescriptor: vehicle.vehicleDescriptor,
+            vehicleManufactureYear: vehicle.vehicleManufactureYear,
+            vehicleColor: vehicle.vehicleColor,
+            vehicleVin: vehicle.vehicleVin,
             queueColor: normalizeCode(readValue(item, "queueColor", "QueueColor")) || "WHITE",
             queueState: toText(readValue(item, "queueState", "QueueState")) || "--",
             dispatchTag: normalizeCode(readValue(item, "dispatchTag", "DispatchTag")) || "",
@@ -243,6 +348,10 @@ export default function TechnicianDashboard() {
             isCancelPendingApproval: Boolean(readValue(item, "isCancelPendingApproval", "IsCancelPendingApproval")),
             leadName: toText(readValue(item, "technicianName", "TechnicianName")),
             assistantName: toText(readValue(item, "assistantTechnicianName", "AssistantTechnicianName")),
+            teamName:
+              toText(readValue(item, "primaryTeamName", "PrimaryTeamName", "teamName", "TeamName")) ||
+              currentTeamName ||
+              "--",
             roleInPair: isLead ? "Thợ chính" : "Thợ phụ",
           };
         })
@@ -373,7 +482,7 @@ export default function TechnicianDashboard() {
     if (!query) return diagnosisTasks;
 
     return diagnosisTasks.filter((task) => {
-      const haystack = [task.serviceOrderCode, task.vehicleLicensePlate]
+      const haystack = [task.serviceOrderCode, task.vehicleLicensePlate, task.vehicleDescriptor, task.vehicleVin, task.teamName]
         .map((value) => toText(value).toLowerCase())
         .join(" ");
       return haystack.includes(query);
@@ -389,9 +498,17 @@ export default function TechnicianDashboard() {
   const diagnosisWaitingToStart = filteredDiagnosisTasks.filter(
     (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt
   ).length;
+  const diagnosisNewCount = filteredDiagnosisTasks.filter(
+    (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
+  ).length;
   const diagnosisUrgentCount = filteredDiagnosisTasks.filter((task) => task.queueColor === "RED").length;
   const diagnosisSupportCount = filteredDiagnosisTasks.filter((task) => task.isSupportRequested).length;
   const visibleDiagnosisTasks = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW) {
+      return filteredDiagnosisTasks.filter(
+        (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
+      );
+    }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
       return filteredDiagnosisTasks.filter((task) => task.queueColor === "RED");
     }
@@ -402,20 +519,24 @@ export default function TechnicianDashboard() {
   }, [activeKpiFilter, filteredDiagnosisTasks]);
 
   const activeViewLabel = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW) return "Ca mới";
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) return "Ca ưu tiên";
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) return "Đang chờ hỗ trợ";
     if (activeKpiFilter === KPI_FILTER_REPAIR_ACTIVE) return "Sửa chữa đang làm";
-    return "Ca chuẩn đoán";
+    return "Ca mới";
   }, [activeKpiFilter]);
 
   const diagnosisEmptyMessage = useMemo(() => {
+    if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW) {
+      return "Không có ca mới trong bộ lọc hiện tại.";
+    }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
       return "Không có ca ưu tiên RED trong bộ lọc hiện tại.";
     }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) {
       return "Không có ca nào đang chờ hỗ trợ hội chẩn.";
     }
-    return "Hiện chưa có ca chuẩn đoán được giao cho bạn.";
+    return "Hiện chưa có ca mới được giao cho bạn.";
   }, [activeKpiFilter]);
 
   const handleSelectKpiFilter = useCallback((nextFilter) => {
@@ -438,6 +559,11 @@ export default function TechnicianDashboard() {
             <Text color="gray.600" mt={1}>
               Theo dõi ca chuẩn đoán, nhận việc đúng khoang và phối hợp hội chẩn khi cần.
             </Text>
+            <HStack mt={2} spacing={2} flexWrap="wrap">
+              <Badge colorScheme="teal" variant="subtle" borderRadius="full" px={2.5} py={1}>
+                Tổ của bạn: {currentStaffTeamName || "Chưa có nhóm"}
+              </Badge>
+            </HStack>
           </Box>
           <Button
             leftIcon={<MdAutorenew />}
@@ -478,13 +604,13 @@ export default function TechnicianDashboard() {
 
           <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} spacing={3}>
             <MetricCard
-              title="Ca chuẩn đoán"
-              value={filteredDiagnosisTasks.length}
+              title="Ca mới"
+              value={diagnosisNewCount}
               description={`${diagnosisWaitingToStart} ca chờ nhận`}
               color="#5b4af7"
               isInteractive
-              isActive={activeKpiFilter === KPI_FILTER_DIAGNOSIS_ALL}
-              onClick={() => handleSelectKpiFilter(KPI_FILTER_DIAGNOSIS_ALL)}
+              isActive={activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW}
+              onClick={() => handleSelectKpiFilter(KPI_FILTER_DIAGNOSIS_NEW)}
             />
             <MetricCard
               title="Ca ưu tiên"
@@ -653,7 +779,23 @@ export default function TechnicianDashboard() {
           <VStack align="stretch" spacing={4} p={2}>
             <Box bg="orange.50" p={3} borderRadius="xl" borderLeft="4px solid" borderColor="orange.400">
               <Text fontSize="sm" fontWeight="700">Lệnh: {supportTarget.serviceOrderCode}</Text>
-              <Text fontSize="xs" color="gray.600">Xe: {supportTarget.vehicleLicensePlate || "--"}</Text>
+              <HStack mt={1} spacing={1.5} flexWrap="wrap">
+                <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+                  Biển số: {supportTarget.vehicleLicensePlate || "--"}
+                </Badge>
+                <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+                  Dòng xe: {supportTarget.vehicleDescriptor || "Chưa rõ dòng xe"}
+                </Badge>
+                <Badge colorScheme="teal" variant="subtle" borderRadius="full" px={2.5}>
+                  Nhóm: {supportTarget.teamName || currentStaffTeamName || "--"}
+                </Badge>
+              </HStack>
+              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600">
+                Năm SX: {supportTarget.vehicleManufactureYear || "--"} | Màu: {supportTarget.vehicleColor || "--"}
+              </Text>
+              {toText(supportTarget.vehicleVin) ? (
+                <Text fontSize="sm" color="gray.700" fontWeight="600">VIN: {supportTarget.vehicleVin}</Text>
+              ) : null}
             </Box>
             <Box>
               <Text fontWeight="700" mb={2}>Nội dung cần hỗ trợ *</Text>
@@ -763,9 +905,22 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
           >
             {task.serviceOrderCode}
           </Text>
-          <Text fontSize="sm" color="gray.600" noOfLines={1}>
-            Biển số: {task.vehicleLicensePlate || "--"}
+          <HStack mt={1} spacing={1.5} flexWrap="wrap">
+            <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+              Biển số: {task.vehicleLicensePlate || "--"}
+            </Badge>
+            <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+              Dòng xe: {task.vehicleDescriptor || "Chưa rõ dòng xe"}
+            </Badge>
+          </HStack>
+          <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+            Năm SX: {task.vehicleManufactureYear || "--"} | Màu: {task.vehicleColor || "--"}
           </Text>
+          {toText(task.vehicleVin) ? (
+            <Text fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+              VIN: {task.vehicleVin}
+            </Text>
+          ) : null}
           {!canOpenDiagnosis && (
             <Text mt={0.5} fontSize="xs" color="orange.600">
               Nhấn "Nhận yêu cầu" để mở phiếu chuẩn đoán.
@@ -775,6 +930,7 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
         <HStack spacing={1.5} flexWrap="wrap" justify="flex-end">
           <Badge colorScheme={queueMeta.badge} borderRadius="full">{task.queueColor}</Badge>
           <Badge variant="subtle" colorScheme={roleColorScheme} borderRadius="full">{task.roleInPair}</Badge>
+          <Badge variant="subtle" colorScheme="teal" borderRadius="full">{task.teamName || "--"}</Badge>
           {task.isSupportRequested && <Badge colorScheme="orange" borderRadius="full">Đang chờ hỗ trợ</Badge>}
         </HStack>
       </HStack>
@@ -785,12 +941,17 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
           icon={MdDirectionsCar}
           lines={[
             `Biển số: ${task.vehicleLicensePlate || "--"}`,
+            `Dòng xe: ${task.vehicleDescriptor || "Chưa rõ dòng xe"}`,
+            `Năm SX: ${task.vehicleManufactureYear || "--"}`,
+            `Màu: ${task.vehicleColor || "--"}`,
+            ...(toText(task.vehicleVin) ? [`VIN: ${task.vehicleVin}`] : []),
           ]}
         />
         <InfoTile
           title="Phân công"
           icon={MdPerson}
           lines={[
+            `Nhóm: ${task.teamName || "--"}`,
             `Đồng đội: ${teammateName || "--"}`,
             `Khoang: ${task.assignedBayCode || "Chưa chỉ định"}`,
           ]}

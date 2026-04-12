@@ -53,13 +53,13 @@ function getAppointmentIssueLabel(appointment) {
 function AppointmentIssueIndicator({ appointment }) {
   const issueLabel = getAppointmentIssueLabel(appointment);
   const isVisible = Boolean(issueLabel);
+  if (!isVisible) return null;
 
   return (
     <span
-      className={`appointment-issue-indicator${isVisible ? "" : " is-hidden"}`}
-      title={isVisible ? issueLabel : undefined}
-      aria-label={isVisible ? issueLabel : undefined}
-      aria-hidden={!isVisible}
+      className="appointment-issue-indicator"
+      title={issueLabel}
+      aria-label={issueLabel}
     >
       !
     </span>
@@ -202,7 +202,9 @@ function GroupBlock({
               <th>Ngày</th>
               <th>Giờ</th>
               <th>Xe</th>
-              <th className="th-center">Trạng thái</th>
+              <th className="th-center col-status-fixed">
+                <span className="status-col-label">Trạng thái</span>
+              </th>
               <th className="col-actions col-actions-wide th-center">Thao tác</th>
             </tr>
           </thead>
@@ -221,10 +223,12 @@ function GroupBlock({
                       </div>
                     ) : null}
                   </td>
-                  <td className="th-center">
+                  <td className="th-center col-status-fixed">
                     <div className="appointment-status-cell">
-                      <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
-                      <AppointmentIssueIndicator appointment={appt} />
+                      <span className="appointment-status-main">
+                        <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
+                        <AppointmentIssueIndicator appointment={appt} />
+                      </span>
                     </div>
                   </td>
                   <td className="col-actions col-actions-wide th-center">
@@ -407,7 +411,9 @@ export default function ReceptionAppointmentsSection({
                   <th>Ngày</th>
                   <th>Giờ</th>
                   <th>Xe</th>
-                  <th className="th-center">Trạng thái</th>
+                  <th className="th-center col-status-fixed">
+                    <span className="status-col-label">Trạng thái</span>
+                  </th>
                   <th className="col-actions col-actions-wide th-center">Thao tác</th>
                 </tr>
               </thead>
@@ -435,10 +441,12 @@ export default function ReceptionAppointmentsSection({
                             </div>
                           ) : null}
                         </td>
-                        <td className="th-center">
+                        <td className="th-center col-status-fixed">
                           <div className="appointment-status-cell">
-                            <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
-                            <AppointmentIssueIndicator appointment={appt} />
+                            <span className="appointment-status-main">
+                              <span className={`badge ${getApptStatusBadge(appt.status)}`}>{getStatusLabelVi(appt.status, appt.status)}</span>
+                              <AppointmentIssueIndicator appointment={appt} />
+                            </span>
                           </div>
                         </td>
                         <td className="col-actions col-actions-wide th-center">

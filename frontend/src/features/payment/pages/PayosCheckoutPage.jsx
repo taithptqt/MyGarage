@@ -496,7 +496,9 @@ export default function PayosCheckoutPage() {
                     </td>
                     <td style={{ padding: "10px 8px" }}>{item.type || "-"}</td>
                     <td style={{ padding: "10px 8px" }}>
-                      {item.createdAt ? new Date(item.createdAt).toLocaleString("vi-VN") : "-"}
+                      {item.createdAt
+                        ? new Date(item.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+                        : "-"}
                     </td>
                   </tr>
                 ))}

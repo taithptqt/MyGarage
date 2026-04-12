@@ -343,7 +343,11 @@ export default function AdminChangeLogPage() {
                 rows.map((log) => (
                   <tr key={log.id}>
                     <td className="td-id">#{log.id}</td>
-                    <td>{log.timestamp ? new Date(log.timestamp).toLocaleString() : "-"}</td>
+                    <td>
+                      {log.timestamp
+                        ? new Date(log.timestamp).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+                        : "-"}
+                    </td>
                     <td>
                       <span className={`badge ${log.actionBadge}`}>{log.actionText}</span>
                     </td>

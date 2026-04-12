@@ -7,6 +7,7 @@ import InsuranceBillingOverview from "@features/workshop/components/InsuranceBil
 import { formatOrderDateTime, parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
+import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import FilterDropdown from "@shared/components/FilterDropdown";
 import { formatDetailPayerLabel, summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
 import "../pages/Workshop.css";
@@ -41,6 +42,47 @@ const DISPATCH_TAG_OPTIONS = [
   { value: "BODY_PAINT", label: "Đồng sơn - Chăm sóc xe", description: "Gò, hàn, sơn và chăm sóc ngoại thất." },
   { value: "MAINTENANCE", label: "Bảo dưỡng nhanh", description: "Bảo dưỡng định kỳ và hạng mục nhanh." },
 ];
+const AUTO_DISPATCH_WARNING_PREFIX = "[AUTO_DISPATCH_WARNING]:";
+const DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY = "mygarage.diagnosisDispatchReviewOrders";
+
+function parseDispatchReviewOrderIds() {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY);
+    const list = JSON.parse(raw || "[]");
+    if (!Array.isArray(list)) return new Set();
+    return new Set(
+      list
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDispatchReviewOrderIds(idSet) {
+  if (typeof window === "undefined") return;
+  const values = Array.from(idSet).filter((value) => Number.isFinite(value) && value > 0);
+  window.localStorage.setItem(DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY, JSON.stringify(values));
+}
+
+function markOrderNeedsDispatchReview(orderId) {
+  const normalizedOrderId = Number(orderId);
+  if (!Number.isFinite(normalizedOrderId) || normalizedOrderId <= 0) return;
+  const ids = parseDispatchReviewOrderIds();
+  ids.add(normalizedOrderId);
+  persistDispatchReviewOrderIds(ids);
+}
+
+function clearOrderDispatchReviewMark(orderId) {
+  const normalizedOrderId = Number(orderId);
+  if (!Number.isFinite(normalizedOrderId) || normalizedOrderId <= 0) return;
+  const ids = parseDispatchReviewOrderIds();
+  if (!ids.has(normalizedOrderId)) return;
+  ids.delete(normalizedOrderId);
+  persistDispatchReviewOrderIds(ids);
+}
 
 function formatStatusLabel(status) {
   const key = String(status || "").toUpperCase();
@@ -61,6 +103,14 @@ function firstText(...values) {
   return "";
 }
 
+function toPositiveNumber(...values) {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 function formatMoney(amount) {
   const value = Number(amount || 0);
   return `${value.toLocaleString("vi-VN")}đ`;
@@ -77,7 +127,14 @@ function formatDateTimeValue(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
+}
+
+function extractAutoDispatchWarning(note) {
+  const raw = String(note || "").trim();
+  if (!raw || !raw.startsWith(AUTO_DISPATCH_WARNING_PREFIX)) return "";
+  return raw.slice(AUTO_DISPATCH_WARNING_PREFIX.length).trim();
 }
 
 function buildIntakePackageLabel(item) {
@@ -88,6 +145,33 @@ function buildIntakePackageLabel(item) {
     return `${name} (${nominalMinutes}p)`;
   }
   return name || code || "--";
+}
+
+function normalizeImageUrls(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+  }
+
+  const text = String(value || "").trim();
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+  } catch {
+    // Ignore JSON parse errors and fallback to split.
+  }
+
+  return text
+    .split(/[,\n]/g)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
 }
 
 export default function ServiceOrderDetailModal({
@@ -121,8 +205,11 @@ export default function ServiceOrderDetailModal({
 
   const [orderDetails, setOrderDetails] = useState([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+  const [vehicleModels, setVehicleModels] = useState([]);
+  const [vehicleBrands, setVehicleBrands] = useState([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [diagnoses, setDiagnoses] = useState([]);
+  const [orderSnapshot, setOrderSnapshot] = useState(order || null);
   const [liveOrderStatus, setLiveOrderStatus] = useState(() =>
     String(order?.status || "").trim().toUpperCase()
   );
@@ -169,6 +256,7 @@ export default function ServiceOrderDetailModal({
 
   useEffect(() => {
     setLiveOrderStatus(String(order?.status || "").trim().toUpperCase());
+    setOrderSnapshot(order || null);
   }, [order?.id, order?.status]);
 
   useEffect(() => {
@@ -176,20 +264,25 @@ export default function ServiceOrderDetailModal({
       if (!order?.id) return;
       setLoadingDetails(true);
       try {
-        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes] = await Promise.all([
+        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes, modelRes, brandRes] = await Promise.all([
           serviceOrderApi.getById(order.id),
           serviceOrderApi.getDetails(order.id),
           serviceOrderApi.getDiagnoses(order.id),
           vehicleConditionLogApi.getByServiceOrderId(order.id),
           insuranceCompanyApi.getAll().catch(() => []),
           serviceOrderApi.getDiagnosisIntakePackages().catch(() => []),
+          getVehicleModels().catch(() => []),
+          getVehicleBrands().catch(() => []),
         ]);
 
         setLiveOrderStatus(String(orderRes?.status || order?.status || "").trim().toUpperCase());
+        setOrderSnapshot(orderRes || order || null);
         setOrderDetails(Array.isArray(detailsRes) ? detailsRes : []);
         setDiagnoses(Array.isArray(diagnosesRes) ? diagnosesRes : []);
         setInsuranceCompanies(Array.isArray(insuranceRes) ? insuranceRes : []);
         setIntakePackages(Array.isArray(intakePackagesRes) ? intakePackagesRes : []);
+        setVehicleModels(Array.isArray(modelRes) ? modelRes : []);
+        setVehicleBrands(Array.isArray(brandRes) ? brandRes : []);
 
         const signedCheckInExists = Array.isArray(conditionLogsRes) && conditionLogsRes.some((log) => {
           const logType = String(log?.logType || log?.LogType || "").toUpperCase();
@@ -283,6 +376,75 @@ export default function ServiceOrderDetailModal({
     || latestDiagnosis?.updatedAt
     || latestDiagnosis?.UpdatedAt
     || null;
+  const autoDispatchWarning = useMemo(
+    () => extractAutoDispatchWarning(firstText(latestDiagnosis?.supportRequestNote, latestDiagnosis?.SupportRequestNote)),
+    [latestDiagnosis?.SupportRequestNote, latestDiagnosis?.supportRequestNote]
+  );
+  const diagnosisAssignedTeamLabel = useMemo(() => {
+    const explicitTeamName = firstText(
+      latestDiagnosis?.assignedTeamName,
+      latestDiagnosis?.AssignedTeamName,
+      latestDiagnosis?.teamName,
+      latestDiagnosis?.TeamName
+    );
+    if (explicitTeamName) return explicitTeamName;
+
+    const teamId = Number(
+      latestDiagnosis?.assignedTeamId
+      ?? latestDiagnosis?.AssignedTeamId
+      ?? latestDiagnosis?.teamId
+      ?? latestDiagnosis?.TeamId
+      ?? 0
+    );
+    if (Number.isFinite(teamId) && teamId > 0) return `tổ #${teamId}`;
+
+    return "tổ chưa xác định";
+  }, [
+    latestDiagnosis?.AssignedTeamId,
+    latestDiagnosis?.AssignedTeamName,
+    latestDiagnosis?.TeamId,
+    latestDiagnosis?.TeamName,
+    latestDiagnosis?.assignedTeamId,
+    latestDiagnosis?.assignedTeamName,
+    latestDiagnosis?.teamId,
+    latestDiagnosis?.teamName,
+  ]);
+  const diagnosisAssignedLeaderLabel = useMemo(() => {
+    const explicitLeaderName = firstText(
+      latestDiagnosis?.assignedTeamLeaderName,
+      latestDiagnosis?.AssignedTeamLeaderName
+    );
+    if (explicitLeaderName) return explicitLeaderName;
+
+    const leaderId = Number(
+      latestDiagnosis?.assignedTeamLeaderId
+      ?? latestDiagnosis?.AssignedTeamLeaderId
+      ?? latestDiagnosis?.technicianId
+      ?? latestDiagnosis?.TechnicianId
+      ?? 0
+    );
+    if (!Number.isFinite(leaderId) || leaderId <= 0) return "";
+
+    const leader = (Array.isArray(staff) ? staff : []).find((item) => Number(item?.id) === leaderId);
+    return firstText(leader?.fullName, "");
+  }, [
+    latestDiagnosis?.AssignedTeamLeaderId,
+    latestDiagnosis?.AssignedTeamLeaderName,
+    latestDiagnosis?.TechnicianId,
+    latestDiagnosis?.assignedTeamLeaderId,
+    latestDiagnosis?.assignedTeamLeaderName,
+    latestDiagnosis?.technicianId,
+    staff,
+  ]);
+  const diagnosisRecallTargetLabel = useMemo(() => {
+    if (diagnosisAssignedLeaderLabel) {
+      if (diagnosisAssignedTeamLabel === "tổ chưa xác định") {
+        return `tổ của ${diagnosisAssignedLeaderLabel}`;
+      }
+      return `${diagnosisAssignedTeamLabel} (tổ trưởng: ${diagnosisAssignedLeaderLabel})`;
+    }
+    return diagnosisAssignedTeamLabel;
+  }, [diagnosisAssignedLeaderLabel, diagnosisAssignedTeamLabel]);
 
   const isFromAppointment = Boolean(order?.appointmentId);
   const isGuest = !order?.appointmentId && customer && customer.isRegistered === false;
@@ -312,7 +474,78 @@ export default function ServiceOrderDetailModal({
   const customerName = firstText(order?.customerName, customer?.fullName, "-");
   const customerPhone = firstText(order?.customerPhone, customer?.phone, "-");
   const vehiclePlate = firstText(order?.vehicleLicensePlate, vehicle?.licensePlate, "N/A");
-  const vehicleModel = firstText(order?.vehicleModelName, vehicle?.modelName, "Chưa rõ dòng xe");
+  const modelById = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(vehicleModels) ? vehicleModels : []).forEach((item) => {
+      const id = toPositiveNumber(item?.id, item?.Id);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [vehicleModels]);
+
+  const brandById = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(vehicleBrands) ? vehicleBrands : []).forEach((item) => {
+      const id = toPositiveNumber(item?.id, item?.Id);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [vehicleBrands]);
+
+  const resolvedVehicleModelId = toPositiveNumber(
+    order?.vehicleModelId,
+    order?.VehicleModelId,
+    vehicle?.vehicleModelId,
+    vehicle?.VehicleModelId,
+    vehicle?.modelId,
+    vehicle?.ModelId,
+    vehicle?.model?.id,
+    vehicle?.Model?.Id
+  );
+  const resolvedModel = resolvedVehicleModelId > 0 ? modelById.get(resolvedVehicleModelId) : null;
+  const resolvedVehicleBrandId = toPositiveNumber(
+    order?.vehicleBrandId,
+    order?.VehicleBrandId,
+    vehicle?.vehicleBrandId,
+    vehicle?.VehicleBrandId,
+    vehicle?.brandId,
+    vehicle?.BrandId,
+    resolvedModel?.brandId,
+    resolvedModel?.BrandId
+  );
+  const resolvedBrand = resolvedVehicleBrandId > 0 ? brandById.get(resolvedVehicleBrandId) : null;
+  const vehicleBrand = firstText(
+    order?.vehicleBrandName,
+    order?.VehicleBrandName,
+    vehicle?.brandName,
+    vehicle?.BrandName,
+    resolvedBrand?.name,
+    resolvedBrand?.Name
+  );
+
+  const vehicleModel = firstText(
+    order?.vehicleModelName,
+    order?.VehicleModelName,
+    vehicle?.modelName,
+    vehicle?.ModelName,
+    resolvedModel?.modelName,
+    resolvedModel?.ModelName,
+    resolvedModel?.name,
+    resolvedModel?.Name,
+    resolvedBrand?.name,
+    resolvedBrand?.Name,
+    "Chưa rõ dòng xe"
+  );
+  const vehicleDisplayName = useMemo(() => {
+    const brand = String(vehicleBrand || "").trim();
+    const model = String(vehicleModel || "").trim();
+    if (!brand) return model || "Chưa rõ dòng xe";
+    if (!model) return brand;
+    if (model.toLowerCase().includes(brand.toLowerCase())) return model;
+    return `${brand} ${model}`.trim();
+  }, [vehicleBrand, vehicleModel]);
   const vehicleColor = firstText(order?.vehicleColor, vehicle?.color);
   const vehicleVin = firstText(order?.vehicleVin, vehicle?.vin);
   const advisorName = firstText(advisor?.fullName, "-");
@@ -337,6 +570,31 @@ export default function ServiceOrderDetailModal({
       .map((companyId) => companyNameById.get(Number(companyId)) || `Công ty #${companyId}`)
       .filter(Boolean);
   }, [insuranceCompanies, insuranceSummary]);
+
+  const insuranceCardImageUrls = useMemo(
+    () =>
+      normalizeImageUrls(
+        orderSnapshot?.insuranceCardImageUrls
+        ?? orderSnapshot?.InsuranceCardImageUrls
+        ?? order?.insuranceCardImageUrls
+        ?? order?.InsuranceCardImageUrls
+      ),
+    [order?.InsuranceCardImageUrls, order?.insuranceCardImageUrls, orderSnapshot?.InsuranceCardImageUrls, orderSnapshot?.insuranceCardImageUrls]
+  );
+
+  const insuranceDamageImageUrls = useMemo(
+    () =>
+      normalizeImageUrls(
+        orderSnapshot?.insuranceDamageImageUrls
+        ?? orderSnapshot?.InsuranceDamageImageUrls
+        ?? order?.insuranceDamageImageUrls
+        ?? order?.InsuranceDamageImageUrls
+      ),
+    [order?.InsuranceDamageImageUrls, order?.insuranceDamageImageUrls, orderSnapshot?.InsuranceDamageImageUrls, orderSnapshot?.insuranceDamageImageUrls]
+  );
+
+  const shouldShowImageSection =
+    insuranceCardImageUrls.length > 0 || insuranceDamageImageUrls.length > 0;
 
   const handleOpenPage = (path) => {
     onClose?.();
@@ -446,7 +704,7 @@ export default function ServiceOrderDetailModal({
 
     setSubmittingDiagnosisRequest(true);
     try {
-      await serviceOrderApi.requestDiagnosis(order.id, {
+      const requestResult = await serviceOrderApi.requestDiagnosisSafe(order.id, {
         dispatchTag: normalizedTag,
         autoAssign: true,
         enforceCapacityGuard: true,
@@ -457,6 +715,16 @@ export default function ServiceOrderDetailModal({
         customerConsentChannel: requiresCustomerConsent ? customerConsentChannel : undefined,
         customerConsentNote: requiresCustomerConsent ? customerConsentNote : undefined,
       });
+      if (!requestResult?.ok) {
+        const message = String(requestResult?.data?.message || "Không xác định");
+        const requiresDispatchReview = Boolean(requestResult?.data?.requiresDispatchReview);
+        if (requiresDispatchReview) {
+          markOrderNeedsDispatchReview(order?.id);
+        }
+        alert(`Lỗi khi yêu cầu chuẩn đoán: ${message}`);
+        return;
+      }
+      clearOrderDispatchReviewMark(order?.id);
       setSelectedDispatchTag(normalizedTag);
       setShowDispatchPopup(false);
       setIntakeSuggestion(null);
@@ -473,7 +741,7 @@ export default function ServiceOrderDetailModal({
       alert("SO đã chuyển sang trạng thái Đang chuẩn đoán, không thể thu hồi yêu cầu.");
       return;
     }
-    const confirmed = window.confirm("Thu hồi yêu cầu chuẩn đoán?");
+    const confirmed = window.confirm(`Thu hồi yêu cầu chuẩn đoán từ ${diagnosisRecallTargetLabel}?`);
     if (!confirmed) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
@@ -553,7 +821,7 @@ export default function ServiceOrderDetailModal({
                   </button>
                 </div>
                 <h4>{vehiclePlate}</h4>
-                <p>{vehicleColor ? `${vehicleModel} - ${vehicleColor}` : vehicleModel}</p>
+                  <p>{vehicleColor ? `${vehicleDisplayName} - ${vehicleColor}` : vehicleDisplayName}</p>
                 {vehicleVin ? <p className="so-detail-vin">VIN: {vehicleVin}</p> : null}
               </article>
             </div>
@@ -584,10 +852,71 @@ export default function ServiceOrderDetailModal({
             note="Các khoản khách trả trong phần này đã bao gồm miễn thường, hồ sơ, khấu hao hoặc các dòng dịch vụ đang để payer là khách hàng."
           />
 
+          {shouldShowImageSection ? (
+            <section className="so-detail-section">
+              <h3 className="so-detail-section-title">
+                <MdDirectionsCar aria-hidden="true" />
+                <span>Ảnh từ lịch hẹn</span>
+              </h3>
+
+              <div className="so-detail-image-block-grid">
+                <article className="so-detail-image-block">
+                  <div className="so-detail-image-head">
+                    <p>Ảnh bảo hiểm</p>
+                    <span>{insuranceCardImageUrls.length} ảnh</span>
+                  </div>
+                  {insuranceCardImageUrls.length > 0 ? (
+                    <div className="so-detail-image-grid">
+                      {insuranceCardImageUrls.map((url, index) => (
+                        <a
+                          key={`ins-card-${url}-${index}`}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="so-detail-image-link"
+                          title="Mở ảnh bảo hiểm"
+                        >
+                          <img src={url} alt={`Ảnh bảo hiểm ${index + 1}`} loading="lazy" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="so-detail-empty">Không có ảnh bảo hiểm.</p>
+                  )}
+                </article>
+
+                <article className="so-detail-image-block">
+                  <div className="so-detail-image-head">
+                    <p>Ảnh hiện trạng</p>
+                    <span>{insuranceDamageImageUrls.length} ảnh</span>
+                  </div>
+                  {insuranceDamageImageUrls.length > 0 ? (
+                    <div className="so-detail-image-grid">
+                      {insuranceDamageImageUrls.map((url, index) => (
+                        <a
+                          key={`ins-damage-${url}-${index}`}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="so-detail-image-link"
+                          title="Mở ảnh hiện trạng"
+                        >
+                          <img src={url} alt={`Ảnh hiện trạng ${index + 1}`} loading="lazy" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="so-detail-empty">Không có ảnh hiện trạng.</p>
+                  )}
+                </article>
+              </div>
+            </section>
+          ) : null}
+
           <section className="so-detail-section">
             <h3 className="so-detail-section-title">
               <MdAssignment aria-hidden="true" />
-              <span>Ghi chú & nguồn gốc tiếp nhận</span>
+              <span>Dịch vụ và mô tả</span>
             </h3>
 
             <div className="so-detail-note-grid">
@@ -615,7 +944,7 @@ export default function ServiceOrderDetailModal({
               </article>
 
               <article className="so-detail-panel">
-                <p className="so-detail-panel-title">Ghi chú / Yêu cầu thêm</p>
+                <p className="so-detail-panel-title">Mô tả / Yêu cầu thêm</p>
                 {symptomNoteItems.length > 0 ? (
                   <ul className="so-detail-note-list">
                     {symptomNoteItems.map((item, index) => (
@@ -695,6 +1024,7 @@ export default function ServiceOrderDetailModal({
               </button>
             </div>
 
+            {autoDispatchWarning ? <p className="so-detail-diagnosis-warning">{autoDispatchWarning}</p> : null}
             {diagnosisHint ? <p className="so-detail-diagnosis-hint">{diagnosisHint}</p> : null}
           </section>
         </div>
