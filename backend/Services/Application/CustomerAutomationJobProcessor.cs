@@ -175,7 +175,9 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
             pendingCandidates.Add(new NotificationCandidate
             {
                 CustomerId = owner.CustomerId,
-                LinkAction = $"{MaintenancePrefix}{owner.VehicleId}/{dedupeToken}",
+                VehicleId = owner.VehicleId,
+                SemanticToken = dedupeToken,
+                LinkAction = $"/my-vehicles/{owner.VehicleId}?tab=maintenance&notificationType=maintenance&dedupe={dedupeToken}",
                 Title = settings.NotificationTitle,
                 Content = $"Maintenance check recommended for {vehicleLabel}. Trigger(s): {string.Join("; ", reasons)}."
             });
@@ -193,17 +195,23 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
             .Where(n =>
                 customerIds.Contains(n.CustomerId) &&
                 n.LinkAction != null &&
-                EF.Functions.Like(n.LinkAction, $"{MaintenancePrefix}%"))
+                (EF.Functions.Like(n.LinkAction, $"{MaintenancePrefix}%") ||
+                 EF.Functions.Like(n.LinkAction, "%notificationType=maintenance%")))
             .Select(n => new { n.CustomerId, n.LinkAction })
             .ToListAsync(cancellationToken);
-        var existingKeys = new HashSet<string>(
-            existingRows.Select(x => BuildNotificationKey(x.CustomerId, x.LinkAction!)),
-            StringComparer.OrdinalIgnoreCase);
+        var existingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in existingRows)
+        {
+            if (TryBuildMaintenanceNotificationKey(row.CustomerId, row.LinkAction!, out var existingKey))
+            {
+                existingKeys.Add(existingKey);
+            }
+        }
 
         var notifications = new List<Notification>();
         foreach (var candidate in pendingCandidates)
         {
-            var key = BuildNotificationKey(candidate.CustomerId, candidate.LinkAction);
+            var key = BuildMaintenanceNotificationKey(candidate.CustomerId, candidate.VehicleId, candidate.SemanticToken);
             if (!existingKeys.Add(key))
             {
                 result.SkippedCount++;
@@ -266,6 +274,7 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
             {
                 ServiceOrderId = so.Id,
                 CustomerId = so.CustomerId,
+                VehicleId = so.VehicleId,
                 CompletionAt = (so.ActualHandover ?? so.UpdatedAt ?? so.CreatedAt)!.Value
             })
             .OrderBy(x => x.CompletionAt)
@@ -297,12 +306,18 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
             .Where(n =>
                 customerIds.Contains(n.CustomerId) &&
                 n.LinkAction != null &&
-                EF.Functions.Like(n.LinkAction, $"{SurveyPrefix}%"))
+                (EF.Functions.Like(n.LinkAction, $"{SurveyPrefix}%") ||
+                 EF.Functions.Like(n.LinkAction, "%notificationType=survey%")))
             .Select(n => new { n.CustomerId, n.LinkAction })
             .ToListAsync(cancellationToken);
-        var existingKeys = new HashSet<string>(
-            existingSurveyRows.Select(x => BuildNotificationKey(x.CustomerId, x.LinkAction!)),
-            StringComparer.OrdinalIgnoreCase);
+        var existingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in existingSurveyRows)
+        {
+            if (TryBuildSurveyNotificationKey(row.CustomerId, row.LinkAction!, out var existingKey))
+            {
+                existingKeys.Add(existingKey);
+            }
+        }
 
         var notifications = new List<Notification>();
         foreach (var order in candidateOrders)
@@ -313,8 +328,8 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
                 continue;
             }
 
-            var linkAction = $"{SurveyPrefix}{order.ServiceOrderId}";
-            var key = BuildNotificationKey(order.CustomerId, linkAction);
+            var linkAction = $"/my-vehicles/{order.VehicleId}?tab=history&serviceOrderId={order.ServiceOrderId}&notificationType=survey";
+            var key = BuildSurveyNotificationKey(order.CustomerId, order.ServiceOrderId);
             if (!existingKeys.Add(key))
             {
                 result.SkippedCount++;
@@ -431,7 +446,10 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
                 pending.Add(new NotificationCandidate
                 {
                     CustomerId = customerId,
-                    LinkAction = $"{InsurancePrefix}{insurance.VehicleInsuranceId}/{insurance.ExpiryDate:yyyyMMdd}",
+                    VehicleId = insurance.VehicleId,
+                    VehicleInsuranceId = insurance.VehicleInsuranceId,
+                    ExpiryDate = insurance.ExpiryDate,
+                    LinkAction = $"/my-vehicles/{insurance.VehicleId}?tab=overview&notificationType=insurance&vehicleInsuranceId={insurance.VehicleInsuranceId}&expiryDate={insurance.ExpiryDate:yyyyMMdd}",
                     Title = settings.NotificationTitle,
                     Content = $"Insurance policy {insurance.PolicyNumber} for {vehicleLabel} expires in {daysLeft} day(s) on {insurance.ExpiryDate:yyyy-MM-dd}."
                 });
@@ -449,17 +467,26 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
             .Where(n =>
                 pendingCustomerIds.Contains(n.CustomerId) &&
                 n.LinkAction != null &&
-                EF.Functions.Like(n.LinkAction, $"{InsurancePrefix}%"))
+                (EF.Functions.Like(n.LinkAction, $"{InsurancePrefix}%") ||
+                 EF.Functions.Like(n.LinkAction, "%notificationType=insurance%")))
             .Select(n => new { n.CustomerId, n.LinkAction })
             .ToListAsync(cancellationToken);
-        var existingKeys = new HashSet<string>(
-            existingRows.Select(x => BuildNotificationKey(x.CustomerId, x.LinkAction!)),
-            StringComparer.OrdinalIgnoreCase);
+        var existingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in existingRows)
+        {
+            if (TryBuildInsuranceNotificationKey(row.CustomerId, row.LinkAction!, out var existingKey))
+            {
+                existingKeys.Add(existingKey);
+            }
+        }
 
         var notifications = new List<Notification>();
         foreach (var candidate in pending)
         {
-            var key = BuildNotificationKey(candidate.CustomerId, candidate.LinkAction);
+            var key = BuildInsuranceNotificationKey(
+                candidate.CustomerId,
+                candidate.VehicleInsuranceId,
+                candidate.ExpiryDate);
             if (!existingKeys.Add(key))
             {
                 result.SkippedCount++;
@@ -629,9 +656,215 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
         }
     }
 
-    private static string BuildNotificationKey(long customerId, string linkAction)
+    private static string BuildMaintenanceNotificationKey(long customerId, long vehicleId, string dedupeToken)
     {
-        return $"{customerId}:{linkAction.Trim()}";
+        return $"{customerId}:maintenance:{vehicleId}:{NormalizeNotificationToken(dedupeToken)}";
+    }
+
+    private static string BuildSurveyNotificationKey(long customerId, long serviceOrderId)
+    {
+        return $"{customerId}:survey:{serviceOrderId}";
+    }
+
+    private static string BuildInsuranceNotificationKey(long customerId, long vehicleInsuranceId, DateOnly expiryDate)
+    {
+        return $"{customerId}:insurance:{vehicleInsuranceId}:{expiryDate:yyyyMMdd}";
+    }
+
+    private static bool TryBuildMaintenanceNotificationKey(long customerId, string linkAction, out string key)
+    {
+        key = string.Empty;
+        if (!TryParseMaintenanceIdentity(linkAction, out var vehicleId, out var dedupeToken))
+        {
+            return false;
+        }
+
+        key = BuildMaintenanceNotificationKey(customerId, vehicleId, dedupeToken);
+        return true;
+    }
+
+    private static bool TryBuildSurveyNotificationKey(long customerId, string linkAction, out string key)
+    {
+        key = string.Empty;
+        if (!TryParseSurveyIdentity(linkAction, out var serviceOrderId))
+        {
+            return false;
+        }
+
+        key = BuildSurveyNotificationKey(customerId, serviceOrderId);
+        return true;
+    }
+
+    private static bool TryBuildInsuranceNotificationKey(long customerId, string linkAction, out string key)
+    {
+        key = string.Empty;
+        if (!TryParseInsuranceIdentity(linkAction, out var vehicleInsuranceId, out var expiryDate))
+        {
+            return false;
+        }
+
+        key = BuildInsuranceNotificationKey(customerId, vehicleInsuranceId, expiryDate);
+        return true;
+    }
+
+    private static bool TryParseMaintenanceIdentity(string linkAction, out long vehicleId, out string dedupeToken)
+    {
+        vehicleId = 0;
+        dedupeToken = string.Empty;
+        var trimmed = linkAction?.Trim() ?? string.Empty;
+        if (trimmed.StartsWith(MaintenancePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = trimmed[MaintenancePrefix.Length..]
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || !long.TryParse(parts[0], out vehicleId))
+            {
+                return false;
+            }
+
+            dedupeToken = NormalizeNotificationToken(parts[1]);
+            return !string.IsNullOrWhiteSpace(dedupeToken);
+        }
+
+        if (!trimmed.Contains("notificationType=maintenance", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryParseVehicleIdFromMyVehiclesPath(trimmed, out vehicleId))
+        {
+            return false;
+        }
+
+        if (!TryGetQueryParameter(trimmed, "dedupe", out dedupeToken))
+        {
+            return false;
+        }
+
+        dedupeToken = NormalizeNotificationToken(dedupeToken);
+        return !string.IsNullOrWhiteSpace(dedupeToken);
+    }
+
+    private static bool TryParseSurveyIdentity(string linkAction, out long serviceOrderId)
+    {
+        serviceOrderId = 0;
+        var trimmed = linkAction?.Trim() ?? string.Empty;
+        if (trimmed.StartsWith(SurveyPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var rawOrderId = trimmed[SurveyPrefix.Length..]
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault();
+            return long.TryParse(rawOrderId, out serviceOrderId);
+        }
+
+        if (!trimmed.Contains("notificationType=survey", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryGetQueryParameter(trimmed, "serviceOrderId", out var rawServiceOrderId))
+        {
+            return false;
+        }
+
+        return long.TryParse(rawServiceOrderId, out serviceOrderId);
+    }
+
+    private static bool TryParseInsuranceIdentity(
+        string linkAction,
+        out long vehicleInsuranceId,
+        out DateOnly expiryDate)
+    {
+        vehicleInsuranceId = 0;
+        expiryDate = default;
+        var trimmed = linkAction?.Trim() ?? string.Empty;
+        if (trimmed.StartsWith(InsurancePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = trimmed[InsurancePrefix.Length..]
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || !long.TryParse(parts[0], out vehicleInsuranceId))
+            {
+                return false;
+            }
+
+            return DateOnly.TryParseExact(
+                parts[1],
+                "yyyyMMdd",
+                null,
+                System.Globalization.DateTimeStyles.None,
+                out expiryDate);
+        }
+
+        if (!trimmed.Contains("notificationType=insurance", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryGetQueryParameter(trimmed, "vehicleInsuranceId", out var rawInsuranceId) ||
+            !long.TryParse(rawInsuranceId, out vehicleInsuranceId))
+        {
+            return false;
+        }
+
+        if (!TryGetQueryParameter(trimmed, "expiryDate", out var rawExpiryDate))
+        {
+            return false;
+        }
+
+        return DateOnly.TryParseExact(
+            rawExpiryDate,
+            "yyyyMMdd",
+            null,
+            System.Globalization.DateTimeStyles.None,
+            out expiryDate);
+    }
+
+    private static bool TryParseVehicleIdFromMyVehiclesPath(string path, out long vehicleId)
+    {
+        vehicleId = 0;
+        var pathOnly = path.Split('?', 2)[0];
+        var parts = pathOnly.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2 ||
+            !string.Equals(parts[0], "my-vehicles", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return long.TryParse(parts[1], out vehicleId);
+    }
+
+    private static bool TryGetQueryParameter(string path, string key, out string value)
+    {
+        value = string.Empty;
+        var queryIndex = path.IndexOf('?');
+        if (queryIndex < 0 || queryIndex == path.Length - 1)
+        {
+            return false;
+        }
+
+        var query = path[(queryIndex + 1)..];
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var kv = pair.Split('=', 2);
+            if (!string.Equals(kv[0], key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            value = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : string.Empty;
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        return false;
+    }
+
+    private static string NormalizeNotificationToken(string rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return string.Empty;
+        }
+
+        return rawValue.Trim().ToUpperInvariant();
     }
 
     private static List<string> NormalizeList(IEnumerable<string>? values, params string[] defaults)
@@ -674,6 +907,8 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
 
         public long CustomerId { get; set; }
 
+        public long VehicleId { get; set; }
+
         public DateTime CompletionAt { get; set; }
     }
 
@@ -693,6 +928,14 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
     private sealed class NotificationCandidate
     {
         public long CustomerId { get; set; }
+
+        public long VehicleId { get; set; }
+
+        public long VehicleInsuranceId { get; set; }
+
+        public DateOnly ExpiryDate { get; set; }
+
+        public string SemanticToken { get; set; } = string.Empty;
 
         public string LinkAction { get; set; } = string.Empty;
 

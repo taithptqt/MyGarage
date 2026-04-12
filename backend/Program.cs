@@ -89,7 +89,9 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
+builder.Services.AddScoped<IServiceOrderCustomerLifecycleNotifier, ServiceOrderCustomerLifecycleNotifier>();
 builder.Services.AddScoped<IServiceOrderService, ServiceOrderService>();
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 
 builder.Services.AddScoped<IServiceOrderDetailRepository, ServiceOrderDetailRepository>();
 builder.Services.AddScoped<IServiceOrderDetailService, ServiceOrderDetailService>();
