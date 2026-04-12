@@ -316,6 +316,7 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<ServiceOrderResponseDto>> Create([FromBody] ServiceOrderCreateDto itemDto)
         {
+            var actorUserId = this.GetCurrentUserId();
             var validationError = NormalizeAndValidateFields(itemDto);
             if (!string.IsNullOrWhiteSpace(validationError))
             {
@@ -323,6 +324,9 @@ namespace MyGarage.Controllers
             }
 
             var entity = _mapper.Map<ServiceOrder>(itemDto);
+            entity.Status = nameof(ServiceOrderLifecycleStatus.NEW);
+            entity.CreatedBy = actorUserId;
+            entity.UpdatedBy = actorUserId;
             var createdItem = await _serviceOrderService.AddAsync(entity);
             var responseDto = await MapServiceOrderResponseAsync(createdItem);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
@@ -377,6 +381,7 @@ namespace MyGarage.Controllers
         {
             try
             {
+                var actorUserId = this.GetCurrentUserId();
                 var existingItem = await _serviceOrderService.GetByIdAsync(id);
                 if (existingItem == null)
                 {
@@ -392,6 +397,7 @@ namespace MyGarage.Controllers
                 }
 
                 _mapper.Map(itemDto, existingItem);
+                existingItem.UpdatedBy = actorUserId;
                 var updatedItem = await _serviceOrderService.UpdateAsync(id, existingItem);
                 if (updatedItem == null)
                 {
@@ -625,22 +631,6 @@ namespace MyGarage.Controllers
             if (error != null) return error;
             if (normalizedOrderCategory != null) dto.OrderCategory = normalizedOrderCategory;
 
-            error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
-            if (error != null) return error;
-            if (normalizedStatus != null) dto.Status = normalizedStatus;
-
-            error = TryNormalizeChoice(dto.PaymentStatus, AllowedPaymentStatuses, "paymentStatus", out var normalizedPaymentStatus);
-            if (error != null) return error;
-            if (normalizedPaymentStatus != null) dto.PaymentStatus = normalizedPaymentStatus;
-
-            error = TryNormalizeChoice(dto.DepositStatus, AllowedDepositStatuses, "depositStatus", out var normalizedDepositStatus);
-            if (error != null) return error;
-            if (normalizedDepositStatus != null) dto.DepositStatus = normalizedDepositStatus;
-
-            error = TryNormalizeChoice(dto.Qcstatus, AllowedQcStatuses, "qcStatus", out var normalizedQcStatus);
-            if (error != null) return error;
-            if (normalizedQcStatus != null) dto.Qcstatus = normalizedQcStatus;
-
             return null;
         }
 
@@ -654,22 +644,6 @@ namespace MyGarage.Controllers
             var error = TryNormalizeOrderCategory(dto.OrderCategory, out var normalizedOrderCategory);
             if (error != null) return error;
             if (normalizedOrderCategory != null) dto.OrderCategory = normalizedOrderCategory;
-
-            error = TryNormalizeChoice(dto.Status, AllowedServiceOrderStatuses, "status", out var normalizedStatus);
-            if (error != null) return error;
-            if (normalizedStatus != null) dto.Status = normalizedStatus;
-
-            error = TryNormalizeChoice(dto.PaymentStatus, AllowedPaymentStatuses, "paymentStatus", out var normalizedPaymentStatus);
-            if (error != null) return error;
-            if (normalizedPaymentStatus != null) dto.PaymentStatus = normalizedPaymentStatus;
-
-            error = TryNormalizeChoice(dto.DepositStatus, AllowedDepositStatuses, "depositStatus", out var normalizedDepositStatus);
-            if (error != null) return error;
-            if (normalizedDepositStatus != null) dto.DepositStatus = normalizedDepositStatus;
-
-            error = TryNormalizeChoice(dto.Qcstatus, AllowedQcStatuses, "qcStatus", out var normalizedQcStatus);
-            if (error != null) return error;
-            if (normalizedQcStatus != null) dto.Qcstatus = normalizedQcStatus;
 
             return null;
         }

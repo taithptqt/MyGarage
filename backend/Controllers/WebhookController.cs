@@ -8,6 +8,7 @@ using MyGarage.Interfaces;
 using MyGarage.Services;
 using MyGarage.Models;
 using MyGarage.Enums;
+using MyGarage.Support;
 
 namespace MyGarage.Controllers;
 
@@ -52,6 +53,8 @@ public class WebhookController(
 
         if (isPaid)
         {
+            await RetailOrderStockCommitter.EnsureStockDeductedAsync(_db, retailOrderId);
+
             await _paymentConfirmationService.SendRetailOrderSuccessEmailAsync(
                 retailOrderId,
                 amountPaid,
@@ -151,6 +154,11 @@ public class WebhookController(
                 {
                     var targetStatus = order.AmountRemaining > 0 ? PaymentStatusPending : PaymentStatusCompleted;
                     await _paymentConfirmationService.ApplyOutcomeAsync(payment, order.AmountPaid, targetStatus);
+
+                    if (order.RetailOrderId.HasValue && string.Equals(targetStatus, PaymentStatusCompleted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await RetailOrderStockCommitter.EnsureStockDeductedAsync(_db, order.RetailOrderId.Value);
+                    }
                 }
                 else if (order.RetailOrderId.HasValue)
                 {

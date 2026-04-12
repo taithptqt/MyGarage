@@ -17,7 +17,9 @@ namespace MyGarage.Services
     {
         public async Task<Appointment> BookAsync(long authUserId, BookAppointmentRequestDto dto)
         {
-            return await BookCoreAsync(authUserId, dto, null, null);
+            var appointment = await BookCoreAsync(authUserId, dto, null, null);
+            await TrySendBookingSuccessEmailAsync(appointment.Id);
+            return appointment;
         }
 
         public async Task<GroupSessionResponseDto> BookBatchAsync(long authUserId, BookAppointmentBatchRequestDto dto)
@@ -88,6 +90,7 @@ namespace MyGarage.Services
 
                     response.Appointments = (await _appointmentDetailAssembler.AssembleManyAsync(createdAppointments))
                         .ToList();
+                    await TrySendBookingSuccessEmailAsync(createdAppointmentIds);
                     return response;
                 }
 

@@ -14,27 +14,32 @@ using MyGarage.Enums;
 
 namespace MyGarage.Controllers
 {
+    [Authorize]
     [Route("api/payments")]
     [ApiController]
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
+        private readonly IPaymentConfirmationService _paymentConfirmationService;
         private readonly IServiceOrderService _serviceOrderService;
         private readonly IGarageContext _context;
         private readonly IMapper _mapper;
 
         public PaymentController(
             IPaymentService paymentService,
+            IPaymentConfirmationService paymentConfirmationService,
             IServiceOrderService serviceOrderService,
             IGarageContext context,
             IMapper mapper)
         {
             _paymentService = paymentService;
+            _paymentConfirmationService = paymentConfirmationService;
             _serviceOrderService = serviceOrderService;
             _context = context;
             _mapper = mapper;
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PaymentResponseDto>>> GetAll()
         {
@@ -58,6 +63,7 @@ namespace MyGarage.Controllers
             return Ok(dtos);
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpGet("{id}")]
         public async Task<ActionResult<PaymentResponseDto>> GetById(long id)
         {
@@ -110,11 +116,18 @@ namespace MyGarage.Controllers
             });
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpPost]
         public async Task<ActionResult<PaymentResponseDto>> Create([FromBody] PaymentCreateDto itemDto)
         {
             try
             {
+                var actorUserId = this.GetCurrentUserId();
+                if (actorUserId == null)
+                {
+                    return Unauthorized();
+                }
+
                 var serviceOrderId = await ResolveServiceOrderIdAsync(itemDto?.ServiceOrderId, itemDto?.InvoiceId);
                 var lockError = await ValidatePaymentMutationAsync(serviceOrderId, null);
                 if (!string.IsNullOrWhiteSpace(lockError))
@@ -123,7 +136,18 @@ namespace MyGarage.Controllers
                 }
 
                 var entity = _mapper.Map<Payment>(itemDto);
+                entity.Status = nameof(PaymentStatusCode.PENDING);
+                entity.UpdatedBy = actorUserId.Value;
+                entity.UpdatedAt = VietnamTime.Now;
                 var createdItem = await _paymentService.AddAsync(entity);
+                if (createdItem != null && string.Equals(createdItem.Status, nameof(PaymentStatusCode.COMPLETED), StringComparison.OrdinalIgnoreCase))
+                {
+                    await _paymentConfirmationService.ApplyOutcomeAsync(createdItem, createdItem.Amount, createdItem.Status!);
+                }
+                if (createdItem == null)
+                {
+                    return BadRequest(new { message = "Không thể tạo payment." });
+                }
                 var responseDto = _mapper.Map<PaymentResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
             }
@@ -133,11 +157,18 @@ namespace MyGarage.Controllers
             }
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpPut("{id}")]
         public async Task<ActionResult<PaymentResponseDto>> Update(long id, [FromBody] PaymentUpdateDto itemDto)
         {
             try
             {
+                var actorUserId = this.GetCurrentUserId();
+                if (actorUserId == null)
+                {
+                    return Unauthorized();
+                }
+
                 var existingItem = await _paymentService.GetByIdAsync(id);
                 if (existingItem == null)
                 {
@@ -154,7 +185,13 @@ namespace MyGarage.Controllers
                 }
 
                 _mapper.Map(itemDto, existingItem);
+                existingItem.UpdatedBy = actorUserId.Value;
+                existingItem.UpdatedAt = VietnamTime.Now;
                 var updatedItem = await _paymentService.UpdateAsync(id, existingItem);
+                if (updatedItem != null && string.Equals(updatedItem.Status, nameof(PaymentStatusCode.COMPLETED), StringComparison.OrdinalIgnoreCase))
+                {
+                    await _paymentConfirmationService.ApplyOutcomeAsync(updatedItem, updatedItem.Amount, updatedItem.Status!);
+                }
                 
                 if (updatedItem == null)
                 {
@@ -169,6 +206,7 @@ namespace MyGarage.Controllers
             }
         }
 
+        [Authorize(Roles = "Staff")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {

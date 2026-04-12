@@ -1,11 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText,
   ImagePlus,
   MessageCircle,
   Minus,
   Paperclip,
-  RotateCcw,
   SendHorizontal,
   ShoppingBag,
   X,
@@ -41,6 +40,28 @@ import {
 import { formatChatDividerTime, shouldShowChatTimeDivider } from "@features/chat/utils/chatTime";
 import { createChatHubConnection } from "@features/chat/realtime/chatHubConnection";
 import "./CustomerMessengerWidget.css";
+
+function MessengerBadgeIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id="messenger-widget-gradient" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#00a8ff" />
+          <stop offset="50%" stopColor="#a948ff" />
+          <stop offset="100%" stopColor="#ff5f7e" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 0C5.373 0 0 4.974 0 11.111c0 3.498 1.744 6.614 4.469 8.654V24l4.088-2.242c1.092.3 2.246.464 3.443.464 6.627 0 12-4.975 12-11.11S18.627 0 12 0z"
+        fill="url(#messenger-widget-gradient)"
+      />
+      <path
+        d="M13.191 14.953l-3.308-3.529-6.442 3.529 7.034-7.465 3.308 3.528 6.442-3.528-7.034 7.465z"
+        fill="#fff"
+      />
+    </svg>
+  );
+}
 
 function getItems(response) {
   if (!response) return [];
@@ -590,21 +611,6 @@ export default function CustomerMessengerWidget() {
             <div className="messenger-header-actions">
               <button
                 type="button"
-                className="messenger-icon-btn"
-                onClick={() => {
-                  if (conversationId) {
-                    loadMessages(conversationId);
-                  } else {
-                    loadConversation();
-                  }
-                }}
-                disabled={loadingConversation || loadingMessages}
-                aria-label="Tai lai tin nhan"
-              >
-                <RotateCcw size={14} />
-              </button>
-              <button
-                type="button"
                 className="messenger-icon-btn messenger-icon-btn-minimize"
                 onClick={() => setIsOpen(false)}
                 aria-label="Thu nho khung chat"
@@ -897,7 +903,7 @@ export default function CustomerMessengerWidget() {
         onClick={() => setIsOpen(true)}
         aria-label="Mo chat voi le tan"
       >
-        <MessageCircle size={22} strokeWidth={2.2} />
+        <MessengerBadgeIcon className="messenger-floating-icon" aria-hidden="true" />
       </button>
     </>
   );

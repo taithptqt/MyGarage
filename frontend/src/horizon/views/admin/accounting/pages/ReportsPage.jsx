@@ -17,25 +17,23 @@ import {
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
 import {
-  getInvoices,
-  getPayments,
   getPayrollRunSummaryReport,
   getRevenueSnapshots,
   getSupplierPayableSummaryReport,
   getTrialBalanceReport
 } from "../api/accountingApi";
-import {
-  formatCurrency,
-  sumCompletedCollectedPayments,
-  sumCompletedPaymentByTypes,
-  sumBy
-} from "../utils/accountingHelpers";
+import { formatCurrency } from "../utils/accountingHelpers";
 
 function fieldOf(item, ...keys) {
   for (const key of keys) {
     if (item && item[key] !== undefined && item[key] !== null) return item[key];
   }
   return null;
+}
+
+function safeTime(value) {
+  const ts = Date.parse(String(value || ""));
+  return Number.isNaN(ts) ? 0 : ts;
 }
 
 export default function ReportsPage() {
@@ -48,8 +46,6 @@ export default function ReportsPage() {
   const [supplierPayableSummary, setSupplierPayableSummary] = useState({ available: false, items: [] });
   const [payrollRunSummary, setPayrollRunSummary] = useState({ available: false, items: [] });
   const [snapshots, setSnapshots] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [invoices, setInvoices] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -57,24 +53,20 @@ export default function ReportsPage() {
       setLoading(true);
       setError("");
       try {
-        const [trialData, supplierData, payrollData, snapshotData, paymentData, invoiceData] = await Promise.all([
+        const [trialData, supplierData, payrollData, snapshotData] = await Promise.all([
           getTrialBalanceReport(),
           getSupplierPayableSummaryReport(),
           getPayrollRunSummaryReport(),
-          getRevenueSnapshots(),
-          getPayments(),
-          getInvoices()
+          getRevenueSnapshots()
         ]);
         if (!mounted) return;
         setTrialBalance(trialData);
         setSupplierPayableSummary(supplierData);
         setPayrollRunSummary(payrollData);
         setSnapshots(snapshotData || []);
-        setPayments(paymentData || []);
-        setInvoices(invoiceData || []);
       } catch (err) {
         if (!mounted) return;
-        setError(err?.message || "Không tải được dữ liệu báo cáo.");
+        setError(err?.message || "KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u bÃ¡o cÃ¡o.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -85,56 +77,37 @@ export default function ReportsPage() {
     };
   }, []);
 
-  const computedMetrics = useMemo(() => {
-    const revenue = sumBy(snapshots || [], (item) => fieldOf(item, "totalRevenue", "TotalRevenue"));
-    const netProfit = sumBy(snapshots || [], (item) => fieldOf(item, "netProfit", "NetProfit"));
-    const cashFlow = sumBy(snapshots || [], (item) => fieldOf(item, "netCashFlow", "NetCashFlow"));
-    const collected = sumCompletedCollectedPayments(payments || []);
+  const orderedSnapshots = useMemo(
+    () =>
+      [...(snapshots || [])].sort((a, b) => {
+        const left = safeTime(fieldOf(a, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt"));
+        const right = safeTime(fieldOf(b, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt"));
+        return right - left;
+      }),
+    [snapshots]
+  );
 
-    const refundTotal = sumCompletedPaymentByTypes(payments || [], ["REFUND"]);
-    const reversalTotal = sumCompletedPaymentByTypes(payments || [], ["REVERSAL"]);
+  const latestSnapshot = orderedSnapshots[0] || null;
 
-    const totalInvoiceAmount = sumBy(invoices || [], (item) => fieldOf(item, "totalAmount", "TotalAmount"));
-    const totalInvoiceTax = sumBy(invoices || [], (item) => fieldOf(item, "taxAmount", "TaxAmount"));
-    const totalInvoicePaid = sumBy(invoices || [], (item) => fieldOf(item, "paidAmount", "PaidAmount"));
-
-    const refundRatio = revenue > 0 ? (refundTotal / revenue) * 100 : 0;
-    const reversalRatio = revenue > 0 ? (reversalTotal / revenue) * 100 : 0;
-    const collectionRatio = totalInvoiceAmount > 0 ? (totalInvoicePaid / totalInvoiceAmount) * 100 : 0;
-    const grossMargin = revenue > 0
-      ? ((revenue - sumBy(snapshots || [], (item) => fieldOf(item, "totalExpense", "TotalExpense"))) / revenue) * 100
-      : 0;
-
-    return {
-      revenue,
-      netProfit,
-      cashFlow,
-      collected,
-      refundRatio,
-      reversalRatio,
-      collectionRatio,
-      grossMargin,
-      totalInvoiceTax
-    };
-  }, [snapshots, payments, invoices]);
-
-  const kpiRows = [
-    { metric: "Doanh thu", value: formatCurrency(computedMetrics.revenue) },
-    { metric: "Đã thu (completed)", value: formatCurrency(computedMetrics.collected) },
-    { metric: "Net profit", value: formatCurrency(computedMetrics.netProfit) },
-    { metric: "Cash flow snapshot", value: formatCurrency(computedMetrics.cashFlow) },
-    { metric: "Gross margin", value: `${computedMetrics.grossMargin.toFixed(2)}%` },
-    { metric: "Collection ratio", value: `${computedMetrics.collectionRatio.toFixed(2)}%` },
-    { metric: "Refund ratio", value: `${computedMetrics.refundRatio.toFixed(2)}%` },
-    { metric: "Reversal ratio", value: `${computedMetrics.reversalRatio.toFixed(2)}%` },
-    { metric: "VAT đầu ra", value: formatCurrency(computedMetrics.totalInvoiceTax) }
-  ];
+  const kpiRows = useMemo(() => {
+    if (!latestSnapshot) return [];
+    return [
+      { metric: "Doanh thu", value: formatCurrency(fieldOf(latestSnapshot, "totalRevenue", "TotalRevenue")) },
+      { metric: "Tá»•ng chi phÃ­", value: formatCurrency(fieldOf(latestSnapshot, "totalExpense", "TotalExpense")) },
+      { metric: "Net profit", value: formatCurrency(fieldOf(latestSnapshot, "netProfit", "NetProfit")) },
+      { metric: "Net cash flow", value: formatCurrency(fieldOf(latestSnapshot, "netCashFlow", "NetCashFlow")) },
+      {
+        metric: "NgÃ y snapshot",
+        value: String(fieldOf(latestSnapshot, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt") || "--")
+      }
+    ];
+  }, [latestSnapshot]);
 
   if (loading) {
     return (
       <Flex minH='260px' align='center' justify='center' direction='column' gap='10px'>
         <Spinner size='lg' color='brand.500' />
-        <Text color={textColorSecondary}>Đang tải dữ liệu báo cáo quản trị...</Text>
+        <Text color={textColorSecondary}>Äang táº£i dá»¯ liá»‡u bÃ¡o cÃ¡o quáº£n trá»‹...</Text>
       </Flex>
     );
   }
@@ -148,61 +121,75 @@ export default function ReportsPage() {
       ) : null}
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
-        <MiniStatistics name='Doanh thu' value={formatCurrency(computedMetrics.revenue)} />
-        <MiniStatistics name='Net profit' value={formatCurrency(computedMetrics.netProfit)} />
-        <MiniStatistics name='Cash flow' value={formatCurrency(computedMetrics.cashFlow)} />
-        <MiniStatistics name='Gross margin' value={`${computedMetrics.grossMargin.toFixed(2)}%`} />
+        <MiniStatistics
+          name='Doanh thu snapshot gáº§n nháº¥t'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "totalRevenue", "TotalRevenue")) : "--"}
+        />
+        <MiniStatistics
+          name='Net profit snapshot'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "netProfit", "NetProfit")) : "--"}
+        />
+        <MiniStatistics
+          name='Cash flow snapshot'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "netCashFlow", "NetCashFlow")) : "--"}
+        />
+        <MiniStatistics name='Sá»‘ snapshot' value={String(orderedSnapshots.length)} />
       </SimpleGrid>
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
           <Badge colorScheme={trialBalance.available ? "green" : "orange"}>
-            vw_gl_trial_balance: {trialBalance.available ? "OK" : "Chưa có endpoint"}
+            vw_gl_trial_balance: {trialBalance.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
           <Badge colorScheme={supplierPayableSummary.available ? "green" : "orange"}>
-            vw_supplier_payable_summary: {supplierPayableSummary.available ? "OK" : "Chưa có endpoint"}
+            vw_supplier_payable_summary: {supplierPayableSummary.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
           <Badge colorScheme={payrollRunSummary.available ? "green" : "orange"}>
-            vw_payroll_run_summary: {payrollRunSummary.available ? "OK" : "Chưa có endpoint"}
+            vw_payroll_run_summary: {payrollRunSummary.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
+          <Text color={textColorSecondary} fontSize='xs' maxW='460px'>
+            Trang nÃ y chá»‰ hiá»ƒn thá»‹ snapshot vÃ  cÃ¡c report backend tráº£ vá». UI khÃ´ng tá»± gá»™p invoices/payments Ä‘á»ƒ táº¡o KPI káº¿ toÃ¡n.
+          </Text>
         </Flex>
       </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px'>
         <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='12px'>KPI tài chính</Text>
-          <Table size='sm'>
-            <Thead>
-              <Tr>
-                <Th>Chỉ số</Th>
-                <Th>Giá trị</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {kpiRows.map((row) => (
-                <Tr key={row.metric}>
-                  <Td color={textColor}>{row.metric}</Td>
-                  <Td color={textColor} fontWeight='700'>{row.value}</Td>
+          <Text color={textColor} fontWeight='700' mb='12px'>KPI tá»« snapshot gáº§n nháº¥t</Text>
+          {kpiRows.length ? (
+            <Table size='sm'>
+              <Thead>
+                <Tr>
+                  <Th>Chá»‰ sá»‘</Th>
+                  <Th>GiÃ¡ trá»‹</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
+              </Thead>
+              <Tbody>
+                {kpiRows.map((row) => (
+                  <Tr key={row.metric}>
+                    <Td color={textColor}>{row.metric}</Td>
+                    <Td color={textColor} fontWeight='700'>{row.value}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          ) : (
+            <Text color={textColorSecondary}>ChÆ°a cÃ³ revenue snapshot Ä‘á»ƒ hiá»ƒn thá»‹ KPI.</Text>
+          )}
         </Card>
 
         <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='12px'>Nguồn dữ liệu báo cáo</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Nguá»“n dá»¯ liá»‡u bÃ¡o cÃ¡o</Text>
           <SimpleGrid columns={1} gap='8px'>
-            <Text color={textColorSecondary}>- Invoices: {invoices.length} bản ghi</Text>
-            <Text color={textColorSecondary}>- Payments: {payments.length} bản ghi</Text>
-            <Text color={textColorSecondary}>- RevenueSnapshots: {snapshots.length} bản ghi</Text>
+            <Text color={textColorSecondary}>- RevenueSnapshots: {orderedSnapshots.length} báº£n ghi</Text>
             <Text color={textColorSecondary}>
-              - Trial balance view: {trialBalance.available ? `${trialBalance.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Trial balance view: {trialBalance.available ? `${trialBalance.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
             <Text color={textColorSecondary}>
-              - Supplier payable summary view: {supplierPayableSummary.available ? `${supplierPayableSummary.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Supplier payable summary view: {supplierPayableSummary.available ? `${supplierPayableSummary.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
             <Text color={textColorSecondary}>
-              - Payroll run summary view: {payrollRunSummary.available ? `${payrollRunSummary.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Payroll run summary view: {payrollRunSummary.available ? `${payrollRunSummary.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
           </SimpleGrid>
         </Card>

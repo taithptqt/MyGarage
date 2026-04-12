@@ -106,6 +106,7 @@ builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembl
 builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
 builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
+builder.Services.AddHostedService<AppointmentReminderBackgroundService>();
 builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
 builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
 

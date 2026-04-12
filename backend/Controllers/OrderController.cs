@@ -8,6 +8,7 @@ using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Enums;
 using MyGarage.Services;
+using MyGarage.Support;
 
 using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.V2.PaymentRequests.Invoices;
@@ -21,6 +22,7 @@ namespace MyGarage.Controllers;
 public class OrderController(
     [FromKeyedServices("OrderClient")] PayOSClient client,
     IGarageContext db,
+    IInvoiceService invoiceService,
     IPaymentConfirmationService paymentConfirmationService,
     IOrderStore orderStore,
     IOrderTransactionStore orderTransactionStore,
@@ -35,6 +37,7 @@ public class OrderController(
 
     private readonly PayOSClient _client = client;
     private readonly IGarageContext _db = db;
+    private readonly IInvoiceService _invoiceService = invoiceService;
     private readonly IPaymentConfirmationService _paymentConfirmationService = paymentConfirmationService;
     private readonly IOrderStore _orderStore = orderStore;
     private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
@@ -93,6 +96,8 @@ public class OrderController(
 
         if (isPaid)
         {
+            await RetailOrderStockCommitter.EnsureStockDeductedAsync(_db, retailOrderId);
+
             await _paymentConfirmationService.SendRetailOrderSuccessEmailAsync(
                 retailOrderId,
                 amountPaid,
@@ -270,6 +275,11 @@ public class OrderController(
                     : (order.AmountRemaining > 0 ? PaymentStatusPending : PaymentStatusCompleted);
                 var amountPaid = order.AmountPaid > 0 ? order.AmountPaid : order.Amount;
                 await _paymentConfirmationService.ApplyOutcomeAsync(payment, amountPaid, targetStatus);
+
+                if (order.RetailOrderId.HasValue && string.Equals(targetStatus, PaymentStatusCompleted, StringComparison.OrdinalIgnoreCase))
+                {
+                    await RetailOrderStockCommitter.EnsureStockDeductedAsync(_db, order.RetailOrderId.Value);
+                }
             }
             else if (order.RetailOrderId.HasValue)
             {
@@ -307,7 +317,13 @@ public class OrderController(
         }
 
         var normalizedPaymentType = NormalizePaymentType(request.PaymentType);
-        var resolvedInvoiceId = await ResolveInvoiceIdAsync(request);
+        var resolvedInvoiceId = request.InvoiceId.HasValue && request.InvoiceId.Value > 0
+            ? request.InvoiceId.Value
+            : (await _invoiceService.EnsureForPaymentContextAsync(
+                request.ServiceOrderId,
+                request.RetailOrderId,
+                request.PayerType,
+                request.PayerId))?.Id ?? await ResolveInvoiceIdAsync(request);
 
         if (!request.RetailOrderId.HasValue && !resolvedInvoiceId.HasValue)
         {

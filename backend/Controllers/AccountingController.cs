@@ -17,6 +17,38 @@ namespace MyGarage.Controllers;
 [Authorize]
 public class AccountingController : ControllerBase
 {
+    private static readonly HashSet<string> RestrictedGenericWriteTables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "supplier-invoices",
+        "supplier-invoice-details",
+        "supplier-payments",
+        "supplier-accounting-profiles",
+        "accounting-periods",
+        "chart-of-accounts",
+        "journal-entries",
+        "journal-entry-lines",
+        "finance-approval-requests",
+        "approval-policies",
+        "bank-accounts",
+        "bank-transactions",
+        "bank-reconciliations",
+        "staff-contracts",
+        "staff-salary-profiles",
+        "payroll-periods",
+        "payroll-runs",
+        "payroll-items",
+        "payslips",
+        "salary-advances",
+        "employee-loans",
+        "attendance-adjustments",
+        "overtime-entries",
+        "pit-profiles",
+        "employee-dependents",
+        "tax-filings",
+        "legal-documents",
+        "document-attachments"
+    };
+
     private const string JournalStatusDraft = nameof(JournalEntryStatusCode.DRAFT);
     private const string JournalStatusPosted = nameof(JournalEntryStatusCode.POSTED);
     private const string FinanceApprovalStatusPending = nameof(FinanceApprovalRequestStatusCode.PENDING);
@@ -83,6 +115,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Create(string tableKey, [FromBody] JsonElement payload)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try
         {
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
@@ -101,6 +137,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Update(string tableKey, long id, [FromBody] JsonElement payload)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try
         {
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
@@ -119,6 +159,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Delete(string tableKey, long id)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try { return await _crud.DeleteAsync(tableKey, id, access.BranchId) ? NoContent() : NotFound(); }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException) { return NotFound(new { message = ex.Message }); }
     }
@@ -271,6 +315,150 @@ public class AccountingController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("payslips")]
+    public async Task<IActionResult> IssuePayslip([FromBody] CreatePayslipRequest? request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        request ??= new CreatePayslipRequest();
+
+        if (request.PayrollItemId <= 0)
+            return BadRequest(new { message = "payrollItemId must be a positive number." });
+
+        var payrollItem = await _db.PayrollItems
+            .AsNoTracking()
+            .Include(x => x.PayrollRun)
+            .FirstOrDefaultAsync(x => x.Id == request.PayrollItemId);
+        if (payrollItem is null)
+            return NotFound(new { message = $"Payroll item #{request.PayrollItemId} not found." });
+
+        if (access.BranchId.HasValue && payrollItem.PayrollRun.BranchId != access.BranchId.Value)
+            return NotFound(new { message = $"Payroll item #{request.PayrollItemId} not found." });
+
+        var runStatus = (payrollItem.PayrollRun.Status ?? string.Empty).Trim().ToUpperInvariant();
+        if (runStatus is not PayrollRunStatusApproved and not PayrollRunStatusPaid)
+            return BadRequest(new { message = "Payslip can only be issued when payroll run is APPROVED or PAID." });
+
+        var existingPayslip = await _db.Payslips
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PayrollItemId == request.PayrollItemId);
+        if (existingPayslip is not null)
+        {
+            var existingRow = await _crud.GetByIdAsync("payslips", existingPayslip.Id, access.BranchId);
+            return existingRow is null ? Ok(existingPayslip) : Ok(existingRow);
+        }
+
+        var issuedAt = DateTime.UtcNow;
+        var issuedAtText = (request.IssuedAt ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(issuedAtText))
+        {
+            if (!DateTime.TryParse(issuedAtText, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal, out issuedAt))
+                return BadRequest(new { message = "issuedAt is invalid." });
+        }
+
+        var slipNo = (request.SlipNo ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(slipNo))
+            slipNo = $"PS-{payrollItem.PayrollRun.RunNo}-{request.PayrollItemId}-{issuedAt:yyMMddHHmm}";
+        if (slipNo.Length > 40)
+            return BadRequest(new { message = "slipNo must be <= 40 characters." });
+
+        var fileUrl = (request.FileUrl ?? string.Empty).Trim();
+
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            payrollItemId = request.PayrollItemId,
+            slipNo,
+            issuedAt,
+            issuedBy = access.UserId,
+            fileUrl
+        });
+
+        try
+        {
+            var created = await _crud.InsertAsync("payslips", payload, access.BranchId);
+            return created is null
+                ? BadRequest(new { message = "Failed to issue payslip." })
+                : Ok(created);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            var duplicated = await _db.Payslips
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PayrollItemId == request.PayrollItemId);
+            if (duplicated is not null)
+            {
+                var duplicatedRow = await _crud.GetByIdAsync("payslips", duplicated.Id, access.BranchId);
+                return duplicatedRow is null ? Ok(duplicated) : Ok(duplicatedRow);
+            }
+
+            return Conflict(new { message = "Payslip already exists for this payroll item." });
+        }
+        catch (SqlException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("payroll-periods")]
+    public async Task<IActionResult> CreatePayrollPeriod([FromBody] CreatePayrollPeriodRequest request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var periodCode = (request.PeriodCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(periodCode))
+            return BadRequest(new { message = "periodCode is required." });
+        if (periodCode.Length > 20)
+            return BadRequest(new { message = "periodCode must be <= 20 characters." });
+
+        if (!DateOnly.TryParse(request.StartDate, out var startDate)
+            || !DateOnly.TryParse(request.EndDate, out var endDate)
+            || !DateOnly.TryParse(request.PayrollDate, out var payrollDate))
+            return BadRequest(new { message = "startDate/endDate/payrollDate must be valid dates (yyyy-MM-dd)." });
+
+        if (startDate > endDate)
+            return BadRequest(new { message = "startDate must be <= endDate." });
+        if (payrollDate < endDate)
+            return BadRequest(new { message = "payrollDate must be >= endDate." });
+
+        try
+        {
+            var duplicated = await _crud.ScalarAsync<int?>(
+                "SELECT COUNT(*) FROM dbo.payroll_periods WHERE UPPER(period_code)=UPPER(@periodCode);",
+                [new SqlParameter("@periodCode", periodCode)]);
+            if (duplicated.GetValueOrDefault() > 0)
+                return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
+
+            var payload = JsonSerializer.SerializeToElement(new
+            {
+                periodCode,
+                startDate = startDate.ToDateTime(TimeOnly.MinValue),
+                endDate = endDate.ToDateTime(TimeOnly.MinValue),
+                payrollDate = payrollDate.ToDateTime(TimeOnly.MinValue),
+                status = PayrollPeriodStatusOpen
+            });
+
+            var created = await _crud.InsertAsync("payroll-periods", payload, access.BranchId);
+            return created is null
+                ? BadRequest(new { message = "Failed to create payroll period." })
+                : Ok(created);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
+        }
+        catch (SqlException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -532,7 +720,7 @@ public class AccountingController : ControllerBase
         };
         var payloadJson = JsonSerializer.Serialize(payloadObject);
         var reason = string.IsNullOrWhiteSpace(request.Reason)
-            ? $"Yêu c?u t?o luong kh?i di?m cho nhân s? {staff.FullName} (#{staff.Id})."
+            ? $"Yï¿½u c?u t?o luong kh?i di?m cho nhï¿½n s? {staff.FullName} (#{staff.Id})."
             : request.Reason.Trim();
 
         var createdId = await _crud.ScalarAsync<long?>(
@@ -1549,6 +1737,11 @@ public class AccountingController : ControllerBase
         return tableKey.Equals("finance-approval-requests", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsRestrictedGenericWriteTable(string tableKey)
+    {
+        return RestrictedGenericWriteTables.Contains(tableKey);
+    }
+
     private bool TryGetFinanceApprovalAccess(out AccountingAccess access, out IActionResult deniedResult)
     {
         access = default!;
@@ -1624,7 +1817,7 @@ public class AccountingController : ControllerBase
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("K? TOÁN", StringComparison.OrdinalIgnoreCase)
+                   roleNameUpper.Contains("K? TOï¿½N", StringComparison.OrdinalIgnoreCase)
                );
     }
 
@@ -1738,6 +1931,22 @@ public class AccountingController : ControllerBase
         public bool OverwriteExisting { get; set; } = true;
         public bool IncludeInactiveStaff { get; set; }
         public bool IssuePayslips { get; set; }
+    }
+    public sealed class CreatePayslipRequest
+    {
+        public long PayrollItemId { get; set; }
+        public string? SlipNo { get; set; }
+        public string? IssuedAt { get; set; }
+        public long? IssuedBy { get; set; }
+        public string? FileUrl { get; set; }
+    }
+    public sealed class CreatePayrollPeriodRequest
+    {
+        public string? PeriodCode { get; set; }
+        public string? StartDate { get; set; }
+        public string? EndDate { get; set; }
+        public string? PayrollDate { get; set; }
+        public string? Status { get; set; }
     }
     public sealed class InitialSalaryRequestDto
     {

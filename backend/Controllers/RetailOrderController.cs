@@ -274,30 +274,19 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<RetailOrderResponseDto>> Create([FromBody] RetailOrderCreateDto itemDto)
         {
-            var entity = _mapper.Map<RetailOrder>(itemDto);
-            var createdItem = await _retailOrderService.AddAsync(entity);
-            var responseDto = _mapper.Map<RetailOrderResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            return StatusCode(405, new
+            {
+                message = "Retail order must be created through the controlled checkout workflow."
+            });
         }
 
         [HttpPut("{id:long}")]
         public async Task<ActionResult<RetailOrderResponseDto>> Update(long id, [FromBody] RetailOrderUpdateDto itemDto)
         {
-            var existingItem = await _retailOrderService.GetByIdAsync(id);
-            if (existingItem == null)
+            return StatusCode(405, new
             {
-                return NotFound();
-            }
-
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _retailOrderService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
-            }
-            var responseDto = _mapper.Map<RetailOrderResponseDto>(updatedItem);
-            return Ok(responseDto);
+                message = "Retail order must be updated through a controlled business workflow, not generic CRUD."
+            });
         }
 
         [HttpDelete("{id:long}")]
