@@ -40,3 +40,11 @@ export async function resetPassword(payload) {
     data: payload,
   });
 }
+
+export async function changePassword(payload) {
+  return requestSafe({
+    url: AUTH_ROUTES.changePassword,
+    method: "PATCH",
+    data: payload,
+  });
+}

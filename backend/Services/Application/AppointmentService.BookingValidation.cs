@@ -31,7 +31,7 @@ namespace MyGarage.Services
 
         private static DateTime NormalizeRequestDateTimeToLocalClock(DateTime value)
         {
-            if (value.Kind == DateTimeKind.Utc) return value.ToLocalTime();
+            if (value.Kind == DateTimeKind.Utc) return VietnamTime.ToVietnamTime(value);
             if (value.Kind == DateTimeKind.Unspecified) return DateTime.SpecifyKind(value, DateTimeKind.Local);
             return value;
         }

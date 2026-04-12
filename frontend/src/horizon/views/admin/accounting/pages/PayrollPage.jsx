@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -379,7 +379,7 @@ export default function PayrollPage() {
 
   const runRows = useMemo(() => {
     const normalized = (runs.items || []).map((run, idx) => {
-      const id = toId(pick(run, "id", "Id")) || idx + 1;
+      const id = toId(pick(run, "id", "Id", "payrollRunId", "PayrollRunId"));
       const status = String(pick(run, "status", "Status") || "DRAFT").toUpperCase();
       const payrollPeriodId = toId(pick(run, "payrollPeriodId", "PayrollPeriodId"));
       const periodCodeFromPeriod = payrollPeriodId ? periodCodeById.get(payrollPeriodId) : "";
@@ -439,7 +439,10 @@ export default function PayrollPage() {
 
   const runById = useMemo(() => {
     const map = new Map();
-    runRows.forEach((run) => map.set(run.id, run));
+    runRows.forEach((run) => {
+      if (!run.id) return;
+      map.set(run.id, run);
+    });
     return map;
   }, [runRows]);
 
@@ -462,7 +465,7 @@ export default function PayrollPage() {
 
   const itemRows = useMemo(() => {
     const normalized = (items.items || []).map((item, idx) => {
-      const id = toId(pick(item, "id", "Id")) || idx + 1;
+      const id = toId(pick(item, "id", "Id", "payrollItemId", "PayrollItemId", "payroll_item_id"));
       const payrollRunId = toId(pick(item, "payrollRunId", "PayrollRunId"));
       const staffId = toId(pick(item, "staffId", "StaffId"));
       const runRow = payrollRunId ? runById.get(payrollRunId) || null : null;
@@ -501,7 +504,7 @@ export default function PayrollPage() {
         staffName: staffId ? staffNameById.get(staffId) || `Staff #${staffId}` : "--",
         status: resolveEffectivePayrollItemStatus(pick(item, "status", "Status"), runStatus),
         runStatus,
-        canIssuePayslip: runStatus === "APPROVED" || runStatus === "PAID",
+        canIssuePayslip: Boolean(id) && (runStatus === "APPROVED" || runStatus === "PAID"),
         baseSalary: toNumber(pick(item, "baseSalary", "BaseSalary")),
         overtimeAmount: toNumber(pick(item, "overtimeAmount", "OvertimeAmount")),
         allowanceAmount: toNumber(pick(item, "allowanceAmount", "AllowanceAmount")),
@@ -519,7 +522,7 @@ export default function PayrollPage() {
         amountsSource:
           hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay ? "SERVER" : "INCOMPLETE",
         hasOfficialNetPay,
-        hasPayslip: payslipItemIds.has(id),
+        hasPayslip: id ? payslipItemIds.has(id) : false,
       };
     });
     if (!targetBranchId) return normalized;
@@ -840,6 +843,11 @@ export default function PayrollPage() {
       setError("Không xác định được người dùng hiện tại để phát hành phiếu lương.");
       return;
     }
+    const payrollItemId = toId(itemId);
+    if (!payrollItemId) {
+      setError("Dòng lương chưa có ID backend hợp lệ, không thể phát hành phiếu lương.");
+      return;
+    }
     const row = itemRows.find((item) => item.id === itemId);
     if (!row) {
       setError("Không tìm thấy dòng lương.");
@@ -855,7 +863,7 @@ export default function PayrollPage() {
     try {
       const codeSuffix = String(Date.now()).slice(-6);
       await createPayslip({
-        payrollItemId: itemId,
+        payrollItemId,
         slipNo: `PS-${itemId}-${codeSuffix}`,
         issuedAt: new Date().toISOString(),
         issuedBy: userId,
@@ -877,7 +885,7 @@ export default function PayrollPage() {
       return;
     }
 
-    const targets = filteredItems.filter((item) => item.canIssuePayslip && !item.hasPayslip);
+    const targets = filteredItems.filter((item) => item.canIssuePayslip && !item.hasPayslip && toId(item.id));
     if (!targets.length) {
       setError("Không có dòng lương hợp lệ để phát hành phiếu lương hàng loạt.");
       return;
@@ -888,14 +896,27 @@ export default function PayrollPage() {
     let successCount = 0;
     let failedCount = 0;
     let firstError = null;
+    let autoPaidSuccess = 0;
+    let autoPaidFailed = 0;
     const batchKey = Date.now();
+    const affectedRunIds = new Set(
+      targets
+        .map((item) => toId(item.payrollRunId))
+        .filter(Boolean),
+    );
 
     for (let index = 0; index < targets.length; index += 1) {
       const item = targets[index];
+      const payrollItemId = toId(item.id);
+      if (!payrollItemId) {
+        failedCount += 1;
+        if (!firstError) firstError = new Error(`Dòng lương của ${item.staffName || "nhân sự"} thiếu ID backend.`);
+        continue;
+      }
       try {
         await createPayslip({
-          payrollItemId: item.id,
-          slipNo: `PS-${item.id}-${batchKey}-${index + 1}`,
+          payrollItemId,
+          slipNo: `PS-${payrollItemId}-${batchKey}-${index + 1}`,
           issuedAt: new Date().toISOString(),
           issuedBy: userId,
           fileUrl: "",
@@ -907,19 +928,81 @@ export default function PayrollPage() {
       }
     }
 
-    await reloadItemsAndPayslips();
+    try {
+      const [latestRunsData, latestItemsData, latestPayslipsData] = await Promise.all([
+        getPayrollRuns(),
+        getPayrollItems(),
+        getPayslips(),
+      ]);
+      setRuns(latestRunsData);
+      setItems(latestItemsData);
+      setPayslips(latestPayslipsData);
+
+      // Auto "xác nhận đã chi" cho các đợt liên quan khi đã đủ payslip.
+      if (affectedRunIds.size > 0) {
+        const latestPayslipItemIds = new Set();
+        (latestPayslipsData.items || []).forEach((slip) => {
+          const payrollItemId = toId(pick(slip, "payrollItemId", "PayrollItemId"));
+          if (payrollItemId) latestPayslipItemIds.add(payrollItemId);
+        });
+
+        const payrollItemIdsByRunId = new Map();
+        (latestItemsData.items || []).forEach((item) => {
+          const payrollRunId = toId(pick(item, "payrollRunId", "PayrollRunId"));
+          const payrollItemId = toId(pick(item, "id", "Id", "payrollItemId", "PayrollItemId", "payroll_item_id"));
+          if (!payrollRunId || !payrollItemId) return;
+          const arr = payrollItemIdsByRunId.get(payrollRunId) || [];
+          arr.push(payrollItemId);
+          payrollItemIdsByRunId.set(payrollRunId, arr);
+        });
+
+        for (const run of latestRunsData.items || []) {
+          const runId = toId(pick(run, "id", "Id", "payrollRunId", "PayrollRunId"));
+          if (!runId || !affectedRunIds.has(runId)) continue;
+
+          const runStatus = String(pick(run, "status", "Status") || "").toUpperCase();
+          if (runStatus !== "APPROVED") continue;
+
+          const runItemIds = payrollItemIdsByRunId.get(runId) || [];
+          if (!runItemIds.length) continue;
+
+          const allHavePayslip = runItemIds.every((itemId) => latestPayslipItemIds.has(itemId));
+          if (!allHavePayslip) continue;
+
+          try {
+            await markPayrollRunPaid(runId, userId);
+            autoPaidSuccess += 1;
+          } catch (err) {
+            autoPaidFailed += 1;
+            if (!firstError) firstError = err;
+          }
+        }
+      }
+
+      if (autoPaidSuccess > 0 || autoPaidFailed > 0) {
+        await reloadRuns();
+      }
+    } catch (err) {
+      if (!firstError) firstError = err;
+    }
 
     if (successCount > 0 && failedCount === 0) {
       toast({
         status: "success",
         title: "Đã phát hành toàn bộ phiếu lương.",
-        description: `Số phiếu đã phát hành: ${successCount}.`,
+        description:
+          autoPaidSuccess > 0 || autoPaidFailed > 0
+            ? `Số phiếu đã phát hành: ${successCount}. Tự xác nhận đã chi: ${autoPaidSuccess} đợt${autoPaidFailed > 0 ? ` · Lỗi: ${autoPaidFailed}` : ""}.`
+            : `Số phiếu đã phát hành: ${successCount}.`,
       });
     } else if (successCount > 0 && failedCount > 0) {
       toast({
         status: "warning",
         title: "Đã phát hành phiếu lương một phần.",
-        description: `Thành công: ${successCount} · Thất bại: ${failedCount}.`,
+        description:
+          autoPaidSuccess > 0 || autoPaidFailed > 0
+            ? `Thành công: ${successCount} · Thất bại: ${failedCount}. Tự xác nhận đã chi: ${autoPaidSuccess} đợt${autoPaidFailed > 0 ? ` · Lỗi: ${autoPaidFailed}` : ""}.`
+            : `Thành công: ${successCount} · Thất bại: ${failedCount}.`,
       });
       setError(firstError ? toFriendlyError(firstError, "Một số phiếu lương phát hành thất bại.") : "Một số phiếu lương phát hành thất bại.");
     } else {
@@ -1024,13 +1107,7 @@ export default function PayrollPage() {
           <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chua có"}</Badge>
           <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chua có"}</Badge>
           <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
-          {missingPayrollFactsCount > 0 ? (
-            <Badge colorScheme='orange'>Một số dòng chưa có đủ payroll facts từ backend</Badge>
-          ) : null}
         </Flex>
-        <Text color={textColorSecondary} fontSize='xs' mt='10px'>
-          Trang này không còn tự tính lương ở frontend. Nếu backend chưa trả đủ totals canonical thì UI sẽ để trống các giá trị đó.
-        </Text>
       </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
@@ -1127,35 +1204,37 @@ export default function PayrollPage() {
         <Card p='20px'>
           <Text color={textColor} fontWeight='700' mb='10px'>Danh sách kỳ lương</Text>
           {periodRows.length ? (
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Mã kỳ</Th>
-                  <Th>Từ ngày</Th>
-                  <Th>Đến ngày</Th>
-                  <Th>Ngày trả lương</Th>
-                  <Th>Trạng thái</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {periodRows.slice(0, 8).map((period, idx) => {
-                  const status = String(period.status || "").toUpperCase();
-                  return (
-                    <Tr key={period.id || idx}>
-                      <Td color={textColor} fontWeight='600'>
-                        {period.periodCode || `PERIOD-${idx + 1}`}
-                      </Td>
-                      <Td color={textColorSecondary}>{formatDate(period.startDate)}</Td>
-                      <Td color={textColorSecondary}>{formatDate(period.endDate)}</Td>
-                      <Td color={textColorSecondary}>{formatDate(period.payrollDate)}</Td>
-                      <Td>
-                        <Badge colorScheme={statusColor(status)}>{statusLabel(status)}</Badge>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </Tbody>
-            </Table>
+            <Box maxH='420px' overflowY='auto' overflowX='auto'>
+              <Table size='sm'>
+                <Thead>
+                  <Tr>
+                    <Th>Mã kỳ</Th>
+                    <Th>Từ ngày</Th>
+                    <Th>Đến ngày</Th>
+                    <Th>Ngày trả lương</Th>
+                    <Th>Trạng thái</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {periodRows.map((period, idx) => {
+                    const status = String(period.status || "").toUpperCase();
+                    return (
+                      <Tr key={period.id || idx}>
+                        <Td color={textColor} fontWeight='600'>
+                          {period.periodCode || `PERIOD-${idx + 1}`}
+                        </Td>
+                        <Td color={textColorSecondary}>{formatDate(period.startDate)}</Td>
+                        <Td color={textColorSecondary}>{formatDate(period.endDate)}</Td>
+                        <Td color={textColorSecondary}>{formatDate(period.payrollDate)}</Td>
+                        <Td>
+                          <Badge colorScheme={statusColor(status)}>{statusLabel(status)}</Badge>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
+            </Box>
           ) : (
             <Text color={textColorSecondary}>Chưa có dữ liệu kỳ lương.</Text>
           )}
@@ -1171,52 +1250,66 @@ export default function PayrollPage() {
             </Flex>
           </Flex>
           {runRows.length ? (
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Mã kỳ</Th>
-                  <Th>Chi nhánh</Th>
-                  <Th>Ngày tạo</Th>
-                  <Th>Status</Th>
-                  <Th textAlign='right'>Thao tác</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {runRows.slice(0, 10).map((run) => (
-                  <Tr key={run.id}>
-                    <Td color={textColor} fontWeight='600'>{run.periodCode}</Td>
-                    <Td color={textColorSecondary}>{run.branchName}</Td>
-                    <Td color={textColorSecondary}>{formatDateTime(run.createdAt)}</Td>
-                    <Td>
-                      <Badge colorScheme={statusColor(run.status)}>
-                        {statusLabel(run.status)}
-                      </Badge>
-                    </Td>
-                    <Td textAlign='right'>
-                      <Flex justify='flex-end' gap='8px'>
-                        <Button
-                          size='xs'
-                          colorScheme='blue'
-                          variant='outline'
-                          isDisabled={run.status === "APPROVED" || run.status === "PAID"}
-                          isLoading={busyRunId === run.id}
-                          onClick={() => handleApprove(run.id)}>
-                          Duyệt
-                        </Button>
-                        <Button
-                          size='xs'
-                          colorScheme='green'
-                          isDisabled={run.status !== "APPROVED"}
-                          isLoading={busyRunId === run.id}
-                          onClick={() => handleMarkPaid(run.id)}>
-                          Xác nhận đã chi
-                        </Button>
-                      </Flex>
-                    </Td>
+            <Box maxH='420px' overflowY='auto' overflowX='auto'>
+              <Table size='sm'>
+                <Thead>
+                  <Tr>
+                    <Th>Mã kỳ</Th>
+                    <Th>Chi nhánh</Th>
+                    <Th>Ngày tạo</Th>
+                    <Th>Status</Th>
+                    <Th textAlign='right'>Thao tác</Th>
                   </Tr>
-                ))}
-              </Tbody>
-            </Table>
+                </Thead>
+                <Tbody>
+                  {runRows.map((run) => (
+                    <Tr key={run.id}>
+                      <Td color={textColor} fontWeight='600'>{run.periodCode}</Td>
+                      <Td color={textColorSecondary}>{run.branchName}</Td>
+                      <Td color={textColorSecondary}>{formatDateTime(run.createdAt)}</Td>
+                      <Td>
+                        <Badge colorScheme={statusColor(run.status)}>
+                          {statusLabel(run.status)}
+                        </Badge>
+                      </Td>
+                      <Td textAlign='right'>
+                        <Flex justify='flex-end' gap='8px'>
+                          <Button
+                            size='xs'
+                            colorScheme='blue'
+                            variant='outline'
+                            isDisabled={run.status === "APPROVED" || run.status === "PAID"}
+                            isLoading={busyRunId === run.id}
+                            onClick={() => handleApprove(run.id)}>
+                            Duyệt
+                          </Button>
+                          <Button
+                            size='xs'
+                            colorScheme='green'
+                            variant='solid'
+                            isDisabled={run.status !== "APPROVED"}
+                            isLoading={busyRunId === run.id}
+                            onClick={() => handleMarkPaid(run.id)}
+                            _disabled={
+                              run.status === "PAID"
+                                ? {
+                                  opacity: 1,
+                                  bg: "green.400",
+                                  color: "white",
+                                  cursor: "not-allowed",
+                                  pointerEvents: "none",
+                                }
+                                : undefined
+                            }>
+                            {run.status === "PAID" ? "Đã chi" : "Xác nhận đã chi"}
+                          </Button>
+                        </Flex>
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </Box>
           ) : (
             <Text color={textColorSecondary}>Chưa có kỳ lương.</Text>
           )}
@@ -1470,6 +1563,3 @@ export default function PayrollPage() {
     </Box>
   );
 }
-
-
-

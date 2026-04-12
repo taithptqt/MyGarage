@@ -18,14 +18,6 @@ export async function getInvoices() {
   return normalizeListResponse(data);
 }
 
-export async function updateInvoice(id, payload) {
-  return request({
-    url: `/api/invoices/${id}`,
-    method: "PUT",
-    data: payload
-  });
-}
-
 export async function getInvoiceDetails() {
   const data = await request({ url: "/api/invoice-details", method: "GET" });
   return normalizeListResponse(data);
@@ -145,7 +137,11 @@ export async function getPayslips() {
 }
 
 export async function createPayrollPeriod(payload) {
-  return createAccountingTableRow("payroll-periods", payload);
+  return request({
+    url: "/api/accounting/payroll-periods",
+    method: "POST",
+    data: payload
+  });
 }
 
 export async function createPayrollRun(payload) {
@@ -157,7 +153,11 @@ export async function createPayrollItem(payload) {
 }
 
 export async function createPayslip(payload) {
-  return createAccountingTableRow("payslips", payload);
+  return request({
+    url: "/api/accounting/payslips",
+    method: "POST",
+    data: payload
+  });
 }
 
 export async function getTaxFilings() {

@@ -16,17 +16,9 @@ namespace MyGarage.DTOs.Requests
         [EmailAddress(ErrorMessage = ValidationMessages.Email)]
         public string? ReceiveEmail { get; set; }
         public string? TaxCode { get; set; }
-        public decimal? SubTotalAmount { get; set; }
-        public decimal? TaxAmount { get; set; }
-        public decimal? TotalAmount { get; set; }
         public string? PayerType { get; set; }
         public long? PayerId { get; set; }
-        public decimal? PaidAmount { get; set; }
-        public string? PaymentStatus { get; set; }
-        public long? CreditApprovedByStaffId { get; set; }
         public string? CreditNote { get; set; }
         public DateTime? IssuedAt { get; set; }
-        public long? CreatedBy { get; set; }
-        public long? UpdatedBy { get; set; }
     }
 }

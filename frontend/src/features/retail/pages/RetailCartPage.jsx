@@ -31,6 +31,16 @@ import {
 import "./RetailShared.css";
 import "./RetailCartPage.css";
 
+const BRANCH_SHORTCUT_ORDER = [
+  { key: "ha-noi", label: "Hà Nội", aliases: ["ha noi", "hanoi", "hn"] },
+  { key: "da-nang", label: "Đà Nẵng", aliases: ["da nang", "danang", "dn"] },
+  {
+    key: "tp-hcm",
+    label: "TP HCM",
+    aliases: ["tp hcm", "tphcm", "ho chi minh", "hcm", "sai gon", "saigon"],
+  },
+];
+
 function toSafeAmount(value) {
   const parsed = Number(value);
   if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
@@ -58,6 +68,15 @@ function openPayosPopupWindow() {
   );
   popup.document.close();
   return popup;
+}
+
+function normalizeBranchSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export default function RetailCartPage() {
@@ -222,6 +241,36 @@ export default function RetailCartPage() {
     () => branches.find((item) => String(item.id) === String(branchId)) || null,
     [branchId, branches]
   );
+
+  const branchShortcutOptions = useMemo(() => {
+    const usedIds = new Set();
+    const mappedShortcuts = BRANCH_SHORTCUT_ORDER.map((shortcut) => {
+      const matchedBranch = branches.find((branch) => {
+        if (!branch || usedIds.has(branch.id)) return false;
+        const normalized = normalizeBranchSearchText(getBranchLabel(branch));
+        return shortcut.aliases.some((alias) => normalized.includes(alias));
+      });
+
+      if (!matchedBranch) return null;
+
+      usedIds.add(matchedBranch.id);
+      return {
+        id: String(matchedBranch.id),
+        label: shortcut.label,
+        fullLabel: getBranchLabel(matchedBranch),
+      };
+    }).filter(Boolean);
+
+    if (mappedShortcuts.length) {
+      return mappedShortcuts;
+    }
+
+    return branches.slice(0, 3).map((branch) => ({
+      id: String(branch.id),
+      label: getBranchLabel(branch),
+      fullLabel: getBranchLabel(branch),
+    }));
+  }, [branches]);
 
   const cartProductIds = useMemo(
     () => cart.map((item) => Number(item.id)).filter((value) => Number.isFinite(value) && value > 0),
@@ -783,13 +832,24 @@ export default function RetailCartPage() {
               <div className="retail-cart-form">
                 <label className="retail-cart-field">
                   <span>Chi nhánh tiếp nhận</span>
-                  <select value={branchId} onChange={(event) => setBranchId(event.target.value)}>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {getBranchLabel(branch)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="retail-cart-branch-shortcuts" role="radiogroup" aria-label="Chi nhánh tiếp nhận">
+                    {branchShortcutOptions.map((branch) => {
+                      const isActive = String(branchId) === branch.id;
+                      return (
+                        <button
+                          key={branch.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActive}
+                          className={`retail-cart-branch-chip${isActive ? " is-active" : ""}`}
+                          onClick={() => setBranchId(branch.id)}
+                          title={branch.fullLabel}
+                        >
+                          {branch.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </label>
 
                 <label className="retail-cart-field">

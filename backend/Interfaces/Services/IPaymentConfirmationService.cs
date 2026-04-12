@@ -6,6 +6,7 @@ namespace MyGarage.Interfaces
     public interface IPaymentConfirmationService
     {
         Task ApplyOutcomeAsync(Payment payment, decimal amountPaid, string status);
+        Task EnsureInvoiceLinkedAsync(Payment payment);
         Task SendRetailOrderSuccessEmailAsync(
             long retailOrderId,
             decimal amountPaid,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, Minus, RotateCcw, SendHorizontal } from "lucide-react";
+import { Bot, Expand, Minimize2, Minus, SendHorizontal } from "lucide-react";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createChatbotSession,
@@ -9,8 +9,11 @@ import {
 import "./CustomerChatbotWidget.css";
 
 const STORAGE_KEY = "mygarage_chatbot_session_v1";
+const WELCOME_HINT_SESSION_KEY = "mygarage_chatbot_welcome_hint_v1";
 const GREETING_TEXT =
   "Xin chào. Mình là trợ lý AI MyGarage. Bạn có thể hỏi về bảo dưỡng, đặt lịch, báo giá, đơn sửa chữa và ưu đãi.";
+const WELCOME_HINT_TEXT =
+  "Xin chào, mình là trợ lý AI MyGarage. Mình có thể hỗ trợ đặt lịch, báo giá nhanh, tra cứu đơn sửa chữa và gợi ý dịch vụ phù hợp cho xe của bạn.";
 const LOCKED_SESSION_STATUSES = new Set(["HANDED_OFF", "EXPIRED", "CLOSED", "ARCHIVED"]);
 
 function normalizeRole(role) {
@@ -148,9 +151,12 @@ export default function CustomerChatbotWidget() {
   const { isAuthenticated, user } = useAuth();
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
   const isCustomer = isAuthenticated && roleCode === "CUSTOMER";
+  const userId = String(user?.id ?? user?.Id ?? user?.userId ?? user?.UserId ?? "guest");
   const messageListRef = useRef(null);
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showWelcomeHint, setShowWelcomeHint] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -263,22 +269,6 @@ export default function CustomerChatbotWidget() {
     }
   }, [createNewSession]);
 
-  const reloadConversation = useCallback(async () => {
-    setInitializing(true);
-    setError("");
-    try {
-      writeStoredSession(null);
-      setSession(null);
-      setResumeCandidate(null);
-      setMessages([]);
-      await createNewSession();
-    } catch (err) {
-      setError(err?.message || "Không thể tải lại phiên chatbot.");
-    } finally {
-      setInitializing(false);
-    }
-  }, [createNewSession]);
-
   useEffect(() => {
     if (!isOpen || !isCustomer) return;
     let cancelled = false;
@@ -316,6 +306,41 @@ export default function CustomerChatbotWidget() {
     const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || typeof window === "undefined") return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsExpanded(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!isCustomer || isOpen) {
+      setShowWelcomeHint(false);
+      return undefined;
+    }
+
+    const sessionKey = `${WELCOME_HINT_SESSION_KEY}:${userId}`;
+    if (window.sessionStorage.getItem(sessionKey) === "shown") {
+      return undefined;
+    }
+
+    window.sessionStorage.setItem(sessionKey, "shown");
+    setShowWelcomeHint(true);
+
+    const timer = window.setTimeout(() => {
+      setShowWelcomeHint(false);
+    }, 9000);
+
+    return () => window.clearTimeout(timer);
+  }, [isCustomer, isOpen, userId]);
 
   const sendMessageContent = useCallback(
     async (content) => {
@@ -396,11 +421,20 @@ export default function CustomerChatbotWidget() {
 
   return (
     <>
+      {isOpen && isExpanded ? (
+        <div
+          className="chatbot-ai-expanded-backdrop"
+          onClick={() => setIsExpanded(false)}
+          aria-hidden="true"
+        />
+      ) : null}
       {isOpen ? (
-        <section className="chatbot-ai-widget" aria-label="MyGarage AI Chatbot">
+        <section className={`chatbot-ai-widget ${isExpanded ? "is-expanded" : ""}`} aria-label="MyGarage AI Chatbot">
           <header className="chatbot-ai-header">
             <div className="chatbot-ai-profile">
-              <span className="chatbot-ai-avatar">AI</span>
+              <span className="chatbot-ai-avatar" aria-hidden="true">
+                <Bot size={18} strokeWidth={2.1} />
+              </span>
               <div>
                 <strong>MyGarage AI</strong>
                 <small>{initializing ? "Đang kết nối..." : "Đang hoạt động"}</small>
@@ -410,18 +444,18 @@ export default function CustomerChatbotWidget() {
               <button
                 type="button"
                 className="chatbot-ai-icon-btn"
-                onClick={() => {
-                  void reloadConversation();
-                }}
-                title="Tải lại"
-                disabled={initializing || sending}
+                onClick={() => setIsExpanded((prev) => !prev)}
+                title={isExpanded ? "Thu nhỏ khung chat" : "Mở rộng chat"}
               >
-                <RotateCcw size={14} />
+                {isExpanded ? <Minimize2 size={14} /> : <Expand size={14} />}
               </button>
               <button
                 type="button"
                 className="chatbot-ai-icon-btn chatbot-ai-icon-btn-minimize"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsExpanded(false);
+                  setIsOpen(false);
+                }}
                 title="Thu nhỏ chatbot"
               >
                 <Minus size={16} strokeWidth={2.4} />
@@ -473,7 +507,11 @@ export default function CustomerChatbotWidget() {
                 return (
                   <div key={message.id} className="chatbot-ai-message-block">
                     <article className={`chatbot-ai-message-row ${mine ? "mine" : "other"}`}>
-                      {!mine ? <span className="chatbot-ai-message-avatar">AI</span> : null}
+                      {!mine ? (
+                        <span className="chatbot-ai-message-avatar" aria-hidden="true">
+                          <Bot size={15} strokeWidth={2.1} />
+                        </span>
+                      ) : null}
                       <div className="chatbot-ai-message-content">
                         <div className="chatbot-ai-bubble">
                           <p>{message.content}</p>
@@ -522,12 +560,29 @@ export default function CustomerChatbotWidget() {
       <button
         type="button"
         className="chatbot-ai-floating-btn"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setShowWelcomeHint(false);
+          setIsOpen(true);
+        }}
         aria-label="Mở MyGarage AI chatbot"
         title="Mở MyGarage AI chatbot"
       >
-        <MessageCircle size={22} strokeWidth={2.2} />
+        <Bot size={24} strokeWidth={2.1} />
       </button>
+      {showWelcomeHint ? (
+        <div className="chatbot-ai-welcome-hint" role="status" aria-live="polite">
+          <button
+            type="button"
+            className="chatbot-ai-welcome-close"
+            onClick={() => setShowWelcomeHint(false)}
+            aria-label="Dong goi y chatbot"
+          >
+            ×
+          </button>
+          <div className="chatbot-ai-welcome-eyebrow">Tro ly AI MyGarage</div>
+          <p>{WELCOME_HINT_TEXT}</p>
+        </div>
+      ) : null}
     </>
   );
 }

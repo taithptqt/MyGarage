@@ -4,7 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import App from "@app/App";
 import { AuthProvider } from "@shared/core/context/AuthContext";
 import { SearchProvider } from "@shared/core/context/SearchContext";
+import { forceVietnamTimezone } from "@shared/core/utils/forceVietnamTimezone";
 import "./shared/core/styles/global.css";
+
+forceVietnamTimezone();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

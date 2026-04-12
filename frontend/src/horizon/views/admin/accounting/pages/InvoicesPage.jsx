@@ -4,8 +4,6 @@ import {
   Box,
   Button,
   Flex,
-  FormControl,
-  FormLabel,
   Input,
   Select,
   SimpleGrid,
@@ -22,21 +20,14 @@ import {
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
-import { MdAttachMoney, MdCheckCircle, MdReceipt, MdRequestQuote } from "react-icons/md";
-import {
-  getInvoiceDetails,
-  getInvoices,
-  getPayments,
-  updateInvoice
-} from "../api/accountingApi";
+import { MdCheckCircle, MdReceipt, MdRequestQuote } from "react-icons/md";
+import { getInvoiceDetails, getInvoices, getPayments } from "../api/accountingApi";
 import {
   formatCurrency,
   formatDateTime,
   normalizeText,
-  sumBy,
   toNumber
 } from "../utils/accountingHelpers";
-import { isOptionalEmailValid } from "@shared/utils/contactValidation";
 
 function fieldOf(item, ...candidates) {
   for (const key of candidates) {
@@ -57,41 +48,40 @@ function resolveSource(invoice) {
 
 function paymentStatusLabel(invoice) {
   const status = String(fieldOf(invoice, "paymentStatus", "PaymentStatus") || "").toUpperCase();
-  if (status) return status;
-
-  const total = toNumber(fieldOf(invoice, "totalAmount", "TotalAmount"));
-  const paid = toNumber(fieldOf(invoice, "paidAmount", "PaidAmount"));
-  if (paid <= 0) return "UNPAID";
-  if (paid < total) return "PARTIAL";
-  return "PAID";
+  return status || "UNKNOWN";
 }
 
-function invoicePayloadFrom(existing, overrides = {}) {
-  return {
-    serviceOrderId: fieldOf(existing, "serviceOrderId", "ServiceOrderId"),
-    retailOrderId: fieldOf(existing, "retailOrderId", "RetailOrderId"),
-    vehicleId: fieldOf(existing, "vehicleId", "VehicleId"),
-    phone: fieldOf(existing, "phone", "Phone"),
-    address: fieldOf(existing, "address", "Address"),
-    invoiceUrl: fieldOf(existing, "invoiceUrl", "InvoiceUrl"),
-    companyName: fieldOf(existing, "companyName", "CompanyName"),
-    companyAddress: fieldOf(existing, "companyAddress", "CompanyAddress"),
-    receiveEmail: fieldOf(existing, "receiveEmail", "ReceiveEmail"),
-    taxCode: fieldOf(existing, "taxCode", "TaxCode"),
-    subTotalAmount: fieldOf(existing, "subTotalAmount", "SubTotalAmount"),
-    taxAmount: fieldOf(existing, "taxAmount", "TaxAmount"),
-    totalAmount: fieldOf(existing, "totalAmount", "TotalAmount"),
-    payerType: fieldOf(existing, "payerType", "PayerType"),
-    payerId: fieldOf(existing, "payerId", "PayerId"),
-    paidAmount: fieldOf(existing, "paidAmount", "PaidAmount"),
-    paymentStatus: fieldOf(existing, "paymentStatus", "PaymentStatus"),
-    creditApprovedByStaffId: fieldOf(existing, "creditApprovedByStaffId", "CreditApprovedByStaffId"),
-    creditNote: fieldOf(existing, "creditNote", "CreditNote"),
-    issuedAt: fieldOf(existing, "issuedAt", "IssuedAt"),
-    createdBy: fieldOf(existing, "createdBy", "CreatedBy"),
-    updatedBy: fieldOf(existing, "updatedBy", "UpdatedBy"),
-    ...overrides
-  };
+function readOutstandingAmount(invoice) {
+  const explicitOutstanding = fieldOf(
+    invoice,
+    "outstandingAmount",
+    "OutstandingAmount",
+    "remainingAmount",
+    "RemainingAmount"
+  );
+  if (explicitOutstanding !== undefined && explicitOutstanding !== null) {
+    return toNumber(explicitOutstanding);
+  }
+  return null;
+}
+
+function statusColor(status) {
+  if (status === "PAID") return "green";
+  if (status === "PARTIAL") return "orange";
+  if (status === "REFUNDED") return "purple";
+  if (status === "UNKNOWN") return "gray";
+  return "red";
+}
+
+function ReadonlyField({ label, value, borderColor, textColorSecondary }) {
+  return (
+    <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px'>
+      <Text fontSize='xs' color={textColorSecondary}>
+        {label}
+      </Text>
+      <Text fontWeight='600'>{value || "--"}</Text>
+    </Box>
+  );
 }
 
 export default function InvoicesPage() {
@@ -111,15 +101,6 @@ export default function InvoicesPage() {
   const [invoiceDetails, setInvoiceDetails] = useState([]);
   const [payments, setPayments] = useState([]);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
-
-  const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState({
-    companyName: "",
-    companyAddress: "",
-    receiveEmail: "",
-    taxCode: "",
-    creditNote: ""
-  });
 
   async function loadData() {
     setLoading(true);
@@ -152,19 +133,15 @@ export default function InvoicesPage() {
       (invoices || [])
         .map((item) => {
           const id = fieldOf(item, "id", "Id");
-          const totalAmount = toNumber(fieldOf(item, "totalAmount", "TotalAmount"));
-          const taxAmount = toNumber(fieldOf(item, "taxAmount", "TaxAmount"));
-          const paidAmount = toNumber(fieldOf(item, "paidAmount", "PaidAmount"));
-          const status = paymentStatusLabel(item);
-          const source = resolveSource(item);
           return {
             raw: item,
             id,
-            source,
-            status,
-            totalAmount,
-            taxAmount,
-            paidAmount,
+            source: resolveSource(item),
+            status: paymentStatusLabel(item),
+            totalAmount: toNumber(fieldOf(item, "totalAmount", "TotalAmount")),
+            taxAmount: toNumber(fieldOf(item, "taxAmount", "TaxAmount")),
+            paidAmount: toNumber(fieldOf(item, "paidAmount", "PaidAmount")),
+            outstandingAmount: readOutstandingAmount(item),
             issuedAt: fieldOf(item, "issuedAt", "IssuedAt"),
             companyName: fieldOf(item, "companyName", "CompanyName"),
             receiveEmail: fieldOf(item, "receiveEmail", "ReceiveEmail"),
@@ -219,88 +196,15 @@ export default function InvoicesPage() {
     [payments, selectedInvoiceId]
   );
 
-  useEffect(() => {
-    if (!selectedInvoice) return;
-    setEditForm({
-      companyName: fieldOf(selectedInvoice.raw, "companyName", "CompanyName") || "",
-      companyAddress: fieldOf(selectedInvoice.raw, "companyAddress", "CompanyAddress") || "",
-      receiveEmail: fieldOf(selectedInvoice.raw, "receiveEmail", "ReceiveEmail") || "",
-      taxCode: fieldOf(selectedInvoice.raw, "taxCode", "TaxCode") || "",
-      creditNote: fieldOf(selectedInvoice.raw, "creditNote", "CreditNote") || ""
-    });
-  }, [selectedInvoice]);
-
-  const summary = useMemo(() => {
-    return {
+  const summary = useMemo(
+    () => ({
       totalInvoice: filteredRows.length,
-      totalVat: sumBy(filteredRows, (item) => item.taxAmount),
-      totalOutstanding: sumBy(filteredRows, (item) => Math.max(0, item.totalAmount - item.paidAmount)),
-      issuedCount: filteredRows.filter((item) => item.issuedAt).length
-    };
-  }, [filteredRows]);
-
-  async function handleIssue(invoiceRow) {
-    if (!invoiceRow) return;
-    setSaving(true);
-    try {
-      const payload = invoicePayloadFrom(invoiceRow.raw, {
-        issuedAt: new Date().toISOString()
-      });
-      await updateInvoice(invoiceRow.id, payload);
-      toast({
-        status: "success",
-        title: `Đã issue hóa đơn #${invoiceRow.id}`
-      });
-      await loadData();
-      setSelectedInvoiceId(invoiceRow.id);
-    } catch (err) {
-      toast({
-        status: "error",
-        title: "Issue hóa đơn thất bại",
-        description: err?.message
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaveAdjustment() {
-    if (!selectedInvoice) return;
-    const receiveEmail = String(editForm.receiveEmail || "").trim();
-    if (!isOptionalEmailValid(receiveEmail)) {
-      toast({
-        status: "error",
-        title: "Email nhận hóa đơn không đúng định dạng"
-      });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const payload = invoicePayloadFrom(selectedInvoice.raw, {
-        companyName: editForm.companyName,
-        companyAddress: editForm.companyAddress,
-        receiveEmail: receiveEmail || null,
-        taxCode: editForm.taxCode,
-        creditNote: editForm.creditNote
-      });
-      await updateInvoice(selectedInvoice.id, payload);
-      toast({
-        status: "success",
-        title: `Đã cập nhật hóa đơn #${selectedInvoice.id}`
-      });
-      await loadData();
-      setSelectedInvoiceId(selectedInvoice.id);
-    } catch (err) {
-      toast({
-        status: "error",
-        title: "Cập nhật hóa đơn thất bại",
-        description: err?.message
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
+      issuedCount: filteredRows.filter((item) => item.issuedAt).length,
+      paidCount: filteredRows.filter((item) => item.status === "PAID").length,
+      unknownStatusCount: filteredRows.filter((item) => item.status === "UNKNOWN").length
+    }),
+    [filteredRows]
+  );
 
   function handleResend(invoiceRow) {
     const email = invoiceRow?.receiveEmail;
@@ -336,35 +240,21 @@ export default function InvoicesPage() {
     <Box>
       {error ? (
         <Card p='16px' mb='20px'>
-          <Text color='red.400' fontWeight='600'>{error}</Text>
+          <Text color='red.400' fontWeight='600'>
+            {error}
+          </Text>
         </Card>
       ) : null}
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
-        <MiniStatistics
-          startContent={<MdReceipt size='24px' />}
-          name='Tổng hóa đơn'
-          value={String(summary.totalInvoice)}
-        />
-        <MiniStatistics
-          startContent={<MdRequestQuote size='24px' />}
-          name='VAT đầu ra'
-          value={formatCurrency(summary.totalVat)}
-        />
-        <MiniStatistics
-          startContent={<MdAttachMoney size='24px' />}
-          name='Chưa thu đủ'
-          value={formatCurrency(summary.totalOutstanding)}
-        />
-        <MiniStatistics
-          startContent={<MdCheckCircle size='24px' />}
-          name='Đã issue'
-          value={String(summary.issuedCount)}
-        />
+        <MiniStatistics startContent={<MdReceipt size='24px' />} name='Tổng hóa đơn' value={String(summary.totalInvoice)} />
+        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã thanh toán' value={String(summary.paidCount)} />
+        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã phát hành' value={String(summary.issuedCount)} />
+        <MiniStatistics startContent={<MdRequestQuote size='24px' />} name='Thiếu trạng thái thanh toán' value={String(summary.unknownStatusCount)} />
       </SimpleGrid>
 
       <Card p='20px' mb='20px'>
-        <Flex gap='12px' wrap='wrap'>
+        <Flex gap='12px' wrap='wrap' align='center'>
           <Input
             placeholder='Tìm theo mã invoice / SO / RO / email / công ty'
             value={search}
@@ -377,12 +267,16 @@ export default function InvoicesPage() {
             <option value='PARTIAL'>PARTIAL</option>
             <option value='PAID'>PAID</option>
             <option value='REFUNDED'>REFUNDED</option>
+            <option value='UNKNOWN'>UNKNOWN</option>
           </Select>
           <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} maxW='220px'>
             <option value='ALL'>Tất cả nguồn</option>
             <option value='SERVICE'>Service Order</option>
             <option value='RETAIL'>Retail Order</option>
           </Select>
+          <Text color={textColorSecondary} fontSize='xs' maxW='420px'>
+            Payment status và công nợ trên màn hình này chỉ hiển thị theo field backend trả về, UI không tự suy diễn thay backend.
+          </Text>
         </Flex>
       </Card>
 
@@ -407,14 +301,18 @@ export default function InvoicesPage() {
                   bg={String(row.id) === String(selectedInvoiceId) ? selectedBg : "transparent"}
                   onClick={() => setSelectedInvoiceId(row.id)}
                   cursor='pointer'>
-                  <Td color={textColor} fontWeight='600'>#{row.id}</Td>
+                  <Td color={textColor} fontWeight='600'>
+                    #{row.id}
+                  </Td>
                   <Td color={textColorSecondary}>{row.source}</Td>
-                  <Td color={textColor} isNumeric>{formatCurrency(row.totalAmount)}</Td>
-                  <Td color={textColor} isNumeric>{formatCurrency(row.paidAmount)}</Td>
+                  <Td color={textColor} isNumeric>
+                    {formatCurrency(row.totalAmount)}
+                  </Td>
+                  <Td color={textColor} isNumeric>
+                    {formatCurrency(row.paidAmount)}
+                  </Td>
                   <Td>
-                    <Badge colorScheme={row.status === "PAID" ? "green" : row.status === "PARTIAL" ? "orange" : "red"}>
-                      {row.status}
-                    </Badge>
+                    <Badge colorScheme={statusColor(row.status)}>{row.status}</Badge>
                   </Td>
                   <Td color={textColorSecondary}>{row.issuedAt ? formatDateTime(row.issuedAt) : "--"}</Td>
                   <Td textAlign='right'>
@@ -428,16 +326,6 @@ export default function InvoicesPage() {
                           handleResend(row);
                         }}>
                         Gửi lại
-                      </Button>
-                      <Button
-                        size='xs'
-                        colorScheme='green'
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleIssue(row);
-                        }}
-                        isDisabled={saving}>
-                        Issue
                       </Button>
                     </Flex>
                   </Td>
@@ -455,25 +343,45 @@ export default function InvoicesPage() {
               </Text>
 
               <SimpleGrid columns={2} gap='10px' mb='14px'>
-                <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px'>
-                  <Text fontSize='xs' color={textColorSecondary}>Total</Text>
-                  <Text fontWeight='700'>{formatCurrency(selectedInvoice.totalAmount)}</Text>
-                </Box>
-                <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px'>
-                  <Text fontSize='xs' color={textColorSecondary}>VAT</Text>
-                  <Text fontWeight='700'>{formatCurrency(selectedInvoice.taxAmount)}</Text>
-                </Box>
-                <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px'>
-                  <Text fontSize='xs' color={textColorSecondary}>Paid</Text>
-                  <Text fontWeight='700'>{formatCurrency(selectedInvoice.paidAmount)}</Text>
-                </Box>
-                <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px'>
-                  <Text fontSize='xs' color={textColorSecondary}>Source</Text>
-                  <Text fontWeight='700'>{selectedInvoice.source}</Text>
-                </Box>
+                <ReadonlyField
+                  label='Total'
+                  value={formatCurrency(selectedInvoice.totalAmount)}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='VAT'
+                  value={formatCurrency(selectedInvoice.taxAmount)}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Paid (backend)'
+                  value={formatCurrency(selectedInvoice.paidAmount)}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Source'
+                  value={selectedInvoice.source}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Outstanding (backend)'
+                  value={
+                    selectedInvoice.outstandingAmount === null
+                      ? "Backend chưa trả field"
+                      : formatCurrency(selectedInvoice.outstandingAmount)
+                  }
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
               </SimpleGrid>
 
-              <Text color={textColor} fontWeight='600' mb='8px'>Dòng hóa đơn</Text>
+              <Text color={textColor} fontWeight='600' mb='8px'>
+                Dòng hóa đơn
+              </Text>
               <Box mb='12px' maxH='150px' overflowY='auto'>
                 {selectedDetails.length ? (
                   selectedDetails.map((detail) => {
@@ -488,16 +396,22 @@ export default function InvoicesPage() {
                         borderBottom='1px solid'
                         borderColor={borderColor}>
                         <Text fontSize='sm'>{itemName}</Text>
-                        <Text fontSize='sm' fontWeight='600'>{formatCurrency(finalAmount)}</Text>
+                        <Text fontSize='sm' fontWeight='600'>
+                          {formatCurrency(finalAmount)}
+                        </Text>
                       </Flex>
                     );
                   })
                 ) : (
-                  <Text color={textColorSecondary} fontSize='sm'>Không có dòng chi tiết.</Text>
+                  <Text color={textColorSecondary} fontSize='sm'>
+                    Không có dòng chi tiết.
+                  </Text>
                 )}
               </Box>
 
-              <Text color={textColor} fontWeight='600' mb='8px'>Payment liên quan</Text>
+              <Text color={textColor} fontWeight='600' mb='8px'>
+                Payment liên quan
+              </Text>
               <Box mb='16px' maxH='130px' overflowY='auto'>
                 {selectedPayments.length ? (
                   selectedPayments.map((payment) => {
@@ -512,67 +426,73 @@ export default function InvoicesPage() {
                         p='8px'
                         borderBottom='1px solid'
                         borderColor={borderColor}>
-                        <Text fontSize='sm'>#{paymentId} · {type || "--"}</Text>
-                        <Text fontSize='sm' fontWeight='600'>{formatCurrency(amount)} · {status || "--"}</Text>
+                        <Text fontSize='sm'>
+                          #{paymentId} • {type || "--"}
+                        </Text>
+                        <Text fontSize='sm' fontWeight='600'>
+                          {formatCurrency(amount)} • {status || "--"}
+                        </Text>
                       </Flex>
                     );
                   })
                 ) : (
-                  <Text color={textColorSecondary} fontSize='sm'>Chưa có payment liên quan.</Text>
+                  <Text color={textColorSecondary} fontSize='sm'>
+                    Chưa có payment liên quan.
+                  </Text>
                 )}
               </Box>
 
-              <Text color={textColor} fontWeight='600' mb='8px'>Điều chỉnh / thay thế invoice</Text>
+              <Text color={textColor} fontWeight='600' mb='8px'>
+                Thông tin invoice
+              </Text>
               <SimpleGrid columns={1} gap='10px'>
-                <FormControl>
-                  <FormLabel mb='4px' fontSize='xs'>Company name</FormLabel>
-                  <Input
-                    value={editForm.companyName}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel mb='4px' fontSize='xs'>Company address</FormLabel>
-                  <Input
-                    value={editForm.companyAddress}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, companyAddress: e.target.value }))}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel mb='4px' fontSize='xs'>Receive email</FormLabel>
-                  <Input
-                    type='email'
-                    value={editForm.receiveEmail}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, receiveEmail: e.target.value }))}
-                  />
-                </FormControl>
+                <ReadonlyField
+                  label='Company name'
+                  value={fieldOf(selectedInvoice.raw, "companyName", "CompanyName")}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Company address'
+                  value={fieldOf(selectedInvoice.raw, "companyAddress", "CompanyAddress")}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Receive email'
+                  value={fieldOf(selectedInvoice.raw, "receiveEmail", "ReceiveEmail")}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
                 <SimpleGrid columns={2} gap='10px'>
-                  <FormControl>
-                    <FormLabel mb='4px' fontSize='xs'>Tax code</FormLabel>
-                    <Input
-                      value={editForm.taxCode}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, taxCode: e.target.value }))}
-                    />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel mb='4px' fontSize='xs'>Trạng thái thanh toán (tự động)</FormLabel>
-                    <Input value={selectedInvoice.status || "--"} isReadOnly />
-                  </FormControl>
-                </SimpleGrid>
-                <FormControl>
-                  <FormLabel mb='4px' fontSize='xs'>Số tiền đã thu (tự động)</FormLabel>
-                  <Input value={formatCurrency(selectedInvoice.paidAmount)} isReadOnly />
-                </FormControl>
-                <FormControl>
-                  <FormLabel mb='4px' fontSize='xs'>Credit note</FormLabel>
-                  <Input
-                    value={editForm.creditNote}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, creditNote: e.target.value }))}
+                  <ReadonlyField
+                    label='Tax code'
+                    value={fieldOf(selectedInvoice.raw, "taxCode", "TaxCode")}
+                    borderColor={borderColor}
+                    textColorSecondary={textColorSecondary}
                   />
-                </FormControl>
-                <Button colorScheme='blue' onClick={handleSaveAdjustment} isLoading={saving}>
-                  Lưu điều chỉnh
-                </Button>
+                  <ReadonlyField
+                    label='Trạng thái thanh toán'
+                    value={selectedInvoice.status}
+                    borderColor={borderColor}
+                    textColorSecondary={textColorSecondary}
+                  />
+                </SimpleGrid>
+                <ReadonlyField
+                  label='Số tiền đã thu (backend)'
+                  value={formatCurrency(selectedInvoice.paidAmount)}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <ReadonlyField
+                  label='Credit note'
+                  value={fieldOf(selectedInvoice.raw, "creditNote", "CreditNote")}
+                  borderColor={borderColor}
+                  textColorSecondary={textColorSecondary}
+                />
+                <Text fontSize='sm' color={textColorSecondary}>
+                  Invoice là chứng từ bất biến. Mọi điều chỉnh phải đi qua quy trình điều chỉnh/thay thế riêng, không sửa trực tiếp trên màn hình kế toán.
+                </Text>
               </SimpleGrid>
             </>
           ) : (

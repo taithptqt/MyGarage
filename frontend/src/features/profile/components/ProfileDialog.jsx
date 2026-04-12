@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
-import { getApiBaseUrl } from "@features/auth/api/authApi";
+import { changePassword, getApiBaseUrl } from "@features/auth/api/authApi";
 import { getCustomerById, updateCustomer } from "@features/admin/api/customerApi";
 import { getStaffById, updateStaff, uploadStaffAvatar } from "@features/admin/api/staffApi";
 import { VIETNAM_PHONE_PATTERN, isValidEmail, isValidVietnamesePhone } from "@shared/utils/contactValidation";
@@ -48,7 +48,7 @@ function buildInitialFormData(source) {
 }
 
 export default function ProfileDialog({ onClose }) {
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const userId = user?.id || user?.Id;
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
   const isStaffRole = STAFF_ROLES.includes(roleCode);
@@ -59,6 +59,14 @@ export default function ProfileDialog({ onClose }) {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [selectedImage, setSelectedImage] = useState("");
   const [showCropper, setShowCropper] = useState(false);
 
@@ -125,6 +133,11 @@ export default function ProfileDialog({ onClose }) {
   const onChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onPasswordChange = (event) => {
+    const { name, value } = event.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const onAvatarChange = (event) => {
@@ -236,6 +249,66 @@ export default function ProfileDialog({ onClose }) {
     }
   };
 
+  const onPasswordSubmit = async (event) => {
+    event.preventDefault();
+
+    const oldPassword = String(passwordForm.oldPassword || "");
+    const newPassword = String(passwordForm.newPassword || "");
+    const confirmPassword = String(passwordForm.confirmPassword || "");
+
+    if (!oldPassword) {
+      setPasswordError("Vui lòng nhập mật khẩu hiện tại.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Mật khẩu xác nhận chưa khớp.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (oldPassword === newPassword) {
+      setPasswordError("Mật khẩu mới cần khác mật khẩu hiện tại.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    setChangingPassword(true);
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    const { ok, data } = await changePassword({
+      oldPassword,
+      newPassword,
+    });
+
+    if (!ok) {
+      setPasswordError(data?.message || "Không thể đổi mật khẩu.");
+      setChangingPassword(false);
+      return;
+    }
+
+    setPasswordForm({
+      oldPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setPasswordSuccess("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+    setChangingPassword(false);
+
+    window.setTimeout(() => {
+      onClose();
+      logout();
+    }, 1200);
+  };
+
   const content = (
     <>
       <div className="profile-dialog-overlay" onClick={onClose}>
@@ -266,56 +339,131 @@ export default function ProfileDialog({ onClose }) {
           {error ? <div className="profile-dialog-alert error">{error}</div> : null}
           {success ? <div className="profile-dialog-alert success">{success}</div> : null}
 
-          <form className="profile-dialog-form" onSubmit={onSubmit}>
-            <label>
-              Họ và tên
-              <input name="fullName" value={formData.fullName} onChange={onChange} required />
-            </label>
-            <label>
-              Số điện thoại
-              <input
-                type="tel"
-                inputMode="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={onChange}
-                pattern={VIETNAM_PHONE_PATTERN}
-                title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
-                required
-              />
-            </label>
-            <label>
-              Email
-              <input type="email" name="email" value={formData.email} onChange={onChange} required />
-            </label>
-
-            {isStaffRole ? (
-              <>
-                <label>
-                  Số CCCD
-                  <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chưa cập nhật" />
-                </label>
-                <label>
-                  Ngày sinh
-                  <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={onChange} />
-                </label>
-              </>
-            ) : null}
-
-            <label>
-              {isStaffRole ? "Chi nhánh" : "Chi nhánh ưu tiên"}
-              <input value={user?.branchName || "Chưa xác định"} disabled />
-            </label>
-
-            <div className="profile-dialog-actions">
-              <button type="button" className="ghost" onClick={onClose} disabled={saving || uploadingAvatar}>
-                Hủy
-              </button>
-              <button type="submit" disabled={saving || uploadingAvatar || loadingProfile}>
-                {loadingProfile ? "Đang tải..." : saving ? "Đang lưu..." : "Lưu hồ sơ"}
-              </button>
+          <section className="profile-dialog-section">
+            <div className="profile-dialog-section-title">
+              <h3>Thông tin hồ sơ</h3>
+              <p>Cập nhật thông tin cá nhân đang dùng trong hệ thống.</p>
             </div>
-          </form>
+
+            <form className="profile-dialog-form" onSubmit={onSubmit}>
+              <label>
+                Họ và tên
+                <input name="fullName" value={formData.fullName} onChange={onChange} required />
+              </label>
+              <label>
+                Số điện thoại
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={onChange}
+                  pattern={VIETNAM_PHONE_PATTERN}
+                  title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                  required
+                />
+              </label>
+              <label>
+                Email
+                <input type="email" name="email" value={formData.email} onChange={onChange} required />
+              </label>
+
+              {isStaffRole ? (
+                <>
+                  <label>
+                    Số CCCD
+                    <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chưa cập nhật" />
+                  </label>
+                  <label>
+                    Ngày sinh
+                    <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={onChange} />
+                  </label>
+                </>
+              ) : null}
+
+              <label>
+                {isStaffRole ? "Chi nhánh" : "Chi nhánh ưu tiên"}
+                <input value={user?.branchName || "Chưa xác định"} disabled />
+              </label>
+
+              <div className="profile-dialog-actions">
+                <button type="button" className="ghost" onClick={onClose} disabled={saving || uploadingAvatar}>
+                  Hủy
+                </button>
+                <button type="submit" disabled={saving || uploadingAvatar || loadingProfile}>
+                  {loadingProfile ? "Đang tải..." : saving ? "Đang lưu..." : "Lưu hồ sơ"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="profile-dialog-section profile-dialog-section-password">
+            <div className="profile-dialog-section-title">
+              <h3>Đổi mật khẩu</h3>
+              <p>Sau khi đổi mật khẩu, phiên đăng nhập hiện tại sẽ được đăng xuất để bảo mật.</p>
+            </div>
+
+            {passwordError ? <div className="profile-dialog-alert error">{passwordError}</div> : null}
+            {passwordSuccess ? <div className="profile-dialog-alert success">{passwordSuccess}</div> : null}
+
+            <form className="profile-dialog-form" onSubmit={onPasswordSubmit}>
+              <label>
+                Mật khẩu hiện tại
+                <input
+                  type="password"
+                  name="oldPassword"
+                  value={passwordForm.oldPassword}
+                  onChange={onPasswordChange}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <label>
+                Mật khẩu mới
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordForm.newPassword}
+                  onChange={onPasswordChange}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </label>
+              <label className="profile-dialog-field-full">
+                Xác nhận mật khẩu mới
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordForm.confirmPassword}
+                  onChange={onPasswordChange}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </label>
+
+              <div className="profile-dialog-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    setPasswordForm({
+                      oldPassword: "",
+                      newPassword: "",
+                      confirmPassword: "",
+                    })
+                  }
+                  disabled={changingPassword}
+                >
+                  Xóa nhanh
+                </button>
+                <button type="submit" disabled={changingPassword}>
+                  {changingPassword ? "Đang đổi..." : "Đổi mật khẩu"}
+                </button>
+              </div>
+            </form>
+          </section>
         </section>
       </div>
 
