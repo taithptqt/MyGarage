@@ -35,17 +35,13 @@ import { useBranch } from "../../../../../context/BranchContext";
 import {
   approvePayrollRun,
   calculatePayrollForAllStaff,
-  createPayrollItem,
   createPayrollPeriod,
-  createPayrollRun,
   createPayslip,
-  createInitialSalaryRequest,
   getBranches,
   getPayrollItems,
   getPayrollPeriods,
   getPayrollRuns,
   getPayslips,
-  getRevenueSnapshots,
   getStaffSalaryCoefficient,
   markPayrollRunPaid,
   getStaffBaseSalary,
@@ -72,27 +68,24 @@ function toId(value) {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
-function calcItem(item) {
-  const baseSalary = toNumber(pick(item, "baseSalary", "BaseSalary"));
-  const overtimeAmount = toNumber(pick(item, "overtimeAmount", "OvertimeAmount"));
-  const allowanceAmount = toNumber(pick(item, "allowanceAmount", "AllowanceAmount"));
-  const commissionAmount = toNumber(pick(item, "commissionAmount", "CommissionAmount"));
-  const bonusAmount = toNumber(pick(item, "bonusAmount", "BonusAmount"));
+function derivePayrollAmounts(item) {
+  const explicitGrossPay = pick(item, "grossPay", "GrossPay");
+  const explicitTotalDeduction = pick(item, "totalDeduction", "TotalDeduction");
+  const explicitNetPay = pick(item, "netPay", "NetPay");
 
-  const attendanceDeduction = toNumber(pick(item, "attendanceDeduction", "AttendanceDeduction"));
-  const penaltyAmount = toNumber(pick(item, "penaltyAmount", "PenaltyAmount"));
-  const advanceDeduction = toNumber(pick(item, "advanceDeduction", "AdvanceDeduction"));
-  const loanDeduction = toNumber(pick(item, "loanDeduction", "LoanDeduction"));
-  const insuranceEmployeeAmount = toNumber(pick(item, "insuranceEmployeeAmount", "InsuranceEmployeeAmount"));
-  const pitAmount = toNumber(pick(item, "pitAmount", "PitAmount"));
-  const otherDeduction = toNumber(pick(item, "otherDeduction", "OtherDeduction"));
-
-  const grossPay = baseSalary + overtimeAmount + allowanceAmount + commissionAmount + bonusAmount;
+  const grossPay = explicitGrossPay !== undefined && explicitGrossPay !== null ? toNumber(explicitGrossPay) : null;
   const totalDeduction =
-    attendanceDeduction + penaltyAmount + advanceDeduction + loanDeduction + insuranceEmployeeAmount + pitAmount + otherDeduction;
-  const netPay = toNumber(pick(item, "netPay", "NetPay")) || grossPay - totalDeduction;
+    explicitTotalDeduction !== undefined && explicitTotalDeduction !== null ? toNumber(explicitTotalDeduction) : null;
+  const netPay = explicitNetPay !== undefined && explicitNetPay !== null ? toNumber(explicitNetPay) : null;
 
-  return { grossPay, totalDeduction, netPay };
+  return {
+    grossPay,
+    totalDeduction,
+    netPay,
+    hasOfficialGrossPay: explicitGrossPay !== undefined && explicitGrossPay !== null,
+    hasOfficialTotalDeduction: explicitTotalDeduction !== undefined && explicitTotalDeduction !== null,
+    hasOfficialNetPay: explicitNetPay !== undefined && explicitNetPay !== null
+  };
 }
 
 function toDateInputValue(value) {
@@ -142,27 +135,6 @@ function createDefaultPeriodForm() {
     endDate: toDateInputValue(last),
     payrollDate: toDateInputValue(payroll),
     status: "OPEN",
-  };
-}
-
-function createDefaultItemForm() {
-  return {
-    staffId: "",
-    baseSalary: "",
-    dependentCount: "0",
-    insuranceZone: "I",
-    attendanceDeduction: "0",
-    overtimeAmount: "0",
-    allowanceAmount: "0",
-    commissionAmount: "0",
-    bonusAmount: "0",
-    penaltyAmount: "0",
-    advanceDeduction: "0",
-    loanDeduction: "0",
-    insuranceEmployeeAmount: "0",
-    insuranceCompanyAmount: "0",
-    pitAmount: "0",
-    otherDeduction: "0",
   };
 }
 
@@ -247,55 +219,6 @@ function safeTime(value) {
   return Number.isNaN(ts) ? 0 : ts;
 }
 
-const VIETNAM_PAYROLL_POLICY_PRE_2026 = {
-  employeeBhxhRate: 0.08,
-  employeeBhytRate: 0.015,
-  employeeBhtnRate: 0.01,
-  employerBhxhRate: 0.175,
-  employerBhytRate: 0.03,
-  employerBhtnRate: 0.01,
-  employerOaidRate: 0.005,
-  personalDeduction: 11000000,
-  dependentDeduction: 4400000,
-  socialInsuranceBaseReference: 2340000,
-  regionalMinimumWageByZone: {
-    I: 4960000,
-    II: 4410000,
-    III: 3860000,
-    IV: 3450000,
-  },
-};
-
-const VIETNAM_PAYROLL_POLICY_2026 = {
-  ...VIETNAM_PAYROLL_POLICY_PRE_2026,
-  personalDeduction: 15500000,
-  dependentDeduction: 6200000,
-};
-
-const VIETNAM_PIT_BRACKETS = [
-  { limit: 5000000, rate: 0.05 },
-  { limit: 10000000, rate: 0.1 },
-  { limit: 18000000, rate: 0.15 },
-  { limit: 32000000, rate: 0.2 },
-  { limit: 52000000, rate: 0.25 },
-  { limit: 80000000, rate: 0.3 },
-  { limit: Number.POSITIVE_INFINITY, rate: 0.35 },
-];
-
-function resolveVietnamPayrollPolicy(asOfDate) {
-  const asOf = asOfDate ? new Date(`${asOfDate}T00:00:00`) : new Date();
-  if (!Number.isNaN(asOf.getTime()) && asOf >= new Date("2026-01-01T00:00:00")) {
-    return VIETNAM_PAYROLL_POLICY_2026;
-  }
-  return VIETNAM_PAYROLL_POLICY_PRE_2026;
-}
-
-function normalizeInsuranceZone(zone) {
-  const text = String(zone || "").trim().toUpperCase();
-  if (text === "II" || text === "III" || text === "IV") return text;
-  return "I";
-}
-
 function normalizePeriodCode(value) {
   return String(value || "")
     .normalize("NFD")
@@ -303,85 +226,6 @@ function normalizePeriodCode(value) {
     .replace(/\s+/g, "")
     .trim()
     .toUpperCase();
-}
-
-function roundVnd(value) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
-}
-
-function calculatePitByProgressiveBracket(taxableIncome) {
-  let remaining = Math.max(0, toNumber(taxableIncome));
-  if (remaining <= 0) return 0;
-
-  let lowerBound = 0;
-  let totalTax = 0;
-  VIETNAM_PIT_BRACKETS.forEach((bracket) => {
-    if (remaining <= 0) return;
-    const upperBound = bracket.limit;
-    const range = upperBound - lowerBound;
-    const taxableInRange = Math.min(remaining, range);
-    if (taxableInRange > 0) {
-      totalTax += taxableInRange * bracket.rate;
-      remaining -= taxableInRange;
-    }
-    lowerBound = upperBound;
-  });
-  return roundVnd(totalTax);
-}
-
-function calculateVietnamStatutoryAmounts(baseSalaryForInsurance, grossIncome, dependentCount, policy, insuranceZone) {
-  const resolvedPolicy = policy || VIETNAM_PAYROLL_POLICY_2026;
-  const zone = normalizeInsuranceZone(insuranceZone);
-  const normalizedDependents = Math.max(0, Math.trunc(toNumber(dependentCount)));
-  const socialInsuranceCap = 20 * resolvedPolicy.socialInsuranceBaseReference;
-  const unemploymentCap = 20 * toNumber(resolvedPolicy.regionalMinimumWageByZone?.[zone]);
-  const baseSalary = Math.max(0, toNumber(baseSalaryForInsurance));
-  const socialInsurableBase = Math.min(baseSalary, socialInsuranceCap);
-  const unemploymentInsurableBase = Math.min(baseSalary, unemploymentCap);
-
-  const employeeBhxh = roundVnd(socialInsurableBase * resolvedPolicy.employeeBhxhRate);
-  const employeeBhyt = roundVnd(socialInsurableBase * resolvedPolicy.employeeBhytRate);
-  const employeeBhtn = roundVnd(unemploymentInsurableBase * resolvedPolicy.employeeBhtnRate);
-  const employeeInsuranceTotal = roundVnd(employeeBhxh + employeeBhyt + employeeBhtn);
-
-  const employerBhxh = roundVnd(socialInsurableBase * resolvedPolicy.employerBhxhRate);
-  const employerBhyt = roundVnd(socialInsurableBase * resolvedPolicy.employerBhytRate);
-  const employerBhtn = roundVnd(unemploymentInsurableBase * resolvedPolicy.employerBhtnRate);
-  const employerOaid = roundVnd(socialInsurableBase * resolvedPolicy.employerOaidRate);
-  const employerInsuranceTotal = roundVnd(employerBhxh + employerBhyt + employerBhtn + employerOaid);
-
-  const taxableIncome =
-    Math.max(
-      0,
-      toNumber(grossIncome) -
-      employeeInsuranceTotal -
-      resolvedPolicy.personalDeduction -
-      normalizedDependents * resolvedPolicy.dependentDeduction,
-    );
-  const pitAmount = calculatePitByProgressiveBracket(taxableIncome);
-
-  return {
-    employeeBhxh,
-    employeeBhyt,
-    employeeBhtn,
-    employeeInsuranceTotal,
-    employerBhxh,
-    employerBhyt,
-    employerBhtn,
-    employerOaid,
-    employerInsuranceTotal,
-    taxableIncome: roundVnd(taxableIncome),
-    pitAmount,
-    dependentCount: normalizedDependents,
-    insuranceZone: zone,
-    socialInsurableBase: roundVnd(socialInsurableBase),
-    unemploymentInsurableBase: roundVnd(unemploymentInsurableBase),
-    socialInsuranceCap: roundVnd(socialInsuranceCap),
-    unemploymentInsuranceCap: roundVnd(unemploymentCap),
-    personalDeduction: roundVnd(resolvedPolicy.personalDeduction),
-    dependentDeduction: roundVnd(resolvedPolicy.dependentDeduction),
-  };
 }
 
 const TENURE_BRACKETS = [
@@ -417,7 +261,6 @@ export default function PayrollPage() {
   const [runs, setRuns] = useState({ available: false, items: [] });
   const [items, setItems] = useState({ available: false, items: [] });
   const [payslips, setPayslips] = useState({ available: false, items: [] });
-  const [snapshots, setSnapshots] = useState([]);
   const [staffs, setStaffs] = useState([]);
   const [branches, setBranches] = useState([]);
 
@@ -427,12 +270,7 @@ export default function PayrollPage() {
   const [busyItemId, setBusyItemId] = useState(null);
   const [issuingAllPayslips, setIssuingAllPayslips] = useState(false);
   const [savingPeriod, setSavingPeriod] = useState(false);
-  const [savingItem, setSavingItem] = useState(false);
   const [calculatingBatchPayroll, setCalculatingBatchPayroll] = useState(false);
-  const [applyingSalaryCoefficient, setApplyingSalaryCoefficient] = useState(false);
-  const [submittingInitialSalaryRequest, setSubmittingInitialSalaryRequest] = useState(false);
-  const [salaryCoefficientInfo, setSalaryCoefficientInfo] = useState(null);
-  const salaryCoefficientRequestSeqRef = useRef(0);
   const [selectedPayrollItem, setSelectedPayrollItem] = useState(null);
   const [selectedPayrollSalaryInfo, setSelectedPayrollSalaryInfo] = useState(null);
   const [loadingPayrollDetail, setLoadingPayrollDetail] = useState(false);
@@ -440,11 +278,6 @@ export default function PayrollPage() {
   const payrollDetailRequestSeqRef = useRef(0);
 
   const [periodForm, setPeriodForm] = useState(() => createDefaultPeriodForm());
-  const [itemForm, setItemForm] = useState(() => createDefaultItemForm());
-  const [initialSalaryRequest, setInitialSalaryRequest] = useState({
-    baseSalary: "",
-    reason: "",
-  });
 
   function updatePeriodEndDate(nextEndDate) {
     setPeriodForm((prev) => {
@@ -462,12 +295,11 @@ export default function PayrollPage() {
   async function loadData() {
     setLoading(true);
     setError("");
-    const [periodRes, runRes, itemRes, payslipRes, snapshotRes, staffRes, branchRes] = await Promise.allSettled([
+    const [periodRes, runRes, itemRes, payslipRes, staffRes, branchRes] = await Promise.allSettled([
       getPayrollPeriods(),
       getPayrollRuns(),
       getPayrollItems(),
       getPayslips(),
-      getRevenueSnapshots(),
       getAllStaff(),
       getBranches(),
     ]);
@@ -476,7 +308,6 @@ export default function PayrollPage() {
     setRuns(runRes.status === "fulfilled" ? runRes.value : { available: false, items: [] });
     setItems(itemRes.status === "fulfilled" ? itemRes.value : { available: false, items: [] });
     setPayslips(payslipRes.status === "fulfilled" ? payslipRes.value : { available: false, items: [] });
-    setSnapshots(snapshotRes.status === "fulfilled" && Array.isArray(snapshotRes.value) ? snapshotRes.value : []);
 
     const staffList = staffRes.status === "fulfilled" && Array.isArray(staffRes.value) ? staffRes.value : [];
     const branchList = branchRes.status === "fulfilled" && Array.isArray(branchRes.value) ? branchRes.value : [];
@@ -637,18 +468,20 @@ export default function PayrollPage() {
       const runRow = payrollRunId ? runById.get(payrollRunId) || null : null;
       const payrollPeriodId = runRow?.payrollPeriodId || null;
       const periodRow = payrollPeriodId ? periodById.get(payrollPeriodId) || null : null;
-      const { grossPay, totalDeduction, netPay } = calcItem(item);
+      const {
+        grossPay,
+        totalDeduction,
+        netPay,
+        hasOfficialGrossPay,
+        hasOfficialTotalDeduction,
+        hasOfficialNetPay,
+      } = derivePayrollAmounts(item);
       const runStatus = runRow?.status || "DRAFT";
       const policyAsOfDate = toDateInputValue(
         periodRow?.endDate ||
         periodRow?.payrollDate ||
         new Date().toISOString(),
       );
-      const baseSalary = toNumber(pick(item, "baseSalary", "BaseSalary"));
-      const overtimeAmount = toNumber(pick(item, "overtimeAmount", "OvertimeAmount"));
-      const allowanceAmount = toNumber(pick(item, "allowanceAmount", "AllowanceAmount"));
-      const commissionAmount = toNumber(pick(item, "commissionAmount", "CommissionAmount"));
-      const bonusAmount = toNumber(pick(item, "bonusAmount", "BonusAmount"));
       const attendanceDeduction = toNumber(pick(item, "attendanceDeduction", "AttendanceDeduction"));
       const penaltyAmount = toNumber(pick(item, "penaltyAmount", "PenaltyAmount"));
       const advanceDeduction = toNumber(pick(item, "advanceDeduction", "AdvanceDeduction"));
@@ -657,15 +490,6 @@ export default function PayrollPage() {
       const insuranceCompanyAmount = toNumber(pick(item, "insuranceCompanyAmount", "InsuranceCompanyAmount"));
       const pitAmount = toNumber(pick(item, "pitAmount", "PitAmount"));
       const otherDeduction = toNumber(pick(item, "otherDeduction", "OtherDeduction"));
-      const dependentCount = Math.max(0, Math.trunc(toNumber(pick(item, "dependentCount", "DependentCount"))));
-      const insuranceZone = normalizeInsuranceZone(pick(item, "insuranceZone", "InsuranceZone") || "I");
-      const statutoryBreakdown = calculateVietnamStatutoryAmounts(
-        baseSalary,
-        grossPay,
-        dependentCount,
-        resolveVietnamPayrollPolicy(policyAsOfDate),
-        insuranceZone,
-      );
       return {
         id,
         payrollRunId,
@@ -678,11 +502,9 @@ export default function PayrollPage() {
         status: resolveEffectivePayrollItemStatus(pick(item, "status", "Status"), runStatus),
         runStatus,
         canIssuePayslip: runStatus === "APPROVED" || runStatus === "PAID",
-        baseSalary,
-        overtimeAmount,
-        allowanceAmount,
-        commissionAmount,
-        bonusAmount,
+        baseSalary: toNumber(pick(item, "baseSalary", "BaseSalary")),
+        overtimeAmount: toNumber(pick(item, "overtimeAmount", "OvertimeAmount")),
+        allowanceAmount: toNumber(pick(item, "allowanceAmount", "AllowanceAmount")),
         attendanceDeduction,
         penaltyAmount,
         advanceDeduction,
@@ -691,14 +513,12 @@ export default function PayrollPage() {
         insuranceCompanyAmount,
         pitAmount,
         otherDeduction,
-        dependentCount,
-        insuranceZone,
-        employeeBhxh: statutoryBreakdown.employeeBhxh,
-        employeeBhyt: statutoryBreakdown.employeeBhyt,
-        employeeBhtn: statutoryBreakdown.employeeBhtn,
         grossPay,
         totalDeduction,
         netPay,
+        amountsSource:
+          hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay ? "SERVER" : "INCOMPLETE",
+        hasOfficialNetPay,
         hasPayslip: payslipItemIds.has(id),
       };
     });
@@ -721,15 +541,16 @@ export default function PayrollPage() {
     [filteredItems],
   );
 
-  const payrollTotal = useMemo(() => sumBy(itemRows, (item) => item.netPay), [itemRows]);
-  const revenueTotal = useMemo(
-    () => sumBy(snapshots || [], (snapshot) => pick(snapshot, "totalRevenue", "TotalRevenue")),
-    [snapshots],
+  const officialPayrollTotal = useMemo(
+    () => sumBy(itemRows.filter((item) => item.hasOfficialNetPay), (item) => item.netPay),
+    [itemRows],
   );
-  const payrollRevenueRatio = revenueTotal > 0 ? (payrollTotal / revenueTotal) * 100 : 0;
+  const missingPayrollFactsCount = useMemo(
+    () => itemRows.filter((item) => item.amountsSource !== "SERVER").length,
+    [itemRows],
+  );
 
   const openPeriod = useMemo(() => periodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN"), [periodRows]);
-  const openPeriodId = useMemo(() => toId(pick(openPeriod, "id", "Id")), [openPeriod]);
   const selectedPeriodForBatch = useMemo(() => {
     if (runFilter === "ALL") return openPeriod || null;
     const normalizedFilter = normalizePeriodCode(runFilter);
@@ -749,14 +570,6 @@ export default function PayrollPage() {
     () => String(pick(selectedPeriodForBatch, "status", "Status") || "").toUpperCase(),
     [selectedPeriodForBatch],
   );
-  const coefficientAsOfDate = useMemo(() => {
-    const asOfDateRaw =
-      pick(openPeriod, "endDate", "EndDate") ||
-      pick(openPeriod, "payrollDate", "PayrollDate") ||
-      new Date().toISOString();
-    return toDateInputValue(asOfDateRaw);
-  }, [openPeriod]);
-
   const runSummary = useMemo(() => {
     return {
       draft: runRows.filter((run) => run.status === "DRAFT").length,
@@ -811,89 +624,8 @@ export default function PayrollPage() {
     }
   }, [periodFilterOptions, runFilter]);
 
-  const effectiveBaseSalary = useMemo(() => {
-    const baseSalary = toNumber(itemForm.baseSalary);
-    const appliedSalary = toNumber(pick(salaryCoefficientInfo, "calculatedSalary"));
-    const hasAppliedSalary = Boolean(pick(salaryCoefficientInfo, "hasBaseSalary")) && appliedSalary > 0;
-    return hasAppliedSalary ? appliedSalary : baseSalary;
-  }, [itemForm.baseSalary, salaryCoefficientInfo]);
-
-  const payrollPolicy = useMemo(
-    () => resolveVietnamPayrollPolicy(coefficientAsOfDate),
-    [coefficientAsOfDate],
-  );
-
-  const grossIncomePreview = useMemo(() => {
-    return roundVnd(
-      effectiveBaseSalary +
-      toNumber(itemForm.overtimeAmount) +
-      toNumber(itemForm.allowanceAmount) +
-      toNumber(itemForm.commissionAmount) +
-      toNumber(itemForm.bonusAmount),
-    );
-  }, [
-    effectiveBaseSalary,
-    itemForm.overtimeAmount,
-    itemForm.allowanceAmount,
-    itemForm.commissionAmount,
-    itemForm.bonusAmount,
-  ]);
-
-  const statutoryPreview = useMemo(
-    () =>
-      calculateVietnamStatutoryAmounts(
-        effectiveBaseSalary,
-        grossIncomePreview,
-        itemForm.dependentCount,
-        payrollPolicy,
-        itemForm.insuranceZone,
-      ),
-    [effectiveBaseSalary, grossIncomePreview, itemForm.dependentCount, itemForm.insuranceZone, payrollPolicy],
-  );
-
-  useEffect(() => {
-    const nextInsuranceEmployeeAmount = String(statutoryPreview.employeeInsuranceTotal);
-    const nextPitAmount = String(statutoryPreview.pitAmount);
-    const nextInsuranceCompanyAmount = String(statutoryPreview.employerInsuranceTotal);
-
-    setItemForm((prev) => {
-      if (
-        prev.insuranceEmployeeAmount === nextInsuranceEmployeeAmount &&
-        prev.pitAmount === nextPitAmount &&
-        prev.insuranceCompanyAmount === nextInsuranceCompanyAmount
-      ) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        insuranceEmployeeAmount: nextInsuranceEmployeeAmount,
-        pitAmount: nextPitAmount,
-        insuranceCompanyAmount: nextInsuranceCompanyAmount,
-      };
-    });
-  }, [
-    statutoryPreview.employeeInsuranceTotal,
-    statutoryPreview.pitAmount,
-    statutoryPreview.employerInsuranceTotal,
-  ]);
-
-  const itemPreview = useMemo(
-    () => calcItem({ ...itemForm, baseSalary: String(effectiveBaseSalary) }),
-    [effectiveBaseSalary, itemForm],
-  );
-
   const selectedPayrollBreakdown = useMemo(() => {
     if (!selectedPayrollItem) return null;
-
-    const policyAsOfDate = selectedPayrollItem.policyAsOfDate || coefficientAsOfDate;
-    const statutory = calculateVietnamStatutoryAmounts(
-      selectedPayrollItem.baseSalary,
-      selectedPayrollItem.grossPay,
-      selectedPayrollItem.dependentCount,
-      resolveVietnamPayrollPolicy(policyAsOfDate),
-      selectedPayrollItem.insuranceZone,
-    );
 
     const originalBaseSalary = toNumber(pick(selectedPayrollSalaryInfo, "baseSalary", "BaseSalary"));
     const coefficient = toNumber(pick(selectedPayrollSalaryInfo, "coefficient", "Coefficient")) || 1;
@@ -903,25 +635,20 @@ export default function PayrollPage() {
     );
 
     return {
-      policyAsOfDate,
+      policyAsOfDate: selectedPayrollItem.policyAsOfDate,
       originalBaseSalary,
       hasOriginalBaseSalary: Boolean(pick(selectedPayrollSalaryInfo, "hasBaseSalary", "HasBaseSalary")) || originalBaseSalary > 0,
       coefficient,
       yearsOfService,
       tenureRange: tenureRangeLabel(yearsOfService),
-      employeeBhxh: statutory.employeeBhxh,
-      employeeBhyt: statutory.employeeBhyt,
-      employeeBhtn: statutory.employeeBhtn,
-      employeeInsuranceTotal:
-        selectedPayrollItem.insuranceEmployeeAmount > 0
-          ? selectedPayrollItem.insuranceEmployeeAmount
-          : statutory.employeeInsuranceTotal,
+      employeeInsuranceTotal: selectedPayrollItem.insuranceEmployeeAmount,
       pitAmount: selectedPayrollItem.pitAmount,
       totalIncome: selectedPayrollItem.grossPay,
       totalDeduction: selectedPayrollItem.totalDeduction,
       netPay: selectedPayrollItem.netPay,
+      amountsSource: selectedPayrollItem.amountsSource,
     };
-  }, [coefficientAsOfDate, selectedPayrollItem, selectedPayrollSalaryInfo]);
+  }, [selectedPayrollItem, selectedPayrollSalaryInfo]);
 
   async function reloadRuns() {
     const data = await getPayrollRuns();
@@ -937,42 +664,6 @@ export default function PayrollPage() {
     const [itemData, payslipData] = await Promise.all([getPayrollItems(), getPayslips()]);
     setItems(itemData);
     setPayslips(payslipData);
-  }
-
-  async function ensureDraftRunId() {
-    if (!openPeriodId) {
-      throw new Error("Chưa có kỳ lương đang mở. Vui lòng tạo kỳ lương trước.");
-    }
-
-    if (activeDraftRun?.id) {
-      return activeDraftRun.id;
-    }
-
-    const scopedRuns = runRows.filter((run) => {
-      if (run.payrollPeriodId !== openPeriodId) return false;
-      if (targetBranchId) return run.branchId === targetBranchId;
-      return run.branchId == null;
-    });
-    const maxRunNo = scopedRuns.reduce((max, run) => Math.max(max, run.runNoValue || 0), 0);
-    const nextRunNo = maxRunNo + 1;
-
-    const payload = {
-      payrollPeriodId: openPeriodId,
-      runNo: nextRunNo,
-      status: "DRAFT",
-      calculatedAt: new Date().toISOString(),
-    };
-    if (targetBranchId) payload.branchId = targetBranchId;
-
-    const created = await createPayrollRun(payload);
-    const createdId = toId(pick(created, "id", "Id"));
-    if (!createdId) {
-      throw new Error("Không lấy được đợt lương vừa tạo.");
-    }
-
-    await reloadRuns();
-    toast({ status: "success", title: `Đã tự tạo đợt nháp #${nextRunNo}.` });
-    return createdId;
   }
 
   async function handleCreatePeriod() {
@@ -1022,52 +713,6 @@ export default function PayrollPage() {
       setError(toFriendlyError(err, "Tạo kỳ lương thất bại."));
     } finally {
       setSavingPeriod(false);
-    }
-  }
-
-  async function handleCreateItem() {
-    const staffId = toId(itemForm.staffId);
-    if (!staffId) {
-      setError("Vui lòng chọn nhân sự.");
-      return;
-    }
-    if (!openPeriodId) {
-      setError("Chưa có kỳ lương đang mở. Vui lòng tạo kỳ lương trước.");
-      return;
-    }
-
-    setSavingItem(true);
-    setError("");
-    try {
-      const payrollRunId = await ensureDraftRunId();
-      await createPayrollItem({
-        payrollRunId,
-        staffId,
-        baseSalary: effectiveBaseSalary,
-        attendanceDeduction: toNumber(itemForm.attendanceDeduction),
-        overtimeAmount: toNumber(itemForm.overtimeAmount),
-        allowanceAmount: toNumber(itemForm.allowanceAmount),
-        commissionAmount: toNumber(itemForm.commissionAmount),
-        bonusAmount: toNumber(itemForm.bonusAmount),
-        penaltyAmount: toNumber(itemForm.penaltyAmount),
-        advanceDeduction: toNumber(itemForm.advanceDeduction),
-        loanDeduction: toNumber(itemForm.loanDeduction),
-        insuranceEmployeeAmount: toNumber(itemForm.insuranceEmployeeAmount),
-        insuranceCompanyAmount: toNumber(itemForm.insuranceCompanyAmount),
-        pitAmount: toNumber(itemForm.pitAmount),
-        otherDeduction: toNumber(itemForm.otherDeduction),
-        netPay: itemPreview.netPay,
-        status: "DRAFT",
-      });
-      toast({ status: "success", title: "Đã thêm dòng lương." });
-      setItemForm(createDefaultItemForm());
-      setSalaryCoefficientInfo(null);
-      setInitialSalaryRequest({ baseSalary: "", reason: "" });
-      await reloadItemsAndPayslips();
-    } catch (err) {
-      setError(toFriendlyError(err, "Thêm dòng lương thất bại."));
-    } finally {
-      setSavingItem(false);
     }
   }
 
@@ -1121,175 +766,6 @@ export default function PayrollPage() {
       setCalculatingBatchPayroll(false);
     }
   }
-
-  const applySalaryCoefficientFromServer = useCallback(async (staffIdInput, options = {}) => {
-    const { showToast = false } = options;
-    const staffId = toId(staffIdInput);
-    if (!staffId) {
-      setSalaryCoefficientInfo(null);
-      setItemForm((prev) => ({
-        ...prev,
-        baseSalary: "",
-        dependentCount: "0",
-        insuranceZone: "I",
-      }));
-      return;
-    }
-
-    const requestSeq = salaryCoefficientRequestSeqRef.current + 1;
-    salaryCoefficientRequestSeqRef.current = requestSeq;
-
-    setApplyingSalaryCoefficient(true);
-    if (showToast) setError("");
-
-    try {
-      const data = await getStaffSalaryCoefficient(staffId, coefficientAsOfDate);
-      if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
-
-      const baseSalary = toNumber(pick(data, "baseSalary", "BaseSalary"));
-      const hasBaseSalary =
-        Boolean(pick(data, "hasBaseSalary", "HasBaseSalary")) || baseSalary > 0;
-      const coefficient = toNumber(pick(data, "coefficient", "Coefficient")) || 1;
-      const calculatedSalary = toNumber(pick(data, "calculatedSalary", "CalculatedSalary"));
-      const yearsOfService = Math.max(0, Math.trunc(toNumber(pick(data, "yearsOfService", "YearsOfService"))));
-      const appliedSalary =
-        calculatedSalary > 0 ? calculatedSalary : Math.round(baseSalary * coefficient);
-
-      setItemForm((prev) => ({
-        ...prev,
-        baseSalary: hasBaseSalary ? String(Math.round(baseSalary)) : "",
-      }));
-      setSalaryCoefficientInfo({
-        coefficient,
-        yearsOfService,
-        tenureRange: tenureRangeLabel(yearsOfService),
-        baseSalary,
-        hasBaseSalary,
-        calculatedSalary: hasBaseSalary ? appliedSalary : 0,
-        asOfDate: pick(data, "asOfDate", "AsOfDate") || coefficientAsOfDate,
-        policyReference: pick(data, "policyReference", "PolicyReference") || "",
-      });
-
-      if (!showToast) return;
-      if (hasBaseSalary && appliedSalary > 0) {
-        toast({
-          status: "success",
-          title: "Đã áp hệ số lương theo thâm niên.",
-          description: `Hệ số ${coefficient.toFixed(4)} · Lương áp dụng ${formatCurrency(appliedSalary)}`,
-        });
-      } else {
-        toast({
-          status: "warning",
-          title: "Đã tính hệ số thâm niên.",
-          description: `Hệ số ${coefficient.toFixed(4)}. Nhân sự này chưa có lương gốc hiệu lực trong kỳ.`,
-        });
-      }
-    } catch (err) {
-      if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
-      const statusCode = Number(err?.response?.status || err?.status || 0);
-      if (statusCode === 404) {
-        try {
-          const baseData = await getStaffBaseSalary(staffId, coefficientAsOfDate);
-          if (requestSeq !== salaryCoefficientRequestSeqRef.current) return;
-          const fallbackBaseSalary = toNumber(pick(baseData, "baseSalary", "BaseSalary"));
-          const hasFallbackBaseSalary = fallbackBaseSalary > 0;
-
-          setItemForm((prev) => ({
-            ...prev,
-            baseSalary: hasFallbackBaseSalary ? String(Math.round(fallbackBaseSalary)) : "",
-          }));
-          setSalaryCoefficientInfo({
-            coefficient: 1,
-            yearsOfService: 0,
-            tenureRange: tenureRangeLabel(0),
-            baseSalary: fallbackBaseSalary,
-            hasBaseSalary: hasFallbackBaseSalary,
-            calculatedSalary: hasFallbackBaseSalary ? Math.round(fallbackBaseSalary) : 0,
-            asOfDate: coefficientAsOfDate,
-            policyReference: "Fallback to base salary because salary-coefficient API returned 404.",
-          });
-
-          if (showToast) {
-            toast({
-              status: "warning",
-              title: "Không tìm thấy API hệ số lương.",
-              description: "Đã tạm dùng hệ số 1.0000 theo lương cơ bản.",
-            });
-          }
-          return;
-        } catch {
-          // Ignore and continue to common error handling below.
-        }
-      }
-
-      setSalaryCoefficientInfo(null);
-      setItemForm((prev) => ({ ...prev, baseSalary: "" }));
-
-      if (showToast) {
-        const fallbackMessage = "Không áp được hệ số lương.";
-        setError(toFriendlyError(err, fallbackMessage));
-      }
-    } finally {
-      if (requestSeq === salaryCoefficientRequestSeqRef.current) {
-        setApplyingSalaryCoefficient(false);
-      }
-    }
-  }, [coefficientAsOfDate, toast]);
-
-  async function handleApplySalaryCoefficient() {
-    const staffId = toId(itemForm.staffId);
-    if (!staffId) {
-      setError("Vui lòng chọn nhân sự trước khi áp hệ số lương.");
-      return;
-    }
-    await applySalaryCoefficientFromServer(staffId, { showToast: true });
-  }
-
-  async function handleSubmitInitialSalaryRequest() {
-    const staffId = toId(itemForm.staffId);
-    if (!staffId) {
-      setError("Vui lòng chọn nhân sự trước khi gửi yêu cầu lương.");
-      return;
-    }
-
-    const proposedBaseSalary = toNumber(initialSalaryRequest.baseSalary);
-    if (proposedBaseSalary <= 0) {
-      setError("Vui lòng nhập mức lương đề xuất lớn hơn 0.");
-      return;
-    }
-
-    setSubmittingInitialSalaryRequest(true);
-    setError("");
-    try {
-      const reasonText = initialSalaryRequest.reason.trim();
-      const response = await createInitialSalaryRequest(staffId, {
-        baseSalary: proposedBaseSalary,
-        effectiveFrom: coefficientAsOfDate,
-        reason: reasonText || `Đề xuất tạo lương khởi điểm cho nhân sự #${staffId}.`,
-        note: reasonText
-      });
-      toast({
-        status: "success",
-        title: "Đã gửi yêu cầu duyệt lương lên admin.",
-        description: `Mã yêu cầu #${pick(response, "requestId", "RequestId") || "--"}`
-      });
-      setInitialSalaryRequest((prev) => ({ ...prev, reason: "" }));
-    } catch (err) {
-      setError(toFriendlyError(err, "Không gửi được yêu cầu duyệt lương."));
-    } finally {
-      setSubmittingInitialSalaryRequest(false);
-    }
-  }
-
-  useEffect(() => {
-    const staffId = toId(itemForm.staffId);
-    if (!staffId) {
-      salaryCoefficientRequestSeqRef.current += 1;
-      setApplyingSalaryCoefficient(false);
-      return;
-    }
-    applySalaryCoefficientFromServer(staffId);
-  }, [applySalaryCoefficientFromServer, itemForm.staffId, coefficientAsOfDate]);
 
   async function handleApprove(runId) {
     const userId = getCurrentUserId();
@@ -1537,8 +1013,8 @@ export default function PayrollPage() {
         />
         <MiniStatistics name='Kỳ tính lương' value={String(runRows.length)} />
         <MiniStatistics name='Dòng lương' value={String(itemRows.length)} />
-        <MiniStatistics name='Tổng lương thực nhận' value={formatCurrency(payrollTotal)} />
-        <MiniStatistics name='Lương / Doanh thu' value={`${payrollRevenueRatio.toFixed(2)}%`} />
+        <MiniStatistics name='Tổng thực nhận (server)' value={formatCurrency(officialPayrollTotal)} />
+        <MiniStatistics name='Dòng thiếu payroll facts' value={String(missingPayrollFactsCount)} />
       </SimpleGrid>
 
       <Card p='16px' mb='20px'>
@@ -1548,7 +1024,13 @@ export default function PayrollPage() {
           <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chua có"}</Badge>
           <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chua có"}</Badge>
           <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
+          {missingPayrollFactsCount > 0 ? (
+            <Badge colorScheme='orange'>Một số dòng chưa có đủ payroll facts từ backend</Badge>
+          ) : null}
         </Flex>
+        <Text color={textColorSecondary} fontSize='xs' mt='10px'>
+          Trang này không còn tự tính lương ở frontend. Nếu backend chưa trả đủ totals canonical thì UI sẽ để trống các giá trị đó.
+        </Text>
       </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
@@ -1772,9 +1254,9 @@ export default function PayrollPage() {
               <Tr>
                 <Th>Nhân sự</Th>
                 <Th>Mã kỳ</Th>
-                <Th isNumeric>Tổng thu nhập</Th>
-                <Th isNumeric>Tổng khấu trừ</Th>
-                <Th isNumeric>Thực nhận</Th>
+                <Th isNumeric>Tổng thu nhập*</Th>
+                <Th isNumeric>Tổng khấu trừ*</Th>
+                <Th isNumeric>Thực nhận*</Th>
                 <Th>Status</Th>
                 <Th>Phiếu lương</Th>
                 <Th textAlign='right'>Thao tác</Th>
@@ -1794,9 +1276,9 @@ export default function PayrollPage() {
                     </Button>
                   </Td>
                   <Td color={textColorSecondary}>{item.periodCode || "--"}</Td>
-                  <Td color={textColor} isNumeric>{formatCurrency(item.grossPay)}</Td>
-                  <Td color={textColor} isNumeric>{formatCurrency(item.totalDeduction)}</Td>
-                  <Td color={textColor} isNumeric>{formatCurrency(item.netPay)}</Td>
+                  <Td color={textColor} isNumeric>{item.grossPay == null ? "--" : formatCurrency(item.grossPay)}</Td>
+                  <Td color={textColor} isNumeric>{item.totalDeduction == null ? "--" : formatCurrency(item.totalDeduction)}</Td>
+                  <Td color={textColor} isNumeric>{item.netPay == null ? "--" : formatCurrency(item.netPay)}</Td>
                   <Td>
                     <Badge colorScheme={statusColor(item.status)}>
                       {statusLabel(item.status)}
@@ -1806,6 +1288,9 @@ export default function PayrollPage() {
                     <Badge colorScheme={item.hasPayslip ? "green" : "gray"}>
                       {item.hasPayslip ? "Đã phát hành" : "Chưa phát hành"}
                     </Badge>
+                    <Text color={textColorSecondary} fontSize='xs'>
+                      {item.amountsSource === "SERVER" ? "Server" : "Thiếu totals"}
+                    </Text>
                     {!item.canIssuePayslip ? (
                       <Text color={textColorSecondary} fontSize='xs'>
                         Chờ duyệt đợt
@@ -1830,6 +1315,9 @@ export default function PayrollPage() {
         ) : (
           <Text color={textColorSecondary}>Chưa có dòng lương phù hợp bộ lọc.</Text>
         )}
+        <Text color={textColorSecondary} fontSize='xs' mt='10px'>
+          * Nếu backend chưa trả explicit totals thì cột sẽ để trống thay vì để frontend tự suy diễn.
+        </Text>
       </Card>
 
       <Modal
@@ -1879,6 +1367,12 @@ export default function PayrollPage() {
               </Text>
             ) : null}
 
+            {selectedPayrollBreakdown?.amountsSource !== "SERVER" ? (
+              <Text color='orange.400' fontSize='sm' mb='10px'>
+                Backend chưa trả đủ breakdown canonical cho dòng lương này. Popup chỉ hiển thị các số server đã cung cấp.
+              </Text>
+            ) : null}
+
             {selectedPayrollBreakdown ? (
               <>
                 <SimpleGrid columns={{ base: 1, md: 2 }} gap='10px' mb='12px'>
@@ -1915,15 +1409,11 @@ export default function PayrollPage() {
 
                 <SimpleGrid columns={{ base: 1, md: 2 }} gap='10px' mb='12px'>
                   <Box borderWidth='1px' borderRadius='10px' p='12px'>
-                    <Text color={textColorSecondary} fontSize='xs'>BHXH NLĐ (8%)</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.employeeBhxh)}</Text>
-                    <Text color={textColorSecondary} fontSize='xs' mt='6px'>BHYT NLĐ (1.5%)</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.employeeBhyt)}</Text>
-                    <Text color={textColorSecondary} fontSize='xs' mt='6px'>BHTN NLĐ (1%)</Text>
-                    <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.employeeBhtn)}</Text>
-                    <Divider my='8px' />
                     <Text color={textColorSecondary} fontSize='xs'>Tổng BH NLĐ</Text>
                     <Text color={textColor} fontWeight='700'>{formatCurrency(selectedPayrollBreakdown.employeeInsuranceTotal)}</Text>
+                    <Text color={textColorSecondary} fontSize='xs' mt='6px'>
+                      Trang này không còn tách BHXH/BHYT/BHTN ở frontend nếu backend chưa trả breakdown chi tiết.
+                    </Text>
                   </Box>
 
                   <Box borderWidth='1px' borderRadius='10px' p='12px'>
@@ -1949,19 +1439,19 @@ export default function PayrollPage() {
                     <Box>
                       <Text color='green.700' fontSize='xs'>Tổng thu nhập</Text>
                       <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {formatCurrency(selectedPayrollBreakdown.totalIncome)}
+                        {selectedPayrollBreakdown.totalIncome == null ? "--" : formatCurrency(selectedPayrollBreakdown.totalIncome)}
                       </Text>
                     </Box>
                     <Box>
                       <Text color='green.700' fontSize='xs'>Tổng khấu trừ</Text>
                       <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {formatCurrency(selectedPayrollBreakdown.totalDeduction)}
+                        {selectedPayrollBreakdown.totalDeduction == null ? "--" : formatCurrency(selectedPayrollBreakdown.totalDeduction)}
                       </Text>
                     </Box>
                     <Box>
                       <Text color='green.700' fontSize='xs'>Tổng tiền nhận được</Text>
                       <Text color='green.800' fontWeight='800' fontSize='lg'>
-                        {formatCurrency(selectedPayrollBreakdown.netPay)}
+                        {selectedPayrollBreakdown.netPay == null ? "--" : formatCurrency(selectedPayrollBreakdown.netPay)}
                       </Text>
                     </Box>
                   </SimpleGrid>
