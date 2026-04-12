@@ -10,6 +10,17 @@ import {
 } from "@features/appointments/utils/bookingInsurance";
 import "./BookingInsurancePanel.css";
 
+function toVehicleTabLabel(label, fallback = "") {
+  const normalizedLabel = String(label || "").trim();
+  if (!normalizedLabel) {
+    return String(fallback || "").trim() || "Không biển số";
+  }
+
+  const [platePart] = normalizedLabel.split(" - ");
+  const plate = String(platePart || "").trim();
+  return plate || normalizedLabel;
+}
+
 function buildCompanyOptions(companies = []) {
   const normalized = (companies || [])
     .map((company) => {
@@ -169,7 +180,7 @@ export default function BookingInsurancePanel({
               className={`booking-insurance-vehicle-tab ${vehicle.key === activeVehicle?.key ? "active" : ""}`}
               onClick={() => onActiveVehicleChange?.(vehicle.key)}
             >
-              {vehicle.label}
+              {toVehicleTabLabel(vehicle.label, vehicle.key)}
             </button>
           ))}
         </div>

@@ -122,7 +122,9 @@ export default function ReceptionCreateAppointmentPage() {
         });
         setSuccessAppt(summary);
       } catch (err) {
-        setError(err?.message || TEXT.createError);
+        const message = err?.message || TEXT.createError;
+        setError(message);
+        throw err;
       } finally {
         setSaving(false);
       }
@@ -161,6 +163,7 @@ export default function ReceptionCreateAppointmentPage() {
             serviceCategories={serviceCategories}
             services={services}
             branchId={effectiveBranchId}
+            onErrorMessage={setError}
             onSubmit={handleSubmit}
             onCancel={handleGoBack}
             loading={saving}

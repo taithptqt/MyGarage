@@ -143,6 +143,9 @@ function getQuoteStateLabel(insuranceQuoteState, insuranceDeductibleOption, insu
 export default function WorkshopInsurancePanel({
   enabled = false,
   locked = false,
+  insuranceVehicleOptions = [],
+  activeInsuranceVehicleKey = "",
+  onInsuranceVehicleChange,
   companies = [],
   selectedCompanyId = "",
   onToggle,
@@ -201,6 +204,28 @@ export default function WorkshopInsurancePanel({
 
       {enabled ? (
         <>
+          {Array.isArray(insuranceVehicleOptions) && insuranceVehicleOptions.length > 1 ? (
+            <div className="form-group">
+              <label>Bảo hiểm theo từng xe</label>
+              <div className="reception-selected-tabs reception-vehicle-tabs-layout">
+                {insuranceVehicleOptions.map((vehicle) => (
+                  <div
+                    key={`insurance-vehicle-${vehicle.key}`}
+                    className={`reception-selected-tab ${String(activeInsuranceVehicleKey) === String(vehicle.key) ? "active" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="reception-selected-tab-main"
+                      onClick={() => onInsuranceVehicleChange?.(vehicle.key)}
+                    >
+                      {vehicle.label}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="workshop-insurance-core-grid">
             <div className="form-group workshop-insurance-company-field">
               <label>Công ty bảo hiểm *</label>

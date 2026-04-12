@@ -69,6 +69,7 @@ export function buildWorkshopBatchCreatePayload({
   suggestedFleetCompletionIso,
   effectiveBranchId,
   insuranceActive = false,
+  insuranceByVehicleKey = {},
   hasMultipleSelectedVehicles,
   selectedVehicleKeys,
   plansByVehicleKey,
@@ -78,8 +79,6 @@ export function buildWorkshopBatchCreatePayload({
     Boolean(hasMultipleSelectedVehicles) &&
     !Boolean(formData?.isQuickOrder) &&
     !Boolean(formData?.isNewVehicle);
-  const insuranceSnapshot = insuranceActive ? buildInsuranceSnapshotPayload(formData) : buildInsuranceSnapshotPayload();
-
   const basePayload = {
     customerId: parsePositiveId(formData?.customerId),
     serviceAdvisorId: parsePositiveId(formData?.serviceAdvisorId),
@@ -105,7 +104,6 @@ export function buildWorkshopBatchCreatePayload({
     vehicleColor: formData?.vehicleColor || "",
     vehicleVin: formData?.vehicleVin || "",
     vehicleYear: parsePositiveId(formData?.vehicleYear),
-    ...insuranceSnapshot,
   };
 
   const createTargets = (Array.isArray(selectedVehicleKeys) ? selectedVehicleKeys : []).map((vehicleKey) => {
@@ -114,11 +112,16 @@ export function buildWorkshopBatchCreatePayload({
       : (plansByVehicleKey?.[vehicleKey] || {});
 
     const split = splitBookingItemIds(toNumberList(plan.serviceIds));
+    const insuranceSnapshot = insuranceActive
+      ? buildInsuranceSnapshotPayload(insuranceByVehicleKey?.[vehicleKey] || {})
+      : buildInsuranceSnapshotPayload();
+
     const payload = {
       ...basePayload,
       serviceIds: split.serviceIds,
       packageIds: split.packageIds,
       customerNotes: buildCustomerNotes(vehicleNotesByKey?.[vehicleKey]),
+      ...insuranceSnapshot,
     };
 
     if (vehicleKey === VEHICLE_KEY_GUEST) {

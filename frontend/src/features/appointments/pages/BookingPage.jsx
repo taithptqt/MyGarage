@@ -52,7 +52,9 @@ import {
 import {
   buildFlexibleCompletionWarningMessage,
   buildFlexibleTriggerServiceIdSet,
-  resolveServiceDrivenBookingFlow,
+  buildInsuranceFlexiblePackageIdSet,
+  findUnresolvedPackageIds,
+  resolveBookingFlowByItemsAndDuration,
   WORKING_DAY_MINUTES,
 } from "@features/appointments/utils/bookingFlowRules";
 import { buildCurrentVehiclePayload } from "@features/appointments/utils/bookingVehicle";
@@ -462,6 +464,7 @@ export default function BookingPage() {
         };
       });
   }, [brands, customerRecord, customerVehicles, models, user?.id, vehicles]);
+  const customerHasNoSavedVehicles = linkedVehicles.length === 0;
 
   const vehicleModelInfoById = useMemo(() => {
     const map = new Map();
@@ -512,6 +515,10 @@ export default function BookingPage() {
     () => buildFlexibleTriggerServiceIdSet(services),
     [services]
   );
+  const insuranceFlexiblePackageIdSet = useMemo(
+    () => buildInsuranceFlexiblePackageIdSet(services),
+    [services]
+  );
   const isFirstCustomerBooking = !hasPreviousCustomerBookings;
   const miniCheckServiceIdSet = useMemo(
     () =>
@@ -539,9 +546,14 @@ export default function BookingPage() {
 
   const getVehicleFlow = useCallback((vehicle) => {
     if (!vehicle) return BOOKING_FLOW.FIXED;
-    const serviceIds = getEffectiveServiceIds(vehicle);
-    return resolveServiceDrivenBookingFlow(serviceIds, flexibleTriggerServiceIdSet);
-  }, [flexibleTriggerServiceIdSet, getEffectiveServiceIds]);
+    const itemIds = getEffectiveServiceIds(vehicle);
+    return resolveBookingFlowByItemsAndDuration({
+      itemIds,
+      flexibleTriggerServiceIdSet,
+      insuranceFlexiblePackageIdSet,
+      executionMinutes: 0,
+    }).bookingFlow;
+  }, [flexibleTriggerServiceIdSet, getEffectiveServiceIds, insuranceFlexiblePackageIdSet]);
   const resolveSlotFlow = useCallback((slot, fallbackFlow = BOOKING_FLOW.FIXED) => {
     const rawFlow = normalizeText(extractField(slot, ["bookingFlow", "BookingFlow"], fallbackFlow));
     if (rawFlow.includes("flex")) return BOOKING_FLOW.FLEXIBLE;
@@ -1272,7 +1284,13 @@ export default function BookingPage() {
       const resolveSlotTimeMs = (rawValue) => {
         if (!rawValue) return null;
         const parsed = new Date(rawValue);
-        if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+        if (!Number.isNaN(parsed.getTime())) {
+          if (!effectiveSelectedDate) return parsed.getTime();
+          const hours = String(parsed.getHours()).padStart(2, "0");
+          const minutes = String(parsed.getMinutes()).padStart(2, "0");
+          const composed = new Date(`${effectiveSelectedDate}T${hours}:${minutes}:00`);
+          return Number.isNaN(composed.getTime()) ? parsed.getTime() : composed.getTime();
+        }
         const match = String(rawValue).match(/^(\d{1,2}):(\d{2})/);
         if (!match || !effectiveSelectedDate) return null;
         const hours = String(match[1]).padStart(2, "0");
@@ -1884,6 +1902,14 @@ export default function BookingPage() {
       }
     }
     if (stepNo === 4 && !selectedBranchId) return "Vui lòng chọn chi nhánh.";
+    if (stepNo === 4) {
+      for (const vehicle of multi.vehicles || []) {
+        const unresolvedPackageIds = findUnresolvedPackageIds(getEffectiveServiceIds(vehicle), serviceById);
+        if (unresolvedPackageIds.length > 0) {
+          return `Xe ${vehicle.displayLabel}: có gói dịch vụ chưa hợp lệ (#${unresolvedPackageIds.join(", #")}). Vui lòng chọn lại trước khi qua bước chọn giờ.`;
+        }
+      }
+    }
     if (stepNo === 5) {
       if (multi.slotMode === SLOT_MODE.PARALLEL && !selectedDate) return "Vui lòng chọn ngày đặt lịch.";
       if (multi.slotMode === SLOT_MODE.INDIVIDUAL) {
@@ -2103,7 +2129,7 @@ export default function BookingPage() {
                   <label>Họ và tên <span>*</span><input type="text" value={customerForm.fullName} onChange={(e) => setCustomerForm((prev) => ({ ...prev, fullName: e.target.value }))} /></label>
                   <label>Số điện thoại <span>*</span><input type="tel" inputMode="tel" pattern={VIETNAM_PHONE_PATTERN} title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx" value={customerForm.phone} onChange={(e) => setCustomerForm((prev) => ({ ...prev, phone: e.target.value }))} /></label>
                 </div>
-                <VehicleActionPanel linkedVehicles={linkedVehicles} selectedVehicles={multi.vehicles} brands={brands} models={models} activeVehicleKey={activeSymptomVehicleKey} onSelectVehicle={setActiveSymptomVehicleKey} draftVehicle={draftVehicle} onDraftChange={updateDraftVehicle} onToggleExistingVehicle={toggleExistingVehicle} onAddNewVehicle={addNewVehicle} onRemoveVehicle={handleRemoveVehicle} />
+                <VehicleActionPanel linkedVehicles={linkedVehicles} selectedVehicles={multi.vehicles} brands={brands} models={models} activeVehicleKey={activeSymptomVehicleKey} forceNewVehicleWhenNoSaved={customerHasNoSavedVehicles} onSelectVehicle={setActiveSymptomVehicleKey} draftVehicle={draftVehicle} onDraftChange={updateDraftVehicle} onToggleExistingVehicle={toggleExistingVehicle} onAddNewVehicle={addNewVehicle} onRemoveVehicle={handleRemoveVehicle} />
                 <label className="notes-field">
                   Mô tả thêm
                   {(multi.vehicles || []).length > 0 ? (

@@ -3745,6 +3745,43 @@
   word-break: break-word;
 }
 
+.reception-plan-summary-text-bulleted {
+  white-space: pre-line;
+}
+
+.reception-plan-summary-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: #23406f;
+}
+
+.reception-plan-summary-list-item {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.reception-plan-summary-list-group {
+  color: #1f3f74;
+}
+
+.reception-plan-summary-sublist {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.reception-plan-summary-sublist-item {
+  color: #2b4b7f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .reception-plan-summary-warning {
   margin: 0;
   color: #cc2c2c;
@@ -4023,7 +4060,7 @@
   justify-content: space-between;
   gap: 10px;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
@@ -4048,11 +4085,15 @@
 }
 
 .reception-selected-vehicle-chip-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
   color: #7290bf;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .reception-vehicle-popup-backdrop {
@@ -5734,6 +5775,9 @@
 }
 
 .workshop-page.dark .reception-plan-summary-text,
+.workshop-page.dark .reception-plan-summary-list,
+.workshop-page.dark .reception-plan-summary-list-group,
+.workshop-page.dark .reception-plan-summary-sublist-item,
 .workshop-page.dark .reception-plan-summary-time-row strong,
 .workshop-page.dark .reception-plan-summary-footer,
 .workshop-page.dark .reception-plan-summary-footer strong {

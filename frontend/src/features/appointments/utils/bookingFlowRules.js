@@ -26,6 +26,53 @@ export function buildFlexibleTriggerServiceIdSet(services) {
   return result;
 }
 
+export function isInsurancePackageFlowItem(item) {
+  const itemId = Number(item?.id ?? item?.Id ?? 0);
+  const isPackageItem = itemId < 0 || Boolean(item?.isPackage);
+  if (!isPackageItem) return false;
+
+  const signalText = normalizeServiceCode(
+    [
+      item?.code ?? item?.Code ?? "",
+      item?.name ?? item?.Name ?? "",
+      item?.categoryCode ?? item?.CategoryCode ?? "",
+      item?.categoryName ?? item?.CategoryName ?? "",
+      item?.description ?? item?.Description ?? "",
+    ].join(" ")
+  );
+
+  return (
+    signalText.includes("pkgbh") ||
+    signalText.includes("insurancerepair") ||
+    signalText.includes("insurance") ||
+    signalText.includes("baohiem")
+  );
+}
+
+export function buildInsuranceFlexiblePackageIdSet(items) {
+  const result = new Set();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const itemId = Number(item?.id ?? item?.Id ?? 0);
+    if (!Number.isFinite(itemId) || itemId >= 0) return;
+    if (isInsurancePackageFlowItem(item)) {
+      result.add(itemId);
+    }
+  });
+  return result;
+}
+
+export function findUnresolvedPackageIds(itemIds, itemLookup) {
+  const unresolved = new Set();
+  (Array.isArray(itemIds) ? itemIds : []).forEach((itemIdRaw) => {
+    const itemId = Number(itemIdRaw);
+    if (!Number.isFinite(itemId) || itemId >= 0) return;
+    if (!itemLookup?.has?.(itemId)) {
+      unresolved.add(Math.abs(itemId));
+    }
+  });
+  return Array.from(unresolved);
+}
+
 export function resolveServiceDrivenBookingFlow(
   serviceIds,
   flexibleTriggerServiceIdSet,
@@ -53,6 +100,37 @@ export function resolveBookingFlowByServicesAndDuration({
     bookingFlow,
     isLongDurationFlow,
     isServiceDrivenFlexibleFlow,
+  };
+}
+
+export function resolveBookingFlowByItemsAndDuration({
+  itemIds,
+  flexibleTriggerServiceIdSet,
+  insuranceFlexiblePackageIdSet,
+  executionMinutes,
+  workingDayMinutes = WORKING_DAY_MINUTES,
+}) {
+  const normalizedItemIds = Array.isArray(itemIds) ? itemIds.map(Number).filter(Number.isFinite) : [];
+  const serviceIds = normalizedItemIds.filter((itemId) => itemId > 0);
+  const packageSelectableIds = normalizedItemIds.filter((itemId) => itemId < 0);
+
+  const isServiceDrivenFlexibleFlow =
+    resolveServiceDrivenBookingFlow(serviceIds, flexibleTriggerServiceIdSet) === BOOKING_FLOW.FLEXIBLE;
+  const isInsurancePackageFlexibleFlow = packageSelectableIds.some((itemId) =>
+    insuranceFlexiblePackageIdSet?.has(Number(itemId))
+  );
+  const isLongDurationFlow = Number(executionMinutes || 0) > Number(workingDayMinutes || WORKING_DAY_MINUTES);
+
+  const bookingFlow =
+    isServiceDrivenFlexibleFlow || isInsurancePackageFlexibleFlow || isLongDurationFlow
+      ? BOOKING_FLOW.FLEXIBLE
+      : BOOKING_FLOW.FIXED;
+
+  return {
+    bookingFlow,
+    isLongDurationFlow,
+    isServiceDrivenFlexibleFlow,
+    isInsurancePackageFlexibleFlow,
   };
 }
 
