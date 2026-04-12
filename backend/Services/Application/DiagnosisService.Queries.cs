@@ -37,10 +37,10 @@ namespace MyGarage.Services
                 return rows;
             }
 
-            var normalizedTeamTag = NormalizeDispatchTag(await _context.Teams
+            var teamProfile = await _context.Teams
                 .Where(x => x.Id == teamId.Value)
-                .Select(x => x.SpecialtyTag)
-                .FirstOrDefaultAsync());
+                .Select(x => new { x.SpecialtyTag, x.Code })
+                .FirstOrDefaultAsync();
 
             var filtered = rows.Where(x =>
                 x.AssignedTeamId == teamId.Value ||
@@ -49,9 +49,9 @@ namespace MyGarage.Services
                     x.AssignedTeamId == null &&
                     IsPendingLikeStatus(x.Status) &&
                     (
-                        normalizedTeamTag == null ||
+                        teamProfile == null ||
                         string.IsNullOrWhiteSpace(x.DispatchTag) ||
-                        SplitDispatchTags(x.DispatchTag).Contains(normalizedTeamTag, StringComparer.OrdinalIgnoreCase)
+                        SplitDispatchTags(x.DispatchTag).Any(tag => DispatchTagMatchesTeam(tag, teamProfile.SpecialtyTag, teamProfile.Code))
                     )
                 ))
                 .ToList();
@@ -94,10 +94,10 @@ namespace MyGarage.Services
 
             if (teamId.HasValue)
             {
-                var normalizedTeamTag = NormalizeDispatchTag(await _context.Teams
+                var teamProfile = await _context.Teams
                     .Where(x => x.Id == teamId.Value)
-                    .Select(x => x.SpecialtyTag)
-                    .FirstOrDefaultAsync());
+                    .Select(x => new { x.SpecialtyTag, x.Code })
+                    .FirstOrDefaultAsync();
 
                 diagnoses = diagnoses
                     .Where(x =>
@@ -107,9 +107,9 @@ namespace MyGarage.Services
                             x.AssignedTeamId == null &&
                             IsPendingLikeStatus(x.Status) &&
                             (
-                                normalizedTeamTag == null ||
+                                teamProfile == null ||
                                 string.IsNullOrWhiteSpace(x.DispatchTag) ||
-                                SplitDispatchTags(x.DispatchTag).Contains(normalizedTeamTag, StringComparer.OrdinalIgnoreCase)
+                                SplitDispatchTags(x.DispatchTag).Any(tag => DispatchTagMatchesTeam(tag, teamProfile.SpecialtyTag, teamProfile.Code))
                             )
                         ))
                     .ToList();
@@ -394,8 +394,12 @@ namespace MyGarage.Services
                                 {
                                     TeamId = group.Key,
                                     TeamName = teamNameMap.TryGetValue(group.Key, out var supportingTeamName) ? supportingTeamName : null,
-                                    TechnicianId = latestTeamDiagnosis.TechnicianId > 0 ? latestTeamDiagnosis.TechnicianId : null,
-                                    TechnicianName = latestTeamDiagnosis.TechnicianId > 0 && technicianNameMap.TryGetValue(latestTeamDiagnosis.TechnicianId, out var supportingTechnicianName)
+                                    TechnicianId = latestTeamDiagnosis.TechnicianId.HasValue && latestTeamDiagnosis.TechnicianId.Value > 0
+                                        ? latestTeamDiagnosis.TechnicianId.Value
+                                        : null,
+                                    TechnicianName = latestTeamDiagnosis.TechnicianId.HasValue
+                                        && latestTeamDiagnosis.TechnicianId.Value > 0
+                                        && technicianNameMap.TryGetValue(latestTeamDiagnosis.TechnicianId.Value, out var supportingTechnicianName)
                                         ? supportingTechnicianName
                                         : null,
                                     AssistantTechnicianId = latestTeamDiagnosis.AssistantTechnicianId,
@@ -515,6 +519,40 @@ namespace MyGarage.Services
                 _context.Diagnoses.RemoveRange(list);
             }
             return Task.CompletedTask;
+        }
+
+        public async Task ArchiveDiagnosesAsSupersededAsync(IEnumerable<Diagnosis> diagnoses, long? actorStaffId = null, string? auditTag = null)
+        {
+            var now = VietnamTime.Now;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            var tag = string.IsNullOrWhiteSpace(auditTag) ? "[SUPERSEDED_REQUEUED]" : auditTag.Trim();
+            foreach (var diagnosis in list)
+            {
+                diagnosis.Status = DiagnosisStatusCompleted;
+                diagnosis.DiagnosedAt ??= now;
+                diagnosis.CancellationStatus = nameof(DiagnosisCancellationStatusCode.NONE);
+                diagnosis.CancellationRequestedAt = null;
+                diagnosis.CancellationRequestedBy = null;
+                diagnosis.CancellationDecisionAt = null;
+                diagnosis.CancellationDecisionBy = null;
+                diagnosis.CancellationDecisionNote = null;
+                diagnosis.DispatchCollaborationMeta = null;
+                diagnosis.SupportRequestNote = string.IsNullOrWhiteSpace(diagnosis.SupportRequestNote)
+                    ? tag
+                    : diagnosis.SupportRequestNote.Contains(tag, StringComparison.OrdinalIgnoreCase)
+                        ? diagnosis.SupportRequestNote
+                        : $"{diagnosis.SupportRequestNote.Trim()} {tag}";
+                diagnosis.UpdatedAt = now;
+                diagnosis.UpdatedBy = actorStaffId;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
         }
     }
 }

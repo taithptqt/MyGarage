@@ -94,6 +94,10 @@ namespace MyGarage.Services
             }
 
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
+            if (normalizedDispatchTag == null)
+            {
+                normalizedDispatchTag = await InferDispatchTagFromRequestedServicesAsync(serviceOrderId);
+            }
             var checkInTime = serviceOrder.CheckInTime ?? serviceOrder.CreatedAt ?? VietnamTime.Now;
             var bufferMinutes = NormalizeBufferMinutes(bufferMinutesOverride);
             var mainServiceMinutes = await EstimateMainServiceMinutesAsync(serviceOrderId, serviceOrder.OrderCategory);
@@ -150,6 +154,10 @@ namespace MyGarage.Services
             }
 
             var suggestedTeam = await ResolveSuggestedTeamAsync(serviceOrder.ExecuteBranchId, normalizedDispatchTag);
+            var effectiveDispatchTag = ResolveEffectiveDispatchTag(
+                normalizedDispatchTag,
+                suggestedTeam.specialtyTag,
+                suggestedTeam.teamCode);
             DiagnosisDispatchSuggestionDto? dispatchSuggestion = null;
             if (suggestedTeam.teamId.HasValue)
             {
@@ -195,7 +203,7 @@ namespace MyGarage.Services
             return new DiagnosisIntakeSuggestionDto
             {
                 ServiceOrderId = serviceOrderId,
-                DispatchTag = normalizedDispatchTag,
+                DispatchTag = effectiveDispatchTag,
                 CheckInTime = checkInTime,
                 BufferMinutes = bufferMinutes,
                 MainServiceMinutes = mainServiceMinutes,
@@ -226,6 +234,65 @@ namespace MyGarage.Services
                 SuggestedBayCode = dispatchSuggestion?.SuggestedBayCode,
                 Reasons = reasons.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
             };
+        }
+
+        private async Task<string?> InferDispatchTagFromRequestedServicesAsync(long serviceOrderId)
+        {
+            var serviceCodes = await _context.ServiceOrderDetails.AsNoTracking()
+                .Where(x => x.ServiceOrderId == serviceOrderId && x.StandardServiceId.HasValue && !x.DiagnoseRecommendationId.HasValue)
+                .Join(
+                    _context.StandardServices.AsNoTracking(),
+                    detail => detail.StandardServiceId!.Value,
+                    standard => standard.Id,
+                    (detail, standard) => standard.Code)
+                .ToListAsync();
+
+            if (serviceCodes.Count == 0)
+            {
+                return null;
+            }
+
+            var inferredDispatchTags = serviceCodes
+                .Select(code =>
+                {
+                    var normalizedCode = (code ?? string.Empty).Trim().ToUpperInvariant();
+                    return DiagnosisCodeDispatchTagMap.TryGetValue(normalizedCode, out var tag)
+                        ? NormalizeDispatchTag(tag)
+                        : null;
+                })
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .ToList();
+
+            if (inferredDispatchTags.Count == 0)
+            {
+                return null;
+            }
+
+            var priorities = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ENGINE_CHASSIS"] = 1,
+                ["ELECTRICAL_AC"] = 2,
+                ["BODY_PAINT"] = 3,
+                ["CAR_CARE"] = 4,
+                ["MAINTENANCE"] = 5,
+                ["QUICK_SERVICE"] = 6
+            };
+
+            var bestTag = inferredDispatchTags
+                .GroupBy(x => x!, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    Tag = group.Key,
+                    Count = group.Count(),
+                    Priority = priorities.TryGetValue(group.Key, out var score) ? score : int.MaxValue
+                })
+                .OrderBy(x => x.Priority)
+                .ThenByDescending(x => x.Count)
+                .ThenBy(x => x.Tag)
+                .Select(x => x.Tag)
+                .FirstOrDefault();
+
+            return NormalizeDispatchTag(bestTag);
         }
 
         private async Task<IReadOnlyList<DiagnosisPackageProfile>> GetIntakePackageProfilesAsync()
@@ -267,7 +334,7 @@ namespace MyGarage.Services
         {
             var nominalMinutes = Math.Max(0, candidate.StandardMinutes);
             var code = string.IsNullOrWhiteSpace(candidate.Code)
-                ? $"DG-PKG-{candidate.Id}"
+                ? $"INTAKE-PKG-{candidate.Id}"
                 : candidate.Code.Trim().ToUpperInvariant();
             var name = string.IsNullOrWhiteSpace(candidate.Name)
                 ? $"Goi chan doan #{candidate.Id}"
@@ -496,7 +563,7 @@ namespace MyGarage.Services
             };
         }
 
-        private async Task<(long? teamId, string? teamName)> ResolveSuggestedTeamAsync(long branchId, string? normalizedDispatchTag)
+        private async Task<(long? teamId, string? teamName, string? specialtyTag, string? teamCode)> ResolveSuggestedTeamAsync(long branchId, string? normalizedDispatchTag)
         {
             var teamRows = await _context.Teams.AsNoTracking()
                 .Where(x => x.BranchId == branchId)
@@ -505,13 +572,14 @@ namespace MyGarage.Services
                 {
                     x.Id,
                     x.Name,
-                    x.SpecialtyTag
+                    x.SpecialtyTag,
+                    x.Code
                 })
                 .ToListAsync();
 
             if (teamRows.Count == 0)
             {
-                return (null, null);
+                return (null, null, null, null);
             }
 
             var dispatchTags = SplitDispatchTags(normalizedDispatchTag);
@@ -520,15 +588,14 @@ namespace MyGarage.Services
                 var matchByTag = teamRows
                     .Where(x =>
                     {
-                        var specialty = NormalizeDispatchTag(x.SpecialtyTag);
-                        return specialty != null && dispatchTags.Any(tag => DispatchTagMatchesSpecialty(tag, specialty));
+                        return dispatchTags.Any(tag => DispatchTagMatchesTeam(tag, x.SpecialtyTag, x.Code));
                     })
                     .OrderBy(x => x.Id)
                     .FirstOrDefault();
 
                 if (matchByTag != null)
                 {
-                    return (matchByTag.Id, matchByTag.Name);
+                    return (matchByTag.Id, matchByTag.Name, matchByTag.SpecialtyTag, matchByTag.Code);
                 }
             }
 
@@ -552,7 +619,55 @@ namespace MyGarage.Services
                 .ThenBy(x => x.Id)
                 .First();
 
-            return (bestTeam.Id, bestTeam.Name);
+            return (bestTeam.Id, bestTeam.Name, bestTeam.SpecialtyTag, bestTeam.Code);
+        }
+
+        private static string? ResolveEffectiveDispatchTag(string? normalizedDispatchTag, string? teamSpecialtyTag, string? teamCode)
+        {
+            if (!string.IsNullOrWhiteSpace(normalizedDispatchTag))
+            {
+                return normalizedDispatchTag;
+            }
+
+            var normalizedSpecialty = NormalizeDispatchTag(teamSpecialtyTag);
+            if (!string.IsNullOrWhiteSpace(normalizedSpecialty))
+            {
+                return normalizedSpecialty;
+            }
+
+            var normalizedTeamCode = NormalizeToken(teamCode);
+            if (string.IsNullOrWhiteSpace(normalizedTeamCode))
+            {
+                return null;
+            }
+
+            if (string.Equals(normalizedTeamCode, TeamCodeFastMaint, StringComparison.OrdinalIgnoreCase))
+            {
+                return "MAINTENANCE";
+            }
+
+            if (string.Equals(normalizedTeamCode, TeamCodeEngChas1, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedTeamCode, TeamCodeEngChas2, StringComparison.OrdinalIgnoreCase))
+            {
+                return "ENGINE_CHASSIS";
+            }
+
+            if (string.Equals(normalizedTeamCode, TeamCodeElecAc, StringComparison.OrdinalIgnoreCase))
+            {
+                return "ELECTRICAL_AC";
+            }
+
+            if (string.Equals(normalizedTeamCode, TeamCodeBodyCare, StringComparison.OrdinalIgnoreCase))
+            {
+                return "BODY_PAINT";
+            }
+
+            if (string.Equals(normalizedTeamCode, TeamCodeCarCare, StringComparison.OrdinalIgnoreCase))
+            {
+                return "CAR_CARE";
+            }
+
+            return null;
         }
 
         private static DiagnosisPackageProfile ResolveScoredPackage(

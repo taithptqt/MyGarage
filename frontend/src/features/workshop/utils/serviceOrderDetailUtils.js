@@ -3,9 +3,13 @@
 export function formatOrderDateTime(isoString) {
   if (!isoString) return "-";
   try {
-    return new Date(isoString).toLocaleString("vi-VN", {
+    const raw = String(isoString).trim();
+    const hasTimezone = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+    const normalized = hasTimezone ? raw : `${raw}Z`;
+    return new Date(normalized).toLocaleString("vi-VN", {
       dateStyle: "short",
       timeStyle: "short",
+      timeZone: "Asia/Ho_Chi_Minh",
     });
   } catch {
     return "-";

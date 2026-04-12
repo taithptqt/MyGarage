@@ -21,8 +21,15 @@ namespace MyGarage.Interfaces
         Task<IReadOnlyList<DiagnosisIntakePackageOptionDto>> GetIntakePackagesAsync();
         Task RemoveRecommendationsByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds);
         Task RemoveDiagnosesAsync(IEnumerable<Diagnosis> diagnoses);
+        Task ArchiveDiagnosesAsSupersededAsync(IEnumerable<Diagnosis> diagnoses, long? actorStaffId = null, string? auditTag = null);
         Task<long> ResolvePlaceholderTechnicianIdAsync(ServiceOrder serviceOrder, string? dispatchTag = null);
-        Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(long serviceOrderId, long technicianId, IReadOnlyList<string> symptoms, string? dispatchTag = null);
+        Task<IReadOnlyList<Diagnosis>> CreatePendingDiagnosesAsync(
+            long serviceOrderId,
+            long? technicianId,
+            IReadOnlyList<string> symptoms,
+            string? dispatchTag = null,
+            long? assignedTeamId = null,
+            long? assignedBayId = null);
         Task RecordIntakeSnapshotAsync(
             ServiceOrder serviceOrder,
             DiagnosisIntakeSuggestionDto intakeSuggestion,
@@ -49,6 +56,8 @@ namespace MyGarage.Interfaces
         Task<bool> IsTechnicianInTeamAsync(long technicianId, long teamId);
         Task<bool> IsDispatchTagCompatibleAsync(string? dispatchTag, long? teamId);
         Task<bool> IsBayInBranchAsync(long bayId, long branchId);
+        Task<long?> ResolveDiagnoseBayIdForBranchAsync(long branchId, long? preferredBayId = null);
+        Task<WorkSlot?> ScheduleDiagnosisQueueSlotAsync(long serviceOrderId, int diagnoseMinutes, int bufferMinutes = 15, long? preferredBayId = null);
         Task<(bool IsCompatible, string Reason)> ValidateTeamBayCompatibilityAsync(long serviceOrderId, long? teamId, long bayId);
         Task AssignDiagnosesAsync(
             IEnumerable<Diagnosis> diagnoses,

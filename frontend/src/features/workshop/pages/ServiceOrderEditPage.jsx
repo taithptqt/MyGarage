@@ -5,7 +5,7 @@ import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi"
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
-import { getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getAllBranchOperatingHours, getAllPackages, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
@@ -42,6 +42,7 @@ import {
   collectCompatibleCategoryIds,
   filterBookableItemsForVehicleModels,
 } from "@shared/utils/serviceEngineCompatibility";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 import { addMinutesWithinWorkingHours } from "@shared/utils/workingHoursSchedule";
 import { mergeBookableServicesAndPackages, splitBookingItemIds, toPackageSelectableId } from "@features/appointments/utils/bookingPackages";
 import "./Workshop.css";
@@ -365,6 +366,7 @@ export default function ServiceOrderEditPage() {
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [models, setModels] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState("");
@@ -631,7 +633,7 @@ export default function ServiceOrderEditPage() {
     setLoadingEditRequests(true);
     setError("");
     try {
-      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, packageRes, detailsRes, insuranceRes, customerRes, vehicleRes, modelRes] = await Promise.all([
+      const [orderRes, capabilityRes, requestRes, staffRes, roleRes, categoryRes, serviceRes, packageRes, detailsRes, insuranceRes, customerRes, vehicleRes, modelRes, operatingHoursRes] = await Promise.all([
         serviceOrderApi.getById(orderId),
         serviceOrderApi.getEditCapabilities(orderId).catch(() => null),
         serviceOrderApi.getEditRequests(orderId).catch(() => []),
@@ -645,6 +647,7 @@ export default function ServiceOrderEditPage() {
         getAllCustomers(),
         getAllVehicles(),
         getVehicleModels().catch(() => []),
+        getAllBranchOperatingHours().catch(() => []),
       ]);
 
       if (!orderRes) {
@@ -732,6 +735,7 @@ export default function ServiceOrderEditPage() {
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
       setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
       setModels(Array.isArray(modelRes) ? modelRes : []);
+      setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
       setEditRequests(
         (Array.isArray(requestRes) ? requestRes : [])
           .map(normalizeServiceOrderEditRequestItem)
@@ -830,6 +834,8 @@ export default function ServiceOrderEditPage() {
       if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
       if (!checkIn || Number.isNaN(checkIn.getTime())) {
         errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
+      } else if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, checkIn)) {
+        errors.checkInTime = getBranchClosedMessage(checkIn);
       }
 
       if (estimated && checkIn && !Number.isNaN(estimated.getTime()) && estimated < checkIn) {
@@ -862,7 +868,7 @@ export default function ServiceOrderEditPage() {
 
       return errors;
     },
-    [isInsuranceOrderEnabled, suggestedFinish.finishIso]
+    [branchOperatingHours, effectiveBranchId, isInsuranceOrderEnabled, suggestedFinish.finishIso]
   );
 
   const checkInSelectionGuardMessage = useMemo(() => {
@@ -878,11 +884,23 @@ export default function ServiceOrderEditPage() {
 
   const handleFieldValueChange = useCallback((fieldName, value) => {
     if (fieldName === "checkInTime" && checkInSelectionGuardMessage) {
-      setError(checkInSelectionGuardMessage);
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+      return;
+    }
+    if (fieldName === "checkInTime" && value && isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, value)) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: getBranchClosedMessage(value) }));
       return;
     }
     setFormData((prev) => ({ ...prev, [fieldName]: value }));
-  }, [checkInSelectionGuardMessage]);
+    if (fieldName === "checkInTime") {
+      setFieldErrors((prev) => {
+        if (!prev?.checkInTime) return prev;
+        const next = { ...prev };
+        delete next.checkInTime;
+        return next;
+      });
+    }
+  }, [branchOperatingHours, checkInSelectionGuardMessage, effectiveBranchId]);
 
   const handleInsuranceToggle = useCallback((enabled) => {
     setFormData((prev) => ({
@@ -1547,13 +1565,13 @@ export default function ServiceOrderEditPage() {
                     minDate={pickerMinDate}
                     onOpenRequest={() => {
                       if (checkInSelectionGuardMessage) {
-                        setError(checkInSelectionGuardMessage);
+                        setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
                         return false;
                       }
                       return true;
                     }}
                   />
-                  {showError("checkInTime") ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
+                  {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                 </div>
 
                 <div className="form-group">

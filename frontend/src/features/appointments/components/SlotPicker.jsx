@@ -25,7 +25,11 @@
     if (!t) return "";
     const d = new Date(t);
     if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+      return d.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
     }
     const parts = String(t).split(":");
     return `${parts[0] || ""}:${parts[1] || ""}`;

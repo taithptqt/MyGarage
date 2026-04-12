@@ -26,18 +26,31 @@ export function getApiBaseUrl() {
   return "";
 }
 
+function decodeUnicodeEscapes(text) {
+  const raw = String(text ?? "");
+  if (!raw || !/\\u[0-9a-fA-F]{4}/.test(raw)) return raw;
+  return raw.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 16))
+  );
+}
+
+function normalizeErrorText(text) {
+  return decodeUnicodeEscapes(String(text ?? "")).trim();
+}
+
 function extractErrorMessage(error) {
   const data = error?.response?.data;
-  if (!data) return error?.message || "Request failed.";
-  if (typeof data === "string" && data.trim()) return data;
-  if (data?.message) return data.message;
+  if (!data) return normalizeErrorText(error?.message) || "Request failed.";
+  if (typeof data === "string" && data.trim()) return normalizeErrorText(data);
+  if (data?.message) return normalizeErrorText(data.message);
   // Handle ASP.NET Core validation errors
   if (data?.errors) {
-    const errorDetails = Object.values(data.errors).flat().join(" ");
-    return data.title ? `${data.title}: ${errorDetails}` : errorDetails;
+    const errorDetails = normalizeErrorText(Object.values(data.errors).flat().join(" "));
+    const title = normalizeErrorText(data.title);
+    return title ? `${title}: ${errorDetails}` : errorDetails;
   }
-  if (data?.title) return data.title;
-  if (error?.message) return error.message;
+  if (data?.title) return normalizeErrorText(data.title);
+  if (error?.message) return normalizeErrorText(error.message);
   return "Request failed.";
 }
 

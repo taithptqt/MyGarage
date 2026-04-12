@@ -1,6 +1,7 @@
 import {
   bookAppointment,
   getAllBranches,
+  getAllBranchOperatingHours,
   getAllCustomerVehicles,
   getAllCustomers,
   getAllInsuranceCompanies,
@@ -25,6 +26,7 @@ export async function loadBookingFormMasterData() {
     serviceData,
     packageData,
     branchData,
+    operatingHoursData,
     brandData,
     modelData,
     insuranceCompanyData,
@@ -36,6 +38,7 @@ export async function loadBookingFormMasterData() {
     getAllStandardServices(),
     getAllPackages().catch(() => []),
     getAllBranches(),
+    getAllBranchOperatingHours().catch(() => []),
     getVehicleBrands(),
     getVehicleModels(),
     getAllInsuranceCompanies().catch(() => []),
@@ -52,6 +55,7 @@ export async function loadBookingFormMasterData() {
     ),
     packages: Array.isArray(packageData) ? packageData.filter((item) => item?.isDeleted !== true) : [],
     branches: Array.isArray(branchData) ? branchData.filter((item) => normalizeText(item?.status) === "active") : [],
+    branchOperatingHours: Array.isArray(operatingHoursData) ? operatingHoursData : [],
     brands: Array.isArray(brandData) ? brandData.filter((item) => item?.isDeleted !== true) : [],
     models: Array.isArray(modelData) ? modelData.filter((item) => item?.isDeleted !== true) : [],
     insuranceCompanies: Array.isArray(insuranceCompanyData)

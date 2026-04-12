@@ -9,7 +9,7 @@ public partial class Diagnosis
 
     public long ServiceOrderId { get; set; }
 
-    public long TechnicianId { get; set; }
+    public long? TechnicianId { get; set; }
 
     public long? AssistantTechnicianId { get; set; }
 
@@ -75,7 +75,7 @@ public partial class Diagnosis
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
 
-    public virtual Staff Technician { get; set; } = null!;
+    public virtual Staff? Technician { get; set; }
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }

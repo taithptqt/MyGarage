@@ -1,4 +1,4 @@
-import { request } from "@app/apiClient";
+import { request, requestSafe } from "@app/apiClient";
 
 /**
  * SERVICE ORDER API
@@ -90,6 +90,21 @@ export const serviceOrderApi = {
     }
 
     return request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
+      method: "POST",
+      data: payloadOrDispatchTag ? { dispatchTag: payloadOrDispatchTag } : undefined,
+    });
+  },
+  requestDiagnosisSafe: (serviceOrderId, payloadOrDispatchTag = null) => {
+    if (payloadOrDispatchTag && typeof payloadOrDispatchTag === "object") {
+      return requestSafe({
+        url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
+        method: "POST",
+        data: payloadOrDispatchTag,
+      });
+    }
+
+    return requestSafe({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues`,
       method: "POST",
       data: payloadOrDispatchTag ? { dispatchTag: payloadOrDispatchTag } : undefined,

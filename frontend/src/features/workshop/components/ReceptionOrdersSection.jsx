@@ -12,6 +12,8 @@ import TablePagination from "@shared/components/TablePagination";
 import FilterDropdown from "@shared/components/FilterDropdown";
 import { getStatusLabelVi, toStatusOptionVi } from "@shared/core/utils/statusLabelUtils";
 import ServiceOrderDetailModal from "@features/workshop/components/ServiceOrderDetailModal";
+const AUTO_DISPATCH_WARNING_PREFIX = "[AUTO_DISPATCH_WARNING]:";
+const DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY = "mygarage.diagnosisDispatchReviewOrders";
 
 function parseBranchId(value) {
   const parsed = Number(value);
@@ -84,7 +86,9 @@ function formatOrderDate(value) {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString("vi-VN");
+  return parsed.toLocaleDateString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
 }
 
 function formatOrderTime(value) {
@@ -95,6 +99,7 @@ function formatOrderTime(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -112,6 +117,64 @@ function buildOrderRowInteraction(order, onOrderClick) {
       }
     },
   };
+}
+
+function hasOrderDispatchReview(order) {
+  return Boolean(
+    order?.requiresDispatchReview
+    || order?.RequiresDispatchReview
+    || order?.hasDiagnosisDispatchWarning
+    || order?.HasDiagnosisDispatchWarning
+  );
+}
+
+function hasOrderPartsFollowUp(order) {
+  return Boolean(
+    order?.requiresPartsFollowUp
+    || order?.RequiresPartsFollowUp
+  );
+}
+
+function parseDispatchReviewOrderIds() {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY);
+    const list = JSON.parse(raw || "[]");
+    if (!Array.isArray(list)) return new Set();
+    return new Set(
+      list
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function getOrderIssueLabel(order) {
+  if (hasOrderPartsFollowUp(order)) {
+    return "Thiếu phụ tùng, cần gọi khách";
+  }
+  if (hasOrderDispatchReview(order)) {
+    return "Cần điều phối thủ công";
+  }
+  return "";
+}
+
+function OrderIssueIndicator({ order }) {
+  const issueLabel = getOrderIssueLabel(order);
+  const isVisible = Boolean(issueLabel);
+  if (!isVisible) return null;
+
+  return (
+    <span
+      className="appointment-issue-indicator"
+      title={issueLabel}
+      aria-label={issueLabel}
+    >
+      !
+    </span>
+  );
 }
 
 
@@ -148,15 +211,80 @@ export default function ReceptionOrdersSection() {
     setLoading(true);
     setError("");
     try {
-      const [oRes, cRes, vRes, sRes, rRes] = await Promise.all([
+      const [oRes, cRes, vRes, sRes, rRes, diagnosisRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllCustomers(),
         getAllVehicles(),
         getAllStaff(),
         getAllRoles(),
+        serviceOrderApi.getDiagnoses().catch(() => []),
       ]);
 
-      setOrders(Array.isArray(oRes) ? oRes : []);
+      const diagnosisList = Array.isArray(diagnosisRes) ? diagnosisRes : [];
+      const diagnosisByOrderId = new Map();
+      const persistedDispatchReviewOrderIds = parseDispatchReviewOrderIds();
+      let shouldPersistDispatchReviewOrderIds = false;
+      diagnosisList.forEach((item) => {
+        const serviceOrderId = Number(item?.serviceOrderId ?? item?.ServiceOrderId ?? 0);
+        if (!Number.isFinite(serviceOrderId) || serviceOrderId <= 0) return;
+        if (!diagnosisByOrderId.has(serviceOrderId)) diagnosisByOrderId.set(serviceOrderId, []);
+        diagnosisByOrderId.get(serviceOrderId).push(item);
+      });
+
+      const baseOrders = (Array.isArray(oRes) ? oRes : []).map((order) => {
+        const orderId = Number(order?.id ?? order?.Id ?? 0);
+        const orderStatus = String(order?.status ?? order?.Status ?? "").trim().toUpperCase();
+        const relatedDiagnoses = diagnosisByOrderId.get(orderId) || [];
+        const hasAutoDispatchWarning = relatedDiagnoses.some((diag) => {
+          const note = String(diag?.supportRequestNote ?? diag?.SupportRequestNote ?? "").trim();
+          return note.startsWith(AUTO_DISPATCH_WARNING_PREFIX);
+        });
+        const hasPendingUnassigned = relatedDiagnoses.some((diag) => {
+          const status = String(diag?.status ?? diag?.Status ?? "").trim().toUpperCase();
+          const teamId = Number(diag?.assignedTeamId ?? diag?.AssignedTeamId ?? 0);
+          const technicianId = Number(diag?.technicianId ?? diag?.TechnicianId ?? 0);
+          return status === "PENDING" && (teamId <= 0 || technicianId <= 0);
+        });
+
+        const diagnosisDispatchIssue =
+          hasAutoDispatchWarning || (hasPendingUnassigned && orderStatus === "DIAGNOSING");
+
+        return {
+          ...order,
+          __diagnosisDispatchIssue: diagnosisDispatchIssue,
+          __persistedDispatchReviewIssue: persistedDispatchReviewOrderIds.has(orderId),
+          requiresDispatchReview: diagnosisDispatchIssue || persistedDispatchReviewOrderIds.has(orderId),
+          hasDiagnosisDispatchWarning: diagnosisDispatchIssue || persistedDispatchReviewOrderIds.has(orderId),
+        };
+      });
+
+      const enrichedOrders = baseOrders.map((order) => {
+        const orderId = Number(order?.id ?? order?.Id ?? 0);
+        const diagnosisDispatchIssue = Boolean(order?.__diagnosisDispatchIssue);
+        const persistedDispatchIssue = Boolean(order?.__persistedDispatchReviewIssue);
+        const hasDispatchIssue = diagnosisDispatchIssue || persistedDispatchIssue;
+        if (!hasDispatchIssue && persistedDispatchIssue && persistedDispatchReviewOrderIds.has(orderId)) {
+          persistedDispatchReviewOrderIds.delete(orderId);
+          shouldPersistDispatchReviewOrderIds = true;
+        }
+
+        // Internal fields are used only during in-memory enrichment and should not leak to UI consumers.
+        const { __diagnosisDispatchIssue, __persistedDispatchReviewIssue, ...cleanOrder } = order;
+        return {
+          ...cleanOrder,
+          requiresDispatchReview: hasDispatchIssue,
+          hasDiagnosisDispatchWarning: hasDispatchIssue,
+        };
+      });
+
+      if (shouldPersistDispatchReviewOrderIds) {
+        window.localStorage.setItem(
+          DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY,
+          JSON.stringify(Array.from(persistedDispatchReviewOrderIds))
+        );
+      }
+
+      setOrders(enrichedOrders);
       setCustomers(Array.isArray(cRes) ? cRes : []);
       setVehicles(Array.isArray(vRes) ? vRes : []);
 
@@ -810,8 +938,10 @@ function OrdersTableContent({
                             <th>Biển số</th>
                             <th>Thời điểm vào</th>
                             <th>Hẹn trả</th>
-                            <th className="th-center">Trạng thái</th>
-                            <th className="col-actions col-actions-wide th-center">Thao tác</th>
+                            <th className="th-center col-status-fixed">
+                              <span className="status-col-label">Trạng thái</span>
+                            </th>
+                            <th className="col-actions col-actions-compact th-center">Thao tác</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -831,12 +961,17 @@ function OrdersTableContent({
                                     ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
                                     : "Chưa hẹn"}
                                 </td>
-                                <td className="th-center">
-                                  <span className={`badge ${getStatusBadge(order.status)}`}>
-                                    {getStatusLabelVi(order.status, order.status)}
-                                  </span>
+                                <td className="th-center col-status-fixed">
+                                  <div className="appointment-status-cell">
+                                    <span className="appointment-status-main">
+                                      <span className={`badge ${getStatusBadge(order.status)}`}>
+                                        {getStatusLabelVi(order.status, order.status)}
+                                      </span>
+                                      <OrderIssueIndicator order={order} />
+                                    </span>
+                                  </div>
                                 </td>
-                                <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
+                                <td className="col-actions col-actions-compact th-center" onClick={(event) => event.stopPropagation()}>
                                   {renderOrderActionButtons(order)}
                                 </td>
                               </tr>
@@ -858,10 +993,12 @@ function OrdersTableContent({
                 <th>Khách hàng</th>
                 <th>SĐT</th>
                 <th>Biển số</th>
-                <th>Trạng thái</th>
+                <th className="th-center col-status-fixed">
+                  <span className="status-col-label">Trạng thái</span>
+                </th>
                 <th>Thời điểm vào</th>
                 <th>Hẹn trả</th>
-                <th className="col-actions col-actions-wide th-center">Thao tác</th>
+                <th className="col-actions col-actions-compact th-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -880,10 +1017,15 @@ function OrdersTableContent({
                       <td style={{ fontWeight: 600 }}>{getOrderCustomerName(order)}</td>
                       <td>{getOrderCustomerPhone(order)}</td>
                       <td>{getOrderVehiclePlate(order)}</td>
-                      <td>
-                        <span className={`badge ${getStatusBadge(order.status)}`}>
-                          {getStatusLabelVi(order.status, order.status)}
-                        </span>
+                      <td className="th-center col-status-fixed">
+                        <div className="appointment-status-cell">
+                          <span className="appointment-status-main">
+                            <span className={`badge ${getStatusBadge(order.status)}`}>
+                              {getStatusLabelVi(order.status, order.status)}
+                            </span>
+                            <OrderIssueIndicator order={order} />
+                          </span>
+                        </div>
                       </td>
                       <td>
                         {order.checkInTime
@@ -895,7 +1037,7 @@ function OrdersTableContent({
                           ? `${formatOrderDate(order.estimatedHandover)} ${formatOrderTime(order.estimatedHandover)}`
                           : "Chưa hẹn"}
                       </td>
-                      <td className="col-actions col-actions-wide th-center" onClick={(event) => event.stopPropagation()}>
+                      <td className="col-actions col-actions-compact th-center" onClick={(event) => event.stopPropagation()}>
                         {renderOrderActionButtons(order)}
                       </td>
                     </tr>

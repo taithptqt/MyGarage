@@ -419,12 +419,35 @@ namespace MyGarage.Controllers
                     return;
                 }
 
+                var intakeSuggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
+                    serviceOrderId,
+                    dispatchTag: null,
+                    bufferMinutesOverride: null,
+                    requestedPackageCode: null);
+
+                var suggestedTeamId = intakeSuggestion.SuggestedTeamId;
+                if (!suggestedTeamId.HasValue || suggestedTeamId.Value <= 0)
+                {
+                    return;
+                }
+
                 var symptoms = ExtractSymptomsFromNotes(serviceOrder.CustomerNotes);
-                var placeholderTechnicianId = await _diagnosisService.ResolvePlaceholderTechnicianIdAsync(serviceOrder);
+                var resolvedDiagnoseBayId = await _diagnosisService.ResolveDiagnoseBayIdForBranchAsync(
+                    serviceOrder.ExecuteBranchId,
+                    intakeSuggestion.SuggestedBayId);
+                var scheduledSlot = await _diagnosisService.ScheduleDiagnosisQueueSlotAsync(
+                    serviceOrderId,
+                    intakeSuggestion.PackageEffectiveMinutes,
+                    bufferMinutes: 15,
+                    preferredBayId: resolvedDiagnoseBayId);
+                var finalAssignedBayId = scheduledSlot?.BayId ?? resolvedDiagnoseBayId;
                 await _diagnosisService.CreatePendingDiagnosesAsync(
                     serviceOrderId,
-                    placeholderTechnicianId,
-                    symptoms);
+                    technicianId: null,
+                    symptoms,
+                    intakeSuggestion.DispatchTag,
+                    assignedTeamId: suggestedTeamId.Value,
+                    assignedBayId: finalAssignedBayId);
             }
             catch
             {
@@ -524,25 +547,22 @@ namespace MyGarage.Controllers
 
         private static bool IsInspectionService(string? serviceCode, string? serviceName, string? categoryCode, string? categoryName)
         {
-            var normalized = NormalizeSearchText($"{serviceCode} {serviceName} {categoryCode} {categoryName}");
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return false;
-            }
+            _ = serviceName;
+            _ = categoryCode;
+            _ = categoryName;
 
-            return normalized.Contains("kiem tra", StringComparison.Ordinal) ||
-                   normalized.Contains("chan doan", StringComparison.Ordinal) ||
-                   normalized.Contains("mini check", StringComparison.Ordinal) ||
-                   normalized.Contains("quick check", StringComparison.Ordinal) ||
-                   normalized.Contains("inspection", StringComparison.Ordinal) ||
-                   normalized.Contains("diagnos", StringComparison.Ordinal) ||
-                   normalized.Contains("scan loi", StringComparison.Ordinal) ||
-                   normalized.Contains("obd", StringComparison.Ordinal);
+            // Strict rule per business requirement: only 7 diagnosis package codes trigger auto diagnosis queue.
+            var normalizedCode = NormalizeSearchText(serviceCode)
+                .Replace("_", "-", StringComparison.Ordinal)
+                .Trim()
+                .ToUpperInvariant();
+
+            return normalizedCode is "DG-MINI" or "DG-GEN" or "DG-SCAN" or "DG-ENG" or "DG-ELEC" or "DG-AC" or "DG-NOISE";
         }
 
         private static List<string> ExtractSymptomsFromNotes(string? customerNotes)
         {
-            var fallback = new List<string> { "Khong co ghi chu gi" };
+            var fallback = new List<string>();
             if (string.IsNullOrWhiteSpace(customerNotes))
             {
                 return fallback;
@@ -559,7 +579,7 @@ namespace MyGarage.Controllers
                     var values = root.EnumerateArray()
                         .Where(item => item.ValueKind == JsonValueKind.String)
                         .Select(item => (item.GetString() ?? string.Empty).Trim())
-                        .Where(item => !string.IsNullOrWhiteSpace(item))
+                        .Where(IsMeaningfulSymptom)
                         .Distinct()
                         .ToList();
                     return values.Count > 0 ? values : fallback;
@@ -572,7 +592,7 @@ namespace MyGarage.Controllers
                         var values = symptomsElement.EnumerateArray()
                             .Where(item => item.ValueKind == JsonValueKind.String)
                             .Select(item => (item.GetString() ?? string.Empty).Trim())
-                            .Where(item => !string.IsNullOrWhiteSpace(item))
+                            .Where(IsMeaningfulSymptom)
                             .Distinct()
                             .ToList();
                         return values.Count > 0 ? values : fallback;
@@ -581,7 +601,7 @@ namespace MyGarage.Controllers
                     if (root.TryGetProperty("note", out var noteElement) && noteElement.ValueKind == JsonValueKind.String)
                     {
                         var note = (noteElement.GetString() ?? string.Empty).Trim();
-                        return string.IsNullOrWhiteSpace(note) ? fallback : new List<string> { note };
+                        return IsMeaningfulSymptom(note) ? new List<string> { note } : fallback;
                     }
                 }
             }
@@ -590,9 +610,49 @@ namespace MyGarage.Controllers
                 // Legacy non-JSON format.
             }
 
-            return new List<string> { notes };
+            return IsMeaningfulSymptom(notes)
+                ? new List<string> { notes }
+                : fallback;
         }
 
+        private static bool IsMeaningfulSymptom(string? text)
+        {
+            var value = (text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var normalized = NormalizeSearchText(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized == "khong co" ||
+                normalized == "khong co ghi chu" ||
+                normalized == "khong co ghi chu gi" ||
+                normalized == "khong co mo ta")
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) &&
+                normalized.Contains("khong co", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith("[flow:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[cluster:", StringComparison.Ordinal) ||
+                normalized.StartsWith("[dispatch", StringComparison.Ordinal) ||
+                normalized.StartsWith("[auto_dispatch", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return true;
+        }
         private static bool HasRequiredCornerImages(string? defectsAndImages)
         {
             if (string.IsNullOrWhiteSpace(defectsAndImages))
@@ -804,8 +864,11 @@ namespace MyGarage.Controllers
 
             return builder.ToString()
                 .Normalize(NormalizationForm.FormC)
-                .Replace('d', 'd')
-                .Replace('Ð', 'd');
+                .Replace('\u0111', 'd')
+                .Replace('\u0110', 'd');
         }
     }
 }
+
+
+

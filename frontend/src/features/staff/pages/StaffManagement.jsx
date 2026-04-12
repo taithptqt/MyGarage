@@ -321,7 +321,7 @@ export default function StaffManagement() {
                   </td>
                   <td>
                     {member.createdAt
-                      ? new Date(member.createdAt).toLocaleDateString()
+                      ? new Date(member.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
                       : "ệ""}
                   </td>
                   <td>

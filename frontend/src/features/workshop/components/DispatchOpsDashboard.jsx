@@ -33,6 +33,7 @@ import { keyframes } from "@emotion/react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/vehicleCatalogApi";
 import { parseCustomerNotes } from "@features/workshop/utils/serviceOrderDetailUtils";
 import FilterDropdown from "@shared/components/FilterDropdown";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -152,6 +153,16 @@ function toPositiveNumber(value) {
 
 function normalizeCode(value) {
   return toText(value).toUpperCase();
+}
+
+function resolveDispatchTagLabel(tag, fallbackTag = "") {
+  const normalizedTag = normalizeCode(tag);
+  if (normalizedTag) return getDispatchTagLabel(normalizedTag);
+
+  const normalizedFallback = normalizeCode(fallbackTag);
+  if (normalizedFallback) return `${getDispatchTagLabel(normalizedFallback)} (chuyên môn tổ)`;
+
+  return getDispatchTagLabel(tag);
 }
 
 function formatDateTime(value) {
@@ -544,6 +555,75 @@ function resolveVehiclePlate(raw, order, vehicleMap) {
   return toText(readValue(vehicle, "licensePlate", "LicensePlate", "plateNumber", "PlateNumber"));
 }
 
+function resolveVehicleInfo(raw, order, vehicleMap, vehicleModelMap = new Map(), vehicleBrandMap = new Map()) {
+  const vehicleId = toPositiveNumber(readValue(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? (vehicleMap.get(vehicleId) || null) : null;
+  const vehicleModelId =
+    toPositiveNumber(readValue(raw, "vehicleModelId", "VehicleModelId")) ||
+    toPositiveNumber(readValue(order, "vehicleModelId", "VehicleModelId")) ||
+    toPositiveNumber(readValue(vehicle, "modelId", "ModelId"));
+  const vehicleModel = vehicleModelId ? (vehicleModelMap.get(vehicleModelId) || null) : null;
+  const vehicleBrandId =
+    toPositiveNumber(readValue(raw, "vehicleBrandId", "VehicleBrandId")) ||
+    toPositiveNumber(readValue(order, "vehicleBrandId", "VehicleBrandId")) ||
+    toPositiveNumber(readValue(vehicle, "brandId", "BrandId")) ||
+    toPositiveNumber(readValue(vehicleModel, "brandId", "BrandId"));
+  const vehicleBrand = vehicleBrandId ? (vehicleBrandMap.get(vehicleBrandId) || null) : null;
+
+  const brandName =
+    toText(readValue(raw, "vehicleBrandName", "VehicleBrandName")) ||
+    toText(readValue(order, "vehicleBrandName", "VehicleBrandName", "guestVehicleBrandName", "GuestVehicleBrandName")) ||
+    toText(readValue(vehicle, "brandName", "BrandName")) ||
+    toText(readValue(vehicleBrand, "name", "Name", "brandName", "BrandName", "code", "Code"));
+
+  const modelName =
+    toText(readValue(raw, "vehicleModelName", "VehicleModelName")) ||
+    toText(readValue(order, "vehicleModelName", "VehicleModelName", "guestVehicleModelName", "GuestVehicleModelName")) ||
+    toText(readValue(vehicle, "modelName", "ModelName")) ||
+    toText(readValue(vehicleModel, "modelName", "ModelName", "name", "Name"));
+
+  const descriptorFromApi =
+    toText(readValue(raw, "vehicleDescriptor", "VehicleDescriptor")) ||
+    toText(readValue(order, "vehicleDescriptor", "VehicleDescriptor"));
+
+  const vehicleDescriptor = descriptorFromApi || (brandName && modelName ? `${brandName} ${modelName}` : (modelName || brandName));
+
+  const vehicleManufactureYear =
+    toText(readValue(raw, "vehicleManufactureYear", "VehicleManufactureYear", "manufactureYear", "ManufactureYear")) ||
+    toText(readValue(order, "vehicleManufactureYear", "VehicleManufactureYear", "manufactureYear", "ManufactureYear")) ||
+    toText(readValue(vehicle, "manufactureYear", "ManufactureYear", "year", "Year"));
+
+  const vehicleColor =
+    toText(readValue(raw, "vehicleColor", "VehicleColor", "color", "Color")) ||
+    toText(readValue(order, "vehicleColor", "VehicleColor", "color", "Color")) ||
+    toText(readValue(vehicle, "color", "Color"));
+
+  const vehicleVin =
+    toText(readValue(raw, "vehicleVin", "VehicleVin", "vin", "Vin")) ||
+    toText(readValue(order, "vehicleVin", "VehicleVin", "guestVehicleVin", "GuestVehicleVin")) ||
+    toText(readValue(vehicle, "vin", "Vin"));
+
+  return {
+    vehicleBrandName: brandName,
+    vehicleModelName: modelName,
+    vehicleDescriptor,
+    vehicleManufactureYear,
+    vehicleColor,
+    vehicleVin,
+  };
+}
+
+function getVehicleDisplayParts(item) {
+  const vin = toText(item?.vehicleVin);
+  return {
+    plate: toText(item?.vehicleLicensePlate) || "--",
+    descriptor: toText(item?.vehicleDescriptor) || "Chưa rõ dòng xe",
+    manufactureYear: toText(item?.vehicleManufactureYear) || "--",
+    color: toText(item?.vehicleColor) || "--",
+    vin,
+  };
+}
+
 function extractAlertReasons(item) {
   const reasons = [];
   if (!item) return reasons;
@@ -567,7 +647,7 @@ function extractAlertReasons(item) {
   return reasons;
 }
 
-function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, teamMap = new Map()) {
+function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModelMap = new Map(), vehicleBrandMap = new Map(), teamMap = new Map()) {
   const serviceOrderId = toPositiveNumber(readValue(raw, "serviceOrderId", "ServiceOrderId")) || 0;
   const order = orderMap.get(serviceOrderId) || null;
   const teamId = toPositiveNumber(readValue(raw, "teamId", "TeamId"));
@@ -629,6 +709,7 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, teamMap = ne
   const startedAt = readValue(raw, "startedAt", "StartedAt");
   const customerNotesRaw = toText(readValue(order, "customerNotes", "CustomerNotes"));
   const parsedCustomerNotes = parseCustomerNotes(customerNotesRaw);
+  const vehicleInfo = resolveVehicleInfo(raw, order, vehicleMap, vehicleModelMap, vehicleBrandMap);
 
   // Guard rail: if no real assignment signal exists, keep assignee fields empty.
   const hasRealAssignment = Boolean(primaryTeamId || assignedAt || startedAt || assignedBayId);
@@ -686,6 +767,12 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, teamMap = ne
     finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt"),
     customerName: resolveCustomerName(raw, order, customerMap),
     vehicleLicensePlate: resolveVehiclePlate(raw, order, vehicleMap),
+    vehicleBrandName: vehicleInfo.vehicleBrandName,
+    vehicleModelName: vehicleInfo.vehicleModelName,
+    vehicleDescriptor: vehicleInfo.vehicleDescriptor,
+    vehicleManufactureYear: vehicleInfo.vehicleManufactureYear,
+    vehicleColor: vehicleInfo.vehicleColor,
+    vehicleVin: vehicleInfo.vehicleVin,
     customerNotes: customerNotesRaw,
     customerMainNotes: toText(parsedCustomerNotes?.mainNotes),
     customerRequestedServices: toText(parsedCustomerNotes?.requestedServices),
@@ -697,10 +784,12 @@ function DispatchQueueCard({
   onSelect,
   onViewCancelRequest,
   onViewQuote,
+  dispatchTagLabel = "",
 }) {
   const meta = COLOR_META[item.queueColor] || COLOR_META.WHITE;
   const alerts = extractAlertReasons(item);
   const queueStateMeta = getQueueStateMeta(item.queueState, item.queueColor);
+  const vehicle = getVehicleDisplayParts(item);
   const canViewCancelRequest = Boolean(item?.isCancelPendingApproval) && typeof onViewCancelRequest === "function";
   const canViewQuote = isDiagnosisCompletedItem(item) && typeof onViewQuote === "function";
   const statusBorderByColor = {
@@ -733,8 +822,24 @@ function DispatchQueueCard({
               {item.serviceOrderCode}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              {item.customerName || "Khách hàng chưa rõ"} - {item.vehicleLicensePlate || "--"}
+              {item.customerName || "Khách hàng chưa rõ"}
             </Text>
+            <HStack mt={1} spacing={1.5} flexWrap="wrap">
+              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+                Biển số: {vehicle.plate}
+              </Badge>
+              <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+                Dòng xe: {vehicle.descriptor}
+              </Badge>
+            </HStack>
+            <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+              Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
+            </Text>
+            {vehicle.vin ? (
+              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+                VIN: {vehicle.vin}
+              </Text>
+            ) : null}
           </Box>
 
           <Badge colorScheme={queueStateMeta.colorScheme} borderRadius="full" px={2.5} py={1}>
@@ -744,7 +849,7 @@ function DispatchQueueCard({
 
         <HStack spacing={2} flexWrap="wrap">
           <Badge colorScheme="purple" borderRadius="full" px={2.5}>
-            Chuyên môn: {getDispatchTagLabel(item.dispatchTag)}
+            Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
           </Badge>
           <Badge colorScheme="gray" borderRadius="full" px={2.5}>
             Chờ nhận: {formatMinutes(item.pendingMinutes)}
@@ -989,6 +1094,7 @@ export default function DispatchOpsDashboard({
   }, [activeTeams, currentStaffTeamId]);
 
   const currentTeamSpecialty = normalizeCode(readValue(currentTeam, "specialtyTag", "SpecialtyTag"));
+  const currentTeamSpecialtyLabel = resolveDispatchTagLabel(currentTeamSpecialty);
 
   const activeTechnicians = useMemo(() => {
     const filtered = (Array.isArray(staffs) ? staffs : []).filter((staff) => {
@@ -1308,6 +1414,8 @@ export default function DispatchOpsDashboard({
         ordersRes,
         customersRes,
         vehiclesRes,
+        vehicleModelsRes,
+        vehicleBrandsRes,
         teamsRes,
         staffsRes,
         rolesRes,
@@ -1317,6 +1425,8 @@ export default function DispatchOpsDashboard({
         serviceOrderApi.getAll(),
         getAllCustomers(branchId || undefined),
         getAllVehicles(),
+        getAllVehicleModels(),
+        getAllVehicleBrands(),
         serviceOrderApi.getTeams(),
         getAllStaff(branchId || undefined),
         getAllRoles(),
@@ -1326,6 +1436,8 @@ export default function DispatchOpsDashboard({
       const orderList = Array.isArray(ordersRes) ? ordersRes : [];
       const customerList = Array.isArray(customersRes) ? customersRes : [];
       const vehicleList = Array.isArray(vehiclesRes) ? vehiclesRes : [];
+      const vehicleModelList = Array.isArray(vehicleModelsRes) ? vehicleModelsRes : [];
+      const vehicleBrandList = Array.isArray(vehicleBrandsRes) ? vehicleBrandsRes : [];
 
       setTeams(Array.isArray(teamsRes) ? teamsRes : []);
       setStaffs(Array.isArray(staffsRes) ? staffsRes : []);
@@ -1335,12 +1447,14 @@ export default function DispatchOpsDashboard({
       const orderMap = new Map(orderList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
       const customerMap = new Map(customerList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
       const vehicleMap = new Map(vehicleList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const vehicleModelMap = new Map(vehicleModelList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const vehicleBrandMap = new Map(vehicleBrandList.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
       const teamMap = new Map(
         (Array.isArray(teamsRes) ? teamsRes : []).map((team) => [toPositiveNumber(readValue(team, "id", "Id")) || 0, team])
       );
 
       const normalized = (Array.isArray(boardRes) ? boardRes : [])
-        .map((item) => normalizeBoardItem(item, orderMap, customerMap, vehicleMap, teamMap))
+        .map((item) => normalizeBoardItem(item, orderMap, customerMap, vehicleMap, vehicleModelMap, vehicleBrandMap, teamMap))
         .filter((item) => item.serviceOrderId > 0);
 
       setBoardItems(normalized);
@@ -2229,6 +2343,10 @@ export default function DispatchOpsDashboard({
   const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.finalApprovedByManagerId;
   const canShowManagerQuoteSection = Boolean(selectedItem && isDiagnosisCompletedItem(selectedItem));
   const canViewSelectedQuote = Boolean(isAssignmentPage && selectedItem && isDiagnosisCompletedItem(selectedItem) && typeof onOpenQuote === "function");
+  const selectedDispatchTagLabel = resolveDispatchTagLabel(
+    selectedItem?.dispatchTag,
+    isTeamLeaderMode ? currentTeamSpecialty : ""
+  );
   const selectedIncomingSupportAssignment = useMemo(() => {
     if (!isTeamLeaderMode || !currentStaffTeamId || !selectedItem) return null;
     const rows = Array.isArray(selectedItem.supportingAssignments) ? selectedItem.supportingAssignments : [];
@@ -2338,6 +2456,16 @@ export default function DispatchOpsDashboard({
                 ? "Trang phân công chi tiết cho từng lệnh, tập trung thao tác điều phối và phê duyệt."
                 : "Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá."}
             </Text>
+            {isTeamLeaderMode && (
+              <HStack mt={2} spacing={2} flexWrap="wrap">
+                <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={1}>
+                  Tổ phụ trách: {toText(readValue(currentTeam, "name", "Name")) || "Chưa xác định"}
+                </Badge>
+                <Badge colorScheme="purple" variant="subtle" borderRadius="full" px={2.5} py={1}>
+                  Chuyên môn quản lý: {currentTeamSpecialtyLabel}
+                </Badge>
+              </HStack>
+            )}
           </Box>
 
           <HStack spacing={2} align="center">
@@ -2466,41 +2594,109 @@ export default function DispatchOpsDashboard({
         {!isAssignmentPage && (
           isTeamLeaderMode && (
             <Box bg="white" borderRadius="xl" border="1px solid" borderColor="#d9e2f1" p={3}>
-              <HStack spacing={2} align="stretch" flexWrap="wrap">
-                <Button
-                  variant={teamLeaderBoardTab === "dispatch" ? "solid" : "outline"}
-                  colorScheme="blue"
-                  borderRadius="full"
+              <HStack spacing={2} align="center" flexWrap="wrap">
+                <Box
+                  as="button"
+                  type="button"
                   onClick={() => setTeamLeaderBoardTab("dispatch")}
+                  h="40px"
+                  minH="40px"
+                  px={5}
+                  borderRadius="999px"
+                  border="1px solid"
+                  borderColor={teamLeaderBoardTab === "dispatch" ? "#2563eb" : "#93c5fd"}
+                  bg={teamLeaderBoardTab === "dispatch" ? "#2563eb" : "#ffffff"}
+                  color={teamLeaderBoardTab === "dispatch" ? "#ffffff" : "#1d4ed8"}
+                  fontWeight="700"
+                  fontSize="sm"
+                  lineHeight="1"
+                  display="inline-flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  boxSizing="border-box"
+                  appearance="none"
+                  verticalAlign="middle"
+                  m={0}
+                  alignSelf="center"
+                  transition="all 0.16s ease"
+                  _hover={{
+                    bg: teamLeaderBoardTab === "dispatch" ? "#1d4ed8" : "#eff6ff",
+                    borderColor: "#2563eb",
+                  }}
                 >
-                  Danh sách điều phối
-                </Button>
-                <Button
-                  variant={teamLeaderBoardTab === "support_notifications" ? "solid" : "outline"}
-                  colorScheme="orange"
-                  borderRadius="full"
+                  <HStack spacing={2} align="center" h="100%">
+                    <Text as="span" fontSize="inherit" lineHeight="1">
+                      Danh sách điều phối
+                    </Text>
+                    <Badge
+                      visibility="hidden"
+                      borderRadius="full"
+                      px={2}
+                      py={0.5}
+                      lineHeight="1"
+                      display="inline-flex"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      0
+                    </Badge>
+                  </HStack>
+                </Box>
+                <Box
+                  as="button"
+                  type="button"
                   onClick={() => setTeamLeaderBoardTab("support_notifications")}
-                  rightIcon={
+                  h="40px"
+                  minH="40px"
+                  px={5}
+                  borderRadius="999px"
+                  border="1px solid"
+                  borderColor={teamLeaderBoardTab === "support_notifications" ? "#ea580c" : "#f97316"}
+                  bg={teamLeaderBoardTab === "support_notifications" ? "#ea580c" : "#ffffff"}
+                  color={teamLeaderBoardTab === "support_notifications" ? "#ffffff" : "#c2410c"}
+                  fontWeight="700"
+                  fontSize="sm"
+                  lineHeight="1"
+                  display="inline-flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  boxSizing="border-box"
+                  appearance="none"
+                  verticalAlign="middle"
+                  m={0}
+                  alignSelf="center"
+                  transition="all 0.16s ease"
+                  _hover={{
+                    bg: teamLeaderBoardTab === "support_notifications" ? "#c2410c" : "#fff7ed",
+                    borderColor: "#ea580c",
+                  }}
+                >
+                  <HStack spacing={2} align="center" h="100%">
+                    <Text as="span" fontSize="inherit" lineHeight="1">
+                      Thông báo hỗ trợ
+                    </Text>
                     <Badge
                       bg={teamLeaderBoardTab === "support_notifications" ? "white" : "orange.100"}
                       color={teamLeaderBoardTab === "support_notifications" ? "orange.600" : "orange.700"}
                       borderRadius="full"
                       px={2}
                       py={0.5}
+                      lineHeight="1"
+                      display="inline-flex"
+                      alignItems="center"
+                      justifyContent="center"
                       animation={teamLeaderSupportNotifications.length > 0 ? `${cancelAttentionPulse} 1.8s ease-in-out infinite` : "none"}
                     >
                       {teamLeaderSupportNotifications.length}
                     </Badge>
-                  }
-                >
-                  Thông báo hỗ trợ
-                </Button>
+                  </HStack>
+                </Box>
               </HStack>
             </Box>
           )
         )}
 
-        {!isAssignmentPage && (
+        {!isAssignmentPage && !isTeamLeaderMode && (
           <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" p={3}>
             <HStack spacing={3} align="center" flexWrap="wrap">
               <FilterDropdown
@@ -2554,6 +2750,7 @@ export default function DispatchOpsDashboard({
                           key={`support-notification-${item.serviceOrderId}`}
                           item={item}
                           onSelect={handleQueueCardSelect}
+                          dispatchTagLabel={resolveDispatchTagLabel(item.dispatchTag, isTeamLeaderMode ? currentTeamSpecialty : "")}
                         />
                       ))
                       : activeBoardListItems.map((item) => (
@@ -2564,6 +2761,7 @@ export default function DispatchOpsDashboard({
                           onSelect={handleQueueCardSelect}
                           onViewCancelRequest={isTeamLeaderMode ? null : handleViewCancelRequest}
                           onViewQuote={handleViewQuote}
+                          dispatchTagLabel={resolveDispatchTagLabel(item.dispatchTag, isTeamLeaderMode ? currentTeamSpecialty : "")}
                         />
                       ))}
                   </VStack>
@@ -2588,7 +2786,7 @@ export default function DispatchOpsDashboard({
                       <Badge colorScheme={(selectedItem.queueColor === "RED" ? "red" : selectedItem.queueColor === "YELLOW" ? "yellow" : selectedItem.queueColor === "GREEN" ? "green" : "gray")} borderRadius="full">
                         {selectedItem.queueColor}
                       </Badge>
-                      <Badge colorScheme="purple" borderRadius="full">Chuyên môn: {getDispatchTagLabel(selectedItem.dispatchTag)}</Badge>
+                      <Badge colorScheme="purple" borderRadius="full">Chuyên môn: {selectedDispatchTagLabel}</Badge>
                       <Badge colorScheme={getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).colorScheme} borderRadius="full">
                         {getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).label}
                       </Badge>
@@ -2861,7 +3059,7 @@ export default function DispatchOpsDashboard({
                                 {formatDateTime(selectedItem.supportRequestedAt || selectedItem.requestedAt)}
                               </Text>
                               <Text mt={1} fontSize="xs" color="gray.500">
-                                Chuyên môn: {getDispatchTagLabel(selectedItem.dispatchTag)}
+                                Chuyên môn: {selectedDispatchTagLabel}
                               </Text>
                             </Box>
                           </SimpleGrid>
@@ -3232,8 +3430,24 @@ export default function DispatchOpsDashboard({
                 <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">Lệnh sửa chữa</Text>
                 <Text mt={1} fontWeight="800" color="gray.800">{selectedItem?.serviceOrderCode || "--"}</Text>
                 <Text mt={1} fontSize="sm" color="gray.600">
-                  {selectedItem?.customerName || "Khách hàng chưa rõ"} - {selectedItem?.vehicleLicensePlate || "--"}
+                  {selectedItem?.customerName || "Khách hàng chưa rõ"}
                 </Text>
+                <HStack mt={1} spacing={1.5} flexWrap="wrap">
+                  <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+                    Biển số: {getVehicleDisplayParts(selectedItem).plate}
+                  </Badge>
+                  <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+                    Dòng xe: {getVehicleDisplayParts(selectedItem).descriptor}
+                  </Badge>
+                </HStack>
+                <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600">
+                  Năm SX: {getVehicleDisplayParts(selectedItem).manufactureYear} | Màu: {getVehicleDisplayParts(selectedItem).color}
+                </Text>
+                {getVehicleDisplayParts(selectedItem).vin ? (
+                  <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600">
+                    VIN: {getVehicleDisplayParts(selectedItem).vin}
+                  </Text>
+                ) : null}
               </Box>
 
               <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="orange.50">
@@ -3288,8 +3502,9 @@ export default function DispatchOpsDashboard({
   );
 }
 
-function SupportNotificationCard({ item, onSelect }) {
+function SupportNotificationCard({ item, onSelect, dispatchTagLabel = "" }) {
   const requestedCount = Math.max(1, Number(item?.requestedTechnicianCount || 1));
+  const vehicle = getVehicleDisplayParts(item);
 
   return (
     <Box
@@ -3311,8 +3526,24 @@ function SupportNotificationCard({ item, onSelect }) {
               {item.serviceOrderCode}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              {item.customerName || "Khách hàng chưa rõ"} - {item.vehicleLicensePlate || "--"}
+              {item.customerName || "Khách hàng chưa rõ"}
             </Text>
+            <HStack mt={1} spacing={1.5} flexWrap="wrap">
+              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+                Biển số: {vehicle.plate}
+              </Badge>
+              <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+                Dòng xe: {vehicle.descriptor}
+              </Badge>
+            </HStack>
+            <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+              Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
+            </Text>
+            {vehicle.vin ? (
+              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+                VIN: {vehicle.vin}
+              </Text>
+            ) : null}
           </Box>
           <Badge colorScheme="orange" borderRadius="full" px={2.5}>
             Chờ tổ phụ chọn thợ
@@ -3339,7 +3570,7 @@ function SupportNotificationCard({ item, onSelect }) {
               {formatDateTime(item.supportRequestedAt || item.requestedAt)}
             </Text>
             <Text mt={1} fontSize="xs" color="gray.500">
-              Chuyên môn: {getDispatchTagLabel(item.dispatchTag)}
+              Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
             </Text>
           </Box>
         </SimpleGrid>

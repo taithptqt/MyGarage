@@ -131,6 +131,7 @@ function formatMessageTime(value) {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 

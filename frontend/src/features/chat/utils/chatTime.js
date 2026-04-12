@@ -6,6 +6,8 @@ function toValidDate(value) {
   return date;
 }
 
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 export function formatChatTimestamp(value) {
   const date = toValidDate(value);
   if (!date) return "";
@@ -18,6 +20,7 @@ export function formatChatTimestamp(value) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: VIETNAM_TIME_ZONE,
   }).formatToParts(date);
 
   const read = (type) => parts.find((part) => part.type === type)?.value ?? "";
@@ -43,6 +46,7 @@ export function formatChatDividerTime(value) {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: VIETNAM_TIME_ZONE,
   }).formatToParts(date);
 
   const read = (type) => parts.find((part) => part.type === type)?.value ?? "";
@@ -66,7 +70,18 @@ export function shouldShowChatTimeDivider(previousValue, currentValue, gapMinute
     return true;
   }
 
-  const previousDay = `${previous.getFullYear()}-${previous.getMonth()}-${previous.getDate()}`;
-  const currentDay = `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`;
+  const toDateKeyInVietnam = (target) => {
+    const parts = new Intl.DateTimeFormat("vi-VN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: VIETNAM_TIME_ZONE,
+    }).formatToParts(target);
+    const read = (type) => parts.find((part) => part.type === type)?.value ?? "";
+    return `${read("year")}-${read("month")}-${read("day")}`;
+  };
+
+  const previousDay = toDateKeyInVietnam(previous);
+  const currentDay = toDateKeyInVietnam(current);
   return previousDay !== currentDay;
 }

@@ -1878,7 +1878,53 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .summary-vehicle-content {
   margin-top: 8px;
   display: grid;
-  gap: 6px;
+  gap: 10px;
+}
+
+.summary-vehicle-section {
+  border: 1px solid rgba(39, 96, 182, 0.2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.summary-vehicle-section-title {
+  margin: 0 0 6px;
+  color: #4c6696;
+  font-size: 12px;
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.summary-vehicle-empty {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(29, 42, 38, 0.7);
+}
+
+.summary-service-list,
+.summary-service-sublist {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.summary-service-list {
+  display: grid;
+  gap: 4px;
+}
+
+.summary-service-list > li > span {
+  font-weight: 700;
+  color: #1d2a26;
+}
+
+.summary-service-sublist {
+  margin-top: 2px;
+  display: grid;
+  gap: 2px;
 }
 
 .summary-vehicle-content p {

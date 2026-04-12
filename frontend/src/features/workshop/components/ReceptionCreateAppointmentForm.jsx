@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createSlotHold,
+  getAllBranchOperatingHours,
   getAllInsuranceCompanies,
   getAvailableSlots,
   getVehicleBrands,
@@ -26,6 +27,12 @@ import {
   getConflictingInspectionTriadServiceIds,
   sumServiceMinutes,
 } from "@shared/utils/serviceDurationUtils";
+import {
+  arePlanSelectionsEqual,
+  collectCompatibleCategoryIds,
+  filterBookableItemsForVehicleModels,
+  prunePlanByVehicleCompatibility,
+} from "@shared/utils/serviceEngineCompatibility";
 import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
 import {
   buildFlexibleTriggerServiceIdSet,
@@ -43,6 +50,7 @@ import {
   resolveInsuranceVehicleKeys,
   validateInsuranceSnapshotByMode,
 } from "@features/appointments/utils/bookingInsurance";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 
 const SERVICE_MODE = {
   SHARED: "SHARED",
@@ -295,6 +303,7 @@ function normalizeService(service) {
     categoryId,
     code: String(readField(service, ["code", "Code"], "") || ""),
     name: getInspectionTriadDisplayName(service, rawName),
+    engineType: String(readField(service, ["engineType", "EngineType"], "") || ""),
     minutes: Math.max(0, Number(readField(service, ["standardMinutes", "StandardMinutes"], 0) || 0)),
     price: Math.max(0, Number(readField(service, ["basePrice", "BasePrice"], 0) || 0))
   };
@@ -512,6 +521,7 @@ export default function ReceptionCreateAppointmentForm({
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [guestSelectedBrandId, setGuestSelectedBrandId] = useState("");
   const [insuranceByVehicleKey, setInsuranceByVehicleKey] = useState({});
@@ -641,14 +651,54 @@ export default function ReceptionCreateAppointmentForm({
       const name = String(readField(model, ["modelName", "ModelName", "name", "Name"], "") || "").trim();
       const brandId = Number(readField(model, ["brandId", "BrandId"], 0));
       const brandName = String(readField(model, ["brandName", "BrandName"], "") || "").trim();
+      const fuelType = String(readField(model, ["fuelType", "FuelType"], "") || "").trim();
       map.set(id, {
         name,
         brandId: Number.isFinite(brandId) && brandId > 0 ? brandId : 0,
-        brandName
+        brandName,
+        fuelType
       });
     });
     return map;
   }, [models]);
+
+  const vehicleModelIdByKey = useMemo(() => {
+    const map = new Map();
+
+    if (Number(formData.guestVehicleModelId || 0) > 0) {
+      map.set("guest", Number(formData.guestVehicleModelId));
+    }
+    if (Number(formData.vehicleModelId || 0) > 0) {
+      map.set("new-customer", Number(formData.vehicleModelId));
+    }
+
+    const customerId = Number(formData.customerId || 0);
+    if (customerId > 0) {
+      const linkedVehicleIds = new Set(
+        (customerVehicles || [])
+          .filter((item) => Number(item.customerId) === customerId)
+          .map((item) => Number(item.vehicleId))
+      );
+
+      (vehicles || [])
+        .filter((vehicle) => linkedVehicleIds.has(Number(vehicle.id)))
+        .forEach((vehicle) => {
+          const key = getVehicleKeyFromId(vehicle.id);
+          const modelId = Number(readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0));
+          if (Number.isFinite(modelId) && modelId > 0) {
+            map.set(key, modelId);
+          }
+        });
+    }
+
+    return map;
+  }, [
+    customerVehicles,
+    formData.customerId,
+    formData.guestVehicleModelId,
+    formData.vehicleModelId,
+    vehicles
+  ]);
 
   const describeSavedVehicle = useCallback(
     (vehicle) => formatSavedVehicleDescriptor(vehicle, brandNameById, modelInfoById),
@@ -660,20 +710,23 @@ export default function ReceptionCreateAppointmentForm({
 
     (async () => {
       try {
-        const [brandRes, modelRes, insuranceCompanyRes] = await Promise.all([
+        const [brandRes, modelRes, insuranceCompanyRes, operatingHoursRes] = await Promise.all([
           getVehicleBrands(),
           getVehicleModels(),
           getAllInsuranceCompanies().catch(() => []),
+          getAllBranchOperatingHours().catch(() => []),
         ]);
         if (ignore) return;
         setBrands(Array.isArray(brandRes) ? brandRes : []);
         setModels(Array.isArray(modelRes) ? modelRes : []);
         setInsuranceCompanies(Array.isArray(insuranceCompanyRes) ? insuranceCompanyRes : []);
+        setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
       } catch {
         if (!ignore) {
           setBrands([]);
           setModels([]);
           setInsuranceCompanies([]);
+          setBranchOperatingHours([]);
         }
       }
     })();
@@ -846,6 +899,13 @@ export default function ReceptionCreateAppointmentForm({
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
   const showServiceModeSwitch = hasMultipleSelectedVehicles && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
+  const selectedVehicleModelIds = useMemo(
+    () =>
+      selectedVehicleKeys
+        .map((vehicleKey) => Number(vehicleModelIdByKey.get(vehicleKey) || 0))
+        .filter((modelId) => Number.isFinite(modelId) && modelId > 0),
+    [selectedVehicleKeys, vehicleModelIdByKey]
+  );
 
   const vehicleLabelByKey = useMemo(() => {
     const map = new Map();
@@ -974,6 +1034,13 @@ export default function ReceptionCreateAppointmentForm({
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return "shared";
     return activePlanVehicleKey || selectedVehicleKeys[0] || "";
   }, [effectiveServiceMode, activePlanVehicleKey, selectedVehicleKeys]);
+  const activePlanVehicleModelIds = useMemo(() => {
+    if (effectiveServiceMode === SERVICE_MODE.SHARED) {
+      return selectedVehicleModelIds;
+    }
+    const modelId = Number(vehicleModelIdByKey.get(activePlanKey || "") || 0);
+    return Number.isFinite(modelId) && modelId > 0 ? [modelId] : [];
+  }, [activePlanKey, effectiveServiceMode, selectedVehicleModelIds, vehicleModelIdByKey]);
 
   const resolveEffectivePlan = useCallback(
     (rawVehiclePlan, sharedSource = sharedPlan) => {
@@ -1038,6 +1105,48 @@ export default function ReceptionCreateAppointmentForm({
     if (effectiveServiceMode === SERVICE_MODE.SHARED) return normalizePlan(sharedPlan);
     return resolveEffectivePlan(vehiclePlans[activePlanKey] || EMPTY_PLAN, sharedPlan);
   }, [effectiveServiceMode, sharedPlan, vehiclePlans, activePlanKey, resolveEffectivePlan]);
+
+  useEffect(() => {
+    setSharedPlan((prev) => {
+      const next = prunePlanByVehicleCompatibility(
+        normalizePlan(prev),
+        normalizedServices,
+        selectedVehicleModelIds,
+        modelInfoById,
+        serviceById
+      );
+      return arePlanSelectionsEqual(prev, next) ? prev : normalizePlan(next);
+    });
+
+    setVehiclePlans((prev) => {
+      let hasChanges = false;
+      const next = { ...prev };
+
+      selectedVehicleKeys.forEach((vehicleKey) => {
+        const modelId = Number(vehicleModelIdByKey.get(vehicleKey) || 0);
+        const nextPlan = prunePlanByVehicleCompatibility(
+          normalizePlan(prev[vehicleKey] || EMPTY_PLAN),
+          normalizedServices,
+          modelId > 0 ? [modelId] : [],
+          modelInfoById,
+          serviceById
+        );
+        if (!arePlanSelectionsEqual(prev[vehicleKey] || EMPTY_PLAN, nextPlan)) {
+          next[vehicleKey] = normalizePlan(nextPlan);
+          hasChanges = true;
+        }
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [
+    modelInfoById,
+    normalizedServices,
+    selectedVehicleKeys,
+    selectedVehicleModelIds,
+    serviceById,
+    vehicleModelIdByKey
+  ]);
 
   useEffect(() => {
     const selectedCategories = activePlan.categoryIds || [];
@@ -1313,17 +1422,44 @@ export default function ReceptionCreateAppointmentForm({
     }
   };
 
+  const compatibleCategoryIds = useMemo(
+    () =>
+      collectCompatibleCategoryIds(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
+  const visibleCategoryOptions = useMemo(
+    () => categoryOptions.filter((category) => compatibleCategoryIds.has(Number(category.id))),
+    [categoryOptions, compatibleCategoryIds]
+  );
+
+  const compatibleServicesForActivePlan = useMemo(
+    () =>
+      filterBookableItemsForVehicleModels(
+        normalizedServices,
+        activePlanVehicleModelIds,
+        modelInfoById,
+        serviceById
+      ),
+    [activePlanVehicleModelIds, modelInfoById, normalizedServices, serviceById]
+  );
+
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
     const selectedCategories = new Set(activePlan.categoryIds || []);
     if (selectedCategories.size === 0) return [];
 
-    return normalizedServices
+    return compatibleServicesForActivePlan
       .filter((service) => selectedCategories.has(service.categoryId))
       .filter((service) => (!activeCategoryId ? true : String(service.categoryId) === String(activeCategoryId)))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-  }, [activePlan.categoryIds, activeCategoryId, normalizedServices, serviceSearch]);
+  }, [activePlan.categoryIds, activeCategoryId, compatibleServicesForActivePlan, serviceSearch]);
 
   const plansByVehicleKey = useMemo(() => {
     const map = new Map();
@@ -1819,9 +1955,10 @@ export default function ReceptionCreateAppointmentForm({
       const start = new Date(selection.startTime);
       const end = new Date(selection.endTime);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-      return `${start.toLocaleString("vi-VN")} - ${end.toLocaleTimeString("vi-VN", {
+      return `${start.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} - ${end.toLocaleTimeString("vi-VN", {
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
       })}`;
     }
 
@@ -1943,6 +2080,11 @@ export default function ReceptionCreateAppointmentForm({
       setSlots([]);
       return;
     }
+    if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, `${effectiveSelectedDate}T08:00:00`)) {
+      setSlots([]);
+      setErrorText(getBranchClosedMessage(`${effectiveSelectedDate}T08:00:00`));
+      return;
+    }
 
     const serviceGroups = selectedVehicleKeys.map((vehicleKey) => serviceIdsByVehicleKey.get(vehicleKey) || []);
     const packageGroups = selectedVehicleKeys.map((vehicleKey) => packageIdsByVehicleKey.get(vehicleKey) || []);
@@ -2008,6 +2150,7 @@ export default function ReceptionCreateAppointmentForm({
     }
   }, [
     activeSlotVehicleKey,
+    branchOperatingHours,
     branchId,
     effectiveSelectedDate,
     effectiveSlotFlow,
@@ -2075,6 +2218,16 @@ export default function ReceptionCreateAppointmentForm({
     }
 
     const nextDate = String(value || "").slice(0, 10);
+    const effectiveBranchId = Number(branchId || 0);
+    if (
+      nextDate &&
+      Number.isFinite(effectiveBranchId) &&
+      effectiveBranchId > 0 &&
+      isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, `${nextDate}T08:00:00`)
+    ) {
+      setErrorText(getBranchClosedMessage(`${nextDate}T08:00:00`));
+      return;
+    }
 
     if (slotMode === SLOT_MODE.INDIVIDUAL && activeSlotVehicleKey) {
       await releaseHoldTokenIfAny(activeSlotVehicleKey);
@@ -3030,7 +3183,7 @@ export default function ReceptionCreateAppointmentForm({
               </button>
               {!isServicePickerCollapsed ? (
                 <div className="reception-category-grid">
-                  {categoryOptions.map((category) => {
+                  {visibleCategoryOptions.map((category) => {
                     const selected = activePlan.categoryIds.includes(Number(category.id));
                     return (
                       <button
@@ -3384,7 +3537,6 @@ export default function ReceptionCreateAppointmentForm({
                 {planSummaries.map((plan) => {
                   const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
                   const insuranceSummary = insuranceDetails?.summary || null;
-                  const selectedInsuranceItemNames = insuranceDetails?.selectedInsuranceItemNames || [];
 
                   return (
                   <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
@@ -3428,10 +3580,6 @@ export default function ReceptionCreateAppointmentForm({
                           <strong>{insuranceSummary.companyName}</strong>
                         </div>
                         <div className="reception-plan-summary-time-row">
-                          <span>Gói bảo hiểm:</span>
-                          <strong>{selectedInsuranceItemNames.length > 0 ? selectedInsuranceItemNames.join(", ") : "Chưa chọn"}</strong>
-                        </div>
-                        <div className="reception-plan-summary-time-row">
                           <span>Hồ sơ bảo hiểm:</span>
                           <strong>{insuranceSummary.assetSummaryLabel}</strong>
                         </div>
@@ -3451,6 +3599,10 @@ export default function ReceptionCreateAppointmentForm({
                         <span>Giờ kết thúc:</span>
                         <strong>{plan.endTimeLabel}</strong>
                       </div>
+                      <div className="reception-plan-summary-time-row">
+                        <span>Tổng thời lượng:</span>
+                        <strong>{`${plan.totalMinutes} phút`}</strong>
+                      </div>
                     </div>
 
                     {plan.bookingFlow === BOOKING_FLOW.FLEXIBLE && plan.flowWarningLabel ? (
@@ -3460,7 +3612,7 @@ export default function ReceptionCreateAppointmentForm({
                     ) : null}
 
                     <div className="reception-plan-summary-footer">
-                      <span>{`${plan.totalMinutes} phút`}</span>
+                      <span>Tổng giá dịch vụ</span>
                       <strong>{formatCurrency(plan.totalPrice)}</strong>
                     </div>
                   </article>

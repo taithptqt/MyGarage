@@ -5,7 +5,7 @@ namespace MyGarage.DTOs.Responses
     {
         public long Id { get; set; }
         public long ServiceOrderId { get; set; }
-        public long TechnicianId { get; set; }
+        public long? TechnicianId { get; set; }
         public long? AssistantTechnicianId { get; set; }
         public long? AssignedBayId { get; set; }
         public string? Symptom { get; set; }
@@ -14,6 +14,10 @@ namespace MyGarage.DTOs.Responses
         public string? Status { get; set; }
         public string? DispatchTag { get; set; }
         public long? AssignedTeamId { get; set; }
+        public string? AssignedTeamName { get; set; }
+        public string? AssignedTeamSpecialtyTag { get; set; }
+        public long? AssignedTeamLeaderId { get; set; }
+        public string? AssignedTeamLeaderName { get; set; }
         public DateTime? AssignedAt { get; set; }
         public DateTime? StartedAt { get; set; }
         public DateTime? DiagnosedAt { get; set; }

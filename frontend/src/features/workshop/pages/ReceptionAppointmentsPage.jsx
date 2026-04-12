@@ -46,6 +46,19 @@ function normalizeStatus(status) {
   return String(status || "").trim().toUpperCase();
 }
 
+function decodeUnicodeEscapes(text) {
+  const raw = String(text ?? "");
+  if (!raw || !/\\u[0-9a-fA-F]{4}/.test(raw)) return raw;
+  return raw.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 16))
+  );
+}
+
+function toDisplayErrorText(value, fallback = "") {
+  const decoded = decodeUnicodeEscapes(value);
+  return String(decoded || fallback).trim();
+}
+
 function toDateText(dateObj) {
   if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return "";
   const y = dateObj.getFullYear();
@@ -149,7 +162,9 @@ function canEditAppointment(status) {
 function formatApptDate(value) {
   if (!value) return "--/--/----";
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "--/--/----" : d.toLocaleDateString("vi-VN");
+  return Number.isNaN(d.getTime())
+    ? "--/--/----"
+    : d.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function formatApptTime(value) {
@@ -157,7 +172,7 @@ function formatApptTime(value) {
   const d = new Date(value);
   return Number.isNaN(d.getTime())
     ? "--:--"
-    : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function getAppointmentFilterTimestamp(appt) {
@@ -234,7 +249,7 @@ export default function ReceptionAppointmentsPage() {
         : await getAllAppointments();
       setAppointments(normalizeAppointments(data));
     } catch (err) {
-      setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
+      setError(toDisplayErrorText(err?.message, "Không thể tải dữ liệu lịch hẹn."));
     } finally {
       setApptLoading(false);
     }
@@ -251,7 +266,7 @@ export default function ReceptionAppointmentsPage() {
         : await getAllAppointments();
       setAppointments(normalizeAppointments(data));
     } catch (err) {
-      setError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u l\u1ecbch h\u1eb9n.");
+      setError(toDisplayErrorText(err?.message, "Không thể tải dữ liệu lịch hẹn."));
     }
   }, [canViewAllBranches, effectiveBranchId, normalizeAppointments]);
 
@@ -428,7 +443,8 @@ export default function ReceptionAppointmentsPage() {
 
       await fetchAppointmentsSilent();
     } catch (err) {
-      setError(`Thao t\u00e1c l\u1ecbch h\u1eb9n th\u1ea5t b\u1ea1i: ${err?.message || "Kh\u00f4ng r\u00f5 l\u1ed7i"}`);
+      const errorMessage = toDisplayErrorText(err?.message, "Không rõ lỗi");
+      setError(`Thao tác lịch hẹn thất bại: ${errorMessage}`);
     } finally {
       setActingAppt(null);
     }
@@ -498,7 +514,7 @@ export default function ReceptionAppointmentsPage() {
         return { ...prev, ...normalizedDetail };
       });
     } catch (err) {
-      setApptDetailError(err?.message || "Kh\u00f4ng th\u1ec3 t\u1ea3i chi ti\u1ebft l\u1ecbch h\u1eb9n.");
+      setApptDetailError(toDisplayErrorText(err?.message, "Không thể tải chi tiết lịch hẹn."));
     } finally {
       setApptDetailLoading(false);
     }
@@ -552,7 +568,7 @@ export default function ReceptionAppointmentsPage() {
     <div className="reception-dashboard">
       {error && (
         <div style={{ padding: "12px", background: "#fee", color: "#e6522c", borderRadius: "8px", marginBottom: "16px", fontWeight: 600 }}>
-          L\u1ed7i: {error}
+          Lỗi: {toDisplayErrorText(error)}
         </div>
       )}
 

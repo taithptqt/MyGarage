@@ -126,7 +126,9 @@ function toNumber(value, fallback = 0) {
 function formatDateTime(value) {
   if (!value) return "-";
   const dt = new Date(value);
-  return Number.isNaN(dt.getTime()) ? "-" : dt.toLocaleString();
+  return Number.isNaN(dt.getTime())
+    ? "-"
+    : dt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function formatHours(value) {

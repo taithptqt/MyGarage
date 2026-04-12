@@ -5,7 +5,7 @@ import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi"
 import { getAllCustomers, getAllCustomerVehicles, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
 import { getAllServiceCategories, getAllStandardServices } from "@features/admin/api/serviceApi";
-import { getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { getAllBranchOperatingHours, getAllPackages, getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
 import { getNearestSlotSuggestion } from "@features/appointments/api/appointmentSlotsApi";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -34,6 +34,7 @@ import {
   WORKING_DAY_MINUTES,
 } from "@features/appointments/utils/bookingFlowRules";
 import {
+  buildInsuranceSummary,
   createEmptyInsuranceSnapshot,
   INSURANCE_ASSET_TYPE,
   normalizeInsuranceSnapshot,
@@ -63,6 +64,7 @@ import {
   filterBookableItemsForVehicleModels,
   prunePlanByVehicleCompatibility,
 } from "@shared/utils/serviceEngineCompatibility";
+import { getBranchClosedMessage, isBranchClosedBySchedule } from "@shared/utils/branchOperatingSchedule";
 import "./Workshop.css";
 
 const SERVICE_MODE = {
@@ -244,7 +246,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nh�m ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
     }
   });
 
@@ -321,6 +323,7 @@ function formatDateTimeValue(value) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -333,11 +336,13 @@ function formatTimeWithDateInBrackets(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
   const date = parsed.toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 
   return `${time} (${date})`;
@@ -375,6 +380,7 @@ function formatSlotTime(value) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -444,6 +450,7 @@ export default function CreateServiceOrderPage() {
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
   const [brands, setBrands] = useState([]);
   const [models, setModels] = useState([]);
+  const [branchOperatingHours, setBranchOperatingHours] = useState([]);
 
   const [search, setSearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
@@ -559,7 +566,7 @@ export default function CreateServiceOrderPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes] = await Promise.all([
+      const [cRes, vRes, cvRes, sRes, rRes, catRes, srvRes, packageRes, insuranceRes, brandsRes, modelsRes, operatingHoursRes] = await Promise.all([
         getAllCustomers(),
         getAllVehicles(),
         getAllCustomerVehicles(),
@@ -571,6 +578,7 @@ export default function CreateServiceOrderPage() {
         insuranceCompanyApi.getAll().catch(() => []),
         getVehicleBrands(),
         getVehicleModels(),
+        getAllBranchOperatingHours().catch(() => []),
       ]);
 
       setCustomers(Array.isArray(cRes) ? cRes : []);
@@ -581,6 +589,7 @@ export default function CreateServiceOrderPage() {
       setInsuranceCompanies(Array.isArray(insuranceRes) ? insuranceRes : []);
       setBrands(Array.isArray(brandsRes) ? brandsRes : []);
       setModels(Array.isArray(modelsRes) ? modelsRes : []);
+      setBranchOperatingHours(Array.isArray(operatingHoursRes) ? operatingHoursRes : []);
 
       const filteredStaff = (Array.isArray(sRes) ? sRes : []).filter((item) => {
         const role = (Array.isArray(rRes) ? rRes : []).find((r) => Number(r.id) === Number(item.roleId));
@@ -828,11 +837,6 @@ export default function CreateServiceOrderPage() {
     });
   }, [effectiveServiceMode, selectedVehicleKeys]);
 
-  const selectedOrderCategoryOption = useMemo(
-    () => orderCategories.find((category) => String(category.code || category.name) === String(formData.orderCategory)) || null,
-    [orderCategories, formData.orderCategory]
-  );
-
   const normalizedServices = useMemo(
     () =>
       services
@@ -861,6 +865,16 @@ export default function CreateServiceOrderPage() {
     () => buildInsuranceFlexiblePackageIdSet(normalizedServices),
     [normalizedServices]
   );
+  const insuranceCompanyNameById = useMemo(() => {
+    const map = new Map();
+    (insuranceCompanies || []).forEach((company) => {
+      const id = Number(readField(company, ["id", "Id"], 0));
+      const name = String(readField(company, ["name", "Name"], "") || "").trim();
+      if (!Number.isFinite(id) || id <= 0 || !name) return;
+      map.set(id, name);
+    });
+    return map;
+  }, [insuranceCompanies]);
 
   const serviceCategoryMap = useMemo(() => {
     const map = new Map();
@@ -1305,6 +1319,26 @@ export default function CreateServiceOrderPage() {
       ),
     [effectiveActiveInsuranceVehicleKey, insuranceByVehicleKey]
   );
+  const insuranceSummaryByVehicleKey = useMemo(() => {
+    const map = new Map();
+    if (!isInsuranceOrderEnabled) return map;
+
+    selectedVehicleKeys.forEach((vehicleKey) => {
+      const snapshot = normalizeInsuranceSnapshot(
+        insuranceByVehicleKey[vehicleKey] || createEmptyInsuranceSnapshot()
+      );
+      map.set(vehicleKey, {
+        summary: buildInsuranceSummary(snapshot, insuranceCompanyNameById, { mode: "workshop" }),
+      });
+    });
+
+    return map;
+  }, [
+    insuranceByVehicleKey,
+    insuranceCompanyNameById,
+    isInsuranceOrderEnabled,
+    selectedVehicleKeys,
+  ]);
 
   useEffect(() => {
     if (insuranceVehicleKeys.length === 0) {
@@ -1514,6 +1548,8 @@ export default function CreateServiceOrderPage() {
         errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
       } else if (checkIn < checkInWindowStart || checkIn > checkInWindowEnd) {
         errors.checkInTime = "Thời điểm xe vào xưởng chỉ được trong khoảng ±30 phút so với hiện tại.";
+      } else if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, checkIn)) {
+        errors.checkInTime = getBranchClosedMessage(checkIn);
       }
 
       if (data.estimatedHandover && checkIn) {
@@ -1606,6 +1642,7 @@ export default function CreateServiceOrderPage() {
       return errors;
     },
     [
+      branchOperatingHours,
       categoryNameById,
       effectiveActiveInsuranceVehicleKey,
       effectiveBranchId,
@@ -1641,13 +1678,24 @@ export default function CreateServiceOrderPage() {
 
   const handleFieldValueChange = useCallback((name, value) => {
     if (name === "checkInTime" && checkInSelectionGuardMessage) {
-      setError(checkInSelectionGuardMessage);
-      scrollToPageTop();
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+      return;
+    }
+    if (name === "checkInTime" && value && isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, value)) {
+      setFieldErrors((prev) => ({ ...prev, checkInTime: getBranchClosedMessage(value) }));
       return;
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === "checkInTime") {
+      setFieldErrors((prev) => {
+        if (!prev?.checkInTime) return prev;
+        const next = { ...prev };
+        delete next.checkInTime;
+        return next;
+      });
+    }
     setError("");
-  }, [checkInSelectionGuardMessage, scrollToPageTop]);
+  }, [branchOperatingHours, checkInSelectionGuardMessage, effectiveBranchId]);
 
   const handleInsuranceToggle = useCallback((enabled) => {
     setFormData((prev) => ({
@@ -1903,8 +1951,7 @@ export default function CreateServiceOrderPage() {
 
   const handleApplySuggestedSlot = useCallback((slot) => {
     if (checkInSelectionGuardMessage) {
-      setError(checkInSelectionGuardMessage);
-      scrollToPageTop();
+      setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
       return;
     }
 
@@ -1915,7 +1962,7 @@ export default function CreateServiceOrderPage() {
     setSelectedSuggestedSlotStart(normalizedStartTime);
     // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chờ để tự tính theo khung giờ.
     setFormData((prev) => ({ ...prev, estimatedHandover: "" }));
-  }, [checkInSelectionGuardMessage, scrollToPageTop]);
+  }, [checkInSelectionGuardMessage]);
 
   useEffect(() => {
     if (!selectedSuggestedSlotStart) return;
@@ -2369,7 +2416,7 @@ export default function CreateServiceOrderPage() {
       const errors = validateForm(formData);
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) {
-        setError("Vui lòng xử lý các lỗi trong biểu mẫu trước khi lưu.");
+        setError("");
         scrollToPageTop();
         return;
       }
@@ -3152,14 +3199,14 @@ export default function CreateServiceOrderPage() {
                     availableTimeMap={checkInAvailableTimeMap}
                     onOpenRequest={() => {
                       if (checkInSelectionGuardMessage) {
-                        setError(checkInSelectionGuardMessage);
-                        scrollToPageTop();
+                        setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
                         return false;
                       }
                       return true;
                     }}
                     autoSelectNowOnOpen
                   />
+                  {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
                   {hasCheckInInput && suggestedAlternativeSlots.length > 0 ? (
                     <div className="reception-slot-picker">
                       <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
@@ -3318,7 +3365,11 @@ export default function CreateServiceOrderPage() {
 
               {planSummaries.length > 0 ? (
                 <div className="reception-plan-summary-grid">
-                  {planSummaries.map((plan) => (
+                  {planSummaries.map((plan) => {
+                    const insuranceDetails = insuranceSummaryByVehicleKey.get(plan.vehicleKey) || null;
+                    const insuranceSummary = insuranceDetails?.summary || null;
+
+                    return (
                     <article key={`plan-summary-${plan.vehicleKey}`} className="reception-plan-summary-card">
                       <div className="reception-plan-summary-head">
                         <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
@@ -3328,24 +3379,54 @@ export default function CreateServiceOrderPage() {
                       </div>
 
                       <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">LOẠI DỊCH VỤ</p>
-                        <p className="reception-plan-summary-text">
-                          {plan.categoryNames.length > 0
-                            ? plan.categoryNames.join(", ")
-                            : selectedOrderCategoryOption?.name || "Chưa chọn"}
-                        </p>
+                        <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
+                        {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0 ? (
+                          <ul className="reception-plan-summary-list">
+                            {plan.serviceGroupsByCategory.map((group) => (
+                              <li key={`${plan.vehicleKey}-${group.categoryName}`} className="reception-plan-summary-list-item">
+                                <span className="reception-plan-summary-list-group">{group.categoryName}</span>
+                                <ul className="reception-plan-summary-sublist">
+                                  {(group.serviceNames || []).map((serviceName) => (
+                                    <li
+                                      key={`${plan.vehicleKey}-${group.categoryName}-${serviceName}`}
+                                      className="reception-plan-summary-sublist-item"
+                                    >
+                                      {serviceName}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
+                        )}
                       </div>
 
-                      <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                        <p className="reception-plan-summary-text reception-plan-summary-text-bulleted">
-                          {Array.isArray(plan.serviceGroupsByCategory) && plan.serviceGroupsByCategory.length > 0
-                            ? plan.serviceGroupsByCategory
-                              .map((group) => `- ${group.categoryName}\n  ${(group.serviceNames || []).map((name) => `+ ${name}`).join("\n  ")}`)
-                              .join("\n")
-                            : "Chưa có dịch vụ"}
-                        </p>
-                      </div>
+                      {insuranceSummary ? (
+                        <div className="reception-plan-summary-block">
+                          <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Công ty bảo hiểm:</span>
+                            <strong>{insuranceSummary.companyName}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Mức miễn thường:</span>
+                            <strong>{insuranceSummary.deductibleLabel}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Hình thức xử lý:</span>
+                            <strong>{insuranceSummary.claimModeLabel}</strong>
+                          </div>
+                          <div className="reception-plan-summary-time-row">
+                            <span>Hồ sơ bảo hiểm:</span>
+                            <strong>{insuranceSummary.assetSummaryLabel}</strong>
+                          </div>
+                          <p className="reception-plan-summary-text">
+                            {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
+                          </p>
+                        </div>
+                      ) : null}
 
                       <div className="reception-plan-summary-block">
                         <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
@@ -3374,7 +3455,7 @@ export default function CreateServiceOrderPage() {
                         <strong>{formatCurrency(plan.totalPrice)}</strong>
                       </div>
                     </article>
-                  ))}
+                  )})}
                 </div>
               ) : null}
             </section>
@@ -3411,5 +3492,6 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
+
 
 
