@@ -538,15 +538,15 @@ namespace MyGarage.Controllers
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/final-approval")]
         public async Task<IActionResult> ApproveFinal(long serviceOrderId, [FromBody] DiagnosisFinalApprovalRequestDto request)
         {
-            if (request == null || request.ManagerId <= 0)
+            if (request == null || request.TeamLeaderId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin quan doc duyet bao gia." });
+                return BadRequest(new { message = "Thieu thong tin to truong duyet bao gia." });
             }
 
-            var manager = await _diagnosisService.GetStaffByIdAsync(request.ManagerId);
-            if (manager == null)
+            var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
+            if (teamLeader == null)
             {
-                return BadRequest(new { message = "Quan doc khong ton tai." });
+                return BadRequest(new { message = "To truong khong ton tai." });
             }
 
             var diagnoses = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
@@ -557,10 +557,10 @@ namespace MyGarage.Controllers
 
             if (diagnoses.Any(x => !x.ApprovedByForemanId.HasValue))
             {
-                return BadRequest(new { message = "Can to truong duyet bao cao ky thuat truoc khi quan doc duyet bao gia." });
+                return BadRequest(new { message = "Can to truong duyet bao cao ky thuat truoc khi duyet bao gia." });
             }
 
-            await _diagnosisService.ApproveFinalAsync(diagnoses, request.ManagerId, request.Note);
+            await _diagnosisService.ApproveFinalAsync(diagnoses, request.TeamLeaderId, request.Note);
             return Ok(new { message = "Da duyet bao gia cuoi cung va tra ket qua ve le tan." });
         }
 
@@ -893,7 +893,8 @@ namespace MyGarage.Controllers
                 supportingTeamIds: normalizedSupportingTeamIds,
                 supportingAssignments: normalizedSupportingAssignments,
                 bayId: request.BayId,
-                managerOverride: true);
+                managerOverride: true,
+                assignedByTeamLeaderId: null);
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
@@ -1540,7 +1541,8 @@ namespace MyGarage.Controllers
                 normalizedSupportingTeamIds,
                 normalizedSupportingAssignments,
                 request.BayId,
-                request.IsManagerOverride);
+                request.IsManagerOverride,
+                request.IsManagerOverride ? null : request.TeamLeaderId);
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)

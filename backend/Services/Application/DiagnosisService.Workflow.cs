@@ -498,7 +498,9 @@ namespace MyGarage.Services
                     CancellationDecisionAt = null,
                     CancellationDecisionBy = null,
                     CancellationDecisionNote = null,
-                    FinalApprovedByManagerId = null,
+                    AssignedByTeamLeaderId = null,
+                    ApprovedByForemanAt = null,
+                    ApprovedByTeamLeaderAt = null,
                     FinalApprovedAt = null,
                     FinalApprovalNote = null,
                     DispatchCollaborationMeta = null,
@@ -1239,7 +1241,8 @@ namespace MyGarage.Services
             IReadOnlyList<long>? supportingTeamIds,
             IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
-            bool managerOverride)
+            bool managerOverride,
+            long? assignedByTeamLeaderId = null)
         {
             var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -1345,11 +1348,13 @@ namespace MyGarage.Services
                 diagnosis.Status = DiagnosisStatusAssigned;
                 diagnosis.AssignedTeamId = assignedTeamId;
                 diagnosis.AssignedBayId = bayId;
+                diagnosis.AssignedByTeamLeaderId = assignedByTeamLeaderId;
                 diagnosis.AssignedAt ??= now;
                 diagnosis.StartedAt = null;
 
                 diagnosis.ApprovedByForemanId = null;
-                diagnosis.FinalApprovedByManagerId = null;
+                diagnosis.ApprovedByForemanAt = null;
+                diagnosis.ApprovedByTeamLeaderAt = null;
                 diagnosis.FinalApprovedAt = null;
                 diagnosis.FinalApprovalNote = null;
                 diagnosis.DispatchCollaborationMeta = collaborationMeta;
@@ -1958,7 +1963,8 @@ namespace MyGarage.Services
                     diagnosis.SupportRequestedBy = null;
                     diagnosis.SupportRequestNote = null;
                     diagnosis.ApprovedByForemanId = null;
-                    diagnosis.FinalApprovedByManagerId = null;
+                    diagnosis.ApprovedByForemanAt = null;
+                    diagnosis.ApprovedByTeamLeaderAt = null;
                     diagnosis.FinalApprovedAt = null;
                     diagnosis.FinalApprovalNote = null;
                     diagnosis.DispatchCollaborationMeta = null;
@@ -1995,6 +2001,7 @@ namespace MyGarage.Services
             foreach (var diagnosis in list)
             {
                 diagnosis.ApprovedByForemanId = teamLeaderId;
+                diagnosis.ApprovedByForemanAt = now;
                 diagnosis.UpdatedBy = teamLeaderId;
                 diagnosis.UpdatedAt = now;
 
@@ -2008,7 +2015,7 @@ namespace MyGarage.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long managerId, string? note)
+        public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note)
         {
             var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -2019,10 +2026,10 @@ namespace MyGarage.Services
 
             foreach (var diagnosis in list)
             {
-                diagnosis.FinalApprovedByManagerId = managerId;
+                diagnosis.ApprovedByTeamLeaderAt = now;
                 diagnosis.FinalApprovedAt = now;
                 diagnosis.FinalApprovalNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-                diagnosis.UpdatedBy = managerId;
+                diagnosis.UpdatedBy = teamLeaderId;
                 diagnosis.UpdatedAt = now;
             }
 

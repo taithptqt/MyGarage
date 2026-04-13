@@ -26,6 +26,7 @@ namespace MyGarage.DTOs.Responses
         public string? AssistantTechnicianName { get; set; }
         public long? AssignedBayId { get; set; }
         public string? AssignedBayCode { get; set; }
+        public long? AssignedByTeamLeaderId { get; set; }
         public DateTime? RequestedAt { get; set; }
         public DateTime? AssignedAt { get; set; }
         public DateTime? StartedAt { get; set; }
@@ -38,8 +39,9 @@ namespace MyGarage.DTOs.Responses
         public bool IsCancelPendingApproval { get; set; }
         public string? CancelReason { get; set; }
         public long? TechnicalApprovedByTeamLeaderId { get; set; }
+        public DateTime? ApprovedByForemanAt { get; set; }
         public DateTime? TechnicalApprovedAt { get; set; }
-        public long? FinalApprovedByManagerId { get; set; }
+        public DateTime? ApprovedByTeamLeaderAt { get; set; }
         public DateTime? FinalApprovedAt { get; set; }
     }
 }

@@ -15,6 +15,8 @@ public partial class Diagnosis
 
     public long? AssignedBayId { get; set; }
 
+    public long? AssignedByTeamLeaderId { get; set; }
+
     public string? Symptom { get; set; }
 
     public string? RootCause { get; set; }
@@ -55,7 +57,9 @@ public partial class Diagnosis
 
     public long? ApprovedByForemanId { get; set; }
 
-    public long? FinalApprovedByManagerId { get; set; }
+    public DateTime? ApprovedByForemanAt { get; set; }
+
+    public DateTime? ApprovedByTeamLeaderAt { get; set; }
 
     public DateTime? FinalApprovedAt { get; set; }
 

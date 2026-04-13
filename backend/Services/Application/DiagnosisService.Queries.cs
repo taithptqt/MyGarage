@@ -181,7 +181,7 @@ namespace MyGarage.Services
                     x.TechnicianId,
                     x.AssistantTechnicianId,
                     x.ApprovedByForemanId,
-                    x.FinalApprovedByManagerId,
+                    x.AssignedByTeamLeaderId,
                 })
                 .Where(x => x.HasValue && x.Value > 0)
                 .Select(x => x!.Value)
@@ -435,6 +435,12 @@ namespace MyGarage.Services
                     var technicalApprovedBy = technicalApprovedEntries
                         .Select(x => x.ApprovedByForemanId)
                         .FirstOrDefault(x => x.HasValue);
+                    var approvedByForemanAt = list
+                        .Select(x => x.ApprovedByForemanAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderByDescending(x => x)
+                        .FirstOrDefault();
 
                     var finalApprovedAt = list
                         .Select(x => x.FinalApprovedAt)
@@ -442,8 +448,14 @@ namespace MyGarage.Services
                         .Select(x => x!.Value)
                         .OrderByDescending(x => x)
                         .FirstOrDefault();
-                    var finalApprovedBy = list
-                        .Select(x => x.FinalApprovedByManagerId)
+                    var approvedByTeamLeaderAt = list
+                        .Select(x => x.ApprovedByTeamLeaderAt)
+                        .Where(x => x.HasValue)
+                        .Select(x => x!.Value)
+                        .OrderByDescending(x => x)
+                        .FirstOrDefault();
+                    var assignedByTeamLeaderId = list
+                        .Select(x => x.AssignedByTeamLeaderId)
                         .FirstOrDefault(x => x.HasValue);
                     var cancelReason = list
                         .Select(x => x.CancellationReason)
@@ -472,6 +484,7 @@ namespace MyGarage.Services
                         AssistantTechnicianName = assistantTechnicianId.HasValue && technicianNameMap.TryGetValue(assistantTechnicianId.Value, out var assistantName) ? assistantName : null,
                         AssignedBayId = assignedBayId,
                         AssignedBayCode = assignedBayId.HasValue && bayCodeMap.TryGetValue(assignedBayId.Value, out var bayCode) ? bayCode : null,
+                        AssignedByTeamLeaderId = assignedByTeamLeaderId,
                         RequestedAt = pendingSince == default ? latest.CreatedAt : pendingSince,
                         AssignedAt = assignedSince == default ? null : assignedSince,
                         StartedAt = startedAt == default ? null : startedAt,
@@ -484,8 +497,9 @@ namespace MyGarage.Services
                         IsCancelPendingApproval = hasCancelPending,
                         CancelReason = cancelReason,
                         TechnicalApprovedByTeamLeaderId = technicalApprovedBy,
+                        ApprovedByForemanAt = approvedByForemanAt == default ? null : approvedByForemanAt,
                         TechnicalApprovedAt = technicalApprovedAt == default ? null : technicalApprovedAt,
-                        FinalApprovedByManagerId = finalApprovedBy,
+                        ApprovedByTeamLeaderAt = approvedByTeamLeaderAt == default ? null : approvedByTeamLeaderAt,
                         FinalApprovedAt = finalApprovedAt == default ? null : finalApprovedAt,
                     };
                 })

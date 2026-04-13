@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Responses
         public long? TechnicianId { get; set; }
         public long? AssistantTechnicianId { get; set; }
         public long? AssignedBayId { get; set; }
+        public long? AssignedByTeamLeaderId { get; set; }
         public string? Symptom { get; set; }
         public string? RootCause { get; set; }
         public string? Severity { get; set; }
@@ -32,7 +33,8 @@ namespace MyGarage.DTOs.Responses
         public long? CancellationDecisionBy { get; set; }
         public string? CancellationDecisionNote { get; set; }
         public long? ApprovedByForemanId { get; set; }
-        public long? FinalApprovedByManagerId { get; set; }
+        public DateTime? ApprovedByForemanAt { get; set; }
+        public DateTime? ApprovedByTeamLeaderAt { get; set; }
         public DateTime? FinalApprovedAt { get; set; }
         public string? FinalApprovalNote { get; set; }
         public DateTime? CreatedAt { get; set; }

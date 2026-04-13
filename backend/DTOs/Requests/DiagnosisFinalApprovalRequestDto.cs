@@ -2,7 +2,7 @@ namespace MyGarage.DTOs.Requests
 {
     public class DiagnosisFinalApprovalRequestDto
     {
-        public long ManagerId { get; set; }
+        public long TeamLeaderId { get; set; }
         public string? Note { get; set; }
     }
 }
