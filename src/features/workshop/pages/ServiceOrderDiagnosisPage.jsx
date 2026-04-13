@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
+﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Badge,
@@ -7,7 +7,6 @@ import {
   Heading,
   HStack,
   Input,
-  Select,
   Spinner,
   Stack,
   Text,
@@ -19,11 +18,18 @@ import {
   Icon,
   FormControl,
   FormLabel,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from "@chakra-ui/react";
 import {
   Wrench,
   AlertTriangle,
   MessageSquare,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
@@ -31,38 +37,42 @@ import { getAllServiceCategories, getAllStandardServices } from "@features/admin
 import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
-
-const DIAGNOSIS_DROPDOWN_STYLES = {
-  bg: "#f8fafc",
-  borderColor: "#d7e3f5",
-  borderRadius: "12px",
-  color: "#1b2559",
-  _hover: { borderColor: "#c4d4ef" },
-  _focus: { borderColor: "#5f86eb", boxShadow: "0 0 0 1px #5f86eb" },
-  _disabled: {
-    color: "#1b2559",
-    WebkitTextFillColor: "#1b2559",
-    opacity: 1,
-    bg: "#f2f5fb",
-    cursor: "not-allowed",
-  },
-};
+import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import FilterDropdown from "@shared/components/FilterDropdown";
 
 function DiagnosisDropdown({
+  id,
   label,
   value,
   onChange,
-  placeholder,
+  placeholder = "",
   isDisabled = false,
-  size = "md",
   minW,
   maxW,
   flex,
   labelColor = "#2b3674",
   labelFontSize = "sm",
   children,
-  ...selectProps
+  menuMinWidth,
+  optionNoWrap = false,
+  fullWidth = true,
 }) {
+  const options = React.Children.toArray(children)
+    .filter((child) => React.isValidElement(child))
+    .map((child) => ({
+      value: child.props?.value ?? "",
+      label: typeof child.props?.children === "string" ? child.props.children : String(child.props?.children ?? ""),
+      disabled: Boolean(child.props?.disabled),
+    }));
+
+  const normalizedValue = value ?? "";
+
+  const selectedValueExists = options.some((option) => String(option.value) === String(normalizedValue));
+  const fallbackOption = options.find((option) => String(option.value) === "") || options[0];
+  const effectiveValue = selectedValueExists ? normalizedValue : (fallbackOption?.value ?? "");
+
+  const normalizedMinWidth = minW === undefined ? 170 : (typeof minW === "number" ? minW : String(minW));
+
   return (
     <Box minW={minW} maxW={maxW} flex={flex}>
       {label ? (
@@ -70,18 +80,18 @@ function DiagnosisDropdown({
           {label}
         </Text>
       ) : null}
-      <Select
-        size={size}
-        value={value}
-        onChange={(event) => onChange?.(event.target.value)}
-        placeholder={placeholder}
-        isDisabled={isDisabled}
-        w="100%"
-        {...DIAGNOSIS_DROPDOWN_STYLES}
-        {...selectProps}
-      >
-        {children}
-      </Select>
+      <FilterDropdown
+        id={id}
+        value={effectiveValue}
+        options={options}
+        onChange={onChange}
+        minWidth={normalizedMinWidth}
+        menuMinWidth={menuMinWidth}
+        ariaLabel={label || placeholder || "dropdown"}
+        disabled={isDisabled}
+        optionNoWrap={optionNoWrap}
+        fullWidth={fullWidth}
+      />
     </Box>
   );
 }
@@ -89,6 +99,33 @@ function DiagnosisDropdown({
 function toPositiveNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseIdList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toPositiveNumber(entry))
+      .filter(Boolean);
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((entry) => toPositiveNumber(entry))
+        .filter(Boolean);
+    }
+  } catch {
+    // Fallback to CSV parser below.
+  }
+
+  return raw
+    .split(",")
+    .map((entry) => toPositiveNumber(entry))
+    .filter(Boolean);
 }
 
 function extractServiceId(service) {
@@ -132,6 +169,254 @@ function extractCategoryName(category) {
   return String(category?.categoryName ?? category?.name ?? category?.Name ?? category?.code ?? "").trim();
 }
 
+function firstNonEmptyText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeLookupText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function extractVehicleModelId(order) {
+  return toPositiveNumber(
+    order?.vehicleModelId ??
+    order?.VehicleModelId ??
+    order?.customerVehicle?.vehicleModelId ??
+    order?.customerVehicle?.VehicleModelId ??
+    order?.vehicle?.vehicleModelId ??
+    order?.vehicle?.VehicleModelId
+  );
+}
+
+function normalizeServiceBomItems(response) {
+  const source = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.items)
+      ? response.items
+      : Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.$values)
+          ? response.$values
+          : Array.isArray(response?.result?.items)
+            ? response.result.items
+            : Array.isArray(response?.result?.data)
+              ? response.result.data
+              : Array.isArray(response?.result?.$values)
+                ? response.result.$values
+        : [];
+
+  return source
+    .map((item) => {
+      const productId = toPositiveNumber(item?.productId ?? item?.ProductId ?? item?.inventoryItemId ?? item?.InventoryItemId);
+      if (!productId) return null;
+      const quantity = Number(
+        item?.quantity ??
+        item?.Quantity ??
+        item?.requiredQuantity ??
+        item?.RequiredQuantity ??
+        item?.qty ??
+        item?.Qty ??
+        1
+      );
+      return {
+        productId,
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+        isMandatory: Boolean(item?.isMandatory ?? item?.IsMandatory),
+      };
+    })
+    .filter(Boolean);
+}
+
+function resolveApiErrorMessage(error) {
+  const payload = error?.response?.data;
+  return (
+    payload?.message ||
+    payload?.title ||
+    error?.message ||
+    "Không thể tải vật tư tự động từ BOM."
+  );
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeImageUrls(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+  }
+
+  const text = String(value || "").trim();
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+  } catch {
+    // Fallback to plain text split
+  }
+
+  return text
+    .split(/[,\n;]/g)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function toEvidenceMediaUrlsValue(urls) {
+  const normalized = normalizeImageUrls(urls);
+  return normalized.length > 0 ? JSON.stringify(normalized) : "";
+}
+
+function isNewRecommendationItem(item) {
+  return Boolean(item?.isNew) || String(item?.id || "").startsWith("tmp-");
+}
+
+function buildVehicleDisplay(order, modelById, brandById, vehicleContext = null) {
+  const plate = firstNonEmptyText(
+    vehicleContext?.vehicleLicensePlate,
+    vehicleContext?.VehicleLicensePlate,
+    order?.vehicleLicensePlate,
+    order?.VehicleLicensePlate,
+    order?.guestVehicleLicensePlate,
+    order?.GuestVehicleLicensePlate,
+    order?.licensePlate,
+    order?.LicensePlate,
+    order?.vehicle?.licensePlate,
+    order?.vehicle?.LicensePlate,
+    order?.customerVehicle?.licensePlate,
+    order?.customerVehicle?.LicensePlate
+  );
+
+  const resolvedVehicleModelId = toPositiveNumber(
+    vehicleContext?.vehicleModelId,
+    vehicleContext?.VehicleModelId,
+    order?.vehicleModelId,
+    order?.VehicleModelId,
+    order?.guestVehicleModelId,
+    order?.GuestVehicleModelId,
+    order?.customerVehicle?.vehicleModelId,
+    order?.customerVehicle?.VehicleModelId,
+    order?.vehicle?.vehicleModelId,
+    order?.vehicle?.VehicleModelId,
+    order?.vehicle?.modelId,
+    order?.vehicle?.ModelId,
+    order?.vehicle?.model?.id,
+    order?.vehicle?.Model?.Id
+  );
+  const resolvedModel = resolvedVehicleModelId ? modelById.get(resolvedVehicleModelId) : null;
+
+  const resolvedVehicleBrandId = toPositiveNumber(
+    vehicleContext?.vehicleBrandId,
+    vehicleContext?.VehicleBrandId,
+    order?.vehicleBrandId,
+    order?.VehicleBrandId,
+    order?.guestVehicleBrandId,
+    order?.GuestVehicleBrandId,
+    order?.customerVehicle?.vehicleBrandId,
+    order?.customerVehicle?.VehicleBrandId,
+    order?.vehicle?.vehicleBrandId,
+    order?.vehicle?.VehicleBrandId,
+    order?.vehicle?.brandId,
+    order?.vehicle?.BrandId,
+    resolvedModel?.brandId,
+    resolvedModel?.BrandId
+  );
+  const resolvedBrand = resolvedVehicleBrandId ? brandById.get(resolvedVehicleBrandId) : null;
+
+  const brand = firstNonEmptyText(
+    vehicleContext?.vehicleBrandName,
+    vehicleContext?.VehicleBrandName,
+    order?.vehicleBrandName,
+    order?.VehicleBrandName,
+    order?.guestVehicleBrandName,
+    order?.GuestVehicleBrandName,
+    order?.brandName,
+    order?.BrandName,
+    order?.vehicle?.brandName,
+    order?.vehicle?.BrandName,
+    order?.customerVehicle?.brandName,
+    order?.customerVehicle?.BrandName,
+    order?.vehicle?.brand?.name,
+    order?.vehicle?.Brand?.Name,
+    order?.customerVehicle?.brand?.name,
+    order?.customerVehicle?.Brand?.Name,
+    resolvedBrand?.name,
+    resolvedBrand?.Name
+  );
+
+  const model = firstNonEmptyText(
+    vehicleContext?.vehicleModelName,
+    vehicleContext?.VehicleModelName,
+    vehicleContext?.vehicleDescriptor,
+    vehicleContext?.VehicleDescriptor,
+    order?.vehicleModelName,
+    order?.VehicleModelName,
+    order?.guestVehicleModelName,
+    order?.GuestVehicleModelName,
+    order?.modelName,
+    order?.ModelName,
+    order?.vehicle?.modelName,
+    order?.vehicle?.ModelName,
+    order?.customerVehicle?.modelName,
+    order?.customerVehicle?.ModelName,
+    order?.vehicle?.model?.name,
+    order?.vehicle?.Model?.Name,
+    order?.customerVehicle?.model?.name,
+    order?.customerVehicle?.Model?.Name,
+    resolvedModel?.modelName,
+    resolvedModel?.ModelName,
+    resolvedModel?.name,
+    resolvedModel?.Name
+  );
+
+  const yearRaw = firstNonEmptyText(
+    vehicleContext?.vehicleManufactureYear,
+    vehicleContext?.VehicleManufactureYear,
+    vehicleContext?.vehicleYear,
+    vehicleContext?.VehicleYear,
+    order?.vehicleYear,
+    order?.VehicleYear,
+    order?.guestVehicleYear,
+    order?.GuestVehicleYear,
+    order?.manufactureYear,
+    order?.ManufactureYear,
+    order?.year,
+    order?.Year,
+    order?.vehicle?.vehicleYear,
+    order?.vehicle?.VehicleYear,
+    order?.vehicle?.year,
+    order?.vehicle?.Year,
+    order?.customerVehicle?.vehicleYear,
+    order?.customerVehicle?.VehicleYear,
+    order?.customerVehicle?.year,
+    order?.customerVehicle?.Year
+  );
+  const yearNumber = Number(yearRaw);
+  const year = Number.isFinite(yearNumber) && yearNumber > 1900 ? String(Math.trunc(yearNumber)) : "";
+
+  return {
+    plate: plate || "Chưa có",
+    brand: brand || "Chưa có",
+    model: model || "Chưa có",
+    year: year || "Chưa có",
+  };
+}
+
 export default function ServiceOrderDiagnosisPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -143,15 +428,23 @@ export default function ServiceOrderDiagnosisPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState(null);
+  const [orderDetails, setOrderDetails] = useState([]);
   
   const [allDiagnoses, setAllDiagnoses] = useState([]);
   const [activeDiagId, setActiveDiagId] = useState(null);
   
   const [recommendations, setRecommendations] = useState([]);
   const [deletedRecommendationIds, setDeletedRecommendationIds] = useState([]);
+  const [expandedMaterialByService, setExpandedMaterialByService] = useState({});
   const [services, setServices] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [vehicleModels, setVehicleModels] = useState([]);
+  const [vehicleBrands, setVehicleBrands] = useState([]);
+  const [quickPickCategoryId, setQuickPickCategoryId] = useState("");
+  const [quickPickKeyword, setQuickPickKeyword] = useState("");
+  const [quickPickOpen, setQuickPickOpen] = useState(false);
+  const quickPickRef = useRef(null);
 
   // Form structured for AI + Legacy
   const [form, setForm] = useState({
@@ -172,6 +465,109 @@ export default function ServiceOrderDiagnosisPage() {
     ["ASSIGNED", "COMPLETED", "PENDING"].includes(String(activeDiagnosis.status || "PENDING").toUpperCase());
 
   const backPath = isTechnician ? "/workshop/technician" : "/workshop/reception";
+  const routeVehicleContext = useMemo(
+    () => location?.state?.vehicleSnapshot || location?.state?.orderSummary || null,
+    [location?.state]
+  );
+  const modelById = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(vehicleModels) ? vehicleModels : []).forEach((item) => {
+      const id = toPositiveNumber(item?.id, item?.Id);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [vehicleModels]);
+  const brandById = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(vehicleBrands) ? vehicleBrands : []).forEach((item) => {
+      const id = toPositiveNumber(item?.id, item?.Id);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [vehicleBrands]);
+  const vehicleDisplay = useMemo(
+    () => buildVehicleDisplay(order, modelById, brandById, routeVehicleContext),
+    [order, modelById, brandById, routeVehicleContext]
+  );
+  const resolvedVehicleModelIdForBom = useMemo(() => {
+    const directModelId = toPositiveNumber(
+      routeVehicleContext?.vehicleModelId,
+      routeVehicleContext?.VehicleModelId,
+      order?.vehicleModelId,
+      order?.VehicleModelId,
+      order?.guestVehicleModelId,
+      order?.GuestVehicleModelId,
+      order?.customerVehicle?.vehicleModelId,
+      order?.customerVehicle?.VehicleModelId,
+      order?.vehicle?.vehicleModelId,
+      order?.vehicle?.VehicleModelId,
+      order?.vehicle?.modelId,
+      order?.vehicle?.ModelId,
+      order?.vehicle?.model?.id,
+      order?.vehicle?.Model?.Id
+    );
+    if (directModelId) return directModelId;
+
+    const modelHint = firstNonEmptyText(
+      routeVehicleContext?.vehicleModelName,
+      routeVehicleContext?.VehicleModelName,
+      order?.vehicleModelName,
+      order?.VehicleModelName,
+      order?.guestVehicleModelName,
+      order?.GuestVehicleModelName,
+      routeVehicleContext?.vehicleDescriptor,
+      routeVehicleContext?.VehicleDescriptor
+    );
+    if (!modelHint) return null;
+
+    const brandHint = firstNonEmptyText(
+      routeVehicleContext?.vehicleBrandName,
+      routeVehicleContext?.VehicleBrandName,
+      order?.vehicleBrandName,
+      order?.VehicleBrandName,
+      order?.guestVehicleBrandName,
+      order?.GuestVehicleBrandName
+    );
+
+    const normalizedModelHint = normalizeLookupText(modelHint);
+    const normalizedBrandHint = normalizeLookupText(brandHint);
+
+    const candidates = (Array.isArray(vehicleModels) ? vehicleModels : [])
+      .map((item) => {
+        const id = toPositiveNumber(item?.id, item?.Id);
+        if (!id) return null;
+        const modelName = firstNonEmptyText(item?.modelName, item?.ModelName, item?.name, item?.Name);
+        const brandName = firstNonEmptyText(item?.brandName, item?.BrandName);
+        return {
+          id,
+          model: normalizeLookupText(modelName),
+          brand: normalizeLookupText(brandName),
+        };
+      })
+      .filter(Boolean);
+
+    const exact = candidates.find((candidate) => {
+      const modelMatch =
+        candidate.model === normalizedModelHint ||
+        candidate.model.includes(normalizedModelHint) ||
+        normalizedModelHint.includes(candidate.model);
+      const brandMatch = !normalizedBrandHint || !candidate.brand || candidate.brand === normalizedBrandHint;
+      return modelMatch && brandMatch;
+    });
+
+    return exact?.id || null;
+  }, [order, routeVehicleContext, vehicleModels]);
+  const vehicleModelDisplay = useMemo(() => {
+    const brand = String(vehicleDisplay.brand || "").trim();
+    const model = String(vehicleDisplay.model || "").trim();
+    if (brand && model) {
+      if (model.toLowerCase().includes(brand.toLowerCase())) return model;
+      return `${brand} ${model}`.trim();
+    }
+    return model || brand || "Chưa có";
+  }, [vehicleDisplay.brand, vehicleDisplay.model]);
 
   const serviceCategoryByServiceId = useMemo(() => {
     const map = new Map();
@@ -196,6 +592,37 @@ export default function ServiceOrderDiagnosisPage() {
     return map;
   }, [services]);
 
+  const selectedCustomerServiceNames = useMemo(() => {
+    const names = new Set();
+
+    const selectedServiceIds = parseIdList(
+      order?.requestedServiceIds ??
+      order?.RequestedServiceIds
+    );
+
+    selectedServiceIds.forEach((serviceId) => {
+      const mapped = serviceNameById.get(String(serviceId));
+      if (mapped) names.add(mapped);
+    });
+
+    (orderDetails || []).forEach((detail) => {
+      const serviceId = toPositiveNumber(detail?.standardServiceId ?? detail?.StandardServiceId);
+      const detailName = String(detail?.itemName ?? detail?.ItemName ?? "").trim();
+      const itemType = String(detail?.itemType ?? detail?.ItemType ?? "").trim().toUpperCase();
+
+      if (serviceId) {
+        names.add(serviceNameById.get(String(serviceId)) || detailName || `Dịch vụ #${serviceId}`);
+        return;
+      }
+
+      if (itemType === "SERVICE" && detailName) {
+        names.add(detailName);
+      }
+    });
+
+    return Array.from(names);
+  }, [order, orderDetails, serviceNameById]);
+
   const serviceCategoryOptions = useMemo(() => {
     const map = new Map();
 
@@ -216,6 +643,47 @@ export default function ServiceOrderDiagnosisPage() {
 
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
   }, [serviceCategories, services]);
+
+  const quickPickFilteredServices = useMemo(() => {
+    const keyword = normalizeLookupText(quickPickKeyword);
+    return (services || [])
+      .filter((service) => {
+        const serviceId = extractServiceId(service);
+        if (!serviceId) return false;
+
+        const categoryId = String(extractServiceCategoryId(service) || "");
+        if (quickPickCategoryId && categoryId !== String(quickPickCategoryId)) return false;
+
+        if (!keyword) return true;
+
+        const serviceName = normalizeLookupText(extractServiceName(service));
+        const serviceCode = normalizeLookupText(service?.code ?? service?.Code ?? "");
+        const categoryName = normalizeLookupText(extractServiceCategoryName(service));
+        return serviceName.includes(keyword) || serviceCode.includes(keyword) || categoryName.includes(keyword);
+      })
+      .sort((a, b) => extractServiceName(a).localeCompare(extractServiceName(b), "vi"));
+  }, [quickPickCategoryId, quickPickKeyword, services]);
+
+  const existingRootServiceIdSet = useMemo(() => {
+    return new Set(
+      recommendations
+        .filter((row) => !row.parentRecommendationId)
+        .map((row) => toPositiveNumber(row.standardServiceId))
+        .filter(Boolean)
+        .map(String)
+    );
+  }, [recommendations]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!quickPickRef.current) return;
+      if (quickPickRef.current.contains(event.target)) return;
+      setQuickPickOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   const parseSymptomsFromNotes = (rawNotes) => {
     try {
@@ -269,19 +737,25 @@ export default function ServiceOrderDiagnosisPage() {
     setLoading(true);
     setError("");
     try {
-      const [orderRes, diagnosesRes, servicesRes, serviceCategoriesRes, productsRes, conditionLogsRes] = await Promise.all([
+      const [orderRes, diagnosesRes, servicesRes, serviceCategoriesRes, productsRes, conditionLogsRes, modelsRes, brandsRes, detailsRes] = await Promise.all([
         serviceOrderApi.getById(id),
         serviceOrderApi.getDiagnoses(id),
         getAllStandardServices(),
         getAllServiceCategories(),
         inventoryApi.getProducts(),
         vehicleConditionLogApi.getByServiceOrderId(id),
+        getVehicleModels().catch(() => []),
+        getVehicleBrands().catch(() => []),
+        serviceOrderApi.getDetails(id).catch(() => []),
       ]);
 
       setOrder(orderRes || null);
       setServices(Array.isArray(servicesRes) ? servicesRes : []);
       setServiceCategories(Array.isArray(serviceCategoriesRes) ? serviceCategoriesRes : []);
       setProducts(Array.isArray(productsRes) ? productsRes : []);
+      setVehicleModels(Array.isArray(modelsRes) ? modelsRes : []);
+      setVehicleBrands(Array.isArray(brandsRes) ? brandsRes : []);
+      setOrderDetails(Array.isArray(detailsRes) ? detailsRes : []);
       
       const signedCheckInExists =
         Array.isArray(conditionLogsRes) &&
@@ -397,6 +871,7 @@ export default function ServiceOrderDiagnosisPage() {
       }
     }
     setDeletedRecommendationIds([]);
+    setExpandedMaterialByService({});
   };
 
   // Updates memory without switching
@@ -424,7 +899,72 @@ export default function ServiceOrderDiagnosisPage() {
     ]);
   };
 
+  const addServiceFromQuickPick = (service) => {
+    if (!canEdit) return;
+    const serviceId = toPositiveNumber(extractServiceId(service));
+    if (!serviceId) return;
+
+    if (existingRootServiceIdSet.has(String(serviceId))) {
+      const targetRootIds = recommendations
+        .filter((row) => !row.parentRecommendationId && String(toPositiveNumber(row.standardServiceId) || "") === String(serviceId))
+        .map((row) => String(row.id));
+
+      if (targetRootIds.length === 0) return;
+
+      const targetRootIdSet = new Set(targetRootIds);
+      setRecommendations((prev) => {
+        const idsToRemove = new Set(targetRootIds);
+        prev.forEach((item) => {
+          if (targetRootIdSet.has(String(item.parentRecommendationId || ""))) {
+            idsToRemove.add(String(item.id));
+          }
+        });
+
+        const persistedIds = prev
+          .filter((item) => idsToRemove.has(String(item.id)))
+          .filter((item) => !item?.isNew && !String(item?.id).startsWith("tmp-"))
+          .map((item) => item.id);
+
+        if (persistedIds.length > 0) {
+          setDeletedRecommendationIds((prevDeleted) => [...new Set([...prevDeleted, ...persistedIds])]);
+        }
+
+        return prev.filter((item) => !idsToRemove.has(String(item.id)));
+      });
+
+      setExpandedMaterialByService((prev) => {
+        const next = { ...prev };
+        targetRootIds.forEach((id) => {
+          delete next[id];
+        });
+        return next;
+      });
+      setQuickPickOpen(true);
+      return;
+    }
+
+    const newRow = {
+      id: `tmp-${Date.now()}-${Math.random()}`,
+      diagnoseId: activeDiagId,
+      parentRecommendationId: null,
+      serviceCategoryId: String(serviceCategoryByServiceId.get(String(serviceId)) || ""),
+      itemType: "LABOR",
+      standardServiceId: serviceId,
+      inventoryItemId: null,
+      quantity: 1,
+      urgency: "RECOMMENDED",
+      evidenceMediaUrls: "",
+      technicianNotes: "",
+      isNew: true,
+    };
+
+    setRecommendations((prev) => [...prev, newRow]);
+    handleServiceSelectionChange(newRow.id, serviceId);
+    setQuickPickOpen(true);
+  };
+
   const addMaterialRecommendation = (parentRecommendationId) => {
+    const parentKey = String(parentRecommendationId || "");
     setRecommendations((prev) => [
       ...prev,
       {
@@ -441,11 +981,151 @@ export default function ServiceOrderDiagnosisPage() {
         isNew: true,
       },
     ]);
+    if (parentKey) {
+      setExpandedMaterialByService((prev) => ({ ...prev, [parentKey]: true }));
+    }
   };
+
+  const handleServiceSelectionChange = useCallback(
+    async (recommendationId, selectedServiceIdRaw) => {
+      const recommendationKey = String(recommendationId || "");
+      const selectedServiceId = toPositiveNumber(selectedServiceIdRaw);
+      const inferredServiceCategoryId = String(serviceCategoryByServiceId.get(String(selectedServiceId || "")) || "");
+
+      setRecommendations((prev) =>
+        prev
+          .map((item) => {
+            if (String(item.id) !== recommendationKey) return item;
+            return {
+              ...item,
+              serviceCategoryId: selectedServiceId ? (inferredServiceCategoryId || item.serviceCategoryId || "") : item.serviceCategoryId,
+              itemType: "LABOR",
+              standardServiceId: selectedServiceId || null,
+              inventoryItemId: null,
+              parentRecommendationId: null,
+            };
+          })
+          .filter(
+            (item) =>
+              !(
+                String(item.parentRecommendationId || "") === recommendationKey &&
+                item?.isAutoFromBom
+              )
+          )
+      );
+
+      if (!selectedServiceId) return;
+
+      try {
+        const vehicleModelId = resolvedVehicleModelIdForBom;
+        if (!vehicleModelId) {
+          toast({
+            title: "Không xác định được dòng xe",
+            description: "Không thể lọc BOM theo dòng xe. Vui lòng kiểm tra lại thông tin dòng xe của lệnh.",
+            status: "warning",
+            duration: 3200,
+            isClosable: true,
+          });
+          return;
+        }
+
+        let bomItems = [];
+        let lastBomError = null;
+        // Retry strictly with both service + vehicle model.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const response = await serviceOrderApi.getServiceBoms(selectedServiceId, vehicleModelId);
+            bomItems = normalizeServiceBomItems(response);
+            if (bomItems.length > 0) break;
+          } catch (error) {
+            lastBomError = error;
+          }
+
+          if (attempt < 2) {
+            await delay(250 * (attempt + 1));
+          }
+        }
+
+        if (bomItems.length === 0) {
+          if (lastBomError) {
+            throw lastBomError;
+          }
+          return;
+        }
+
+        setRecommendations((prev) => {
+          if (!prev.some((item) => String(item.id) === recommendationKey)) return prev;
+
+          const existingChildProductIds = new Set(
+            prev
+              .filter((item) => String(item.parentRecommendationId || "") === recommendationKey)
+              .map((item) => String(toPositiveNumber(item.inventoryItemId) || ""))
+              .filter(Boolean)
+          );
+
+          const rowsToAdd = bomItems
+            .filter((bom) => !existingChildProductIds.has(String(bom.productId)))
+            .map((bom, index) => ({
+              id: `tmp-bom-${Date.now()}-${index}-${Math.random()}`,
+              diagnoseId: activeDiagId,
+              parentRecommendationId: recommendationId,
+              itemType: "PART",
+              standardServiceId: null,
+              inventoryItemId: bom.productId,
+              quantity: bom.quantity,
+              urgency: bom.isMandatory ? "CRITICAL" : "RECOMMENDED",
+              evidenceMediaUrls: "",
+              technicianNotes: "",
+              isNew: true,
+              isAutoFromBom: true,
+            }));
+
+          if (rowsToAdd.length === 0) return prev;
+          return [...prev, ...rowsToAdd];
+        });
+
+        setExpandedMaterialByService((prev) => ({ ...prev, [recommendationKey]: false }));
+      } catch (error) {
+        toast({
+          title: "Không tự tải được vật tư từ BOM",
+          description: resolveApiErrorMessage(error),
+          status: "warning",
+          duration: 3200,
+          isClosable: true,
+        });
+      }
+    },
+    [activeDiagId, resolvedVehicleModelIdForBom, serviceCategoryByServiceId, toast]
+  );
 
   const updateRecommendation = (id, patch) => {
     setRecommendations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
+
+  const handleServiceCategoryChange = useCallback((recommendationId, categoryId) => {
+    const recommendationKey = String(recommendationId || "");
+    setRecommendations((prev) =>
+      prev
+        .map((item) => {
+          if (String(item.id) !== recommendationKey) return item;
+          return {
+            ...item,
+            serviceCategoryId: categoryId || "",
+            standardServiceId: null,
+            itemType: "LABOR",
+            inventoryItemId: null,
+            parentRecommendationId: null,
+          };
+        })
+        .filter(
+          (item) =>
+            !(
+              String(item.parentRecommendationId || "") === recommendationKey &&
+              item?.isAutoFromBom
+            )
+        )
+    );
+  }, []);
 
   const removeRecommendation = (rec) => {
     const targetId = String(rec?.id || "");
@@ -474,6 +1154,43 @@ export default function ServiceOrderDiagnosisPage() {
 
       return prev.filter((item) => !idsToRemove.has(String(item.id)));
     });
+  };
+
+  const addEvidenceImagesToRecommendation = (recommendationId, fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRecommendations((prev) =>
+          prev.map((item) => {
+            if (String(item.id) !== String(recommendationId)) return item;
+            const existingUrls = normalizeImageUrls(item.evidenceMediaUrls);
+            const nextUrls = [...existingUrls, String(reader.result || "").trim()].filter(Boolean);
+            return {
+              ...item,
+              evidenceMediaUrls: toEvidenceMediaUrlsValue(nextUrls),
+            };
+          })
+        );
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeEvidenceImageFromRecommendation = (recommendationId, imageIndex) => {
+    setRecommendations((prev) =>
+      prev.map((item) => {
+        if (String(item.id) !== String(recommendationId)) return item;
+        const currentUrls = normalizeImageUrls(item.evidenceMediaUrls);
+        const nextUrls = currentUrls.filter((_, index) => index !== imageIndex);
+        return {
+          ...item,
+          evidenceMediaUrls: toEvidenceMediaUrlsValue(nextUrls),
+        };
+      })
+    );
   };
 
   const saveAllDiagnoses = async () => {
@@ -538,7 +1255,7 @@ export default function ServiceOrderDiagnosisPage() {
         };
       };
 
-      const isTemporaryRecommendation = (rec) => rec?.isNew || String(rec?.id || "").startsWith("tmp-");
+      const isTemporaryRecommendation = (rec) => isNewRecommendationItem(rec);
 
       const roots = recommendations.filter((rec) => !rec.parentRecommendationId);
       const children = recommendations.filter((rec) => !!rec.parentRecommendationId);
@@ -554,6 +1271,9 @@ export default function ServiceOrderDiagnosisPage() {
         if (!toPositiveNumber(root.standardServiceId)) {
           throw new Error("Vui lòng chọn dịch vụ sửa chữa cho từng dòng dịch vụ.");
         }
+        if (isNewRecommendationItem(root) && normalizeImageUrls(root.evidenceMediaUrls).length === 0) {
+          throw new Error("Mỗi dịch vụ phải có ít nhất 1 ảnh hiện trạng trước khi lưu.");
+        }
       }
 
       for (const child of children) {
@@ -563,7 +1283,24 @@ export default function ServiceOrderDiagnosisPage() {
       }
 
       for (const root of roots) {
-        const payload = normalizeRecommendationPayload({ ...root, itemType: "LABOR" }, null);
+        const rootEvidenceUrls = [];
+        for (const url of normalizeImageUrls(root.evidenceMediaUrls)) {
+          if (String(url).startsWith("data:")) {
+            const uploadRes = await vehicleConditionLogApi.uploadImage(url);
+            const uploadedUrl = String(uploadRes?.url || "").trim();
+            if (!uploadedUrl) {
+              throw new Error("Không thể upload ảnh hiện trạng của dịch vụ.");
+            }
+            rootEvidenceUrls.push(uploadedUrl);
+          } else {
+            rootEvidenceUrls.push(url);
+          }
+        }
+
+        const payload = normalizeRecommendationPayload(
+          { ...root, itemType: "LABOR", evidenceMediaUrls: toEvidenceMediaUrlsValue(rootEvidenceUrls) },
+          null
+        );
 
         if (isTemporaryRecommendation(root)) {
           const created = await serviceOrderApi.createDiagnoseRecommendation(payload);
@@ -581,7 +1318,24 @@ export default function ServiceOrderDiagnosisPage() {
         const parentId = toPositiveNumber(mappedParentId ?? child.parentRecommendationId);
         if (!parentId) continue;
 
-        const payload = normalizeRecommendationPayload(child, parentId);
+        const childEvidenceUrls = [];
+        for (const url of normalizeImageUrls(child.evidenceMediaUrls)) {
+          if (String(url).startsWith("data:")) {
+            const uploadRes = await vehicleConditionLogApi.uploadImage(url);
+            const uploadedUrl = String(uploadRes?.url || "").trim();
+            if (!uploadedUrl) {
+              throw new Error("Không thể upload ảnh đính kèm của vật tư.");
+            }
+            childEvidenceUrls.push(uploadedUrl);
+          } else {
+            childEvidenceUrls.push(url);
+          }
+        }
+
+        const payload = normalizeRecommendationPayload(
+          { ...child, evidenceMediaUrls: toEvidenceMediaUrlsValue(childEvidenceUrls) },
+          parentId
+        );
         if (isTemporaryRecommendation(child)) {
           await serviceOrderApi.createDiagnoseRecommendation(payload);
         } else {
@@ -618,7 +1372,23 @@ export default function ServiceOrderDiagnosisPage() {
       <HStack justify="space-between" mb={5} flexWrap="wrap" gap={3}>
         <Box>
           <Heading size="md" color="#2b3674">Báo cáo Chuẩn đoán Chuyên sâu</Heading>
-          <Text color="#707eae" mt={1}>Lệnh sửa chữa: <strong>{order?.code || `#${orderId}`}</strong> | Xe: <strong>{order?.vehicleLicensePlate}</strong></Text>
+          <Text color="#707eae" mt={1}>
+            Lệnh sửa chữa: <strong>{order?.code || `#${orderId}`}</strong>
+            {" | "}
+            Biển số: <strong>{vehicleDisplay.plate}</strong>
+            {" | "}
+            Dòng xe: <strong>{vehicleModelDisplay}</strong>
+            {" | "}
+            Năm sản xuất: <strong>{vehicleDisplay.year}</strong>
+          </Text>
+          <Text color="#707eae" mt={1}>
+            Dịch vụ:{" "}
+            <strong>
+              {selectedCustomerServiceNames.length > 0
+                ? selectedCustomerServiceNames.join(" | ")
+                : "Chưa có"}
+            </strong>
+          </Text>
         </Box>
         <Button colorScheme="blue" onClick={() => navigate(backPath)}>Quay lại Bảng điều khiển</Button>
       </HStack>
@@ -747,12 +1517,106 @@ export default function ServiceOrderDiagnosisPage() {
                     <Icon as={Wrench} size={20} />
                     <Heading size="sm">Vật tư & Nhân công đề xuất</Heading>
                   </HStack>
-                  {canEdit && (
-                    <Button size="sm" colorScheme="blue" variant="outline" onClick={addServiceRecommendation}>
-                      + Thêm dịch vụ
-                    </Button>
-                  )}
                 </HStack>
+
+                <Box mb={4} p={4} border="1px solid #d7e3f5" borderRadius="lg" bg="#f8fbff">
+                  <HStack spacing={3} align="end" flexWrap="wrap">
+                    <DiagnosisDropdown
+                      label="Loại dịch vụ"
+                      labelFontSize="xs"
+                      labelColor="#5c6b8a"
+                      minW="220px"
+                      value={quickPickCategoryId}
+                      onChange={(value) => setQuickPickCategoryId(value || "")}
+                      isDisabled={!canEdit}
+                    >
+                      <option value="">-- Tất cả loại dịch vụ --</option>
+                      {(serviceCategoryOptions || []).map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </DiagnosisDropdown>
+
+                    <Box minW="320px" flex="1" ref={quickPickRef}>
+                      <Text fontSize="xs" fontWeight="600" color="#5c6b8a" mb={2}>
+                        Tìm dịch vụ
+                      </Text>
+                      <Box position="relative">
+                        <Input
+                          size="md"
+                          value={quickPickKeyword}
+                          onChange={(event) => {
+                            setQuickPickKeyword(event.target.value);
+                            setQuickPickOpen(true);
+                          }}
+                          onFocus={() => setQuickPickOpen(true)}
+                          placeholder={
+                            quickPickCategoryId
+                              ? "Nhập tên dịch vụ trong loại đã chọn..."
+                              : "Nhập tên dịch vụ để tìm trên toàn bộ danh sách..."
+                          }
+                          isDisabled={!canEdit}
+                          bg="white"
+                          borderColor="#d7e3f5"
+                        />
+                        {quickPickOpen && canEdit && (
+                          <Box
+                            position="absolute"
+                            top="calc(100% + 6px)"
+                            left={0}
+                            right={0}
+                            zIndex={20}
+                            bg="white"
+                            border="1px solid #d7e3f5"
+                            borderRadius="md"
+                            boxShadow="0 10px 24px rgba(27, 37, 89, 0.12)"
+                            maxH="240px"
+                            overflowY="auto"
+                          >
+                            {quickPickFilteredServices.length === 0 ? (
+                              <Text px={3} py={2} fontSize="sm" color="#7f8fb2">
+                                Không có dịch vụ phù hợp.
+                              </Text>
+                            ) : (
+                              quickPickFilteredServices.map((service) => {
+                                const serviceId = String(extractServiceId(service) || "");
+                                const existed = existingRootServiceIdSet.has(serviceId);
+                                const serviceName = extractServiceName(service) || `Dịch vụ #${serviceId}`;
+                                const categoryName = extractServiceCategoryName(service);
+                                return (
+                                  <Box
+                                    as="button"
+                                    type="button"
+                                    key={serviceId}
+                                    w="100%"
+                                    textAlign="left"
+                                    px={3}
+                                    py={2}
+                                    bg={existed ? "#edf4ff" : "transparent"}
+                                    _hover={{ bg: existed ? "#e4efff" : "#f4f8ff" }}
+                                    borderLeft={existed ? "2px solid #3b82f6" : "2px solid transparent"}
+                                    border="none"
+                                    onClick={() => addServiceFromQuickPick(service)}
+                                  >
+                                    <Text fontSize="sm" fontWeight={existed ? "700" : "600"} color={existed ? "#274690" : "#2b3674"}>
+                                      {serviceName}
+                                    </Text>
+                                    {categoryName ? (
+                                      <Text fontSize="xs" color="#7f8fb2">
+                                        {categoryName}
+                                      </Text>
+                                    ) : null}
+                                  </Box>
+                                );
+                              })
+                            )}
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                  </HStack>
+                </Box>
 
                 {recommendations.length === 0 ? (
                   <Text color="#707eae" fontSize="sm">
@@ -760,46 +1624,70 @@ export default function ServiceOrderDiagnosisPage() {
                   </Text>
                 ) : (
                   <VStack align="stretch" spacing={3}>
-                    {recommendationsByParent.roots.map((root) => (
-                      <Box key={root.id} p={3} border="1px solid #e9edf7" borderRadius="md" bg="gray.50">
-                        <RecommendationRow
-                          mode="service"
-                          item={root}
-                          canEdit={canEdit}
-                          services={services}
-                          serviceCategoryOptions={serviceCategoryOptions}
-                          serviceCategoryByServiceId={serviceCategoryByServiceId}
-                          products={products}
+                    {recommendationsByParent.roots.map((root, rootIndex) => {
+                      const rootKey = String(root.id);
+                      const childItems = recommendationsByParent.childrenMap.get(rootKey) || [];
+                      const hasChildItems = childItems.length > 0;
+                      const isMaterialExpanded = Boolean(expandedMaterialByService[rootKey]);
+
+                      return (
+                        <Box key={root.id} p={3} border="1px solid #e9edf7" borderRadius="md" bg="gray.50">
+                          <RecommendationRow
+                            mode="service"
+                            item={root}
+                            displayNumber={rootIndex + 1}
+                            canEdit={canEdit}
+                            services={services}
+                            serviceCategoryOptions={serviceCategoryOptions}
+                            serviceCategoryByServiceId={serviceCategoryByServiceId}
+                            products={products}
                           onChange={updateRecommendation}
                           onRemove={removeRecommendation}
                           onAddMaterial={addMaterialRecommendation}
-                        />
-                        {(recommendationsByParent.childrenMap.get(String(root.id)) || []).length > 0 && (
-                          <VStack align="stretch" mt={3} spacing={2} pl={4} borderLeft="2px solid #d6e0f5">
-                            {(recommendationsByParent.childrenMap.get(String(root.id)) || []).map((child) => (
-                              <RecommendationRow
-                                key={child.id}
-                                mode="material"
-                                item={child}
-                                canEdit={canEdit}
-                                services={services}
-                                serviceCategoryOptions={serviceCategoryOptions}
-                                serviceCategoryByServiceId={serviceCategoryByServiceId}
-                                products={products}
-                                onChange={updateRecommendation}
-                                onRemove={removeRecommendation}
-                                parentServiceName={serviceNameById.get(String(root.standardServiceId)) || `Dịch vụ #${root.id}`}
-                              />
-                            ))}
-                          </VStack>
-                        )}
-                        {(recommendationsByParent.childrenMap.get(String(root.id)) || []).length === 0 && (
-                          <Text mt={2} fontSize="xs" color="#7f8fb2">
-                            Chưa có vật tư cho dịch vụ này.
-                          </Text>
-                        )}
-                      </Box>
-                    ))}
+                            onSelectService={handleServiceSelectionChange}
+                            onSelectServiceCategory={handleServiceCategoryChange}
+                            onAddEvidenceImages={addEvidenceImagesToRecommendation}
+                            onRemoveEvidenceImage={removeEvidenceImageFromRecommendation}
+                          materialCount={childItems.length}
+                          isMaterialExpanded={isMaterialExpanded}
+                          onToggleMaterials={
+                              hasChildItems
+                                ? () =>
+                                    setExpandedMaterialByService((prev) => ({
+                                      ...prev,
+                                      [rootKey]: !prev[rootKey],
+                                    }))
+                                : null
+                            }
+                          />
+                          {hasChildItems && isMaterialExpanded && (
+                            <VStack align="stretch" mt={3} spacing={2} pl={4} borderLeft="2px solid #d6e0f5">
+                              {childItems.map((child, childIndex) => (
+                                <RecommendationRow
+                                  key={child.id}
+                                  mode="material"
+                                  item={child}
+                                  displayNumber={childIndex + 1}
+                                  canEdit={canEdit}
+                                  services={services}
+                                  serviceCategoryOptions={serviceCategoryOptions}
+                                  serviceCategoryByServiceId={serviceCategoryByServiceId}
+                                  products={products}
+                                  onChange={updateRecommendation}
+                                  onRemove={removeRecommendation}
+                                  parentServiceName={serviceNameById.get(String(root.standardServiceId)) || `Dịch vụ #${root.id}`}
+                                />
+                              ))}
+                            </VStack>
+                          )}
+                          {!hasChildItems && (
+                            <Text mt={2} fontSize="xs" color="#7f8fb2">
+                              Chưa có vật tư cho dịch vụ này.
+                            </Text>
+                          )}
+                        </Box>
+                      );
+                    })}
                   </VStack>
                 )}
               </Box>
@@ -822,202 +1710,375 @@ export default function ServiceOrderDiagnosisPage() {
 function RecommendationRow({
   item,
   mode = "service",
+  displayNumber,
   canEdit,
   services,
   serviceCategoryOptions,
-  serviceCategoryByServiceId,
   products,
   onChange,
   onRemove,
   onAddMaterial,
+  onAddEvidenceImages,
+  onRemoveEvidenceImage,
   parentServiceName,
+  materialCount = 0,
+  isMaterialExpanded = false,
+  onToggleMaterials = null,
 }) {
   const isServiceMode = mode === "service";
   const normalizedItemType = String(item.itemType || (isServiceMode ? "LABOR" : "PART")).toUpperCase();
   const itemType = normalizedItemType === "CONSUMABLE" ? "CONSUMABLE" : normalizedItemType === "LABOR" ? "LABOR" : "PART";
+  const itemTypeLabel = itemType === "CONSUMABLE" ? "Vật tư / Dung dịch" : itemType === "LABOR" ? "Nhân công" : "Phụ tùng";
   const canAddMaterial = Boolean(item.standardServiceId);
-  const inferredServiceCategoryId = String(serviceCategoryByServiceId?.get(String(item.standardServiceId)) || "");
-  const selectedServiceCategoryId = String(item.serviceCategoryId || inferredServiceCategoryId || "");
-  const filteredServices = selectedServiceCategoryId
-    ? (services || []).filter((service) => String(extractServiceCategoryId(service) || "") === selectedServiceCategoryId)
-    : [];
+  const selectedService = isServiceMode
+    ? (services || []).find((service) => String(extractServiceId(service) || "") === String(item.standardServiceId || ""))
+    : null;
+  const selectedServiceName = isServiceMode
+    ? (extractServiceName(selectedService) || (item.standardServiceId ? `Dịch vụ #${item.standardServiceId}` : "Chưa chọn dịch vụ"))
+    : "";
+  const selectedServiceCategoryId = String(
+    item.serviceCategoryId ||
+      extractServiceCategoryId(selectedService) ||
+      ""
+  );
+  const selectedServiceCategoryName = isServiceMode
+    ? (
+      extractServiceCategoryName(selectedService) ||
+      (serviceCategoryOptions || []).find((category) => String(category.value) === selectedServiceCategoryId)?.label ||
+      "Chưa phân loại"
+    )
+    : "";
+  const selectedProduct = !isServiceMode
+    ? (products || []).find((product) => String(product?.id ?? product?.Id ?? "") === String(item.inventoryItemId || ""))
+    : null;
+  const selectedProductName = !isServiceMode
+    ? String(selectedProduct?.name ?? selectedProduct?.Name ?? "").trim() || "Chưa chọn vật tư"
+    : "";
+  const isAutoMaterial = Boolean(item?.isAutoFromBom);
+  const serviceEvidenceUrls = isServiceMode ? normalizeImageUrls(item.evidenceMediaUrls) : [];
+  const requiresEvidenceImage = isServiceMode && isNewRecommendationItem(item);
+  const evidenceInputId = `diagnose-evidence-${item.id}`;
 
   return (
     <Stack
-      spacing={2}
+      spacing={isServiceMode ? 2 : 3}
       p={3}
-      border={isServiceMode ? "1px solid #cfe0ff" : "1px dashed #f0c991"}
-      borderRadius="md"
-      bg={isServiceMode ? "#f6f9ff" : "#fff9f0"}
-      boxShadow={isServiceMode ? "0 2px 8px rgba(42, 67, 122, 0.06)" : "none"}
+      position="relative"
+      border={isServiceMode ? "1px solid #cfe0ff" : "1px solid #f0d7b3"}
+      borderRadius="lg"
+      bg={isServiceMode ? "#f6f9ff" : "linear-gradient(180deg, #fffaf2 0%, #fff7ee 100%)"}
+      boxShadow={isServiceMode ? "0 2px 8px rgba(42, 67, 122, 0.06)" : "0 2px 8px rgba(138, 90, 31, 0.05)"}
     >
-      <HStack justify="space-between">
-        <Text fontWeight="bold" fontSize="sm" color={isServiceMode ? "#2b3674" : "#8a5a1f"}>
-          {isServiceMode ? "Dịch vụ" : "Vật tư"} #{item.id}
-        </Text>
-        <HStack spacing={1}>
-          {isServiceMode && canEdit && (
-            <Button
-              size="xs"
-              colorScheme="blue"
-              variant="outline"
-              onClick={() => onAddMaterial?.(item.id)}
-              isDisabled={!canAddMaterial}
+      <HStack justify="space-between" position="relative" zIndex={2}>
+        <HStack spacing={2} align="center">
+          <Text fontWeight="bold" fontSize="sm" color={isServiceMode ? "#2b3674" : "#8a5a1f"}>
+            {isServiceMode ? "Dịch vụ" : "Vật tư"} #{displayNumber ?? item.id}
+          </Text>
+          {!isServiceMode && (
+            <Badge
+              borderRadius="full"
+              px={2}
+              py={0.5}
+              bg="#fff1d9"
+              color="#9a5d18"
+              border="1px solid #f1cf98"
+              fontSize="10px"
+              fontWeight="700"
             >
-              + Thêm vật tư
-            </Button>
+              {isAutoMaterial ? "BOM" : itemTypeLabel}
+            </Badge>
           )}
+        </HStack>
+        <HStack spacing={2} align="center" position="relative" zIndex={3}>
           {canEdit && (
-            <Button size="xs" colorScheme="red" variant="ghost" onClick={() => onRemove(item)}>
+            <Button size="xs" colorScheme="red" variant="ghost" position="relative" zIndex={3} onClick={() => onRemove(item)}>
               Xóa
             </Button>
           )}
         </HStack>
       </HStack>
 
-      {!isServiceMode && (
-        <Box px={3} py={2} borderRadius="md" border="1px solid #f0d4aa" bg="#fff3df">
-          <Text fontSize="xs" fontWeight="700" color="#8a5a1f">
-            Thuộc dịch vụ: {parentServiceName || "Chưa xác định"}
-          </Text>
+      {isServiceMode && (
+        <Grid templateColumns={{ base: "1fr", lg: "minmax(0, 1fr) 360px" }} gap={3} alignItems="start">
+          <Box>
+            <Text fontSize="xs" fontWeight="600" color="#a3aed0" mb={2}>
+              Dịch vụ sửa chữa
+            </Text>
+            <Text fontSize="sm" fontWeight="700" color="#2b3674" lineHeight="1.35">
+              {selectedServiceName}
+            </Text>
+            <Text mt={1} fontSize="xs" color="#7f8fb2" lineHeight="1.3">
+              Loại dịch vụ: {selectedServiceCategoryName}
+            </Text>
+          </Box>
+
+          <Box
+            p={2}
+            borderRadius="10px"
+            border="1px solid #dbe7ff"
+            bg="#f8fbff"
+            maxW={{ base: "100%", lg: "360px" }}
+          >
+            <HStack align="center" spacing={2} mb={1.5} justify="space-between">
+              <Text fontSize="12px" fontWeight="700" color="#2b3674" whiteSpace="nowrap">
+                Ảnh hiện trạng chỗ hỏng
+                {requiresEvidenceImage ? <Text as="span" color="red.500"> *</Text> : null}
+              </Text>
+              <Input
+                id={evidenceInputId}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                display="none"
+                isDisabled={!canEdit}
+                onChange={(event) => {
+                  onAddEvidenceImages?.(item.id, event.target.files);
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                as="label"
+                htmlFor={evidenceInputId}
+                size="xs"
+                h="26px"
+                minH="26px"
+                px={2.5}
+                colorScheme="blue"
+                variant="outline"
+                borderRadius="8px"
+                fontSize="11px"
+                cursor={canEdit ? "pointer" : "not-allowed"}
+                isDisabled={!canEdit}
+              >
+                + Ảnh
+              </Button>
+            </HStack>
+
+            {serviceEvidenceUrls.length === 0 ? (
+              requiresEvidenceImage ? (
+                <Text fontSize="11px" color="red.500" lineHeight="1.2">
+                  Bắt buộc 1 ảnh.
+                </Text>
+              ) : (
+                <Text fontSize="11px" color="#7f8fb2" lineHeight="1.2">
+                  Chưa có ảnh hiện trạng.
+                </Text>
+              )
+            ) : (
+              <HStack spacing={2} overflowX="auto" pb={1} maxW="100%">
+                {serviceEvidenceUrls.map((url, index) => (
+                  <Box key={`${item.id}-evidence-${index}`} position="relative" flex="0 0 auto">
+                    <Box
+                      as="img"
+                      src={url}
+                      alt={`evidence-${index + 1}`}
+                      w="88px"
+                      h="88px"
+                      objectFit="cover"
+                      borderRadius="8px"
+                      border="1px solid #d6e4ff"
+                      bg="#f5f8ff"
+                    />
+                    {canEdit && (
+                      <Button
+                        size="2xs"
+                        colorScheme="red"
+                        position="absolute"
+                        top="4px"
+                        right="4px"
+                        minW="18px"
+                        h="18px"
+                        p={0}
+                        onClick={() => onRemoveEvidenceImage?.(item.id, index)}
+                      >
+                        x
+                      </Button>
+                    )}
+                  </Box>
+                ))}
+              </HStack>
+            )}
+          </Box>
+        </Grid>
+      )}
+
+      {isServiceMode && (
+        <Box mt={2}>
+          <HStack
+            spacing={2}
+            align="center"
+            justify={{ base: "flex-start", md: "flex-end" }}
+            minH="36px"
+            flexWrap="wrap"
+          >
+            <Text
+              fontSize="xs"
+              fontWeight="600"
+              color="#a3aed0"
+              h="36px"
+              display="inline-flex"
+              alignItems="center"
+            >
+              Độ cần thiết
+            </Text>
+            <Box h="36px" minH="36px" display="flex" alignItems="center" my="0" alignSelf="center">
+              <DiagnosisDropdown
+                minW="170px"
+                size="sm"
+                value={item.urgency || "RECOMMENDED"}
+                isDisabled={!canEdit}
+                onChange={(value) => onChange(item.id, { urgency: value })}
+                fullWidth={false}
+              >
+                <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
+                <option value="RECOMMENDED">Nên làm</option>
+                <option value="OPTIONAL">Không bắt buộc</option>
+              </DiagnosisDropdown>
+            </Box>
+            {canEdit && (
+              <Box
+                as="button"
+                type="button"
+                appearance="none"
+                WebkitAppearance="none"
+                h="36px"
+                minH="36px"
+                maxH="36px"
+                px="14px"
+                py="0"
+                m="0"
+                borderRadius="12px"
+                border="1px solid"
+                borderColor={canAddMaterial ? "#2b6fe8" : "#c9d8ef"}
+                bg={canAddMaterial ? "linear-gradient(180deg, #ffffff 0%, #f7faff 100%)" : "#f3f4f6"}
+                color={canAddMaterial ? "#2b6fe8" : "#94a3b8"}
+                fontSize="14px"
+                fontWeight="600"
+                lineHeight="36px"
+                display="inline-flex"
+                alignItems="center"
+                justifyContent="center"
+                verticalAlign="middle"
+                boxShadow={canAddMaterial ? "0 2px 8px rgba(58, 99, 168, 0.08)" : "none"}
+                cursor={canAddMaterial ? "pointer" : "not-allowed"}
+                transition="all .15s ease"
+                _hover={canAddMaterial ? { bg: "#f4f8ff" } : undefined}
+                onClick={() => onAddMaterial?.(item.id)}
+                disabled={!canAddMaterial}
+              >
+                + Thêm vật tư
+              </Box>
+            )}
+          </HStack>
+          <Box pt={2} mt={2} borderTop="1px dashed #d6e4ff">
+            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#6f83b3" mb={1.5}>
+              Ghi chú kỹ thuật
+            </Text>
+            <Textarea
+              size="sm"
+              minH="72px"
+              placeholder="Nhập ghi chú cho dịch vụ này..."
+              value={item.technicianNotes || ""}
+              isDisabled={!canEdit}
+              onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
+              bg="rgba(255,255,255,0.92)"
+              borderColor="#d6e4ff"
+              _focus={{ borderColor: "#7aa6ff", boxShadow: "0 0 0 1px #7aa6ff" }}
+            />
+          </Box>
         </Box>
       )}
 
-      <HStack spacing={3} flexWrap="wrap">
-        {isServiceMode ? (
-          <>
-            <DiagnosisDropdown
-              label="Loại dịch vụ"
-              labelFontSize="xs"
-              labelColor="#7f8fb2"
-              minW="220px"
+      {!isServiceMode && (
+        <Grid
+          templateColumns={{ base: "1fr", sm: "1fr 1fr", lg: "170px minmax(280px, 1fr) 110px 210px" }}
+          gap={2}
+          alignItems="start"
+        >
+          <Box>
+            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Loại vật tư</Text>
+            <Text fontSize="sm" fontWeight="700" color="#7f4f1f">{itemTypeLabel}</Text>
+          </Box>
+          <Box>
+            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Vật tư cụ thể</Text>
+            <Text fontSize="sm" fontWeight="700" color="#7f4f1f" lineHeight="1.4">{selectedProductName}</Text>
+          </Box>
+          <Box>
+            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Số lượng</Text>
+            <NumberInput
               size="sm"
-              value={selectedServiceCategoryId}
+              min={1}
+              value={item.quantity ?? 1}
               isDisabled={!canEdit}
-              onChange={(value) => onChange(item.id, {
-                serviceCategoryId: value || "",
-                standardServiceId: null,
-                itemType: "LABOR",
-                inventoryItemId: null,
-                parentRecommendationId: null,
-              })}
+              onChange={(_, valueNumber) => onChange(item.id, { quantity: Number.isFinite(valueNumber) && valueNumber > 0 ? valueNumber : 1 })}
+              keepWithinRange
+              clampValueOnBlur
             >
-              <option value="">-- Chọn loại dịch vụ --</option>
-              {(serviceCategoryOptions || []).map((category) => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </DiagnosisDropdown>
-              <DiagnosisDropdown
-                label="Dịch vụ sửa chữa"
-                labelFontSize="xs"
-                labelColor="#7f8fb2"
-              minW="280px"
-              flex="1"
-              size="sm"
-              value={item.standardServiceId || ""}
-              isDisabled={!canEdit || !selectedServiceCategoryId}
-              onChange={(value) => onChange(item.id, {
-                itemType: "LABOR",
-                standardServiceId: value || null,
-                inventoryItemId: null,
-                parentRecommendationId: null,
-              })}
-              >
-                <option value="">
-                  {selectedServiceCategoryId ? "-- Chọn dịch vụ --" : "-- Chọn loại dịch vụ trước --"}
-                </option>
-                {filteredServices.map((service) => {
-                  const serviceId = extractServiceId(service);
-                  const serviceName = extractServiceName(service);
-                  if (!serviceId) return null;
-                  return (
-                    <option key={serviceId} value={serviceId}>
-                      {serviceName || `Dịch vụ #${serviceId}`}
-                    </option>
-                  );
-                })}
-              </DiagnosisDropdown>
-              {!selectedServiceCategoryId && (
-                <Text fontSize="xs" color="#7f8fb2">
-                  Chọn loại dịch vụ trước để lọc danh sách dịch vụ.
-                </Text>
-              )}
-            </>
-          ) : (
-          <>
+              <NumberInputField
+                bg="rgba(255,255,255,0.92)"
+                borderColor="#e7d5b6"
+                _focus={{ borderColor: "#d4a15a", boxShadow: "0 0 0 1px #d4a15a" }}
+              />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+          </Box>
+          <Box>
+            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Độ cần thiết</Text>
             <DiagnosisDropdown
-              label="Loại vật tư"
-              labelFontSize="xs"
-              labelColor="#b07a2f"
-              minW="160px"
-              size="sm"
-              value={itemType}
+              minW="100%"
+              value={item.urgency || "RECOMMENDED"}
               isDisabled={!canEdit}
-              onChange={(value) => onChange(item.id, { itemType: value, inventoryItemId: null })}
+              onChange={(value) => onChange(item.id, { urgency: value })}
+              fullWidth={false}
             >
-              <option value="PART">Phụ tùng</option>
-              <option value="CONSUMABLE">Vật tư / Dung dịch</option>
+              <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
+              <option value="RECOMMENDED">Nên làm</option>
+              <option value="OPTIONAL">Không bắt buộc</option>
             </DiagnosisDropdown>
-            <DiagnosisDropdown
-              label="Vật tư cụ thể"
-              labelFontSize="xs"
-              labelColor="#b07a2f"
-              minW="260px"
-              flex="1"
-              size="sm"
-              value={item.inventoryItemId || ""}
-              isDisabled={!canEdit}
-              onChange={(value) => onChange(item.id, { inventoryItemId: value || null })}
-            >
-              <option value="">-- Chọn sản phẩm --</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name || p.Name}</option>)}
-            </DiagnosisDropdown>
-          </>
-        )}
+          </Box>
+        </Grid>
+      )}
 
-        <Box minW="80px" maxW="100px">
-          <Text fontSize="xs" fontWeight="600" mb={1} color={isServiceMode ? "#a3aed0" : "#b07a2f"}>Số lượng</Text>
+      {!isServiceMode && (
+        <Box pt={1} borderTop="1px dashed #edd6b1">
+          <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Ghi chú kỹ thuật</Text>
           <Input
-            size="sm"
-            type="number"
-            value={item.quantity ?? 1}
+            size="xs"
+            placeholder="Ghi chú cho vật tư này..."
+            value={item.technicianNotes || ""}
             isDisabled={!canEdit}
-            onChange={(e) => onChange(item.id, { quantity: Number(e.target.value || 1) })}
+            onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
+            bg="rgba(255,255,255,0.92)"
+            borderColor="#e7d5b6"
+            _focus={{ borderColor: "#d4a15a", boxShadow: "0 0 0 1px #d4a15a" }}
           />
         </Box>
+      )}
 
-        <DiagnosisDropdown
-          label="Độ cần thiết"
-          labelFontSize="xs"
-          labelColor={isServiceMode ? "#a3aed0" : "#b07a2f"}
-          minW="140px"
-          size="sm"
-          value={item.urgency || "RECOMMENDED"}
-          isDisabled={!canEdit}
-          onChange={(value) => onChange(item.id, { urgency: value })}
-        >
-          <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
-          <option value="RECOMMENDED">Nên làm</option>
-          <option value="OPTIONAL">Không bắt buộc</option>
-        </DiagnosisDropdown>
-      </HStack>
-
-      {/* Optional fields can be added here or collapsable like Media URLs/Tech notes */}
-      <Box pt={2}>
-        <Input
-          size="xs"
-          placeholder={isServiceMode ? "Ghi chú cho dịch vụ này..." : "Ghi chú cho vật tư này..."}
-          value={item.technicianNotes || ""}
-          isDisabled={!canEdit}
-          onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
-          bg="#f8fafc"
-        />
-      </Box>
+      {isServiceMode && materialCount > 0 && (
+        <HStack justify="flex-end" pt={1}>
+          <Button
+            size="xs"
+            variant="ghost"
+            colorScheme="blue"
+            leftIcon={<Icon as={isMaterialExpanded ? ChevronDown : ChevronRight} boxSize={3.5} />}
+            onClick={onToggleMaterials}
+          >
+            {isMaterialExpanded ? "Thu gọn vật tư" : `Xem vật tư (${materialCount})`}
+          </Button>
+        </HStack>
+      )}
     </Stack>
   );
 }
+
+
+
+
 
 
 

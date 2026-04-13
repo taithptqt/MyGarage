@@ -3,6 +3,7 @@ import { servicesApi } from "@features/services/api/servicesApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { generateAcronym } from "@shared/core/utils/stringUtils";
 import { useSearch } from "@shared/core/context/SearchContext";
+import TablePagination from "@shared/components/TablePagination";
 import {
   filterPackageManagedStandardServices,
   getPackageManagedStandardServiceMessage,
@@ -17,7 +18,7 @@ const EMPTY_SERVICE = {
   basePrice: 0,
   standardMinutes: 0,
   categoryId: "",
-  isActive: true
+  isActive: true,
 };
 
 const toNumber = (value, fallback = 0) => {
@@ -26,7 +27,7 @@ const toNumber = (value, fallback = 0) => {
 };
 
 const categoryLabel = (category) =>
-  category?.categoryName || category?.name || category?.code || (category?.id ? `Danh má»¥c #${category.id}` : "-");
+  category?.categoryName || category?.name || category?.code || (category?.id ? `Danh mục #${category.id}` : "-");
 
 function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
   const [form, setForm] = useState(() => ({
@@ -34,7 +35,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
     categoryId: initial?.categoryId != null ? String(initial.categoryId) : "",
     basePrice: initial?.basePrice ?? 0,
     standardMinutes: initial?.standardMinutes ?? 0,
-    isActive: initial?.isActive !== false
+    isActive: initial?.isActive !== false,
   }));
   const [codeError, setCodeError] = useState("");
 
@@ -48,7 +49,6 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       const nextValue = name === "code" ? normalizeStandardServiceCode(value) : value;
       const nextForm = { ...prev, [name]: type === "checkbox" ? checked : nextValue };
 
-      // Tá»± Ä‘á»™ng táº¡o mÃ£ theo tÃªn khi táº¡o má»›i vÃ  ngÆ°á»i dÃ¹ng chÆ°a nháº­p mÃ£ riÃªng.
       if (name === "name" && !prev.id) {
         const oldAcronym = generateAcronym(prev.name || "");
         if (!prev.code || prev.code === oldAcronym) {
@@ -78,48 +78,46 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       basePrice: toNumber(form.basePrice, 0),
       standardMinutes: toNumber(form.standardMinutes, 0),
-      isActive: form.isActive !== false
+      isActive: form.isActive !== false,
     });
   }
 
   return (
     <form className="admin-form service-form" onSubmit={handleSubmit}>
-      <p className="service-form-note">
-        Äiá»n thÃ´ng tin dá»‹ch vá»¥ Ä‘á»ƒ Ä‘á»“ng bá»™ cho Ä‘áº·t lá»‹ch vÃ  lá»‡nh sá»­a chá»¯a.
-      </p>
+      <p className="service-form-note">Điền thông tin dịch vụ để đồng bộ cho đặt lịch và lệnh sửa chữa.</p>
 
       <div className="service-form-grid">
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-name`}>TÃªn dá»‹ch vá»¥ *</label>
+          <label htmlFor={`${formPrefix}-name`}>Tên dịch vụ *</label>
           <input
             id={`${formPrefix}-name`}
             name="name"
             value={form.name || ""}
             onChange={handleChange}
-            placeholder="VÃ­ dá»¥: Thay dáº§u Ä‘á»™ng cÆ¡"
+            placeholder="Ví dụ: Thay dầu động cơ"
             required
           />
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-code`}>MÃ£ dá»‹ch vá»¥ *</label>
+          <label htmlFor={`${formPrefix}-code`}>Code dịch vụ *</label>
           <input
             id={`${formPrefix}-code`}
             name="code"
             value={form.code || ""}
             onChange={handleChange}
-            placeholder="VÃ­ dá»¥: TDDC"
+            placeholder="Ví dụ: TDDC"
             required
           />
           <p className="service-form-hint">
-            GÃ³i dá»‹ch vá»¥ dÃ¹ng mÃ£ báº¯t Ä‘áº§u báº±ng <strong>PKG-</strong> pháº£i táº¡o á»Ÿ má»¥c Packages.
+            Gói dịch vụ dùng code bắt đầu bằng <strong>PKG-</strong> phải tạo ở mục Packages.
           </p>
           {codeError ? <p className="service-form-error">{codeError}</p> : null}
-          {isCreateMode ? <p className="service-form-hint">MÃ£ Ä‘Æ°á»£c gá»£i Ã½ tá»± Ä‘á»™ng theo tÃªn, báº¡n cÃ³ thá»ƒ sá»­a láº¡i.</p> : null}
+          {isCreateMode ? <p className="service-form-hint">Code được gợi ý tự động theo tên, bạn có thể sửa lại.</p> : null}
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-price`}>ÄÆ¡n giÃ¡ (VNÄ) *</label>
+          <label htmlFor={`${formPrefix}-price`}>Đơn giá (VNĐ) *</label>
           <input
             id={`${formPrefix}-price`}
             name="basePrice"
@@ -133,7 +131,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-minutes`}>Thá»i gian (phÃºt) *</label>
+          <label htmlFor={`${formPrefix}-minutes`}>Thời gian (phút) *</label>
           <input
             id={`${formPrefix}-minutes`}
             name="standardMinutes"
@@ -146,7 +144,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group service-form-group--full">
-          <label htmlFor={`${formPrefix}-category`}>Danh má»¥c *</label>
+          <label htmlFor={`${formPrefix}-category`}>Danh mục *</label>
           <select
             id={`${formPrefix}-category`}
             name="categoryId"
@@ -154,7 +152,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
             onChange={handleChange}
             required
           >
-            <option value="">-- Chá»n danh má»¥c --</option>
+            <option value="">-- Chọn danh mục --</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {categoryLabel(category)}
@@ -172,9 +170,9 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
             onChange={handleChange}
           />
           <label htmlFor={`${formPrefix}-active`} className="service-form-status-copy">
-            <span className="service-form-status-title">Äang kinh doanh</span>
+            <span className="service-form-status-title">Đang kinh doanh</span>
             <small className="service-form-status-note">
-              Dá»‹ch vá»¥ sáº½ hiá»ƒn thá»‹ á»Ÿ giao diá»‡n Ä‘áº·t lá»‹ch vÃ  cÃ³ thá»ƒ Ä‘Æ°á»£c chá»n khi láº­p phiáº¿u.
+              Dịch vụ sẽ hiển thị ở giao diện đặt lịch và có thể được chọn khi lập phiếu.
             </small>
           </label>
         </div>
@@ -182,10 +180,10 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
 
       <div className="form-actions service-form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>
-          Há»§y
+          Hủy
         </button>
         <button type="submit" className="btn-primary" disabled={loading || Boolean(codeError)}>
-          {loading ? "Äang lÆ°u..." : "LÆ°u"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -203,6 +201,8 @@ export default function ServicesPage() {
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -210,12 +210,12 @@ export default function ServicesPage() {
     try {
       const [serviceResponse, categoryResponse] = await Promise.all([
         servicesApi.getStandardServices(),
-        servicesApi.getServiceCategories()
+        servicesApi.getServiceCategories(),
       ]);
       setServices(filterPackageManagedStandardServices(serviceResponse || []));
       setCategories(categoryResponse || []);
     } catch {
-      setError("KhÃ´ng thá»ƒ táº£i danh má»¥c dá»‹ch vá»¥.");
+      setError("Không thể tải danh mục dịch vụ.");
     } finally {
       setLoading(false);
     }
@@ -225,13 +225,20 @@ export default function ServicesPage() {
     fetchData();
   }, [fetchData]);
 
-  const query = String(searchQuery || "")
-    .trim()
-    .toLowerCase();
-  const filtered = (services || []).filter((service) =>
-    (service.name || "").toLowerCase().includes(query) ||
-    (service.code || "").toLowerCase().includes(query)
+  const query = String(searchQuery || "").trim().toLowerCase();
+  const filtered = (services || []).filter(
+    (service) => (service.name || "").toLowerCase().includes(query) || (service.code || "").toLowerCase().includes(query)
   );
+  const pagedServices = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, pageSize]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (page > totalPages) setPage(totalPages);
+  }, [filtered.length, page, pageSize]);
 
   const closeModal = () => {
     setModal(null);
@@ -246,7 +253,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "KhÃ´ng thá»ƒ thÃªm dá»‹ch vá»¥.");
+      setFormError(err?.response?.data?.message || err?.message || "Không thể thêm dịch vụ.");
     } finally {
       setSaving(false);
     }
@@ -259,7 +266,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t dá»‹ch vá»¥.");
+      setFormError(err?.response?.data?.message || err?.message || "Không thể cập nhật dịch vụ.");
     } finally {
       setSaving(false);
     }
@@ -272,7 +279,7 @@ export default function ServicesPage() {
       await fetchData();
       closeModal();
     } catch (err) {
-      setFormError(err?.message || "KhÃ´ng thá»ƒ xÃ³a dá»‹ch vá»¥.");
+      setFormError(err?.response?.data?.message || err?.message || "Không thể xóa dịch vụ.");
     } finally {
       setSaving(false);
     }
@@ -280,18 +287,14 @@ export default function ServicesPage() {
 
   return (
     <div className="management-content services-page">
-      <header className="admin-header">
-        <div>
-          <h1>Quáº£n lÃ½ dá»‹ch vá»¥</h1>
-          <p className="header-sub">Danh má»¥c cÃ¡c dá»‹ch vá»¥ sá»­a chá»¯a vÃ  báº£o dÆ°á»¡ng</p>
-        </div>
+      <header className="admin-header header-actions-only">
         <button className="btn-primary" onClick={() => setModal("create")}>
-          + ThÃªm dá»‹ch vá»¥
+          + Thêm dịch vụ
         </button>
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} dá»‹ch vá»¥</span>
+        <span className="result-count">{filtered.length} dịch vụ</span>
       </div>
 
       {error ? <div className="error service-page-error">{error}</div> : null}
@@ -300,62 +303,62 @@ export default function ServicesPage() {
         {loading ? (
           <div className="loading-state">
             <div className="spinner" />
-            <p>Äang táº£i...</p>
+            <p>Đang tải...</p>
           </div>
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
-                <th>MÃ£</th>
-                <th>TÃªn dá»‹ch vá»¥</th>
-                <th>ÄÆ¡n giÃ¡</th>
-                <th>Thá»i gian</th>
-                <th className="th-center">Danh má»¥c</th>
-                <th className="th-center">Tráº¡ng thÃ¡i</th>
-                <th>Thao tÃ¡c</th>
+                <th>Code</th>
+                <th>Tên dịch vụ</th>
+                <th>Đơn giá</th>
+                <th>Thời gian</th>
+                <th className="th-center">Danh mục</th>
+                <th className="th-center">Trạng thái</th>
+                <th className="th-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="td-center">
-                    KhÃ´ng cÃ³ dá»‹ch vá»¥ phÃ¹ há»£p.
+                    Không có dịch vụ phù hợp.
                   </td>
                 </tr>
               ) : (
-                filtered.map((service) => {
+                pagedServices.map((service) => {
                   const category = categories.find((item) => Number(item.id) === Number(service.categoryId));
                   return (
                     <tr key={service.id}>
                       <td className="td-id">{service.code}</td>
                       <td className="td-name">{service.name}</td>
-                      <td>{Number(service.basePrice || 0).toLocaleString("vi-VN")}Ä‘</td>
-                      <td>{Number(service.standardMinutes || 0)} phÃºt</td>
+                      <td>{Number(service.basePrice || 0).toLocaleString("vi-VN")}đ</td>
+                      <td>{Number(service.standardMinutes || 0)} phút</td>
                       <td className="td-center">{categoryLabel(category)}</td>
                       <td className="td-center">
                         <span className={`badge ${service.isActive !== false ? "badge-active" : "badge-inactive"}`}>
-                          {service.isActive !== false ? "Äang kinh doanh" : "Ngá»«ng kinh doanh"}
+                          {service.isActive !== false ? "Đang kinh doanh" : "Ngừng kinh doanh"}
                         </span>
                       </td>
-                      <td>
+                      <td className="td-center">
                         <div className="row-actions">
                           <button
-                            className="btn-icon"
+                            className="btn-icon btn-edit"
                             onClick={() => {
                               setSelected(service);
                               setModal("edit");
                             }}
                           >
-                            Sá»­a
+                            Sửa
                           </button>
                           <button
-                            className="btn-icon"
+                            className="btn-icon btn-del"
                             onClick={() => {
                               setSelected(service);
                               setModal("delete");
                             }}
                           >
-                            XÃ³a
+                            Xóa
                           </button>
                         </div>
                       </td>
@@ -368,36 +371,37 @@ export default function ServicesPage() {
         )}
       </div>
 
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <TablePagination
+          totalItems={filtered.length}
+          currentPage={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
+      </div>
+
       {modal === "create" && (
-        <Modal title="ThÃªm dá»‹ch vá»¥ má»›i" onClose={closeModal} className="service-modal">
+        <Modal title="Thêm dịch vụ mới" onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
-          <ServiceForm
-            initial={EMPTY_SERVICE}
-            categories={categories}
-            onSubmit={handleCreate}
-            onCancel={closeModal}
-            loading={saving}
-          />
+          <ServiceForm initial={EMPTY_SERVICE} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
 
       {modal === "edit" && selected ? (
-        <Modal title={`Sá»­a dá»‹ch vá»¥ â€¢ ${selected.name}`} onClose={closeModal} className="service-modal">
+        <Modal title={`Sửa dịch vụ • ${selected.name}`} onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
-          <ServiceForm
-            initial={selected}
-            categories={categories}
-            onSubmit={handleEdit}
-            onCancel={closeModal}
-            loading={saving}
-          />
+          <ServiceForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
         </Modal>
       ) : null}
 
       {modal === "delete" && selected ? (
-        <Modal title="XÃ¡c nháº­n xÃ³a" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           <ConfirmDialog
-            message={`XÃ³a dá»‹ch vá»¥ "${selected.name}"?`}
+            message={`Xóa dịch vụ "${selected.name}"?`}
             onConfirm={handleDelete}
             onCancel={closeModal}
             loading={saving}
@@ -407,4 +411,3 @@ export default function ServicesPage() {
     </div>
   );
 }
-

@@ -248,6 +248,14 @@ export default function WorkshopPage() {
     : currentNormalizedPath.startsWith("/workshop/reception/appointments")
       ? "appointments"
       : "orders";
+  const supportsHistoryView = ["TECH", "TEAM_LEADER", "FOREMAN"].includes(userRole);
+  const currentRolePath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "";
+  const isRoleDashboardPage = Boolean(currentRolePath) && (
+    currentNormalizedPath === currentRolePath ||
+    currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`) ||
+    currentNormalizedPath.startsWith(`${currentRolePath}/orders/`)
+  );
+  const isRoleHistoryPage = Boolean(currentRolePath) && currentNormalizedPath === `${currentRolePath}/history`;
 
   const goReceptionTab = useCallback((tab) => {
     if (tab === "chat") {
@@ -260,6 +268,15 @@ export default function WorkshopPage() {
     }
     navigate("/workshop/reception");
   }, [navigate]);
+
+  const goRoleWorkspaceTab = useCallback((tab) => {
+    if (!currentRolePath) return;
+    if (tab === "history") {
+      navigate(`${currentRolePath}/history`);
+      return;
+    }
+    navigate(currentRolePath);
+  }, [currentRolePath, navigate]);
   return (
     <ChakraProvider theme={initialTheme}>
       <div className={`workshop-page ${isDarkMode ? "dark" : ""}`}>
@@ -313,6 +330,24 @@ export default function WorkshopPage() {
                   onClick={() => goReceptionTab("chat")}
                 >
                   Chat khách hàng
+                </button>
+              </div>
+            )}
+            {supportsHistoryView && (
+              <div className="role-sub-nav">
+                <button
+                  type="button"
+                  className={`role-sub-item ${isRoleDashboardPage ? "active" : ""}`}
+                  onClick={() => goRoleWorkspaceTab("dashboard")}
+                >
+                  Bảng điều phối
+                </button>
+                <button
+                  type="button"
+                  className={`role-sub-item ${isRoleHistoryPage ? "active" : ""}`}
+                  onClick={() => goRoleWorkspaceTab("history")}
+                >
+                  Lịch sử đã xử lý
                 </button>
               </div>
             )}

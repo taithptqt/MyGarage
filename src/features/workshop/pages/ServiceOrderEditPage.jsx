@@ -253,7 +253,7 @@ function hasServiceOrderEditWindowPassed(order) {
   const actualHandoverRaw = readField(order, ["actualHandover", "ActualHandover"], null);
   const hasActualHandover = Boolean(actualHandoverRaw);
   return hasActualHandover
-    || ["APPROVED", "IN_PROGRESS", "REPAIRING", "READY", "WAITING_PAYMENT", "CLOSED", "CANCELED", "CANCELLED"].includes(normalizedStatus);
+    || ["APPROVED", "IN_PROGRESS", "REPAIRING", "READY", "WAITING_PAYMENT", "CLOSED", "CANCELED", "CANCELED"].includes(normalizedStatus);
 }
 
 function normalizeServiceOrderEditCapability(payload) {
@@ -1664,5 +1664,6 @@ export default function ServiceOrderEditPage() {
     </div>
   );
 }
+
 
 

@@ -22,6 +22,15 @@
   margin: 0 28px 12px;
 }
 
+.services-page .admin-table th.th-center,
+.services-page .admin-table td.td-center {
+  text-align: center !important;
+}
+
+.services-page .td-center .row-actions {
+  justify-content: center;
+}
+
 .service-form {
   gap: 16px;
 }

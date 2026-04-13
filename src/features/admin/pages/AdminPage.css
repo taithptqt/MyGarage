@@ -96,6 +96,10 @@
   justify-content: space-between;
 }
 
+.admin-header.header-actions-only {
+  justify-content: flex-end;
+}
+
 .admin-header h1 {
   margin: 0;
   font-size: 30px;
@@ -324,6 +328,67 @@ select.search-input:not([multiple]):focus {
 .row-actions {
   display: flex;
   gap: 8px;
+}
+
+.admin-page .row-actions,
+.management-content .row-actions {
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-page .row-actions .btn-icon,
+.management-content .row-actions .btn-icon {
+  min-width: 68px;
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  line-height: 1.1;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.16s ease;
+  flex-shrink: 0;
+}
+
+.admin-page .row-actions .btn-icon.btn-edit,
+.management-content .row-actions .btn-icon.btn-edit {
+  border-color: #c7d6ff;
+  background: linear-gradient(180deg, #f3f7ff 0%, #e8efff 100%);
+  color: #1f3f93;
+  box-shadow: 0 2px 8px rgba(46, 91, 255, 0.12);
+}
+
+.admin-page .row-actions .btn-icon.btn-edit:hover,
+.management-content .row-actions .btn-icon.btn-edit:hover {
+  border-color: #afc4ff;
+  background: #dfe9ff;
+  transform: translateY(-1px);
+}
+
+.admin-page .row-actions .btn-icon.btn-del,
+.management-content .row-actions .btn-icon.btn-del {
+  border-color: #ffc9c6;
+  background: linear-gradient(180deg, #fff3f2 0%, #ffe9e7 100%);
+  color: #b42318;
+  box-shadow: 0 2px 8px rgba(233, 54, 38, 0.12);
+}
+
+.admin-page .row-actions .btn-icon.btn-del:hover,
+.management-content .row-actions .btn-icon.btn-del:hover {
+  border-color: #ffb1ab;
+  background: #ffdeda;
+  transform: translateY(-1px);
+}
+
+.admin-page .row-actions .btn-icon:focus-visible,
+.management-content .row-actions .btn-icon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.18);
 }
 
 .btn-icon {

@@ -1,52 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
-import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
-import InsuranceBillingOverview from "@features/workshop/components/InsuranceBillingOverview";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
-import { useServiceOrderDetailData } from "@features/workshop/hooks/useServiceOrderDetailData";
-import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
-import { summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
+import { getAllStandardServices } from "@features/admin/api/serviceApi";
+import { inventoryApi } from "@features/admin/api/inventoryApi";
+import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import "./Workshop.css";
 
 function resolveBackConfig(pathname) {
   const normalizedPath = String(pathname || "").toLowerCase();
-  if (normalizedPath.includes("/workshop/manager/")) {
-    return { path: "/workshop/manager", label: "Quay lại quản đốc" };
-  }
-  if (normalizedPath.includes("/workshop/foreman/")) {
-    return { path: "/workshop/foreman", label: "Quay lại quản đốc" };
-  }
-  if (normalizedPath.includes("/workshop/team-leader/")) {
-    return { path: "/workshop/team-leader", label: "Quay lại tổ trưởng" };
-  }
-
+  if (normalizedPath.includes("/workshop/manager/")) return { path: "/workshop/manager", label: "Quay lại quản đốc" };
+  if (normalizedPath.includes("/workshop/foreman/")) return { path: "/workshop/foreman", label: "Quay lại quản đốc" };
+  if (normalizedPath.includes("/workshop/team-leader/")) return { path: "/workshop/team-leader", label: "Quay lại tổ trưởng" };
   return { path: "/workshop/reception", label: "Quay lại lễ tân" };
 }
 
-function normalizeMinutes(value) {
+function toPositiveNumber(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(24 * 60, Math.round(parsed)));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function addMinutes(baseDate, minutes) {
-  if (!baseDate) return null;
-  const parsed = new Date(baseDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setMinutes(parsed.getMinutes() + normalizeMinutes(minutes));
-  return parsed;
+function normalizeStatus(value) {
+  return String(value || "").trim().toUpperCase();
 }
 
 function formatMoney(value) {
   return Number(value || 0).toLocaleString("vi-VN");
-}
-
-function formatApprovalState(state) {
-  const normalized = String(state || "").trim().toUpperCase();
-  if (normalized === "APPROVED") return "Đã duyệt";
-  if (normalized === "REJECTED") return "Khách từ chối";
-  return "Chờ khách duyệt";
 }
 
 function resolveCurrentStaffId(user) {
@@ -62,12 +42,134 @@ function resolveCurrentStaffId(user) {
     const parsed = Number(candidate);
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
-  return undefined;
+  return null;
 }
 
-function toPositiveNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+function readField(row, ...keys) {
+  for (const key of keys) {
+    if (row && row[key] !== undefined && row[key] !== null) return row[key];
+  }
+  return null;
+}
+
+function firstNonEmptyText(...candidates) {
+  for (const candidate of candidates) {
+    const text = String(candidate ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveCustomerDisplay(order, customerById) {
+  const directText = firstNonEmptyText(
+    readField(order, "customerName", "CustomerName", "customerFullName", "CustomerFullName", "guestName", "GuestName"),
+    order?.customer?.fullName,
+    order?.customer?.FullName,
+    order?.customer?.name,
+    order?.customer?.Name
+  );
+  if (directText) return directText;
+
+  const customerId = toPositiveNumber(readField(order, "customerId", "CustomerId"));
+  const customer = customerId ? customerById.get(customerId) : null;
+  return firstNonEmptyText(
+    customer?.fullName,
+    customer?.FullName,
+    customer?.name,
+    customer?.Name
+  );
+}
+
+function resolveVehiclePlateDisplay(order, vehicleById) {
+  const directText = firstNonEmptyText(
+    readField(
+      order,
+      "vehicleLicensePlate",
+      "VehicleLicensePlate",
+      "vehiclePlate",
+      "VehiclePlate",
+      "licensePlate",
+      "LicensePlate",
+      "guestVehicleLicensePlate",
+      "GuestVehicleLicensePlate"
+    ),
+    order?.vehicle?.licensePlate,
+    order?.vehicle?.LicensePlate,
+    order?.customerVehicle?.licensePlate,
+    order?.customerVehicle?.LicensePlate
+  );
+  if (directText) return directText;
+
+  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+  return firstNonEmptyText(
+    vehicle?.licensePlate,
+    vehicle?.LicensePlate,
+    vehicle?.plateNumber,
+    vehicle?.PlateNumber
+  );
+}
+
+function extractLatestDiagnosisId(diagnoses) {
+  const list = Array.isArray(diagnoses) ? diagnoses : [];
+  if (list.length === 0) return null;
+
+  const sorted = [...list].sort((a, b) => {
+    const aTime = new Date(readField(a, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+    const bTime = new Date(readField(b, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+    return bTime - aTime;
+  });
+
+  return toPositiveNumber(readField(sorted[0], "id", "Id"));
+}
+
+function normalizeRecommendationItemType(raw) {
+  const token = String(raw || "").trim().toUpperCase();
+  if (token.includes("PART") || token.includes("MATERIAL") || token.includes("PRODUCT")) return "PART";
+  return "SERVICE";
+}
+
+function extractServiceId(service) {
+  return toPositiveNumber(readField(service, "id", "Id"));
+}
+
+function extractServiceName(service) {
+  return String(readField(service, "name", "Name", "serviceName", "ServiceName") || "").trim();
+}
+
+function extractServicePrice(service) {
+  const val = Number(readField(service, "basePrice", "BasePrice", "unitPrice", "UnitPrice", "price", "Price") || 0);
+  return Number.isFinite(val) && val > 0 ? val : 0;
+}
+
+function extractServiceTax(service) {
+  const val = Number(readField(service, "taxRate", "TaxRate") || 0);
+  return Number.isFinite(val) && val >= 0 ? val : 0;
+}
+
+function extractProductId(product) {
+  return toPositiveNumber(readField(product, "id", "Id", "productId", "ProductId"));
+}
+
+function extractProductName(product) {
+  return String(readField(product, "name", "Name", "productName", "ProductName") || "").trim();
+}
+
+function extractProductPrice(product) {
+  const val = Number(
+    readField(product, "salePrice", "SalePrice", "retailPrice", "RetailPrice", "unitPrice", "UnitPrice", "sellingPrice", "SellingPrice") || 0
+  );
+  return Number.isFinite(val) && val > 0 ? val : 0;
+}
+
+function statusLabel(status) {
+  const token = normalizeStatus(status);
+  if (token === "DRAFT") return "DRAFT";
+  if (token === "WAITING_APPROVAL") return "WAITING_APPROVAL";
+  if (token === "APPROVED") return "APPROVED";
+  if (token === "REJECTED") return "REJECTED";
+  if (token === "SUPERSEDED") return "SUPERSEDED";
+  return token || "UNKNOWN";
 }
 
 export default function ServiceOrderQuotePage() {
@@ -75,221 +177,348 @@ export default function ServiceOrderQuotePage() {
   const location = useLocation();
   const { orderId } = useParams();
   const { user } = useAuth();
-  const backConfig = useMemo(() => resolveBackConfig(location.pathname), [location.pathname]);
+  const normalizedPath = String(location.pathname || "").toLowerCase();
+  const roleCode = String(user?.roleCode || "").trim().toUpperCase();
 
-  const {
-    order,
-    details,
-    diagnoses,
-    totalAmount,
-    loading,
-    error,
-    refresh,
-  } = useServiceOrderDetailData(orderId);
-
-  const latestDiagnosis = diagnoses[0] || null;
   const staffId = useMemo(() => resolveCurrentStaffId(user), [user]);
   const numericOrderId = Number(orderId);
+  const backConfig = useMemo(() => resolveBackConfig(location.pathname), [location.pathname]);
+  const isTeamLeaderView = roleCode === "TEAM_LEADER" || normalizedPath.includes("/team-leader/");
+  const isForemanOrManagerView =
+    ["FOREMAN", "MANAGER", "ADMIN"].includes(roleCode) ||
+    normalizedPath.includes("/foreman/") ||
+    normalizedPath.includes("/manager/");
+  const isReceptionView = roleCode === "RECEPTIONIST" || normalizedPath.includes("/reception/");
 
-  const [handoverSnapshot, setHandoverSnapshot] = useState(null);
-  const [loadingHandoverSnapshot, setLoadingHandoverSnapshot] = useState(false);
-  const [handoverError, setHandoverError] = useState("");
-  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
-  const [additionalRepairMinutes, setAdditionalRepairMinutes] = useState(30);
-  const [quoteChannel, setQuoteChannel] = useState("APP");
-  const [quoteSummary, setQuoteSummary] = useState("");
-  const [quoteAttachmentUrl, setQuoteAttachmentUrl] = useState("");
-  const [decisionChannel, setDecisionChannel] = useState("APP");
-  const [decisionNote, setDecisionNote] = useState("");
-  const [technicalApprovalNote, setTechnicalApprovalNote] = useState("");
-  const [submittingSnapshot, setSubmittingSnapshot] = useState(false);
-  const [submittingDecision, setSubmittingDecision] = useState(false);
-  const [submittingTechnicalApproval, setSubmittingTechnicalApproval] = useState(false);
+  const [order, setOrder] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [quotations, setQuotations] = useState([]);
+  const [activeQuotationId, setActiveQuotationId] = useState(null);
+  const [decisionByDetailId, setDecisionByDetailId] = useState({});
+  const [approveNote, setApproveNote] = useState("");
+  const autoCreateTriedRef = useRef(false);
 
-  const loadLatestHandoverSnapshot = useCallback(async () => {
-    if (!numericOrderId) return;
-    setLoadingHandoverSnapshot(true);
-    setHandoverError("");
+  const [services, setServices] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+
+  const customerById = useMemo(() => {
+    const map = new Map();
+    (customers || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id", "customerId", "CustomerId"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [customers]);
+
+  const vehicleById = useMemo(() => {
+    const map = new Map();
+    (vehicles || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id", "vehicleId", "VehicleId"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [vehicles]);
+
+  const serviceLookup = useMemo(() => {
+    const map = new Map();
+    (services || []).forEach((item) => {
+      const id = extractServiceId(item);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [services]);
+
+  const productLookup = useMemo(() => {
+    const map = new Map();
+    (products || []).forEach((item) => {
+      const id = extractProductId(item);
+      if (!id) return;
+      map.set(id, item);
+    });
+    return map;
+  }, [products]);
+
+  const activeQuotation = useMemo(
+    () => (quotations || []).find((item) => Number(readField(item, "id", "Id")) === Number(activeQuotationId)) || null,
+    [quotations, activeQuotationId]
+  );
+
+  const loadData = useCallback(async () => {
+    if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
+      setError("Mã lệnh sửa chữa không hợp lệ.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setActionMessage("");
     try {
-      const response = await serviceOrderApi.getLatestDiagnosisHandoverSnapshot(numericOrderId);
-      setHandoverSnapshot(response || null);
-      if (response?.quoteSummary) {
-        setQuoteSummary(response.quoteSummary);
-      }
-      if (response?.quoteChannel) {
-        setQuoteChannel(String(response.quoteChannel).toUpperCase());
-      }
-      if (response?.quoteAttachmentUrl) {
-        setQuoteAttachmentUrl(response.quoteAttachmentUrl);
+      const [orderRes, diagnosesRes, quotationsRes, serviceRes, productRes, customerRes, vehicleRes] = await Promise.all([
+        serviceOrderApi.getById(numericOrderId),
+        serviceOrderApi.getDiagnoses(numericOrderId),
+        serviceOrderApi.getQuotationsByServiceOrder(numericOrderId),
+        getAllStandardServices().catch(() => []),
+        inventoryApi.getProducts().catch(() => []),
+        getAllCustomers().catch(() => []),
+        getAllVehicles().catch(() => []),
+      ]);
+
+      const latestDiagnosisId = extractLatestDiagnosisId(diagnosesRes);
+      const recommendationRes = latestDiagnosisId
+        ? await serviceOrderApi.getDiagnoseRecommendations(latestDiagnosisId).catch(() => [])
+        : [];
+
+      const quoteList = Array.isArray(quotationsRes) ? quotationsRes : [];
+      const sortedQuoteList = [...quoteList].sort((a, b) => {
+        const av = Number(readField(a, "versionNo", "VersionNo") || 0);
+        const bv = Number(readField(b, "versionNo", "VersionNo") || 0);
+        return bv - av;
+      });
+
+      setOrder(orderRes || null);
+      setRecommendations(Array.isArray(recommendationRes) ? recommendationRes : []);
+      setQuotations(sortedQuoteList);
+      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setProducts(Array.isArray(productRes) ? productRes : []);
+      setCustomers(Array.isArray(customerRes) ? customerRes : []);
+      setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
+
+      if (sortedQuoteList.length > 0) {
+        const latestId = Number(readField(sortedQuoteList[0], "id", "Id"));
+        setActiveQuotationId(latestId);
+      } else {
+        setActiveQuotationId(null);
       }
     } catch (err) {
-      const message = String(err?.message || "");
-      if (message.toLowerCase().includes("404")) {
-        setHandoverSnapshot(null);
-      } else {
-        setHandoverError(message || "Không thể tải snapshot T2.");
-      }
+      setError(err?.message || "Không thể tải dữ liệu báo giá.");
     } finally {
-      setLoadingHandoverSnapshot(false);
+      setLoading(false);
     }
   }, [numericOrderId]);
 
   useEffect(() => {
-    loadLatestHandoverSnapshot();
-  }, [loadLatestHandoverSnapshot]);
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
-    let active = true;
+    const next = {};
+    const details = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
+    details.forEach((item) => {
+      const detailId = Number(readField(item, "id", "Id"));
+      if (!detailId) return;
+      const status = normalizeStatus(readField(item, "approvalStatus", "ApprovalStatus"));
+      next[detailId] = status === "REJECTED" ? "REJECTED" : "APPROVED";
+    });
+    setDecisionByDetailId(next);
+  }, [activeQuotationId, activeQuotation]);
 
-    const loadInsuranceCompanies = async () => {
-      try {
-        const response = await insuranceCompanyApi.getAll();
-        if (active) {
-          setInsuranceCompanies(Array.isArray(response) ? response : []);
+  const buildQuotationItemsFromRecommendations = useCallback(() => {
+    const source = (Array.isArray(recommendations) ? recommendations : []).filter((item) => {
+      const parentId = toPositiveNumber(readField(item, "parentRecommendationId", "ParentRecommendationId"));
+      return !parentId;
+    });
+
+    return source
+      .map((rec) => {
+        const itemType = normalizeRecommendationItemType(readField(rec, "itemType", "ItemType"));
+        const standardServiceId = toPositiveNumber(readField(rec, "standardServiceId", "StandardServiceId"));
+        const inventoryItemId = toPositiveNumber(readField(rec, "inventoryItemId", "InventoryItemId"));
+        const quantityRaw = Number(readField(rec, "quantity", "Quantity") || 1);
+        const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+
+        let itemId = null;
+        let itemName = "";
+        let unitPriceAtTime = 0;
+        let taxRate = 0;
+
+        if (itemType === "SERVICE" && standardServiceId) {
+          const service = serviceLookup.get(standardServiceId);
+          itemId = standardServiceId;
+          itemName = extractServiceName(service) || `Dịch vụ #${standardServiceId}`;
+          unitPriceAtTime = extractServicePrice(service);
+          taxRate = extractServiceTax(service);
+        } else if (inventoryItemId) {
+          const product = productLookup.get(inventoryItemId);
+          itemId = inventoryItemId;
+          itemName = extractProductName(product) || `Vật tư #${inventoryItemId}`;
+          unitPriceAtTime = extractProductPrice(product);
+          taxRate = 0;
         }
-      } catch {
-        if (active) {
-          setInsuranceCompanies([]);
-        }
-      }
-    };
 
-    void loadInsuranceCompanies();
+        return {
+          diagnoseRecommendationId: toPositiveNumber(readField(rec, "id", "Id")),
+          itemType,
+          itemId,
+          itemName: itemName || "Hạng mục đề xuất",
+          description: readField(rec, "technicianNotes", "TechnicianNotes") || null,
+          quantity,
+          unitPriceAtTime,
+          costPriceAtTime: null,
+          discountValue: 0,
+          taxRate,
+          payerType: "CUSTOMER",
+          insuranceCompanyId: null,
+          insuranceRequestedAmount: null,
+          customerCoPayAmount: null,
+          isBlocking: true,
+          estimatedMinutes: null,
+          isReturnOldPart: false,
+        };
+      })
+      .filter((item) => String(item.itemName || "").trim().length > 0);
+  }, [recommendations, serviceLookup, productLookup]);
 
-    return () => {
-      active = false;
-    };
-  }, []);
+  const handleCreateDraftQuotation = useCallback(async () => {
+    if (!numericOrderId || !staffId) {
+      setError("Không xác định được mã lệnh hoặc nhân sự thao tác.");
+      return;
+    }
 
-  const fallbackT1 = order?.estimatedHandover || order?.promisedHandoverTime || order?.checkInTime || null;
-  const effectiveT1 = handoverSnapshot?.t1EstimatedHandover || fallbackT1;
-  const draftT2 = useMemo(
-    () => addMinutes(effectiveT1, additionalRepairMinutes),
-    [effectiveT1, additionalRepairMinutes]
-  );
-  const hasPendingCustomerDecision =
-    String(handoverSnapshot?.approvalState || "").toUpperCase() === "PENDING";
-  const insuranceSummary = useMemo(
-    () => summarizeInsuranceOrderDetails(details),
-    [details]
-  );
-  const insuranceCompanyNames = useMemo(() => {
-    if (!insuranceSummary.hasInsurance) return [];
+    const items = buildQuotationItemsFromRecommendations();
+    if (items.length === 0) {
+      setError("Không có đề xuất chẩn đoán để tạo báo giá nháp.");
+      return;
+    }
 
-    const companyNameById = new Map(
-      (Array.isArray(insuranceCompanies) ? insuranceCompanies : []).map((company) => [
-        Number(company?.id || company?.Id || 0),
-        String(company?.name || company?.Name || "").trim(),
-      ])
-    );
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+    try {
+      const created = await serviceOrderApi.createQuotation(numericOrderId, {
+        title: `Báo giá v${(quotations?.length || 0) + 1}`,
+        quotationType: "NORMAL",
+        validUntil: null,
+        serviceAdvisorId: staffId,
+        customerNotes: null,
+        internalNotes: "Tạo từ đề xuất chẩn đoán",
+        submitForApproval: false,
+        items,
+      });
 
-    return insuranceSummary.companyIds
-      .map((companyId) => companyNameById.get(Number(companyId)) || `Công ty #${companyId}`)
+      setActionMessage("Đã tạo báo giá nháp mới.");
+      await loadData();
+      const createdId = Number(readField(created, "id", "Id"));
+      if (createdId > 0) setActiveQuotationId(createdId);
+    } catch (err) {
+      setError(err?.message || "Không tạo được báo giá nháp.");
+    } finally {
+      setSaving(false);
+    }
+  }, [numericOrderId, staffId, buildQuotationItemsFromRecommendations, quotations?.length, loadData]);
+
+  useEffect(() => {
+    autoCreateTriedRef.current = false;
+  }, [numericOrderId]);
+
+  useEffect(() => {
+    if (loading || saving) return;
+    if (autoCreateTriedRef.current) return;
+    if (!(isTeamLeaderView || isReceptionView || roleCode === "ADMIN")) return;
+    if ((quotations || []).length > 0) return;
+    if ((recommendations || []).length === 0) return;
+    if (!staffId) return;
+
+    autoCreateTriedRef.current = true;
+    void handleCreateDraftQuotation();
+  }, [loading, saving, quotations, recommendations, staffId, handleCreateDraftQuotation, isTeamLeaderView, isReceptionView, roleCode]);
+
+  const handleSubmitQuotation = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+    try {
+      await serviceOrderApi.submitQuotation(quoteId, { actorStaffId: staffId, note: "Gửi cho khách duyệt" });
+      setActionMessage("Đã chuyển báo giá sang WAITING_APPROVAL.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Không gửi được báo giá.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, loadData]);
+
+  const handleSupersedeQuotation = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+    try {
+      await serviceOrderApi.supersedeQuotation(quoteId, { actorStaffId: staffId, note: "Thay bằng phiên bản mới" });
+      setActionMessage("Đã supersede báo giá hiện tại.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Không supersede được báo giá.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, loadData]);
+
+  const handleApproveQuotation = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    const details = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
+    const decisions = details
+      .map((row) => {
+        const detailId = Number(readField(row, "id", "Id"));
+        if (!detailId) return null;
+        const selected = normalizeStatus(decisionByDetailId[detailId]) || "APPROVED";
+        return {
+          quotationDetailId: detailId,
+          approved: selected !== "REJECTED",
+          rejectReason: selected === "REJECTED" ? "CUSTOMER_REJECTED" : null,
+        };
+      })
       .filter(Boolean);
-  }, [insuranceCompanies, insuranceSummary]);
 
-  const canShowTechnicalApprovalSection = useMemo(() => {
-    const normalizedPath = String(location.pathname || "").toLowerCase();
-    return normalizedPath.includes("/workshop/team-leader/") || normalizedPath.includes("/workshop/foreman/");
-  }, [location.pathname]);
-
-  const hasDiagnosisData = Array.isArray(diagnoses) && diagnoses.length > 0;
-  const isTechnicalApproved = useMemo(
-    () =>
-      (Array.isArray(diagnoses) ? diagnoses : []).some((item) =>
-        Boolean(toPositiveNumber(item?.approvedByForemanId ?? item?.ApprovedByForemanId))
-      ),
-    [diagnoses]
-  );
-
-  const handleTechnicalApproval = useCallback(async () => {
-    if (!numericOrderId || !staffId || !hasDiagnosisData || isTechnicalApproved) return;
-
-    setSubmittingTechnicalApproval(true);
-    setHandoverError("");
+    setSaving(true);
+    setError("");
+    setActionMessage("");
     try {
-      await serviceOrderApi.approveDiagnosisTechnical(numericOrderId, {
-        teamLeaderId: staffId,
-        note: technicalApprovalNote || undefined,
+      await serviceOrderApi.approveQuotation(quoteId, {
+        approvedBy: staffId,
+        note: approveNote || null,
+        decisions,
       });
-      setTechnicalApprovalNote("");
-      await refresh();
+      setActionMessage("Đã duyệt báo giá và đẩy hạng mục APPROVED qua SOD.");
+      setApproveNote("");
+      await loadData();
     } catch (err) {
-      setHandoverError(err?.message || "Không thể duyệt báo cáo kỹ thuật.");
+      setError(err?.message || "Không duyệt được báo giá.");
     } finally {
-      setSubmittingTechnicalApproval(false);
+      setSaving(false);
     }
-  }, [hasDiagnosisData, isTechnicalApproved, numericOrderId, refresh, staffId, technicalApprovalNote]);
+  }, [activeQuotation, staffId, decisionByDetailId, approveNote, loadData]);
 
-  const handleCreateSnapshot = useCallback(async () => {
-    if (!numericOrderId) {
-      setHandoverError("Mã lệnh sửa chữa không hợp lệ.");
-      return;
-    }
-
-    const normalizedAdditionalMinutes = normalizeMinutes(additionalRepairMinutes);
-    setSubmittingSnapshot(true);
-    setHandoverError("");
-    try {
-      const response = await serviceOrderApi.createDiagnosisHandoverSnapshot(numericOrderId, {
-        additionalRepairMinutes: normalizedAdditionalMinutes,
-        quoteChannel,
-        quoteSummary,
-        quoteAttachmentUrl: quoteAttachmentUrl || undefined,
-        createdByStaffId: staffId,
-      });
-      setHandoverSnapshot(response || null);
-      await refresh();
-    } catch (err) {
-      setHandoverError(err?.message || "Không thể tạo snapshot báo giá T2.");
-    } finally {
-      setSubmittingSnapshot(false);
-    }
-  }, [
-    additionalRepairMinutes,
-    numericOrderId,
-    quoteAttachmentUrl,
-    quoteChannel,
-    quoteSummary,
-    refresh,
-    staffId,
-  ]);
-
-  const handleCustomerDecision = useCallback(async (approved) => {
-    if (!numericOrderId || !handoverSnapshot?.snapshotId) {
-      return;
-    }
-
-    setSubmittingDecision(true);
-    setHandoverError("");
-    try {
-      const response = await serviceOrderApi.decideDiagnosisHandoverSnapshot(
-        numericOrderId,
-        handoverSnapshot.snapshotId,
-        {
-          approved,
-          decisionChannel,
-          decisionNote: decisionNote || undefined,
-          decidedByStaffId: staffId,
-        }
-      );
-      setHandoverSnapshot(response || null);
-      await refresh();
-    } catch (err) {
-      setHandoverError(err?.message || "Không thể ghi nhận quyết định của khách.");
-    } finally {
-      setSubmittingDecision(false);
-    }
-  }, [decisionChannel, decisionNote, handoverSnapshot?.snapshotId, numericOrderId, refresh, staffId]);
+  const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+  const canSubmit = quotationStatus === "DRAFT";
+  const canApprove = ["DRAFT", "WAITING_APPROVAL"].includes(quotationStatus);
+  const canFinalApprove = quotationStatus === "WAITING_APPROVAL";
+  const canSupersede = !["APPROVED", "SUPERSEDED"].includes(normalizeStatus(readField(activeQuotation, "status", "Status")));
+  const customerDisplay = resolveCustomerDisplay(order, customerById) || "-";
+  const vehiclePlateDisplay = resolveVehiclePlateDisplay(order, vehicleById) || "-";
 
   return (
     <div className="workshop-table-card reception-quote-page">
       <div className="reception-quote-head">
         <div>
-          <h2 className="reception-quote-title">Báo giá & xác nhận khách (T2)</h2>
+          <h2 className="reception-quote-title">Báo giá theo luồng mới</h2>
           <p className="reception-quote-subtitle">
-            Lệnh <strong>{order?.code || `#${orderId}`}</strong> · Snapshot báo giá v1 sau chuẩn đoán
+            Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
           </p>
         </div>
         <button type="button" className="btn-back" onClick={() => navigate(backConfig.path)}>
@@ -300,262 +529,161 @@ export default function ServiceOrderQuotePage() {
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Đang tải dữ liệu báo giá...</p>
+            <p>Đang tải dữ liệu...</p>
         </div>
-      ) : error ? (
-        <div className="validation-summary">{error}</div>
       ) : (
         <div className="reception-quote-layout">
           <section className="reception-quote-summary-card">
             <article>
               <span>Khách hàng</span>
-              <strong>{order?.customerName || "-"}</strong>
+              <strong>{customerDisplay}</strong>
             </article>
             <article>
-              <span>Biển số xe</span>
-              <strong>{order?.vehicleLicensePlate || "-"}</strong>
+              <span>Biển số</span>
+              <strong>{vehiclePlateDisplay}</strong>
             </article>
             <article>
               <span>Trạng thái lệnh</span>
-              <strong>{order?.status || "-"}</strong>
+              <strong>{getStatusLabelVi(readField(order, "status", "Status"), readField(order, "status", "Status") || "-")}</strong>
             </article>
             <article>
-              <span>Dự kiến hiện tại</span>
-              <strong>{formatOrderDateTime(order?.estimatedHandover)}</strong>
+              <span>Số đề xuất chẩn đoán</span>
+              <strong>{(recommendations || []).length}</strong>
             </article>
           </section>
 
-          <InsuranceBillingOverview
-            summary={insuranceSummary}
-            companyNames={insuranceCompanyNames}
-            title="Tách bill bảo hiểm"
-            note="Giá trị khách trả bên dưới đã tính theo payer của từng hạng mục, không cộng chồng lên tổng giá trị sửa chữa."
-          />
-
-          <section className="reception-quote-timeline-card">
-            <div className="reception-quote-timeline-row">
-              <p>T1 (sau check-in)</p>
-              <strong>{formatOrderDateTime(effectiveT1)}</strong>
-            </div>
-            <div className="reception-quote-timeline-row">
-              <p>T2 (thêm sửa chữa)</p>
-              <strong>
-                {handoverSnapshot?.t2EstimatedHandover
-                  ? formatOrderDateTime(handoverSnapshot.t2EstimatedHandover)
-                  : formatOrderDateTime(draftT2)}
-              </strong>
-            </div>
-            <div className="reception-quote-timeline-row">
-              <p>Trạng thái duyệt khách</p>
-              <strong>{formatApprovalState(handoverSnapshot?.approvalState)}</strong>
-            </div>
-            {handoverSnapshot?.customerDecisionAt ? (
-              <div className="reception-quote-timeline-row">
-                <p>Thời điểm xác nhận</p>
-                <strong>{formatOrderDateTime(handoverSnapshot.customerDecisionAt)}</strong>
-              </div>
-            ) : null}
-          </section>
-
-          {canShowTechnicalApprovalSection ? (
-            <section className="reception-quote-action-card">
-              <h3>Duyệt báo cáo kỹ thuật</h3>
-              <div className="reception-quote-form-grid">
-                <label className="full-row">
-                  <span>Ghi chú duyệt kỹ thuật (tuỳ chọn)</span>
-                  <textarea
-                    rows={3}
-                    value={technicalApprovalNote}
-                    onChange={(event) => setTechnicalApprovalNote(event.target.value)}
-                    placeholder="Ví dụ: Đã kiểm tra đầy đủ nguyên nhân gốc và hạng mục đề xuất."
-                    disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData}
-                  />
-                </label>
-              </div>
-              <div className="reception-quote-action-row">
-                <button
-                  type="button"
-                  className="btn-success"
-                  onClick={handleTechnicalApproval}
-                  disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData || !staffId}
-                >
-                  {submittingTechnicalApproval ? "Đang duyệt..." : (isTechnicalApproved ? "Đã duyệt kỹ thuật" : "Duyệt kỹ thuật")}
-                </button>
-              </div>
-              {isTechnicalApproved ? (
-                <p className="reception-quote-note">Báo cáo kỹ thuật đã được duyệt.</p>
-              ) : null}
-            </section>
-          ) : null}
-
           <section className="reception-quote-action-card">
-            <h3>Snapshot báo giá v1 (T2)</h3>
-            <div className="reception-quote-form-grid">
-              <label>
-                <span>Phút sửa thêm</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={24 * 60}
-                  value={additionalRepairMinutes}
-                  onChange={(event) => setAdditionalRepairMinutes(event.target.value)}
-                  disabled={submittingSnapshot}
-                />
-              </label>
-              <label>
-                <span>Kênh gửi báo giá</span>
-                <select
-                  value={quoteChannel}
-                  onChange={(event) => setQuoteChannel(String(event.target.value || "APP").toUpperCase())}
-                  disabled={submittingSnapshot}
-                >
-                  <option value="APP">Ứng dụng</option>
-                  <option value="ZALO">Zalo</option>
-                  <option value="PHONE">Điện thoại</option>
-                  <option value="DIRECT">Trực tiếp tại quầy</option>
-                </select>
-              </label>
-              <label className="full-row">
-                <span>Tóm tắt báo giá v1</span>
-                <textarea
-                  rows={3}
-                  value={quoteSummary}
-                  onChange={(event) => setQuoteSummary(event.target.value)}
-                  placeholder="Mô tả ngắn hạng mục sửa thêm và chi phí dự kiến"
-                  disabled={submittingSnapshot}
-                />
-              </label>
-              <label className="full-row">
-                <span>Link ảnh lỗi (tuỳ chọn)</span>
-                <input
-                  type="text"
-                  value={quoteAttachmentUrl}
-                  onChange={(event) => setQuoteAttachmentUrl(event.target.value)}
-                  placeholder="https://..."
-                  disabled={submittingSnapshot}
-                />
-              </label>
-            </div>
-            <div className="reception-quote-action-row">
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleCreateSnapshot}
-                disabled={submittingSnapshot}
-              >
-                {submittingSnapshot ? "Đang gửi snapshot..." : "Gửi báo giá v1 (T2)"}
-              </button>
-              <button
-                type="button"
-                className="toolbar-action-btn toolbar-action-outline"
-                onClick={loadLatestHandoverSnapshot}
-                disabled={loadingHandoverSnapshot || submittingSnapshot}
-              >
-                {loadingHandoverSnapshot ? "Đang tải..." : "Làm mới snapshot"}
-              </button>
-            </div>
-            {handoverError ? <p className="reception-quote-error">{handoverError}</p> : null}
-          </section>
-
-          {handoverSnapshot ? (
-            <section className="reception-quote-action-card">
-              <h3>Quyết định của khách</h3>
-              <div className="reception-quote-form-grid">
-                <label>
-                  <span>Kênh xác nhận</span>
-                  <select
-                    value={decisionChannel}
-                    onChange={(event) => setDecisionChannel(String(event.target.value || "APP").toUpperCase())}
-                    disabled={submittingDecision || !hasPendingCustomerDecision}
-                  >
-                    <option value="APP">Ứng dụng</option>
-                    <option value="ZALO">Zalo</option>
-                    <option value="PHONE">Điện thoại</option>
-                    <option value="DIRECT">Trực tiếp tại quầy</option>
-                  </select>
-                </label>
-                <label className="full-row">
-                  <span>Ghi chú quyết định</span>
-                  <textarea
-                    rows={3}
-                    value={decisionNote}
-                    onChange={(event) => setDecisionNote(event.target.value)}
-                    placeholder="Ví dụ: Khách duyệt qua app lúc 10:35"
-                    disabled={submittingDecision || !hasPendingCustomerDecision}
-                  />
-                </label>
-              </div>
-
-              <div className="reception-quote-action-row">
-                <button
-                  type="button"
-                  className="btn-success"
-                  disabled={submittingDecision || !hasPendingCustomerDecision}
-                  onClick={() => handleCustomerDecision(true)}
-                >
-                  {submittingDecision ? "Đang xử lý..." : "Khách duyệt"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  disabled={submittingDecision || !hasPendingCustomerDecision}
-                  onClick={() => handleCustomerDecision(false)}
-                >
-                  {submittingDecision ? "Đang xử lý..." : "Khách từ chối"}
-                </button>
-              </div>
-              {!hasPendingCustomerDecision ? (
-                <p className="reception-quote-note">
-                  Snapshot đã có quyết định: <strong>{formatApprovalState(handoverSnapshot?.approvalState)}</strong>.
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-
-          <section className="reception-quote-action-card">
-            <h3>Tóm tắt chuẩn đoán</h3>
+            <h3>Thao tác báo giá</h3>
             <p className="reception-quote-note">
-              {latestDiagnosis?.diagnosisDetails || "Chưa có thông tin chuẩn đoán chi tiết."}
+              Hệ thống tự tạo báo giá nháp từ đề xuất chẩn đoán và chờ thao tác duyệt theo vai trò.
             </p>
+            {error ? <p className="reception-quote-error">{error}</p> : null}
+            {actionMessage ? <p className="reception-quote-note">{actionMessage}</p> : null}
           </section>
 
-          <section className="reception-quote-table-card">
-            <div className="reception-quote-table-head">
-              <h3>Chi tiết báo giá (view-only)</h3>
-              <strong>{formatMoney(totalAmount)} đ</strong>
-            </div>
-            {details.length === 0 ? (
-              <p className="reception-quote-note">Chưa có hạng mục báo giá.</p>
+          <section className="reception-quote-action-card">
+            <h3>Danh sách báo giá</h3>
+            {(quotations || []).length === 0 ? (
+              <p className="reception-quote-note">Chưa có báo giá.</p>
             ) : (
-              <div className="workshop-table-card">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Nội dung</th>
-                      <th>SL</th>
-                      <th>Đơn giá</th>
-                      <th>Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.map((item, index) => {
-                      const quantity = Number(item.quantity || 1);
-                      const unitPrice = Number(item.unitPrice || item.unitPriceAtTime || 0);
-                      const amount = Number(item.finalAmount || quantity * unitPrice);
-                      return (
-                        <tr key={item.id || index}>
-                          <td>{item.itemName || "Dịch vụ/Phụ tùng"}</td>
-                          <td>{quantity}</td>
-                          <td>{formatMoney(unitPrice)}</td>
-                          <td style={{ fontWeight: 700 }}>{formatMoney(amount)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="reception-quote-action-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {quotations.map((row) => {
+                  const id = Number(readField(row, "id", "Id"));
+                  const versionNo = Number(readField(row, "versionNo", "VersionNo") || 0);
+                  const status = statusLabel(readField(row, "status", "Status"));
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={id === Number(activeQuotationId) ? "btn-primary" : "toolbar-action-btn toolbar-action-outline"}
+                      onClick={() => setActiveQuotationId(id)}
+                      title={`Trạng thái: ${getStatusLabelVi(status, status)}`}
+                    >
+                      Báo giá - V{versionNo}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
+
+          {activeQuotation ? (
+            <>
+              <section className="reception-quote-action-card">
+                <h3>Xử lý báo giá đang chọn</h3>
+                <div className="reception-quote-action-row">
+                  {isForemanOrManagerView ? (
+                    <button type="button" className="btn-success" onClick={handleApproveQuotation} disabled={saving || !canFinalApprove || !staffId}>
+                      Duyệt lần cuối
+                    </button>
+                  ) : null}
+                  {isForemanOrManagerView ? (
+                    <button type="button" className="btn-danger" onClick={handleSupersedeQuotation} disabled={saving || !canSupersede || !staffId}>
+                      Thay thế phiên bản
+                    </button>
+                  ) : null}
+                </div>
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Ghi chú duyệt</span>
+                    <small className="reception-quote-approval-note-hint">Nêu rõ chỉnh sửa hoặc lý do duyệt để theo dõi lịch sử.</small>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={3}
+                    value={approveNote}
+                    onChange={(event) => setApproveNote(event.target.value)}
+                    placeholder="Nhập ghi chú nội bộ..."
+                    disabled={saving || !canApprove || (!isTeamLeaderView && !isForemanOrManagerView && !isReceptionView && roleCode !== "ADMIN")}
+                  />
+                </div>
+              </section>
+
+              <section className="reception-quote-table-card">
+                <div className="reception-quote-table-head">
+                  <h3>Chi tiết báo giá</h3>
+                  <strong>{formatMoney(readField(activeQuotation, "finalAmount", "FinalAmount"))} đ</strong>
+                </div>
+                {Array.isArray(activeQuotation.details) && activeQuotation.details.length > 0 ? (
+                  <div className="workshop-table-card">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Hạng mục</th>
+                          <th>SL</th>
+                          <th>Đơn giá</th>
+                          <th>Thành tiền</th>
+                          <th>Duyệt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeQuotation.details.map((row) => {
+                          const detailId = Number(readField(row, "id", "Id"));
+                          const name = String(readField(row, "itemName", "ItemName") || "-");
+                          const qty = Number(readField(row, "quantity", "Quantity") || 1);
+                          const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+                          const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || qty * unitPrice);
+                          const current = normalizeStatus(decisionByDetailId[detailId]) || "APPROVED";
+                          const locked = !canApprove || saving;
+                          return (
+                            <tr key={detailId}>
+                              <td>{name}</td>
+                              <td>{qty}</td>
+                              <td>{formatMoney(unitPrice)}</td>
+                              <td>{formatMoney(finalAmount)}</td>
+                              <td>
+                                <select
+                                  value={current}
+                                  disabled={locked}
+                                  onChange={(event) => {
+                                    const value = normalizeStatus(event.target.value) || "APPROVED";
+                                    setDecisionByDetailId((prev) => ({ ...prev, [detailId]: value }));
+                                  }}
+                                >
+                                  <option value="APPROVED">APPROVED</option>
+                                  <option value="REJECTED">REJECTED</option>
+                                </select>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="reception-quote-note">Báo giá này chưa có dòng chi tiết.</p>
+                )}
+              </section>
+
+              {(isTeamLeaderView || isReceptionView || roleCode === "ADMIN") ? (
+                <section className="reception-quote-submit-footer">
+                  <button type="button" className="btn-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit || !staffId}>
+                    Gửi quản đốc duyệt
+                  </button>
+                </section>
+              ) : null}
+            </>
+          ) : null}
         </div>
       )}
     </div>

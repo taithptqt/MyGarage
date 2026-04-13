@@ -22,7 +22,6 @@ const STATUS_LABELS = {
   READY: "Sẵn sàng giao xe",
   COMPLETED: "Hoàn tất",
   CANCELED: "Đã hủy",
-  CANCELLED: "Đã hủy",
 };
 
 const ORDER_CATEGORY_LABELS = {
@@ -113,7 +112,7 @@ function toPositiveNumber(...values) {
 
 function formatMoney(amount) {
   const value = Number(amount || 0);
-  return `${value.toLocaleString("vi-VN")}đ`;
+  return `${value.toLocaleString("vi-VN")}d`;
 }
 
 function formatDateTimeValue(value) {
@@ -439,9 +438,9 @@ export default function ServiceOrderDetailModal({
   const diagnosisRecallTargetLabel = useMemo(() => {
     if (diagnosisAssignedLeaderLabel) {
       if (diagnosisAssignedTeamLabel === "tổ chưa xác định") {
-        return `tổ của ${diagnosisAssignedLeaderLabel}`;
+    return `tổ của ${diagnosisAssignedLeaderLabel}`;
       }
-      return `${diagnosisAssignedTeamLabel} (tổ trưởng: ${diagnosisAssignedLeaderLabel})`;
+  return `${diagnosisAssignedTeamLabel} (tổ trưởng: ${diagnosisAssignedLeaderLabel})`;
     }
     return diagnosisAssignedTeamLabel;
   }, [diagnosisAssignedLeaderLabel, diagnosisAssignedTeamLabel]);
@@ -536,12 +535,12 @@ export default function ServiceOrderDetailModal({
     resolvedModel?.Name,
     resolvedBrand?.name,
     resolvedBrand?.Name,
-    "Chưa rõ dòng xe"
+    "Chua rõ dòng xe"
   );
   const vehicleDisplayName = useMemo(() => {
     const brand = String(vehicleBrand || "").trim();
     const model = String(vehicleModel || "").trim();
-    if (!brand) return model || "Chưa rõ dòng xe";
+    if (!brand) return model || "Chua rõ dòng xe";
     if (!model) return brand;
     if (model.toLowerCase().includes(brand.toLowerCase())) return model;
     return `${brand} ${model}`.trim();
@@ -1187,7 +1186,7 @@ export default function ServiceOrderDetailModal({
                   onChange={(event) => setBypassConflictGuard(Boolean(event.target.checked))}
                   disabled={submittingDiagnosisRequest}
                 />
-                <span>Bypass canh bao do (chi dung khi khach rat voi)</span>
+                <span>Bypass cảnh báo đỏ (chỉ dùng khi khách rất vội)</span>
               </label>
             ) : null}
 
@@ -1272,3 +1271,6 @@ export default function ServiceOrderDetailModal({
     </>
   );
 }
+
+
+

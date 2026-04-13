@@ -256,6 +256,27 @@
   background: #f4f7ff;
 }
 
+.inventory-admin-page .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.inventory-admin-page .row-actions .btn-icon {
+  min-width: 68px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .inventory-admin-page .policy-card {
   margin: 0 28px 14px;
   border: 1px solid var(--inv-panel-border);

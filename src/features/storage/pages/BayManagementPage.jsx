@@ -3,6 +3,7 @@ import { Modal } from "../../admin/components/AdminModals";
 import { bayApi } from "../api/bayApi";
 import { useSearch } from "@context/SearchContext";
 import { useBranch } from "../../../context/BranchContext";
+import TablePagination from "@shared/components/TablePagination";
 import "../../admin/pages/AdminPage.css";
 import "./BayManagementPage.css";
 
@@ -147,6 +148,23 @@ function formatDateTime(value) {
 
 function formatHours(value) {
   return `${toNumber(value, 0).toFixed(2)}h`;
+}
+
+function getFriendlyErrorMessage(err, fallbackMessage) {
+  const statusCode = err?.response?.status;
+  const apiMessage = err?.response?.data?.message;
+
+  if (statusCode === 401) {
+    return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+  }
+  if (statusCode === 403) {
+    return "Bạn không có quyền truy cập chức năng này.";
+  }
+  if (statusCode === 404) {
+    return apiMessage || "Không tìm thấy dữ liệu.";
+  }
+
+  return apiMessage || fallbackMessage;
 }
 
 function statusBadge(status) {
@@ -347,6 +365,14 @@ export default function BayManagementPage({ section }) {
     sortDirection: "asc",
     includeHidden: false,
   });
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(10);
+  const [usagePage, setUsagePage] = useState(1);
+  const [usagePageSize, setUsagePageSize] = useState(10);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [alertPage, setAlertPage] = useState(1);
+  const [alertPageSize, setAlertPageSize] = useState(10);
 
   const [modal, setModal] = useState(null);
   const [formError, setFormError] = useState("");
@@ -407,14 +433,14 @@ export default function BayManagementPage({ section }) {
         setSelectedBayId(listRows[0].id);
       }
     } catch (err) {
-      setError(err.message || "Không thể tải dữ liệu module Khoang.");
+      setError(getFriendlyErrorMessage(err, "Không thể tải dữ liệu module Khoang."));
     } finally {
       setLoading(false);
     }
   }, [filters, searchQuery, selectedBayId]);
 
   useEffect(() => {
-    refreshLookups().catch((err) => setError(err.message || "Không thể tải dữ liệu tham chiếu."));
+    refreshLookups().catch((err) => setError(getFriendlyErrorMessage(err, "Không thể tải dữ liệu tham chiếu.")));
   }, [refreshLookups]);
 
   useEffect(() => {
@@ -431,7 +457,7 @@ export default function BayManagementPage({ section }) {
       setSelectedBayVehicles(vehicleRes || { vehicles: [] });
       setSelectedBayHistory(historyRes || { items: [] });
     } catch (err) {
-      setError(err.message || "Không thể tải chi tiết khoang.");
+      setError(getFriendlyErrorMessage(err, "Không thể tải chi tiết khoang."));
     }
   }, []);
 
@@ -454,6 +480,29 @@ export default function BayManagementPage({ section }) {
 
   const activeVehicles = selectedBayVehicles?.vehicles || [];
   const visibleRows = rows || [];
+  const pagedVisibleRows = useMemo(
+    () => visibleRows.slice((listPage - 1) * listPageSize, listPage * listPageSize),
+    [visibleRows, listPage, listPageSize]
+  );
+  const pagedUsageRows = useMemo(
+    () => (usage.byBay || []).slice((usagePage - 1) * usagePageSize, usagePage * usagePageSize),
+    [usage.byBay, usagePage, usagePageSize]
+  );
+  const pagedHistoryRows = useMemo(
+    () => (selectedBayHistory.items || []).slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize),
+    [selectedBayHistory.items, historyPage, historyPageSize]
+  );
+  const pagedAlertRows = useMemo(
+    () => (alerts.items || []).slice((alertPage - 1) * alertPageSize, alertPage * alertPageSize),
+    [alerts.items, alertPage, alertPageSize]
+  );
+
+  useEffect(() => {
+    setListPage(1);
+    setUsagePage(1);
+    setHistoryPage(1);
+    setAlertPage(1);
+  }, [currentTab, filters.branchId, filters.area, filters.status, searchQuery, selectedBayId]);
 
   const runMutation = useCallback(async (task, successMessage, options = {}) => {
     setSaving(true);
@@ -469,7 +518,7 @@ export default function BayManagementPage({ section }) {
         await loadSelectedBayDetails(options.reloadBayId || selectedBayId);
       }
     } catch (err) {
-      const message = err.message || "Không thể thực hiện thao tác.";
+      const message = getFriendlyErrorMessage(err, "Không thể thực hiện thao tác.");
       if (options.asFormError) {
         setFormError(message);
       } else {
@@ -605,19 +654,13 @@ export default function BayManagementPage({ section }) {
       });
       setSuggestions(response?.items || []);
     } catch (err) {
-      setError(err.message || "Không thể lấy gợi ý khoang.");
+      setError(getFriendlyErrorMessage(err, "Không thể lấy gợi ý khoang."));
     }
   };
 
   return (
     <div className="management-content bay-admin-page">
-      <header className="admin-header">
-        <div>
-          <h1>Quản lý khoang</h1>
-          <p className="header-sub">
-            Quản lý vị trí, sức chứa, trạng thái và điều phối xe theo từng khoang.
-          </p>
-        </div>
+      <header className="admin-header header-actions-only">
         <div className="bay-header-actions">
           <button className="btn-ghost" type="button" onClick={refreshDashboard}>
             Tải lại
@@ -730,77 +773,91 @@ export default function BayManagementPage({ section }) {
       ) : (
         <>
           {currentTab === "list" && (
-            <div className="table-wrapper">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>STT</th>
-                    <th>Mã</th>
-                    <th>Tên khoang</th>
-                    <th>Chi nhánh</th>
-                    <th>Khu vực</th>
-                    <th>Trạng thái</th>
-                    <th>Sức chứa</th>
-                    <th>Đang chứa</th>
-                    <th>Mức sử dụng</th>
-                    <th className="th-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.length === 0 ? (
-                    <tr><td colSpan={10}><div className="empty-state"><p>Chưa có khoang nào.</p></div></td></tr>
-                  ) : (
-                    visibleRows.map((item) => (
-                      <tr
-                        key={item.id}
-                        className={Number(selectedBayId) === Number(item.id) ? "bay-row-selected" : ""}
-                        onClick={() => setSelectedBayId(item.id)}
-                      >
-                        <td className="td-center">{item.sequenceOrder || "-"}</td>
-                        <td className="td-id">{item.code}</td>
-                        <td>{item.name}</td>
-                        <td>{item.branchName}</td>
-                        <td>{item.area}</td>
-                        <td><span className={`badge ${statusBadge(item.operationalStatus)}`}>{STATUS_LABELS[item.operationalStatus] || item.operationalStatus}</span></td>
-                        <td>{item.capacity}</td>
-                        <td>{item.occupiedCount}</td>
-                        <td>{toNumber(item.utilizationRate, 0).toFixed(2)}%</td>
-                        <td className="td-center">
-                          <div className="row-actions bay-row-actions">
-                            <button className="btn-icon" type="button" onClick={(event) => { event.stopPropagation(); openEditModal(item); }}>Sửa</button>
-                            <button className="btn-icon" type="button" onClick={(event) => { event.stopPropagation(); runMutation(() => bayApi.hideBay(item.id), "Đã ẩn khoang.").catch(() => { }); }}>Ẩn</button>
-                            <button
-                              className="btn-icon"
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                if (item.isLocked) {
-                                  runMutation(() => bayApi.unlockBay(item.id), "Đã mở khóa khoang.").catch(() => { });
-                                } else {
-                                  runMutation(() => bayApi.lockBay(item.id), "Đã khóa khoang.").catch(() => { });
-                                }
-                              }}
-                            >
-                              {item.isLocked ? "Mở khóa" : "Khóa"}
-                            </button>
-                            <select
-                              className="bay-inline-select"
-                              value={item.operationalStatus}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã cập nhật trạng thái khoang.").catch(() => { })}
-                            >
-                              {STATUS_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>STT</th>
+                      <th>Mã</th>
+                      <th>Tên khoang</th>
+                      <th>Chi nhánh</th>
+                      <th>Khu vực</th>
+                      <th>Trạng thái</th>
+                      <th>Sức chứa</th>
+                      <th>Đang chứa</th>
+                      <th>Mức sử dụng</th>
+                      <th className="th-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.length === 0 ? (
+                      <tr><td colSpan={10}><div className="empty-state"><p>Chưa có khoang nào.</p></div></td></tr>
+                    ) : (
+                      pagedVisibleRows.map((item) => (
+                        <tr
+                          key={item.id}
+                          className={Number(selectedBayId) === Number(item.id) ? "bay-row-selected" : ""}
+                          onClick={() => setSelectedBayId(item.id)}
+                        >
+                          <td className="td-center">{item.sequenceOrder || "-"}</td>
+                          <td className="td-id">{item.code}</td>
+                          <td>{item.name}</td>
+                          <td>{item.branchName}</td>
+                          <td>{item.area}</td>
+                          <td><span className={`badge ${statusBadge(item.operationalStatus)}`}>{STATUS_LABELS[item.operationalStatus] || item.operationalStatus}</span></td>
+                          <td>{item.capacity}</td>
+                          <td>{item.occupiedCount}</td>
+                          <td>{toNumber(item.utilizationRate, 0).toFixed(2)}%</td>
+                          <td className="td-center">
+                            <div className="row-actions bay-row-actions">
+                              <button className="btn-icon" type="button" onClick={(event) => { event.stopPropagation(); openEditModal(item); }}>Sửa</button>
+                              <button className="btn-icon" type="button" onClick={(event) => { event.stopPropagation(); runMutation(() => bayApi.hideBay(item.id), "Đã ẩn khoang.").catch(() => { }); }}>Ẩn</button>
+                              <button
+                                className="btn-icon"
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (item.isLocked) {
+                                    runMutation(() => bayApi.unlockBay(item.id), "Đã mở khóa khoang.").catch(() => { });
+                                  } else {
+                                    runMutation(() => bayApi.lockBay(item.id), "Đã khóa khoang.").catch(() => { });
+                                  }
+                                }}
+                              >
+                                {item.isLocked ? "Mở khóa" : "Khóa"}
+                              </button>
+                              <select
+                                className="bay-inline-select"
+                                value={item.operationalStatus}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã cập nhật trạng thái khoang.").catch(() => { })}
+                              >
+                                {STATUS_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <TablePagination
+                  totalItems={visibleRows.length}
+                  currentPage={listPage}
+                  pageSize={listPageSize}
+                  onPageChange={setListPage}
+                  onPageSizeChange={(size) => {
+                    setListPageSize(size);
+                    setListPage(1);
+                  }}
+                />
+              </div>
+            </>
           )}
 
           {currentTab === "vehicles" && (
@@ -963,7 +1020,7 @@ export default function BayManagementPage({ section }) {
                     {(usage.byBay || []).length === 0 ? (
                       <tr><td colSpan={6}><div className="empty-state"><p>Chưa có dữ liệu sử dụng.</p></div></td></tr>
                     ) : (
-                      usage.byBay.map((item) => (
+                      pagedUsageRows.map((item) => (
                         <tr key={item.id}>
                           <td>{item.code}</td>
                           <td>{item.area}</td>
@@ -994,7 +1051,7 @@ export default function BayManagementPage({ section }) {
                     {(selectedBayHistory.items || []).length === 0 ? (
                       <tr><td colSpan={4}><div className="empty-state"><p>Chưa có lịch sử.</p></div></td></tr>
                     ) : (
-                      selectedBayHistory.items.slice(0, 20).map((item) => (
+                      pagedHistoryRows.map((item) => (
                         <tr key={item.sessionId}>
                           <td>{item.licensePlate}</td>
                           <td>{formatDateTime(item.assignedAt)}</td>
@@ -1005,6 +1062,30 @@ export default function BayManagementPage({ section }) {
                     )}
                   </tbody>
                 </table>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <TablePagination
+                  totalItems={(usage.byBay || []).length}
+                  currentPage={usagePage}
+                  pageSize={usagePageSize}
+                  onPageChange={setUsagePage}
+                  onPageSizeChange={(size) => {
+                    setUsagePageSize(size);
+                    setUsagePage(1);
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <TablePagination
+                  totalItems={(selectedBayHistory.items || []).length}
+                  currentPage={historyPage}
+                  pageSize={historyPageSize}
+                  onPageChange={setHistoryPage}
+                  onPageSizeChange={(size) => {
+                    setHistoryPageSize(size);
+                    setHistoryPage(1);
+                  }}
+                />
               </div>
             </div>
           )}
@@ -1045,34 +1126,48 @@ export default function BayManagementPage({ section }) {
           )}
 
           {currentTab === "alerts" && (
-            <div className="table-wrapper">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Mức độ</th>
-                    <th>Loại cảnh báo</th>
-                    <th>Khoang</th>
-                    <th>Nội dung</th>
-                    <th>Thời gian</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(alerts.items || []).length === 0 ? (
-                    <tr><td colSpan={5}><div className="empty-state"><p>Không có cảnh báo.</p></div></td></tr>
-                  ) : (
-                    alerts.items.map((item, idx) => (
-                      <tr key={`${item.type}-${item.bayId}-${idx}`}>
-                        <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-danger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
-                        <td>{item.type}</td>
-                        <td>{item.code} - {item.name}</td>
-                        <td>{item.message}</td>
-                        <td>{formatDateTime(item.createdAt)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Mức độ</th>
+                      <th>Loại cảnh báo</th>
+                      <th>Khoang</th>
+                      <th>Nội dung</th>
+                      <th>Thời gian</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(alerts.items || []).length === 0 ? (
+                      <tr><td colSpan={5}><div className="empty-state"><p>Không có cảnh báo.</p></div></td></tr>
+                    ) : (
+                      pagedAlertRows.map((item, idx) => (
+                        <tr key={`${item.type}-${item.bayId}-${idx}`}>
+                          <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-danger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
+                          <td>{item.type}</td>
+                          <td>{item.code} - {item.name}</td>
+                          <td>{item.message}</td>
+                          <td>{formatDateTime(item.createdAt)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <TablePagination
+                  totalItems={(alerts.items || []).length}
+                  currentPage={alertPage}
+                  pageSize={alertPageSize}
+                  onPageChange={setAlertPage}
+                  onPageSizeChange={(size) => {
+                    setAlertPageSize(size);
+                    setAlertPage(1);
+                  }}
+                />
+              </div>
+            </>
           )}
 
           {currentTab === "stats" && summary && (

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:encoding": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-encoding.ps1",
     "build": "vite build",
+    "verify": "npm run check:encoding && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

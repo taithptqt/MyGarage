@@ -15,7 +15,7 @@ const STATUS_LABELS_VI = Object.freeze({
   READY: "S\u1eb5n s\u00e0ng b\u00e0n giao",
   COMPLETED: "Ho\u00e0n t\u1ea5t",
   CANCELED: "\u0110\u00e3 h\u1ee7y",
-  CANCELLED: "\u0110\u00e3 h\u1ee7y",
+  CANCELED: "\u0110\u00e3 h\u1ee7y",
   NO_SHOW: "Kh\u00f4ng \u0111\u1ebfn",
   NEW: "M\u1edbi t\u1ea1o",
   RECEPTION: "Ti\u1ebfp nh\u1eadn",
@@ -43,3 +43,4 @@ export function toStatusOptionVi(status) {
     label: getStatusLabelVi(value, value || "-"),
   };
 }
+

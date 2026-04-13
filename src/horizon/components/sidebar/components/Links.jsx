@@ -32,7 +32,16 @@ export function SidebarLinks(props) {
 
   // verifies if routeName is the one active (in browser input)
   const activeRoute = (routeName) => {
-    return location.pathname.includes(routeName);
+    const path = String(location.pathname || "").toLowerCase();
+    const target = String(routeName || "").toLowerCase();
+    if (!target) return false;
+
+    // Treat /admin as the dashboard default route for initial landing.
+    if ((path === "/admin" || path === "/admin/") && target === "/default") {
+      return true;
+    }
+
+    return path.includes(target);
   };
   const isGroupActive = (route) => {
     if (!route?.items?.length) return false;

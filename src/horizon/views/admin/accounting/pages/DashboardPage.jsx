@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -79,7 +79,7 @@ function normalizeStatus(value) {
 
 function isInvoiceClosed(status) {
   const normalized = normalizeStatus(status);
-  return ["PAID", "CANCELLED", "CANCELED", "VOID", "WRITTEN_OFF", "CLOSED"].includes(normalized);
+  return ["PAID", "CANCELED", "CANCELED", "VOID", "WRITTEN_OFF", "CLOSED"].includes(normalized);
 }
 
 function invoiceOutstanding(item) {
@@ -199,7 +199,7 @@ export default function DashboardPage() {
         setSelectedMonth(monthKeys[0] || "");
       } catch (error) {
         if (!mounted) return;
-        setLoadError(error?.message || "Không tải được dữ liệu dashboard kế toán.");
+        setLoadError(error?.message || "Kh�ng t?i du?c d? li?u dashboard k? to�n.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -411,7 +411,7 @@ export default function DashboardPage() {
       const status = normalizeStatus(fieldOf(item, "status", "Status"));
       return status.includes("OPEN");
     });
-    if (!openPeriod) return "Chưa tích hợp";
+    if (!openPeriod) return "Chua t�ch h?p";
 
     const periodCode = fieldOf(openPeriod, "periodCode", "PeriodCode", "name", "Name");
     const fromDate = fieldOf(openPeriod, "startDate", "StartDate");
@@ -429,7 +429,7 @@ export default function DashboardPage() {
   }, [payrollRuns]);
 
   const currentPayrollLabel = useMemo(() => {
-    if (!currentPayroll) return "Chưa tích hợp";
+    if (!currentPayroll) return "Chua t�ch h?p";
     const code = fieldOf(currentPayroll, "runCode", "RunCode", "name", "Name") || `Run #${fieldOf(currentPayroll, "id", "Id")}`;
     const status = normalizeStatus(fieldOf(currentPayroll, "status", "Status")) || "PENDING";
     return `${code} (${status})`;
@@ -441,56 +441,56 @@ export default function DashboardPage() {
     if (paymentStats.duplicateCount > 0) {
       rows.push({
         level: "high",
-        title: `${paymentStats.duplicateCount} mã giao dịch bị trùng`,
-        detail: "Nguy cơ ghi nhận doanh thu trùng. Cần rà soát đối chiếu ngay."
+        title: `${paymentStats.duplicateCount} m� giao d?ch b? tr�ng`,
+        detail: "Nguy co ghi nh?n doanh thu tr�ng. C?n r� so�t d?i chi?u ngay."
       });
     }
 
     if (paymentStats.inflowNoInvoice > 0) {
       rows.push({
         level: "high",
-        title: `${paymentStats.inflowNoInvoice} payment inflow chưa gắn invoice`,
-        detail: "Có nguy cơ vi phạm ràng buộc nghiệp vụ Payment-Invoice."
+        title: `${paymentStats.inflowNoInvoice} payment inflow chua g?n invoice`,
+        detail: "C� nguy co vi ph?m r�ng bu?c nghi?p v? Payment-Invoice."
       });
     }
 
     if (invoiceSummary.overdueCount > 0) {
       rows.push({
         level: "high",
-        title: `${invoiceSummary.overdueCount} hóa đơn đã quá hạn`,
-        detail: "Cần ưu tiên thu hồi công nợ để giảm rủi ro dòng tiền."
+        title: `${invoiceSummary.overdueCount} h�a don d� qu� h?n`,
+        detail: "C?n uu ti�n thu h?i c�ng n? d? gi?m r?i ro d�ng ti?n."
       });
     }
 
     if (apDueSummary.overdueAmount > 0) {
       rows.push({
         level: "medium",
-        title: `AP quá hạn: ${formatCurrency(apDueSummary.overdueAmount)}`,
-        detail: "Rà soát kế hoạch thanh toán để tránh phạt/lệch công nợ NCC."
+        title: `AP qu� h?n: ${formatCurrency(apDueSummary.overdueAmount)}`,
+        detail: "R� so�t k? ho?ch thanh to�n d? tr�nh ph?t/l?ch c�ng n? NCC."
       });
     }
 
     if (approvalsPending.length > 0) {
       rows.push({
         level: "medium",
-        title: `${approvalsPending.length} yêu cầu approval chưa xử lý`,
-        detail: "Có thể chặn luồng hoàn tiền, điều chỉnh hoặc quyết toán."
+        title: `${approvalsPending.length} y�u c?u approval chua x? l�`,
+        detail: "C� th? ch?n lu?ng ho�n ti?n, di?u ch?nh ho?c quy?t to�n."
       });
     }
 
     if (financeSnapshot.netProfit < 0) {
       rows.push({
         level: "medium",
-        title: "Net profit đang âm",
-        detail: "Theo dõi chi phí, tỷ lệ refund/reversal và biên lợi nhuận."
+        title: "Net profit dang �m",
+        detail: "Theo d�i chi ph�, t? l? refund/reversal v� bi�n l?i nhu?n."
       });
     }
 
     if (!rows.length) {
       rows.push({
         level: "low",
-        title: "Không có cảnh báo nghiêm trọng",
-        detail: "Hệ thống đang vận hành ổn định theo dữ liệu hiện tại."
+        title: "Kh�ng c� c?nh b�o nghi�m tr?ng",
+        detail: "H? th?ng dang v?n h�nh ?n d?nh theo d? li?u hi?n t?i."
       });
     }
 
@@ -502,10 +502,10 @@ export default function DashboardPage() {
   const activeFilterLabel = useMemo(() => {
     const branchName =
       effectiveBranchFilter === "all"
-        ? "Tất cả chi nhánh"
-        : branchOptions.find((x) => String(x.id) === String(effectiveBranchFilter))?.name || `Chi nhánh #${effectiveBranchFilter}`;
-    const periodLabel = periodMode === "month" && selectedMonth ? `Tháng ${selectedMonth}` : "Theo ngày mới nhất";
-    return `${branchName} · ${periodLabel}`;
+        ? "T?t c? chi nh�nh"
+        : branchOptions.find((x) => String(x.id) === String(effectiveBranchFilter))?.name || `Chi nh�nh #${effectiveBranchFilter}`;
+    const periodLabel = periodMode === "month" && selectedMonth ? `Th�ng ${selectedMonth}` : "Theo ng�y m?i nh?t";
+    return `${branchName} � ${periodLabel}`;
   }, [branchOptions, effectiveBranchFilter, periodMode, selectedMonth]);
 
   const queryString = useMemo(() => {
@@ -526,31 +526,31 @@ export default function DashboardPage() {
       },
       {
         key: "collected",
-        name: "Đã thu",
+        name: "�� thu",
         value: formatCurrency(displayedCollected),
         icon: MdAttachMoney
       },
       {
         key: "ar_open",
-        name: "Công nợ phải thu mở",
+        name: "C�ng n? ph?i thu m?",
         value: formatCurrency(invoiceSummary.totalOutstanding),
         icon: MdReceiptLong
       },
       {
         key: "approval_pending",
-        name: "Approval chờ xử lý",
+        name: "Approval ch? x? l�",
         value: String(approvalsPending.length),
         icon: MdPendingActions
       },
       {
         key: "ap_due",
-        name: "AP quá hạn + sắp hạn",
+        name: "AP qu� h?n + s?p h?n",
         value: formatCurrency(apDueSummary.overdueAmount + apDueSummary.dueSoonAmount),
         icon: MdWarning
       },
       {
         key: "inflow_no_invoice",
-        name: "Inflow chưa gắn invoice",
+        name: "Inflow chua g?n invoice",
         value: String(paymentStats.inflowNoInvoice),
         icon: MdFactCheck
       },
@@ -573,8 +573,8 @@ export default function DashboardPage() {
   const kpiDetail = useMemo(() => {
     if (selectedKpiKey === "approval_pending") {
       return {
-        title: "Chi tiết approvals chờ xử lý",
-        columns: ["Loại", "Lý do", "Tạo lúc"],
+        title: "Chi ti?t approvals ch? x? l�",
+        columns: ["Lo?i", "L� do", "T?o l�c"],
         rows: topPendingApprovals.map((item) => [
           fieldOf(item, "requestType", "RequestType") || "N/A",
           fieldOf(item, "reason", "Reason") || "--",
@@ -585,8 +585,8 @@ export default function DashboardPage() {
 
     if (selectedKpiKey === "ar_open") {
       return {
-        title: "Top hóa đơn cần theo dõi",
-        columns: ["Hóa đơn", "Khách hàng", "Hạn", "Còn phải thu"],
+        title: "Top h�a don c?n theo d�i",
+        columns: ["H�a don", "Kh�ch h�ng", "H?n", "C�n ph?i thu"],
         rows: invoiceSummary.rows.slice(0, 8).map((item, idx) => [
           fieldOf(item, "invoiceCode", "InvoiceCode", "code", "Code") || `INV-${fieldOf(item, "id", "Id", idx + 1)}`,
           fieldOf(item, "customerName", "CustomerName", "receiverName", "ReceiverName") || "--",
@@ -598,21 +598,21 @@ export default function DashboardPage() {
 
     if (selectedKpiKey === "ap_due") {
       return {
-        title: "Top AP đến hạn / quá hạn",
-        columns: ["Supplier/AP", "Hạn", "Outstanding", "Mức độ"],
+        title: "Top AP d?n h?n / qu� h?n",
+        columns: ["Supplier/AP", "H?n", "Outstanding", "M?c d?"],
         rows: apDueSummary.rows.slice(0, 8).map((item, idx) => [
           fieldOf(item, "supplierName", "SupplierName", "apCode", "ApCode", "name", "Name") || `AP #${idx + 1}`,
           formatDate(item.dueDate),
           formatCurrency(item.outstanding),
-          item.overdue ? "Quá hạn" : item.dueSoon ? "Sắp hạn" : "Ổn định"
+          item.overdue ? "Qu� h?n" : item.dueSoon ? "S?p h?n" : "?n d?nh"
         ])
       };
     }
 
     if (selectedKpiKey === "inflow_no_invoice") {
       return {
-        title: "Top payment inflow chưa gắn invoice",
-        columns: ["Transaction code", "Số tiền", "Thời điểm"],
+        title: "Top payment inflow chua g?n invoice",
+        columns: ["Transaction code", "S? ti?n", "Th?i di?m"],
         rows: filteredPayments
           .filter((item) => {
             const direction = normalizeStatus(fieldOf(item, "direction", "Direction"));
@@ -631,14 +631,14 @@ export default function DashboardPage() {
     }
 
     return {
-      title: "Tóm tắt KPI đã chọn",
-      columns: ["Chỉ số", "Giá trị"],
+      title: "T�m t?t KPI d� ch?n",
+      columns: ["Ch? s?", "Gi� tr?"],
       rows: [
-        ["Bộ lọc hiện tại", activeFilterLabel],
+        ["B? l?c hi?n t?i", activeFilterLabel],
         ["Doanh thu", formatCurrency(financeSnapshot.totalRevenue)],
-        ["Đã thu", formatCurrency(displayedCollected)],
-        ["Công nợ phải thu mở", formatCurrency(invoiceSummary.totalOutstanding)],
-        ["AP quá hạn + sắp hạn", formatCurrency(apDueSummary.overdueAmount + apDueSummary.dueSoonAmount)],
+        ["�� thu", formatCurrency(displayedCollected)],
+        ["C�ng n? ph?i thu m?", formatCurrency(invoiceSummary.totalOutstanding)],
+        ["AP qu� h?n + s?p h?n", formatCurrency(apDueSummary.overdueAmount + apDueSummary.dueSoonAmount)],
         ["Net profit", formatCurrency(financeSnapshot.netProfit)]
       ]
     };
@@ -650,19 +650,19 @@ export default function DashboardPage() {
 
   function handleExportCsv() {
     const rows = [
-      ["Dashboard kế toán V2", new Date().toISOString()],
-      ["Bộ lọc", activeFilterLabel],
+      ["Dashboard k? to�n V2", new Date().toISOString()],
+      ["B? l?c", activeFilterLabel],
       [],
-      ["KPI", "Giá trị"],
+      ["KPI", "Gi� tr?"],
       ["Doanh thu", formatCurrency(financeSnapshot.totalRevenue)],
-      ["Đã thu", formatCurrency(displayedCollected)],
-      ["Công nợ phải thu mở", formatCurrency(invoiceSummary.totalOutstanding)],
-      ["AP quá hạn + sắp hạn", formatCurrency(apDueSummary.overdueAmount + apDueSummary.dueSoonAmount)],
-      ["Approval chờ xử lý", approvalsPending.length],
-      ["Inflow chưa gắn invoice", paymentStats.inflowNoInvoice],
+      ["�� thu", formatCurrency(displayedCollected)],
+      ["C�ng n? ph?i thu m?", formatCurrency(invoiceSummary.totalOutstanding)],
+      ["AP qu� h?n + s?p h?n", formatCurrency(apDueSummary.overdueAmount + apDueSummary.dueSoonAmount)],
+      ["Approval ch? x? l�", approvalsPending.length],
+      ["Inflow chua g?n invoice", paymentStats.inflowNoInvoice],
       ["Net profit", formatCurrency(financeSnapshot.netProfit)],
       [],
-      ["Cảnh báo", "Mức độ", "Chi tiết"],
+      ["C?nh b�o", "M?c d?", "Chi ti?t"],
       ...warnings.map((w) => [w.title, w.level, w.detail])
     ];
     downloadCsv(`dashboard-ke-toan-${new Date().toISOString().slice(0, 10)}.csv`, rows);
@@ -676,7 +676,7 @@ export default function DashboardPage() {
     return (
       <Flex pt='20px' align='center' justify='center' minH='280px' direction='column' gap='12px'>
         <Spinner size='lg' color='brand.500' />
-        <Text color={textColorSecondary}>Đang tải dữ liệu dashboard kế toán...</Text>
+        <Text color={textColorSecondary}>�ang t?i d? li?u dashboard k? to�n...</Text>
       </Flex>
     );
   }
@@ -686,17 +686,17 @@ export default function DashboardPage() {
       <Card p='18px' mb='20px'>
         <Flex gap='12px' wrap='wrap' align='center' justify='space-between'>
           <Box>
-            <Text color={textColor} fontSize='xl' fontWeight='800'>Dashboard vận hành kế toán</Text>
+            <Text color={textColor} fontSize='xl' fontWeight='800'>Dashboard v?n h�nh k? to�n</Text>
             <Text color={textColorSecondary} fontSize='sm'>
-              Tổng hợp công nợ, thu chi, approvals, AP và chất lượng dữ liệu trong một màn hình.
+              T?ng h?p c�ng n?, thu chi, approvals, AP v� ch?t lu?ng d? li?u trong m?t m�n h�nh.
             </Text>
             <Badge mt='8px' colorScheme='blue'>{activeFilterLabel}</Badge>
           </Box>
 
           <Flex gap='10px' wrap='wrap'>
             <Select value={periodMode} onChange={(e) => setPeriodMode(e.target.value)} w='140px'>
-              <option value='day'>Theo ngày</option>
-              <option value='month'>Theo tháng</option>
+              <option value='day'>Theo ng�y</option>
+              <option value='month'>Theo th�ng</option>
             </Select>
             <Select
               value={selectedMonth}
@@ -710,7 +710,7 @@ export default function DashboardPage() {
                   </option>
                 ))
               ) : (
-                <option value=''>Không có dữ liệu</option>
+                <option value=''>Kh�ng c� d? li?u</option>
               )}
             </Select>
             <Select
@@ -718,7 +718,7 @@ export default function DashboardPage() {
               onChange={(e) => setBranchFilter(e.target.value)}
               isDisabled={Boolean(enforcedBranchId)}
               w='190px'>
-              {!enforcedBranchId ? <option value='all'>Tất cả chi nhánh</option> : null}
+              {!enforcedBranchId ? <option value='all'>T?t c? chi nh�nh</option> : null}
               {branchOptions.map((branch) => (
                 <option value={branch.id} key={branch.id}>
                   {branch.name}
@@ -726,7 +726,7 @@ export default function DashboardPage() {
               ))}
             </Select>
             <Button colorScheme='blue' variant='outline' onClick={handleExportCsv}>
-              Xuất CSV
+              Xu?t CSV
             </Button>
             <Button colorScheme='blue' variant='solid' onClick={handlePrintPdf}>
               In / PDF
@@ -801,18 +801,18 @@ export default function DashboardPage() {
               </Table>
             </Box>
           ) : (
-            <Text color={textColorSecondary}>Không có dữ liệu chi tiết cho KPI này.</Text>
+            <Text color={textColorSecondary}>Kh�ng c� d? li?u chi ti?t cho KPI n�y.</Text>
           )}
         </Card>
 
         <Card p='20px' bg={panelBg}>
-          <Text color={textColor} fontWeight='700' fontSize='lg' mb='12px'>Điều hướng nhanh</Text>
+          <Text color={textColor} fontWeight='700' fontSize='lg' mb='12px'>�i?u hu?ng nhanh</Text>
           <Flex direction='column' gap='10px'>
-            <Button variant='outline' onClick={() => goTo("/admin/accounting/invoices")}>Mở hoá đơn</Button>
-            <Button variant='outline' onClick={() => goTo("/admin/accounting/payments")}>Mở thu chi</Button>
-            <Button variant='outline' onClick={() => goTo("/admin/accounting/approvals")}>Mở approvals</Button>
-            <Button variant='outline' onClick={() => goTo("/admin/accounting/payroll")}>Mở payroll</Button>
-            <Button variant='outline' onClick={() => goTo("/admin/accounting/reports")}>Mở báo cáo</Button>
+            <Button variant='outline' onClick={() => goTo("/admin/accounting/invoices")}>M? ho� don</Button>
+            <Button variant='outline' onClick={() => goTo("/admin/accounting/payments")}>M? thu chi</Button>
+            <Button variant='outline' onClick={() => goTo("/admin/accounting/approvals")}>M? approvals</Button>
+            <Button variant='outline' onClick={() => goTo("/admin/accounting/payroll")}>M? payroll</Button>
+            <Button variant='outline' onClick={() => goTo("/admin/accounting/reports")}>M? b�o c�o</Button>
           </Flex>
         </Card>
       </SimpleGrid>
@@ -820,7 +820,7 @@ export default function DashboardPage() {
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
         <Card p='20px' bg={panelBg}>
           <Flex justify='space-between' align='center' mb='12px'>
-            <Text color={textColor} fontWeight='700' fontSize='lg'>Hàng đợi cần xử lý</Text>
+            <Text color={textColor} fontWeight='700' fontSize='lg'>H�ng d?i c?n x? l�</Text>
             <Badge colorScheme='purple'>{topPendingApprovals.length} item</Badge>
           </Flex>
 
@@ -829,10 +829,10 @@ export default function DashboardPage() {
               <Table size='sm'>
                 <Thead>
                   <Tr>
-                    <Th>Loại</Th>
-                    <Th>Lý do</Th>
-                    <Th>Trạng thái</Th>
-                    <Th>Tạo lúc</Th>
+                    <Th>Lo?i</Th>
+                    <Th>L� do</Th>
+                    <Th>Tr?ng th�i</Th>
+                    <Th>T?o l�c</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -850,15 +850,15 @@ export default function DashboardPage() {
               </Table>
             </Box>
           ) : (
-            <Text color={textColorSecondary}>Không có yêu cầu chờ duyệt.</Text>
+            <Text color={textColorSecondary}>Kh�ng c� y�u c?u ch? duy?t.</Text>
           )}
         </Card>
 
         <Card p='20px' bg={panelBg}>
           <Flex justify='space-between' align='center' mb='12px'>
-            <Text color={textColor} fontWeight='700' fontSize='lg'>Trạng thái vận hành</Text>
+            <Text color={textColor} fontWeight='700' fontSize='lg'>Tr?ng th�i v?n h�nh</Text>
             <Flex gap='8px' wrap='wrap'>
-              <Badge colorScheme='blue'>Kỳ kế toán: {openPeriodLabel}</Badge>
+              <Badge colorScheme='blue'>K? k? to�n: {openPeriodLabel}</Badge>
               <Badge colorScheme='green'>Payroll: {currentPayrollLabel}</Badge>
             </Flex>
           </Flex>
@@ -877,7 +877,7 @@ export default function DashboardPage() {
               <Text color={textColor} fontWeight='700'>{formatCurrency(apDueSummary.totalOutstanding)}</Text>
             </Box>
             <Box p='10px' border='1px solid' borderColor={borderColor} borderRadius='12px' bg={subPanelBg}>
-              <Text fontSize='xs' color={textColorSecondary}>Invoice mở</Text>
+              <Text fontSize='xs' color={textColorSecondary}>Invoice m?</Text>
               <Text color={textColor} fontWeight='700'>{invoiceSummary.openCount}</Text>
             </Box>
           </SimpleGrid>
@@ -887,10 +887,10 @@ export default function DashboardPage() {
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
         <Card p='20px' bg={panelBg}>
           <Flex justify='space-between' align='center' mb='12px'>
-            <Text color={textColor} fontWeight='700' fontSize='lg'>AR - Hóa đơn cần theo dõi</Text>
+            <Text color={textColor} fontWeight='700' fontSize='lg'>AR - H�a don c?n theo d�i</Text>
             <Flex gap='8px' wrap='wrap'>
-              <Badge colorScheme='red'>Quá hạn: {invoiceSummary.overdueCount}</Badge>
-              <Badge colorScheme='orange'>Sắp hạn: {invoiceSummary.dueSoonCount}</Badge>
+              <Badge colorScheme='red'>Qu� h?n: {invoiceSummary.overdueCount}</Badge>
+              <Badge colorScheme='orange'>S?p h?n: {invoiceSummary.dueSoonCount}</Badge>
             </Flex>
           </Flex>
 
@@ -899,11 +899,11 @@ export default function DashboardPage() {
               <Table size='sm'>
                 <Thead>
                   <Tr>
-                    <Th>Hóa đơn</Th>
-                    <Th>Khách hàng</Th>
-                    <Th>Hạn thanh toán</Th>
-                    <Th isNumeric>Còn phải thu</Th>
-                    <Th>Ưu tiên</Th>
+                    <Th>H�a don</Th>
+                    <Th>Kh�ch h�ng</Th>
+                    <Th>H?n thanh to�n</Th>
+                    <Th isNumeric>C�n ph?i thu</Th>
+                    <Th>Uu ti�n</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -911,7 +911,7 @@ export default function DashboardPage() {
                     const code = fieldOf(item, "invoiceCode", "InvoiceCode", "code", "Code") || `INV-${fieldOf(item, "id", "Id", idx + 1)}`;
                     const customer = fieldOf(item, "customerName", "CustomerName", "receiverName", "ReceiverName") || "--";
                     const dueDate = fieldOf(item, "dueDate", "DueDate");
-                    const level = item.overdue ? "Quá hạn" : item.dueSoon ? "Sắp hạn" : "Theo dõi";
+                    const level = item.overdue ? "Qu� h?n" : item.dueSoon ? "S?p h?n" : "Theo d�i";
                     return (
                       <Tr key={`${code}-${idx}`}>
                         <Td color={textColor} fontWeight='600'>{code}</Td>
@@ -928,13 +928,13 @@ export default function DashboardPage() {
               </Table>
             </Box>
           ) : (
-            <Text color={textColorSecondary}>Không có hóa đơn mở cần theo dõi.</Text>
+            <Text color={textColorSecondary}>Kh�ng c� h�a don m? c?n theo d�i.</Text>
           )}
         </Card>
 
         <Card p='20px' bg={panelBg}>
           <Flex justify='space-between' align='center' mb='12px'>
-            <Text color={textColor} fontWeight='700' fontSize='lg'>AP đến hạn / quá hạn</Text>
+            <Text color={textColor} fontWeight='700' fontSize='lg'>AP d?n h?n / qu� h?n</Text>
             <Flex gap='8px' wrap='wrap'>
               <Badge colorScheme='red'>{formatCurrency(apDueSummary.overdueAmount)}</Badge>
               <Badge colorScheme='orange'>{formatCurrency(apDueSummary.dueSoonAmount)}</Badge>
@@ -949,7 +949,7 @@ export default function DashboardPage() {
                     <Th>Supplier/AP</Th>
                     <Th>Due date</Th>
                     <Th isNumeric>Outstanding</Th>
-                    <Th>Trạng thái</Th>
+                    <Th>Tr?ng th�i</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -963,7 +963,7 @@ export default function DashboardPage() {
                         <Td color={textColor} isNumeric>{formatCurrency(item.outstanding)}</Td>
                         <Td>
                           <Badge colorScheme={item.overdue ? "red" : item.dueSoon ? "orange" : "green"}>
-                            {item.overdue ? "Quá hạn" : item.dueSoon ? "Sắp đến hạn" : "Ổn định"}
+                            {item.overdue ? "Qu� h?n" : item.dueSoon ? "S?p d?n h?n" : "?n d?nh"}
                           </Badge>
                         </Td>
                       </Tr>
@@ -973,16 +973,16 @@ export default function DashboardPage() {
               </Table>
             </Box>
           ) : (
-            <Text color={textColorSecondary}>Chưa có dữ liệu accounts payable từ API.</Text>
+            <Text color={textColorSecondary}>Chua c� d? li?u accounts payable t? API.</Text>
           )}
         </Card>
       </SimpleGrid>
 
       <Card p='20px' bg={panelBg}>
         <Flex justify='space-between' align='center' mb='12px'>
-          <Text color={textColor} fontWeight='700' fontSize='lg'>Cảnh báo thất thoát / lệch dữ liệu</Text>
+          <Text color={textColor} fontWeight='700' fontSize='lg'>C?nh b�o th?t tho�t / l?ch d? li?u</Text>
           <Badge colorScheme={warnings.some((w) => w.level === "high") ? "red" : warnings.some((w) => w.level === "medium") ? "orange" : "green"}>
-            {warnings.some((w) => w.level === "high") ? "ƯU TIÊN CAO" : "ỔN ĐỊNH"}
+            {warnings.some((w) => w.level === "high") ? "UU TI�N CAO" : "?N �?NH"}
           </Badge>
         </Flex>
 
@@ -1015,3 +1015,4 @@ export default function DashboardPage() {
     </Box>
   );
 }
+

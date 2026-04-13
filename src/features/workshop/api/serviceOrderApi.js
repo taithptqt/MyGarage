@@ -39,6 +39,28 @@ export const serviceOrderApi = {
   createDetail: (data) => request({ url: "/api/service-order-details", method: "POST", data }),
   updateDetail: (id, data) => request({ url: `/api/service-order-details/${id}`, method: "PUT", data }),
   deleteDetail: (id) => request({ url: `/api/service-order-details/${id}`, method: "DELETE" }),
+  // --- Quotation ---
+  getQuotationsByServiceOrder: (serviceOrderId) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "GET" }),
+  getQuotationById: (quotationId) =>
+    request({ url: `/api/quotations/${quotationId}`, method: "GET" }),
+  createQuotation: (serviceOrderId, data) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "POST", data }),
+  submitQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/submit`, method: "POST", data }),
+  approveQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
+  supersedeQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/supersede`, method: "POST", data }),
+  getServiceBoms: (serviceId, vehicleModelId = null) =>
+    request({
+      url: "/api/service-boms",
+      method: "GET",
+      params: {
+        serviceId,
+        ...(vehicleModelId ? { vehicleModelId } : {}),
+      },
+    }),
 
   // --- Check-in Requests ---
   getCheckInRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_IN" } }),

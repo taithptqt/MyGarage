@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from "react-router-dom";
+﻿import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
@@ -122,40 +122,40 @@ const EMPTY_BRANCH_FORM = {
 
 const SECTION_META = {
   staff: {
-    title: "Staff Management",
-    subtitle: "Manage internal staff accounts and role assignment",
-    addLabel: "+ Add Staff",
-    searchPlaceholder: "Search staff by name, email, phone or role..."
+    title: "Nhân sự",
+    subtitle: "Quản lý tài khoản nội bộ và phân quyền vai trò",
+    addLabel: "+ Thêm nhân sự",
+    searchPlaceholder: "Tìm theo tên, email, số điện thoại hoặc vai trò..."
   },
   branches: {
-    title: "Branch Management",
-    subtitle: "Configure branch information and operating setup",
-    addLabel: "+ Add Branch",
-    searchPlaceholder: "Search branch by name, address, hotline or email..."
+    title: "Chi nhánh",
+    subtitle: "Quản lý thông tin và cấu hình vận hành chi nhánh",
+    addLabel: "+ Thêm chi nhánh",
+    searchPlaceholder: "Tìm theo tên, địa chỉ, hotline hoặc email..."
   },
   customers: {
-    title: "Users (Customers)",
-    subtitle: "Manage customer accounts only",
-    addLabel: "+ Add Customer",
-    searchPlaceholder: "Search by name, phone, tier, plate, brand or model..."
+    title: "Khách hàng",
+    subtitle: "Quản lý tài khoản khách hàng",
+    addLabel: "+ Thêm khách hàng",
+    searchPlaceholder: "Tìm theo tên, số điện thoại, hạng, biển số, hãng xe hoặc dòng xe..."
   },
   brands: {
-    title: "Vehicle Brands",
-    subtitle: "Manage car brands for service catalog",
-    addLabel: "+ Add Brand",
-    searchPlaceholder: "Search by code, brand name or country..."
+    title: "Hãng xe",
+    subtitle: "Quản lý hãng xe cho danh mục dịch vụ",
+    addLabel: "+ Thêm hãng xe",
+    searchPlaceholder: "Tìm theo code, tên hãng hoặc quốc gia..."
   },
   models: {
-    title: "Vehicle Models",
-    subtitle: "Manage car models for each brand",
-    addLabel: "+ Add Model",
-    searchPlaceholder: "Search by model, segment or fuel type..."
+    title: "Dòng xe",
+    subtitle: "Quản lý dòng xe theo từng hãng",
+    addLabel: "+ Thêm dòng xe",
+    searchPlaceholder: "Tìm theo dòng xe, phân khúc hoặc nhiên liệu..."
   },
   services: {
-    title: "Service Management",
-    subtitle: "Manage repair and maintenance service catalog",
-    addLabel: "+ Add Service",
-    searchPlaceholder: "Search by code, service name, category or status..."
+    title: "Dịch vụ",
+    subtitle: "Quản lý danh mục dịch vụ sửa chữa và bảo dưỡng",
+    addLabel: "+ Thêm dịch vụ",
+    searchPlaceholder: "Tìm theo code, tên dịch vụ, danh mục hoặc trạng thái..."
   }
 };
 
@@ -249,7 +249,7 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.phone || ""}
           onChange={handleChange}
           required
@@ -284,7 +284,7 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
         <label>Status</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
           <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="inactive">Ngừng hoạt động</option>
           <option value="suspended">Suspended</option>
         </select>
       </div>
@@ -353,7 +353,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.phone || ""}
           onChange={handleChange}
           required
@@ -364,9 +364,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Hạng khách</label>
+        <label>Háº¡ng khÃ¡ch</label>
         <select name="tierId" value={form.tierId} onChange={handleChange}>
-          <option value="">Chọn hạng</option>
+          <option value="">Chá»n háº¡ng</option>
           {tiers.map((tier) => (
             <option key={tier.id} value={tier.id}>
               {tier.tierName || `Tier #${tier.id}`}
@@ -385,7 +385,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Biển số xe</label>
+        <label>Biá»ƒn sá»‘ xe</label>
         <input
           name="licensePlate"
           value={form.licensePlate || ""}
@@ -396,9 +396,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Hãng xe</label>
+        <label>HÃ£ng xe</label>
         <select name="brandId" value={form.brandId} onChange={handleChange}>
-          <option value="">Chọn hãng xe</option>
+          <option value="">Chá»n hÃ£ng xe</option>
           {brands.map((brand) => (
             <option key={brand.id} value={brand.id}>
               {brand.name || brand.code || `Brand #${brand.id}`}
@@ -407,9 +407,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Dòng xe</label>
+        <label>DÃ²ng xe</label>
         <select name="modelId" value={form.modelId} onChange={handleChange}>
-          <option value="">Chọn dòng xe</option>
+          <option value="">Chá»n dÃ²ng xe</option>
           {modelOptions.map((model) => (
             <option key={model.id} value={model.id}>
               {model.modelName || `Model #${model.id}`}
@@ -418,7 +418,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Màu xe</label>
+        <label>MÃ u xe</label>
         <input name="color" value={form.color || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
@@ -444,7 +444,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
           onChange={handleChange}
         >
           <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
@@ -531,8 +531,8 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
       <div className="form-group">
         <label>Upload Logo</label>
         <input type="file" accept="image/*" onChange={handleImageUpload} />
-        {uploadingImage ? <small>Đang tải ảnh...</small> : null}
-        {cropSource ? <small>Vui lòng cắt ảnh trước khi lưu.</small> : null}
+        {uploadingImage ? <small>Äang táº£i áº£nh...</small> : null}
+        {cropSource ? <small>Vui lÃ²ng cáº¯t áº£nh trÆ°á»›c khi lÆ°u.</small> : null}
         {form.logoUrl ? (
           <img
             src={form.logoUrl}
@@ -549,7 +549,7 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
           onChange={handleChange}
         >
           <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
@@ -730,7 +730,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
           onChange={handleChange}
         >
           <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
@@ -785,7 +785,7 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.hotline || ""}
           onChange={handleChange}
         />
@@ -808,7 +808,7 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
         <label>Status</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
           <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="inactive">Ngừng hoạt động</option>
         </select>
       </div>
       <div className="form-group">
@@ -840,7 +840,7 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Không thể đọc file ảnh."));
+    reader.onerror = () => reject(new Error("KhÃ´ng thá»ƒ Ä‘á»c file áº£nh."));
     reader.readAsDataURL(file);
   });
 }
@@ -849,7 +849,7 @@ function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Không thể xử lý ảnh đã cắt."));
+    reader.onerror = () => reject(new Error("KhÃ´ng thá»ƒ xá»­ lÃ½ áº£nh Ä‘Ã£ cáº¯t."));
     reader.readAsDataURL(blob);
   });
 }
@@ -1142,7 +1142,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   }, [branches, searchQuery]);
 
   // Early returns AFTER all hooks (required by React Rules of Hooks)
-  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Đang xác thực...</p></div>;
+  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Äang xÃ¡c thá»±c...</p></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   const visibleRows =
@@ -1228,10 +1228,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         const hotline = String(formData.hotline || "").trim();
         const email = String(formData.email || "").trim();
         if (hotline && !isValidVietnamesePhone(hotline)) {
-          throw new Error("Hotline chi nhánh phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Hotline chi nhÃ¡nh pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email chi nhánh không đúng định dạng.");
+          throw new Error("Email chi nhÃ¡nh khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1253,10 +1253,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         const phone = String(formData.phone || "").trim();
         const email = String(formData.email || "").trim();
         if (!isValidVietnamesePhone(phone)) {
-          throw new Error("Số điện thoại nhân viên phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Sá»‘ Ä‘iá»‡n thoáº¡i nhÃ¢n viÃªn pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email nhân viên không đúng định dạng.");
+          throw new Error("Email nhÃ¢n viÃªn khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1275,10 +1275,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         const phone = String(formData.phone || "").trim();
         const email = String(formData.email || "").trim();
         if (!isValidVietnamesePhone(phone)) {
-          throw new Error("Số điện thoại khách hàng phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch hÃ ng pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email khách hàng không đúng định dạng.");
+          throw new Error("Email khÃ¡ch hÃ ng khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1293,15 +1293,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
         const formattedLicensePlate = formatLicensePlateByFieldName("licensePlate", formData.licensePlate || "");
         if (formattedLicensePlate && !isValidVietnameseLicensePlate(formattedLicensePlate)) {
-          throw new Error("Biển số xe không đúng định dạng Việt Nam.");
+          throw new Error("Biá»ƒn sá»‘ xe khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.");
         }
 
         const hasVehicleInput = Boolean(formattedLicensePlate || Number(formData.modelId));
         if (hasVehicleInput && !formattedLicensePlate) {
-          throw new Error("Vui lòng nhập biển số xe.");
+          throw new Error("Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe.");
         }
         if (hasVehicleInput && !formData.modelId) {
-          throw new Error("Vui lòng chọn dòng xe khi nhập thông tin xe.");
+          throw new Error("Vui lÃ²ng chá»n dÃ²ng xe khi nháº­p thÃ´ng tin xe.");
         }
 
         let savedCustomer = null;
@@ -1426,10 +1426,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 Users
               </button>
               <button className={`nav-item ${section === "brands" ? "active" : ""}`} type="button" onClick={() => { setSection("brands"); }}>
-                Vehicle Brands
+                Hãng xe
               </button>
               <button className={`nav-item ${section === "models" ? "active" : ""}`} type="button" onClick={() => { setSection("models"); }}>
-                Vehicle Models
+                Dòng xe
               </button>
               <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
                 Services
@@ -1442,14 +1442,16 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       <main className="admin-main">
-        <header className="admin-header">
-          <div>
-            <h1>{sectionMeta.title}</h1>
-            <p className="header-sub">{sectionMeta.subtitle}</p>
-            {selectedBranch?.name && section !== "branches" && (
-              <p className="header-sub">Current branch: {selectedBranch.name}</p>
-            )}
-          </div>
+        <header className={`admin-header ${embedded ? "header-actions-only" : ""}`}>
+          {!embedded ? (
+            <div>
+              <h1>{sectionMeta.title}</h1>
+              <p className="header-sub">{sectionMeta.subtitle}</p>
+              {selectedBranch?.name && section !== "branches" && (
+                <p className="header-sub">Chi nhánh hiện tại: {selectedBranch.name}</p>
+              )}
+            </div>
+          ) : null}
           <button className="btn-primary" onClick={handleCreateClick} type="button">
             {sectionMeta.addLabel}
           </button>
@@ -1458,64 +1460,64 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         <div className="stats-bar">
           {section === "branches" && (
             <>
-              <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Total Branches</div></div>
-              <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Selected Branch</div></div>
+              <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Tổng chi nhánh</div></div>
+              <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Chi nhánh chọn</div></div>
             </>
           )}
 
           {section === "staff" && (
             <>
-              <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Total Staff</div></div>
-              <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Roles Used</div></div>
+              <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Tổng nhân sự</div></div>
+              <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Vai trò sử dụng</div></div>
             </>
           )}
 
           {section === "customers" && (
             <>
-              <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Total Customers</div></div>
-              <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Tier Levels</div></div>
+              <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Tổng khách hàng</div></div>
+              <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Hạng thành viên</div></div>
             </>
           )}
 
           {section === "brands" && (
             <>
-              <div className="stat-card"><div className="stat-value">{brands.length}</div><div className="stat-label">Total Brands</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === false).length}</div><div className="stat-label">Inactive</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.length}</div><div className="stat-label">Tổng hãng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === false).length}</div><div className="stat-label">Ngừng hoạt động</div></div>
             </>
           )}
 
           {section === "models" && (
             <>
-              <div className="stat-card"><div className="stat-value">{models.length}</div><div className="stat-label">Total Models</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(models.map((item) => item.brandId)).size}</div><div className="stat-label">Brand Coverage</div></div>
-              <div className="stat-card"><div className="stat-value">{models.filter((item) => !item.isDeleted).length}</div><div className="stat-label">Active Models</div></div>
+              <div className="stat-card"><div className="stat-value">{models.length}</div><div className="stat-label">Tổng dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{new Set(models.map((item) => item.brandId)).size}</div><div className="stat-label">Số hãng có dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{models.filter((item) => !item.isDeleted).length}</div><div className="stat-label">Dòng xe đang dùng</div></div>
             </>
           )}
 
           {section === "services" && (
             <>
-              <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Total Services</div></div>
-              <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Categories</div></div>
+              <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Tổng dịch vụ</div></div>
+              <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Danh mục</div></div>
             </>
           )}
         </div>
 
         <div className="table-toolbar">
-          <span className="result-count">{visibleRows.length} result(s)</span>
+          <span className="result-count">{visibleRows.length} kết quả</span>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="table-wrapper">
           {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Loading data...</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải dữ liệu...</p></div>
           ) : visibleRows.length === 0 ? (
-            <div className="empty-state"><p>No records found.</p></div>
+            <div className="empty-state"><p>Không có dữ liệu.</p></div>
           ) : (
             <table className="admin-table">
               {section === "branches" && (
@@ -1523,13 +1525,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Name</th>
-                      <th>Address</th>
+                      <th>Tên</th>
+                      <th>Địa chỉ</th>
                       <th>Hotline</th>
                       <th>Email</th>
-                      <th>Status</th>
-                      <th>Max Slots</th>
-                      <th className="th-center">Actions</th>
+                      <th>Trạng thái</th>
+                      <th>Số chỗ tối đa</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1544,8 +1546,8 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.maxWorkSlots ?? "-"}</td>
                         <td className="td-center">
                           <div className="row-actions">
-                            <button className="btn-icon btn-edit" type="button" onClick={() => openModal("branch", "edit", item)}>Edit</button>
-                            <button className="btn-icon btn-del" type="button" onClick={() => openModal("branch", "delete", item)}>Del</button>
+                            <button className="btn-icon btn-edit" type="button" onClick={() => openModal("branch", "edit", item)}>Sửa</button>
+                            <button className="btn-icon btn-del" type="button" onClick={() => openModal("branch", "delete", item)}>Xóa</button>
                           </div>
                         </td>
                       </tr>
@@ -1556,7 +1558,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "staff" && (
                 <>
-                  <thead><tr><th>ID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Họ tên</th><th>Số điện thoại</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
@@ -1576,16 +1578,16 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Full Name</th>
-                      <th>Phone</th>
+                      <th>Họ tên</th>
+                      <th>Số điện thoại</th>
                       <th>Email</th>
-                      <th>Tier</th>
-                      <th>Plate</th>
-                      <th>Brand</th>
-                      <th>Model</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th className="th-center">Actions</th>
+                      <th>Hạng</th>
+                      <th>Biển số</th>
+                      <th>Hãng xe</th>
+                      <th>Dòng xe</th>
+                      <th>Trạng thái</th>
+                      <th>Ngày tạo</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1607,7 +1609,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "brands" && (
                 <>
-                  <thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Country</th><th>Status</th><th>Updated</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Code</th><th>Tên</th><th>Quốc gia</th><th>Trạng thái</th><th>Cập nhật</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
@@ -1623,11 +1625,11 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "models" && (
                 <>
-                  <thead><tr><th>ID</th><th>Brand</th><th>Model</th><th>Segment</th><th>Fuel</th><th>Cylinder</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Hãng xe</th><th>Dòng xe</th><th>Phân khúc</th><th>Nhiên liệu</th><th>Dung tích xi lanh</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
-                        <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Brand #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
+                        <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Hãng #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1641,12 +1643,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     <tr>
                       <th>ID</th>
                       <th>Code</th>
-                      <th>Service Name</th>
-                      <th>Category</th>
-                      <th>Price</th>
-                      <th>Est. Time</th>
-                      <th>Status</th>
-                      <th className="th-center">Actions</th>
+                      <th>Tên dịch vụ</th>
+                      <th>Danh mục</th>
+                      <th>Giá</th>
+                      <th>Thời gian dự kiến</th>
+                      <th>Trạng thái</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1655,7 +1657,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td>
                         <td>{item.code || "-"}</td>
                         <td>{item.name || "-"}</td>
-                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Category #${item.categoryId}`}</td>
+                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Danh mục #${item.categoryId}`}</td>
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
                         <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
@@ -1811,3 +1813,5 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     </div>
   );
 }
+
+

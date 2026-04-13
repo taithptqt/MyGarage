@@ -134,7 +134,7 @@ function getApptStatusBadge(status) {
   if (normalized === "PENDING" || normalized === "LATE") return "badge-warning";
   if (normalized === "CONFIRMED" || normalized === "PARTIAL_CONFIRMED") return "badge-active";
   if (normalized === "ARRIVED" || normalized === "ARRIVED_LATE") return "badge-success";
-  if (normalized === "CANCELED" || normalized === "CANCELLED") return "badge-danger";
+  if (normalized === "CANCELED" || normalized === "CANCELED") return "badge-danger";
   if (normalized === "COMPLETED") return "badge-completed";
   return "badge-inactive";
 }
@@ -572,6 +572,17 @@ export default function ReceptionAppointmentsPage() {
         </div>
       )}
 
+      <div className="workshop-global-actions" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          className="toolbar-action-btn toolbar-action-outline workshop-global-refresh-btn"
+          onClick={fetchAppointments}
+          disabled={apptLoading}
+        >
+          ⟳ Làm mới
+        </button>
+      </div>
+
       <ReceptionAppointmentsSection
         onCreateAppointment={() => navigate("/workshop/reception/appointments/new")}
         apptStatusFilter={apptStatusFilter}
@@ -631,3 +642,4 @@ export default function ReceptionAppointmentsPage() {
     </div>
   );
 }
+

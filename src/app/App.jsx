@@ -21,6 +21,7 @@ import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage"
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
 import ReceptionEditAppointmentPage from "@features/workshop/pages/ReceptionEditAppointmentPage";
 import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
+import WorkshopRoleHistoryPage from "@features/workshop/pages/WorkshopRoleHistoryPage";
 import HorizonMain from "@horizon/Main";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -259,7 +260,10 @@ function App() {
           <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
+          <Route path="technician/history" element={<ProtectedRoute allowedRoles={["TECH"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />
+          <Route path="team-leader/history" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
+          <Route path="foreman/history" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
           
         </Route>
 

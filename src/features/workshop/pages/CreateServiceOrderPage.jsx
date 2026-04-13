@@ -2483,16 +2483,17 @@ export default function CreateServiceOrderPage() {
   }
 
   return (
-    <div className="create-order-page reception-create-appointment-page">
+    <div className="create-order-page reception-create-appointment-page service-order-create-page">
       <div className="page-header-actions reception-create-header">
-        <button className="btn-back" onClick={() => navigate(-1)}>
-          Quay lại Dashboard
-        </button>
         <div className="reception-create-header-copy">
           <h2 className="page-title">Tiếp nhận xe và tạo Service Order mới</h2>
           <p className="reception-create-header-note">
             Hỗ trợ tiếp nhận xe đơn hoặc nhóm xe, cho phép cấu hình dịch vụ dùng chung hoặc tùy chỉnh riêng theo từng xe.
           </p>
+          <button className="btn-back reception-create-back-btn" onClick={() => navigate(-1)}>
+            <span className="btn-back-icon" aria-hidden="true">←</span>
+            <span>Quay lại dashboard</span>
+          </button>
         </div>
       </div>
       {error ? (

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
 import { Modal } from "@features/admin/components/AdminModals";
+import TablePagination from "@shared/components/TablePagination";
 import "../../admin/pages/AdminPage.css";
 import "./InventoryAdminPage.css";
 
@@ -327,6 +328,20 @@ export default function InventoryAdminPage({ section }) {
     to: ""
   });
   const [transactions, setTransactions] = useState({ items: [], total: 0, page: 1, pageSize: 30 });
+  const [warehousePage, setWarehousePage] = useState(1);
+  const [warehousePageSize, setWarehousePageSize] = useState(10);
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(10);
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [categoryPageSize, setCategoryPageSize] = useState(10);
+  const [supplierPage, setSupplierPage] = useState(1);
+  const [supplierPageSize, setSupplierPageSize] = useState(10);
+  const [reportBranchPage, setReportBranchPage] = useState(1);
+  const [reportBranchPageSize, setReportBranchPageSize] = useState(10);
+  const [reportTopOutboundPage, setReportTopOutboundPage] = useState(1);
+  const [reportTopOutboundPageSize, setReportTopOutboundPageSize] = useState(10);
+  const [reportAuditLogPage, setReportAuditLogPage] = useState(1);
+  const [reportAuditLogPageSize, setReportAuditLogPageSize] = useState(10);
 
   const [form, setForm] = useState({
     newWarehouseCode: "",
@@ -583,6 +598,63 @@ export default function InventoryAdminPage({ section }) {
     const size = toNumber(transactions.pageSize || txParams.pageSize, 30);
     return Math.max(1, Math.ceil(total / Math.max(1, size)));
   }, [transactions, txParams.pageSize]);
+  const pagedWarehouses = useMemo(
+    () =>
+      (warehouseStructure.warehouses || []).slice(
+        (warehousePage - 1) * warehousePageSize,
+        warehousePage * warehousePageSize
+      ),
+    [warehouseStructure.warehouses, warehousePage, warehousePageSize]
+  );
+  const pagedProducts = useMemo(
+    () => products.slice((productPage - 1) * productPageSize, productPage * productPageSize),
+    [products, productPage, productPageSize]
+  );
+  const pagedCategories = useMemo(
+    () => categories.slice((categoryPage - 1) * categoryPageSize, categoryPage * categoryPageSize),
+    [categories, categoryPage, categoryPageSize]
+  );
+  const pagedSuppliers = useMemo(
+    () => suppliers.slice((supplierPage - 1) * supplierPageSize, supplierPage * supplierPageSize),
+    [suppliers, supplierPage, supplierPageSize]
+  );
+  const reportStockByBranchRows = reports?.stockByBranch || [];
+  const pagedReportStockByBranch = useMemo(
+    () =>
+      reportStockByBranchRows.slice(
+        (reportBranchPage - 1) * reportBranchPageSize,
+        reportBranchPage * reportBranchPageSize
+      ),
+    [reportStockByBranchRows, reportBranchPage, reportBranchPageSize]
+  );
+  const reportTopOutboundRows = reports?.topOutbound || [];
+  const pagedReportTopOutbound = useMemo(
+    () =>
+      reportTopOutboundRows.slice(
+        (reportTopOutboundPage - 1) * reportTopOutboundPageSize,
+        reportTopOutboundPage * reportTopOutboundPageSize
+      ),
+    [reportTopOutboundRows, reportTopOutboundPage, reportTopOutboundPageSize]
+  );
+  const reportAuditLogRows = reports?.auditLogs || [];
+  const pagedReportAuditLogs = useMemo(
+    () =>
+      reportAuditLogRows.slice(
+        (reportAuditLogPage - 1) * reportAuditLogPageSize,
+        reportAuditLogPage * reportAuditLogPageSize
+      ),
+    [reportAuditLogRows, reportAuditLogPage, reportAuditLogPageSize]
+  );
+
+  useEffect(() => {
+    setWarehousePage(1);
+    setProductPage(1);
+    setCategoryPage(1);
+    setSupplierPage(1);
+    setReportBranchPage(1);
+    setReportTopOutboundPage(1);
+    setReportAuditLogPage(1);
+  }, [section]);
 
   const warehouseOptionsByBranch = useMemo(() => {
     if (!txParams.branchId) return warehouseStructure.warehouses || [];
@@ -1175,7 +1247,7 @@ export default function InventoryAdminPage({ section }) {
                     {warehouseStructure.warehouses.length === 0 ? (
                       <NoDataRow colSpan={8} message="Chưa có kho nào. Hãy tạo kho đầu tiên để bắt đầu cấu hình." />
                     ) : (
-                      warehouseStructure.warehouses.map((w) => (
+                      pagedWarehouses.map((w) => (
                         <tr key={w.id}>
                           <td className="td-id">#{w.id}</td>
                           <td>{w.code}</td>
@@ -1201,6 +1273,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={(warehouseStructure.warehouses || []).length}
+                currentPage={warehousePage}
+                pageSize={warehousePageSize}
+                onPageChange={setWarehousePage}
+                onPageSizeChange={(size) => {
+                  setWarehousePageSize(size);
+                  setWarehousePage(1);
+                }}
+              />
             </>
           ) : null}
 
@@ -1501,7 +1583,7 @@ export default function InventoryAdminPage({ section }) {
                     {products.length === 0 ? (
                       <NoDataRow colSpan={14} message="Chưa có sản phẩm trong danh mục kho." />
                     ) : (
-                      products.map((p) => (
+                      pagedProducts.map((p) => (
                         <tr key={p.id}>
                           <td className="td-id">#{p.id}</td>
                           <td className="td-thumb">
@@ -1554,6 +1636,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={(products || []).length}
+                currentPage={productPage}
+                pageSize={productPageSize}
+                onPageChange={setProductPage}
+                onPageSizeChange={(size) => {
+                  setProductPageSize(size);
+                  setProductPage(1);
+                }}
+              />
             </>
           ) : null}
 
@@ -1670,7 +1762,7 @@ export default function InventoryAdminPage({ section }) {
                     {categories.length === 0 ? (
                       <NoDataRow colSpan={7} message="Chưa có danh mục nào trong kho." />
                     ) : (
-                      categories.map((category) => (
+                      pagedCategories.map((category) => (
                         <tr key={category.id}>
                           <td className="td-id">#{category.id}</td>
                           <td>{category.categoryName || "-"}</td>
@@ -1694,6 +1786,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={(categories || []).length}
+                currentPage={categoryPage}
+                pageSize={categoryPageSize}
+                onPageChange={setCategoryPage}
+                onPageSizeChange={(size) => {
+                  setCategoryPageSize(size);
+                  setCategoryPage(1);
+                }}
+              />
             </>
           ) : null}
 
@@ -1741,7 +1843,7 @@ export default function InventoryAdminPage({ section }) {
                     {suppliers.length === 0 ? (
                       <NoDataRow colSpan={4} message="Chưa có nhà cung cấp nào trong hệ thống." />
                     ) : (
-                      suppliers.map((supplier) => (
+                      pagedSuppliers.map((supplier) => (
                         <tr key={supplier.id}>
                           <td className="td-id">#{supplier.id}</td>
                           <td>{supplier.supplierName || supplier.name || "-"}</td>
@@ -1762,6 +1864,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={(suppliers || []).length}
+                currentPage={supplierPage}
+                pageSize={supplierPageSize}
+                onPageChange={setSupplierPage}
+                onPageSizeChange={(size) => {
+                  setSupplierPageSize(size);
+                  setSupplierPage(1);
+                }}
+              />
             </>
           ) : null}
 
@@ -2215,7 +2327,7 @@ export default function InventoryAdminPage({ section }) {
                     {(reports.stockByBranch || []).length === 0 ? (
                       <NoDataRow colSpan={3} message="Chưa có dữ liệu tồn kho theo chi nhánh." />
                     ) : (
-                      (reports.stockByBranch || []).map((r) => (
+                      pagedReportStockByBranch.map((r) => (
                         <tr key={r.branchId}>
                           <td>{r.branchName}</td>
                           <td>{toNumber(r.totalQuantity).toLocaleString()}</td>
@@ -2226,6 +2338,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={reportStockByBranchRows.length}
+                currentPage={reportBranchPage}
+                pageSize={reportBranchPageSize}
+                onPageChange={setReportBranchPage}
+                onPageSizeChange={(size) => {
+                  setReportBranchPageSize(size);
+                  setReportBranchPage(1);
+                }}
+              />
 
               <div className="table-wrapper">
                 <table className="admin-table">
@@ -2239,7 +2361,7 @@ export default function InventoryAdminPage({ section }) {
                     {(reports.topOutbound || []).length === 0 ? (
                       <NoDataRow colSpan={2} message="Chưa có dữ liệu top xuất kho." />
                     ) : (
-                      (reports.topOutbound || []).map((r) => (
+                      pagedReportTopOutbound.map((r) => (
                         <tr key={r.productId}>
                           <td>{r.sku} - {r.productName}</td>
                           <td>{toNumber(r.totalOutboundQty).toLocaleString()}</td>
@@ -2249,6 +2371,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={reportTopOutboundRows.length}
+                currentPage={reportTopOutboundPage}
+                pageSize={reportTopOutboundPageSize}
+                onPageChange={setReportTopOutboundPage}
+                onPageSizeChange={(size) => {
+                  setReportTopOutboundPageSize(size);
+                  setReportTopOutboundPage(1);
+                }}
+              />
 
               <div className="table-wrapper">
                 <table className="admin-table">
@@ -2265,7 +2397,7 @@ export default function InventoryAdminPage({ section }) {
                     {(reports.auditLogs || []).length === 0 ? (
                       <NoDataRow colSpan={5} message="Chưa có audit log liên quan đến kho." />
                     ) : (
-                      (reports.auditLogs || []).map((log) => (
+                      pagedReportAuditLogs.map((log) => (
                         <tr key={log.id}>
                           <td className="td-id">#{log.id}</td>
                           <td>{log.action}</td>
@@ -2278,6 +2410,16 @@ export default function InventoryAdminPage({ section }) {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                totalItems={reportAuditLogRows.length}
+                currentPage={reportAuditLogPage}
+                pageSize={reportAuditLogPageSize}
+                onPageChange={setReportAuditLogPage}
+                onPageSizeChange={(size) => {
+                  setReportAuditLogPageSize(size);
+                  setReportAuditLogPage(1);
+                }}
+              />
             </>
           ) : null}
         </>

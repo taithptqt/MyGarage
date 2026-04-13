@@ -28,7 +28,7 @@ import {
   VStack,
   useToast,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, RepeatIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon } from "@chakra-ui/icons";
 import { keyframes } from "@emotion/react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
@@ -706,7 +706,8 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
   const assignedBayId = toPositiveNumber(readValue(raw, "bayId", "BayId", "assignedBayId", "AssignedBayId"));
   const assignedBayCode = toText(readValue(raw, "bayCode", "BayCode", "assignedBayCode", "AssignedBayCode"));
   const assignedAt = readValue(raw, "assignedAt", "AssignedAt");
-  const startedAt = readValue(raw, "startedAt", "StartedAt");
+  const startedAt = readValue(raw, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt");
+  const technicianCompletedAt = readValue(raw, "technicianCompletedAt", "TechnicianCompletedAt");
   const customerNotesRaw = toText(readValue(order, "customerNotes", "CustomerNotes"));
   const parsedCustomerNotes = parseCustomerNotes(customerNotesRaw);
   const vehicleInfo = resolveVehicleInfo(raw, order, vehicleMap, vehicleModelMap, vehicleBrandMap);
@@ -753,6 +754,8 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
     requestedAt: readValue(raw, "requestedAt", "RequestedAt"),
     assignedAt: hasRealAssignment ? assignedAt : null,
     startedAt: hasRealAssignment ? startedAt : null,
+    technicianAcceptedAt: hasRealAssignment ? startedAt : null,
+    technicianCompletedAt: hasRealAssignment ? technicianCompletedAt : null,
     pendingMinutes: Number(readValue(raw, "pendingMinutes", "PendingMinutes") || 0),
     assignedMinutes: Number(readValue(raw, "assignedMinutes", "AssignedMinutes") || 0),
     isSupportRequested: Boolean(readValue(raw, "isSupportRequested", "IsSupportRequested")),
@@ -764,7 +767,9 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
     technicalApprovedByTeamLeaderId: toPositiveNumber(readValue(raw, "technicalApprovedByTeamLeaderId", "TechnicalApprovedByTeamLeaderId")),
     technicalApprovedAt: readValue(raw, "technicalApprovedAt", "TechnicalApprovedAt"),
     approvedByTeamLeaderAt: readValue(raw, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt", "finalApprovedAt", "FinalApprovedAt"),
-    finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt"),
+    finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt", "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt"),
+    teamLeaderNote: toText(readValue(raw, "teamLeaderNote", "TeamLeaderNote")),
+    foremanNote: toText(readValue(raw, "foremanNote", "ForemanNote")),
     customerName: resolveCustomerName(raw, order, customerMap),
     vehicleLicensePlate: resolveVehiclePlate(raw, order, vehicleMap),
     vehicleBrandName: vehicleInfo.vehicleBrandName,
@@ -1397,7 +1402,7 @@ export default function DispatchOpsDashboard({
     setLoading(true);
     setError("");
 
-    const boardParams = { includeCompleted: false };
+    const boardParams = { includeCompleted: isTeamLeaderMode || isAssignmentPage };
     const teamFilterId = toPositiveNumber(teamFilter);
     if (branchId) {
       boardParams.branchId = branchId;
@@ -2526,16 +2531,18 @@ export default function DispatchOpsDashboard({
                 Xem báo giá
               </Button>
             )}
-            <Button
-              leftIcon={<RepeatIcon />}
-              colorScheme="blue"
-              variant="outline"
-              onClick={fetchData}
-              isLoading={loading}
-            >
-              Làm mới bảng
-            </Button>
           </HStack>
+        </HStack>
+
+        <HStack justify="flex-end" align="center" mt={1} mb={1}>
+          <Button
+            variant="outline"
+            colorScheme="blue"
+            onClick={fetchData}
+            isLoading={loading}
+          >
+            ⟳ Làm mới
+          </Button>
         </HStack>
 
         {!isAssignmentPage && (
@@ -3057,10 +3064,17 @@ export default function DispatchOpsDashboard({
                                   mt={3}
                                   size="sm"
                                   colorScheme="orange"
-                                  variant="outline"
+                                  variant="solid"
                                   onClick={handleLeaderSupport}
                                   isLoading={saving}
                                   isDisabled={!canLeaderSupport || leaderSupportTeamIds.length === 0}
+                                  bg={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.200" : "orange.500"}
+                                  color={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.500" : "white"}
+                                  borderWidth="1px"
+                                  borderColor={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.300" : "orange.600"}
+                                  _hover={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.600", transform: "translateY(-1px)" }}
+                                  _active={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.700" }}
+                                  _disabled={{ opacity: 1, cursor: "not-allowed" }}
                                 >
                                   Gửi yêu cầu đến tổ phụ
                                 </Button>
@@ -3893,3 +3907,4 @@ function SupportingTeamSelector({
     </Box>
   );
 }
+

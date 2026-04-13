@@ -205,6 +205,8 @@ function resolveVehicleDetails(item, order, vehicleMap, vehicleModelMap = new Ma
 
   return {
     vehicleLicensePlate,
+    vehicleBrandName: brandName,
+    vehicleModelName: modelName,
     vehicleDescriptor,
     vehicleManufactureYear,
     vehicleColor,
@@ -307,7 +309,7 @@ export default function TechnicianDashboard() {
         })
         .filter((assignment) => {
           const orderStatus = normalizeCode(readValue(assignment.order, "status", "Status"));
-          return assignment.order && orderStatus !== "CANCELLED" && orderStatus !== "COMPLETED";
+          return assignment.order && orderStatus !== "CANCELED" && orderStatus !== "COMPLETED";
         });
 
       setAssignments(myAssignments);
@@ -329,6 +331,8 @@ export default function TechnicianDashboard() {
             serviceOrderCode: toText(readValue(item, "serviceOrderCode", "ServiceOrderCode")) || toText(readValue(order, "code", "Code")) || `SO-${serviceOrderId}`,
             customerName: toText(readValue(item, "customerName", "CustomerName")) || toText(readValue(order, "customerName", "CustomerName")) || "Khách hàng chưa rõ",
             vehicleLicensePlate: vehicle.vehicleLicensePlate,
+            vehicleBrandName: vehicle.vehicleBrandName,
+            vehicleModelName: vehicle.vehicleModelName,
             vehicleDescriptor: vehicle.vehicleDescriptor,
             vehicleManufactureYear: vehicle.vehicleManufactureYear,
             vehicleColor: vehicle.vehicleColor,
@@ -341,7 +345,9 @@ export default function TechnicianDashboard() {
             pendingMinutes: Number(readValue(item, "pendingMinutes", "PendingMinutes") || 0),
             assignedMinutes: Number(readValue(item, "assignedMinutes", "AssignedMinutes") || 0),
             assignedAt: readValue(item, "assignedAt", "AssignedAt"),
-            startedAt: readValue(item, "startedAt", "StartedAt"),
+            startedAt: readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt"),
+            technicianAcceptedAt: readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt"),
+            technicianCompletedAt: readValue(item, "technicianCompletedAt", "TechnicianCompletedAt"),
             technicalApprovedAt: readValue(item, "technicalApprovedAt", "TechnicalApprovedAt"),
             finalApprovedAt: readValue(item, "finalApprovedAt", "FinalApprovedAt"),
             isSupportRequested: Boolean(readValue(item, "isSupportRequested", "IsSupportRequested")),
@@ -441,10 +447,10 @@ export default function TechnicianDashboard() {
         bayId: task.assignedBayId || null,
       });
 
-      toast({ title: "Đã bắt đầu chuẩn đoán", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "Đã bắt đầu chẩn đoán", status: "success", duration: 2500, isClosable: true });
       await fetchData();
     } catch (err) {
-      toast({ title: "Không thể bắt đầu chuẩn đoán", description: resolveApiErrorMessage(err), status: "error" });
+      toast({ title: "Không thể bắt đầu chẩn đoán", description: resolveApiErrorMessage(err), status: "error" });
     }
   };
 
@@ -505,8 +511,9 @@ export default function TechnicianDashboard() {
   const diagnosisSupportCount = filteredDiagnosisTasks.filter((task) => task.isSupportRequested).length;
   const visibleDiagnosisTasks = useMemo(() => {
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW) {
+      // Keep accepted-but-not-approved tasks visible so technicians do not lose the card after clicking "Nhận yêu cầu".
       return filteredDiagnosisTasks.filter(
-        (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
+        (task) => !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
       );
     }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
@@ -557,7 +564,7 @@ export default function TechnicianDashboard() {
           <Box>
             <Heading size="lg" color="#1b2559">Bảng điều khiển Kỹ thuật viên</Heading>
             <Text color="gray.600" mt={1}>
-              Theo dõi ca chuẩn đoán, nhận việc đúng khoang và phối hợp hội chẩn khi cần.
+              Theo dõi ca chẩn đoán, nhận việc đúng khoang và phối hợp hội chẩn khi cần.
             </Text>
             <HStack mt={2} spacing={2} flexWrap="wrap">
               <Badge colorScheme="teal" variant="subtle" borderRadius="full" px={2.5} py={1}>
@@ -565,15 +572,17 @@ export default function TechnicianDashboard() {
               </Badge>
             </HStack>
           </Box>
+        </HStack>
+
+        <HStack justify="flex-end" align="center" spacing={3} flexWrap="wrap">
           <Button
             leftIcon={<MdAutorenew />}
             colorScheme="blue"
             variant="outline"
-            borderRadius="full"
             onClick={fetchData}
             isLoading={loading}
           >
-            Làm mới bảng
+            Làm mới
           </Button>
         </HStack>
 
@@ -656,7 +665,7 @@ export default function TechnicianDashboard() {
                 <HStack justify="space-between" align={{ base: "start", md: "center" }} spacing={3} p={4} borderBottom="1px solid" borderColor="gray.100" bg="gray.50" flexWrap="wrap">
                   <HStack spacing={2}>
                     <Icon as={MdInfo} color="purple.500" />
-                    <Heading size="md" color="#1b2559">Ca chuẩn đoán đã phân công</Heading>
+                    <Heading size="md" color="#1b2559">Ca chẩn đoán đã phân công</Heading>
                   </HStack>
                   <Badge borderRadius="full" px={3} py={1} colorScheme="blue">
                     {visibleDiagnosisTasks.length} ca
@@ -674,7 +683,21 @@ export default function TechnicianDashboard() {
                         key={`diag-task-${task.serviceOrderId}`}
                         task={task}
                         onStart={() => handleStartDiagnosis(task)}
-                        onOpenDiagnosis={() => navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`)}
+                        onOpenDiagnosis={() =>
+                          navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`, {
+                            state: {
+                              vehicleSnapshot: {
+                                vehicleLicensePlate: task.vehicleLicensePlate,
+                                vehicleBrandName: task.vehicleBrandName,
+                                vehicleModelName: task.vehicleModelName,
+                                vehicleDescriptor: task.vehicleDescriptor,
+                                vehicleManufactureYear: task.vehicleManufactureYear,
+                                vehicleColor: task.vehicleColor,
+                                vehicleVin: task.vehicleVin,
+                              },
+                            },
+                          })
+                        }
                         onRequestSupport={() => {
                           setSupportTarget(task);
                           setSupportNote("");
@@ -731,7 +754,13 @@ export default function TechnicianDashboard() {
                           key={readValue(assignment, "id", "Id")}
                           assignment={assignment}
                           isActive
-                          onOpenDiagnosis={(orderId) => navigate(`/workshop/technician/orders/${orderId}/diagnosis`)}
+                          onOpenDiagnosis={(orderId) =>
+                            navigate(`/workshop/technician/orders/${orderId}/diagnosis`, {
+                              state: {
+                                orderSummary: assignment?.order || null,
+                              },
+                            })
+                          }
                           onFinish={() => handleFinishRepair(assignment)}
                         />
                       ))}
@@ -885,6 +914,21 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
       bg={queueMeta.bg}
       p={4}
       boxShadow="0 8px 20px rgba(15, 23, 42, 0.08)"
+      transition="transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease"
+      cursor={canOpenDiagnosis ? "pointer" : "default"}
+      onClick={canOpenDiagnosis ? onOpenDiagnosis : undefined}
+      title={canOpenDiagnosis ? "Mở phiếu chẩn đoán" : undefined}
+      _hover={
+        canOpenDiagnosis
+          ? {
+              transform: "translateY(-3px)",
+              borderColor: "blue.200",
+              boxShadow: "0 16px 30px rgba(30, 64, 175, 0.16)",
+            }
+          : {
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
+            }
+      }
     >
       <HStack justify="space-between" align="start" spacing={3} flexWrap="wrap">
         <Box minW={0}>
@@ -900,7 +944,7 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
             cursor={canOpenDiagnosis ? "pointer" : "not-allowed"}
             opacity={canOpenDiagnosis ? 1 : 0.9}
             onClick={canOpenDiagnosis ? onOpenDiagnosis : undefined}
-            title={canOpenDiagnosis ? "Mở phiếu chuẩn đoán" : "Bấm Nhận yêu cầu trước khi mở phiếu"}
+            title={canOpenDiagnosis ? "Mở phiếu chẩn đoán" : "Bấm Nhận yêu cầu trước khi mở phiếu"}
             _hover={canOpenDiagnosis ? { color: "#1e40af" } : undefined}
           >
             {task.serviceOrderCode}
@@ -923,7 +967,7 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
           ) : null}
           {!canOpenDiagnosis && (
             <Text mt={0.5} fontSize="xs" color="orange.600">
-              Nhấn "Nhận yêu cầu" để mở phiếu chuẩn đoán.
+              Nhấn "Nhận yêu cầu" để mở phiếu chẩn đoán.
             </Text>
           )}
         </Box>
@@ -1122,7 +1166,7 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagn
                 borderRadius="full"
                 onClick={() => onOpenDiagnosis?.(toPositiveNumber(readValue(order, "id", "Id")))}
               >
-                Mở màn hình chuẩn đoán
+                Mở màn hình chẩn đoán
               </Button>
             ) : (
               <Button colorScheme="green" size="sm" h="36px" minH="36px" borderRadius="full" onClick={onFinish}>
@@ -1135,3 +1179,7 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagn
     </Box>
   );
 };
+
+
+
+

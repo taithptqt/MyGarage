@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAdminChangeLogs } from "../api/auditLogApi";
+import TablePagination from "@shared/components/TablePagination";
 import "./AdminPage.css";
 import "./AdminChangeLogPage.css";
 
@@ -363,16 +364,20 @@ export default function AdminChangeLogPage() {
         )}
       </div>
 
-      <div className="table-toolbar">
-        <button className="btn-ghost" onClick={() => changePage(-1)} disabled={filters.page <= 1}>
-          Trang trước
-        </button>
-        <span className="result-count">
-          Trang {filters.page} / {totalPages}
-        </span>
-        <button className="btn-ghost" onClick={() => changePage(1)} disabled={filters.page >= totalPages}>
-          Trang sau
-        </button>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <TablePagination
+          totalItems={total}
+          currentPage={filters.page}
+          pageSize={filters.pageSize}
+          onPageChange={(nextPage) => setFilters((prev) => ({ ...prev, page: nextPage }))}
+          onPageSizeChange={(nextSize) =>
+            setFilters((prev) => ({
+              ...prev,
+              pageSize: nextSize,
+              page: 1,
+            }))
+          }
+        />
       </div>
     </div>
   );
