@@ -139,10 +139,12 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Mã lệnh sửa chữa không hợp lệ.");
             }
 
-            var checkInTime = entity?.CheckInTime ?? VietnamTime.Now;
-            var executeBranchId = entity?.ExecuteBranchId > 0
+            ArgumentNullException.ThrowIfNull(entity);
+
+            var checkInTime = entity.CheckInTime ?? VietnamTime.Now;
+            var executeBranchId = entity.ExecuteBranchId > 0
                 ? entity.ExecuteBranchId
-                : (entity?.OriginBranchId ?? 0);
+                : entity.OriginBranchId;
             await EnsureBranchOpenForCheckInAsync(executeBranchId, checkInTime);
             await EnsureWorkshopEditableAsync(serviceOrderId);
             return await base.UpdateAsync(id, entity);
