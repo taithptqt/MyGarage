@@ -67,8 +67,7 @@ namespace MyGarage.Interfaces
             IReadOnlyList<long>? supportingTeamIds,
             IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
-            bool managerOverride,
-            long? assignedByTeamLeaderId = null);
+            bool managerOverride);
         Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId);
         Task MarkSupportRequestedAsync(
             IEnumerable<Diagnosis> diagnoses,

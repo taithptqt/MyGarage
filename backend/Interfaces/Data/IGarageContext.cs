@@ -42,6 +42,7 @@ namespace MyGarage.Interfaces
         DbSet<CustomerVoucher> CustomerVouchers { get; }
         DbSet<Delivery> Deliveries { get; }
         DbSet<DiagnoseRecommendation> DiagnoseRecommendations { get; }
+        DbSet<DiagnosisAssignment> DiagnosisAssignments { get; }
         DbSet<Diagnosis> Diagnoses { get; }
         DbSet<ExpenseLog> ExpenseLogs { get; }
         DbSet<GatePass> GatePasses { get; }
@@ -68,6 +69,8 @@ namespace MyGarage.Interfaces
         DbSet<PurchaseOrder> PurchaseOrders { get; }
         DbSet<PurchaseOrderItem> PurchaseOrderItems { get; }
         DbSet<QcInspection> QcInspections { get; }
+        DbSet<Quotation> Quotations { get; }
+        DbSet<QuotationDetail> QuotationDetails { get; }
         DbSet<RetailOrder> RetailOrders { get; }
         DbSet<RetailOrderItem> RetailOrderItems { get; }
         DbSet<RetailReturn> RetailReturns { get; }

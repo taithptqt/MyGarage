@@ -9,6 +9,7 @@ public enum ServiceOrderLifecycleStatus
     QUOTING,
     WAITING_APPROVAL,
     APPROVED,
+    WAITING_PARTS,
     IN_PROGRESS,
     REPAIRING,
     READY,

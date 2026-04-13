@@ -71,8 +71,6 @@ public partial class ServiceOrder
 
     public DateTime? QcverifiedAt { get; set; }
 
-    public DateTime? ValidUntil { get; set; }
-
     public DateTime? CustomerApprovedAt { get; set; }
 
     public string? OldPartsReturnOption { get; set; }
@@ -132,6 +130,10 @@ public partial class ServiceOrder
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public virtual ICollection<QcInspection> QcInspections { get; set; } = new List<QcInspection>();
+
+    public virtual ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<QuotationDetail> QuotationDetails { get; set; } = new List<QuotationDetail>();
 
     public virtual Staff? Qcinspector { get; set; }
 

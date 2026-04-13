@@ -2,6 +2,7 @@
 
 public enum DiagnosisStatus
 {
+    CANCELED,
     COMPLETED,
     ASSIGNED,
     PENDING

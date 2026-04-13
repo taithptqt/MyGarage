@@ -600,18 +600,34 @@ namespace MyGarage.Services
             }
 
             var teamIds = teamRows.Select(x => x.Id).Distinct().ToList();
-            var teamLoadRows = await _context.Diagnoses.AsNoTracking()
-                .Where(x => x.AssignedTeamId.HasValue && teamIds.Contains(x.AssignedTeamId.Value))
-                .Where(x =>
-                    x.Status == DiagnosisStatusAssigned ||
-                    x.Status == DiagnosisStatusPending)
-                .GroupBy(x => x.AssignedTeamId!.Value)
+            var rawLoadRows = await (
+                from assignment in _context.DiagnosisAssignments.AsNoTracking()
+                join diagnosis in _context.Diagnoses.AsNoTracking() on assignment.DiagnosisId equals diagnosis.Id
+                where assignment.AssignedTeamId.HasValue && teamIds.Contains(assignment.AssignedTeamId.Value)
+                where assignment.Status == DiagnosisStatusAssigned || assignment.Status == DiagnosisStatusPending
+                select new
+                {
+                    assignment.DiagnosisId,
+                    diagnosis.ServiceOrderId,
+                    TeamId = assignment.AssignedTeamId!.Value,
+                    assignment.CreatedAt,
+                    assignment.Id
+                })
+                .ToListAsync();
+
+            var teamLoadRows = rawLoadRows
+                .GroupBy(x => x.DiagnosisId)
+                .Select(group => group
+                    .OrderByDescending(x => x.CreatedAt)
+                    .ThenByDescending(x => x.Id)
+                    .First())
+                .GroupBy(x => x.TeamId)
                 .Select(group => new
                 {
                     TeamId = group.Key,
                     Load = group.Select(x => x.ServiceOrderId).Distinct().Count()
                 })
-                .ToListAsync();
+                .ToList();
 
             var loadMap = teamLoadRows.ToDictionary(x => x.TeamId, x => x.Load);
             var bestTeam = teamRows

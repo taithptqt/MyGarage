@@ -29,10 +29,9 @@ namespace MyGarage.Repositories
             if (!string.IsNullOrWhiteSpace(status))
             {
                 var normalized = status.Trim().ToUpperInvariant();
-                if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+                if (normalized == nameof(AppointmentStatus.CANCELED))
                 {
-                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED)
-                        || a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED));
+                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED));
                 }
                 else
                 {
@@ -56,8 +55,7 @@ namespace MyGarage.Repositories
                          && a.StartTime >= start
                          && a.StartTime < end
                          && (a.Status == null
-                             || (a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)
-                                 && a.Status.ToUpper() != nameof(AppointmentStatus.CANCELLED))))
+                             || a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)))
                 .ToListAsync();
         }
 
@@ -88,10 +86,9 @@ namespace MyGarage.Repositories
             if (!string.IsNullOrWhiteSpace(status))
             {
                 var normalized = status.Trim().ToUpperInvariant();
-                if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+                if (normalized == nameof(AppointmentStatus.CANCELED))
                 {
-                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED)
-                        || a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED));
+                    query = query.Where(a => a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED));
                 }
                 else
                 {
@@ -113,12 +110,11 @@ namespace MyGarage.Repositories
             }
 
             var normalized = status.Trim().ToUpperInvariant();
-            if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+            if (normalized == nameof(AppointmentStatus.CANCELED))
             {
                 return query.Where(a =>
                     a.Status != null &&
-                    (a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED) ||
-                     a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED)));
+                    a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED));
             }
 
             return query.Where(a => a.Status != null && a.Status.ToUpper() == normalized);
@@ -147,3 +143,5 @@ namespace MyGarage.Repositories
         }
     }
 }
+
+

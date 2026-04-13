@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 namespace MyGarage.DTOs.Responses
 {
     public class DiagnosisResponseDto
@@ -8,7 +8,6 @@ namespace MyGarage.DTOs.Responses
         public long? TechnicianId { get; set; }
         public long? AssistantTechnicianId { get; set; }
         public long? AssignedBayId { get; set; }
-        public long? AssignedByTeamLeaderId { get; set; }
         public string? Symptom { get; set; }
         public string? RootCause { get; set; }
         public string? Severity { get; set; }
@@ -20,7 +19,8 @@ namespace MyGarage.DTOs.Responses
         public long? AssignedTeamLeaderId { get; set; }
         public string? AssignedTeamLeaderName { get; set; }
         public DateTime? AssignedAt { get; set; }
-        public DateTime? StartedAt { get; set; }
+        public DateTime? TechnicianAcceptedAt { get; set; }
+        public DateTime? TechnicianCompletedAt { get; set; }
         public DateTime? DiagnosedAt { get; set; }
         public DateTime? SupportRequestedAt { get; set; }
         public long? SupportRequestedBy { get; set; }
@@ -35,10 +35,11 @@ namespace MyGarage.DTOs.Responses
         public long? ApprovedByForemanId { get; set; }
         public DateTime? ApprovedByForemanAt { get; set; }
         public DateTime? ApprovedByTeamLeaderAt { get; set; }
-        public DateTime? FinalApprovedAt { get; set; }
-        public string? FinalApprovalNote { get; set; }
+        public string? TeamLeaderNote { get; set; }
+        public string? ForemanNote { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
     }
 }
+

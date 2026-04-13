@@ -11,6 +11,8 @@ public partial class ServiceOrderDetail
 
     public long? DiagnoseRecommendationId { get; set; }
 
+    public long? QuotationDetailId { get; set; }
+
     public long? StandardServiceId { get; set; }
 
     public long? TechnicianId { get; set; }
@@ -104,6 +106,8 @@ public partial class ServiceOrderDetail
     public virtual ICollection<QcInspection> QcInspections { get; set; } = new List<QcInspection>();
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
+
+    public virtual QuotationDetail? QuotationDetail { get; set; }
 
     public virtual ICollection<ServiceStaffAssignment> ServiceStaffAssignments { get; set; } = new List<ServiceStaffAssignment>();
 

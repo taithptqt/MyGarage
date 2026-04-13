@@ -14,6 +14,7 @@ namespace MyGarage.Services
         private static readonly HashSet<string> QuoteLockedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             nameof(ServiceOrderLifecycleStatus.APPROVED),
+            nameof(ServiceOrderLifecycleStatus.WAITING_PARTS),
             nameof(ServiceOrderLifecycleStatus.IN_PROGRESS),
             nameof(ServiceOrderLifecycleStatus.REPAIRING),
             nameof(ServiceOrderLifecycleStatus.READY),
@@ -24,6 +25,7 @@ namespace MyGarage.Services
 
         private static readonly HashSet<string> AssignmentLockedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
+            nameof(ServiceOrderLifecycleStatus.WAITING_PARTS),
             nameof(ServiceOrderLifecycleStatus.IN_PROGRESS),
             nameof(ServiceOrderLifecycleStatus.REPAIRING),
             nameof(ServiceOrderLifecycleStatus.READY),

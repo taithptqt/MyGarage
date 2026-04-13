@@ -165,7 +165,7 @@ namespace MyGarage.Services
             var activeSlots = await _context.WorkSlots
                 .Where(slot =>
                     slot.AppointmentId == appointment.Id &&
-                    slot.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    slot.Status != nameof(WorkSlotStatus.CANCELED) &&
                     slot.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     slot.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(slot => slot.SequenceOrder)
@@ -340,3 +340,4 @@ namespace MyGarage.Services
         }
     }
 }
+

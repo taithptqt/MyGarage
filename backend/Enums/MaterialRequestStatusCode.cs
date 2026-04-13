@@ -2,7 +2,7 @@
 
 public enum MaterialRequestStatusCode
 {
-    CANCELLED,
+    CANCELED,
     COMPLETED,
     PARTIAL,
     PENDING

@@ -7,7 +7,7 @@ namespace MyGarage.Constants
         public static readonly HashSet<string> Closed = new(System.StringComparer.OrdinalIgnoreCase)
         {
             nameof(AppointmentStatus.CANCELED),
-            nameof(AppointmentStatus.CANCELLED),
+            nameof(AppointmentStatus.CANCELED),
             nameof(AppointmentStatus.NO_SHOW),
         };
 
@@ -21,4 +21,5 @@ namespace MyGarage.Constants
         };
     }
 }
+
 

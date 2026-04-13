@@ -4,7 +4,7 @@ namespace MyGarage.Support;
 
 /// <summary>
 /// Maps workshop / service-order state to customer-facing Vietnamese stages.
-/// Handles both CANCELED and CANCELLED spellings.
+/// Uses CANCELED spelling only.
 /// </summary>
 public static class CustomerPortalStageMapper
 {
@@ -34,7 +34,7 @@ public static class CustomerPortalStageMapper
     {
         if (string.IsNullOrWhiteSpace(status)) return false;
         var u = status.Trim().ToUpperInvariant();
-        return u is "CANCELED" or "CANCELLED";
+        return u == "CANCELED";
     }
 
     public static bool IsTerminalDelivered(string? status)
@@ -53,15 +53,14 @@ public static class CustomerPortalStageMapper
     }
 
     /// <summary>
-    /// Active diagnosis: not completed, not cancelled decision.
+    /// Active diagnosis: pending/assigned only.
     /// </summary>
     public static bool IsDiagnosisInProgress(string? diagnosisStatus, string? cancellationStatus)
     {
         if (string.IsNullOrWhiteSpace(diagnosisStatus)) return false;
         if (string.Equals(diagnosisStatus, nameof(DiagnosisStatus.COMPLETED), StringComparison.OrdinalIgnoreCase))
             return false;
-        if (!string.IsNullOrWhiteSpace(cancellationStatus) &&
-            !string.Equals(cancellationStatus, "NONE", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(diagnosisStatus, nameof(DiagnosisStatus.CANCELED), StringComparison.OrdinalIgnoreCase))
             return false;
         return string.Equals(diagnosisStatus, nameof(DiagnosisStatus.PENDING), StringComparison.OrdinalIgnoreCase)
                || string.Equals(diagnosisStatus, nameof(DiagnosisStatus.ASSIGNED), StringComparison.OrdinalIgnoreCase);
@@ -157,3 +156,4 @@ public static class CustomerPortalStageMapper
 }
 
 public sealed record PortalTimelineStep(string Code, string Label, string State);
+

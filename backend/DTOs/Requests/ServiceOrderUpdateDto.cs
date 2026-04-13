@@ -24,7 +24,6 @@ namespace MyGarage.DTOs.Requests
         public string? CancellationReason { get; set; }
         public long? QcinspectorId { get; set; }
         public DateTime? QcverifiedAt { get; set; }
-        public DateTime? ValidUntil { get; set; }
         public DateTime? CustomerApprovedAt { get; set; }
         public string? OldPartsReturnOption { get; set; }
         public DateTime? CheckInTime { get; set; }

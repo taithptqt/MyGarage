@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -720,7 +721,7 @@ public class AccountingController : ControllerBase
         };
         var payloadJson = JsonSerializer.Serialize(payloadObject);
         var reason = string.IsNullOrWhiteSpace(request.Reason)
-            ? $"Y�u c?u t?o luong kh?i di?m cho nh�n s? {staff.FullName} (#{staff.Id})."
+            ? $"Yêu cầu tạo lương khởi điểm cho nhân sự {staff.FullName} (#{staff.Id})."
             : request.Reason.Trim();
 
         var createdId = await _crud.ScalarAsync<long?>(
@@ -1811,14 +1812,49 @@ public class AccountingController : ControllerBase
 
     private static bool IsAccountingStaff(string? claimRole, string? roleCode, string? roleName)
     {
-        var roleNameUpper = (roleName ?? "").Trim().ToUpperInvariant();
+        var normalizedRoleName = NormalizeRoleNameForMatch(roleName);
         return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
                (
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("K? TO�N", StringComparison.OrdinalIgnoreCase)
+                   normalizedRoleName.Contains("ACCOUNTANT", StringComparison.Ordinal) ||
+                   normalizedRoleName.Contains("KE TOAN", StringComparison.Ordinal)
                );
+    }
+
+    private static string NormalizeRoleNameForMatch(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            return string.Empty;
+        }
+
+        var normalized = TryFixUtf8Mojibake(roleName.Trim());
+        var decomposed = normalized.Normalize(NormalizationForm.FormD);
+        var buffer = new StringBuilder(decomposed.Length);
+
+        foreach (var c in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                buffer.Append(c);
+            }
+        }
+
+        return buffer.ToString()
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd')
+            .ToUpperInvariant();
+    }
+
+    private static string TryFixUtf8Mojibake(string value)
+    {
+        if (value.IndexOfAny(['Ã', 'Â', 'Ð', 'Æ']) < 0)
+        {
+            return value;
+        }
+
+        var decoded = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
+        return decoded.Contains('\uFFFD') ? value : decoded;
     }
 
     private static bool IsAdminStaff(string? claimRole, string? roleCode, string? roleName)

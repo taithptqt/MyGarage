@@ -123,7 +123,7 @@ namespace MyGarage.Services
                 .Where(slot =>
                     slot.AppointmentId.HasValue &&
                     appointmentIds.Contains(slot.AppointmentId.Value) &&
-                    slot.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    slot.Status != nameof(WorkSlotStatus.CANCELED) &&
                     slot.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     slot.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     slot.Notes != null &&
@@ -779,4 +779,5 @@ namespace MyGarage.Services
         }
     }
 }
+
 

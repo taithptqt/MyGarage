@@ -83,7 +83,7 @@ namespace MyGarage.Services
                           && slot.StartTime < endAt
                           && slot.EndTime > startAt
                           && slot.SlotType == nameof(WorkSlotType.REPAIR)
-                          && slot.Status != nameof(WorkSlotStatus.CANCELLED)
+                          && slot.Status != nameof(WorkSlotStatus.CANCELED)
                           && slot.Status != nameof(WorkSlotStatus.NOSHOW)
                           && slot.Status != nameof(WorkSlotStatus.COMPLETED)
                           && slot.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING)
@@ -213,7 +213,7 @@ namespace MyGarage.Services
                     s.BayId.HasValue &&
                     s.StartTime < scheduleEnd &&
                     s.EndTime > scheduleStart &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     s.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
@@ -558,3 +558,4 @@ namespace MyGarage.Services
         }
     }
 }
+

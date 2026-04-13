@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
@@ -588,7 +588,7 @@ public class VehicleAdminController : ControllerBase
         if (request.ModelId <= 0) return BadRequest(new { message = "ModelId is required." });
         if (!request.ManufactureYear.HasValue || request.ManufactureYear.Value <= 0)
         {
-            return BadRequest(new { message = "Vui lòng nhập năm sản xuất." });
+            return BadRequest(new { message = "Vui lÃ²ng nháº­p nÄƒm sáº£n xuáº¥t." });
         }
 
         var modelExists = await _context.VehicleModels.AsNoTracking().AnyAsync(m => m.Id == request.ModelId && m.IsDeleted != true);
@@ -1680,7 +1680,7 @@ public class VehicleAdminController : ControllerBase
             "WAITING_DELIVERY" or "CHO_GIAO" => StatusWaitingDelivery,
             nameof(ServiceOrderDetailStatusCode.COMPLETED) or "DONE" or "HOAN_TAT" => StatusCompleted,
             nameof(RetailOrderStatus.DELIVERED) or "DA_GIAO" or "HANDOVER" => StatusDelivered,
-            nameof(AppointmentStatus.CANCELLED) or nameof(ServiceOrderDetailStatusCode.CANCELED) or "HUY" => StatusCanceled,
+            nameof(AppointmentStatus.CANCELED) or nameof(ServiceOrderDetailStatusCode.CANCELED) or "HUY" => StatusCanceled,
             _ => normalized
         };
     }
@@ -1755,7 +1755,7 @@ public class VehicleAdminController : ControllerBase
         public long ModelId { get; set; }
         public string? Color { get; set; }
         public int? Odo { get; set; }
-        [Range(1900, 2100, ErrorMessage = "NÃ„Æ’m sÃ¡ÂºÂ£n xuÃ¡ÂºÂ¥t khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡.")]
+        [Range(1900, 2100, ErrorMessage = "Năm sản xuất không hợp lệ.")]
         public int? ManufactureYear { get; set; }
         public long? CustomerId { get; set; }
         public long? BranchId { get; set; }
@@ -2129,3 +2129,5 @@ public class VehicleAdminController : ControllerBase
         public static AssignBayResult Fail(string message) => new() { Success = false, Message = message };
     }
 }
+
+

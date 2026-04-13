@@ -7,6 +7,7 @@ using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Common;
 
 namespace MyGarage.Controllers
 {
@@ -76,27 +77,30 @@ namespace MyGarage.Controllers
             }
 
             var total = await logsQuery.CountAsync();
-            var items = await logsQuery
+            var logs = await logsQuery
                 .OrderByDescending(x => x.Timestamp)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .ToListAsync();
+
+            var items = logs
                 .Select(x => new
                 {
                     id = x.Id,
                     userId = x.UserId,
-                    userType = x.UserType,
+                    userType = Utf8MojibakeRepair.Fix(x.UserType),
                     branchId = x.BranchId,
-                    action = x.Action,
-                    tableName = x.TableName,
+                    action = Utf8MojibakeRepair.Fix(x.Action),
+                    tableName = Utf8MojibakeRepair.Fix(x.TableName),
                     recordId = x.RecordId,
-                    oldValue = x.OldValue,
-                    newValue = x.NewValue,
-                    ipAddress = x.IpAddress,
-                    userAgent = x.UserAgent,
-                    sessionId = x.SessionId,
+                    oldValue = Utf8MojibakeRepair.Fix(x.OldValue),
+                    newValue = Utf8MojibakeRepair.Fix(x.NewValue),
+                    ipAddress = Utf8MojibakeRepair.Fix(x.IpAddress),
+                    userAgent = Utf8MojibakeRepair.Fix(x.UserAgent),
+                    sessionId = Utf8MojibakeRepair.Fix(x.SessionId),
                     timestamp = x.Timestamp
                 })
-                .ToListAsync();
+                .ToList();
 
             return Ok(new { items, total, page, pageSize });
         }

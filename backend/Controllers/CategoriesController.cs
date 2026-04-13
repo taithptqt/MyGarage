@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -15,16 +18,52 @@ namespace MyGarage.Controllers
     {
         private readonly ICategoryService _categoryService;
         private readonly IMapper _mapper;
+        private readonly IGarageContext _db;
 
-        public CategoriesController(ICategoryService categoryService, IMapper mapper)
+        public CategoriesController(ICategoryService categoryService, IMapper mapper, IGarageContext db)
         {
             _categoryService = categoryService;
             _mapper = mapper;
+            _db = db;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<CategoryResponseDto>>> GetAll()
+        public async Task<ActionResult> GetAll(
+            [FromQuery] int? page = null,
+            [FromQuery] int? pageSize = null)
         {
+            var hasPaging = page.HasValue || pageSize.HasValue;
+            if (hasPaging)
+            {
+                var normalizedPage = page.GetValueOrDefault(1);
+                if (normalizedPage < 1) normalizedPage = 1;
+
+                var normalizedPageSize = pageSize.GetValueOrDefault(20);
+                if (normalizedPageSize < 1) normalizedPageSize = 1;
+                if (normalizedPageSize > 200) normalizedPageSize = 200;
+
+                var query = _db.Categories
+                    .AsNoTracking()
+                    .Where(x => x.IsDeleted != true)
+                    .OrderByDescending(x => x.Id);
+
+                var total = await query.CountAsync();
+                var items = await query
+                    .Skip((normalizedPage - 1) * normalizedPageSize)
+                    .Take(normalizedPageSize)
+                    .ToListAsync();
+
+                var pagedDtos = _mapper.Map<List<CategoryResponseDto>>(items);
+                return Ok(new
+                {
+                    items = pagedDtos,
+                    total,
+                    page = normalizedPage,
+                    pageSize = normalizedPageSize,
+                    totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)normalizedPageSize)
+                });
+            }
+
             var items = await _categoryService.GetAllAsync();
             var dtos = _mapper.Map<IEnumerable<CategoryResponseDto>>(items);
             return Ok(dtos);

@@ -30,8 +30,42 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetAll()
+        public async Task<ActionResult> GetAll(
+            [FromQuery] int? page = null,
+            [FromQuery] int? pageSize = null)
         {
+            var hasPaging = page.HasValue || pageSize.HasValue;
+            if (hasPaging)
+            {
+                var normalizedPage = page.GetValueOrDefault(1);
+                if (normalizedPage < 1) normalizedPage = 1;
+
+                var normalizedPageSize = pageSize.GetValueOrDefault(20);
+                if (normalizedPageSize < 1) normalizedPageSize = 1;
+                if (normalizedPageSize > 200) normalizedPageSize = 200;
+
+                var query = _db.Products
+                    .AsNoTracking()
+                    .Where(x => x.IsDeleted != true)
+                    .OrderByDescending(x => x.Id);
+
+                var total = await query.CountAsync();
+                var items = await query
+                    .Skip((normalizedPage - 1) * normalizedPageSize)
+                    .Take(normalizedPageSize)
+                    .ToListAsync();
+
+                var dtos = _mapper.Map<List<ProductResponseDto>>(items);
+                return Ok(new
+                {
+                    items = dtos,
+                    total,
+                    page = normalizedPage,
+                    pageSize = normalizedPageSize,
+                    totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)normalizedPageSize)
+                });
+            }
+
             var items = await _productService.GetAllAsync();
             var dtos = _mapper.Map<IEnumerable<ProductResponseDto>>(items);
             return Ok(dtos);

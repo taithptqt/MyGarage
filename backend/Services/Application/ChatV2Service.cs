@@ -66,7 +66,8 @@ namespace MyGarage.Services
                     Status = c.Status ?? nameof(ConversationStatus.OPEN),
                     LastMessage = c.LastMessage,
                     LastMessageAt = ToChatDisplayTime(c.LastMessageAt ?? c.UpdatedAt ?? c.CreatedAt),
-                    UnreadCount = await GetUnreadForCustomerAsync(c.Id, customerId, cancellationToken)
+                    UnreadCount = await GetUnreadForCustomerAsync(c.Id, customerId, cancellationToken),
+                    CustomerOnline = ChatHub.IsCustomerOnline(c.CustomerId)
                 });
             }
 
@@ -271,7 +272,8 @@ namespace MyGarage.Services
                 Status = x.Conversation.Status ?? nameof(ConversationStatus.OPEN),
                 LastMessage = x.Conversation.LastMessage,
                 LastMessageAt = ToChatDisplayTime(x.Conversation.LastMessageAt ?? x.Conversation.UpdatedAt ?? x.Conversation.CreatedAt),
-                UnreadCount = x.UnreadCount
+                UnreadCount = x.UnreadCount,
+                CustomerOnline = ChatHub.IsCustomerOnline(x.Conversation.CustomerId)
             }).ToList();
 
             return new PagedConversationsResponseDto
@@ -669,7 +671,7 @@ namespace MyGarage.Services
             }
 
             return normalized != "DRAFT"
-                && normalized != "CANCELLED"
+                && normalized != "CANCELED"
                 && normalized != "CANCELED";
         }
 
@@ -1199,6 +1201,7 @@ namespace MyGarage.Services
                 LastMessage = c.LastMessage,
                 LastMessageAt = ToChatDisplayTime(c.LastMessageAt ?? c.UpdatedAt ?? c.CreatedAt),
                 UnreadCount = unreadCount,
+                CustomerOnline = ChatHub.IsCustomerOnline(c.CustomerId),
                 CustomerName = c.Customer?.FullName,
                 CustomerPhone = c.Customer?.Phone,
                 Messages = await GetMessagesAsync(c.Id, null, DefaultMessageTake, cancellationToken)
@@ -1462,17 +1465,45 @@ namespace MyGarage.Services
                 }
 
                 var normalized = value.Trim().ToUpperInvariant();
-                var noSpace = normalized.Replace(" ", string.Empty);
+                var compact = CompactRoleValue(normalized);
 
                 if (normalized == "RECEPTIONIST"
                     || normalized.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
-                    || noSpace.Contains("LETAN", StringComparison.OrdinalIgnoreCase))
+                    || compact.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("LETAN", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("TIEPTAN", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static string CompactRoleValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var decomposed = value.Normalize(NormalizationForm.FormD);
+            var chars = new StringBuilder(decomposed.Length);
+            foreach (var ch in decomposed)
+            {
+                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (unicodeCategory == UnicodeCategory.NonSpacingMark)
+                {
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(ch))
+                {
+                    chars.Append(char.ToUpperInvariant(ch));
+                }
+            }
+
+            return chars.ToString().Normalize(NormalizationForm.FormC);
         }
 
         private static string NormalizeConversationStatus(string? status)
@@ -1796,3 +1827,4 @@ namespace MyGarage.Services
         }
     }
 }
+

@@ -231,6 +231,7 @@ builder.Services.AddScoped<IDiagnoseRecommendationService, DiagnoseRecommendatio
 
 builder.Services.AddScoped<IDiagnosisRepository, DiagnosisRepository>();
 builder.Services.AddScoped<IDiagnosisService, DiagnosisService>();
+builder.Services.AddScoped<IQuotationWorkflowService, QuotationWorkflowService>();
 
 builder.Services.AddScoped<IExpenseLogRepository, ExpenseLogRepository>();
 builder.Services.AddScoped<IExpenseLogService, ExpenseLogService>();

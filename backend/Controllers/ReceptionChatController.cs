@@ -13,7 +13,7 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Authorize(Roles = "Staff")]
+    [Authorize]
     [Route("api/reception/chat")]
     public class ReceptionChatController : ControllerBase
     {

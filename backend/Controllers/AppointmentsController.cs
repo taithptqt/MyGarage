@@ -279,7 +279,7 @@ namespace MyGarage.Controllers
 
             return Ok(new
             {
-                message = "Ðã ghi nh?n yêu c?u s?a l?ch h?n.",
+                message = "Đã ghi nhận yêu cầu sửa lịch hẹn.",
                 requestId = created.Id
             });
         }
@@ -291,7 +291,7 @@ namespace MyGarage.Controllers
             var decision = NormalizeToken(dto?.Decision);
             if (decision is not ("APPROVE" or "REJECT"))
             {
-                return BadRequest(new { message = "Decision ph?i là APPROVE ho?c REJECT." });
+                return BadRequest(new { message = "Decision phải là APPROVE hoặc REJECT." });
             }
 
             var actorUserId = this.GetCurrentUserId();
@@ -306,19 +306,19 @@ namespace MyGarage.Controllers
                 !string.Equals(requestLog.TableName, "APPOINTMENTS", StringComparison.OrdinalIgnoreCase) ||
                 requestLog.RecordId != id)
             {
-                return NotFound(new { message = "Không tìm th?y yêu c?u s?a c?n x? lý." });
+                return NotFound(new { message = "Không tìm thấy yêu cầu sửa cần xử lý." });
             }
 
             var payload = DeserializeEditRequestPayload(requestLog.NewValue);
             if (payload == null)
             {
-                return BadRequest(new { message = "D? li?u yêu c?u s?a không h?p l?." });
+                return BadRequest(new { message = "Dữ liệu yêu cầu sửa không hợp lệ." });
             }
 
             var currentStatus = NormalizeToken(payload.Status);
             if (!string.Equals(currentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Yêu c?u s?a này dã du?c x? lý tru?c dó." });
+                return BadRequest(new { message = "Yêu cầu sửa này đã được xử lý trước đó." });
             }
 
             var requestedSection = NormalizeSection(payload.Section, "APPOINTMENT");
@@ -331,7 +331,7 @@ namespace MyGarage.Controllers
             var note = string.IsNullOrWhiteSpace(dto?.Note) ? null : dto!.Note!.Trim();
             if (decision == "REJECT" && string.IsNullOrWhiteSpace(note))
             {
-                return BadRequest(new { message = "Vui lòng nh?p lý do t? ch?i yêu c?u s?a." });
+                return BadRequest(new { message = "Vui lòng nhập lý do từ chối yêu cầu sửa." });
             }
 
             var now = VietnamTime.Now;
@@ -378,8 +378,8 @@ namespace MyGarage.Controllers
                 decision = payload.Status,
                 overrideUntilUtc = payload.OverrideUntilUtc,
                 message = decision == "APPROVE"
-                    ? "Ðã duy?t yêu c?u s?a l?ch h?n."
-                    : "Ðã t? ch?i yêu c?u s?a l?ch h?n."
+                    ? "Đã duyệt yêu cầu sửa lịch hẹn."
+                    : "Đã từ chối yêu cầu sửa lịch hẹn."
             });
         }
 

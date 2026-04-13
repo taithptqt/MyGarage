@@ -39,8 +39,10 @@ public class InventoryAdminController : ControllerBase
         => Ok(await _inventoryAdminService.GetBranchSummaryAsync());
 
     [HttpGet("warehouse-structures")]
-    public async Task<IActionResult> GetWarehouseStructure()
-        => Ok(await _inventoryAdminService.GetWarehouseStructureAsync());
+    public async Task<IActionResult> GetWarehouseStructure(
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
+        => Ok(await _inventoryAdminService.GetWarehouseStructureAsync(page, pageSize));
 
     [HttpGet("alert-items")]
     public async Task<IActionResult> GetAlerts()
@@ -119,8 +121,10 @@ public class InventoryAdminController : ControllerBase
     }
 
     [HttpGet("analytics-reports")]
-    public async Task<IActionResult> GetReports()
-        => Ok(await _inventoryAdminService.GetReportsAsync());
+    public async Task<IActionResult> GetReports(
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
+        => Ok(await _inventoryAdminService.GetReportsAsync(page, pageSize));
 
     [HttpGet("audit-entries")]
     public async Task<IActionResult> GetInventoryAuditLog([FromQuery] int take = 300)

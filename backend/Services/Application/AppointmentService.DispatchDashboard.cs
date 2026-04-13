@@ -25,7 +25,7 @@ namespace MyGarage.Services
                     && s.StartTime <= snapshot
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > snapshot)
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderByDescending(s => s.StartTime)
@@ -74,3 +74,4 @@ namespace MyGarage.Services
         }
     }
 }
+

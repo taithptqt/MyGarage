@@ -113,7 +113,10 @@ namespace MyGarage.Mappings
             // Diagnosis Mappings
             CreateMap<Diagnosis, DiagnosisResponseDto>();
             CreateMap<DiagnosisCreateDto, Diagnosis>();
-            CreateMap<DiagnosisUpdateDto, Diagnosis>();
+            CreateMap<DiagnosisUpdateDto, Diagnosis>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.ServiceOrderId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
             // ExpenseLog Mappings
             CreateMap<ExpenseLog, ExpenseLogResponseDto>();
             CreateMap<ExpenseLogCreateDto, ExpenseLog>();

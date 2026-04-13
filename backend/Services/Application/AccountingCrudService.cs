@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Data;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
@@ -431,7 +432,7 @@ public sealed class AccountingCrudService : IAccountingCrudService
                 {
                     var key = ToCamelCase(reader.GetName(i));
                     var value = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i);
-                    row[key] = value;
+                    row[key] = NormalizeReadValue(value);
                 }
                 results.Add(row);
             }
@@ -605,6 +606,27 @@ public sealed class AccountingCrudService : IAccountingCrudService
             string x when long.TryParse(x, out var parsed) => parsed,
             _ => Convert.ToInt64(branchField.Value)
         };
+    }
+
+    private static object? NormalizeReadValue(object? value)
+    {
+        return value is string text ? TryFixUtf8Mojibake(text) : value;
+    }
+
+    private static string TryFixUtf8Mojibake(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        if (value.IndexOfAny(['Ã', 'Â', 'Ð', 'Æ']) < 0)
+        {
+            return value;
+        }
+
+        var decoded = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
+        return decoded.Contains('\uFFFD') ? value : decoded;
     }
 
     private static string ToSnakeCase(string key)

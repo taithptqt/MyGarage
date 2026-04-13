@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
@@ -16,6 +17,8 @@ namespace MyGarage.Controllers
     [ApiController]
     public class DiagnoseRecommendationController : ControllerBase
     {
+        private const string EvidenceRequiredMessage = "Moi dich vu moi phai co it nhat 1 anh hien trang truoc khi luu.";
+
         private readonly IDiagnoseRecommendationService _diagnoseRecommendationService;
         private readonly IServiceOrderService _serviceOrderService;
         private readonly IGarageContext _context;
@@ -75,6 +78,11 @@ namespace MyGarage.Controllers
                 }
 
                 var entity = _mapper.Map<DiagnoseRecommendation>(itemDto);
+                if (RequiresEvidenceForServiceRecommendation(entity) && !HasEvidenceMedia(entity.EvidenceMediaUrls))
+                {
+                    return BadRequest(new { message = EvidenceRequiredMessage });
+                }
+
                 var createdItem = await _diagnoseRecommendationService.AddAsync(entity);
                 var responseDto = _mapper.Map<DiagnoseRecommendationResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
@@ -104,6 +112,11 @@ namespace MyGarage.Controllers
                 }
 
                 _mapper.Map(itemDto, existingItem);
+                if (RequiresEvidenceForServiceRecommendation(existingItem) && !HasEvidenceMedia(existingItem.EvidenceMediaUrls))
+                {
+                    return BadRequest(new { message = EvidenceRequiredMessage });
+                }
+
                 var updatedItem = await _diagnoseRecommendationService.UpdateAsync(id, existingItem);
                 if (updatedItem == null)
                 {
@@ -161,6 +174,69 @@ namespace MyGarage.Controllers
                 .Where(x => x.Id == diagnoseId)
                 .Select(x => x.ServiceOrderId)
                 .FirstOrDefaultAsync();
+        }
+
+        private static bool RequiresEvidenceForServiceRecommendation(DiagnoseRecommendation recommendation)
+        {
+            if (recommendation == null)
+            {
+                return false;
+            }
+
+            // Only enforce for top-level service rows, not material/child rows.
+            if (recommendation.ParentRecommendationId.HasValue && recommendation.ParentRecommendationId.Value > 0)
+            {
+                return false;
+            }
+
+            if (recommendation.StandardServiceId.HasValue && recommendation.StandardServiceId.Value > 0)
+            {
+                return true;
+            }
+
+            var normalizedItemType = (recommendation.ItemType ?? string.Empty).Trim().ToUpperInvariant();
+            return normalizedItemType is "SERVICE" or "STANDARD_SERVICE" or "LABOR";
+        }
+
+        private static bool HasEvidenceMedia(string? evidenceMediaUrls)
+        {
+            if (string.IsNullOrWhiteSpace(evidenceMediaUrls))
+            {
+                return false;
+            }
+
+            var trimmed = evidenceMediaUrls.Trim();
+            if (!trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                return trimmed
+                    .Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => x.Trim())
+                    .Any(x => !string.IsNullOrWhiteSpace(x));
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(trimmed);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    return false;
+                }
+
+                foreach (var element in document.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(element.GetString()))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+
+            return false;
         }
     }
 }

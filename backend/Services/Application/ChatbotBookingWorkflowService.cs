@@ -189,7 +189,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             case BookingNavigationCommand.Cancel:
                 await ClearSlotSelectionAsync(state, ct);
                 state = state.Reset();
-                await LogAction(sessionId, ChatbotActionStatus.SKIPPED, "BOOKING_FUNNEL_EXIT", "USER_CANCELLED", "Booking flow cancelled by user command.", null, ct);
+            await LogAction(sessionId, ChatbotActionStatus.SKIPPED, "BOOKING_FUNNEL_EXIT", "USER_CANCELED", "Booking flow canceled by user command.", null, ct);
                 return Build(root, state, true, "Đã hủy luồng đặt lịch. Nếu bạn muốn đặt lịch lại, vui lòng nhập `đặt lịch`.");
 
             case BookingNavigationCommand.Restart:

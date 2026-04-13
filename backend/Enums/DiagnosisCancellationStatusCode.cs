@@ -2,6 +2,9 @@
 
 public enum DiagnosisCancellationStatusCode
 {
-    NONE
+    NONE,
+    REQUESTED,
+    APPROVED,
+    REJECTED
 }
 

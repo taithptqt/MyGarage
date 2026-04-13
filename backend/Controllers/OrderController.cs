@@ -481,7 +481,7 @@ public class OrderController(
         try
         {
 
-            var paymentLink = await _client.PaymentRequests.CancelAsync(order.PaymentLinkId, cancellationReason ?? "Cancelled by user");
+                var paymentLink = await _client.PaymentRequests.CancelAsync(order.PaymentLinkId, cancellationReason ?? "Canceled by user");
 
             order.Status = paymentLink.Status;
             order.Amount = paymentLink.Amount;

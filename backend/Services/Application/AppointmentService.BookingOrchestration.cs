@@ -418,7 +418,7 @@ namespace MyGarage.Services
                         s.BayId.HasValue &&
                         s.StartTime < endAt &&
                         s.EndTime > startAt &&
-                        s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                        s.Status != nameof(WorkSlotStatus.CANCELED) &&
                         s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                         s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                         s.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
@@ -498,14 +498,14 @@ namespace MyGarage.Services
             var workSlots = await _context.WorkSlots
                 .Where(s =>
                     s.AppointmentId == appointmentId &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .ToListAsync();
 
             foreach (var slot in workSlots)
             {
-                slot.Status = nameof(WorkSlotStatus.CANCELLED);
+                slot.Status = nameof(WorkSlotStatus.CANCELED);
                 slot.ActualReleaseTime ??= releasedAt;
                 if (slot.EndTime < releasedAt)
                 {
@@ -539,7 +539,7 @@ namespace MyGarage.Services
             var now = _clock.UtcNow;
             foreach (var reservation in reservations)
             {
-                reservation.Status = "CANCELLED";
+                reservation.Status = "CANCELED";
                 reservation.UpdateAt = now;
                 reservation.UpdateBy = actorStaffId;
             }
@@ -587,7 +587,7 @@ namespace MyGarage.Services
             var workSlots = await _context.WorkSlots
                 .Where(s =>
                     s.AppointmentId == appointment.Id &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     s.Status != nameof(WorkSlotStatus.OVERNIGHT_HOLD))
@@ -627,3 +627,4 @@ namespace MyGarage.Services
         }
     }
 }
+
