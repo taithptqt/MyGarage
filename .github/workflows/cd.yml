@@ -8,6 +8,9 @@ on:
       - completed
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -16,11 +19,13 @@ jobs:
   deploy-production:
     name: Deploy Production via SSH
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
     environment:
       name: production
     steps:
