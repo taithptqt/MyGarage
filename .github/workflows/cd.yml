@@ -66,8 +66,8 @@ jobs:
 
             cd "${{ secrets.DEPLOY_PATH }}"
             git fetch --all --prune
-            git checkout main
-            git pull --ff-only origin main
+            git checkout -B main origin/main
+            git reset --hard origin/main
 
             docker compose config -q
             docker compose up -d --build --remove-orphans --pull always
