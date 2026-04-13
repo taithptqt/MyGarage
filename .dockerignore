@@ -24,6 +24,8 @@ backend/build-commit3-check/
 
 Frontend/.env*
 backend/appsettings.Development.json
+.env
+.env.*
 
 *.mdf
 *.ldf

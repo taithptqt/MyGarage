@@ -22,6 +22,9 @@ RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS backend-restore
 WORKDIR /src/backend
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    NUGET_XMLDOC_MODE=skip
 COPY backend/MyGarage.csproj ./
 RUN --mount=type=cache,target=/root/.nuget/packages dotnet restore MyGarage.csproj
 
@@ -29,7 +32,9 @@ FROM backend-restore AS backend-publish
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src/backend
 COPY backend/ ./
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore
+# On small VPS instances, Roslyn/analyzers parallelism can make publish look "stuck".
+# Keep publish deterministic and low-memory for reliable container builds.
+RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false -p:RunAnalyzers=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
