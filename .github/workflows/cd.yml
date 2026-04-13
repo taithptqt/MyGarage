@@ -72,6 +72,13 @@ jobs:
             git reset --hard origin/main
 
             docker compose config -q
-            docker compose up -d --build --remove-orphans
+            echo "---- Host resources ----"
+            nproc || true
+            free -h || true
+            df -h || true
+            echo "---- Docker compose build ----"
+            time docker compose build --progress plain
+            echo "---- Docker compose up ----"
+            docker compose up -d --remove-orphans
             docker compose ps
             docker image prune -f

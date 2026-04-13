@@ -79,7 +79,25 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      chunkSizeWarningLimit: 2000
+      chunkSizeWarningLimit: 2000,
+      reportCompressedSize: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "react-vendor": ["react", "react-dom", "react-router-dom"],
+            "chakra-vendor": [
+              "@chakra-ui/react",
+              "@chakra-ui/system",
+              "@chakra-ui/icons",
+              "@emotion/react",
+              "@emotion/styled",
+              "framer-motion"
+            ],
+            "chart-vendor": ["apexcharts", "react-apexcharts"],
+            "realtime-vendor": ["@microsoft/signalr"]
+          }
+        }
+      }
     }
   };
 });
