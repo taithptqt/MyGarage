@@ -57,19 +57,21 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script_stop: true
+          command_timeout: 35m
           script: |
-            set -e
+            set -euo pipefail
             if [ ! -d "${{ secrets.DEPLOY_PATH }}" ]; then
               echo "DEPLOY_PATH does not exist: ${{ secrets.DEPLOY_PATH }}"
               exit 1
             fi
 
             cd "${{ secrets.DEPLOY_PATH }}"
+            docker compose version
             git fetch --all --prune
             git checkout -B main origin/main
             git reset --hard origin/main
 
             docker compose config -q
-            docker compose up -d --build --remove-orphans --pull always
+            docker compose up -d --build --remove-orphans
             docker compose ps
             docker image prune -f
