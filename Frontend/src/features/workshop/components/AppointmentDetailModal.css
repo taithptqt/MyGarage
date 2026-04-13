@@ -1,0 +1,377 @@
+.appt-detail-modal {
+  max-width: 940px !important;
+}
+
+.appt-detail-modal .modal-header {
+  align-items: center;
+}
+
+.appt-detail-modal .modal-header h2 {
+  width: auto;
+}
+
+.appt-detail-modal .modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appt-detail-modal .modal-body-content {
+  padding: 20px 22px 22px;
+}
+
+.appt-detail-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.appt-detail-header-edit-btn {
+  min-width: 160px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 999px !important;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+
+.appt-detail-hero {
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  background:
+    radial-gradient(circle at 95% 0%, rgba(67, 24, 255, 0.16), transparent 42%),
+    linear-gradient(135deg, #f7faff 0%, #eef3ff 100%);
+  border: 1px solid #dbe6fb;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.appt-detail-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5a6c92;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.appt-detail-hero h3 {
+  margin: 0;
+  color: #1b2559;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.appt-detail-hero p {
+  margin: 4px 0 0;
+  color: #5a6c92;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.appt-detail-hero-side {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.appt-detail-group-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #edf3ff;
+  color: #2f4f9d;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #d6e2fb;
+}
+
+.appt-detail-group-chip.muted {
+  background: #f5f7fb;
+  color: #6f7d99;
+  border-color: #e4eaf6;
+}
+
+.appt-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.appt-detail-panel {
+  border-radius: 14px;
+  border: 1px solid #e5ecfa;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.appt-detail-panel h4 {
+  margin: 0 0 12px;
+  color: #243b6a;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.appt-detail-field {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.appt-detail-field:last-child {
+  margin-bottom: 0;
+}
+
+.appt-detail-field-label {
+  font-size: 12px;
+  color: #6d7e9d;
+  font-weight: 700;
+}
+
+.appt-detail-field-value {
+  font-size: 14px;
+  color: #1f2f54;
+  font-weight: 700;
+}
+
+.appt-detail-service-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.appt-detail-service-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d7e4ff;
+  background: #f3f7ff;
+  color: #2a468c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.appt-detail-empty {
+  margin: 0;
+  color: #7a8cad;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.appt-detail-issue-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #f7c3ba;
+  background: linear-gradient(135deg, #fff7f5 0%, #fff2ef 100%);
+}
+
+.appt-detail-issue-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fee4e2;
+  color: #d92d20;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.appt-detail-issue-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.appt-detail-issue-copy h4 {
+  margin: 0;
+  color: #8f1d18;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.appt-detail-issue-copy p {
+  margin: 0;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.appt-detail-issue-service-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.appt-detail-issue-service-block {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(180, 35, 24, 0.12);
+}
+
+.appt-detail-issue-service-block h5 {
+  margin: 0;
+  color: #8f1d18;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.appt-detail-issue-part-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: #8f1d18;
+}
+
+.appt-detail-issue-part-list li {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.appt-detail-issue-part-list strong {
+  color: #7a1f17;
+}
+
+.appt-detail-issue-part-list span {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.appt-detail-notes {
+  border-radius: 14px;
+  border: 1px solid #e5ecfa;
+  background: #fcfdff;
+  padding: 14px;
+}
+
+.appt-detail-notes h4 {
+  margin: 0 0 10px;
+  color: #243b6a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.appt-detail-notes-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #334b7a;
+  display: grid;
+  gap: 8px;
+}
+
+.appt-detail-notes-list li {
+  color: #334b7a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.appt-detail-notes p {
+  margin: 0 0 8px;
+  color: #334b7a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.appt-detail-notes p:last-child {
+  margin-bottom: 0;
+}
+
+.appt-detail-insurance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.appt-detail-insurance-gallery-block {
+  display: grid;
+  gap: 10px;
+}
+
+.appt-detail-insurance-gallery-block h5 {
+  margin: 0;
+  color: #2a468c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.appt-detail-insurance-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.appt-detail-insurance-image-link {
+  display: block;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #d7e4ff;
+  background: #f8fbff;
+  aspect-ratio: 4 / 3;
+}
+
+.appt-detail-insurance-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.appt-detail-alert {
+  border-radius: 12px;
+  border: 1px solid #ffd0d5;
+  background: #fff4f5;
+  color: #c5425b;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appt-detail-loading {
+  min-height: 180px;
+  border: 1px dashed #d8e3f3;
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.appt-detail-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.appt-detail-actions .btn-primary-large,
+.appt-detail-actions .appt-detail-edit-btn {
+  display: none !important;
+}
+
+@media (max-width: 920px) {
+  .appt-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-detail-hero {
+    flex-direction: column;
+  }
+
+  .appt-detail-hero-side {
+    justify-items: start;
+  }
+
+  .appt-detail-insurance-grid {
+    grid-template-columns: 1fr;
+  }
+}

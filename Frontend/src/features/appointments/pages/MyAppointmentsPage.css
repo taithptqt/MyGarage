@@ -1,0 +1,499 @@
+.my-appt-page {
+  --primary: #1d2a26;
+  --primary-deep: #081512;
+  --surface: #fef9ee;
+  --surface-low: #f8f3e8;
+  --surface-mid: #f2ede3;
+  --gold: #c5a059;
+  --text: #1d1c15;
+  --appt-bg: #fef9ee;
+  --appt-bg-soft: #f3f8ff;
+  --appt-surface: #ffffff;
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-top: 0;
+  background: linear-gradient(180deg, var(--appt-bg) 0%, #f8f3e8 58%, #f2ede3 100%);
+}
+
+.my-appt-page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 220px;
+  background: linear-gradient(180deg, rgba(126, 130, 122, 0.34) 0%, rgba(126, 130, 122, 0.18) 56%, rgba(126, 130, 122, 0) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.my-appt-page .mg-header-wrap.solid {
+  background: transparent;
+}
+
+.my-appt-page .mg-header-main {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+.my-appt-shell {
+  min-height: 100vh;
+  padding-top: 156px;
+  position: relative;
+  z-index: 1;
+}
+
+.my-appt-content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 52px 24px 48px;
+}
+
+.my-appt-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.my-appt-eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #2858aa;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.my-appt-head h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+  color: #10243f;
+  letter-spacing: -0.02em;
+}
+
+.my-appt-description {
+  margin: 12px 0 0;
+  max-width: 640px;
+  color: #4d5f79;
+  font-size: 15px;
+}
+
+.my-appt-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(140deg, #2858aa 0%, #1f4a93 100%);
+  color: #fff;
+  text-decoration: none;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(31, 74, 147, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.my-appt-primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(31, 74, 147, 0.32);
+}
+
+.my-appt-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.my-appt-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  background: #edf3fb;
+  border: 1px solid #d3e0f1;
+  border-radius: 12px;
+  padding: 6px;
+  margin-bottom: 14px;
+}
+
+.my-appt-view-tabs button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #446286;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-appt-view-tabs button.active {
+  background: #ffffff;
+  color: #173c73;
+  border-color: #c3d4ed;
+  box-shadow: 0 3px 10px rgba(23, 60, 115, 0.12);
+}
+
+.my-appt-stat-card {
+  background: var(--appt-surface);
+  border-radius: 14px;
+  border: 1px solid #dde5f2;
+  padding: 16px 18px;
+  box-shadow: 0 2px 14px rgba(10, 28, 54, 0.05);
+}
+
+.my-appt-stat-card span {
+  display: block;
+  font-size: 12px;
+  color: #5e6f87;
+  margin-bottom: 8px;
+}
+
+.my-appt-stat-card strong {
+  font-size: 26px;
+  line-height: 1;
+  color: #142a47;
+}
+
+.my-appt-toolbar {
+  background: var(--appt-surface);
+  border: 1px solid #dde5f2;
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.my-appt-filter-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.my-appt-filter-list button {
+  border: 1px solid #d4deed;
+  background: var(--appt-bg-soft);
+  color: #435a78;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-appt-filter-list button:hover {
+  border-color: #7392bf;
+  color: #1f4a93;
+}
+
+.my-appt-filter-list button.active {
+  border-color: #1f4a93;
+  background: #1f4a93;
+  color: #fff;
+}
+
+.my-appt-search {
+  width: 100%;
+  border: 1px solid #d4deed;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #22364f;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.my-appt-search:focus {
+  border-color: #1f4a93;
+  box-shadow: 0 0 0 3px rgba(31, 74, 147, 0.12);
+}
+
+.my-appt-alert {
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.my-appt-alert-error {
+  background: #fee2e2;
+  color: #9f1d1d;
+}
+
+.my-appt-list {
+  display: grid;
+  gap: 12px;
+}
+
+.my-appt-group-list {
+  display: grid;
+  gap: 14px;
+}
+
+.my-appt-group-block {
+  border: 1px solid #d8e3f3;
+  border-radius: 16px;
+  background: #f7fbff;
+  box-shadow: 0 2px 16px rgba(13, 33, 61, 0.05);
+  padding: 14px;
+}
+
+.my-appt-group-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.my-appt-group-block-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #17325b;
+}
+
+.my-appt-group-block-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #5b6f8c;
+}
+
+.my-appt-group-appointments {
+  display: grid;
+  gap: 10px;
+}
+
+.my-appt-card {
+  background: var(--appt-surface);
+  border: 1px solid #dbe3f0;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(13, 33, 61, 0.06);
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+}
+
+.my-appt-card-in-group {
+  box-shadow: none;
+}
+
+.my-appt-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.my-appt-card-head h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #132c4f;
+}
+
+.my-appt-status {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+}
+
+.my-appt-status.pending {
+  color: #8d4a00;
+  background: #ffefc7;
+}
+
+.my-appt-status.confirmed {
+  color: #115f3f;
+  background: #d9f9ea;
+}
+
+.my-appt-status.arrived {
+  color: #0f4f80;
+  background: #d8eeff;
+}
+
+.my-appt-status.canceled {
+  color: #8f1f1f;
+  background: #fee2e2;
+}
+
+.my-appt-status.no-show {
+  color: #444f63;
+  background: #e4e8f0;
+}
+
+.my-appt-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.my-appt-card-grid label {
+  display: block;
+  color: #647a98;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.my-appt-card-grid p {
+  margin: 0;
+  color: #1c3354;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.my-appt-service-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.my-appt-service-list span {
+  font-size: 12px;
+  color: #23508e;
+  background: #e6f0ff;
+  border: 1px solid #c7daf7;
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+
+.my-appt-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #4d5f79;
+  line-height: 1.45;
+}
+
+.my-appt-note.cancel {
+  color: #8f1f1f;
+}
+
+.my-appt-card-actions {
+  display: flex;
+  align-items: center;
+}
+
+.my-appt-cancel-btn {
+  border: 1px solid #d14343;
+  background: var(--appt-surface);
+  color: #b82828;
+  border-radius: 10px;
+  padding: 9px 14px;
+  min-width: 98px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-appt-cancel-btn:hover:not(:disabled) {
+  background: #b82828;
+  color: #fff;
+  border-color: #b82828;
+}
+
+.my-appt-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.my-appt-empty {
+  background: var(--appt-surface);
+  border: 1px dashed #c4d3e7;
+  border-radius: 14px;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.my-appt-empty h3 {
+  margin: 0 0 8px;
+  color: #17325b;
+}
+
+.my-appt-empty p {
+  margin: 0;
+  color: #5f7390;
+}
+
+.my-appt-secondary-btn {
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border: 1px solid #2a5db0;
+  color: #2a5db0;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-weight: 600;
+}
+
+.my-appt-cancel-desc {
+  color: #546683;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0 14px;
+}
+
+.my-appt-cancel-form label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  color: #425878;
+  font-weight: 600;
+}
+
+.my-appt-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1024px) {
+  .my-appt-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .my-appt-content {
+    padding: 36px 16px 34px;
+  }
+
+  .my-appt-head h1 {
+    font-size: 27px;
+  }
+
+  .my-appt-card {
+    grid-template-columns: 1fr;
+  }
+
+  .my-appt-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .my-appt-view-tabs {
+    display: grid;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .my-appt-stats {
+    grid-template-columns: 1fr;
+  }
+}

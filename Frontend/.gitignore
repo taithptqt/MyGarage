@@ -1,0 +1,53 @@
+# Visual Studio / .NET Core
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Logs and test outputs
+test_results.txt
+build_errors.txt
+build_output.txt
+out.txt
+debug.ps1
+test_auth.ps1
+check_oks.ps1
+fix_*.ps1
+generate_dtos.ps1
+optimize_controllers.ps1
+scaffold*.ps1
+
+# Frontend
+node_modules/
+dist/
+.cert/
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local build/cache/temp artifacts
+/_build_tmp/
+/artifacts/
+/temp/
+/tmp_build_verify*/
+/backend/.dotnet_home/
+/backend/bin/
+/backend/obj/
+/frontend/node_modules/
+/frontend/dist/
+
+# Local analysis/output scratch files
+/backend_analysis.json
+/backend_diff.txt
+/backend_diff_summary.txt
+/diffs.json
+/temp_unicode_test.txt
+/workspace.code-workspace
+/backend/build_errors_fix.txt
+/backend/build_errors_refactor.txt
+/backend/MyGarage.csproj.user
+/backend/package-lock.json
+/package-lock.json

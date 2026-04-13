@@ -1,0 +1,27 @@
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getUnauthorizedRedirectPath, isRouteAllowed } from "@features/auth/utils/accessPolicy";
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!isRouteAllowed(user, allowedRoles)) {
+    return <Navigate to={getUnauthorizedRedirectPath(user)} replace />;
+  }
+
+  return children;
+};
+
+export default ProtectedRoute;
+
+
