@@ -132,6 +132,30 @@
   gap: 14px 18px;
 }
 
+.profile-dialog-section + .profile-dialog-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e8eefc;
+}
+
+.profile-dialog-section-title {
+  margin-bottom: 14px;
+}
+
+.profile-dialog-section-title h3 {
+  margin: 0;
+  color: #1f2a4d;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.profile-dialog-section-title p {
+  margin: 6px 0 0;
+  color: #607199;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .profile-dialog-form label {
   display: flex;
   flex-direction: column;
@@ -162,6 +186,10 @@
 .profile-dialog-form input:disabled {
   color: #607199;
   background: #f2f5fc;
+}
+
+.profile-dialog-field-full {
+  grid-column: 1 / -1;
 }
 
 .profile-dialog-actions {

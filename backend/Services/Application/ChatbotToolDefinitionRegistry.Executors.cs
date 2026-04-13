@@ -319,7 +319,7 @@ public sealed partial class ChatbotToolDefinitionRegistry
 
         var start = startTime!.Value;
         var resolvedBranchId = branchId!.Value;
-        var date = DateOnly.FromDateTime(start.ToLocalTime());
+        var date = DateOnly.FromDateTime(VietnamTime.ToVietnamTime(start));
         var slots = await _appointmentService.GetAvailableSlotsAsync(
             resolvedBranchId,
             date,

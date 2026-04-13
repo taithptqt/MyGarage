@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MyGarage.Data;
 using MyGarage.Models;
 using MyGarage.Interfaces;
@@ -26,6 +27,8 @@ namespace MyGarage.Services
         private readonly IServiceOrderService _serviceOrderService;
         private readonly ISystemClock _clock;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<AppointmentService> _logger;
         private readonly IGarageContext _context;
         private const int GraceArrivalMinutes = 15;
         private const int NoShowMinutes = 30;
@@ -49,7 +52,9 @@ namespace MyGarage.Services
             ISlotHoldService slotHoldService,
             IServiceOrderService serviceOrderService,
             ISystemClock clock,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IEmailService emailService,
+            ILogger<AppointmentService> logger)
             : base(repository)
         {
             _appointmentRepository = repository;
@@ -61,6 +66,8 @@ namespace MyGarage.Services
             _serviceOrderService = serviceOrderService;
             _clock = clock;
             _configuration = configuration;
+            _emailService = emailService;
+            _logger = logger;
         }
 
     }

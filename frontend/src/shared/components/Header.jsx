@@ -110,6 +110,9 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
+          <a href="/my-garage-dashboard" onClick={(event) => { event.preventDefault(); handleNavigate("/my-garage-dashboard"); }}>GARAGE</a>
+          <a href="/my-vehicles" onClick={(event) => { event.preventDefault(); handleNavigate("/my-vehicles"); }}>XE CỦA TÔI</a>
+          <a href="/my-notifications" onClick={(event) => { event.preventDefault(); handleNavigate("/my-notifications"); }}>THÔNG BÁO</a>
           <a href="/my-appointments" onClick={(event) => { event.preventDefault(); handleNavigate("/my-appointments"); }}>LỊCH HẸN</a>
           <a href="/my-retail-orders" onClick={(event) => { event.preventDefault(); handleNavigate("/my-retail-orders"); }}>ĐƠN PHỤ TÙNG</a>
           <a href="#">TIN TỨC</a>

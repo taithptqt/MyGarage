@@ -9,6 +9,9 @@ export default function CustomerLayout({ children }) {
   const hideDefaultNavbar =
     location.pathname.startsWith("/booking") ||
     location.pathname.startsWith("/my-appointments") ||
+    location.pathname.startsWith("/my-garage-dashboard") ||
+    location.pathname.startsWith("/my-vehicles") ||
+    location.pathname.startsWith("/my-notifications") ||
     location.pathname.startsWith("/parts-cart") ||
     location.pathname.startsWith("/parts-shop") ||
     location.pathname.startsWith("/my-retail-orders");
@@ -33,6 +36,15 @@ export default function CustomerLayout({ children }) {
               </NavLink>
               <NavLink to="/parts-shop" className={({ isActive }) => isActive ? "active" : ""}>
                 Part Shop
+              </NavLink>
+              <NavLink to="/my-garage-dashboard" className={({ isActive }) => isActive ? "active" : ""}>
+                Garage
+              </NavLink>
+              <NavLink to="/my-vehicles" className={({ isActive }) => isActive ? "active" : ""}>
+                Xe của tôi
+              </NavLink>
+              <NavLink to="/my-notifications" className={({ isActive }) => isActive ? "active" : ""}>
+                Thông báo
               </NavLink>
               <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
                 Lịch hẹn

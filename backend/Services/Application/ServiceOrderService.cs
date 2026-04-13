@@ -21,6 +21,7 @@ namespace MyGarage.Services
         private readonly IGarageContext _context;
         private readonly IGroupSessionService _groupSessionService;
         private readonly ISystemClock _clock;
+        private readonly IServiceOrderCustomerLifecycleNotifier _customerLifecycleNotifier;
         private const int MaxCodeGenerationAttempts = 8;
         private const string CheckInLogType = "CHECK_IN";
         private const string CheckInPendingStatus = nameof(DiagnosisStatus.PENDING);
@@ -51,11 +52,13 @@ namespace MyGarage.Services
             IServiceOrderRepository repository,
             IGarageContext context,
             IGroupSessionService groupSessionService,
-            ISystemClock clock) : base(repository)
+            ISystemClock clock,
+            IServiceOrderCustomerLifecycleNotifier customerLifecycleNotifier) : base(repository)
         {
             _context = context;
             _groupSessionService = groupSessionService;
             _clock = clock;
+            _customerLifecycleNotifier = customerLifecycleNotifier;
         }
 
         public override async Task<ServiceOrder> AddAsync(ServiceOrder entity)
@@ -305,6 +308,7 @@ namespace MyGarage.Services
                 order.CheckInTime = checkInTime;
                 order.EstimatedHandover = estimatedHandover;
                 order.PromisedHandoverTime = promisedHandover;
+                var previousLifecycleStatus = order.Status;
                 order.Status = ResolveOrderStatus(dto.Status ?? order.Status);
                 order.CustomerNotes = BuildSymptomsJson(dto.SymptomNotes, order.CustomerNotes);
                 order.RequestedPackageIds = selection.RequestedPackageIds;
@@ -401,6 +405,7 @@ namespace MyGarage.Services
                 order.TaxAmount = taxAmount;
                 order.FinalAmount = subTotal + taxAmount - (order.TotalDiscount ?? 0m);
 
+                _customerLifecycleNotifier.EnqueueAfterStatusChange(order, previousLifecycleStatus);
                 await _context.SaveChangesAsync();
                 await ReplaceServiceOrderInsuranceAssetsAsync(
                     order.Id,

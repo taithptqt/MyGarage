@@ -11,27 +11,15 @@ public partial class GarageContext
         modelBuilder.Ignore<AccountingPeriod>();
         modelBuilder.Ignore<AccountsPayable>();
         modelBuilder.Ignore<ApprovalPolicy>();
-        modelBuilder.Ignore<AttendanceAdjustment>();
         modelBuilder.Ignore<BankAccount>();
         modelBuilder.Ignore<BankReconciliation>();
         modelBuilder.Ignore<BankTransaction>();
         modelBuilder.Ignore<ChartOfAccount>();
         modelBuilder.Ignore<DocumentAttachment>();
-        modelBuilder.Ignore<EmployeeDependent>();
-        modelBuilder.Ignore<EmployeeLoan>();
         modelBuilder.Ignore<FinanceApprovalRequest>();
         modelBuilder.Ignore<JournalEntry>();
         modelBuilder.Ignore<JournalEntryLine>();
         modelBuilder.Ignore<LegalDocument>();
-        modelBuilder.Ignore<OvertimeEntry>();
-        modelBuilder.Ignore<PayrollItem>();
-        modelBuilder.Ignore<PayrollPeriod>();
-        modelBuilder.Ignore<PayrollRun>();
-        modelBuilder.Ignore<Payslip>();
-        modelBuilder.Ignore<PitProfile>();
-        modelBuilder.Ignore<SalaryAdvance>();
-        modelBuilder.Ignore<StaffContract>();
-        modelBuilder.Ignore<StaffSalaryProfile>();
         modelBuilder.Ignore<SupplierAccountingProfile>();
         modelBuilder.Ignore<SupplierInvoice>();
         modelBuilder.Ignore<SupplierInvoiceDetail>();
@@ -355,6 +343,7 @@ public partial class GarageContext
                 .HasForeignKey(d => d.CreatedBy);
         });
 
+        ConfigurePayrollModule(modelBuilder);
         ConfigureChatbotModule(modelBuilder);
         ConfigureAuthModule(modelBuilder);
     }

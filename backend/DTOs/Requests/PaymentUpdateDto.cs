@@ -14,8 +14,6 @@ namespace MyGarage.DTOs.Requests
         public decimal? Amount { get; set; }
         public string? TransactionCode { get; set; }
         public string? Type { get; set; }
-        public string? Status { get; set; }
         public long? ReversedPaymentId { get; set; }
-        public long? UpdatedBy { get; set; }
     }
 }

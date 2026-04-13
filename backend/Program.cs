@@ -89,7 +89,9 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
+builder.Services.AddScoped<IServiceOrderCustomerLifecycleNotifier, ServiceOrderCustomerLifecycleNotifier>();
 builder.Services.AddScoped<IServiceOrderService, ServiceOrderService>();
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 
 builder.Services.AddScoped<IServiceOrderDetailRepository, ServiceOrderDetailRepository>();
 builder.Services.AddScoped<IServiceOrderDetailService, ServiceOrderDetailService>();
@@ -104,6 +106,7 @@ builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembl
 builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
 builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
+builder.Services.AddHostedService<AppointmentReminderBackgroundService>();
 builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
 builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
 

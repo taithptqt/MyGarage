@@ -104,6 +104,8 @@ namespace MyGarage.Services
                     .AsNoTracking()
                     .FirstOrDefaultAsync(v => v.Id == primary.VehicleId);
 
+                await TrySendBookingSuccessEmailAsync(createdAppointments.Select(a => a.Id).ToList());
+
                 return new ReceptionAppointmentSaveResponseDto
                 {
                     GroupSessionId = groupSessionId,

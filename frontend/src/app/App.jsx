@@ -37,6 +37,10 @@ import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
 import RetailCartPage from "@features/retail/pages/RetailCartPage";
 import PartProductDetailPage from "@features/retail/pages/PartProductDetailPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
+import GarageDashboardPage from "@features/customerPortal/pages/GarageDashboardPage";
+import MyVehiclesPage from "@features/customerPortal/pages/MyVehiclesPage";
+import VehicleDetailPage from "@features/customerPortal/pages/VehicleDetailPage";
+import MyNotificationsPage from "@features/customerPortal/pages/MyNotificationsPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
@@ -93,6 +97,39 @@ function App() {
               <CustomerRoute><MyAppointmentsPage /></CustomerRoute>
             </ProtectedRoute>
           } 
+        />
+
+        <Route
+          path="/my-garage-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><GarageDashboardPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-vehicles"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><MyVehiclesPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-vehicles/:vehicleId"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><VehicleDetailPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-notifications"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><MyNotificationsPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
         />
 
         <Route

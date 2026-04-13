@@ -71,6 +71,11 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                 cancellationToken);
         }
 
+        if (LooksLikeBookingIntent(msg))
+        {
+            state.PrefillInput = msg;
+        }
+
         if (IsDirectBookingRequest(msg))
         {
             state.AutoConfirmRequested = true;
@@ -327,6 +332,37 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             return Build(root, state, false, "Hệ thống chưa có dịch vụ active để đặt lịch.");
         }
 
+        var fullCatalog = await _context.StandardServices
+            .AsNoTracking()
+            .Where(service => service.IsDeleted != true && service.IsActive == true && service.Category.IsDeleted != true)
+            .Select(service => new ServiceCatalogRow
+            {
+                ServiceId = service.Id,
+                ServiceCode = service.Code,
+                ServiceName = service.Name,
+                CategoryId = service.CategoryId,
+                CategoryCode = service.Category.Code,
+                CategoryName = service.Category.Name,
+                Description = service.Description
+            })
+            .ToListAsync(ct);
+
+        if ((state.AutoConfirmRequested || LooksLikeBookingIntent(message) || !string.IsNullOrWhiteSpace(state.PrefillInput))
+            && state.ServiceIds.Count == 0)
+        {
+            var extracted = TryExtractServiceSelectionFromBookingUtterance(fullCatalog, message);
+            if (extracted is null && ShouldTryPrefillFallback(message, state.PrefillInput))
+            {
+                extracted = TryExtractServiceSelectionFromBookingUtterance(fullCatalog, state.PrefillInput!);
+            }
+
+            if (extracted is not null)
+            {
+                state.ServiceCategoryId = extracted.CategoryId;
+                state.ServiceIds = extracted.ServiceIds.ToList();
+            }
+        }
+
         if (state.ServiceCategoryId.HasValue && categories.All(item => item.CategoryId != state.ServiceCategoryId.Value))
         {
             state.ServiceCategoryId = null;
@@ -379,7 +415,6 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                 && service.IsActive == true
                 && service.CategoryId == state.ServiceCategoryId.Value)
             .OrderBy(service => service.Name)
-            .Take(80)
             .Select(service => new ServiceOptionRow
             {
                 ServiceId = service.Id,
@@ -407,7 +442,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             .ToList();
 
         var canUseCurrentMessageForServicePick = !currentMessageIsVehicleSelection
-            && (!categoryChangedInCurrentTurn || MentionsSpecificService(message, options));
+            && (!categoryChangedInCurrentTurn || state.AutoConfirmRequested || MentionsSpecificService(message, options));
         var canUsePrefillForServicePick = ShouldTryPrefillFallback(message, state.PrefillInput)
             && MentionsSpecificService(state.PrefillInput, options);
         if (canUseCurrentMessageForServicePick || canUsePrefillForServicePick)
@@ -515,9 +550,9 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             {
                 var prompt = new StringBuilder();
                 prompt.AppendLine("Bước 4/5 - Chọn chi nhánh.");
-                prompt.AppendLine("Vui lòng chọn chi nhánh theo số thứ tự, branchId hoặc tên chi nhánh:");
+                prompt.AppendLine("Vui lòng chọn chi nhánh theo tên chi nhánh hoặc branchId:");
                 prompt.AppendLine(FormatBranchOptions(options));
-                prompt.Append("Ví dụ: `chi nhánh 1` hoặc tên chi nhánh.");
+                prompt.Append("Ví dụ: `Hà Nội`, `Đà Nẵng` hoặc `TP HCM`.");
                 return Build(root, state, true, prompt.ToString(), branchOptions: options);
             }
         }
@@ -553,12 +588,15 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             })
             .ToListAsync(ct);
 
-        return branches
+        var availableBranches = branches
             .Where(IsAvailableBranch)
-            .Select(branch => new ChatbotBookingBranchOptionDto
+            .ToList();
+
+        return availableBranches
+            .Select((branch, index) => new ChatbotBookingBranchOptionDto
             {
                 BranchId = branch.Id,
-                BranchName = branch.Name,
+                BranchName = ResolveBranchDisplayName(branch.Name, index, availableBranches.Count),
                 Address = branch.Address,
                 Hotline = branch.Hotline
             })
@@ -602,7 +640,9 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             return Build(root, state, true, "Chi nhánh đóng cửa vào ngày bạn chọn. Vui lòng thử ngày khác.");
         }
 
-        var options = await LoadSlots(state, date);
+        var preferredTime = ParsePreferredSlotTime(message)
+            ?? (ShouldTryPrefillFallback(message, state.PrefillInput) ? ParsePreferredSlotTime(state.PrefillInput) : null);
+        var options = await LoadSlots(state, date, preferredTime);
         if (options.Count == 0)
         {
             await ClearSlotSelectionAsync(state, ct);
@@ -693,7 +733,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             return Build(root, state, true, "Thông tin đặt lịch chưa đầy đủ. Vui lòng chọn lại khung giờ.");
         }
 
-        var slots = await LoadSlots(state, date);
+        var slots = await LoadSlots(state, date, preferredTime: null);
         if (!slots.Any(slot => SameMoment(slot.StartTime, start)))
         {
             state.Step = BookingStep.ComputeAvailableSlots;
@@ -785,12 +825,61 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
         return new ChatbotBookingResultDto { BookingGroupId = group.Id, Message = $"Đặt lịch nhóm thành công. Mã nhóm lịch hẹn: {group.Id}." };
     }
 
-    private async Task<List<ChatbotBookingSlotOptionDto>> LoadSlots(BookingState state, DateOnly date)
+    private async Task<List<ChatbotBookingSlotOptionDto>> LoadSlots(BookingState state, DateOnly date, TimeSpan? preferredTime)
     {
         var raw = await _appointmentService.GetAvailableSlotsAsync(state.BranchId!.Value, date, string.Join(",", state.ServiceIds), bookingFlow: "FIXED", vehicleCount: 1, isParallel: false);
-        return raw.Where(s => s.IsAvailable && s.RemainingCapacity > 0).OrderBy(s => s.StartTime).Take(8)
-            .Select(s => new ChatbotBookingSlotOptionDto { StartTime = s.StartTime, EndTime = s.EndTime, RemainingCapacity = s.RemainingCapacity, MaxCapacity = s.MaxCapacity })
+        var available = raw
+            .Where(s => s.IsAvailable && s.RemainingCapacity > 0)
+            .Select(s => new ChatbotBookingSlotOptionDto
+            {
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                RemainingCapacity = s.RemainingCapacity,
+                MaxCapacity = s.MaxCapacity
+            })
             .ToList();
+
+        if (preferredTime.HasValue)
+        {
+            return available
+                .OrderBy(option => Math.Abs((option.StartTime.TimeOfDay - preferredTime.Value).TotalMinutes))
+                .ThenBy(option => option.StartTime)
+                .Take(8)
+                .ToList();
+        }
+
+        return available.OrderBy(s => s.StartTime).Take(8)
+            .ToList();
+    }
+
+    private static TimeSpan? ParsePreferredSlotTime(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var match = TimeHintRegex.Match(text);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(match.Groups["hour"].Value, out var hour) || hour is < 0 or > 23)
+        {
+            return null;
+        }
+
+        var minute = 0;
+        if (match.Groups["minute"].Success
+            && !string.IsNullOrWhiteSpace(match.Groups["minute"].Value)
+            && int.TryParse(match.Groups["minute"].Value, out var parsedMinute)
+            && parsedMinute is >= 0 and <= 59)
+        {
+            minute = parsedMinute;
+        }
+
+        return new TimeSpan(hour, minute, 0);
     }
 
     private async Task<bool> IsBookableDay(long branchId, DateOnly date, CancellationToken ct)
@@ -988,7 +1077,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
         summary.AppendLine($"- Giá dự kiến: {FormatCurrency(totalPrice)}");
         if (DateTime.TryParse(state.SlotHoldExpiresAtUtc, null, DateTimeStyles.RoundtripKind, out var holdExpiresAt))
         {
-            summary.AppendLine($"- Giữ chỗ đến: {holdExpiresAt.ToLocalTime():HH:mm:ss dd/MM/yyyy}");
+            summary.AppendLine($"- Giữ chỗ đến: {VietnamTime.ToVietnamTime(holdExpiresAt):HH:mm:ss dd/MM/yyyy}");
         }
 
         return summary.ToString().TrimEnd();
@@ -1258,6 +1347,56 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
         return string.Join(Environment.NewLine, lines);
     }
 
+    private static string ResolveBranchDisplayName(string? rawName, int index, int totalCount)
+    {
+        var normalized = NormalizeNlp(rawName);
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            if (normalized.Contains("ha noi", StringComparison.Ordinal)
+                || normalized.Contains("hanoi", StringComparison.Ordinal)
+                || normalized.Contains("bh 01", StringComparison.Ordinal)
+                || normalized.Contains("branch 1", StringComparison.Ordinal)
+                || normalized.Contains("chi nhanh 1", StringComparison.Ordinal))
+            {
+                return "Hà Nội";
+            }
+
+            if (normalized.Contains("da nang", StringComparison.Ordinal)
+                || normalized.Contains("danang", StringComparison.Ordinal)
+                || normalized.Contains("bh 02", StringComparison.Ordinal)
+                || normalized.Contains("branch 2", StringComparison.Ordinal)
+                || normalized.Contains("chi nhanh 2", StringComparison.Ordinal))
+            {
+                return "Đà Nẵng";
+            }
+
+            if (normalized.Contains("tp hcm", StringComparison.Ordinal)
+                || normalized.Contains("tphcm", StringComparison.Ordinal)
+                || normalized.Contains("ho chi minh", StringComparison.Ordinal)
+                || normalized.Contains("sai gon", StringComparison.Ordinal)
+                || normalized.Contains("saigon", StringComparison.Ordinal)
+                || normalized.Contains("bh 03", StringComparison.Ordinal)
+                || normalized.Contains("branch 3", StringComparison.Ordinal)
+                || normalized.Contains("chi nhanh 3", StringComparison.Ordinal))
+            {
+                return "TP HCM";
+            }
+        }
+
+        if (totalCount == 3)
+        {
+            return index switch
+            {
+                0 => "Hà Nội",
+                1 => "Đà Nẵng",
+                2 => "TP HCM",
+                _ => rawName ?? "Chi nhánh"
+            };
+        }
+
+        return string.IsNullOrWhiteSpace(rawName) ? "Chi nhánh" : rawName.Trim();
+    }
+
     private static string FormatSlotOptions(IReadOnlyList<ChatbotBookingSlotOptionDto> options)
     {
         if (options.Count == 0)
@@ -1368,6 +1507,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
 
         var normalizedInput = NormalizeNlp(message);
         var textualMatches = new HashSet<long>();
+        var scoredMatches = new List<(long ServiceId, int Score)>();
         foreach (var option in options)
         {
             if (!string.IsNullOrWhiteSpace(option.ServiceCode))
@@ -1393,14 +1533,178 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             {
                 textualMatches.Add(option.ServiceId);
             }
+
+            var overlapScore = ScoreTextOverlap(normalizedInput, normalizedName);
+            if (overlapScore >= 2)
+            {
+                scoredMatches.Add((option.ServiceId, overlapScore));
+            }
         }
 
         if (textualMatches.Count == 1)
         {
             set.Add(textualMatches.First());
         }
+        else if (textualMatches.Count == 0 && scoredMatches.Count > 0)
+        {
+            var bestScore = scoredMatches.Max(item => item.Score);
+            var bestMatches = scoredMatches
+                .Where(item => item.Score == bestScore)
+                .Select(item => item.ServiceId)
+                .Distinct()
+                .ToList();
+            if (bestMatches.Count == 1)
+            {
+                set.Add(bestMatches[0]);
+            }
+        }
 
         return set.ToList();
+    }
+
+    private static ExtractedServiceSelection? TryExtractServiceSelectionFromBookingUtterance(
+        IReadOnlyList<ServiceCatalogRow> options,
+        string? message)
+    {
+        if (options.Count == 0 || string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var normalizedInput = NormalizeNlp(message);
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            return null;
+        }
+
+        var explicitMatches = options
+            .Where(option =>
+            {
+                var normalizedCode = NormalizeNlp(option.ServiceCode);
+                var normalizedName = NormalizeNlp(option.ServiceName);
+                return (!string.IsNullOrWhiteSpace(normalizedCode) && normalizedInput.Contains(normalizedCode, StringComparison.Ordinal))
+                    || (!string.IsNullOrWhiteSpace(normalizedName) && normalizedInput.Contains(normalizedName, StringComparison.Ordinal));
+            })
+            .ToList();
+
+        if (explicitMatches.Count > 0)
+        {
+            var primary = explicitMatches[0];
+            return new ExtractedServiceSelection
+            {
+                CategoryId = primary.CategoryId,
+                ServiceIds = explicitMatches
+                    .Where(option => option.CategoryId == primary.CategoryId)
+                    .Select(option => option.ServiceId)
+                    .Distinct()
+                    .ToList()
+            };
+        }
+
+        var ranked = options
+            .Select(option =>
+            {
+                var normalizedName = NormalizeNlp(option.ServiceName);
+                var normalizedCategoryCode = NormalizeNlp(option.CategoryCode);
+                var normalizedCategory = NormalizeNlp(option.CategoryName);
+                var normalizedDescription = NormalizeNlp(option.Description);
+                var categoryKeywordScore = ScoreCategoryKeywordSignal(normalizedInput, option.CategoryCode, normalizedCategory);
+                var nameScore = ScoreTextOverlap(normalizedInput, normalizedName);
+                var categoryScore = ScoreTextOverlap(normalizedInput, normalizedCategory);
+                var descriptionScore = ScoreTextOverlap(normalizedInput, normalizedDescription);
+                var codeScore = string.IsNullOrWhiteSpace(normalizedCategoryCode)
+                    ? 0
+                    : ScoreTextOverlap(normalizedInput, normalizedCategoryCode);
+                var score = (nameScore * 3) + (categoryScore * 2) + (codeScore * 2) + Math.Min(descriptionScore, 2) + categoryKeywordScore;
+                if (HasTextualOverlap(normalizedInput, normalizedName))
+                {
+                    score += 3;
+                }
+
+                if (HasTextualOverlap(normalizedInput, normalizedCategory))
+                {
+                    score += 2;
+                }
+
+                return new
+                {
+                    option.ServiceId,
+                    option.CategoryId,
+                    Score = score
+                };
+            })
+            .Where(item => item.Score >= 4)
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.ServiceId)
+            .ToList();
+
+        if (ranked.Count == 0)
+        {
+            return null;
+        }
+
+        var bestScore = ranked[0].Score;
+        var bestMatches = ranked
+            .Where(item => item.Score == bestScore)
+            .ToList();
+        if (bestMatches.Count != 1)
+        {
+            return null;
+        }
+
+        return new ExtractedServiceSelection
+        {
+            CategoryId = bestMatches[0].CategoryId,
+            ServiceIds = [bestMatches[0].ServiceId]
+        };
+    }
+
+    private static int ScoreCategoryKeywordSignal(string normalizedInput, string? categoryCode, string? normalizedCategoryName)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            return 0;
+        }
+
+        var normalizedCode = NormalizeNlp(categoryCode);
+        var normalizedCategory = NormalizeNlp(normalizedCategoryName);
+
+        return normalizedCode switch
+        {
+            "insurance repair" => CountKeywordHits(normalizedInput, "bao hiem", "tai nan", "phuc hoi", "boi thuong", "than vo", "dong son") * 3,
+            "body paint" => CountKeywordHits(normalizedInput, "dong son", "go son", "son", "vo xe", "than vo", "tai nan") * 3,
+            "general repair" => CountKeywordHits(normalizedInput, "sua chua", "chay dau", "dong co", "hop so", "gam", "phuc hoi") * 2,
+            "rework" => CountKeywordHits(normalizedInput, "lam lai", "rework", "sua lai", "khac phuc lai") * 3,
+            "warranty" or "warrantly" => CountKeywordHits(normalizedInput, "bao hanh", "phu tung bao hanh", "thay bao hanh") * 3,
+            "maintenance" or "quick service" => CountKeywordHits(normalizedInput, "bao duong", "cap", "thay dau", "bao tri", "dinh ky") * 3,
+            "detailing" or "car care" => CountKeywordHits(normalizedInput, "cham soc", "detailing", "rua", "ve sinh", "phu ceramic", "danh bong") * 3,
+            _ when normalizedCategory.Contains("bao hiem", StringComparison.Ordinal) => CountKeywordHits(normalizedInput, "bao hiem", "tai nan", "phuc hoi", "dong son") * 3,
+            _ when normalizedCategory.Contains("bao hanh", StringComparison.Ordinal) => CountKeywordHits(normalizedInput, "bao hanh", "phu tung bao hanh") * 3,
+            _ when normalizedCategory.Contains("bao duong", StringComparison.Ordinal) => CountKeywordHits(normalizedInput, "bao duong", "dinh ky", "thay dau") * 3,
+            _ when normalizedCategory.Contains("sua chua", StringComparison.Ordinal) => CountKeywordHits(normalizedInput, "sua chua", "chay dau", "dong co", "hop so", "gam") * 2,
+            _ => 0
+        };
+    }
+
+    private static int CountKeywordHits(string normalizedInput, params string[] keywords)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedInput) || keywords.Length == 0)
+        {
+            return 0;
+        }
+
+        var hits = 0;
+        foreach (var keyword in keywords)
+        {
+            var normalizedKeyword = NormalizeNlp(keyword);
+            if (!string.IsNullOrWhiteSpace(normalizedKeyword)
+                && normalizedInput.Contains(normalizedKeyword, StringComparison.Ordinal))
+            {
+                hits++;
+            }
+        }
+
+        return hits;
     }
 
     private static bool MentionsSpecificService(string? message, IReadOnlyList<ChatbotBookingServiceOptionDto> options)
@@ -1423,6 +1727,16 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             var normalizedName = NormalizeNlp(option.ServiceName);
             if (!string.IsNullOrWhiteSpace(normalizedName)
                 && normalizedInput.Contains(normalizedName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (HasTextualOverlap(normalizedInput, normalizedName))
+            {
+                return true;
+            }
+
+            if (ScoreTextOverlap(normalizedInput, normalizedName) >= 2)
             {
                 return true;
             }
@@ -1598,7 +1912,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
 
     private DateTime NormalizeBookingDateTime(DateTime value)
     {
-        return value.Kind == DateTimeKind.Utc ? value.ToLocalTime() : value;
+        return VietnamTime.ToVietnamTime(value);
     }
 
     private string BuildFinalizeErrorMessage(string? rawMessage)
@@ -1657,10 +1971,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             return false;
         }
 
-        var asksToBook = n.Contains("dat lich", StringComparison.Ordinal)
-            || n.Contains("book", StringComparison.Ordinal)
-            || n.Contains("appointment", StringComparison.Ordinal);
-        if (!asksToBook)
+        if (!LooksLikeBookingIntent(message))
         {
             return false;
         }
@@ -1673,6 +1984,19 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             || n.Contains("tu dong", StringComparison.Ordinal)
             || n.Contains("luon", StringComparison.Ordinal)
             || n.Contains("ngay", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeBookingIntent(string? message)
+    {
+        var n = NormalizeNlp(message);
+        if (string.IsNullOrWhiteSpace(n))
+        {
+            return false;
+        }
+
+        return n.Contains("dat lich", StringComparison.Ordinal)
+            || n.Contains("book", StringComparison.Ordinal)
+            || n.Contains("appointment", StringComparison.Ordinal);
     }
 
     private static bool IsRestartBookingRequest(string message)
@@ -1744,27 +2068,126 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
     private static string? ParseVin(string text) { var m = VinRegex.Match((text ?? string.Empty).ToUpperInvariant()); return m.Success ? m.Groups[1].Value.ToUpperInvariant() : null; }
     private DateOnly? ParseDate(string text)
     {
+        var raw = (text ?? string.Empty).Trim();
         var normalized = NormalizeNlp(text);
+        var today = DateOnly.FromDateTime(_clock.LocalNow);
         if (normalized is "today" or "hom nay"
             || normalized.Contains("hom nay", StringComparison.Ordinal))
         {
-            return DateOnly.FromDateTime(_clock.LocalNow);
+            return today;
         }
 
         if (normalized is "tomorrow" or "ngay mai" or "mai"
             || normalized.Contains("ngay mai", StringComparison.Ordinal))
         {
-            return DateOnly.FromDateTime(_clock.LocalNow.AddDays(1));
+            return today.AddDays(1);
         }
 
-        if (DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d1))
+        if (DateOnly.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d1))
         {
             return d1;
         }
 
-        if (DateOnly.TryParseExact(text, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d2))
+        if (DateOnly.TryParseExact(raw, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d2))
         {
             return d2;
+        }
+
+        if (DateOnly.TryParseExact(raw, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d3))
+        {
+            return d3;
+        }
+
+        var shortDateMatch = Regex.Match(normalized, @"(?:^|\b)(?<day>\d{1,2})[\/\-](?<month>\d{1,2})(?:\b|$)");
+        if (shortDateMatch.Success
+            && int.TryParse(shortDateMatch.Groups["day"].Value, out var shortDay)
+            && int.TryParse(shortDateMatch.Groups["month"].Value, out var shortMonth))
+        {
+            var candidate = ResolveMonthDayCandidate(today, shortDay, shortMonth);
+            if (candidate.HasValue)
+            {
+                return candidate.Value;
+            }
+        }
+
+        var explicitDayMatch = Regex.Match(normalized, @"(?:^|\b)ngay\s+(?<day>\d{1,2})(?:\b|$)");
+        if (explicitDayMatch.Success && int.TryParse(explicitDayMatch.Groups["day"].Value, out var explicitDay))
+        {
+            var candidate = ResolveDayOnlyCandidate(today, explicitDay);
+            if (candidate.HasValue)
+            {
+                return candidate.Value;
+            }
+        }
+
+        var dayOnlyMatch = Regex.Match(normalized, @"^(?:ngay\s*)?(?<day>\d{1,2})$");
+        if (dayOnlyMatch.Success && int.TryParse(dayOnlyMatch.Groups["day"].Value, out var dayOnly))
+        {
+            var candidate = ResolveDayOnlyCandidate(today, dayOnly);
+            if (candidate.HasValue)
+            {
+                return candidate.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static DateOnly? ResolveMonthDayCandidate(DateOnly today, int day, int month)
+    {
+        if (month is < 1 or > 12 || day < 1)
+        {
+            return null;
+        }
+
+        var year = today.Year;
+        if (day > DateTime.DaysInMonth(year, month))
+        {
+            return null;
+        }
+
+        var candidate = new DateOnly(year, month, day);
+        if (candidate < today)
+        {
+            year += 1;
+            if (day > DateTime.DaysInMonth(year, month))
+            {
+                return null;
+            }
+
+            candidate = new DateOnly(year, month, day);
+        }
+
+        return candidate;
+    }
+
+    private static DateOnly? ResolveDayOnlyCandidate(DateOnly today, int day)
+    {
+        if (day < 1 || day > 31)
+        {
+            return null;
+        }
+
+        var year = today.Year;
+        var month = today.Month;
+
+        for (var i = 0; i < 14; i++)
+        {
+            if (day <= DateTime.DaysInMonth(year, month))
+            {
+                var candidate = new DateOnly(year, month, day);
+                if (candidate >= today)
+                {
+                    return candidate;
+                }
+            }
+
+            month += 1;
+            if (month > 12)
+            {
+                month = 1;
+                year += 1;
+            }
         }
 
         return null;
@@ -1973,9 +2396,12 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                 }
                 else
                 {
-                    for (var i = 0; i < Math.Min(6, serviceOptions.Count); i++)
+                    for (var i = 0; i < serviceOptions.Count; i++)
                     {
-                        AddQuickReply(quickReplies, $"Dịch vụ {i + 1}", $"dich vu {i + 1}");
+                        var option = serviceOptions[i];
+                        var label = BuildServiceQuickReplyLabel(option, i + 1);
+                        var value = BuildServiceQuickReplyValue(option, i + 1);
+                        AddQuickReply(quickReplies, label, value);
                     }
                     AddQuickReply(quickReplies, "Đổi dịch vụ", "doi dich vu");
                     AddQuickReply(quickReplies, "Quay lại", "quay lai");
@@ -1987,7 +2413,8 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             case BookingStep.SelectBranch:
                 for (var i = 0; i < Math.Min(4, branchOptions.Count); i++)
                 {
-                    AddQuickReply(quickReplies, $"Chi nhánh {i + 1}", $"chi nhanh {i + 1}");
+                    var branch = branchOptions[i];
+                    AddQuickReply(quickReplies, branch.BranchName, branch.BranchName);
                 }
                 AddQuickReply(quickReplies, "Quay lại", "quay lai");
                 AddQuickReply(quickReplies, "Đổi dịch vụ", "doi dich vu");
@@ -2047,6 +2474,37 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
         });
     }
 
+    private static string BuildServiceQuickReplyLabel(ChatbotBookingServiceOptionDto option, int ordinal)
+    {
+        var name = option.ServiceName?.Trim();
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return name.Length > 36 ? $"{name[..33]}..." : name;
+        }
+
+        if (!string.IsNullOrWhiteSpace(option.ServiceCode))
+        {
+            return option.ServiceCode.Trim();
+        }
+
+        return $"Dịch vụ {ordinal}";
+    }
+
+    private static string BuildServiceQuickReplyValue(ChatbotBookingServiceOptionDto option, int ordinal)
+    {
+        if (!string.IsNullOrWhiteSpace(option.ServiceCode))
+        {
+            return option.ServiceCode.Trim();
+        }
+
+        if (option.ServiceId > 0)
+        {
+            return option.ServiceId.ToString();
+        }
+
+        return $"dich vu {ordinal}";
+    }
+
     private sealed class BranchRow { public long Id { get; set; } public string Name { get; set; } = string.Empty; public string Status { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public string? Address { get; set; } public string? Hotline { get; set; } }
     private sealed class ServiceCategoryOption
     {
@@ -2061,6 +2519,23 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
         public string ServiceName { get; set; } = string.Empty;
         public decimal BasePrice { get; set; }
         public int StandardMinutes { get; set; }
+    }
+
+    private sealed class ServiceCatalogRow
+    {
+        public long ServiceId { get; set; }
+        public string ServiceCode { get; set; } = string.Empty;
+        public string ServiceName { get; set; } = string.Empty;
+        public long CategoryId { get; set; }
+        public string CategoryCode { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    private sealed class ExtractedServiceSelection
+    {
+        public long CategoryId { get; set; }
+        public List<long> ServiceIds { get; set; } = [];
     }
 
     private sealed class BookingState

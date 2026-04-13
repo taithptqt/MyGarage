@@ -54,6 +54,7 @@ namespace MyGarage.Services
             using var client = new SmtpClient();
             try
             {
+                client.Timeout = 10000;
                 await client.ConnectAsync(smtpServer, smtpPort, SecureSocketOptions.StartTls);
                 await client.AuthenticateAsync(senderEmail, password);
                 await client.SendAsync(emailMessage);

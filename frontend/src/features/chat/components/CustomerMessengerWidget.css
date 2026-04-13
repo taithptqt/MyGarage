@@ -16,14 +16,25 @@
   width: 58px;
   height: 58px;
   border: none;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
   cursor: pointer;
-  background: radial-gradient(circle at 30% 20%, #1e9bff 0%, var(--ms-blue) 45%, var(--ms-blue-strong) 100%);
-  box-shadow: 0 16px 30px rgba(0, 98, 201, 0.38);
+  padding: 0;
+  background: transparent;
+  filter: drop-shadow(0 10px 18px rgba(74, 65, 186, 0.3));
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+
+.messenger-floating-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  filter: drop-shadow(0 14px 24px rgba(74, 65, 186, 0.4)) saturate(1.05);
+}
+
+.messenger-floating-icon {
+  width: 58px;
+  height: 58px;
+  display: block;
 }
 
 .messenger-widget {
