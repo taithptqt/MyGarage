@@ -1,47 +1,43 @@
-# Stage 1: Build Frontend (React + Vite)
-FROM node:20-alpine AS frontend-build
-WORKDIR /src/frontend
+ARG DOTNET_VERSION=8.0
+ARG NODE_VERSION=20-alpine
+ARG BUILD_CONFIGURATION=Release
 
-# Copy package files and install dependencies
-COPY frontend/package*.json ./
+FROM node:${NODE_VERSION} AS frontend-deps
+WORKDIR /src/frontend
+COPY Frontend/package*.json ./
 RUN npm ci
 
-# Copy frontend code and build
-COPY frontend/ .
-# Bạn có thể bỏ qua quá trình check types hoặc test để build nhanh hơn nếu cần
+FROM frontend-deps AS frontend-build
+WORKDIR /src/frontend
+ARG VITE_GOOGLE_CLIENT_ID
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+COPY Frontend/ ./
+RUN test -n "$VITE_GOOGLE_CLIENT_ID" || (echo "Missing VITE_GOOGLE_CLIENT_ID at build time" && exit 1)
 RUN npm run build
 
-
-# Stage 2: Build Backend (.NET 8)
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS backend-restore
 WORKDIR /src/backend
-
-# Copy csproj and restore
 COPY backend/MyGarage.csproj ./
-RUN dotnet restore
+RUN dotnet restore MyGarage.csproj
 
-# Copy backend code and publish
-COPY backend/ .
-RUN dotnet publish -c Release -o /app/publish
+FROM backend-restore AS backend-publish
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src/backend
+COPY backend/ ./
+RUN dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore
 
-
-# Stage 3: Final Runtime Image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
 
-# Chuyển server lắng nghe port 8080 thay vì 7009
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_HTTP_PORTS=8080 \
+    DOTNET_RUNNING_IN_CONTAINER=true
+
 EXPOSE 8080
 
-# Thiết lập môi trường Production
-ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ASPNETCORE_HTTP_PORTS=8080
-
-# Copy published backend files (Thực thi API)
-COPY --from=backend-build /app/publish .
-
-# Copy frontend build (HTML/JS/CSS) bỏ vào đúng cấu trúc "/app/frontend/dist"
-# Điều này giúp hàm ResolveFrontendDistPath trong Program.cs tự động tìm thấy frontend!
+COPY --from=backend-publish /app/publish ./
 COPY --from=frontend-build /src/frontend/dist ./frontend/dist
 
-# Entry point để chạy MyGarage
+USER app
 ENTRYPOINT ["dotnet", "MyGarage.dll"]
+
