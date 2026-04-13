@@ -25,10 +25,30 @@ jobs:
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.event == 'push')
+       github.event.workflow_run.event == 'push' &&
+       vars.ENABLE_PROD_DEPLOY == 'true')
     environment:
       name: production
     steps:
+      - name: Validate deploy secrets
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          missing=()
+          [ -z "$SSH_HOST" ] && missing+=("SSH_HOST")
+          [ -z "$SSH_USERNAME" ] && missing+=("SSH_USERNAME")
+          [ -z "$SSH_KEY" ] && missing+=("SSH_KEY")
+          [ -z "$DEPLOY_PATH" ] && missing+=("DEPLOY_PATH")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required production secrets: ${missing[*]}"
+            echo "Set them in GitHub: Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -49,6 +69,7 @@ jobs:
             git checkout main
             git pull --ff-only origin main
 
-            docker compose up -d --build --remove-orphans
+            docker compose config -q
+            docker compose up -d --build --remove-orphans --pull always
             docker compose ps
             docker image prune -f
