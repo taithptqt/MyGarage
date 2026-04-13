@@ -50,4 +50,4 @@ dist/
 /backend/build_errors_refactor.txt
 /backend/MyGarage.csproj.user
 /backend/package-lock.json
-/package-lock.json
+!/package-lock.json
