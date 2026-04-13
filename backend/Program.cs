@@ -526,7 +526,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (ShouldUseHttpsRedirection(builder.Configuration, app.Environment))
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles(); // Serve files from wwwroot (uploads, etc.)
 
 if (hasFrontendBuild && frontendFileProvider is not null)
@@ -591,6 +594,41 @@ static string ResolveFrontendDistPath(string contentRootPath)
     }
 
     return Path.Combine(contentRootPath, "frontend", "dist");
+}
+
+static bool ShouldUseHttpsRedirection(IConfiguration configuration, IHostEnvironment environment)
+{
+    if (environment.IsDevelopment())
+    {
+        return true;
+    }
+
+    var urls = configuration["ASPNETCORE_URLS"];
+    if (!string.IsNullOrWhiteSpace(urls) &&
+        urls.Contains("https://", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    var httpsPorts = configuration["ASPNETCORE_HTTPS_PORTS"];
+    if (!string.IsNullOrWhiteSpace(httpsPorts))
+    {
+        return true;
+    }
+
+    var httpsPort = configuration["HTTPS_PORT"] ?? configuration["ASPNETCORE_HTTPS_PORT"];
+    if (!string.IsNullOrWhiteSpace(httpsPort))
+    {
+        return true;
+    }
+
+    var kestrelHttpsUrl = configuration["Kestrel:Endpoints:Https:Url"];
+    if (!string.IsNullOrWhiteSpace(kestrelHttpsUrl))
+    {
+        return true;
+    }
+
+    return false;
 }
 
 public partial class Program;

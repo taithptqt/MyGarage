@@ -1,10 +1,14 @@
-﻿.git/
+.git/
+.github/
 .vscode/
 .idea/
+docs/
 
 Frontend/node_modules/
 Frontend/dist/
 Frontend/build/
+Frontend/.cert/
+Frontend/.vite/
 
 backend/bin/
 backend/obj/
@@ -16,6 +20,7 @@ backend/build-commit3-check/
 **/obj/
 **/TestResults/
 **/.vs/
+**/node_modules/
 
 Frontend/.env*
 backend/appsettings.Development.json
