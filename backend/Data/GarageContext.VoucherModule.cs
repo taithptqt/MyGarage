@@ -11,27 +11,15 @@ public partial class GarageContext
         modelBuilder.Ignore<AccountingPeriod>();
         modelBuilder.Ignore<AccountsPayable>();
         modelBuilder.Ignore<ApprovalPolicy>();
-        modelBuilder.Ignore<AttendanceAdjustment>();
         modelBuilder.Ignore<BankAccount>();
         modelBuilder.Ignore<BankReconciliation>();
         modelBuilder.Ignore<BankTransaction>();
         modelBuilder.Ignore<ChartOfAccount>();
         modelBuilder.Ignore<DocumentAttachment>();
-        modelBuilder.Ignore<EmployeeDependent>();
-        modelBuilder.Ignore<EmployeeLoan>();
         modelBuilder.Ignore<FinanceApprovalRequest>();
         modelBuilder.Ignore<JournalEntry>();
         modelBuilder.Ignore<JournalEntryLine>();
         modelBuilder.Ignore<LegalDocument>();
-        modelBuilder.Ignore<OvertimeEntry>();
-        modelBuilder.Ignore<PayrollItem>();
-        modelBuilder.Ignore<PayrollPeriod>();
-        modelBuilder.Ignore<PayrollRun>();
-        modelBuilder.Ignore<Payslip>();
-        modelBuilder.Ignore<PitProfile>();
-        modelBuilder.Ignore<SalaryAdvance>();
-        modelBuilder.Ignore<StaffContract>();
-        modelBuilder.Ignore<StaffSalaryProfile>();
         modelBuilder.Ignore<SupplierAccountingProfile>();
         modelBuilder.Ignore<SupplierInvoice>();
         modelBuilder.Ignore<SupplierInvoiceDetail>();
@@ -41,9 +29,10 @@ public partial class GarageContext
         modelBuilder.Ignore<VwPayrollRunSummary>();
         modelBuilder.Ignore<VwSupplierPayableSummary>();
 
+        // Keep SQL Server default decimal precision explicit to avoid runtime warning.
         modelBuilder.Entity<SalaryCoefficient>(entity =>
         {
-            entity.Property(e => e.CoefficientValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CoefficientValue).HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<Voucher>(entity =>
@@ -354,6 +343,9 @@ public partial class GarageContext
                 .HasForeignKey(d => d.CreatedBy);
         });
 
+        ConfigurePayrollModule(modelBuilder);
+        ConfigureChatbotModule(modelBuilder);
+        ConfigureAuthModule(modelBuilder);
     }
 }
 

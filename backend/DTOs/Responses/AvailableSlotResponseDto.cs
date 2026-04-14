@@ -16,6 +16,9 @@ namespace MyGarage.DTOs.Responses
         public int CompactionScore { get; set; }
         public string BookingFlow { get; set; } = "FIXED";
         public int EstimatedDurationMinutes { get; set; }
+        public int ServiceMinutes { get; set; }
+        public int SetupMinutes { get; set; }
+        public int BufferMinutes { get; set; }
         public string? DynamicNotice { get; set; }
     }
 }

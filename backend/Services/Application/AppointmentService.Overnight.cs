@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -44,7 +45,7 @@ namespace MyGarage.Services
                 {
                     SourceWorkSlotId = source.Id,
                     LockedWorkSlotId = lockSlot.Id,
-                    BayId = source.BayId,
+                    BayId = source.BayId!.Value,
                     LockedFrom = lockSlot.StartTime,
                     LockedTo = lockSlot.EndTime,
                     VehicleId = source.VehicleId

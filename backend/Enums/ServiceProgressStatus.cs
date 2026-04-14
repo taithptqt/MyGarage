@@ -1,6 +1,10 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum ServiceProgressStatus
 {
-    IN_PROGRESS
+    COMPLETED,
+    PAUSED,
+    IN_PROGRESS,
+    PENDING
 }
+

@@ -1,0 +1,260 @@
+.mg-header-wrap {
+  position: relative;
+  z-index: 1200;
+}
+
+/* Ensure NavLink active state works with Tailwind border-b */
+.active {
+  color: var(--color-secondary) !important;
+  border-bottom: 1px solid var(--color-secondary);
+}
+
+<<<<<<< HEAD:frontend/src/shared/components/Header.css
+@media (max-width: 1024px) {
+  /* Mobile menu full screen */
+  .fixed.inset-0 {
+    z-index: 1000;
+=======
+.mg-header-hotline::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  background: no-repeat center/contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c5a059' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.34 1.78.65 2.62a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6.09 6.09l1.46-1.31a2 2 0 0 1 2.11-.45c.84.31 1.72.53 2.62.65A2 2 0 0 1 22 16.92z'/%3E%3C/svg%3E");
+}
+
+.mg-header-hotline::after {
+  content: "+45 69 133 911";
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.mg-header-side {
+  display: flex;
+  gap: clamp(18px, 2.2vw, 38px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 112px;
+}
+
+.mg-header-side.right {
+  justify-content: flex-start;
+}
+
+.mg-header-side a {
+  color: var(--mg-header-white);
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-family: "Oswald", "Bebas Neue", "Manrope", "Segoe UI", sans-serif;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.mg-header-side a:hover {
+  color: var(--mg-header-gold);
+}
+
+.mg-header-logo {
+  width: 160px;
+  height: 92px;
+  display: block;
+  background: url("/assets/mygarage-logo-original.svg") center center / contain no-repeat;
+  margin-top: 34px;
+}
+
+.mg-header-logo span {
+  display: none;
+}
+
+.mg-header-logo small {
+  display: none;
+}
+
+.mg-header-login-btn {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  transform: none;
+  z-index: 2;
+  border: 1px solid var(--mg-header-gold);
+  background: transparent;
+  color: var(--mg-header-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 10px 14px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mg-header-user {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  transform: none;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.mg-header-notify-fixed-btn {
+  border: 0;
+  background: transparent;
+  color: var(--mg-header-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  margin-right: 2px;
+  transform: translateY(-3px);
+  transition: color 0.2s ease, transform 0.2s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.mg-header-notify-fixed-btn:hover {
+  transform: translateY(-4px);
+  color: #e8be6f;
+}
+
+.mg-header-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mg-header-user-name {
+  color: var(--mg-header-gold);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.mg-header-user-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 3.5px solid var(--mg-header-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mg-header-gold);
+  font-size: 17px;
+  font-weight: 800;
+  overflow: hidden;
+  background: transparent;
+}
+
+.mg-header-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mg-header-user-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 220px;
+  border-radius: 22px;
+  background: #f1f2f4;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+  z-index: 60;
+}
+
+.mg-header-user-menu-head {
+  padding: 16px 20px;
+  color: #2a3341;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid #d8dde5;
+}
+
+.mg-header-user-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 14px 20px;
+  color: #2b313d;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mg-header-user-menu-item:hover {
+  background: rgba(23, 30, 42, 0.06);
+}
+
+.mg-header-user-menu-item.logout {
+  color: #f45050;
+}
+
+@media (max-width: 1360px) {
+  .mg-header-main {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px 18px;
+    min-height: auto;
+  }
+
+  .mg-header-hotline,
+  .mg-header-side,
+  .mg-header-side.right,
+  .mg-header-logo,
+  .mg-header-user,
+  .mg-header-login-btn {
+    position: static;
+    top: auto;
+    right: auto;
+    left: auto;
+    transform: none;
+    justify-self: center;
+  }
+
+  .mg-header-side {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mg-header-main {
+    padding: 12px 10px;
+  }
+
+  .mg-header-side a {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+  }
+
+  .mg-header-user-name {
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+>>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/shared/components/Header.css
+  }
+}
+
+
+
+
+
+

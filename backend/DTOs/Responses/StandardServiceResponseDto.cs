@@ -8,7 +8,7 @@ namespace MyGarage.DTOs.Responses
         public string? Name { get; set; }
         public long CategoryId { get; set; }
         public decimal? BasePrice { get; set; }
-        public long? VehicleClassId { get; set; }
+        public string? EngineType { get; set; }
         public int StandardMinutes { get; set; }
         public decimal? TaxRate { get; set; }
         public int? WarrantyMonths { get; set; }

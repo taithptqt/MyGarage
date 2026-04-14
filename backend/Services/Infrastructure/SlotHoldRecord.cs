@@ -10,6 +10,7 @@ namespace MyGarage.Services
         public DateTime EndTime { get; init; }
         public string BookingFlow { get; init; } = "FIXED";
         public string? RequestedServiceIds { get; init; }
+        public string? RequestedPackageIds { get; init; }
         public int VehicleCount { get; init; } = 1;
         public DateTime CreatedAt { get; init; }
         public DateTime ExpiresAt { get; init; }

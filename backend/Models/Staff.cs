@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -9,15 +9,19 @@ public partial class Staff
 
     public string FullName { get; set; } = null!;
 
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
 
     public string? Email { get; set; }
+
+    public string? GoogleId { get; set; }
 
     public string PasswordHash { get; set; } = null!;
 
     public long? RoleId { get; set; }
 
     public long? BranchId { get; set; }
+
+    public long? TeamId { get; set; }
 
     public long? StaffTierId { get; set; }
 
@@ -61,14 +65,10 @@ public partial class Staff
 
     public virtual ICollection<AccountingPeriod> AccountingPeriods { get; set; } = new List<AccountingPeriod>();
 
-    public virtual ICollection<AiContentStore> AiContentStores { get; set; } = new List<AiContentStore>();
-
-    public virtual ICollection<AiTechnicalAssistant> AiTechnicalAssistants { get; set; } = new List<AiTechnicalAssistant>();
-
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public virtual ICollection<Appointment> AppointmentUpdatedByNavigations { get; set; } = new List<Appointment>();
-    public virtual ICollection<BookingGroup> BookingGroupCreatedByNavigations { get; set; } = new List<BookingGroup>();
-    public virtual ICollection<BookingGroup> BookingGroupUpdatedByNavigations { get; set; } = new List<BookingGroup>();
+    public virtual ICollection<GroupSession> GroupSessionCreatedByNavigations { get; set; } = new List<GroupSession>();
+    public virtual ICollection<GroupSession> GroupSessionUpdatedByNavigations { get; set; } = new List<GroupSession>();
 
     public virtual ICollection<ApprovalRequest> ApprovalRequestApprovers { get; set; } = new List<ApprovalRequest>();
 
@@ -353,6 +353,8 @@ public partial class Staff
     public virtual ICollection<StaffSchedule> StaffSchedules { get; set; } = new List<StaffSchedule>();
 
     public virtual StaffTier? StaffTier { get; set; }
+
+    public virtual Team? Team { get; set; }
 
     public virtual ICollection<StaffTier> StaffTierCreatedByNavigations { get; set; } = new List<StaffTier>();
 

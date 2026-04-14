@@ -1,0 +1,10 @@
+.filter-dropdown-menu {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.filter-dropdown-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

@@ -3,15 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class VehicleConditionLogService
     {
-        private const string StatusPending = nameof(ConditionRequestStatusCode.PENDING);
-        private const string StatusAssigned = nameof(ConditionRequestStatusCode.ASSIGNED);
-        private const string StatusCompleted = nameof(ConditionRequestStatusCode.COMPLETED);
+        private const string StatusPending = nameof(DiagnosisStatus.PENDING);
+        private const string StatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
+        private const string StatusCompleted = nameof(DiagnosisStatus.COMPLETED);
         private const string LogTypeCheckIn = "CHECK_IN";
 
         public async Task<IReadOnlyList<VehicleConditionLog>> GetByOrderAsync(long serviceOrderId)
@@ -25,6 +26,14 @@ namespace MyGarage.Services
         public async Task<IReadOnlyList<VehicleConditionLog>> GetActiveRequestsAsync(string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .Where(x => x.LogType == normalizedType)
+                    .Where(x => x.CustomerSignatureUrl == null || x.CustomerSignatureUrl == string.Empty)
+                    .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                    .ToListAsync();
+            }
 
             return await _context.VehicleConditionLogs
                 .Where(x => x.LogType == normalizedType)
@@ -36,6 +45,14 @@ namespace MyGarage.Services
         public async Task<VehicleConditionLog?> GetActiveRequestAsync(long serviceOrderId, string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .Where(x => x.ServiceOrderId == serviceOrderId && x.LogType == normalizedType)
+                    .Where(x => x.CustomerSignatureUrl == null || x.CustomerSignatureUrl == string.Empty)
+                    .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
+                    .FirstOrDefaultAsync();
+            }
 
             return await _context.VehicleConditionLogs
                 .Where(x => x.ServiceOrderId == serviceOrderId && x.LogType == normalizedType)
@@ -47,6 +64,15 @@ namespace MyGarage.Services
         public async Task<bool> HasCompletedLogAsync(long serviceOrderId, string logType)
         {
             var normalizedType = NormalizeLogType(logType);
+            if (normalizedType == LogTypeCheckIn)
+            {
+                return await _context.VehicleConditionLogs
+                    .AnyAsync(x =>
+                        x.ServiceOrderId == serviceOrderId &&
+                        x.LogType == normalizedType &&
+                        x.CustomerSignatureUrl != null &&
+                        x.CustomerSignatureUrl != "");
+            }
 
             return await _context.VehicleConditionLogs
                 .AnyAsync(x =>

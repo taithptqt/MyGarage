@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace MyGarage.Constants
 {
@@ -9,12 +9,13 @@ namespace MyGarage.Constants
             nameof(AppointmentStatus.CANCELED),
             nameof(AppointmentStatus.CANCELLED),
             nameof(AppointmentStatus.NO_SHOW),
-            nameof(AppointmentStatus.COMPLETED),
         };
 
         public static readonly HashSet<string> Queueing = new(System.StringComparer.OrdinalIgnoreCase)
         {
             nameof(AppointmentStatus.PENDING),
+            nameof(AppointmentStatus.CONFIRMED),
+            nameof(AppointmentStatus.LATE),
             nameof(AppointmentStatus.ARRIVED),
             nameof(AppointmentStatus.ARRIVED_LATE),
         };

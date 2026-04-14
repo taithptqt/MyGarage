@@ -1,15 +1,15 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum VoucherStatusCode
 {
-    DRAFT,
-    PENDING_APPROVAL,
-    ACTIVE,
-    PAUSED,
-    ENDED,
     ARCHIVED,
-    EXHAUSTED,
+    REVOKED,
     EXPIRED,
+    EXHAUSTED,
+    PAUSED,
+    ACTIVE,
     SCHEDULED,
-    REVOKED
+    PENDING_APPROVAL,
+    DRAFT
 }
+

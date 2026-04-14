@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,16 @@ namespace MyGarage.Controllers
     public class MaterialReturnController : ControllerBase
     {
         private readonly IMaterialReturnService _materialReturnService;
+        private readonly IServiceOrderService _serviceOrderService;
         private readonly IMapper _mapper;
 
-        public MaterialReturnController(IMaterialReturnService materialReturnService, IMapper mapper)
+        public MaterialReturnController(
+            IMaterialReturnService materialReturnService,
+            IServiceOrderService serviceOrderService,
+            IMapper mapper)
         {
             _materialReturnService = materialReturnService;
+            _serviceOrderService = serviceOrderService;
             _mapper = mapper;
         }
 
@@ -45,41 +51,84 @@ namespace MyGarage.Controllers
         [HttpPost]
         public async Task<ActionResult<MaterialReturnResponseDto>> Create([FromBody] MaterialReturnCreateDto itemDto)
         {
-            var entity = _mapper.Map<MaterialReturn>(itemDto);
-            var createdItem = await _materialReturnService.AddAsync(entity);
-            var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            try
+            {
+                if (itemDto?.ServiceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsurePartsEditableAsync(itemDto.ServiceOrderId.Value);
+                }
+
+                var entity = _mapper.Map<MaterialReturn>(itemDto);
+                var createdItem = await _materialReturnService.AddAsync(entity);
+                var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
+                return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
         public async Task<ActionResult<MaterialReturnResponseDto>> Update(long id, [FromBody] MaterialReturnUpdateDto itemDto)
         {
-            var existingItem = await _materialReturnService.GetByIdAsync(id);
-            if (existingItem == null)
+            try
             {
-                return NotFound();
-            }
+                var existingItem = await _materialReturnService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
 
-            _mapper.Map(itemDto, existingItem);
-            var updatedItem = await _materialReturnService.UpdateAsync(id, existingItem);
-            
-            if (updatedItem == null)
-            {
-                return NotFound();
+                var targetServiceOrderId = itemDto?.ServiceOrderId ?? existingItem.ServiceOrderId;
+                if (targetServiceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsurePartsEditableAsync(targetServiceOrderId.Value);
+                }
+
+                _mapper.Map(itemDto, existingItem);
+                var updatedItem = await _materialReturnService.UpdateAsync(id, existingItem);
+                if (updatedItem == null)
+                {
+                    return NotFound();
+                }
+
+                var responseDto = _mapper.Map<MaterialReturnResponseDto>(updatedItem);
+                return Ok(responseDto);
             }
-            var responseDto = _mapper.Map<MaterialReturnResponseDto>(updatedItem);
-            return Ok(responseDto);
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _materialReturnService.DeleteAsync(id);
-            if (!result)
+            try
             {
-                return NotFound();
+                var existingItem = await _materialReturnService.GetByIdAsync(id);
+                if (existingItem == null)
+                {
+                    return NotFound();
+                }
+
+                if (existingItem.ServiceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsurePartsEditableAsync(existingItem.ServiceOrderId.Value);
+                }
+
+                var result = await _materialReturnService.DeleteAsync(id);
+                if (!result)
+                {
+                    return NotFound();
+                }
+                return NoContent();
             }
-            return NoContent();
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

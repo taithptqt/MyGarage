@@ -11,6 +11,7 @@ namespace MyGarage.DTOs.Responses.Service
         public string? CustomerName { get; set; }
         public long VehicleId { get; set; }
         public string? VehiclePlate { get; set; }
+        public long? GroupSessionId { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
         public decimal? FinalAmount { get; set; }

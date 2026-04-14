@@ -10,6 +10,7 @@ namespace MyGarage.DTOs.Responses
         public string? PasswordHash { get; set; }
         public long? RoleId { get; set; }
         public long? BranchId { get; set; }
+        public long? TeamId { get; set; }
         public long? StaffTierId { get; set; }
         public int? SkillLevel { get; set; }
         public string? CitizenId { get; set; }

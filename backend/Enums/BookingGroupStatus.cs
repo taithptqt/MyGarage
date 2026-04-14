@@ -1,10 +1,11 @@
-namespace MyGarage.Enums;
+﻿namespace MyGarage.Enums;
 
 public enum BookingGroupStatus
 {
-    PENDING,
+    COMPLETED,
+    CANCELED,
     PARTIAL_CONFIRMED,
     CONFIRMED,
-    COMPLETED,
-    CANCELED
+    PENDING
 }
+

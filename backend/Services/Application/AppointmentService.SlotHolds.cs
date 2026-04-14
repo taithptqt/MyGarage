@@ -6,30 +6,39 @@ using Microsoft.EntityFrameworkCore;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        private const int SlotHoldMinutes = 5;
+        private const int SlotHoldMinutes = 15;
 
         public async Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto)
         {
             if (dto.BranchId <= 0)
                 throw new InvalidOperationException("Chi nh\u00E1nh kh\u00F4ng h\u1EE3p l\u1EC7.");
 
-            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds);
+            var opHour = await _context.BranchOperatingHours
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)dto.StartTime.DayOfWeek);
+            var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
+
+            var flow = await ResolveFlowAsync(dto.BookingFlow, dto.RequestedServiceIds, dto.RequestedPackageIds);
+            var plannedDuration = await ResolveScheduledDurationAsync(dto.RequestedServiceIds, slotStepMinutes, false, dto.RequestedPackageIds);
+
             var holdEndTime = dto.EndTime;
 
             if (flow == BookingFlowType.Flexible && holdEndTime <= dto.StartTime)
             {
-                var opHour = await _context.BranchOperatingHours
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(h => h.BranchId == dto.BranchId && h.DayOfWeek == (int)dto.StartTime.DayOfWeek);
-                var slotStepMinutes = ResolveSlotStepMinutes(opHour?.SlotDurationMinutes);
-                var flexibleDuration = await ResolveScheduledDurationAsync(dto.RequestedServiceIds, slotStepMinutes, isParallel: false);
-                holdEndTime = dto.StartTime.AddMinutes(flexibleDuration);
+                var flexibleWindow = ResolveFlexibleWindowMinutes(slotStepMinutes);
+                holdEndTime = dto.StartTime.AddMinutes(flexibleWindow);
+            }
+
+            if (flow == BookingFlowType.Fixed && holdEndTime <= dto.StartTime)
+            {
+                holdEndTime = dto.StartTime.AddMinutes(plannedDuration);
             }
 
             if (holdEndTime <= dto.StartTime)
@@ -41,6 +50,7 @@ namespace MyGarage.Services
                 holdEndTime,
                 flow == BookingFlowType.Flexible ? AppointmentBookingFlows.Flexible : AppointmentBookingFlows.Fixed,
                 dto.RequestedServiceIds,
+                dto.RequestedPackageIds,
                 Math.Max(1, dto.VehicleCount));
 
             return new SlotHoldResponseDto
@@ -73,6 +83,7 @@ namespace MyGarage.Services
                         StartTime = hold.StartTime,
                         EndTime = hold.EndTime,
                         RequestedServiceIds = hold.RequestedServiceIds,
+                        RequestedPackageIds = hold.RequestedPackageIds,
                         CustomerNotes = null,
                         Status = nameof(AppointmentStatus.PENDING)
                     });
@@ -106,12 +117,12 @@ namespace MyGarage.Services
                 throw new InvalidOperationException("Th\u00F4ng tin gi\u1EEF ch\u1ED7 kh\u00F4ng kh\u1EDBp v\u1EDBi l\u1ECBch \u0111ang \u0111\u1EB7t.");
             }
 
-            // Dat lich nhom song song: moi xe co the co thoi luong dich vu khac nhau.
-            // Hold thuong duoc tao theo khung gio chung (dai hon), nen chi can dam bao
-            // lich gui len khong vuot qua khung gio da giu.
+            // Với đặt lịch nhóm song song, mỗi xe có thể có thời lượng dịch vụ khác nhau.
+            // Hold thường được tạo theo khung giờ chung (dài hơn), nên chỉ cần đảm bảo
+            // lịch gửi lên không vượt quá khung giờ đã giữ.
             if (flow == BookingFlowType.Fixed && requestedEndAt > hold.EndTime)
             {
-                throw new InvalidOperationException("Khung gi\u1EDD gi\u1EEF ch\u1ED7 kh\u00F4ng c\u00F2n ph\u00F9 h\u1EE3p v\u1EDBi l\u1ECBch \u0111ang \u0111\u1EB7t. Vui l\u00F2ng ch\u1ECDn l\u1EA1i khung gi\u1EDD.");
+                throw new InvalidOperationException("Khung giờ giữ chỗ không còn phù hợp với lịch đang đặt. Vui lòng chọn lại khung giờ.");
             }
         }
     }

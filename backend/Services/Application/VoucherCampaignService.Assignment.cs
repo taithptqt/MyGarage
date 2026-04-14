@@ -26,7 +26,7 @@ namespace MyGarage.Services
                 .Distinct()
                 .ToList();
 
-            var now = DateTime.UtcNow;
+            var now = VietnamTime.Now;
 
             if (replaceExisting)
             {

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Constants;
+using MyGarage.Enums;
 
 namespace MyGarage.Services
 {
@@ -15,9 +15,12 @@ namespace MyGarage.Services
             var slots = await _context.WorkSlots
                 .AsNoTracking()
                 .Where(s => s.BranchId == branchId
+                    && s.BayId.HasValue
                     && s.StartTime <= now.AddHours(6)
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
-                    && s.Status != nameof(WorkSlotStatus.CANCELED)
+                    && s.SlotType != nameof(WorkSlotType.BUFFER)
+                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(s => s.BayId)
                 .ThenBy(s => s.StartTime)
@@ -34,7 +37,7 @@ namespace MyGarage.Services
                 .ToListAsync();
 
             var sentCount = 0;
-            foreach (var bayGroup in slots.GroupBy(s => s.BayId))
+            foreach (var bayGroup in slots.GroupBy(s => s.BayId!.Value))
             {
                 var current = bayGroup
                     .Where(s => s.StartTime <= now && ResolveEffectiveSlotEnd(s) > now)
@@ -104,8 +107,13 @@ namespace MyGarage.Services
             System.Collections.Generic.IReadOnlyList<Models.Bay> bays,
             System.Collections.Generic.IReadOnlyList<Models.WorkSlot> slots)
         {
+            if (!slot.BayId.HasValue)
+            {
+                return false;
+            }
+
             var slotNeedsQuick = IsQuickSlotType(slot.SlotType, slot.Notes);
-            foreach (var bay in bays.Where(b => b.Id != slot.BayId))
+            foreach (var bay in bays.Where(b => b.Id != slot.BayId.Value))
             {
                 if (!slotNeedsQuick && IsQuickBay(bay))
                 {

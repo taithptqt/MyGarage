@@ -39,6 +39,8 @@ public partial class InsuranceCompany
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
+    public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetails { get; set; } = new List<ServiceOrderDetail>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }

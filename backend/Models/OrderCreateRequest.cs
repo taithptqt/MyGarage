@@ -31,8 +31,10 @@ public class OrderCreateRequest
 
     public string? BuyerCompanyName { get; set; }
 
+    [EmailAddress(ErrorMessage = ValidationMessages.Email)]
     public string? BuyerEmail { get; set; }
 
+    [RegularExpression(ValidationPatterns.VietnamPhone10, ErrorMessage = ValidationMessages.VietnamPhone10)]
     public string? BuyerPhone { get; set; }
 
     public string? BuyerAddress { get; set; }

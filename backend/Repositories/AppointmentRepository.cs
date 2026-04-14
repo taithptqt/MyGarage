@@ -17,7 +17,14 @@ namespace MyGarage.Repositories
 
         public async Task<IEnumerable<Appointment>> GetAllDetailedAsync(string? status = null)
         {
-            var query = BuildDetailedQuery();
+            var query = _dbSet
+                .Include(a => a.Branch)
+                .Include(a => a.Customer)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
+                .Include(a => a.GroupSession)
+                .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -46,18 +53,22 @@ namespace MyGarage.Repositories
 
             return await BuildDetailedQuery()
                 .Where(a => a.BranchId == branchId
-                    && a.StartTime >= start
-                    && a.StartTime < end
-                    && (a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)
-                        && a.Status.ToUpper() != nameof(AppointmentStatus.CANCELLED)))
-                .OrderBy(a => a.StartTime)
-                .ThenBy(a => a.Id)
+                         && a.StartTime >= start
+                         && a.StartTime < end
+                         && (a.Status == null
+                             || (a.Status.ToUpper() != nameof(AppointmentStatus.CANCELED)
+                                 && a.Status.ToUpper() != nameof(AppointmentStatus.CANCELLED))))
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<Appointment>> GetByCustomerIdAsync(long customerId)
         {
-            return await BuildDetailedQuery()
+            return await _dbSet
+                .Include(a => a.Branch)
+                .Include(a => a.GroupSession)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
                 .Where(a => a.CustomerId == customerId)
                 .OrderByDescending(a => a.StartTime)
                 .ThenByDescending(a => a.Id)
@@ -66,7 +77,12 @@ namespace MyGarage.Repositories
 
         public async Task<IEnumerable<Appointment>> GetByBranchIdAsync(long branchId, string? status = null)
         {
-            var query = BuildDetailedQuery()
+            var query = _dbSet
+                .Include(a => a.Customer)
+                .Include(a => a.GroupSession)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
                 .Where(a => a.BranchId == branchId);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -89,9 +105,34 @@ namespace MyGarage.Repositories
                 .ToListAsync();
         }
 
+        private static IQueryable<Appointment> ApplyStatusFilter(IQueryable<Appointment> query, string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return query;
+            }
+
+            var normalized = status.Trim().ToUpperInvariant();
+            if (normalized == nameof(AppointmentStatus.CANCELED) || normalized == nameof(AppointmentStatus.CANCELLED))
+            {
+                return query.Where(a =>
+                    a.Status != null &&
+                    (a.Status.ToUpper() == nameof(AppointmentStatus.CANCELED) ||
+                     a.Status.ToUpper() == nameof(AppointmentStatus.CANCELLED)));
+            }
+
+            return query.Where(a => a.Status != null && a.Status.ToUpper() == normalized);
+        }
+
         public async Task<Appointment?> GetDetailedByIdAsync(long id)
         {
-            return await BuildDetailedQuery()
+            return await _dbSet
+                .Include(a => a.Branch)
+                .Include(a => a.Customer)
+                .Include(a => a.GroupSession)
+                .Include(a => a.Vehicle)
+                    .ThenInclude(v => v!.Model)
+                        .ThenInclude(m => m.Brand)
                 .FirstOrDefaultAsync(a => a.Id == id);
         }
 
@@ -101,7 +142,7 @@ namespace MyGarage.Repositories
                 .Include(a => a.Customer)
                 .Include(a => a.Vehicle)
                 .Include(a => a.Branch)
-                .Include(a => a.BookingGroup)
+                .Include(a => a.GroupSession)
                 .Include(a => a.ServiceOrders);
         }
     }

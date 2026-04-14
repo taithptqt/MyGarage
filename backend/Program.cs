@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Hubs;
 using MyGarage.Interfaces;
 using MyGarage.Repositories;
 using MyGarage.Services;
@@ -10,8 +11,35 @@ using Microsoft.IdentityModel.Tokens;
 using PayOS;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using MyGarage.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+
+static string ResolvePayOsCredential(
+    IConfiguration config,
+    IHostEnvironment env,
+    string configurationKey,
+    string environmentVariableName,
+    string developmentPlaceholder)
+{
+    var value = config[configurationKey] ?? Environment.GetEnvironmentVariable(environmentVariableName);
+    if (!string.IsNullOrWhiteSpace(value))
+    {
+        return value.Trim();
+    }
+
+    if (env.IsDevelopment())
+    {
+        return developmentPlaceholder;
+    }
+
+    throw new InvalidOperationException(
+        $"PayOS: missing {configurationKey} (or env {environmentVariableName}). " +
+        "Set values in appsettings, user secrets, or environment variables.");
+}
 
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
 const string AdminStaffOnlyPolicy = "AdminStaffOnly";
@@ -61,7 +89,9 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
+builder.Services.AddScoped<IServiceOrderCustomerLifecycleNotifier, ServiceOrderCustomerLifecycleNotifier>();
 builder.Services.AddScoped<IServiceOrderService, ServiceOrderService>();
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 
 builder.Services.AddScoped<IServiceOrderDetailRepository, ServiceOrderDetailRepository>();
 builder.Services.AddScoped<IServiceOrderDetailService, ServiceOrderDetailService>();
@@ -73,12 +103,29 @@ builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAppointmentStatusPolicy, AppointmentStatusPolicy>();
 builder.Services.AddScoped<IAppointmentDetailAssembler, AppointmentDetailAssembler>();
-builder.Services.AddScoped<IBookingGroupStatusPolicy, BookingGroupStatusPolicy>();
-builder.Services.AddScoped<IBookingGroupService, BookingGroupService>();
+builder.Services.AddScoped<IGroupSessionStatusPolicy, GroupSessionStatusPolicy>();
+builder.Services.AddScoped<IGroupSessionService, GroupSessionService>();
 builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
+builder.Services.AddHostedService<AppointmentReminderBackgroundService>();
+builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
+builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
+
+builder.Services.AddSingleton<IValidateOptions<CustomerAutomationJobsOptions>, CustomerAutomationJobsOptionsValidator>();
+builder.Services.AddOptions<CustomerAutomationJobsOptions>()
+    .Bind(builder.Configuration.GetSection(CustomerAutomationJobsOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<LlmGatewayOptions>, LlmGatewayOptionsValidator>();
+builder.Services.AddOptions<LlmGatewayOptions>()
+    .Bind(builder.Configuration.GetSection(LlmGatewayOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddScoped<ICustomerAutomationJobProcessor, CustomerAutomationJobProcessor>();
+builder.Services.AddHostedService<CustomerAutomationJobsBackgroundService>();
 
 builder.Services.AddScoped<IStaffRepository, StaffRepository>();
 builder.Services.AddScoped<IStaffService, StaffService>();
+
+builder.Services.AddScoped<ITeamRepository, TeamRepository>();
+builder.Services.AddScoped<ITeamService, TeamService>();
 
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -96,32 +143,17 @@ builder.Services.AddScoped<IInventoryAdminService, InventoryAdminService>();
 builder.Services.AddScoped<IStaffScheduleRepository, StaffScheduleRepository>();
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();
 
-builder.Services.AddScoped<IAiContentStoreRepository, AiContentStoreRepository>();
-builder.Services.AddScoped<IAiContentStoreService, AiContentStoreService>();
-
-builder.Services.AddScoped<IAiCustomerInsightRepository, AiCustomerInsightRepository>();
-builder.Services.AddScoped<IAiCustomerInsightService, AiCustomerInsightService>();
-
 builder.Services.AddScoped<IAiForecastRepository, AiForecastRepository>();
 builder.Services.AddScoped<IAiForecastService, AiForecastService>();
 
-builder.Services.AddScoped<IAiFraudMonitorRepository, AiFraudMonitorRepository>();
-builder.Services.AddScoped<IAiFraudMonitorService, AiFraudMonitorService>();
-
 builder.Services.AddScoped<IAiKnowledgeBaseRepository, AiKnowledgeBaseRepository>();
 builder.Services.AddScoped<IAiKnowledgeBaseService, AiKnowledgeBaseService>();
-
-builder.Services.AddScoped<IAiLearningFeedbackRepository, AiLearningFeedbackRepository>();
-builder.Services.AddScoped<IAiLearningFeedbackService, AiLearningFeedbackService>();
 
 builder.Services.AddScoped<IAiModelConfigRepository, AiModelConfigRepository>();
 builder.Services.AddScoped<IAiModelConfigService, AiModelConfigService>();
 
 builder.Services.AddScoped<IAiSmartDispatchingRepository, AiSmartDispatchingRepository>();
 builder.Services.AddScoped<IAiSmartDispatchingService, AiSmartDispatchingService>();
-
-builder.Services.AddScoped<IAiTechnicalAssistantRepository, AiTechnicalAssistantRepository>();
-builder.Services.AddScoped<IAiTechnicalAssistantService, AiTechnicalAssistantService>();
 
 builder.Services.AddScoped<IApprovalRequestRepository, ApprovalRequestRepository>();
 builder.Services.AddScoped<IApprovalRequestService, ApprovalRequestService>();
@@ -152,6 +184,32 @@ builder.Services.AddScoped<ICommissionTransactionService, CommissionTransactionS
 
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<IChatV2Service, ChatV2Service>();
+builder.Services.AddScoped<IChatbotToolAllowlist, ChatbotToolAllowlist>();
+builder.Services.AddScoped<IChatbotRequestValidator, ChatbotRequestValidator>();
+builder.Services.AddSingleton<IChatbotRateLimitHook, InMemoryChatbotRateLimitHook>();
+builder.Services.AddScoped<IChatbotPricingInventoryGuard, ChatbotPricingInventoryGuard>();
+builder.Services.AddScoped<IChatbotService, ChatbotService>();
+builder.Services.AddScoped<IChatbotImageUploadService, ChatbotImageUploadService>();
+builder.Services.AddScoped<IIntentDetector, IntentDetector>();
+builder.Services.AddScoped<IGuardrailValidator, GuardrailValidator>();
+builder.Services.AddScoped<IVisionAnalyzer, HeuristicVisionAnalyzer>();
+builder.Services.AddScoped<IFileSecurityScanner, NoOpFileSecurityScanner>();
+builder.Services.AddScoped<IChatbotBookingWorkflowService, ChatbotBookingWorkflowService>();
+builder.Services.AddScoped<IChatbotHandoffService, ChatbotHandoffService>();
+builder.Services.AddScoped<IChatbotVoucherResolverService, ChatbotVoucherResolverService>();
+builder.Services.AddScoped<IChatbotLoyaltyStatusLookupService, ChatbotLoyaltyStatusLookupService>();
+builder.Services.AddScoped<IChatbotVoucherStatusLookupService, ChatbotVoucherStatusLookupService>();
+builder.Services.AddScoped<IChatbotRetrievalService, ChatbotRetrievalService>();
+builder.Services.AddScoped<IChatbotAnswerComposer, ChatbotAnswerComposer>();
+builder.Services.AddScoped<IPromptBuilder, PromptBuilder>();
+builder.Services.AddSingleton<IChatbotLlmPromptBuilder, ChatbotLlmPromptBuilder>();
+builder.Services.AddSingleton<IChatbotLlmResponseNormalizer, ChatbotLlmResponseNormalizer>();
+builder.Services.AddScoped<IChatbotToolDefinitionRegistry, ChatbotToolDefinitionRegistry>();
+builder.Services.AddScoped<IChatbotLlmGateway, ChatbotLlmGateway>();
+builder.Services.AddSingleton<IChatbotLlmProviderClient, OpenAiCompatibleChatbotLlmProviderClient>();
+builder.Services.AddScoped<IFunctionCallingRouter, SecureFunctionCallingRouter>();
+builder.Services.AddScoped<IChatbotOrchestrator, ChatbotOrchestrator>();
 
 builder.Services.AddScoped<ICustomerFeedbackRepository, CustomerFeedbackRepository>();
 builder.Services.AddScoped<ICustomerFeedbackService, CustomerFeedbackService>();
@@ -273,6 +331,9 @@ builder.Services.AddScoped<ISalaryCoefficientService, SalaryCoefficientService>(
 builder.Services.AddScoped<IStandardServiceRepository, StandardServiceRepository>();
 builder.Services.AddScoped<IStandardServiceService, StandardServiceService>();
 
+builder.Services.AddScoped<IPackageRepository, PackageRepository>();
+builder.Services.AddScoped<IPackageService, PackageService>();
+
 builder.Services.AddScoped<IStockTransactionRepository, StockTransactionRepository>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 
@@ -309,6 +370,9 @@ builder.Services.AddScoped<IWorkSlotService, WorkSlotService>();
 // Authentication & JWT Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAuthCredentialRecoveryValidator, AuthCredentialRecoveryValidator>();
+builder.Services.AddScoped<IAuthSecurityStampValidator, AuthSecurityStampValidator>();
+builder.Services.AddSingleton<IAuthRateLimitHook, InMemoryAuthRateLimitHook>();
 builder.Services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 builder.Services.AddHttpClient();
 
@@ -332,6 +396,39 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrWhiteSpace(accessToken) &&
+                path.StartsWithSegments("/hubs/chat"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            if (context.Principal == null)
+            {
+                context.Fail("Invalid session.");
+                return;
+            }
+
+            using var scope = context.HttpContext.RequestServices.CreateScope();
+            var validator = scope.ServiceProvider.GetRequiredService<IAuthSecurityStampValidator>();
+            var isValid = await validator.ValidateAsync(context.Principal, context.HttpContext.RequestAborted);
+            if (!isValid)
+            {
+                context.Fail("Session is no longer valid.");
+            }
+        }
     };
 });
 
@@ -360,11 +457,12 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    var env = sp.GetRequiredService<IHostEnvironment>();
     return new PayOSClient(new PayOSOptions
     {
-        ClientId = config["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"),
-        ApiKey = config["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY"),
-        ChecksumKey = config["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"),
+        ClientId = ResolvePayOsCredential(config, env, "PayOS:ClientId", "PAYOS_CLIENT_ID", "dev-local-order-client-id"),
+        ApiKey = ResolvePayOsCredential(config, env, "PayOS:ApiKey", "PAYOS_API_KEY", "dev-local-order-api-key"),
+        ChecksumKey = ResolvePayOsCredential(config, env, "PayOS:ChecksumKey", "PAYOS_CHECKSUM_KEY", "dev-local-order-checksum-key"),
         LogLevel = LogLevel.Debug,
     });
 });
@@ -372,11 +470,12 @@ builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    var env = sp.GetRequiredService<IHostEnvironment>();
     return new PayOSClient(new PayOSOptions
     {
-        ClientId = config["PayOS:PayoutClientId"],
-        ApiKey = config["PayOS:PayoutApiKey"],
-        ChecksumKey = config["PayOS:PayoutChecksumKey"],
+        ClientId = ResolvePayOsCredential(config, env, "PayOS:PayoutClientId", "PAYOS_PAYOUT_CLIENT_ID", "dev-local-payout-client-id"),
+        ApiKey = ResolvePayOsCredential(config, env, "PayOS:PayoutApiKey", "PAYOS_PAYOUT_API_KEY", "dev-local-payout-api-key"),
+        ChecksumKey = ResolvePayOsCredential(config, env, "PayOS:PayoutChecksumKey", "PAYOS_PAYOUT_CHECKSUM_KEY", "dev-local-payout-checksum-key"),
         LogLevel = LogLevel.Debug,
     });
 });
@@ -384,6 +483,7 @@ builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -426,7 +526,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (ShouldUseHttpsRedirection(builder.Configuration, app.Environment))
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles(); // Serve files from wwwroot (uploads, etc.)
 
 if (hasFrontendBuild && frontendFileProvider is not null)
@@ -447,6 +550,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 if (hasFrontendBuild)
 {
@@ -491,3 +595,40 @@ static string ResolveFrontendDistPath(string contentRootPath)
 
     return Path.Combine(contentRootPath, "frontend", "dist");
 }
+
+static bool ShouldUseHttpsRedirection(IConfiguration configuration, IHostEnvironment environment)
+{
+    if (environment.IsDevelopment())
+    {
+        return true;
+    }
+
+    var urls = configuration["ASPNETCORE_URLS"];
+    if (!string.IsNullOrWhiteSpace(urls) &&
+        urls.Contains("https://", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    var httpsPorts = configuration["ASPNETCORE_HTTPS_PORTS"];
+    if (!string.IsNullOrWhiteSpace(httpsPorts))
+    {
+        return true;
+    }
+
+    var httpsPort = configuration["HTTPS_PORT"] ?? configuration["ASPNETCORE_HTTPS_PORT"];
+    if (!string.IsNullOrWhiteSpace(httpsPort))
+    {
+        return true;
+    }
+
+    var kestrelHttpsUrl = configuration["Kestrel:Endpoints:Https:Url"];
+    if (!string.IsNullOrWhiteSpace(kestrelHttpsUrl))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+public partial class Program;

@@ -1,0 +1,84 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-production:
+    name: Deploy Production via SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push' &&
+       vars.ENABLE_PROD_DEPLOY == 'true')
+    environment:
+      name: production
+    steps:
+      - name: Validate deploy secrets
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          missing=()
+          [ -z "$SSH_HOST" ] && missing+=("SSH_HOST")
+          [ -z "$SSH_USERNAME" ] && missing+=("SSH_USERNAME")
+          [ -z "$SSH_KEY" ] && missing+=("SSH_KEY")
+          [ -z "$DEPLOY_PATH" ] && missing+=("DEPLOY_PATH")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required production secrets: ${missing[*]}"
+            echo "Set them in GitHub: Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          command_timeout: 35m
+          script: |
+            set -euo pipefail
+            if [ ! -d "${{ secrets.DEPLOY_PATH }}" ]; then
+              echo "DEPLOY_PATH does not exist: ${{ secrets.DEPLOY_PATH }}"
+              exit 1
+            fi
+
+            cd "${{ secrets.DEPLOY_PATH }}"
+            docker compose version
+            git fetch --all --prune
+            git checkout -B main origin/main
+            git reset --hard origin/main
+
+            docker compose --env-file ./Frontend/.env config -q
+            echo "---- Host resources ----"
+            nproc || true
+            free -h || true
+            df -h || true
+            echo "---- Docker compose build ----"
+            time docker compose --env-file ./Frontend/.env build --progress plain mygarage-app
+            echo "---- Docker compose up ----"
+            docker compose --env-file ./Frontend/.env up -d --remove-orphans mygarage-app
+            docker compose --env-file ./Frontend/.env ps
+            docker image prune -f

@@ -32,6 +32,18 @@ public partial class GarageContext
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasMany(d => d.PayrollRuns)
+                .WithOne(p => p.PayrollPeriod)
+                .HasForeignKey(d => d.PayrollPeriodId);
+
+            entity.HasMany(d => d.SalaryAdvances)
+                .WithOne(p => p.DeductFromPayrollPeriod)
+                .HasForeignKey(d => d.DeductFromPayrollPeriodId);
+
+            entity.HasMany(d => d.EmployeeLoans)
+                .WithOne(p => p.StartPayrollPeriod)
+                .HasForeignKey(d => d.StartPayrollPeriodId);
         });
 
         modelBuilder.Entity<PayrollRun>(entity =>
@@ -50,6 +62,22 @@ public partial class GarageContext
             entity.Property(e => e.PaidAt).HasColumnName("paid_at");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.PayrollPeriod)
+                .WithMany(p => p.PayrollRuns)
+                .HasForeignKey(d => d.PayrollPeriodId);
+
+            entity.HasOne(d => d.Branch)
+                .WithMany(p => p.PayrollRuns)
+                .HasForeignKey(d => d.BranchId);
+
+            entity.HasOne(d => d.CalculatedByNavigation)
+                .WithMany(p => p.PayrollRunCalculatedByNavigations)
+                .HasForeignKey(d => d.CalculatedBy);
+
+            entity.HasOne(d => d.ApprovedByNavigation)
+                .WithMany(p => p.PayrollRunApprovedByNavigations)
+                .HasForeignKey(d => d.ApprovedBy);
         });
 
         modelBuilder.Entity<PayrollItem>(entity =>
@@ -76,6 +104,14 @@ public partial class GarageContext
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.PayrollRun)
+                .WithMany(p => p.PayrollItems)
+                .HasForeignKey(d => d.PayrollRunId);
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.PayrollItems)
+                .HasForeignKey(d => d.StaffId);
         });
 
         modelBuilder.Entity<Payslip>(entity =>
@@ -89,6 +125,14 @@ public partial class GarageContext
             entity.Property(e => e.IssuedBy).HasColumnName("issued_by");
             entity.Property(e => e.FileUrl).HasColumnName("file_url");
             entity.Property(e => e.ViewedAt).HasColumnName("viewed_at");
+
+            entity.HasOne(d => d.PayrollItem)
+                .WithOne(p => p.Payslip)
+                .HasForeignKey<Payslip>(d => d.PayrollItemId);
+
+            entity.HasOne(d => d.IssuedByNavigation)
+                .WithMany(p => p.Payslips)
+                .HasForeignKey(d => d.IssuedBy);
         });
 
         modelBuilder.Entity<StaffSalaryProfile>(entity =>
@@ -106,6 +150,18 @@ public partial class GarageContext
             entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.StaffSalaryProfileStaffs)
+                .HasForeignKey(d => d.StaffId);
+
+            entity.HasOne(d => d.Branch)
+                .WithMany(p => p.StaffSalaryProfiles)
+                .HasForeignKey(d => d.BranchId);
+
+            entity.HasOne(d => d.UpdatedByNavigation)
+                .WithMany(p => p.StaffSalaryProfileUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy);
         });
 
         modelBuilder.Entity<StaffContract>(entity =>
@@ -128,6 +184,10 @@ public partial class GarageContext
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.StaffContracts)
+                .HasForeignKey(d => d.StaffId);
         });
 
         modelBuilder.Entity<OvertimeEntry>(entity =>
@@ -145,6 +205,14 @@ public partial class GarageContext
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.OvertimeEntryStaffs)
+                .HasForeignKey(d => d.StaffId);
+
+            entity.HasOne(d => d.ApprovedByNavigation)
+                .WithMany(p => p.OvertimeEntryApprovedByNavigations)
+                .HasForeignKey(d => d.ApprovedBy);
         });
 
         modelBuilder.Entity<AttendanceAdjustment>(entity =>
@@ -162,6 +230,14 @@ public partial class GarageContext
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.AttendanceAdjustmentStaffs)
+                .HasForeignKey(d => d.StaffId);
+
+            entity.HasOne(d => d.ApprovedByNavigation)
+                .WithMany(p => p.AttendanceAdjustmentApprovedByNavigations)
+                .HasForeignKey(d => d.ApprovedBy);
         });
 
         modelBuilder.Entity<SalaryAdvance>(entity =>
@@ -179,6 +255,18 @@ public partial class GarageContext
             entity.Property(e => e.Note).HasColumnName("note");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.SalaryAdvanceStaffs)
+                .HasForeignKey(d => d.StaffId);
+
+            entity.HasOne(d => d.ApprovedByNavigation)
+                .WithMany(p => p.SalaryAdvanceApprovedByNavigations)
+                .HasForeignKey(d => d.ApprovedBy);
+
+            entity.HasOne(d => d.DeductFromPayrollPeriod)
+                .WithMany(p => p.SalaryAdvances)
+                .HasForeignKey(d => d.DeductFromPayrollPeriodId);
         });
 
         modelBuilder.Entity<EmployeeLoan>(entity =>
@@ -195,6 +283,14 @@ public partial class GarageContext
             entity.Property(e => e.Note).HasColumnName("note");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.EmployeeLoans)
+                .HasForeignKey(d => d.StaffId);
+
+            entity.HasOne(d => d.StartPayrollPeriod)
+                .WithMany(p => p.EmployeeLoans)
+                .HasForeignKey(d => d.StartPayrollPeriodId);
         });
 
         modelBuilder.Entity<PitProfile>(entity =>
@@ -210,6 +306,10 @@ public partial class GarageContext
             entity.Property(e => e.EffectiveTo).HasColumnName("effective_to");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.PitProfiles)
+                .HasForeignKey(d => d.StaffId);
         });
 
         modelBuilder.Entity<EmployeeDependent>(entity =>
@@ -226,6 +326,10 @@ public partial class GarageContext
             entity.Property(e => e.EffectiveTo).HasColumnName("effective_to");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.EmployeeDependents)
+                .HasForeignKey(d => d.StaffId);
         });
 
     }

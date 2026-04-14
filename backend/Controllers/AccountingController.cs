@@ -17,6 +17,66 @@ namespace MyGarage.Controllers;
 [Authorize]
 public class AccountingController : ControllerBase
 {
+    private static readonly HashSet<string> RestrictedGenericWriteTables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "supplier-invoices",
+        "supplier-invoice-details",
+        "supplier-payments",
+        "supplier-accounting-profiles",
+        "accounting-periods",
+        "chart-of-accounts",
+        "journal-entries",
+        "journal-entry-lines",
+        "finance-approval-requests",
+        "approval-policies",
+        "bank-accounts",
+        "bank-transactions",
+        "bank-reconciliations",
+        "staff-contracts",
+        "staff-salary-profiles",
+        "payroll-periods",
+        "payroll-runs",
+        "payroll-items",
+        "payslips",
+        "salary-advances",
+        "employee-loans",
+        "attendance-adjustments",
+        "overtime-entries",
+        "pit-profiles",
+        "employee-dependents",
+        "tax-filings",
+        "legal-documents",
+        "document-attachments"
+    };
+
+    private const string JournalStatusDraft = nameof(JournalEntryStatusCode.DRAFT);
+    private const string JournalStatusPosted = nameof(JournalEntryStatusCode.POSTED);
+    private const string FinanceApprovalStatusPending = nameof(FinanceApprovalRequestStatusCode.PENDING);
+    private const string FinanceApprovalStatusApproved = nameof(FinanceApprovalRequestStatusCode.APPROVED);
+    private const string FinanceApprovalStatusRejected = nameof(FinanceApprovalRequestStatusCode.REJECTED);
+    private const string FinanceApprovalStatusCanceled = nameof(FinanceApprovalRequestStatusCode.CANCELED);
+    private const string PayrollRunStatusDraft = nameof(PayrollRunStatusCode.DRAFT);
+    private const string PayrollRunStatusCalculated = nameof(PayrollRunStatusCode.CALCULATED);
+    private const string PayrollRunStatusApproved = nameof(PayrollRunStatusCode.APPROVED);
+    private const string PayrollRunStatusPaid = nameof(PayrollRunStatusCode.PAID);
+    private const string PayrollRunStatusLocked = nameof(PayrollRunStatusCode.LOCKED);
+    private const string PayrollItemStatusApproved = nameof(PayrollItemStatusCode.APPROVED);
+    private const string PayrollItemStatusPaid = nameof(PayrollItemStatusCode.PAID);
+    private const string PayrollPeriodStatusOpen = nameof(PayrollPeriodStatusCode.OPEN);
+    private const string PayrollPeriodStatusApproved = nameof(PayrollPeriodStatusCode.APPROVED);
+    private const string PayrollPeriodStatusPaid = nameof(PayrollPeriodStatusCode.PAID);
+    private const string PayrollPeriodStatusLocked = nameof(PayrollPeriodStatusCode.LOCKED);
+    private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
+    private const string StaffStatusOnLeave = nameof(StaffStatusCode.ON_LEAVE);
+    private const string StaffSalaryProfileStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
+    private const string StaffContractStatusActive = nameof(StaffContractStatusCode.ACTIVE);
+    private const string EmployeeLoanStatusActive = nameof(EmployeeLoanStatusCode.ACTIVE);
+    private const string SalaryAdvanceStatusApproved = nameof(SalaryAdvanceStatusCode.APPROVED);
+    private const string SalaryAdvanceStatusDeducting = nameof(SalaryAdvanceStatusCode.DEDUCTING);
+    private const string AdjustmentApprovedStatus = nameof(AttendanceAdjustmentStatusCode.APPROVED);
+    private const string AdjustmentPaidStatus = nameof(OvertimeEntryStatusCode.PAID);
+    private const string PaymentCompletedStatus = nameof(PaymentStatusCode.COMPLETED);
+
     private readonly IAccountingCrudService _crud;
     private readonly IGarageContext _db;
     private readonly IPayrollBatchCalculationService _payrollBatchCalculationService;
@@ -55,6 +115,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Create(string tableKey, [FromBody] JsonElement payload)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try
         {
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
@@ -73,6 +137,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Update(string tableKey, long id, [FromBody] JsonElement payload)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try
         {
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
@@ -91,6 +159,10 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Delete(string tableKey, long id)
     {
         if (!TryGetTableAccess(tableKey, out var access, out var denied)) return denied;
+        if (IsRestrictedGenericWriteTable(tableKey))
+        {
+            return StatusCode(405, new { message = $"Generic write is disabled for accounting-critical table '{tableKey}'. Use a dedicated workflow endpoint." });
+        }
         try { return await _crud.DeleteAsync(tableKey, id, access.BranchId) ? NoContent() : NotFound(); }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException) { return NotFound(new { message = ex.Message }); }
     }
@@ -101,7 +173,7 @@ public class AccountingController : ControllerBase
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
         var row = await _crud.GetByIdAsync("journal-entries", id, access.BranchId);
         if (row is null) return NotFound();
-        if (!AsString(row, "status").Equals(nameof(AccountingStatus.DRAFT), StringComparison.OrdinalIgnoreCase))
+        if (!AsString(row, "status").Equals(JournalStatusDraft, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only DRAFT journal can be posted." });
 
         var sums = (await _crud.QueryAsync(
@@ -112,8 +184,12 @@ public class AccountingController : ControllerBase
             return BadRequest(new { message = "Posted journal entry must be balanced." });
 
         await _crud.ExecuteAsync(
-            $"UPDATE dbo.journal_entries SET status='{nameof(AccountingStatus.POSTED)}', posted_by=@u, posted_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
-            [new SqlParameter("@u", access.UserId), new SqlParameter("@id", id)]);
+            "UPDATE dbo.journal_entries SET status=@status, posted_by=@u, posted_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
+            [
+                new SqlParameter("@status", JournalStatusPosted),
+                new SqlParameter("@u", access.UserId),
+                new SqlParameter("@id", id)
+            ]);
         return Ok(await _crud.GetByIdAsync("journal-entries", id, access.BranchId));
     }
 
@@ -122,12 +198,12 @@ public class AccountingController : ControllerBase
     {
         if (!TryGetFinanceApprovalAccess(out var access, out var denied)) return denied;
         var decision = (request.Decision ?? "").Trim().ToUpperInvariant();
-        if (decision is not (nameof(AccountingStatus.APPROVED) or nameof(AccountingStatus.REJECTED) or nameof(AccountingStatus.CANCELED)))
+        if (decision is not (FinanceApprovalStatusApproved or FinanceApprovalStatusRejected or FinanceApprovalStatusCanceled))
             return BadRequest(new { message = "decision must be APPROVED/REJECTED/CANCELED." });
 
         var row = await _crud.GetByIdAsync("finance-approval-requests", id, access.BranchId);
         if (row is null) return NotFound();
-        if (!AsString(row, "status").Equals(nameof(AccountingStatus.PENDING), StringComparison.OrdinalIgnoreCase))
+        if (!AsString(row, "status").Equals(FinanceApprovalStatusPending, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only PENDING request can be decided." });
 
         await _crud.ExecuteAsync(
@@ -148,7 +224,7 @@ public class AccountingController : ControllerBase
         var row = await _crud.GetByIdAsync("payroll-runs", id, access.BranchId);
         if (row is null) return NotFound();
         var payrollPeriodId = AsLong(row, "payrollPeriodId");
-        if (!AsString(row, "status").Equals(nameof(AccountingStatus.DRAFT), StringComparison.OrdinalIgnoreCase))
+        if (!AsString(row, "status").Equals(PayrollRunStatusDraft, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only DRAFT payroll run can be approved." });
 
         var lineCount = await _crud.ScalarAsync<int?>(
@@ -158,16 +234,25 @@ public class AccountingController : ControllerBase
             return BadRequest(new { message = "Cannot approve payroll run without payroll items." });
 
         await _crud.ExecuteAsync(
-            $"UPDATE dbo.payroll_runs SET status='{nameof(AccountingStatus.APPROVED)}', approved_by=@u, approved_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
-            [new SqlParameter("@u", access.UserId), new SqlParameter("@id", id)]);
+            "UPDATE dbo.payroll_runs SET status=@status, approved_by=@u, approved_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
+            [
+                new SqlParameter("@status", PayrollRunStatusApproved),
+                new SqlParameter("@u", access.UserId),
+                new SqlParameter("@id", id)
+            ]);
         await _crud.ExecuteAsync(
             $"""
             UPDATE dbo.payroll_items
-            SET status='{nameof(AccountingStatus.APPROVED)}'
+            SET status=@itemStatusApproved
             WHERE payroll_run_id=@id
-              AND UPPER(ISNULL(status, '{nameof(AccountingStatus.DRAFT)}')) IN ('{nameof(AccountingStatus.DRAFT)}', '{nameof(AccountingStatus.CALCULATED)}');
+              AND UPPER(ISNULL(status, @runStatusDraft)) IN (@runStatusDraft, @runStatusCalculated);
             """,
-            [new SqlParameter("@id", id)]);
+            [
+                new SqlParameter("@id", id),
+                new SqlParameter("@itemStatusApproved", PayrollItemStatusApproved),
+                new SqlParameter("@runStatusDraft", PayrollRunStatusDraft),
+                new SqlParameter("@runStatusCalculated", PayrollRunStatusCalculated)
+            ]);
         if (payrollPeriodId.HasValue && payrollPeriodId.Value > 0)
             await SyncPayrollPeriodStatusAsync(payrollPeriodId.Value);
         return Ok(await _crud.GetByIdAsync("payroll-runs", id, access.BranchId));
@@ -180,19 +265,25 @@ public class AccountingController : ControllerBase
         var row = await _crud.GetByIdAsync("payroll-runs", id, access.BranchId);
         if (row is null) return NotFound();
         var payrollPeriodId = AsLong(row, "payrollPeriodId");
-        if (!AsString(row, "status").Equals(nameof(AccountingStatus.APPROVED), StringComparison.OrdinalIgnoreCase) || !AsLong(row, "approvedBy").HasValue)
+        if (!AsString(row, "status").Equals(PayrollRunStatusApproved, StringComparison.OrdinalIgnoreCase) || !AsLong(row, "approvedBy").HasValue)
             return BadRequest(new { message = "Run must be APPROVED and approvedBy set before PAID." });
 
         await _crud.ExecuteAsync(
-            $"UPDATE dbo.payroll_runs SET status='{nameof(AccountingStatus.PAID)}', paid_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
-            [new SqlParameter("@id", id)]);
+            "UPDATE dbo.payroll_runs SET status=@status, paid_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
+            [
+                new SqlParameter("@id", id),
+                new SqlParameter("@status", PayrollRunStatusPaid)
+            ]);
         await _crud.ExecuteAsync(
             $"""
             UPDATE dbo.payroll_items
-            SET status='{nameof(AccountingStatus.PAID)}'
+            SET status=@itemStatusPaid
             WHERE payroll_run_id=@id;
             """,
-            [new SqlParameter("@id", id)]);
+            [
+                new SqlParameter("@id", id),
+                new SqlParameter("@itemStatusPaid", PayrollItemStatusPaid)
+            ]);
         if (payrollPeriodId.HasValue && payrollPeriodId.Value > 0)
             await SyncPayrollPeriodStatusAsync(payrollPeriodId.Value);
         return Ok(await _crud.GetByIdAsync("payroll-runs", id, access.BranchId));
@@ -229,6 +320,150 @@ public class AccountingController : ControllerBase
         }
     }
 
+    [HttpPost("payslips")]
+    public async Task<IActionResult> IssuePayslip([FromBody] CreatePayslipRequest? request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        request ??= new CreatePayslipRequest();
+
+        if (request.PayrollItemId <= 0)
+            return BadRequest(new { message = "payrollItemId must be a positive number." });
+
+        var payrollItem = await _db.PayrollItems
+            .AsNoTracking()
+            .Include(x => x.PayrollRun)
+            .FirstOrDefaultAsync(x => x.Id == request.PayrollItemId);
+        if (payrollItem is null)
+            return NotFound(new { message = $"Payroll item #{request.PayrollItemId} not found." });
+
+        if (access.BranchId.HasValue && payrollItem.PayrollRun.BranchId != access.BranchId.Value)
+            return NotFound(new { message = $"Payroll item #{request.PayrollItemId} not found." });
+
+        var runStatus = (payrollItem.PayrollRun.Status ?? string.Empty).Trim().ToUpperInvariant();
+        if (runStatus is not PayrollRunStatusApproved and not PayrollRunStatusPaid)
+            return BadRequest(new { message = "Payslip can only be issued when payroll run is APPROVED or PAID." });
+
+        var existingPayslip = await _db.Payslips
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PayrollItemId == request.PayrollItemId);
+        if (existingPayslip is not null)
+        {
+            var existingRow = await _crud.GetByIdAsync("payslips", existingPayslip.Id, access.BranchId);
+            return existingRow is null ? Ok(existingPayslip) : Ok(existingRow);
+        }
+
+        var issuedAt = DateTime.UtcNow;
+        var issuedAtText = (request.IssuedAt ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(issuedAtText))
+        {
+            if (!DateTime.TryParse(issuedAtText, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal, out issuedAt))
+                return BadRequest(new { message = "issuedAt is invalid." });
+        }
+
+        var slipNo = (request.SlipNo ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(slipNo))
+            slipNo = $"PS-{payrollItem.PayrollRun.RunNo}-{request.PayrollItemId}-{issuedAt:yyMMddHHmm}";
+        if (slipNo.Length > 40)
+            return BadRequest(new { message = "slipNo must be <= 40 characters." });
+
+        var fileUrl = (request.FileUrl ?? string.Empty).Trim();
+
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            payrollItemId = request.PayrollItemId,
+            slipNo,
+            issuedAt,
+            issuedBy = access.UserId,
+            fileUrl
+        });
+
+        try
+        {
+            var created = await _crud.InsertAsync("payslips", payload, access.BranchId);
+            return created is null
+                ? BadRequest(new { message = "Failed to issue payslip." })
+                : Ok(created);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            var duplicated = await _db.Payslips
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PayrollItemId == request.PayrollItemId);
+            if (duplicated is not null)
+            {
+                var duplicatedRow = await _crud.GetByIdAsync("payslips", duplicated.Id, access.BranchId);
+                return duplicatedRow is null ? Ok(duplicated) : Ok(duplicatedRow);
+            }
+
+            return Conflict(new { message = "Payslip already exists for this payroll item." });
+        }
+        catch (SqlException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("payroll-periods")]
+    public async Task<IActionResult> CreatePayrollPeriod([FromBody] CreatePayrollPeriodRequest request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var periodCode = (request.PeriodCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(periodCode))
+            return BadRequest(new { message = "periodCode is required." });
+        if (periodCode.Length > 20)
+            return BadRequest(new { message = "periodCode must be <= 20 characters." });
+
+        if (!DateOnly.TryParse(request.StartDate, out var startDate)
+            || !DateOnly.TryParse(request.EndDate, out var endDate)
+            || !DateOnly.TryParse(request.PayrollDate, out var payrollDate))
+            return BadRequest(new { message = "startDate/endDate/payrollDate must be valid dates (yyyy-MM-dd)." });
+
+        if (startDate > endDate)
+            return BadRequest(new { message = "startDate must be <= endDate." });
+        if (payrollDate < endDate)
+            return BadRequest(new { message = "payrollDate must be >= endDate." });
+
+        try
+        {
+            var duplicated = await _crud.ScalarAsync<int?>(
+                "SELECT COUNT(*) FROM dbo.payroll_periods WHERE UPPER(period_code)=UPPER(@periodCode);",
+                [new SqlParameter("@periodCode", periodCode)]);
+            if (duplicated.GetValueOrDefault() > 0)
+                return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
+
+            var payload = JsonSerializer.SerializeToElement(new
+            {
+                periodCode,
+                startDate = startDate.ToDateTime(TimeOnly.MinValue),
+                endDate = endDate.ToDateTime(TimeOnly.MinValue),
+                payrollDate = payrollDate.ToDateTime(TimeOnly.MinValue),
+                status = PayrollPeriodStatusOpen
+            });
+
+            var created = await _crud.InsertAsync("payroll-periods", payload, access.BranchId);
+            return created is null
+                ? BadRequest(new { message = "Failed to create payroll period." })
+                : Ok(created);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
+        }
+        catch (SqlException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost("supplier-payments/{id:long}/void")]
     public async Task<IActionResult> VoidSupplierPayment(long id, [FromBody] SupplierPaymentVoidRequest request)
     {
@@ -240,8 +475,12 @@ public class AccountingController : ControllerBase
             return BadRequest(new { message = "finance_approval_requests table is required for supplier payment void flow." });
 
         var approved = await _crud.ScalarAsync<int?>(
-            $"SELECT TOP 1 1 FROM dbo.finance_approval_requests WHERE status='{nameof(AccountingStatus.APPROVED)}' AND request_type='SUPPLIER_PAYMENT_VOID' AND (supplier_payment_id=@pid OR id=@aid);",
-            [new SqlParameter("@pid", id), new SqlParameter("@aid", request.ApprovalRequestId.HasValue ? request.ApprovalRequestId.Value : DBNull.Value)]);
+            "SELECT TOP 1 1 FROM dbo.finance_approval_requests WHERE status=@statusApproved AND request_type='SUPPLIER_PAYMENT_VOID' AND (supplier_payment_id=@pid OR id=@aid);",
+            [
+                new SqlParameter("@statusApproved", FinanceApprovalStatusApproved),
+                new SqlParameter("@pid", id),
+                new SqlParameter("@aid", request.ApprovalRequestId.HasValue ? request.ApprovalRequestId.Value : DBNull.Value)
+            ]);
         if (!approved.HasValue) return BadRequest(new { message = "Void requires approved SUPPLIER_PAYMENT_VOID finance approval." });
 
         await _crud.DeleteAsync("supplier-payments", id, access.BranchId);
@@ -275,7 +514,7 @@ public class AccountingController : ControllerBase
                 FROM dbo.journal_entry_lines jel
                 INNER JOIN dbo.chart_of_accounts coa ON coa.id = jel.account_id
                 INNER JOIN dbo.journal_entries je ON je.id = jel.journal_entry_id
-                WHERE je.status='{nameof(AccountingStatus.POSTED)}' AND (@branchId IS NULL OR jel.branch_id=@branchId)
+                WHERE je.status=@statusPosted AND (@branchId IS NULL OR jel.branch_id=@branchId)
                 GROUP BY coa.account_code, coa.account_name
                 ORDER BY coa.account_code;
             ELSE IF COL_LENGTH('dbo.journal_entry_lines', 'BranchId') IS NOT NULL
@@ -288,7 +527,7 @@ public class AccountingController : ControllerBase
                 FROM dbo.journal_entry_lines jel
                 INNER JOIN dbo.chart_of_accounts coa ON coa.id = jel.account_id
                 INNER JOIN dbo.journal_entries je ON je.id = jel.journal_entry_id
-                WHERE je.status='{nameof(AccountingStatus.POSTED)}' AND (@branchId IS NULL OR jel.BranchId=@branchId)
+                WHERE je.status=@statusPosted AND (@branchId IS NULL OR jel.BranchId=@branchId)
                 GROUP BY coa.account_code, coa.account_name
                 ORDER BY coa.account_code;
             ELSE
@@ -301,11 +540,14 @@ public class AccountingController : ControllerBase
                 FROM dbo.journal_entry_lines jel
                 INNER JOIN dbo.chart_of_accounts coa ON coa.id = jel.account_id
                 INNER JOIN dbo.journal_entries je ON je.id = jel.journal_entry_id
-                WHERE je.status='{nameof(AccountingStatus.POSTED)}'
+                WHERE je.status=@statusPosted
                 GROUP BY coa.account_code, coa.account_name
                 ORDER BY coa.account_code;
             """,
-            [new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)]));
+            [
+                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value),
+                new SqlParameter("@statusPosted", JournalStatusPosted)
+            ]));
     }
 
     [HttpGet("reports/supplier-payable-summary")]
@@ -359,7 +601,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
-        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
+        var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
         var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
 
         return Ok(new
@@ -383,7 +625,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
         var hireDate = await ResolveStaffHireDateAsync(staff.Id, staff.HireDate);
-        var asOf = DateOnly.FromDateTime((asOfDate ?? DateTime.UtcNow).Date);
+        var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
         decimal coefficient = 1.0000m;
         int yearsOfService = 0;
 
@@ -437,7 +679,7 @@ public class AccountingController : ControllerBase
         if (staff is null) return NotFound(new { message = $"Staff #{staffId} not found." });
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
-        var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? DateTime.UtcNow).Date);
+        var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? VietnamTime.Now).Date);
         var existingBaseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, effectiveFromDate);
         if (existingBaseSalary.HasValue && existingBaseSalary.Value > 0m)
         {
@@ -450,11 +692,14 @@ public class AccountingController : ControllerBase
             FROM dbo.finance_approval_requests
             WHERE request_type='PAYROLL_ADJUSTMENT'
               AND JSON_VALUE(request_payload, '$.requestSubtype') = 'STAFF_INITIAL_SALARY'
-              AND status='{nameof(AccountingStatus.PENDING)}'
+              AND status=@statusPending
               AND TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.staffId')) = @staffId
             ORDER BY id DESC;
             """,
-            [new SqlParameter("@staffId", staff.Id)])).FirstOrDefault();
+            [
+                new SqlParameter("@staffId", staff.Id),
+                new SqlParameter("@statusPending", FinanceApprovalStatusPending)
+            ])).FirstOrDefault();
         if (pendingRequest is not null)
         {
             return Conflict(new { message = "A pending initial salary request for this staff already exists." });
@@ -471,11 +716,11 @@ public class AccountingController : ControllerBase
             effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
             note = request.Note?.Trim() ?? "",
             requestedBy = access.UserId,
-            requestedAt = DateTime.UtcNow.ToString("O")
+            requestedAt = VietnamTime.Now.ToString("O")
         };
         var payloadJson = JsonSerializer.Serialize(payloadObject);
         var reason = string.IsNullOrWhiteSpace(request.Reason)
-            ? $"Yêu cầu tạo lương khởi điểm cho nhân sự {staff.FullName} (#{staff.Id})."
+            ? $"Y�u c?u t?o luong kh?i di?m cho nh�n s? {staff.FullName} (#{staff.Id})."
             : request.Reason.Trim();
 
         var createdId = await _crud.ScalarAsync<long?>(
@@ -501,7 +746,7 @@ public class AccountingController : ControllerBase
                 'PAYROLL_ADJUSTMENT',
                 @requestedBy,
                 NULL,
-                'PENDING',
+                @statusPending,
                 'MEDIUM',
                 @amount,
                 @reason,
@@ -514,6 +759,7 @@ public class AccountingController : ControllerBase
             """,
             [
                 new SqlParameter("@requestedBy", access.UserId),
+                new SqlParameter("@statusPending", FinanceApprovalStatusPending),
                 new SqlParameter("@amount", requestedBaseSalary),
                 new SqlParameter("@reason", reason),
                 new SqlParameter("@payload", payloadJson)
@@ -527,7 +773,7 @@ public class AccountingController : ControllerBase
         return Ok(new
         {
             requestId = createdId.Value,
-            status = nameof(AccountingStatus.PENDING),
+            status = FinanceApprovalStatusPending,
             staffId = staff.Id,
             staffName = staff.FullName,
             baseSalary = requestedBaseSalary,
@@ -540,8 +786,8 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Dashboard([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
-        var from = fromDate ?? DateTime.UtcNow.Date.AddDays(-30);
-        var to = toDate ?? DateTime.UtcNow.Date.AddDays(1).AddTicks(-1);
+        var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
+        var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
         var revenue = (await _crud.QueryAsync(
             "SELECT ISNULL(SUM(TotalRevenue),0) AS revenue, ISNULL(SUM(NetProfit),0) AS net_profit, ISNULL(SUM(NetCashFlow),0) AS cash_flow FROM dbo.RevenueSnapshots WHERE SnapshotDate BETWEEN @f AND @t AND (@branchId IS NULL OR BranchId=@branchId);",
             [
@@ -562,7 +808,7 @@ public class AccountingController : ControllerBase
                 LEFT JOIN dbo.ServiceOrders so ON so.Id = COALESCE(p.ServiceOrderId, i.ServiceOrderId)
                 LEFT JOIN dbo.RetailOrders ro ON ro.Id = COALESCE(p.RetailOrderId, i.RetailOrderId)
                 WHERE p.CreatedAt BETWEEN @f AND @t
-                  AND UPPER(ISNULL(p.Status,'')) IN ('COMPLETED','PAID','SUCCESS')
+                  AND UPPER(ISNULL(p.Status,'')) = @paymentCompletedStatus
                   AND (
                         @branchId IS NULL
                         OR so.ExecuteBranchId = @branchId
@@ -581,7 +827,7 @@ public class AccountingController : ControllerBase
                 LEFT JOIN dbo.ServiceOrders so ON so.Id = COALESCE(p.ServiceOrderId, i.ServiceOrderId)
                 LEFT JOIN dbo.RetailOrders ro ON ro.Id = COALESCE(p.RetailOrderId, i.RetailOrderId)
                 WHERE p.CreatedAt BETWEEN @f AND @t
-                  AND UPPER(ISNULL(p.Status,'')) IN ('COMPLETED','PAID','SUCCESS')
+                  AND UPPER(ISNULL(p.Status,'')) = @paymentCompletedStatus
                   AND (
                         @branchId IS NULL
                         OR so.ExecuteBranchId = @branchId
@@ -593,7 +839,8 @@ public class AccountingController : ControllerBase
             [
                 new SqlParameter("@f", from),
                 new SqlParameter("@t", to),
-                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value),
+                new SqlParameter("@paymentCompletedStatus", PaymentCompletedStatus)
             ])).FirstOrDefault();
         return Ok(new
         {
@@ -616,40 +863,47 @@ public class AccountingController : ControllerBase
         if (periodRow is null) return;
 
         var currentStatus = AsString(periodRow, "status");
-        if (currentStatus.Equals(nameof(AccountingStatus.LOCKED), StringComparison.OrdinalIgnoreCase))
+        if (currentStatus.Equals(PayrollPeriodStatusLocked, StringComparison.OrdinalIgnoreCase))
             return;
 
         var summary = (await _crud.QueryAsync(
             """
             SELECT
                 COUNT(*) AS totalCount,
-                SUM(CASE WHEN UPPER(ISNULL(status,'')) IN ('DRAFT','CALCULATED') THEN 1 ELSE 0 END) AS draftCount,
-                SUM(CASE WHEN UPPER(ISNULL(status,''))='APPROVED' THEN 1 ELSE 0 END) AS approvedCount,
-                SUM(CASE WHEN UPPER(ISNULL(status,'')) IN ('PAID','LOCKED') THEN 1 ELSE 0 END) AS paidCount
+                SUM(CASE WHEN UPPER(ISNULL(status,'')) IN (@runStatusDraft,@runStatusCalculated) THEN 1 ELSE 0 END) AS draftCount,
+                SUM(CASE WHEN UPPER(ISNULL(status,''))=@runStatusApproved THEN 1 ELSE 0 END) AS approvedCount,
+                SUM(CASE WHEN UPPER(ISNULL(status,'')) IN (@runStatusPaid,@runStatusLocked) THEN 1 ELSE 0 END) AS paidCount
             FROM dbo.payroll_runs
             WHERE payroll_period_id=@periodId;
             """,
-            [new SqlParameter("@periodId", payrollPeriodId)])).FirstOrDefault();
+            [
+                new SqlParameter("@periodId", payrollPeriodId),
+                new SqlParameter("@runStatusDraft", PayrollRunStatusDraft),
+                new SqlParameter("@runStatusCalculated", PayrollRunStatusCalculated),
+                new SqlParameter("@runStatusApproved", PayrollRunStatusApproved),
+                new SqlParameter("@runStatusPaid", PayrollRunStatusPaid),
+                new SqlParameter("@runStatusLocked", PayrollRunStatusLocked)
+            ])).FirstOrDefault();
 
         var totalCount = Math.Max(0, AsInt(summary, "totalCount"));
         var draftCount = Math.Max(0, AsInt(summary, "draftCount"));
         var approvedCount = Math.Max(0, AsInt(summary, "approvedCount"));
         var paidCount = Math.Max(0, AsInt(summary, "paidCount"));
 
-        var nextStatus = nameof(AccountingStatus.OPEN);
+        var nextStatus = PayrollPeriodStatusOpen;
         if (totalCount > 0)
         {
             if (draftCount > 0)
             {
-                nextStatus = nameof(AccountingStatus.OPEN);
+                nextStatus = PayrollPeriodStatusOpen;
             }
             else if (paidCount >= totalCount)
             {
-                nextStatus = nameof(AccountingStatus.PAID);
+                nextStatus = PayrollPeriodStatusPaid;
             }
             else if (approvedCount > 0 || paidCount > 0)
             {
-                nextStatus = nameof(AccountingStatus.APPROVED);
+                nextStatus = PayrollPeriodStatusApproved;
             }
         }
 
@@ -711,12 +965,13 @@ public class AccountingController : ControllerBase
             FROM dbo.payroll_runs
             WHERE payroll_period_id=@payrollPeriodId
               AND (@branchId IS NULL OR branch_id=@branchId)
-              AND UPPER(ISNULL(status,''))='DRAFT'
+              AND UPPER(ISNULL(status,''))=@payrollRunStatusDraft
             ORDER BY run_no DESC, id DESC;
             """,
             [
                 new SqlParameter("@payrollPeriodId", payrollPeriodId),
-                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
+                new SqlParameter("@payrollRunStatusDraft", PayrollRunStatusDraft)
             ])).FirstOrDefault();
 
         var existingRunId = AsLong(existing, "id");
@@ -757,7 +1012,7 @@ public class AccountingController : ControllerBase
                 @payrollPeriodId,
                 @branchId,
                 @runNo,
-                'DRAFT',
+                @payrollRunStatusDraft,
                 @calculatedBy,
                 SYSDATETIME()
             );
@@ -767,6 +1022,7 @@ public class AccountingController : ControllerBase
                 new SqlParameter("@payrollPeriodId", payrollPeriodId),
                 new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
                 new SqlParameter("@runNo", runNo),
+                new SqlParameter("@payrollRunStatusDraft", PayrollRunStatusDraft),
                 new SqlParameter("@calculatedBy", calculatedByUserId)
             ]);
 
@@ -802,7 +1058,7 @@ public class AccountingController : ControllerBase
                   AND (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
                   AND effective_from <= @asOf
                   AND (effective_to IS NULL OR effective_to >= @asOf)
-                  AND UPPER(ISNULL(status, 'ACTIVE'))='ACTIVE'
+                  AND UPPER(ISNULL(status, @staffSalaryProfileStatusActive))=@staffSalaryProfileStatusActive
             )
             SELECT staff_id, base_salary
             FROM ranked
@@ -810,7 +1066,8 @@ public class AccountingController : ControllerBase
             """,
             [
                 new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
-                new SqlParameter("@asOf", asOf)
+                new SqlParameter("@asOf", asOf),
+                new SqlParameter("@staffSalaryProfileStatusActive", StaffSalaryProfileStatusActive)
             ]);
 
         foreach (var row in rows)
@@ -851,13 +1108,16 @@ public class AccountingController : ControllerBase
                 WHERE staff_id IN ({idList})
                   AND effective_from <= @asOf
                   AND (effective_to IS NULL OR effective_to >= @asOf)
-                  AND UPPER(ISNULL(status, 'ACTIVE'))='ACTIVE'
+                  AND UPPER(ISNULL(status, @staffContractStatusActive))=@staffContractStatusActive
             )
             SELECT staff_id, base_salary, allowance_amount
             FROM ranked
             WHERE rn=1;
             """,
-            [new SqlParameter("@asOf", asOf)]);
+            [
+                new SqlParameter("@asOf", asOf),
+                new SqlParameter("@staffContractStatusActive", StaffContractStatusActive)
+            ]);
 
         foreach (var row in rows)
         {
@@ -927,13 +1187,17 @@ public class AccountingController : ControllerBase
               AND (
                     status IS NULL
                     OR LTRIM(RTRIM(ISNULL(status, ''))) = ''
-                    OR UPPER(ISNULL(status, '')) IN ('APPROVED', 'PAID', 'POSTED', 'COMPLETED')
+                    OR UPPER(ISNULL(status, '')) IN (@adjustmentApprovedStatus, @adjustmentPaidStatus, @journalPostedStatus, @paymentCompletedStatus)
                   )
             GROUP BY staff_id;
             """,
             [
                 new SqlParameter("@fromDate", fromDate),
-                new SqlParameter("@toDate", toDate)
+                new SqlParameter("@toDate", toDate),
+                new SqlParameter("@adjustmentApprovedStatus", AdjustmentApprovedStatus),
+                new SqlParameter("@adjustmentPaidStatus", AdjustmentPaidStatus),
+                new SqlParameter("@journalPostedStatus", JournalStatusPosted),
+                new SqlParameter("@paymentCompletedStatus", PaymentCompletedStatus)
             ]);
 
         foreach (var row in rows)
@@ -978,13 +1242,17 @@ public class AccountingController : ControllerBase
               AND (
                     status IS NULL
                     OR LTRIM(RTRIM(ISNULL(status, ''))) = ''
-                    OR UPPER(ISNULL(status, '')) IN ('APPROVED', 'PAID', 'POSTED', 'COMPLETED')
+                    OR UPPER(ISNULL(status, '')) IN (@adjustmentApprovedStatus, @adjustmentPaidStatus, @journalPostedStatus, @paymentCompletedStatus)
                   )
             GROUP BY staff_id;
             """,
             [
                 new SqlParameter("@fromDate", fromDate),
-                new SqlParameter("@toDate", toDate)
+                new SqlParameter("@toDate", toDate),
+                new SqlParameter("@adjustmentApprovedStatus", AdjustmentApprovedStatus),
+                new SqlParameter("@adjustmentPaidStatus", AdjustmentPaidStatus),
+                new SqlParameter("@journalPostedStatus", JournalStatusPosted),
+                new SqlParameter("@paymentCompletedStatus", PaymentCompletedStatus)
             ]);
 
         foreach (var row in rows)
@@ -1018,11 +1286,15 @@ public class AccountingController : ControllerBase
               AND (
                     status IS NULL
                     OR LTRIM(RTRIM(ISNULL(status, ''))) = ''
-                    OR UPPER(ISNULL(status, '')) IN ('APPROVED', 'DISBURSED', 'PAID', 'DEDUCTING')
+                    OR UPPER(ISNULL(status, '')) IN (@salaryAdvanceStatusApproved, @salaryAdvanceStatusDeducting)
                   )
             GROUP BY staff_id;
             """,
-            [new SqlParameter("@payrollPeriodId", payrollPeriodId)]);
+            [
+                new SqlParameter("@payrollPeriodId", payrollPeriodId),
+                new SqlParameter("@salaryAdvanceStatusApproved", SalaryAdvanceStatusApproved),
+                new SqlParameter("@salaryAdvanceStatusDeducting", SalaryAdvanceStatusDeducting)
+            ]);
 
         foreach (var row in rows)
         {
@@ -1063,10 +1335,13 @@ public class AccountingController : ControllerBase
             WHERE staff_id IN ({idList})
               AND (start_payroll_period_id IS NULL OR start_payroll_period_id <= @payrollPeriodId)
               AND ISNULL(outstanding_amount, 0) > 0
-              AND UPPER(ISNULL(status, 'ACTIVE')) IN ('ACTIVE', 'APPROVED', 'REPAYING')
+              AND UPPER(ISNULL(status, @employeeLoanStatusActive)) = @employeeLoanStatusActive
             GROUP BY staff_id;
             """,
-            [new SqlParameter("@payrollPeriodId", payrollPeriodId)]);
+            [
+                new SqlParameter("@payrollPeriodId", payrollPeriodId),
+                new SqlParameter("@employeeLoanStatusActive", EmployeeLoanStatusActive)
+            ]);
 
         foreach (var row in rows)
         {
@@ -1166,22 +1441,12 @@ public class AccountingController : ControllerBase
             return true;
         }
 
-        if (normalizedStatus is nameof(StaffStatusCode.ACTIVE) or nameof(StaffStatusCode.WORKING) or nameof(StaffStatusCode.PROBATION) or nameof(StaffStatusCode.ONBOARDING))
+        if (normalizedStatus is StaffStatusActive or StaffStatusOnLeave)
         {
             return true;
         }
 
-        if (normalizedStatus.Contains(nameof(StaffStatusCode.INACTIVE), StringComparison.Ordinal) ||
-            normalizedStatus.Contains("TERMINAT", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("RESIGN", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("QUIT", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("FIRED", StringComparison.Ordinal) ||
-            normalizedStatus.Contains("SUSPEND", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return true;
+        return false;
     }
 
     private static decimal ResolveSalaryCoefficientForYears(int yearsOfService, IReadOnlyList<SalaryCoefficientThreshold> thresholds)
@@ -1312,13 +1577,14 @@ public class AccountingController : ControllerBase
                   AND (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
                   AND effective_from <= @asOf
                   AND (effective_to IS NULL OR effective_to >= @asOf)
-                  AND UPPER(ISNULL(status,'ACTIVE'))='ACTIVE'
+                  AND UPPER(ISNULL(status,@staffSalaryProfileStatusActive))=@staffSalaryProfileStatusActive
                 ORDER BY effective_from DESC, id DESC;
                 """,
                 [
                     new SqlParameter("@staffId", staffId),
                     new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
-                    new SqlParameter("@asOf", asOf)
+                    new SqlParameter("@asOf", asOf),
+                    new SqlParameter("@staffSalaryProfileStatusActive", StaffSalaryProfileStatusActive)
                 ])).FirstOrDefault();
             var baseSalary = AsDecimal(salaryRow, "baseSalary");
             if (baseSalary > 0m) return baseSalary;
@@ -1333,12 +1599,13 @@ public class AccountingController : ControllerBase
                 WHERE staff_id=@staffId
                   AND effective_from <= @asOf
                   AND (effective_to IS NULL OR effective_to >= @asOf)
-                  AND UPPER(ISNULL(status,'ACTIVE'))='ACTIVE'
+                  AND UPPER(ISNULL(status,@staffContractStatusActive))=@staffContractStatusActive
                 ORDER BY effective_from DESC, id DESC;
                 """,
                 [
                     new SqlParameter("@staffId", staffId),
-                    new SqlParameter("@asOf", asOf)
+                    new SqlParameter("@asOf", asOf),
+                    new SqlParameter("@staffContractStatusActive", StaffContractStatusActive)
                 ])).FirstOrDefault();
             var baseSalary = AsDecimal(contractRow, "baseSalary");
             if (baseSalary > 0m) return baseSalary;
@@ -1470,6 +1737,11 @@ public class AccountingController : ControllerBase
         return tableKey.Equals("finance-approval-requests", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsRestrictedGenericWriteTable(string tableKey)
+    {
+        return RestrictedGenericWriteTables.Contains(tableKey);
+    }
+
     private bool TryGetFinanceApprovalAccess(out AccountingAccess access, out IActionResult deniedResult)
     {
         access = default!;
@@ -1545,7 +1817,7 @@ public class AccountingController : ControllerBase
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase)
+                   roleNameUpper.Contains("K? TO�N", StringComparison.OrdinalIgnoreCase)
                );
     }
 
@@ -1659,6 +1931,22 @@ public class AccountingController : ControllerBase
         public bool OverwriteExisting { get; set; } = true;
         public bool IncludeInactiveStaff { get; set; }
         public bool IssuePayslips { get; set; }
+    }
+    public sealed class CreatePayslipRequest
+    {
+        public long PayrollItemId { get; set; }
+        public string? SlipNo { get; set; }
+        public string? IssuedAt { get; set; }
+        public long? IssuedBy { get; set; }
+        public string? FileUrl { get; set; }
+    }
+    public sealed class CreatePayrollPeriodRequest
+    {
+        public string? PeriodCode { get; set; }
+        public string? StartDate { get; set; }
+        public string? EndDate { get; set; }
+        public string? PayrollDate { get; set; }
+        public string? Status { get; set; }
     }
     public sealed class InitialSalaryRequestDto
     {

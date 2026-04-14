@@ -8,10 +8,10 @@ namespace MyGarage.DTOs.Requests.Auth
         public string FullName { get; set; } = string.Empty;
 
         [Required]
-        [Phone]
+        [RegularExpression(ValidationPatterns.VietnamPhone10, ErrorMessage = ValidationMessages.VietnamPhone10)]
         public string Phone { get; set; } = string.Empty;
 
-        [EmailAddress]
+        [EmailAddress(ErrorMessage = ValidationMessages.Email)]
         public string? Email { get; set; }
 
         [Required]

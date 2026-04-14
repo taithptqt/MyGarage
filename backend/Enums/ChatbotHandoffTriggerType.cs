@@ -1,0 +1,10 @@
+namespace MyGarage.Enums;
+
+public enum ChatbotHandoffTriggerType
+{
+    CUSTOMER_REQUESTED_HUMAN,
+    NEGATIVE_SENTIMENT,
+    FUNCTION_CALL_FAILURES,
+    COMPLAINT_OUT_OF_SCOPE,
+    SESSION_TIMEOUT_ORDER_FLOW
+}

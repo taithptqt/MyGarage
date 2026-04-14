@@ -5,7 +5,7 @@ namespace MyGarage.Services
 {
     public partial class AppointmentService
     {
-        private static ServiceCluster ResolveFlowByRequestedServices(string? requestedServiceIds, string? notes)
+        private static ServiceCluster ResolveFlowByRequestedServices(string? requestedServiceIds, string? requestedPackageIds, string? notes)
         {
             if (!string.IsNullOrWhiteSpace(notes) && notes.Contains(AppointmentNoteMarkers.ClusterHeavy, StringComparison.OrdinalIgnoreCase))
                 return ServiceCluster.Heavy;
@@ -13,7 +13,7 @@ namespace MyGarage.Services
                 return ServiceCluster.Quick;
             if (IsHeavyHint(notes)) return ServiceCluster.Heavy;
 
-            return string.IsNullOrWhiteSpace(requestedServiceIds)
+            return string.IsNullOrWhiteSpace(requestedServiceIds) && string.IsNullOrWhiteSpace(requestedPackageIds)
                 ? ServiceCluster.Heavy
                 : ServiceCluster.Quick;
         }
