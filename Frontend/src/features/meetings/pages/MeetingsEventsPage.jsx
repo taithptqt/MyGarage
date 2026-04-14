@@ -1,6 +1,7 @@
 import React from "react";
 import Header from "@shared/components/Header";
 import Footer from "@shared/components/Footer";
+import { Link } from "react-router-dom";
 import { ArrowDown, Quote } from "lucide-react";
 
 const MeetingsEventsPage = () => {
@@ -17,9 +18,9 @@ const MeetingsEventsPage = () => {
           <span className="text-secondary font-sans uppercase tracking-[0.3em] text-sm mb-6 block font-bold">Curated Gatherings</span>
           <h1 className="text-white font-serif text-6xl md:text-8xl italic mb-12 tracking-tighter leading-none">MEETINGS AND <br /> EVENTS</h1>
           <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
-            <button className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300">Book Meeting</button>
-            <button className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300">More About Events</button>
-            <button className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300">Booking</button>
+            <Link to="/booking" className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 block text-center">Book Meeting</Link>
+            <Link to="/news" className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 block text-center">More About Events</Link>
+            <Link to="/contact" className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 block text-center">Inquire</Link>
           </div>
         </div>
       </section>
@@ -66,7 +67,7 @@ const MeetingsEventsPage = () => {
             <h3 className="text-secondary font-serif text-3xl mb-4">All-Day Meeting</h3>
             <p className="text-surface/70 font-sans">The complete collector's experience. Includes exclusive access to the private library and evening cocktail transition.</p>
           </div>
-          <button className="mt-8 md:mt-0 border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 whitespace-nowrap">Inquire Now</button>
+          <Link to="/contact" className="mt-8 md:mt-0 border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 whitespace-nowrap block text-center">Inquire Now</Link>
         </div>
       </section>
 
@@ -81,17 +82,17 @@ const MeetingsEventsPage = () => {
           <div className="bg-surface-container-low p-12 hover:bg-surface transition-colors duration-300 group">
             <h3 className="font-serif text-2xl mb-6 text-primary">Classic Event</h3>
             <p className="text-on-surface-variant font-sans mb-8 opacity-80">Gala dinners and corporate milestones set within our main vault. Unparalleled acoustic engineering.</p>
-            <a className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" href="#">Details</a>
+            <Link className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" to="/contact">Details</Link>
           </div>
           <div className="bg-surface-container-low p-12 hover:bg-surface transition-colors duration-300 group">
             <h3 className="font-serif text-2xl mb-6 text-primary">Today's Event</h3>
             <p className="text-on-surface-variant font-sans mb-8 opacity-80">Modern product launches or media previews utilizing our integrated digital archive systems.</p>
-            <a className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" href="#">Details</a>
+            <Link className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" to="/contact">Details</Link>
           </div>
           <div className="bg-surface-container-low p-12 hover:bg-surface transition-colors duration-300 group">
             <h3 className="font-serif text-2xl mb-6 text-primary">All-Day Event</h3>
             <p className="text-on-surface-variant font-sans mb-8 opacity-80">Multi-session conferences requiring seamless transitions between presentation and social modes.</p>
-            <a className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" href="#">Details</a>
+            <Link className="text-secondary font-sans text-sm tracking-widest uppercase border-b border-secondary/30 hover:border-secondary transition-all" to="/contact">Details</Link>
           </div>
         </div>
 
@@ -103,7 +104,7 @@ const MeetingsEventsPage = () => {
           <div className="md:col-span-6 md:-ml-24 bg-primary-container p-12 md:p-16 z-10 shadow-2xl">
             <h3 className="text-secondary font-serif text-4xl mb-8 leading-tight">Evening Event</h3>
             <p className="text-surface/70 leading-relaxed mb-10 font-sans">When the sun sets, the Collector's gallery transforms. Experience shadow-play and dramatic lighting that elevates any social gathering into a piece of performance art. Bespoke mixology included.</p>
-            <button className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300">Request Quote</button>
+            <Link to="/contact" className="border border-secondary text-secondary font-sans uppercase px-12 py-4 tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300 block text-center w-fit">Request Quote</Link>
           </div>
         </div>
       </section>
@@ -120,11 +121,11 @@ const MeetingsEventsPage = () => {
 
       {/* BROCHURE SECTION */}
       <section className="py-32 text-center bg-surface">
-        <a className="group inline-block" href="#">
+        <Link className="group inline-block" to="/contact">
           <span className="text-on-surface-variant font-sans uppercase tracking-[0.4em] text-xs mb-4 block font-bold">Resources</span>
           <h2 className="font-serif text-3xl md:text-6xl text-primary hover:text-secondary transition-colors duration-300 border-b border-secondary/20 group-hover:border-secondary inline-block pb-4">READ OUR MEETING & EVENT BROCHURE</h2>
-          <ArrowDownward className="text-secondary w-12 h-12 mx-auto mt-12 group-hover:translate-y-2 transition-transform duration-300" />
-        </a>
+          <ArrowDown className="text-secondary w-12 h-12 mx-auto mt-12 group-hover:translate-y-2 transition-transform duration-300" />
+        </Link>
       </section>
 
       {/* TESTIMONIAL SECTION */}

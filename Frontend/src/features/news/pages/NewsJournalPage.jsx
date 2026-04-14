@@ -1,6 +1,7 @@
 import React from "react";
 import Header from "@shared/components/Header";
 import Footer from "@shared/components/Footer";
+import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
 const NewsJournalPage = () => {
@@ -20,9 +21,9 @@ const NewsJournalPage = () => {
             <p className="text-on-surface-variant font-sans text-lg leading-relaxed mb-10 max-w-md opacity-80">
               A deep dive into the intersection of mid-century aesthetics and automotive engineering. Why the garage has become the modern sanctuary.
             </p>
-            <a className="inline-block px-10 py-4 border border-secondary text-secondary font-sans uppercase tracking-widest text-xs hover:bg-secondary hover:text-primary transition-all duration-300 font-bold" href="#">
+            <Link className="inline-block px-10 py-4 border border-secondary text-secondary font-sans uppercase tracking-widest text-xs hover:bg-secondary hover:text-primary transition-all duration-300 font-bold" to="/news">
               Explore Chapter
-            </a>
+            </Link>
           </div>
         </div>
       </section>

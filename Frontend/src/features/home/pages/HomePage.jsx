@@ -1,6 +1,7 @@
 import React from "react";
 import Header from "@shared/components/Header";
 import Footer from "@shared/components/Footer";
+import { Link } from "react-router-dom";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import "./HomePage.css";
 
@@ -110,10 +111,10 @@ function HomePage() {
             ))}
           </div>
           <div className="mt-20 text-center">
-            <button className="text-[11px] font-bold tracking-[0.3em] text-primary hover:text-secondary uppercase transition-all relative group">
+            <Link to="/parts-shop" className="text-[11px] font-bold tracking-[0.3em] text-primary hover:text-secondary uppercase transition-all relative group inline-block">
               VIEW ALL CARS FOR SALE
               <div className="absolute -bottom-2 left-0 w-full h-[1px] bg-secondary scale-x-50 group-hover:scale-x-100 transition-transform duration-500"></div>
-            </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -133,9 +134,9 @@ function HomePage() {
               Our specially designed storage facilities ensure the optimal setting for your vehicle collection.
               With precise climate control and 24/7 security monitoring, your investment is in the safest hands.
             </p>
-            <button className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase">
+            <Link to="/storage" className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
               EXPLORE FACILITY
-            </button>
+            </Link>
           </div>
         </section>
 
@@ -154,9 +155,9 @@ function HomePage() {
               Create unforgettable experiences in our unique surroundings. From intimate board meetings to large product launches
               - we offer tailored solutions that combine professional service with a passion for automobiles.
             </p>
-            <button className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase">
+            <Link to="/meetings-events" className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
               VIEW VENUES
-            </button>
+            </Link>
           </div>
         </section>
       </div>

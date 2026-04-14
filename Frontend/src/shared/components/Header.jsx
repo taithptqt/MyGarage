@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
@@ -120,9 +120,9 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="#">SHOWROOM</a>
-          <a href="#">TIN TỨC</a>
-          <a href="#">LIÊN HỆ</a>
+          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>SHOWROOM</a>
+          <a href="/news" onClick={(event) => { event.preventDefault(); handleNavigate("/news"); }}>TIN TỨC</a>
+          <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
         </div>
 
         {isAuthenticated ? (
