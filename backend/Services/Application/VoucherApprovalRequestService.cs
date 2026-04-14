@@ -1,0 +1,53 @@
+// M?c dích: X? lý các buoc chuy?n tr?ng thái phê duy?t voucher nhu duy?t ho?c t? chdi.
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using MyGarage.Data;
+using MyGarage.Enums;
+using MyGarage.Interfaces;
+using MyGarage.Models;
+
+namespace MyGarage.Services
+{
+    public partial class VoucherApprovalRequestService : GenericService<VoucherApprovalRequest>, IVoucherApprovalRequestService
+    {
+        private const string StatusPending = nameof(VoucherApprovalRequestStatusCode.PENDING);
+        private const string StatusApproved = nameof(VoucherApprovalRequestStatusCode.APPROVED);
+        private const string StatusRejected = nameof(VoucherApprovalRequestStatusCode.REJECTED);
+
+        private readonly IVoucherApprovalRequestRepository _voucherApprovalRequestRepository;
+        private readonly IGarageContext _context;
+
+        public VoucherApprovalRequestService(IVoucherApprovalRequestRepository repository, IGarageContext context)
+            : base(repository)
+        {
+            _voucherApprovalRequestRepository = repository;
+            _context = context;
+        }
+
+        public async Task<IEnumerable<VoucherApprovalRequest>> GetAllAsync(string? status = null)
+        {
+            return await _voucherApprovalRequestRepository.GetAllAsync(status);
+        }
+
+        public async Task<VoucherApprovalRequest?> GetDetailedByIdAsync(long id)
+        {
+            return await _voucherApprovalRequestRepository.GetDetailedByIdAsync(id);
+        }
+
+        public override async Task<VoucherApprovalRequest> AddAsync(VoucherApprovalRequest entity)
+        {
+            var now = VietnamTime.Now;
+            entity.RequestType = (entity.RequestType ?? string.Empty).Trim().ToUpperInvariant();
+            entity.Status = string.IsNullOrWhiteSpace(entity.Status) ? StatusPending : entity.Status!.Trim().ToUpperInvariant();
+            entity.RiskLevel = string.IsNullOrWhiteSpace(entity.RiskLevel) ? "MEDIUM" : entity.RiskLevel!.Trim().ToUpperInvariant();
+            if (entity.CreatedAt == default) entity.CreatedAt = now;
+            if (entity.UpdatedAt == default) entity.UpdatedAt = now;
+
+            return await base.AddAsync(entity);
+        }
+    }
+}
+
+
+

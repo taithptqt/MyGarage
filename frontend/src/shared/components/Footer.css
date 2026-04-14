@@ -1,0 +1,19 @@
+.footer-premium {
+  position: relative;
+  z-index: 1;
+}
+
+.footer-input::placeholder {
+  color: rgba(197, 160, 89, 0.4);
+}
+
+.footer-input:focus {
+  border-bottom-color: var(--color-secondary);
+}
+
+@media (max-width: 1024px) {
+  .max-w-screen-2xl {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}

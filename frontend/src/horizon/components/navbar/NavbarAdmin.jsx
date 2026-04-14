@@ -1,8 +1,8 @@
-// Chakra Imports
+﻿// Chakra Imports
 import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Link, Text, useColorModeValue } from '@chakra-ui/react';
 import PropTypes from 'prop-types';
 import React, { useState, useEffect } from 'react';
-import AdminNavbarLinks from 'components/navbar/NavbarLinksAdmin';
+import AdminNavbarLinks from '@horizon/components/navbar/NavbarLinksAdmin';
 
 export default function AdminNavbar(props) {
 	const [ scrolled, setScrolled ] = useState(false);
@@ -15,7 +15,7 @@ export default function AdminNavbar(props) {
 		};
 	});
 
-	const { secondary, message, brandText } = props;
+	const { secondary, message, brandText, sidebarWidth = 300 } = props;
 
 	// Here are all the props that may change depending on navbar's type or state.(secondary, variant, scrolled)
 	let mainText = useColorModeValue('navy.700', 'white');
@@ -76,8 +76,8 @@ export default function AdminNavbar(props) {
 				base: 'calc(100vw - 6%)',
 				md: 'calc(100vw - 8%)',
 				lg: 'calc(100vw - 6%)',
-				xl: 'calc(100vw - 350px)',
-				'2xl': 'calc(100vw - 365px)'
+				xl: `calc(100vw - ${sidebarWidth + 60}px)`,
+				'2xl': `calc(100vw - ${sidebarWidth + 75}px)`
 			}}>
 			<Flex
 				w='100%'
@@ -141,5 +141,7 @@ AdminNavbar.propTypes = {
 	variant: PropTypes.string,
 	secondary: PropTypes.bool,
 	fixed: PropTypes.bool,
-	onOpen: PropTypes.func
+	onOpen: PropTypes.func,
+	sidebarWidth: PropTypes.number
 };
+

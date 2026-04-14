@@ -109,23 +109,18 @@ function Header({ overlay = false }) {
         <span className="mg-header-hotline">+45 69 133 911</span>
 
         <div className="mg-header-side">
-          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>ABOUT US</a>
+          <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
           <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
           <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
         </div>
 
-        <div
-          className="mg-header-logo cursor-pointer"
-          role="button"
-          aria-label="MY GARAGE"
-          onClick={() => handleNavigate("/home")}
-        >
+        <div className="mg-header-logo" role="img" aria-label="MY GARAGE">
           <span>MY</span>
           <small>GARAGE</small>
         </div>
 
         <div className="mg-header-side right">
-          <a href="/storage" onClick={(event) => { event.preventDefault(); handleNavigate("/storage"); }}>STORAGE</a>
+          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>SHOWROOM</a>
           <a href="/news" onClick={(event) => { event.preventDefault(); handleNavigate("/news"); }}>TIN TỨC</a>
           <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
         </div>

@@ -1,4 +1,4 @@
-/*!
+﻿/*!
   _   _  ___  ____  ___ ________  _   _   _   _ ___   
  | | | |/ _ \|  _ \|_ _|__  / _ \| \ | | | | | |_ _| 
  | |_| | | | | |_) || |  / / | | |  \| | | | | || | 
@@ -24,19 +24,22 @@
 import {
   Avatar,
   Box,
+  Button,
   Flex,
   FormLabel,
+  HStack,
   Icon,
   Select,
   SimpleGrid,
+  Text,
   useColorModeValue,
 } from "@chakra-ui/react";
 // Assets
-import Usa from "assets/img/dashboards/usa.png";
+import Usa from "@horizon/assets/img/dashboards/usa.png";
 // Custom components
-import MiniCalendar from "components/calendar/MiniCalendar";
-import MiniStatistics from "components/card/MiniStatistics";
-import IconBox from "components/icons/IconBox";
+import MiniCalendar from "@horizon/components/calendar/MiniCalendar";
+import MiniStatistics from "@horizon/components/card/MiniStatistics";
+import IconBox from "@horizon/components/icons/IconBox";
 import React from "react";
 import {
   MdAddTask,
@@ -44,26 +47,64 @@ import {
   MdBarChart,
   MdFileCopy,
 } from "react-icons/md";
-import CheckTable from "views/admin/default/components/CheckTable";
-import ComplexTable from "views/admin/default/components/ComplexTable";
-import DailyTraffic from "views/admin/default/components/DailyTraffic";
-import PieCard from "views/admin/default/components/PieCard";
-import Tasks from "views/admin/default/components/Tasks";
-import TotalSpent from "views/admin/default/components/TotalSpent";
-import WeeklyRevenue from "views/admin/default/components/WeeklyRevenue";
+import CheckTable from "@horizon/views/admin/default/components/CheckTable";
+import ComplexTable from "@horizon/views/admin/default/components/ComplexTable";
+import DailyTraffic from "@horizon/views/admin/default/components/DailyTraffic";
+import PieCard from "@horizon/views/admin/default/components/PieCard";
+import Tasks from "@horizon/views/admin/default/components/Tasks";
+import TotalSpent from "@horizon/views/admin/default/components/TotalSpent";
+import WeeklyRevenue from "@horizon/views/admin/default/components/WeeklyRevenue";
 import {
   columnsDataCheck,
   columnsDataComplex,
-} from "views/admin/default/variables/columnsData";
-import tableDataCheck from "views/admin/default/variables/tableDataCheck.json";
-import tableDataComplex from "views/admin/default/variables/tableDataComplex.json";
+} from "@horizon/views/admin/default/variables/columnsData";
+import tableDataCheck from "@horizon/views/admin/default/variables/tableDataCheck.json";
+import tableDataComplex from "@horizon/views/admin/default/variables/tableDataComplex.json";
+import { Link as RouterLink } from "react-router-dom";
 
 export default function UserReports() {
   // Chakra Color Mode
   const brandColor = useColorModeValue("brand.500", "white");
   const boxBg = useColorModeValue("secondaryGray.300", "whiteAlpha.100");
+  const quickCardBg = useColorModeValue("white", "navy.700");
+  const quickCardBorder = useColorModeValue("gray.100", "whiteAlpha.100");
+  const quickText = useColorModeValue("secondaryGray.700", "secondaryGray.300");
   return (
     <Box pt={{ base: "130px", md: "80px", xl: "80px" }}>
+      <Box
+        mb='20px'
+        p='20px'
+        bg={quickCardBg}
+        borderRadius='20px'
+        border='1px solid'
+        borderColor={quickCardBorder}>
+        <Flex
+          direction={{ base: "column", md: "row" }}
+          align={{ base: "start", md: "center" }}
+          justify='space-between'
+          gap='14px'>
+          <Box>
+            <Text fontSize='sm' color={quickText}>
+              Điều phối vận hành
+            </Text>
+            <Text fontSize='xl' fontWeight='700'>
+              Quản lý khoang
+            </Text>
+          </Box>
+          <HStack spacing='10px' flexWrap='wrap'>
+            <Button as={RouterLink} to='/admin/bays/list' size='sm' colorScheme='blue'>
+              Danh sách
+            </Button>
+            <Button as={RouterLink} to='/admin/bays/layout' size='sm' variant='outline'>
+              Sơ đồ
+            </Button>
+            <Button as={RouterLink} to='/admin/bays/alerts' size='sm' variant='outline'>
+              Cảnh báo
+            </Button>
+          </HStack>
+        </Flex>
+      </Box>
+
       <SimpleGrid
         columns={{ base: 1, md: 2, lg: 3, "2xl": 6 }}
         gap='20px'
@@ -170,3 +211,4 @@ export default function UserReports() {
     </Box>
   );
 }
+

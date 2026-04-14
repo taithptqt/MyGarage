@@ -1,10 +1,10 @@
-// Chakra imports
+﻿// Chakra imports
 import { Box, Flex, Text, Select, useColorModeValue } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
-import PieChart from "components/charts/PieChart";
-import { pieChartData, pieChartOptions } from "variables/charts";
-import { VSeparator } from "components/separator/Separator";
+import Card from "@horizon/components/card/Card";
+import PieChart from "@horizon/components/charts/PieChart";
+import { pieChartData, pieChartOptions } from "@horizon/variables/charts";
+import { VSeparator } from "@horizon/components/separator/Separator";
 import React from "react";
 
 export default function Conversion(props) {
@@ -90,4 +90,5 @@ export default function Conversion(props) {
     </Card>
   );
 }
+
 

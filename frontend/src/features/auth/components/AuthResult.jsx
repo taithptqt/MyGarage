@@ -1,15 +1,15 @@
-function AuthResult({ result, onLogout }) {
+﻿function AuthResult({ result, onLogout }) {
   if (!result) return null;
 
   return (
     <div className="success">
-      <p>Dang nhap thanh cong</p>
+      <p>Đăng nhập thành công</p>
       <p>
         <strong>{result.fullName}</strong> ({result.role})
       </p>
       <p>{result.email}</p>
       <button type="button" className="ghost" onClick={onLogout}>
-        Dang xuat (client)
+        Đăng xuất (client)
       </button>
     </div>
   );

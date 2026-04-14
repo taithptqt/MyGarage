@@ -1,53 +1,72 @@
-import { request } from "../../../app/apiClient";
+import { request } from "@app/apiClient";
 
 export const inventoryApi = {
-  getPartCategories: () => request({ url: "/api/Category", method: "GET" }),
-  createPartCategory: (data) => request({ url: "/api/Category", method: "POST", data }),
-  updatePartCategory: (id, data) => request({ url: `/api/Category/${id}`, method: "PUT", data }),
-  deletePartCategory: (id) => request({ url: `/api/Category/${id}`, method: "DELETE" }),
+  getPartCategories: () => request({ url: "/api/categories", method: "GET" }),
+  createPartCategory: (data) => request({ url: "/api/categories", method: "POST", data }),
+  updatePartCategory: (id, data) => request({ url: `/api/categories/${id}`, method: "PUT", data }),
+  deletePartCategory: (id) => request({ url: `/api/categories/${id}`, method: "DELETE" }),
 
-  getProducts: () => request({ url: "/api/Product", method: "GET" }),
-  createProduct: (data) => request({ url: "/api/Product", method: "POST", data }),
-  updateProduct: (id, data) => request({ url: `/api/Product/${id}`, method: "PUT", data }),
-  deleteProduct: (id) => request({ url: `/api/Product/${id}`, method: "DELETE" }),
+  getProducts: () => request({ url: "/api/products", method: "GET" }),
+  createProduct: (data) => request({ url: "/api/products", method: "POST", data }),
+  updateProduct: (id, data) => request({ url: `/api/products/${id}`, method: "PUT", data }),
+  deleteProduct: (id) => request({ url: `/api/products/${id}`, method: "DELETE" }),
+  uploadProductImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/products/${productId}/image`,
+      method: "POST",
+      data: formData,
+    });
+  },
 
-  getSuppliers: () => request({ url: "/api/Supplier", method: "GET" }),
-  createSupplier: (data) => request({ url: "/api/Supplier", method: "POST", data }),
-  updateSupplier: (id, data) => request({ url: `/api/Supplier/${id}`, method: "PUT", data }),
-  deleteSupplier: (id) => request({ url: `/api/Supplier/${id}`, method: "DELETE" }),
+  appendProductGalleryImage: (productId, file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request({
+      url: `/api/admin/products/${productId}/gallery-image`,
+      method: "POST",
+      data: formData,
+    });
+  },
 
-  getWarehouses: () => request({ url: "/api/Warehouse", method: "GET" }),
-  createWarehouse: (data) => request({ url: "/api/Warehouse", method: "POST", data }),
-  updateWarehouse: (id, data) => request({ url: `/api/Warehouse/${id}`, method: "PUT", data }),
-  deleteWarehouse: (id) => request({ url: `/api/Warehouse/${id}`, method: "DELETE" }),
-  getBranches: () => request({ url: "/api/Branch", method: "GET" }),
-  getVehicleModels: () => request({ url: "/api/VehicleModel", method: "GET" }),
+  getSuppliers: () => request({ url: "/api/suppliers", method: "GET" }),
+  createSupplier: (data) => request({ url: "/api/suppliers", method: "POST", data }),
+  updateSupplier: (id, data) => request({ url: `/api/suppliers/${id}`, method: "PUT", data }),
+  deleteSupplier: (id) => request({ url: `/api/suppliers/${id}`, method: "DELETE" }),
 
-  getInventories: () => request({ url: "/api/Inventory", method: "GET" }),
-  updateInventory: (id, data) => request({ url: `/api/Inventory/${id}`, method: "PUT", data }),
+  getWarehouses: () => request({ url: "/api/warehouses", method: "GET" }),
+  createWarehouse: (data) => request({ url: "/api/warehouses", method: "POST", data }),
+  updateWarehouse: (id, data) => request({ url: `/api/warehouses/${id}`, method: "PUT", data }),
+  deleteWarehouse: (id) => request({ url: `/api/warehouses/${id}`, method: "DELETE" }),
+  getBranches: () => request({ url: "/api/branches", method: "GET" }),
+  getVehicleModels: () => request({ url: "/api/vehicle-models", method: "GET" }),
 
-  getProductImages: () => request({ url: "/api/ProductImage", method: "GET" }),
-  createProductImage: (data) => request({ url: "/api/ProductImage", method: "POST", data }),
-  deleteProductImage: (id) => request({ url: `/api/ProductImage/${id}`, method: "DELETE" }),
+  getInventories: () => request({ url: "/api/inventories", method: "GET" }),
+  updateInventory: (id, data) => request({ url: `/api/inventories/${id}`, method: "PUT", data }),
 
-  getModelRules: () => request({ url: "/api/ModelSpecificRule", method: "GET" }),
-  createModelRule: (data) => request({ url: "/api/ModelSpecificRule", method: "POST", data }),
-  updateModelRule: (modelId, productId, data) => request({ url: `/api/ModelSpecificRule/${modelId}/${productId}`, method: "PUT", data }),
-  deleteModelRule: (modelId, productId) => request({ url: `/api/ModelSpecificRule/${modelId}/${productId}`, method: "DELETE" }),
+  getProductImages: (params = {}) => request({ url: "/api/product-images", method: "GET", params }),
+  createProductImage: (data) => request({ url: "/api/product-images", method: "POST", data }),
+  deleteProductImage: (id) => request({ url: `/api/product-images/${id}`, method: "DELETE" }),
 
-  getOverview: () => request({ url: "/api/inventory-admin/overview", method: "GET" }),
-  getBranchSummary: () => request({ url: "/api/inventory-admin/branch-summary", method: "GET" }),
-  getWarehouseStructure: () => request({ url: "/api/inventory-admin/warehouse-structure", method: "GET" }),
-  getAlerts: () => request({ url: "/api/inventory-admin/alerts", method: "GET" }),
-  getTransactions: (params = {}) => request({ url: "/api/inventory-admin/transactions", method: "GET", params }),
-  getApprovals: (status) => request({ url: "/api/inventory-admin/approvals", method: "GET", params: status ? { status } : {} }),
-  approveRequest: (id, data = {}) => request({ url: `/api/inventory-admin/approvals/${id}/approve`, method: "POST", data }),
-  rejectRequest: (id, data = {}) => request({ url: `/api/inventory-admin/approvals/${id}/reject`, method: "POST", data }),
-  getAudits: (status) => request({ url: "/api/inventory-admin/audits", method: "GET", params: status ? { status } : {} }),
-  approveAudit: (id, data = {}) => request({ url: `/api/inventory-admin/audits/${id}/approve`, method: "POST", data }),
-  rejectAudit: (id, data = {}) => request({ url: `/api/inventory-admin/audits/${id}/reject`, method: "POST", data }),
-  getReports: () => request({ url: "/api/inventory-admin/reports", method: "GET" }),
-  getAuditLogs: (take = 300) => request({ url: "/api/inventory-admin/audit-log", method: "GET", params: { take } }),
-  getSettings: () => request({ url: "/api/inventory-admin/settings", method: "GET" }),
-  saveSettings: (data) => request({ url: "/api/inventory-admin/settings", method: "PUT", data }),
+  getModelRules: () => request({ url: "/api/model-specific-rules", method: "GET" }),
+  createModelRule: (data) => request({ url: "/api/model-specific-rules", method: "POST", data }),
+  updateModelRule: (modelId, productId, data) => request({ url: `/api/model-specific-rules/${modelId}/${productId}`, method: "PUT", data }),
+  deleteModelRule: (modelId, productId) => request({ url: `/api/model-specific-rules/${modelId}/${productId}`, method: "DELETE" }),
+
+  getOverview: () => request({ url: "/api/inventory-management/dashboards/overview", method: "GET" }),
+  getBranchSummary: () => request({ url: "/api/inventory-management/branch-summaries", method: "GET" }),
+  getWarehouseStructure: () => request({ url: "/api/inventory-management/warehouse-structures", method: "GET" }),
+  getAlerts: () => request({ url: "/api/inventory-management/alert-items", method: "GET" }),
+  getTransactions: (params = {}) => request({ url: "/api/inventory-management/stock-transactions", method: "GET", params }),
+  getApprovals: (status) => request({ url: "/api/inventory-management/approval-requests", method: "GET", params: status ? { status } : {} }),
+  approveRequest: (id, data = {}) => request({ url: `/api/inventory-management/approval-requests/${id}`, method: "PATCH", data: { ...data, decision: "APPROVE" } }),
+  rejectRequest: (id, data = {}) => request({ url: `/api/inventory-management/approval-requests/${id}`, method: "PATCH", data: { ...data, decision: "REJECT" } }),
+  getAudits: (status) => request({ url: "/api/inventory-management/audit-requests", method: "GET", params: status ? { status } : {} }),
+  approveAudit: (id, data = {}) => request({ url: `/api/inventory-management/audit-requests/${id}`, method: "PATCH", data: { ...data, decision: "APPROVE" } }),
+  rejectAudit: (id, data = {}) => request({ url: `/api/inventory-management/audit-requests/${id}`, method: "PATCH", data: { ...data, decision: "REJECT" } }),
+  getReports: () => request({ url: "/api/inventory-management/analytics-reports", method: "GET" }),
+  getAuditLogs: (take = 300) => request({ url: "/api/inventory-management/audit-entries", method: "GET", params: { take } }),
+  getSettings: () => request({ url: "/api/inventory-management/configuration", method: "GET" }),
+  saveSettings: (data) => request({ url: "/api/inventory-management/configuration", method: "PUT", data }),
 };

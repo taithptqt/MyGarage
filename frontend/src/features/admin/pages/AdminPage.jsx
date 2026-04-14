@@ -1,12 +1,12 @@
 import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
   deleteStaff,
   getAllRoles,
   getAllStaff,
   updateStaff
-} from "../api/staffApi";
+} from "@features/admin/api/staffApi";
 import {
   createCustomerVehicle,
   createCustomer,
@@ -20,7 +20,7 @@ import {
   updateVehicle,
   updateCustomerVehicle,
   updateCustomer
-} from "../api/customerApi";
+} from "@features/admin/api/customerApi";
 import {
   createVehicleBrand,
   createVehicleModel,
@@ -30,23 +30,34 @@ import {
   getAllVehicleModels,
   updateVehicleBrand,
   updateVehicleModel
-} from "../api/vehicleCatalogApi";
+} from "@features/admin/api/vehicleCatalogApi";
 import {
   createStandardService,
   deleteStandardService,
   getAllServiceCategories,
   getAllStandardServices,
   updateStandardService
-} from "../api/serviceApi";
+} from "@features/admin/api/serviceApi";
 import {
   createBranch,
   deleteBranch,
   getAllBranches,
   updateBranch
-} from "../api/branchApi";
+} from "@features/admin/api/branchApi";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearch } from "@context/SearchContext";
-import { useBranch } from "../../../context/BranchContext";
+import { useSearch } from "@shared/core/context/SearchContext";
+import { useBranch } from "@shared/core/context/BranchContext";
+import { VIETNAM_PHONE_PATTERN, isOptionalEmailValid, isValidVietnamesePhone } from "@shared/utils/contactValidation";
+import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
+import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+import {
+  filterPackageManagedStandardServices,
+  getPackageManagedStandardServiceMessage,
+  isPackageManagedStandardServiceCode,
+  normalizeStandardServiceCode,
+} from "@shared/utils/standardServiceCodeRules";
+import ImageCropper from "@features/workshop/components/ImageCropper";
+import TablePagination from "@shared/components/TablePagination";
 import "./AdminPage.css";
 
 const EMPTY_STAFF_FORM = {
@@ -233,7 +244,16 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group">
         <label>Phone *</label>
-        <input name="phone" value={form.phone || ""} onChange={handleChange} required />
+        <input
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.phone || ""}
+          onChange={handleChange}
+          required
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
@@ -301,6 +321,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
       if (name === "brandId") {
         return { ...prev, brandId: value, modelId: "" };
       }
+      if (name === "licensePlate") {
+        return { ...prev, licensePlate: formatLicensePlateByFieldName(name, value) };
+      }
       return { ...prev, [name]: value };
     });
   };
@@ -325,14 +348,23 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
       </div>
       <div className="form-group">
         <label>Phone *</label>
-        <input name="phone" value={form.phone || ""} onChange={handleChange} required />
+        <input
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.phone || ""}
+          onChange={handleChange}
+          required
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Hạng Khách</label>
+        <label>Hạng khách</label>
         <select name="tierId" value={form.tierId} onChange={handleChange}>
           <option value="">Chọn hạng</option>
           {tiers.map((tier) => (
@@ -353,11 +385,18 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Biển Số Xe</label>
-        <input name="licensePlate" value={form.licensePlate || ""} onChange={handleChange} />
+        <label>Biển số xe</label>
+        <input
+          name="licensePlate"
+          value={form.licensePlate || ""}
+          onChange={handleChange}
+          pattern={VIETNAM_LICENSE_PLATE_PATTERN}
+          title={VIETNAM_LICENSE_PLATE_TITLE}
+          style={{ textTransform: "uppercase" }}
+        />
       </div>
       <div className="form-group">
-        <label>Hãng Xe</label>
+        <label>Hãng xe</label>
         <select name="brandId" value={form.brandId} onChange={handleChange}>
           <option value="">Chọn hãng xe</option>
           {brands.map((brand) => (
@@ -368,7 +407,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Dòng Xe</label>
+        <label>Dòng xe</label>
         <select name="modelId" value={form.modelId} onChange={handleChange}>
           <option value="">Chọn dòng xe</option>
           {modelOptions.map((model) => (
@@ -379,11 +418,11 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Màu Xe</label>
+        <label>Màu xe</label>
         <input name="color" value={form.color || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Năm SX</label>
+        <label>Nam SX</label>
         <input
           name="manufactureYear"
           type="number"
@@ -426,6 +465,8 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
     ...initial,
     isActive: initial.isActive ?? true
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [cropSource, setCropSource] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -438,6 +479,31 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
       ...form,
       isActive: form.isActive === true || form.isActive === "true"
     });
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+
+    setUploadingImage(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setCropSource(dataUrl);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleCropComplete = async (blob) => {
+    if (!blob) {
+      setCropSource("");
+      return;
+    }
+    const dataUrl = await blobToDataUrl(blob);
+    setForm((prev) => ({ ...prev, logoUrl: dataUrl }));
+    setCropSource("");
   };
 
   return (
@@ -463,6 +529,19 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
         <input name="logoUrl" value={form.logoUrl || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
+        <label>Upload Logo</label>
+        <input type="file" accept="image/*" onChange={handleImageUpload} />
+        {uploadingImage ? <small>Đang tải ảnh...</small> : null}
+        {cropSource ? <small>Vui lòng cắt ảnh trước khi lưu.</small> : null}
+        {form.logoUrl ? (
+          <img
+            src={form.logoUrl}
+            alt="Logo preview"
+            style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, marginTop: 8 }}
+          />
+        ) : null}
+      </div>
+      <div className="form-group">
         <label>Status</label>
         <select
           name="isActive"
@@ -482,6 +561,13 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
           {loading ? "Saving..." : "Save"}
         </button>
       </div>
+      {cropSource ? (
+        <ImageCropper
+          image={cropSource}
+          onCropComplete={handleCropComplete}
+          onCancel={() => setCropSource("")}
+        />
+      ) : null}
     </form>
   );
 }
@@ -557,16 +643,29 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
     categoryId: initial.categoryId ? String(initial.categoryId) : "",
     isActive: initial.isActive ?? true
   });
+  const [codeError, setCodeError] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const nextValue = name === "code" ? normalizeStandardServiceCode(value) : value;
+    setForm((prev) => ({ ...prev, [name]: nextValue }));
+
+    if (name === "code") {
+      setCodeError(isPackageManagedStandardServiceCode(value) ? getPackageManagedStandardServiceMessage() : "");
+    }
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const normalizedCode = normalizeStandardServiceCode(form.code);
+    if (isPackageManagedStandardServiceCode(normalizedCode)) {
+      setCodeError(getPackageManagedStandardServiceMessage());
+      return;
+    }
+
     onSubmit({
       ...form,
+      code: normalizedCode,
       categoryId: form.categoryId ? Number(form.categoryId) : null,
       basePrice: form.basePrice === "" ? null : Number(form.basePrice),
       standardMinutes: form.standardMinutes === "" ? null : Number(form.standardMinutes),
@@ -579,6 +678,8 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
       <div className="form-group">
         <label>Service Code *</label>
         <input name="code" value={form.code || ""} onChange={handleChange} required />
+        <small className="form-helper">Codes starting with PKG- belong to Packages and should not be created here.</small>
+        {codeError ? <small className="form-error-text">{codeError}</small> : null}
       </div>
       <div className="form-group">
         <label>Service Name *</label>
@@ -637,7 +738,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         <button className="btn-ghost" type="button" onClick={onCancel}>
           Cancel
         </button>
-        <button className="btn-primary" type="submit" disabled={loading}>
+        <button className="btn-primary" type="submit" disabled={loading || Boolean(codeError)}>
           {loading ? "Saving..." : "Save"}
         </button>
       </div>
@@ -679,7 +780,15 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group">
         <label>Hotline</label>
-        <input name="hotline" value={form.hotline || ""} onChange={handleChange} />
+        <input
+          name="hotline"
+          type="tel"
+          inputMode="tel"
+          pattern={VIETNAM_PHONE_PATTERN}
+          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          value={form.hotline || ""}
+          onChange={handleChange}
+        />
       </div>
       <div className="form-group">
         <label>Email</label>
@@ -727,6 +836,24 @@ function getStatusBadge(status) {
   return "badge-inactive";
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Không thể đọc file ảnh."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Không thể xử lý ảnh đã cắt."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function AdminPage({ embedded = false, initialSection = "staff" }) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const {
@@ -755,6 +882,8 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const { searchQuery } = useSearch();
   const [modal, setModal] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setSection(initialSection || "staff");
@@ -787,7 +916,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     []
   );
   const fetchServices = useCallback(
-    async () => setServices((await getAllStandardServices(selectedBranchId)) || []),
+    async () => setServices(filterPackageManagedStandardServices((await getAllStandardServices(selectedBranchId)) || [])),
     [selectedBranchId]
   );
 
@@ -1029,6 +1158,22 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             ? filteredModels
             : filteredServices;
 
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visibleRows.slice(start, start + pageSize);
+  }, [visibleRows, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [section, searchQuery, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const openModal = (entity, mode, item = null) => {
     setFormError("");
     setModal({ entity, mode, item });
@@ -1080,11 +1225,20 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
     try {
       if (modal.entity === "branch") {
+        const hotline = String(formData.hotline || "").trim();
+        const email = String(formData.email || "").trim();
+        if (hotline && !isValidVietnamesePhone(hotline)) {
+          throw new Error("Hotline chi nhánh phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email chi nhánh không đúng định dạng.");
+        }
+
         const payload = {
           name: formData.name,
           address: formData.address || null,
-          hotline: formData.hotline || null,
-          email: formData.email || null,
+          hotline: hotline || null,
+          email: email || null,
           status: formData.status || "active",
           maxWorkSlots: formData.maxWorkSlots ?? null,
           description: formData.description || null
@@ -1096,10 +1250,19 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (!selectedBranchId) {
           throw new Error("Please select a branch before creating/updating staff.");
         }
+        const phone = String(formData.phone || "").trim();
+        const email = String(formData.email || "").trim();
+        if (!isValidVietnamesePhone(phone)) {
+          throw new Error("Số điện thoại nhân viên phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email nhân viên không đúng định dạng.");
+        }
+
         const payload = {
           fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
+          phone,
+          email: email || null,
           roleId: formData.roleId || null,
           status: formData.status || "active",
           branchId: selectedBranchId || null
@@ -1109,21 +1272,36 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (modal.mode === "create") await createStaff(payload);
         else await updateStaff(modal.item.id, payload);
       } else if (modal.entity === "customer") {
+        const phone = String(formData.phone || "").trim();
+        const email = String(formData.email || "").trim();
+        if (!isValidVietnamesePhone(phone)) {
+          throw new Error("Số điện thoại khách hàng phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+        }
+        if (email && !isOptionalEmailValid(email)) {
+          throw new Error("Email khách hàng không đúng định dạng.");
+        }
+
         const payload = {
           fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
+          phone,
+          email: email || null,
           tierId: formData.tierId || null,
           note: formData.note,
           isActive: formData.isActive === true || formData.isActive === "true"
         };
         if (formData.password?.trim()) payload.password = formData.password.trim();
 
-        const hasVehicleInput = Boolean(
-          String(formData.licensePlate || "").trim() || Number(formData.modelId)
-        );
+        const formattedLicensePlate = formatLicensePlateByFieldName("licensePlate", formData.licensePlate || "");
+        if (formattedLicensePlate && !isValidVietnameseLicensePlate(formattedLicensePlate)) {
+          throw new Error("Biển số xe không đúng định dạng Việt Nam.");
+        }
+
+        const hasVehicleInput = Boolean(formattedLicensePlate || Number(formData.modelId));
+        if (hasVehicleInput && !formattedLicensePlate) {
+          throw new Error("Vui lòng nhập biển số xe.");
+        }
         if (hasVehicleInput && !formData.modelId) {
-          throw new Error("Vui long chon dong xe khi nhap thong tin xe.");
+          throw new Error("Vui lòng chọn dòng xe khi nhập thông tin xe.");
         }
 
         let savedCustomer = null;
@@ -1132,7 +1310,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
         if (hasVehicleInput) {
           const vehiclePayload = {
-            licensePlate: String(formData.licensePlate || "").trim(),
+            licensePlate: formattedLicensePlate,
             modelId: Number(formData.modelId),
             color: String(formData.color || "").trim() || null,
             manufactureYear: formData.manufactureYear || null
@@ -1233,33 +1411,33 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     <div className={`admin-page ${embedded ? "embedded" : ""}`}>
       {!embedded && (
         <aside className="admin-sidebar">
-          <div className="sidebar-brand">
-            <span className="brand-name">MyGarage</span>
-          </div>
+            <div className="sidebar-brand">
+              <span className="brand-name">MyGarage</span>
+            </div>
 
-          <nav className="sidebar-nav">
-            <button className={`nav-item ${section === "branches" ? "active" : ""}`} type="button" onClick={() => { setSection("branches"); }}>
-              Branches
-            </button>
-            <button className={`nav-item ${section === "staff" ? "active" : ""}`} type="button" onClick={() => { setSection("staff"); }}>
-              Staff
-            </button>
-            <button className={`nav-item ${section === "customers" ? "active" : ""}`} type="button" onClick={() => { setSection("customers"); }}>
-              Users
-            </button>
-            <button className={`nav-item ${section === "brands" ? "active" : ""}`} type="button" onClick={() => { setSection("brands"); }}>
-              Vehicle Brands
-            </button>
-            <button className={`nav-item ${section === "models" ? "active" : ""}`} type="button" onClick={() => { setSection("models"); }}>
-              Vehicle Models
-            </button>
-            <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
-              Services
-            </button>
-            <button className="nav-item" type="button" onClick={handleLogout}>
-              Logout
-            </button>
-          </nav>
+            <nav className="sidebar-nav">
+              <button className={`nav-item ${section === "branches" ? "active" : ""}`} type="button" onClick={() => { setSection("branches"); }}>
+                Branches
+              </button>
+              <button className={`nav-item ${section === "staff" ? "active" : ""}`} type="button" onClick={() => { setSection("staff"); }}>
+                Staff
+              </button>
+              <button className={`nav-item ${section === "customers" ? "active" : ""}`} type="button" onClick={() => { setSection("customers"); }}>
+                Users
+              </button>
+              <button className={`nav-item ${section === "brands" ? "active" : ""}`} type="button" onClick={() => { setSection("brands"); }}>
+                Vehicle Brands
+              </button>
+              <button className={`nav-item ${section === "models" ? "active" : ""}`} type="button" onClick={() => { setSection("models"); }}>
+                Vehicle Models
+              </button>
+              <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
+                Services
+              </button>
+              <button className="nav-item" type="button" onClick={handleLogout}>
+                Logout
+              </button>
+            </nav>
         </aside>
       )}
 
@@ -1355,7 +1533,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredBranches.map((item) => (
+                    {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td>
                         <td>{item.name || "-"}</td>
@@ -1380,13 +1558,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 <>
                   <thead><tr><th>ID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th className="th-center">Actions</th></tr></thead>
                   <tbody>
-                    {filteredStaff.map((item) => (
+                    {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.fullName || "-"}</td><td>{item.phone || "-"}</td><td className="td-email">{item.email || "-"}</td>
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
-                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>🗑️</button></div></td>
+                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1411,7 +1589,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCustomers.map((item) => (
+                    {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.fullName || "-"}</td><td>{item.phone || "-"}</td><td className="td-email">{item.email || "-"}</td>
                         <td>{item.tierName || "-"}</td>
@@ -1419,8 +1597,8 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.brandName || "-"}</td>
                         <td>{item.modelName || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>🗑️</button></div></td>
+                        <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1431,12 +1609,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 <>
                   <thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Country</th><th>Status</th><th>Updated</th><th className="th-center">Actions</th></tr></thead>
                   <tbody>
-                    {filteredBrands.map((item) => (
+                    {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>🗑️</button></div></td>
+                        <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1447,10 +1625,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 <>
                   <thead><tr><th>ID</th><th>Brand</th><th>Model</th><th>Segment</th><th>Fuel</th><th>Cylinder</th><th className="th-center">Actions</th></tr></thead>
                   <tbody>
-                    {filteredModels.map((item) => (
+                    {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Brand #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1472,7 +1650,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                     </tr>
                   </thead>
                   <tbody>
-                    {(filteredServices || []).map((item) => (
+                    {(pagedRows || []).map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td>
                         <td>{item.code || "-"}</td>
@@ -1481,7 +1659,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
                         <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>✏️</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>🗑️</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1490,6 +1668,17 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             </table>
           )}
         </div>
+
+        <TablePagination
+          totalItems={visibleRows.length}
+          currentPage={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </main>
 
       {modal?.mode === "create" && (

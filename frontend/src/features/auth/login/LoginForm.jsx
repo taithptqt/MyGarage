@@ -1,35 +1,39 @@
+import { Link } from "react-router-dom";
+
 function LoginForm({ form, onChange, onSubmit, isValid, loading }) {
   return (
-    <form onSubmit={onSubmit} className="form" autoComplete="off">
-      <label htmlFor="login-identifier">Email hoac so dien thoai</label>
+    <form onSubmit={onSubmit} className="form">
+      <label htmlFor="login-identifier">Email hoặc số điện thoại</label>
       <input
         id="login-identifier"
-        name="login_identifier"
         type="text"
         value={form.identifier}
-        onChange={(e) => onChange("identifier", e.target.value)}
-        placeholder="user@gmail.com hoac 09xxxxxxxx"
-        autoComplete="off"
-        data-lpignore="true"
+        onChange={(event) => onChange("identifier", event.target.value)}
+        placeholder="user@example.com hoặc 0900000000"
+        autoComplete="username"
         required
       />
 
-      <label htmlFor="login-password">Mat khau</label>
+      <label htmlFor="login-password">Mật khẩu</label>
       <input
         id="login-password"
-        name="login_password"
         type="password"
         value={form.password}
-        onChange={(e) => onChange("password", e.target.value)}
-        placeholder="Toi thieu 6 ky tu"
-        autoComplete="off"
-        data-lpignore="true"
+        onChange={(event) => onChange("password", event.target.value)}
+        placeholder="Tối thiểu 6 ký tự"
+        autoComplete="current-password"
         required
         minLength={6}
       />
 
+      <div className="auth-helper-row">
+        <Link to="/forgot-password" className="auth-helper-link">
+          Quên mật khẩu?
+        </Link>
+      </div>
+
       <button type="submit" disabled={loading || !isValid}>
-        {loading ? "Dang xu ly..." : "Dang nhap"}
+        {loading ? "Đang xử lý..." : "Đăng nhập"}
       </button>
     </form>
   );

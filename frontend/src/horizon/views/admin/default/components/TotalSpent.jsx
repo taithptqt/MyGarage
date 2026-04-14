@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Button,
@@ -8,8 +8,8 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
-import LineChart from "components/charts/LineChart";
+import Card from "@horizon/components/card/Card";
+import LineChart from "@horizon/components/charts/LineChart";
 import React from "react";
 import { IoCheckmarkCircle } from "react-icons/io5";
 import { MdBarChart, MdOutlineCalendarToday } from "react-icons/md";
@@ -18,7 +18,7 @@ import { RiArrowUpSFill } from "react-icons/ri";
 import {
   lineChartDataTotalSpent,
   lineChartOptionsTotalSpent,
-} from "variables/charts";
+} from "@horizon/variables/charts";
 
 export default function TotalSpent(props) {
   const { ...rest } = props;
@@ -122,4 +122,5 @@ export default function TotalSpent(props) {
     </Card>
   );
 }
+
 

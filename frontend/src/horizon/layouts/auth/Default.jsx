@@ -1,9 +1,9 @@
-// Chakra imports
+﻿// Chakra imports
 import { Box, Flex, Icon, Text } from "@chakra-ui/react";
 import PropTypes from "prop-types";
 import React from "react";
-import Footer from "components/footer/FooterAuth";
-import FixedPlugin from "components/fixedPlugin/FixedPlugin";
+import Footer from "@horizon/components/footer/FooterAuth";
+import FixedPlugin from "@horizon/components/fixedPlugin/FixedPlugin";
 // Custom components
 import { NavLink } from "react-router-dom";
 // Assets
@@ -85,3 +85,4 @@ AuthIllustration.propTypes = {
 };
 
 export default AuthIllustration;
+

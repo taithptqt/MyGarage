@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { inventoryApi } from "../api/inventoryApi";
-import { Modal, ConfirmDialog } from "../../admin/components/AdminModals";
-import { useSearch } from "../../../context/SearchContext";
+﻿import { useState, useEffect, useCallback } from "react";
+import { inventoryApi } from "@features/inventory/api/inventoryApi";
+import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
+import { useSearch } from "@shared/core/context/SearchContext";
 
 const EMPTY_CATEGORY = {
   categoryName: "",
@@ -42,7 +42,7 @@ function CategoryForm({ initial, onSubmit, onCancel, loading }) {
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang lưu…" : "Lưu"}
+          {loading ? "Đang lưuệô : "Lưu"}
         </button>
       </div>
     </form>
@@ -114,7 +114,7 @@ export default function PartCategoriesPage() {
       <header className="admin-header">
         <div>
           <h1>Danh mục phụ tùng</h1>
-          <p className="header-sub">Quản lý các nhóm phụ tùng (Lốp, Phanh, Dầu nhớt, v.v.)</p>
+          <p className="header-sub">Quản lý các nhóm phụ tùng (Lđp, Phanh, Dầu nhơt, v.v.)</p>
         </div>
         <button className="btn-primary" onClick={() => setModal("create")}>+ Thêm danh mục</button>
       </header>
@@ -125,7 +125,7 @@ export default function PartCategoriesPage() {
 
       <div className="table-wrapper">
         {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Đang tải…</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải</p></div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -146,8 +146,8 @@ export default function PartCategoriesPage() {
                   </td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("edit"); }}>✏️</button>
-                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("delete"); }}>🗑️</button>
+                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("edit"); }}>đođ️</button>
+                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("delete"); }}>{"\u{1F5D1}\uFE0F"}</button>
                     </div>
                   </td>
                 </tr>
@@ -158,14 +158,14 @@ export default function PartCategoriesPage() {
       </div>
 
       {modal === "create" && (
-        <Modal title="Thêm danh mục mới" onClose={closeModal}>
+        <Modal title="Thêm danh mục mơi" onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <CategoryForm initial={EMPTY_CATEGORY} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
 
       {modal === "edit" && selected && (
-        <Modal title={`Sửa — ${selected.categoryName}`} onClose={closeModal}>
+        <Modal title={`Sửa ệ" ${selected.categoryName}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <CategoryForm initial={selected} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
         </Modal>
@@ -179,3 +179,12 @@ export default function PartCategoriesPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

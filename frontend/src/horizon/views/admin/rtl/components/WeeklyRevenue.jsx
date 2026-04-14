@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Button,
@@ -7,14 +7,14 @@ import {
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 // Custom components
-import BarChart from "components/charts/BarChart";
+import BarChart from "@horizon/components/charts/BarChart";
 import React from "react";
 import {
   barChartDataConsumption,
   barChartOptionsConsumption,
-} from "variables/charts";
+} from "@horizon/variables/charts";
 import { MdBarChart } from "react-icons/md";
 
 export default function WeeklyRevenue(props) {
@@ -68,4 +68,5 @@ export default function WeeklyRevenue(props) {
     </Card>
   );
 }
+
 

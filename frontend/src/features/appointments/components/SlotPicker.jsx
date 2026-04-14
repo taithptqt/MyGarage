@@ -1,4 +1,4 @@
-export default function SlotPicker({ slots, selectedSlot, onSelect, loading, selectedDate }) {
+﻿export default function SlotPicker({ slots, selectedSlot, onSelect, loading, selectedDate }) {
   if (loading) {
     return (
       <div className="spinner-container">
@@ -11,11 +11,11 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     const isSunday = selectedDate && selectedDate.getDay() === 0;
     return (
       <div className="empty-state">
-        <div className="empty-icon">{isSunday ? "😴" : "📅"}</div>
+        <div className="empty-icon">{isSunday ? "\u{1F634}" : "\u{1F4C5}"}</div>
         <p>
           {isSunday
-            ? "Chu nhat la ngay nghi. Vui long chon ngay khac (Thu 2 - Thu 7)."
-            : "Khong co ca nao kha dung cho ngay nay."}
+            ? "Chủ nhật là ngày nghệ. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
+            : "Không có khung giờ nào khả dụng cho ngày này."}
         </p>
       </div>
     );
@@ -23,40 +23,31 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
 
   function formatTime(t) {
     if (!t) return "";
-    const parts = t.split(":");
-    return `${parts[0]}:${parts[1]}`;
-  }
-
-  function shiftLabel(startTime) {
-    if (!startTime) return "";
-    const hour = parseInt(startTime.split(":")[0], 10);
-    if (hour < 11) return "Ca sang";
-    if (hour < 14) return "Ca trua";
-    if (hour < 18) return "Ca chieu";
-    return "Ca toi";
-  }
-
-  function shiftIcon(startTime) {
-    if (!startTime) return "🕐";
-    const hour = parseInt(startTime.split(":")[0], 10);
-    if (hour < 11) return "🌅";
-    if (hour < 14) return "☀️";
-    if (hour < 18) return "🌇";
-    return "🌙";
+    const d = new Date(t);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+    }
+    const parts = String(t).split(":");
+    return `${parts[0] || ""}:${parts[1] || ""}`;
   }
 
   return (
-    <div className="shift-grid">
+    <div className="slot-grid">
       {slots.map((slot) => {
         const key = `${slot.startTime}-${slot.endTime}`;
         const isSelected =
           selectedSlot &&
-          selectedSlot.startTime === slot.startTime;
+          selectedSlot.startTime === slot.startTime &&
+          selectedSlot.endTime === slot.endTime;
 
         const classes = [
-          "shift-card",
-          isSelected ? "shift-selected" : "",
-          !slot.isAvailable ? "shift-disabled" : "",
+          "slot-item",
+          isSelected ? "slot-selected" : "",
+          !slot.isAvailable ? "slot-disabled" : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -67,15 +58,13 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
             className={classes}
             onClick={() => slot.isAvailable && onSelect(slot)}
           >
-            <div className="shift-icon">{shiftIcon(slot.startTime)}</div>
-            <div className="shift-label">{shiftLabel(slot.startTime)}</div>
-            <div className="shift-time">
+            <div className="slot-time">
               {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
             </div>
-            <div className="shift-remaining">
+            <div className="slot-remaining">
               {slot.isAvailable
-                ? `Con ${slot.remainingCapacity} cho`
-                : "Het cho"}
+                ? `Còn ${slot.remainingCapacity} chđ-`
+                : "Hết chđ-"}
             </div>
           </div>
         );
@@ -83,3 +72,6 @@ export default function SlotPicker({ slots, selectedSlot, onSelect, loading, sel
     </div>
   );
 }
+
+
+

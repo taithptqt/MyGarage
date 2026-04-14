@@ -1,40 +1,27 @@
-import apiClient from "../../../api/api";
+import {
+  createStaff as createStaffCore,
+  deleteStaff as deleteStaffCore,
+  getAllStaff as getAllStaffCore,
+  getStaffById,
+  updateStaff as updateStaffCore
+} from "@features/admin/api/staffApi";
 
 export async function getAllStaff() {
-  const res = await apiClient.get("Staff");
-  return res.data;
+  return getAllStaffCore();
 }
 
 export async function getStaff(id) {
-  const res = await apiClient.get(`Staff/${id}`);
-  return res.data;
+  return getStaffById(id);
 }
 
 export async function createStaff(data) {
-  try {
-    const res = await apiClient.post("Staff", data);
-    return res.data;
-  } catch (error) {
-    const message = error.response ? error.response.data.message : error.message;
-    throw new Error(message || "Failed to create staff member.");
-  }
+  return createStaffCore(data);
 }
 
 export async function updateStaff(id, data) {
-  try {
-    const res = await apiClient.put(`Staff/${id}`, data);
-    return res.data;
-  } catch (error) {
-    const message = error.response ? error.response.data.message : error.message;
-    throw new Error(message || "Failed to update staff member.");
-  }
+  return updateStaffCore(id, data);
 }
 
 export async function deleteStaff(id) {
-  try {
-    await apiClient.delete(`Staff/${id}`);
-  } catch (error) {
-    const message = error.response ? error.response.data.message : error.message;
-    throw new Error(message || "Failed to delete staff member.");
-  }
+  return deleteStaffCore(id);
 }

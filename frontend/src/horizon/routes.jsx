@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 import { Icon } from '@chakra-ui/react';
 import {
@@ -21,17 +21,20 @@ import {
   MdWarning,
   MdAssessment,
   MdHistory,
+  MdLocalOffer,
 } from 'react-icons/md';
 
-import MainDashboard from "views/admin/default";
-import AdminPage from "../features/admin/pages/AdminPage";
-import InventoryAdminPage from "../features/inventory/pages/InventoryAdminPage";
-import ServicesPage from "../features/services/pages/ServicesPage";
-import ServiceCategoriesPage from "../features/services/pages/ServiceCategoriesPage";
-import AppointmentManagementPage from "../features/appointments/pages/AppointmentManagementPage";
-import AdminChangeLogPage from "../features/admin/pages/AdminChangeLogPage";
-
-import SignInCentered from 'views/auth/signIn';
+import MainDashboard from "@horizon/views/admin/default";
+import AdminPage from "@features/admin/pages/AdminPage";
+import InventoryAdminPage from "@features/inventory/pages/InventoryAdminPage";
+import ServicesPage from "@features/services/pages/ServicesPage";
+import ServiceCategoriesPage from "@features/services/pages/ServiceCategoriesPage";
+import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
+import ReceptionOrdersSection from "@features/workshop/components/ReceptionOrdersSection";
+import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
+import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
+import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
+import BayManagementPage from "@features/storage/pages/BayManagementPage";
 
 const inventoryItems = [
   {
@@ -42,11 +45,25 @@ const inventoryItems = [
     component: <InventoryAdminPage section="warehouseStructure" />,
   },
   {
-    name: 'Danh mục hàng',
+    name: 'Sản phẩm',
     layout: '/admin',
     icon: <Icon as={MdOutlineCategory} width="20px" height="20px" color="inherit" />,
     path: '/inventory/catalog',
-    component: <InventoryAdminPage section="catalog" />,
+    component: <InventoryAdminPage section="catalogProducts" />,
+  },
+  {
+    name: 'Danh mục',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/inventory/categories',
+    component: <InventoryAdminPage section="catalogCategories" />,
+  },
+  {
+    name: 'Nhà cung cấp',
+    layout: '/admin',
+    icon: <Icon as={MdPeople} width="20px" height="20px" color="inherit" />,
+    path: '/inventory/suppliers',
+    component: <InventoryAdminPage section="catalogSuppliers" />,
   },
   {
     name: 'Chính sách tồn',
@@ -99,6 +116,144 @@ const inventoryItems = [
   },
 ];
 
+const vehicleItems = [
+  {
+    name: 'Hãng xe',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/brands',
+    component: <AdminPage embedded initialSection="brands" />,
+  },
+  {
+    name: 'Dòng xe',
+    layout: '/admin',
+    icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
+    path: '/models',
+    component: <AdminPage embedded initialSection="models" />,
+  },
+];
+
+const bayItems = [
+  {
+    name: 'Danh sách khoang',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/bays/list',
+    component: <BayManagementPage section="list" />,
+  },
+  {
+    name: 'Xe trong khoang',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/bays/vehicles',
+    component: <BayManagementPage section="vehicles" />,
+  },
+  {
+    name: 'Theo dõi sử dụng',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/bays/usage',
+    component: <BayManagementPage section="usage" />,
+  },
+  {
+    name: 'Sơ đồ và điều phối',
+    layout: '/admin',
+    icon: <Icon as={MdSwapHoriz} width="20px" height="20px" color="inherit" />,
+    path: '/bays/layout',
+    component: <BayManagementPage section="layout" />,
+  },
+  {
+    name: 'Cảnh báo',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/bays/alerts',
+    component: <BayManagementPage section="alerts" />,
+  },
+  {
+    name: 'Thống kê',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/bays/stats',
+    component: <BayManagementPage section="stats" />,
+  },
+];
+
+const serviceItems = [
+  {
+    name: 'Dịch vụ',
+    layout: '/admin',
+    icon: <Icon as={MdBuild} width="20px" height="20px" color="inherit" />,
+    path: '/services',
+    component: <ServicesPage />,
+  },
+  {
+    name: 'Danh mục dịch vụ',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/service-categories',
+    component: <ServiceCategoriesPage />,
+  },
+];
+
+const voucherItems = [
+  {
+    name: 'Tổng quan voucher',
+    layout: '/admin',
+    icon: <Icon as={MdHome} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/dashboard',
+    component: <SafeVoucherManagementPage section="dashboard" />,
+  },
+  {
+    name: 'Danh sách voucher',
+    layout: '/admin',
+    icon: <Icon as={MdLocalOffer} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/list',
+    component: <SafeVoucherManagementPage section="list" />,
+  },
+  {
+    name: 'Chiến dịch',
+    layout: '/admin',
+    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/campaigns',
+    component: <SafeVoucherManagementPage section="campaigns" />,
+  },
+  {
+    name: 'Kiểm tra xung đột',
+    layout: '/admin',
+    icon: <Icon as={MdWarning} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/conflicts',
+    component: <SafeVoucherManagementPage section="conflicts" />,
+  },
+  {
+    name: 'Lịch sử sử dụng',
+    layout: '/admin',
+    icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/redemptions',
+    component: <SafeVoucherManagementPage section="redemptions" />,
+  },
+  {
+    name: 'Hàng chờ phê duyệt',
+    layout: '/admin',
+    icon: <Icon as={MdVerifiedUser} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/approvals',
+    component: <SafeVoucherManagementPage section="approvals" />,
+  },
+  {
+    name: 'Báo cáo hiệu quả',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/reports',
+    component: <SafeVoucherManagementPage section="reports" />,
+  },
+  {
+    name: 'Thiết lập voucher',
+    layout: '/admin',
+    icon: <Icon as={MdPolicy} width="20px" height="20px" color="inherit" />,
+    path: '/vouchers/settings',
+    component: <SafeVoucherManagementPage section="settings" />,
+  },
+];
+
 const routes = [
   {
     name: 'Bảng điều khiển',
@@ -112,7 +267,14 @@ const routes = [
     layout: '/admin',
     path: '/appointments',
     icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
-    component: <AppointmentManagementPage />,
+    component: <ReceptionAppointmentsPage />,
+  },
+  {
+    name: 'Lệnh sửa chữa',
+    layout: '/admin',
+    path: '/service-orders',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    component: <ReceptionOrdersSection />,
   },
   {
     name: 'Chi nhánh',
@@ -129,6 +291,13 @@ const routes = [
     component: <AdminPage embedded initialSection="staff" />,
   },
   {
+    name: 'Lương',
+    layout: '/admin',
+    path: '/salary',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    component: <AdminSalaryPage />,
+  },
+  {
     name: 'Khách hàng',
     layout: '/admin',
     icon: <Icon as={MdPerson} width="20px" height="20px" color="inherit" />,
@@ -136,32 +305,34 @@ const routes = [
     component: <AdminPage embedded initialSection="customers" />,
   },
   {
-    name: 'Hãng xe',
-    layout: '/admin',
+    name: 'Xe',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
-    path: '/brands',
-    component: <AdminPage embedded initialSection="brands" />,
+    collapse: true,
+    items: vehicleItems,
   },
   {
-    name: 'Dòng xe',
-    layout: '/admin',
+    name: 'Khoang',
     icon: <Icon as={MdCategory} width="20px" height="20px" color="inherit" />,
-    path: '/models',
-    component: <AdminPage embedded initialSection="models" />,
+    collapse: true,
+    items: bayItems,
   },
   {
     name: 'Dịch vụ',
-    layout: '/admin',
     icon: <Icon as={MdBuild} width="20px" height="20px" color="inherit" />,
-    path: '/services',
-    component: <ServicesPage />,
+    collapse: true,
+    items: serviceItems,
   },
   {
-    name: 'Danh mục dịch vụ',
-    layout: '/admin',
-    icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
-    path: '/service-categories',
-    component: <ServiceCategoriesPage />,
+    name: 'Quản lý voucher',
+    icon: <Icon as={MdLocalOffer} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: voucherItems,
+  },
+  {
+    name: 'Kho',
+    icon: <Icon as={MdWarehouse} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: inventoryItems,
   },
   {
     name: 'Nhật ký chỉnh sửa',
@@ -170,13 +341,9 @@ const routes = [
     path: '/change-logs',
     component: <AdminChangeLogPage />,
   },
-  {
-    name: 'Kho',
-    icon: <Icon as={MdWarehouse} width="20px" height="20px" color="inherit" />,
-    collapse: true,
-    items: inventoryItems,
-  },
 ];
 
 export default routes;
+
+
 

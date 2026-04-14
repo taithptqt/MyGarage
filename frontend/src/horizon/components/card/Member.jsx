@@ -1,9 +1,9 @@
-// Chakra imports
+﻿// Chakra imports
 import React from "react";
 import { Avatar, Flex, useColorModeValue, Icon, Text } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
-import TransparentMenu from "components/menu/TransparentMenu";
+import Card from "@horizon/components/card/Card";
+import TransparentMenu from "@horizon/components/menu/TransparentMenu";
 // Custom icons
 import { IoEllipsisVertical } from "react-icons/io5";
 
@@ -54,4 +54,5 @@ export default function Default(props) {
     </Card>
   );
 }
+
 

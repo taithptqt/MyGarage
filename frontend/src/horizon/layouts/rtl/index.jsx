@@ -1,14 +1,14 @@
-// Chakra imports
+﻿// Chakra imports
 import { Portal, Box, useDisclosure } from '@chakra-ui/react';
-import Footer from 'components/footer/FooterAdmin';
+import Footer from '@horizon/components/footer/FooterAdmin';
 // Layout components
-import Navbar from 'components/navbar/NavbarRTL';
-import Sidebar from 'components/sidebar/Sidebar';
-import { RtlProvider } from 'components/rtlProvider/RtlProvider';
-import { SidebarContext } from 'contexts/SidebarContext';
+import Navbar from '@horizon/components/navbar/NavbarRTL';
+import Sidebar from '@horizon/components/sidebar/Sidebar';
+import { RtlProvider } from '@horizon/components/rtlProvider/RtlProvider';
+import { SidebarContext } from '@horizon/contexts/SidebarContext';
 import React, { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import routes from 'routes';
+import routes from '@horizon/routes.jsx';
 
 // Custom Chakra theme
 export default function Dashboard(props) {
@@ -170,3 +170,4 @@ export default function Dashboard(props) {
     </RtlProvider>
   );
 }
+

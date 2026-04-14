@@ -1,8 +1,8 @@
-import React from "react";
+﻿import React from "react";
 // Chakra imports
 import { Flex, Icon, Image, Text, useColorModeValue } from "@chakra-ui/react";
 // Custom components
-import Card from "components/card/Card";
+import Card from "@horizon/components/card/Card";
 // Assets
 import { FaEthereum } from "react-icons/fa";
 
@@ -66,4 +66,5 @@ export default function NFT(props) {
     </Card>
   );
 }
+
 

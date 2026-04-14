@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 const SCRIPT_ID = "google-identity-services-script";
 
@@ -20,13 +20,13 @@ function GoogleLoginButton({ onCredential, onError }) {
 
   const handleCredentialResponse = useCallback(async (response) => {
     if (!response?.credential) {
-      errorRef.current?.("Khong lay duoc Google credential.");
+      errorRef.current?.("Không lấy được thông tin đăng nhập từ Google.");
       return;
     }
     try {
       await callbackRef.current?.(response.credential);
     } catch (err) {
-      errorRef.current?.(`Google login error: ${err?.message || "Unknown"}`);
+      errorRef.current?.(`Lỗi đăng nhập Google: ${err?.message || "Không xác định"}`);
     }
   }, []);
 
@@ -36,7 +36,7 @@ function GoogleLoginButton({ onCredential, onError }) {
 
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
     if (!clientId) {
-      setLocalError("Thieu VITE_GOOGLE_CLIENT_ID trong frontend/.env");
+      setLocalError("Thiếu VITE_GOOGLE_CLIENT_ID trong tệp frontend/.env");
       return;
     }
 
@@ -64,7 +64,7 @@ function GoogleLoginButton({ onCredential, onError }) {
         setInitialized(true);
       } catch (err) {
         console.error("Google button init error:", err);
-        errorRef.current?.("Khong khoi tao duoc Google Sign-In.");
+        errorRef.current?.("Không khởi tạo được nút đăng nhập Google.");
       }
     };
 
@@ -88,7 +88,7 @@ function GoogleLoginButton({ onCredential, onError }) {
     script.async = true;
     script.defer = true;
     script.onload = initGoogleButton;
-    script.onerror = () => errorRef.current?.("Khong tai duoc Google script.");
+    script.onerror = () => errorRef.current?.("Không tải được script hỗ trợ đăng nhập Google.");
     document.head.appendChild(script);
 
     return () => {

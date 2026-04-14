@@ -1,4 +1,4 @@
-.customer-layout {
+﻿.customer-layout {
   min-height: 100vh;
   background: #f4f7fe;
 }
@@ -89,6 +89,12 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 32px 24px;
+}
+
+.customer-main--booking {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 /* ── Booking Page ────────────────────────────────────────────────────────── */
@@ -594,7 +600,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Cancel Popup ────────────────────────────────────────────────────────── */
@@ -682,13 +690,25 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

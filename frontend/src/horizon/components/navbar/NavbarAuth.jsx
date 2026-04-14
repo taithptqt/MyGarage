@@ -1,4 +1,4 @@
-import PropTypes from "prop-types";
+﻿import PropTypes from "prop-types";
 import React from "react";
 import { NavLink } from "react-router-dom";
 
@@ -22,14 +22,14 @@ import {
 } from "@chakra-ui/react";
 
 // Custom components
-import IconBox from "components/icons/IconBox";
-import { HorizonLogo } from "components/icons/Icons";
-import { SidebarResponsive } from "components/sidebar/Sidebar";
-import { SidebarContext } from "contexts/SidebarContext";
+import IconBox from "@horizon/components/icons/IconBox";
+import { HorizonLogo } from "@horizon/components/icons/Icons";
+import { SidebarResponsive } from "@horizon/components/sidebar/Sidebar";
+import { SidebarContext } from "@horizon/contexts/SidebarContext";
 
 // Assets
 import { GoChevronDown, GoChevronRight } from "react-icons/go";
-import routes from "routes";
+import routes from "@horizon/routes.jsx";
 
 export default function AuthNavbar(props) {
   const { logo, logoText, secondary, sidebarWidth, ...rest } = props;
@@ -504,3 +504,4 @@ AuthNavbar.propTypes = {
   color: PropTypes.oneOf(["primary", "info", "success", "warning", "danger"]),
   brandText: PropTypes.string,
 };
+

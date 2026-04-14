@@ -1,4 +1,4 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 /*!
   _   _  ___  ____  ___ ________  _   _   _   _ ___   
  | | | |/ _ \|  _ \|_ _|__  / _ \| \ | | | | | |_ _| 
@@ -40,10 +40,10 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 // Custom components
-import { HSeparator } from "components/separator/Separator";
-import DefaultAuth from "layouts/auth/Default";
+import { HSeparator } from "@horizon/components/separator/Separator";
+import DefaultAuth from "@horizon/layouts/auth/Default";
 // Assets
-import illustration from "assets/img/auth/auth.png";
+import illustration from "@horizon/assets/img/auth/auth.png";
 import { FcGoogle } from "react-icons/fc";
 import { MdOutlineRemoveRedEye } from "react-icons/md";
 import { RiEyeCloseLine } from "react-icons/ri";
@@ -237,3 +237,4 @@ function SignIn() {
 }
 
 export default SignIn;
+

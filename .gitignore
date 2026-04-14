@@ -1,30 +1,64 @@
-# Visual Studio / .NET Core
-bin/
-obj/
-.vs/
-*.user
-*.suo
-*.userprefs
-
-# Logs and test outputs
-test_results.txt
-build_errors.txt
-build_output.txt
-out.txt
-debug.ps1
-test_auth.ps1
-check_oks.ps1
-fix_*.ps1
-generate_dtos.ps1
-optimize_controllers.ps1
-scaffold*.ps1
-
-# Frontend
-node_modules/
-dist/
-
-# Environment files
+# Environment secrets — never commit real .env
 .env
 .env.*
-**/.env
-**/.env.*
+!.env.example
+
+# ============================================================
+# .NET / ASP.NET Core
+# ============================================================
+backend/bin/
+backend/obj/
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# Publish output
+publish/
+out/
+
+# ============================================================
+# Node / Frontend
+# ============================================================
+Frontend/node_modules/
+node_modules/
+Frontend/dist/
+Frontend/build/
+Frontend/.vite/
+Frontend/.cert/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================================
+# OS & Editor
+# ============================================================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.idea/
+.vscode/
+*.swp
+
+# ============================================================
+# Docker local overrides
+# ============================================================
+docker-compose.override.yml
+
+# ============================================================
+# Database local files
+# ============================================================
+*.mdf
+*.ldf
+database.txt

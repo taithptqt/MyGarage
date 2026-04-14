@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { servicesApi } from "../api/servicesApi";
-import { Modal, ConfirmDialog } from "../../admin/components/AdminModals";
-import { useSearch } from "../../../context/SearchContext";
+import { servicesApi } from "@features/services/api/servicesApi";
+import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
+import { useSearch } from "@shared/core/context/SearchContext";
 
 const EMPTY_CATEGORY = {
   name: "",
@@ -44,7 +44,7 @@ function CategoryForm({ initial, onSubmit, onCancel, loading }) {
         </div>
       </div>
       <div className="form-group">
-        <label>Mô tả</label>
+        <label>M? t?</label>
         <textarea name="description" value={form.description} onChange={handleChange} rows={3} />
       </div>
       <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
@@ -54,7 +54,7 @@ function CategoryForm({ initial, onSubmit, onCancel, loading }) {
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Đang lưu…" : "Lưu"}
+          {loading ? "?ang luu?" : "Luu"}
         </button>
       </div>
     </form>
@@ -137,14 +137,14 @@ export default function ServiceCategoriesPage() {
 
       <div className="table-wrapper">
         {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Đang tải…</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải...</p></div>
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Mã</th>
+                <th>M?</th>
                 <th>Tên danh mục</th>
-                <th>Thứ tự</th>
+                <th>Th? t?</th>
                 <th>Trạng thái</th>
                 <th>Thao tác</th>
               </tr>
@@ -162,8 +162,8 @@ export default function ServiceCategoriesPage() {
                   </td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("edit"); }}>✏️</button>
-                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("delete"); }}>🗑️</button>
+                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("edit"); }}>??</button>
+                      <button className="btn-icon" onClick={() => { setSelected(c); setModal("delete"); }}>???</button>
                     </div>
                   </td>
                 </tr>
@@ -181,7 +181,7 @@ export default function ServiceCategoriesPage() {
       )}
 
       {modal === "edit" && selected && (
-        <Modal title={`Sửa — ${selected.name}`} onClose={closeModal}>
+        <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <CategoryForm initial={selected} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
         </Modal>
@@ -195,3 +195,7 @@ export default function ServiceCategoriesPage() {
     </div>
   );
 }
+
+
+
+

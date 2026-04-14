@@ -1,4 +1,4 @@
-// Chakra Imports
+﻿// Chakra Imports
 import {
   Avatar,
   Button,
@@ -13,17 +13,20 @@ import {
   useColorMode,
 } from '@chakra-ui/react';
 // Custom Components
-import { ItemContent } from 'components/menu/ItemContent';
-import { SearchBar } from 'components/navbar/searchBar/SearchBar';
-import { SidebarResponsive } from 'components/sidebar/Sidebar';
+import { ItemContent } from '@horizon/components/menu/ItemContent';
+import { SearchBar } from '@horizon/components/navbar/searchBar/SearchBar';
+import { SidebarResponsive } from '@horizon/components/sidebar/Sidebar';
 import PropTypes from 'prop-types';
-import React from 'react';
-import { useAuth } from '../../../context/AuthContext';
-import { useBranch } from '../../../context/BranchContext';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@shared/core/context/AuthContext';
+import { useBranch } from '@shared/core/context/BranchContext';
+import ProfileDialog from '@features/profile/components/ProfileDialog';
+import { getApiBaseUrl } from '@features/auth/api/authApi';
 import { MdNotificationsNone } from 'react-icons/md';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { FaEthereum } from 'react-icons/fa';
-import routes from 'routes';
+import routes from '@horizon/routes.jsx';
 
 function getDisplayName(user) {
   if (!user) return 'User';
@@ -45,13 +48,28 @@ function getAvatarInitials(displayName) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function resolveAvatarUrl(avatarUrl) {
+  if (!avatarUrl) return '';
+  const raw = String(avatarUrl).trim();
+  if (!raw) return '';
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
+    return raw;
+  }
+  const base = getApiBaseUrl();
+  if (!base) return raw;
+  return `${base}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
+
 export default function HeaderLinks(props) {
   const { secondary } = props;
   const { colorMode, toggleColorMode } = useColorMode();
   const { user, logout } = useAuth();
-  const { branches, selectedBranch, selectBranch } = useBranch();
+  const navigate = useNavigate();
+  const { branches, selectedBranchId, selectedBranch, selectBranch } = useBranch();
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
   const displayName = getDisplayName(user);
   const avatarInitials = getAvatarInitials(displayName);
+  const avatarSrc = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl || '');
   const greetingName =
     displayName.length > 24 ? `${displayName.slice(0, 24)}...` : displayName;
 
@@ -69,7 +87,8 @@ export default function HeaderLinks(props) {
     '14px 17px 40px 4px rgba(112, 144, 176, 0.06)',
   );
   return (
-    <Flex
+    <>
+      <Flex
       w={{ sm: '100%', md: 'auto' }}
       alignItems="center"
       flexDirection="row"
@@ -133,7 +152,7 @@ export default function HeaderLinks(props) {
           me="10px"
           borderColor={borderColor}
         >
-          {selectedBranch?.name || "Chọn chi nhánh"}
+          {selectedBranchId === 0 ? "Tất cả chi nhánh" : (selectedBranch?.name || "Chọn chi nhánh")}
         </MenuButton>
         <MenuList
           boxShadow={shadow}
@@ -142,14 +161,23 @@ export default function HeaderLinks(props) {
           p="6px"
           minW="220px"
         >
+          <MenuItem
+            borderRadius="10px"
+            bg={selectedBranchId === 0 ? "gray.100" : "transparent"}
+            onClick={() => selectBranch(0)}
+          >
+            <Text fontSize="sm" fontWeight={selectedBranchId === 0 ? "700" : "500"}>
+              Tất cả chi nhánh
+            </Text>
+          </MenuItem>
           {branches.map((branch) => (
             <MenuItem
               key={branch.id}
               borderRadius="10px"
-              bg={selectedBranch?.id === branch.id ? "gray.100" : "transparent"}
+              bg={selectedBranchId === Number(branch.id) ? "gray.100" : "transparent"}
               onClick={() => selectBranch(branch.id)}
             >
-              <Text fontSize="sm" fontWeight={selectedBranch?.id === branch.id ? "700" : "500"}>
+              <Text fontSize="sm" fontWeight={selectedBranchId === Number(branch.id) ? "700" : "500"}>
                 {branch.name || `Branch #${branch.id}`}
               </Text>
             </MenuItem>
@@ -239,13 +267,12 @@ export default function HeaderLinks(props) {
             _hover={{ cursor: 'pointer' }}
             color="white"
             name={displayName}
+            src={avatarSrc || undefined}
             bg="#11047A"
             size="sm"
             w="40px"
             h="40px"
-          >
-            {avatarInitials}
-          </Avatar>
+          />
         </MenuButton>
         <MenuList
           boxShadow={shadow}
@@ -267,7 +294,7 @@ export default function HeaderLinks(props) {
               fontWeight="700"
               color={textColor}
             >
-              Hi, {greetingName}
+              Xin chào, {greetingName}
             </Text>
           </Flex>
           <Flex flexDirection="column" p="10px">
@@ -276,16 +303,18 @@ export default function HeaderLinks(props) {
               _focus={{ bg: 'none' }}
               borderRadius="8px"
               px="14px"
+              onClick={() => setShowProfileDialog(true)}
             >
-              <Text fontSize="sm">Profile Settings</Text>
+              <Text fontSize="sm">Hồ sơ của tôi</Text>
             </MenuItem>
             <MenuItem
               _hover={{ bg: 'none' }}
               _focus={{ bg: 'none' }}
               borderRadius="8px"
               px="14px"
+              onClick={() => navigate('/home')}
             >
-              <Text fontSize="sm">Newsletter Settings</Text>
+              <Text fontSize="sm">Về trang chủ</Text>
             </MenuItem>
             <MenuItem
               _hover={{ bg: 'none' }}
@@ -295,12 +324,14 @@ export default function HeaderLinks(props) {
               px="14px"
               onClick={logout}
             >
-              <Text fontSize="sm">Log out</Text>
+              <Text fontSize="sm">Đăng xuất</Text>
             </MenuItem>
           </Flex>
         </MenuList>
       </Menu>
-    </Flex>
+      </Flex>
+      {showProfileDialog ? <ProfileDialog onClose={() => setShowProfileDialog(false)} /> : null}
+    </>
   );
 }
 
@@ -310,3 +341,7 @@ HeaderLinks.propTypes = {
   secondary: PropTypes.bool,
   onOpen: PropTypes.func,
 };
+
+
+
+

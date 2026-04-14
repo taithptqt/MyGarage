@@ -1,6 +1,6 @@
-import React from "react";
+﻿import React from "react";
 
-export function Modal({ title, onClose, children }) {
+export function Modal({ title, onClose, children, className = "", headerActions = null }) {
   const handleBackdropClick = (e) => {
     if (e.target.classList.contains("modal-backdrop")) {
       onClose();
@@ -9,12 +9,20 @@ export function Modal({ title, onClose, children }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={handleBackdropClick}>
-      <div className="modal-box">
+      <div className={`modal-box ${className}`.trim()}>
         <div className="modal-header">
           <h2>{title}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <div
+            className="modal-header-actions"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            {headerActions}
+            <button className="modal-close" onClick={onClose}>&times;</button>
+          </div>
         </div>
-        {children}
+        <div className="modal-body-content">
+          {children}
+        </div>
       </div>
     </div>
   );

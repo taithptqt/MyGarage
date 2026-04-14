@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Button,
@@ -18,15 +18,15 @@ import {
   useDisclosure,
   SimpleGrid,
 } from "@chakra-ui/react";
-import IconBox from "components/icons/IconBox";
-import { SidebarResponsive } from "components/sidebar/Sidebar";
+import IconBox from "@horizon/components/icons/IconBox";
+import { SidebarResponsive } from "@horizon/components/sidebar/Sidebar";
 import PropTypes from "prop-types";
 import React from "react";
 import { AiFillStar } from "react-icons/ai";
 import { GoChevronDown, GoChevronRight } from "react-icons/go";
 import { NavLink } from "react-router-dom";
-import { SidebarContext } from "contexts/SidebarContext";
-import routes from "routes";
+import { SidebarContext } from "@horizon/contexts/SidebarContext";
+import routes from "@horizon/routes.jsx";
 
 export default function AuthNavbar(props) {
   const { logo, logoText, secondary, sidebarWidth, ...rest } = props;
@@ -584,3 +584,4 @@ AuthNavbar.propTypes = {
   color: PropTypes.oneOf(["primary", "info", "success", "warning", "danger"]),
   brandText: PropTypes.string,
 };
+

@@ -1,9 +1,17 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 // chakra imports
-import { Box, Flex, HStack, Text, useColorModeValue } from "@chakra-ui/react";
+import {
+  Box,
+  Flex,
+  HStack,
+  Text,
+  Tooltip,
+  useColorModeValue,
+} from "@chakra-ui/react";
 import { MdExpandMore, MdChevronRight } from "react-icons/md";
+import { SidebarContext } from "@horizon/contexts/SidebarContext";
 
 export function SidebarLinks(props) {
   //   Chakra color mode
@@ -17,7 +25,9 @@ export function SidebarLinks(props) {
   let textColor = useColorModeValue("secondaryGray.700", "white");
   let brandColor = useColorModeValue("brand.500", "brand.400");
 
-  const { routes } = props;
+  const { routes, collapsed = false } = props;
+  const sidebarContext = React.useContext(SidebarContext) || {};
+  const setIsSidebarCollapsed = sidebarContext.setIsSidebarCollapsed;
   const [openGroups, setOpenGroups] = React.useState({});
 
   // verifies if routeName is the one active (in browser input)
@@ -34,6 +44,11 @@ export function SidebarLinks(props) {
   };
 
   const toggleGroup = (groupKey) => {
+    if (collapsed && setIsSidebarCollapsed) {
+      setOpenGroups((prev) => ({ ...prev, [groupKey]: true }));
+      setIsSidebarCollapsed(false);
+      return;
+    }
     setOpenGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
@@ -42,23 +57,24 @@ export function SidebarLinks(props) {
     return routes.map((route, index) => {
       if (route.category) {
         return (
-          <>
-            <Text
-              fontSize={"md"}
-              color={activeColor}
-              fontWeight='bold'
-              mx='auto'
-              ps={{
-                sm: "10px",
-                xl: "16px",
-              }}
-              pt='18px'
-              pb='12px'
-              key={index}>
-              {route.name}
-            </Text>
+          <Box key={`${route.name}-${index}-${level}`}>
+            {!collapsed ? (
+              <Text
+                fontSize={"md"}
+                color={activeColor}
+                fontWeight='bold'
+                mx='auto'
+                ps={{
+                  sm: "10px",
+                  xl: "16px",
+                }}
+                pt='18px'
+                pb='12px'>
+                {route.name}
+              </Text>
+            ) : null}
             {createLinks(route.items, level + 1)}
-          </>
+          </Box>
         );
       } else if (route.collapse && route.items) {
         const groupKey = `${route.name}-${index}-${level}`;
@@ -67,33 +83,44 @@ export function SidebarLinks(props) {
 
         return (
           <Box key={groupKey}>
-            <Box
-              onClick={() => toggleGroup(groupKey)}
-              cursor='pointer'
-              borderRadius='10px'
-              _hover={{ bg: "gray.50" }}>
-              <HStack spacing='12px' py='7px' ps={`${10 + level * 14}px`}>
-                <Box color={groupIsActive ? activeIcon : textColor} me='6px'>
-                  {route.icon}
-                </Box>
-                <Text
-                  me='auto'
-                  color={groupIsActive ? activeColor : textColor}
-                  fontWeight={groupIsActive ? "bold" : "normal"}>
-                  {route.name}
-                </Text>
-                <Box color={groupIsActive ? activeIcon : textColor}>
-                  {isOpen ? <MdExpandMore /> : <MdChevronRight />}
-                </Box>
-                <Box
-                  h='30px'
-                  w='4px'
-                  bg={groupIsActive ? brandColor : "transparent"}
-                  borderRadius='5px'
-                />
-              </HStack>
-            </Box>
-            {isOpen ? (
+            <Tooltip label={route.name} isDisabled={!collapsed} placement='right'>
+              <Box
+                onClick={() => toggleGroup(groupKey)}
+                cursor='pointer'
+                borderRadius='10px'
+                _hover={{ bg: "gray.50" }}>
+                <HStack
+                  spacing={collapsed ? '0px' : '12px'}
+                  py='7px'
+                  ps={collapsed ? '0px' : `${10 + level * 14}px`}
+                  justifyContent={collapsed ? 'center' : 'flex-start'}>
+                  <Box color={groupIsActive ? activeIcon : textColor} me={collapsed ? '0px' : '6px'}>
+                    {route.icon}
+                  </Box>
+                  {!collapsed ? (
+                    <Text
+                      me='auto'
+                      color={groupIsActive ? activeColor : textColor}
+                      fontWeight={groupIsActive ? "bold" : "normal"}>
+                      {route.name}
+                    </Text>
+                  ) : null}
+                  {!collapsed ? (
+                    <Box color={groupIsActive ? activeIcon : textColor}>
+                      {isOpen ? <MdExpandMore /> : <MdChevronRight />}
+                    </Box>
+                  ) : null}
+                  <Box
+                    h='30px'
+                    w='4px'
+                    bg={groupIsActive ? brandColor : "transparent"}
+                    borderRadius='5px'
+                    ms={collapsed ? '8px' : '0px'}
+                  />
+                </HStack>
+              </Box>
+            </Tooltip>
+            {isOpen && !collapsed ? (
               <Box ps='8px'>
                 {createLinks(route.items, level + 1)}
               </Box>
@@ -102,86 +129,105 @@ export function SidebarLinks(props) {
         );
       } else if (
         route.layout === "/admin" ||
+        route.layout === "/accounting" ||
         route.layout === "/auth" ||
         route.layout === "/rtl" ||
         route.layout === "/horizon/admin" ||
+        route.layout === "/horizon/accounting" ||
         route.layout === "/horizon/auth" ||
         route.layout === "/horizon/rtl"
       ) {
         return (
-          <NavLink key={index} to={route.layout + route.path}>
-            {route.icon ? (
-              <Box>
-                <HStack
-                  spacing={
-                    activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
-                  }
-                  py='5px'
-                  ps={`${10 + level * 14}px`}>
-                  <Flex w='100%' alignItems='center' justifyContent='center'>
+          <Tooltip
+            key={index}
+            label={route.name}
+            isDisabled={!collapsed}
+            placement='right'>
+            <NavLink to={route.layout + route.path}>
+              {route.icon ? (
+                <Box>
+                  <HStack
+                    spacing={collapsed ? "0px" : activeRoute(route.path.toLowerCase()) ? "22px" : "26px"}
+                    py='5px'
+                    ps={collapsed ? '0px' : `${10 + level * 14}px`}
+                    justifyContent={collapsed ? 'center' : 'flex-start'}>
+                    <Flex
+                      w='100%'
+                      alignItems='center'
+                      justifyContent={collapsed ? 'center' : 'flex-start'}>
+                      <Box
+                        color={
+                          activeRoute(route.path.toLowerCase())
+                            ? activeIcon
+                            : textColor
+                        }
+                        me={collapsed ? '0px' : '18px'}>
+                        {route.icon}
+                      </Box>
+                      {!collapsed ? (
+                        <Text
+                          me='auto'
+                          color={
+                            activeRoute(route.path.toLowerCase())
+                              ? activeColor
+                              : textColor
+                          }
+                          fontWeight={
+                            activeRoute(route.path.toLowerCase())
+                              ? "bold"
+                              : "normal"
+                          }>
+                          {route.name}
+                        </Text>
+                      ) : null}
+                    </Flex>
                     <Box
-                      color={
+                      h='36px'
+                      w='4px'
+                      bg={
                         activeRoute(route.path.toLowerCase())
-                          ? activeIcon
-                          : textColor
+                          ? brandColor
+                          : "transparent"
                       }
-                      me='18px'>
-                      {route.icon}
-                    </Box>
-                    <Text
-                      me='auto'
-                      color={
-                        activeRoute(route.path.toLowerCase())
-                          ? activeColor
-                          : textColor
-                      }
-                      fontWeight={
-                        activeRoute(route.path.toLowerCase())
-                          ? "bold"
-                          : "normal"
-                      }>
-                      {route.name}
-                    </Text>
-                  </Flex>
-                  <Box
-                    h='36px'
-                    w='4px'
-                    bg={
-                      activeRoute(route.path.toLowerCase())
-                        ? brandColor
-                        : "transparent"
-                    }
-                    borderRadius='5px'
-                  />
-                </HStack>
-              </Box>
-            ) : (
-              <Box>
-                <HStack
-                  spacing={
-                    activeRoute(route.path.toLowerCase()) ? "22px" : "26px"
-                  }
-                  py='5px'
-                  ps={`${10 + level * 14}px`}>
-                  <Text
-                    me='auto'
-                    color={
-                      activeRoute(route.path.toLowerCase())
-                        ? activeColor
-                        : inactiveColor
-                    }
-                    fontWeight={
-                      activeRoute(route.path.toLowerCase()) ? "bold" : "normal"
-                    }>
-                    {route.name}
-                  </Text>
-                  <Box h='36px' w='4px' bg='brand.400' borderRadius='5px' />
-                </HStack>
-              </Box>
-            )}
-          </NavLink>
+                      borderRadius='5px'
+                      ms={collapsed ? '8px' : '0px'}
+                    />
+                  </HStack>
+                </Box>
+              ) : (
+                <Box>
+                  <HStack
+                    spacing={collapsed ? "0px" : activeRoute(route.path.toLowerCase()) ? "22px" : "26px"}
+                    py='5px'
+                    ps={collapsed ? '0px' : `${10 + level * 14}px`}>
+                    {!collapsed ? (
+                      <Text
+                        me='auto'
+                        color={
+                          activeRoute(route.path.toLowerCase())
+                            ? activeColor
+                            : inactiveColor
+                        }
+                        fontWeight={
+                          activeRoute(route.path.toLowerCase()) ? "bold" : "normal"
+                        }>
+                        {route.name}
+                      </Text>
+                    ) : null}
+                    <Box
+                      h='36px'
+                      w='4px'
+                      bg={activeRoute(route.path.toLowerCase()) ? brandColor : "transparent"}
+                      borderRadius='5px'
+                    />
+                  </HStack>
+                </Box>
+              )}
+            </NavLink>
+          </Tooltip>
         );
       }
+      return null;
     });
   };
   //  BRAND
@@ -189,3 +235,4 @@ export function SidebarLinks(props) {
 }
 
 export default SidebarLinks;
+

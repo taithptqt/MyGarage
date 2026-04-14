@@ -1,4 +1,4 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 
 import {
   Flex,
@@ -23,8 +23,8 @@ import {
 } from '@tanstack/react-table';
 
 // Custom components
-import Card from 'components/card/Card';
-import Menu from 'components/menu/MainMenu';
+import Card from '@horizon/components/card/Card';
+import Menu from '@horizon/components/menu/MainMenu';
 
 const columnHelper = createColumnHelper();
 
@@ -209,3 +209,4 @@ export default function ColumnTable(props) {
     </Card>
   );
 }
+

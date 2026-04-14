@@ -1,4 +1,4 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 
 import {
   Box,
@@ -22,8 +22,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 // Custom components
-import Card from 'components/card/Card';
-import Menu from 'components/menu/MainMenu';
+import Card from '@horizon/components/card/Card';
+import Menu from '@horizon/components/menu/MainMenu';
 import * as React from 'react';
 // Assets
 import { MdCancel, MdCheckCircle, MdOutlineError } from 'react-icons/md';
@@ -241,3 +241,4 @@ export default function ComplexTable(props) {
     </Card>
   );
 }
+

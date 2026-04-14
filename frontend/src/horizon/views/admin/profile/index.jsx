@@ -1,4 +1,4 @@
-/*!
+﻿/*!
   _   _  ___  ____  ___ ________  _   _   _   _ ___   
  | | | |/ _ \|  _ \|_ _|__  / _ \| \ | | | | | |_ _| 
  | |_| | | | | |_) || |  / / | | |  \| | | | | || | 
@@ -24,16 +24,16 @@
 import { Box, Grid } from "@chakra-ui/react";
 
 // Custom components
-import Banner from "views/admin/profile/components/Banner";
-import General from "views/admin/profile/components/General";
-import Notifications from "views/admin/profile/components/Notifications";
-import Projects from "views/admin/profile/components/Projects";
-import Storage from "views/admin/profile/components/Storage";
-import Upload from "views/admin/profile/components/Upload";
+import Banner from "@horizon/views/admin/profile/components/Banner";
+import General from "@horizon/views/admin/profile/components/General";
+import Notifications from "@horizon/views/admin/profile/components/Notifications";
+import Projects from "@horizon/views/admin/profile/components/Projects";
+import Storage from "@horizon/views/admin/profile/components/Storage";
+import Upload from "@horizon/views/admin/profile/components/Upload";
 
 // Assets
-import banner from "assets/img/auth/banner.png";
-import avatar from "assets/img/avatars/avatar4.png";
+import banner from "@horizon/assets/img/auth/banner.png";
+import avatar from "@horizon/assets/img/avatars/avatar4.png";
 import React from "react";
 
 export default function Overview() {
@@ -116,3 +116,4 @@ export default function Overview() {
     </Box>
   );
 }
+
