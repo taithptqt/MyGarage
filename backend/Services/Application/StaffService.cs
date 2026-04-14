@@ -50,48 +50,6 @@ namespace MyGarage.Services
             return await base.UpdateAsync(id, entity);
         }
 
-        public override async Task<IEnumerable<Staff>> GetAllAsync()
-        {
-            return await _context.Staffs
-                .Where(staff => staff.IsDeleted != true)
-                .ToListAsync();
-        }
-
-        public override async Task<Staff?> GetByIdAsync(object id)
-        {
-            if (!TryResolveStaffId(id, out var staffId))
-            {
-                return null;
-            }
-
-            return await _context.Staffs
-                .FirstOrDefaultAsync(staff => staff.Id == staffId && staff.IsDeleted != true);
-        }
-
-        public override async Task<bool> DeleteAsync(object id)
-        {
-            if (!TryResolveStaffId(id, out var staffId))
-            {
-                return false;
-            }
-
-            var staff = await _context.Staffs
-                .FirstOrDefaultAsync(item => item.Id == staffId && item.IsDeleted != true);
-            if (staff == null)
-            {
-                return false;
-            }
-
-            staff.IsDeleted = true;
-            staff.DeletedAt = VietnamTime.Now;
-            staff.Status = nameof(StaffStatusCode.TERMINATED);
-            staff.SecurityStamp = CreateSecurityStamp();
-            staff.UpdatedAt = VietnamTime.Now;
-
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
         private async Task<Staff?> ResolveExistingStaffSnapshotAsync(object id)
         {
             if (!TryResolveStaffId(id, out var staffId))

@@ -1564,7 +1564,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Ẩn</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1598,7 +1598,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.modelName || "-"}</td>
                         <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Ngừng HĐ</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1803,30 +1803,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       {modal?.mode === "delete" && modal.item && (
-        <Modal
-          title={
-            modal.entity === "staff"
-              ? "Ẩn nhân viên"
-              : modal.entity === "customer"
-                ? "Ngừng hoạt động khách hàng"
-                : "Confirm Delete"
-          }
-          onClose={closeModal}
-        >
+        <Modal title="Confirm Delete" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
-          <ConfirmDialog
-            message={
-              modal.entity === "staff"
-                ? `Ẩn nhân viên #${modal.item.id}? Dữ liệu nghiệp vụ sẽ được giữ lại.`
-                : modal.entity === "customer"
-                  ? `Ngừng hoạt động khách hàng #${modal.item.id}? Dữ liệu sẽ không bị xóa vật lý.`
-                  : `Delete this ${modal.entity} record (#${modal.item.id})?`
-            }
-            onConfirm={handleDelete}
-            onCancel={closeModal}
-            loading={saving}
-            confirmLabel={modal.entity === "staff" || modal.entity === "customer" ? "Xác nhận" : "Delete"}
-          />
+          <ConfirmDialog message={`Delete this ${modal.entity} record (#${modal.item.id})?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>

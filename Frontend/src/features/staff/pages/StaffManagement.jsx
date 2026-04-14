@@ -335,7 +335,7 @@ export default function StaffManagement() {
                       </button>
                       <button
                         className="btn-icon btn-del"
-                        title="Ẩn"
+                        title="Xóa"
                         onClick={() => openDelete(member)}
                       >
                         {"\u{1F5D1}\uFE0F"}
@@ -381,14 +381,13 @@ export default function StaffManagement() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận ẩn nhân viên" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
           <ConfirmDialog
-            message={`Bạn có chắc chắn muốn ẩn "${selected.fullName}"? Dữ liệu sẽ được giữ lại và tài khoản sẽ ngừng hoạt động.`}
+            message={`Bạn có chắc chắn muđn xóa "${selected.fullName}"? Hành động này không thể hoàn tác.`}
             onConfirm={handleDelete}
             onCancel={closeModal}
             loading={saving}
-            confirmLabel="Xác nhận ẩn"
           />
         </Modal>
       )}

@@ -905,7 +905,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleDeleteProduct = async (product) => {
-    const ok = window.confirm(`Ẩn/ngừng kinh doanh sản phẩm "${product?.name || "-"}" (SKU: ${product?.sku || "-"})? Dữ liệu sẽ không bị xóa vật lý.`);
+    const ok = window.confirm(`Xóa sản phẩm "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`);
     if (!ok) return;
     await inventoryApi.deleteProduct(product.id);
     await fetchData();
@@ -1537,7 +1537,7 @@ export default function InventoryAdminPage({ section }) {
                                 Sửa
                               </button>
                               <button className="btn-icon" onClick={() => runAction(() => handleDeleteProduct(p))}>
-                                Ẩn
+                                Xóa
                               </button>
                               {p.isActive ? (
                                 <button className="btn-icon" onClick={() => runAction(() => markDiscontinued(p))}>
