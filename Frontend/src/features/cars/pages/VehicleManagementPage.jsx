@@ -713,15 +713,9 @@ export default function VehicleManagementPage({ section }) {
                           <td>{formatDateTime(item.updatedAt)}</td>
                           <td className="td-center">
                             <div className="row-actions bay-row-actions">
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                               <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); openEditModal(item); }}>Sửa</button>
                               <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => item.isEditLocked ? vehicleAdminApi.unlockEdit(item.id) : vehicleAdminApi.lockEdit(item.id), item.isEditLocked ? "Đã mở khóa sửa xe." : "Đã khóa sửa xe.").catch(() => { }); }}>{item.isEditLocked ? "Mở khóa" : "Khóa"}</button>
                               <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => vehicleAdminApi.hideVehicle(item.id), "Đã ẩn xe.").catch(() => { }); }}>Ẩn</button>
-=======
-                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); openEditModal(item); }}>S?a</button>
-                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => item.isEditLocked ? vehicleAdminApi.unlockEdit(item.id) : vehicleAdminApi.lockEdit(item.id), item.isEditLocked ? "ï¿½ï¿½ m? khï¿½a s?a xe." : "ï¿½ï¿½ khï¿½a s?a xe.").catch(() => {}); }}>{item.isEditLocked ? "M? khï¿½a" : "Khï¿½a"}</button>
-                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => vehicleAdminApi.hideVehicle(item.id), "ï¿½ï¿½ ?n xe.").catch(() => {}); }}>?n</button>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                             </div>
                           </td>
                         </tr>
@@ -765,11 +759,7 @@ export default function VehicleManagementPage({ section }) {
                           <td>{item.currentBayCode ? `${item.currentBayCode} - ${item.currentBayName}` : "(chua gï¿½n)"}</td>
                           <td>{item.currentStaffName || "-"}</td>
                           <td className="td-center">
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                             <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "Đã cập nhật trạng thái xe.").catch(() => { })}>
-=======
-                            <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "ï¿½ï¿½ c?p nh?t tr?ng thï¿½i xe.").catch(() => {})}>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                               {availableStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           </td>
@@ -835,19 +825,11 @@ export default function VehicleManagementPage({ section }) {
                   <div className="bay-panel-head"><h3>Thï¿½ng tin v? trï¿½ hi?n t?i</h3></div>
                   <div className="bay-meta-info">
                     <div className="bay-meta-row">
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       <strong>Xe:</strong>
                       <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chưa chọn)"}</span>
                     </div>
                     <div className="bay-meta-row">
                       <strong>Trạng thái:</strong>
-=======
-                      <strong>Xe:</strong> 
-                      <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chua ch?n)"}</span>
-                    </div>
-                    <div className="bay-meta-row">
-                      <strong>Tr?ng thï¿½i:</strong> 
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       <span className={`badge ${statusBadgeClass(selectedRow?.currentStatus)}`}>{selectedRow ? (statusLabelMap[selectedRow.currentStatus] || selectedRow.currentStatus) : "-"}</span>
                     </div>
                     <div className="bay-meta-row">
@@ -858,11 +840,7 @@ export default function VehicleManagementPage({ section }) {
                     </div>
                     {selectedRow?.currentBayCode && (
                       <div className="bay-meta-row">
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                         <strong>Lưu kho:</strong>
-=======
-                        <strong>Luu kho:</strong> 
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                         <span style={{ fontWeight: '500' }}>{formatHours(selectedRow?.bayOccupiedHours)}</span>
                       </div>
                     )}
@@ -876,11 +854,7 @@ export default function VehicleManagementPage({ section }) {
                       e.preventDefault();
                       const bayId = Number(e.currentTarget.elements.assignBayId.value);
                       if (!selectedVehicleId || !bayId) return;
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId }), "Đã gán xe vào khoang.").catch(() => { });
-=======
-                      runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId }), "ï¿½ï¿½ gï¿½n xe vï¿½o khoang.").catch(() => {});
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                     }}>
                       <div className="form-group">
                         <select className="search-input" name="assignBayId" defaultValue="">
@@ -890,7 +864,6 @@ export default function VehicleManagementPage({ section }) {
                       </div>
                       <div className="form-actions" style={{ justifyContent: 'space-between', marginTop: '16px' }}>
                         <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={async () => {
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                           try {
                             setSaving(true);
                             const res = await bayApi.getSuggestions({ vehicleId: selectedVehicleId });
@@ -903,20 +876,6 @@ export default function VehicleManagementPage({ section }) {
                           }
                         }}>💡 Gợi ý (AI)</button>
                         <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>Gán khoang</button>
-=======
-                           try {
-                             setSaving(true);
-                             const res = await bayApi.getSuggestions({ vehicleId: selectedVehicleId });
-                             setSuggestions(res || []);
-                             setFeedback("ï¿½ï¿½ t?i g?i ï¿½ khoang.");
-                           } catch(err) {
-                             setError(err.message || "L?i khi l?y g?i ï¿½ khoang.");
-                           } finally {
-                             setSaving(false);
-                           }
-                        }}>?? G?i ï¿½ (AI)</button>
-                        <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>Gï¿½n khoang</button>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       </div>
                     </form>
 
@@ -925,7 +884,6 @@ export default function VehicleManagementPage({ section }) {
                         <h4>ï¿½? xu?t phï¿½ h?p nh?t</h4>
                         <div className="bay-suggestion-list">
                           {suggestions.map((s, idx) => (
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                             <div key={idx} className="suggestion-item">
                               <div>
                                 <div className="suggestion-item-title">{s.bay?.code || s.bayCode} <span className="suggestion-item-score">Điểm: {s.score}</span></div>
@@ -935,17 +893,6 @@ export default function VehicleManagementPage({ section }) {
                                 runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId: s.bayId || s.bay?.id }), "Đã gán tự động.").catch(() => { });
                               }}>Áp dụng</button>
                             </div>
-=======
-                             <div key={idx} className="suggestion-item">
-                                <div>
-                                  <div className="suggestion-item-title">{s.bay?.code || s.bayCode} <span className="suggestion-item-score">ï¿½i?m: {s.score}</span></div>
-                                  <div className="suggestion-item-reason">{s.reasons?.join(', ')}</div>
-                                </div>
-                                <button className="btn-ghost" type="button" disabled={saving} onClick={() => {
-                                  runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId: s.bayId || s.bay?.id }), "ï¿½ï¿½ gï¿½n t? d?ng.").catch(() => {});
-                                }}>ï¿½p d?ng</button>
-                             </div>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                           ))}
                         </div>
                       </div>
@@ -960,11 +907,7 @@ export default function VehicleManagementPage({ section }) {
                       e.preventDefault();
                       const toBayId = Number(e.currentTarget.elements.moveBayId.value);
                       if (!selectedVehicleId || !toBayId) return;
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       runMutation(() => vehicleAdminApi.moveBay(selectedVehicleId, { toBayId }), "Đã chuyển xe sang khoang mới.").catch(() => { });
-=======
-                      runMutation(() => vehicleAdminApi.moveBay(selectedVehicleId, { toBayId }), "ï¿½ï¿½ chuy?n xe sang khoang m?i.").catch(() => {});
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                     }}>
                       <div className="form-group">
                         <select className="search-input" name="moveBayId" defaultValue="">
@@ -973,13 +916,8 @@ export default function VehicleManagementPage({ section }) {
                         </select>
                       </div>
                       <div className="form-actions" style={{ justifyContent: 'space-between', marginTop: '16px' }}>
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                         <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={() => runMutation(() => vehicleAdminApi.removeBay(selectedVehicleId, { note: "Chuyển ra ngoài xưởng" }), "Đã đưa ra khỏi khoang gốc.").catch(() => { })}>Đưa khỏi khoang</button>
                         <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>Điều phối ngay</button>
-=======
-                        <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={() => runMutation(() => vehicleAdminApi.removeBay(selectedVehicleId, { note: "Chuy?n ra ngoï¿½i xu?ng" }), "ï¿½ï¿½ dua ra kh?i khoang g?c.").catch(() => {})}>ï¿½ua kh?i khoang</button>
-                        <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>ï¿½i?u ph?i ngay</button>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       </div>
                     </form>
                   </div>
@@ -1019,13 +957,8 @@ export default function VehicleManagementPage({ section }) {
                   <div className="bay-panel-head"><h3>Phï¿½n cï¿½ng nhï¿½n s?</h3></div>
                   <div className="bay-meta-info" style={{ marginBottom: '16px' }}>
                     <div className="bay-meta-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                       <strong>Xe:</strong>
                       <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chưa chọn)"}</span>
-=======
-                      <strong>Xe:</strong> 
-                      <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chua ch?n)"}</span>
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                     </div>
                   </div>
                   <form className="admin-form bay-mini-form" onSubmit={(e) => {
@@ -1033,11 +966,7 @@ export default function VehicleManagementPage({ section }) {
                     const staffId = Number(e.currentTarget.elements.staffId.value) || null;
                     const technicalTeam = String(e.currentTarget.elements.technicalTeam.value || "").trim();
                     if (!selectedVehicleId) return;
-<<<<<<< HEAD:frontend/src/features/cars/pages/VehicleManagementPage.jsx
                     runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "Đã cập nhật phân công xe.").catch(() => { });
-=======
-                    runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "ï¿½ï¿½ c?p nh?t phï¿½n cï¿½ng xe.").catch(() => {});
->>>>>>> 4918de7b76e0dd1d9f1e491629638f4aa86bb4e5:Frontend/src/features/cars/pages/VehicleManagementPage.jsx
                   }}>
                     <div className="form-group">
                       <label>C? v?n d?ch v? / KTV chï¿½nh</label>
