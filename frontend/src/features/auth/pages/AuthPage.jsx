@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { getApiBaseUrl } from "@features/auth/api/authApi";
 import AuthResult from "@features/auth/components/AuthResult";

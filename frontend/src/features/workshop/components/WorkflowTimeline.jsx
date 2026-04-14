@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 const STAGES = [
   { key: "RECEPTION", label: "Tiếp nhận" },

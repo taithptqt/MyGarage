@@ -462,7 +462,7 @@ namespace MyGarage.Services
                 Date = DateOnly.FromDateTime(now),
                 Recommendation = $"[AUTO_NO_SHOW_APPOINTMENT:{noShowAppointment.Id}] {bayLabel} \u0111\u00E3 tr\u1ED1ng do kh\u00E1ch kh\u00F4ng \u0111\u1EBFn. C\u00F3 th\u1EC3 \u0111\u01B0a {vehicleLabel} v\u00E0o l\u00E0m ngay.",
                 EfficiencyScore = null,
-                Status = nameof(AiDispatchStatus.PENDING),
+                Status = nameof(AiDispatchStatus.GENERATED),
                 CreatedAt = _clock.UtcNow
             });
         }

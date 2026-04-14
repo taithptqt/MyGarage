@@ -1,4 +1,4 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import Header from "@shared/components/Header";

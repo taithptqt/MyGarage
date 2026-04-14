@@ -1,178 +1,129 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@shared/core/context/AuthContext";
-import { getApiBaseUrl } from "@features/auth/api/authApi";
-import ProfileDialog from "@features/profile/components/ProfileDialog";
-import "./Header.css";
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Search, Globe, ChevronDown } from "lucide-react";
 
-function resolveAvatarUrl(avatarUrl) {
-  if (!avatarUrl) return "";
-  const raw = String(avatarUrl).trim();
-  if (!raw) return "";
-  if (
-    raw.startsWith("http://") ||
-    raw.startsWith("https://") ||
-    raw.startsWith("data:") ||
-    raw.startsWith("blob:")
-  ) {
-    return raw;
-  }
-  const base = getApiBaseUrl();
-  if (!base) return raw;
-  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
-}
-
-function Header({ overlay = false }) {
-  const { isAuthenticated, user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showProfileDialog, setShowProfileDialog] = useState(false);
-  const menuRef = useRef(null);
-
-  const displayName = String(user?.fullName || user?.name || "Bạn").trim();
-  const avatarUrl = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl);
-  const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
-  const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
-  const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN"].includes(roleCode);
-
-  const dashboardPath = useMemo(() => {
-    switch (roleCode) {
-      case "ADMIN":
-        return "/admin/default";
-      case "ACCOUNTANT":
-        return "/accounting/dashboard";
-      case "RECEPTIONIST":
-        return "/workshop/reception";
-      case "TECH":
-        return "/workshop/technician";
-      case "MANAGER":
-        return "/workshop/manager";
-      case "QUALITY_CONTROL":
-        return "/workshop/qc";
-      case "FOREMAN":
-        return "/workshop/foreman";
-      default:
-        return "";
-    }
-  }, [roleCode]);
+const Header = ({ overlay = false }) => {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onDocClick = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuOpen(false);
-      }
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
     };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [menuOpen]);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-  const handleNavigate = (path) => {
-    setMenuOpen(false);
-    if (location.pathname === path) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    navigate(path);
-    window.setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 0);
-  };
-
-  const handleLogout = () => {
-    setMenuOpen(false);
-    setShowProfileDialog(false);
-    logout();
-    navigate("/home", { replace: true });
-  };
+  const navLinks = [
+    { name: "ABOUT MY GARAGE", path: "/about" },
+    { name: "STORAGE", path: "/storage" },
+    { name: "SALES", path: "/sales" },
+    { name: "MEETINGS AND EVENTS", path: "/events" },
+    { name: "PARTNERS", path: "/partners" },
+    { name: "NEWS", path: "/news" },
+    { name: "CONTACT", path: "/contact" },
+  ];
 
   return (
-    <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"}`}>
-      <div className="mg-header-main">
-        <span className="mg-header-hotline">+45 69 133 911</span>
-
-        <div className="mg-header-side">
-          <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
-          <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
-          <a href="/my-appointments" onClick={(event) => { event.preventDefault(); handleNavigate("/my-appointments"); }}>LỊCH HẸN CỦA TÔI</a>
+    <div className="absolute top-0 left-0 w-full z-50">
+      {/* Top Utility Bar */}
+      <div className={`bg-garage-green/40 backdrop-blur-sm border-b border-white/5 py-2 px-8 flex justify-between items-center transition-opacity duration-500 ${isScrolled ? "opacity-0 invisible" : "opacity-100 visible"}`}>
+        <div className="text-[10px] text-garage-gold cursor-default font-sans tracking-widest font-bold">
+          098 765 4321 English
         </div>
-
-        <div className="mg-header-logo" role="img" aria-label="MY GARAGE">
-          <span>MY</span>
-          <small>GARAGE</small>
-        </div>
-
-        <div className="mg-header-side right">
-          <a href="#">HỌP & SỰ KIỆN</a>
-          <a href="#">ĐỐI TÁC</a>
-          <a href="#">TIN TỨC</a>
-          <a href="#">LIÊN HỆ</a>
-        </div>
-
-        {isAuthenticated ? (
-          <div className="mg-header-user" ref={menuRef}>
-            <button
-              type="button"
-              className="mg-header-user-trigger"
-              onClick={() => setMenuOpen((prev) => !prev)}
-            >
-              <span className="mg-header-user-name">Xin chào, {displayName}</span>
-              <span className="mg-header-user-avatar" aria-hidden="true">
-                {avatarUrl ? <img src={avatarUrl} alt="" /> : avatarInitial}
-              </span>
-            </button>
-            {menuOpen && (
-              <div className="mg-header-user-menu">
-                <div className="mg-header-user-menu-head">Xin chào, {displayName}</div>
-                <button
-                  type="button"
-                  className="mg-header-user-menu-item"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setShowProfileDialog(true);
-                  }}
-                >
-                  Hồ sơ của tôi
-                </button>
-                {isStaffOrAdmin && dashboardPath ? (
-                  <button
-                    type="button"
-                    className="mg-header-user-menu-item"
-                    onClick={() => handleNavigate(dashboardPath)}
-                  >
-                    Dashboard
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="mg-header-user-menu-item logout"
-                  onClick={handleLogout}
-                >
-                  Đăng xuất
-                </button>
-              </div>
-            )}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 text-[10px] text-white/70 font-bold tracking-widest">
+            <span className="text-garage-gold cursor-default">FAQ</span>
+            <span className="text-white/20">|</span>
+            <span className="text-garage-gold cursor-default">JOB</span>
           </div>
-        ) : (
-          <a className="mg-header-login-btn" href="/login">ĐĂNG NHẬP</a>
-        )}
+          <button className="text-white/70 hover:text-garage-gold">
+            <Search size={14} />
+          </button>
+        </div>
       </div>
 
-      {showProfileDialog ? <ProfileDialog onClose={() => setShowProfileDialog(false)} /> : null}
-    </nav>
+      {/* Main Navigation */}
+      <nav
+        className={`w-full transition-all duration-500 ${isScrolled
+          ? "bg-garage-green/95 backdrop-blur-lg py-3 shadow-2xl translate-y-[40px]"
+          : "bg-transparent py-6"
+          }`}
+      >
+        <div className="max-w-[1440px] mx-auto px-8 relative">
+          <div className="flex items-center justify-between md:justify-center gap-12 lg:gap-20">
+            {/* Left Links */}
+            <div className="hidden md:flex items-center gap-8 lg:gap-12 flex-1 justify-end">
+              {navLinks.slice(0, 3).map((link) => (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className="text-[11px] font-bold tracking-[0.25em] text-white hover:text-garage-gold transition-colors"
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+
+            {/* Centered Logo */}
+            <Link to="/" className="flex-shrink-0 group flex flex-col items-center">
+              <span className="font-serif text-3xl lg:text-4xl text-garage-gold tracking-[0.15em] leading-none mb-1">
+                MY
+              </span>
+              <span className="text-[9px] font-bold tracking-[0.6em] text-garage-gold leading-none uppercase">
+                Garage
+              </span>
+            </Link>
+
+            {/* Right Links */}
+            <div className="hidden md:flex items-center gap-8 lg:gap-12 flex-1">
+              {navLinks.slice(3).map((link) => (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className="text-[11px] font-bold tracking-[0.25em] text-white hover:text-garage-gold transition-colors"
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+
+            {/* Mobile Toggle */}
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="md:hidden group flex flex-col items-end gap-1.5 focus:outline-none"
+            >
+              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "w-8 translate-y-2 rotate-45" : "w-8 group-hover:w-6"}`} />
+              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "opacity-0" : "w-6 group-hover:w-8"}`} />
+              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "w-8 -translate-y-2 -rotate-45" : "w-4 group-hover:w-8"}`} />
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Fullscreen Overlay Menu (Mobile) */}
+      <div className={`fixed inset-0 bg-garage-green z-[100] transition-all duration-700 ${isMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        <div className="h-full flex flex-col items-center justify-center space-y-6">
+          {navLinks.map((link) => (
+            <Link
+              key={link.name}
+              to={link.path}
+              onClick={() => setIsMenuOpen(false)}
+              className="font-serif text-3xl text-garage-cream hover:text-garage-gold transition-colors tracking-widest uppercase"
+            >
+              {link.name}
+            </Link>
+          ))}
+          <button
+            onClick={() => setIsMenuOpen(false)}
+            className="stencil-font text-garage-gold pt-12 hover:text-white tracking-[0.3em]"
+          >
+            [ CLOSE ]
+          </button>
+        </div>
+      </div>
+    </div>
   );
-}
+};
 
 export default Header;
-
-
-
-
-
-
-

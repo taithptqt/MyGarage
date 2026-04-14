@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllServiceCategories, getAllStandardServices } from "@features/appointments/api/appointmentApi";

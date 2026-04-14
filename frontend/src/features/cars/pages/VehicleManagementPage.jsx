@@ -686,8 +686,8 @@ export default function VehicleManagementPage({ section }) {
                           <td className="td-center">
                             <div className="row-actions bay-row-actions">
                               <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); openEditModal(item); }}>Sửa</button>
-                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => item.isEditLocked ? vehicleAdminApi.unlockEdit(item.id) : vehicleAdminApi.lockEdit(item.id), item.isEditLocked ? "Đã mở khóa sửa xe." : "Đã khóa sửa xe.").catch(() => {}); }}>{item.isEditLocked ? "Mở khóa" : "Khóa"}</button>
-                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => vehicleAdminApi.hideVehicle(item.id), "Đã ẩn xe.").catch(() => {}); }}>Ẩn</button>
+                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => item.isEditLocked ? vehicleAdminApi.unlockEdit(item.id) : vehicleAdminApi.lockEdit(item.id), item.isEditLocked ? "Đã mở khóa sửa xe." : "Đã khóa sửa xe.").catch(() => { }); }}>{item.isEditLocked ? "Mở khóa" : "Khóa"}</button>
+                              <button className="btn-icon" type="button" onClick={(e) => { e.stopPropagation(); runMutation(() => vehicleAdminApi.hideVehicle(item.id), "Đã ẩn xe.").catch(() => { }); }}>Ẩn</button>
                             </div>
                           </td>
                         </tr>
@@ -731,7 +731,7 @@ export default function VehicleManagementPage({ section }) {
                           <td>{item.currentBayCode ? `${item.currentBayCode} - ${item.currentBayName}` : "(chưa gán)"}</td>
                           <td>{item.currentStaffName || "-"}</td>
                           <td className="td-center">
-                            <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "Đã cập nhật trạng thái xe.").catch(() => {})}>
+                            <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "Đã cập nhật trạng thái xe.").catch(() => { })}>
                               {availableStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           </td>
@@ -797,22 +797,22 @@ export default function VehicleManagementPage({ section }) {
                   <div className="bay-panel-head"><h3>Thông tin vị trí hiện tại</h3></div>
                   <div className="bay-meta-info">
                     <div className="bay-meta-row">
-                      <strong>Xe:</strong> 
+                      <strong>Xe:</strong>
                       <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chưa chọn)"}</span>
                     </div>
                     <div className="bay-meta-row">
-                      <strong>Trạng thái:</strong> 
+                      <strong>Trạng thái:</strong>
                       <span className={`badge ${statusBadgeClass(selectedRow?.currentStatus)}`}>{selectedRow ? (statusLabelMap[selectedRow.currentStatus] || selectedRow.currentStatus) : "-"}</span>
                     </div>
                     <div className="bay-meta-row">
-                      <strong>Khoang:</strong> 
+                      <strong>Khoang:</strong>
                       <span className={selectedRow?.currentBayCode ? "badge badge-active" : "badge badge-inactive"}>
                         {selectedRow?.currentBayCode ? `${selectedRow.currentBayCode} - ${selectedRow.currentBayName}` : "Chưa có khoang"}
                       </span>
                     </div>
                     {selectedRow?.currentBayCode && (
                       <div className="bay-meta-row">
-                        <strong>Lưu kho:</strong> 
+                        <strong>Lưu kho:</strong>
                         <span style={{ fontWeight: '500' }}>{formatHours(selectedRow?.bayOccupiedHours)}</span>
                       </div>
                     )}
@@ -826,7 +826,7 @@ export default function VehicleManagementPage({ section }) {
                       e.preventDefault();
                       const bayId = Number(e.currentTarget.elements.assignBayId.value);
                       if (!selectedVehicleId || !bayId) return;
-                      runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId }), "Đã gán xe vào khoang.").catch(() => {});
+                      runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId }), "Đã gán xe vào khoang.").catch(() => { });
                     }}>
                       <div className="form-group">
                         <select className="search-input" name="assignBayId" defaultValue="">
@@ -836,35 +836,35 @@ export default function VehicleManagementPage({ section }) {
                       </div>
                       <div className="form-actions" style={{ justifyContent: 'space-between', marginTop: '16px' }}>
                         <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={async () => {
-                           try {
-                             setSaving(true);
-                             const res = await bayApi.getSuggestions({ vehicleId: selectedVehicleId });
-                             setSuggestions(res || []);
-                             setFeedback("Đã tải gợi ý khoang.");
-                           } catch(err) {
-                             setError(err.message || "Lỗi khi lấy gợi ý khoang.");
-                           } finally {
-                             setSaving(false);
-                           }
+                          try {
+                            setSaving(true);
+                            const res = await bayApi.getSuggestions({ vehicleId: selectedVehicleId });
+                            setSuggestions(res || []);
+                            setFeedback("Đã tải gợi ý khoang.");
+                          } catch (err) {
+                            setError(err.message || "Lỗi khi lấy gợi ý khoang.");
+                          } finally {
+                            setSaving(false);
+                          }
                         }}>💡 Gợi ý (AI)</button>
                         <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>Gán khoang</button>
                       </div>
                     </form>
-                    
+
                     {suggestions && suggestions.length > 0 && (
                       <div className="suggestion-box">
                         <h4>Đề xuất phù hợp nhất</h4>
                         <div className="bay-suggestion-list">
                           {suggestions.map((s, idx) => (
-                             <div key={idx} className="suggestion-item">
-                                <div>
-                                  <div className="suggestion-item-title">{s.bay?.code || s.bayCode} <span className="suggestion-item-score">Điểm: {s.score}</span></div>
-                                  <div className="suggestion-item-reason">{s.reasons?.join(', ')}</div>
-                                </div>
-                                <button className="btn-ghost" type="button" disabled={saving} onClick={() => {
-                                  runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId: s.bayId || s.bay?.id }), "Đã gán tự động.").catch(() => {});
-                                }}>Áp dụng</button>
-                             </div>
+                            <div key={idx} className="suggestion-item">
+                              <div>
+                                <div className="suggestion-item-title">{s.bay?.code || s.bayCode} <span className="suggestion-item-score">Điểm: {s.score}</span></div>
+                                <div className="suggestion-item-reason">{s.reasons?.join(', ')}</div>
+                              </div>
+                              <button className="btn-ghost" type="button" disabled={saving} onClick={() => {
+                                runMutation(() => vehicleAdminApi.assignBay(selectedVehicleId, { bayId: s.bayId || s.bay?.id }), "Đã gán tự động.").catch(() => { });
+                              }}>Áp dụng</button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -879,7 +879,7 @@ export default function VehicleManagementPage({ section }) {
                       e.preventDefault();
                       const toBayId = Number(e.currentTarget.elements.moveBayId.value);
                       if (!selectedVehicleId || !toBayId) return;
-                      runMutation(() => vehicleAdminApi.moveBay(selectedVehicleId, { toBayId }), "Đã chuyển xe sang khoang mới.").catch(() => {});
+                      runMutation(() => vehicleAdminApi.moveBay(selectedVehicleId, { toBayId }), "Đã chuyển xe sang khoang mới.").catch(() => { });
                     }}>
                       <div className="form-group">
                         <select className="search-input" name="moveBayId" defaultValue="">
@@ -888,7 +888,7 @@ export default function VehicleManagementPage({ section }) {
                         </select>
                       </div>
                       <div className="form-actions" style={{ justifyContent: 'space-between', marginTop: '16px' }}>
-                        <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={() => runMutation(() => vehicleAdminApi.removeBay(selectedVehicleId, { note: "Chuyển ra ngoài xưởng" }), "Đã đưa ra khỏi khoang gốc.").catch(() => {})}>Đưa khỏi khoang</button>
+                        <button className="btn-ghost" type="button" disabled={!selectedVehicleId || saving} onClick={() => runMutation(() => vehicleAdminApi.removeBay(selectedVehicleId, { note: "Chuyển ra ngoài xưởng" }), "Đã đưa ra khỏi khoang gốc.").catch(() => { })}>Đưa khỏi khoang</button>
                         <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving}>Điều phối ngay</button>
                       </div>
                     </form>
@@ -929,7 +929,7 @@ export default function VehicleManagementPage({ section }) {
                   <div className="bay-panel-head"><h3>Phân công nhân sự</h3></div>
                   <div className="bay-meta-info" style={{ marginBottom: '16px' }}>
                     <div className="bay-meta-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
-                      <strong>Xe:</strong> 
+                      <strong>Xe:</strong>
                       <span style={{ fontWeight: '600' }}>{selectedRow ? `${selectedRow.vehicleCode} - ${selectedRow.licensePlate}` : "(chưa chọn)"}</span>
                     </div>
                   </div>
@@ -938,7 +938,7 @@ export default function VehicleManagementPage({ section }) {
                     const staffId = Number(e.currentTarget.elements.staffId.value) || null;
                     const technicalTeam = String(e.currentTarget.elements.technicalTeam.value || "").trim();
                     if (!selectedVehicleId) return;
-                    runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "Đã cập nhật phân công xe.").catch(() => {});
+                    runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "Đã cập nhật phân công xe.").catch(() => { });
                   }}>
                     <div className="form-group">
                       <label>Cố vấn dịch vụ / KTV chính</label>
@@ -956,7 +956,7 @@ export default function VehicleManagementPage({ section }) {
                     </div>
                   </form>
                 </div>
-                
+
                 <div className="bay-panel">
                   <div className="bay-panel-head" style={{ marginBottom: '16px' }}><h3>Workload Nhân Sự</h3></div>
                   <table className="admin-table">
