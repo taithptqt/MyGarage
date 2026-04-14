@@ -37,7 +37,7 @@ const featuredCars = [
     year: "2021",
     mileage: "3,400 KM",
     price: "DKK 4,249,000",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDfpqF1kvCrN9Oaxo6Yqg7IBm2dsPuLry0JiyriOSY3C7sLgDe1-65KDMRxbtIjGLl7-7ZuSOjbFfhiHuofR4PoI94JvDfqf67R4F6eRx6PRq9uoE9hutVIxqliJwZvsyvN5zGMqI69-rop3D6juzphI_kWj48OgShrqEaBmFGbCa1XkE8fi-BXmcemb6JP8EN7leTM3fX_XXLSdGGVxj2ldYoFVkCcZRsF89pFYzi6uZ5RwTl8Ux49HmNLCs2bjhyikYj9wKnzdku3"
+    image: "https://www.hdcarwallpapers.com/walls/ferrari_f8_tributo_2019_4k_5k_2-HD.jpg"
   },
 ];
 
@@ -125,7 +125,7 @@ function HomePage() {
         <section className="flex flex-col md:flex-row overflow-hidden relative border-none">
           <div className="absolute inset-0 opacity-10 pointer-events-none botanical-pattern" />
           <div className="w-full md:w-1/2 h-[600px] md:h-[800px] overflow-hidden grayscale">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHX1nC6Z_Y_n2XGZ6o9iA0K3VfM4V_4v5I5_6A7S8D9F0GKJLH" alt="Storage" className="w-full h-full object-cover" />
+            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Gentlemans_Garage_MG_2024-9.jpg" alt="Storage" className="w-full h-full object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex flex-col justify-center p-12 md:p-32 z-10">
             <span className="text-secondary text-[10px] font-bold tracking-[0.5em] uppercase mb-8">SECURE FACILITY</span>
@@ -144,7 +144,7 @@ function HomePage() {
         <section className="flex flex-col md:flex-row-reverse overflow-hidden relative border-none">
           <div className="absolute inset-0 opacity-10 pointer-events-none botanical-pattern-alt" />
           <div className="w-full md:w-1/2 h-[600px] md:h-[800px] overflow-hidden grayscale">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJ_C9X6Y_Z1N2X3C4V5B6N7M8L9K0J1H2G3F4D5S6A" alt="Events" className="w-full h-full object-cover" />
+            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Meeting_Garage_MG_2024-8-e1732700312672.jpg" alt="Events" className="w-full h-full object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex flex-col justify-center p-12 md:p-32 z-10">
             <span className="text-secondary text-[10px] font-bold tracking-[0.5em] uppercase mb-8">EXCLUSIVE SPACES</span>
