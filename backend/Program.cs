@@ -552,6 +552,12 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 
+// Liveness endpoint — used by Docker healthcheck and load balancers.
+// Returns 200 immediately; no auth, no DB round-trip.
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", utc = DateTime.UtcNow }))
+   .AllowAnonymous()
+   .ExcludeFromDescription(); // hide from Swagger
+
 if (hasFrontendBuild)
 {
     app.MapFallback(async context =>

@@ -21,3 +21,19 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_HTTP_PORTS: "8080"
       Logging__LogLevel__Microsoft.AspNetCore.DataProtection: Error
+    healthcheck:
+      # Poll the backend liveness endpoint every 30 s.
+      # curl is available in the aspnet runtime image.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # give the app time to migrate DB / warm up
+    deploy:
+      resources:
+        limits:
+          memory: 512M    # prevent OOM on small VPS; raise if needed
+          cpus: "0.75"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
