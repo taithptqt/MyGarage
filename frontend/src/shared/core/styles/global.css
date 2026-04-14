@@ -1,21 +1,30 @@
 @import "tailwindcss";
 
-@theme {
-  --color-garage-green: #1a2e1a;
-  --color-garage-green-light: #243d24;
-  --color-garage-cream: #fdfaf3;
-  --color-garage-gold: #a68b5a;
-  --color-garage-gold-light: #c2ac84;
 
-  --font-serif: "Lora", serif;
-  --font-sans: "Poppins", sans-serif;
+@theme {
+  --color-primary: #081512;
+  --color-primary-container: #1d2a26;
+  --color-secondary: #c5a059;
+  --color-secondary-dark: #775a19;
+  --color-surface: #fef9ee;
+  --color-surface-container-low: #f8f3e8;
+  --color-surface-container: #f2ede3;
+  --color-surface-container-high: #ece8dd;
+  --color-on-surface: #1d1c15;
+  --color-on-surface-variant: #424846;
+
+  --font-serif: "Newsreader", serif;
+  --font-sans: "Manrope", sans-serif;
   --font-stencil: "Staatliches", system-ui;
 
-  --shadow-premium: 0 20px 50px rgba(26, 46, 26, 0.15);
-  --shadow-gold: 0 10px 30px rgba(166, 139, 90, 0.1);
+  --shadow-premium: none;
+  --shadow-gold: none;
+
+  --spacing-container-mobile: var(--spacing-6);
+  --spacing-container-desktop: var(--spacing-12);
+  --width-container-premium: var(--width-7xl);
 }
 
-@import url("https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Poppins:wght@300;400;500;600;700&family=Staatliches&display=swap");
 
 :root {
   font-family: var(--font-sans);
@@ -28,6 +37,20 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.newsreader-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+}
+
+.gold-label {
+  font-family: var(--font-sans);
+  color: var(--color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 /* Base styles for premium look */
@@ -57,12 +80,40 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Custom Utilities */
-@utility container-premium {
-  @apply max-w-7xl mx-auto px-6 sm:px-8 lg:px-12;
-}
+@layer utilities {
+  .container-premium {
+    max-width: var(--width-container-premium);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--spacing-container-mobile);
+    padding-right: var(--spacing-container-mobile);
+  }
 
-@utility section-padding {
-  @apply py-20 lg:py-32;
+  @media (min-width: 640px) {
+    .container-premium {
+      padding-left: var(--spacing-8);
+      padding-right: var(--spacing-8);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container-premium {
+      padding-left: var(--spacing-container-desktop);
+      padding-right: var(--spacing-container-desktop);
+    }
+  }
+
+  .section-padding {
+    padding-top: var(--spacing-20);
+    padding-bottom: var(--spacing-20);
+  }
+
+  @media (min-width: 1024px) {
+    .section-padding {
+      padding-top: var(--spacing-32);
+      padding-bottom: var(--spacing-32);
+    }
+  }
 }
 
 /* Animations */

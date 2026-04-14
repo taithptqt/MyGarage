@@ -33,6 +33,13 @@ import PaymentCancelPage from "@features/payment/pages/PaymentCancelPage";
 import PartsSalesPage from "@features/retail/pages/PartsSalesPage";
 import MyRetailOrdersPage from "@features/retail/pages/MyRetailOrdersPage";
 import AccountingMain from "@horizon/AccountingMain";
+import ContactPage from "@features/contact/pages/ContactPage";
+import MeetingsEventsPage from "@features/meetings/pages/MeetingsEventsPage";
+import StorageServicesPage from "@features/storage/pages/StorageServicesPage";
+import AboutUsPage from "@features/about/pages/AboutUsPage";
+import NewsJournalPage from "@features/news/pages/NewsJournalPage";
+import PartnersPage from "@features/partners/pages/PartnersPage";
+
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -58,6 +65,14 @@ function App() {
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/home" element={<HomePage />} />
+        
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/meetings-events" element={<MeetingsEventsPage />} />
+        <Route path="/storage" element={<StorageServicesPage />} />
+        <Route path="/about" element={<AboutUsPage />} />
+        <Route path="/news" element={<NewsJournalPage />} />
+        <Route path="/partners" element={<PartnersPage />} />
+
         
         {/* Customer Appointment Routes */}
         <Route 

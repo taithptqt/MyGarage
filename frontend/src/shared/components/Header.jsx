@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Search, Globe, ChevronDown } from "lucide-react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { Search, Phone, Globe } from "lucide-react";
+import "./Header.css";
 
 const Header = ({ overlay = false }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -14,115 +16,124 @@ const Header = ({ overlay = false }) => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navLinks = [
-    { name: "ABOUT MY GARAGE", path: "/about" },
+  const handleLinkClick = () => {
+    window.scrollTo(0, 0);
+    setIsMenuOpen(false);
+  };
+
+  const leftLinks = [
+    { name: "OM MY GARAGE", path: "/about" },
     { name: "STORAGE", path: "/storage" },
     { name: "SALES", path: "/sales" },
-    { name: "MEETINGS AND EVENTS", path: "/events" },
+  ];
+
+  const rightLinks = [
+    { name: "COLLECTIBLES", path: "/news" }, // Mapping collectibles to news/journal for now
     { name: "PARTNERS", path: "/partners" },
-    { name: "NEWS", path: "/news" },
     { name: "CONTACT", path: "/contact" },
   ];
 
+  const navBackground = isScrolled
+    ? "bg-primary/95 backdrop-blur-md shadow-lg"
+    : overlay
+    ? "bg-black/30 backdrop-blur-md"
+    : "bg-primary";
+
   return (
-    <div className="absolute top-0 left-0 w-full z-50">
-      {/* Top Utility Bar */}
-      <div className={`bg-garage-green/40 backdrop-blur-sm border-b border-white/5 py-2 px-8 flex justify-between items-center transition-opacity duration-500 ${isScrolled ? "opacity-0 invisible" : "opacity-100 visible"}`}>
-        <div className="text-[10px] text-garage-gold cursor-default font-sans tracking-widest font-bold">
-          098 765 4321 English
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3 text-[10px] text-white/70 font-bold tracking-widest">
-            <span className="text-garage-gold cursor-default">FAQ</span>
-            <span className="text-white/20">|</span>
-            <span className="text-garage-gold cursor-default">JOB</span>
+    <nav className={`fixed top-0 left-0 right-0 z-50 w-full transition-colors duration-500 ${navBackground}`}>
+      {/* UTILITY TOP BAR */}
+      <div className="max-w-screen-2xl mx-auto px-6 md:px-12 py-4 flex justify-between items-center border-b border-white/5 transition-opacity duration-300">
+        <div className="flex items-center space-x-8">
+          <div className="flex items-center text-secondary text-[10px] font-sans tracking-[0.3em] uppercase">
+            <Phone size={14} className="mr-2" />
+            <span>+45 69 133 911</span>
           </div>
-          <button className="text-white/70 hover:text-garage-gold">
-            <Search size={14} />
+          <Link className="text-surface/60 hover:text-secondary text-[10px] font-sans uppercase tracking-[0.3em] transition-colors" to="#">ENGLISH</Link>
+        </div>
+        <div className="flex items-center space-x-8">
+          <Link className="text-surface/60 hover:text-secondary text-[10px] font-sans uppercase tracking-[0.3em] transition-colors" to="#">FAQ</Link>
+          <Link className="text-surface/60 hover:text-secondary text-[10px] font-sans uppercase tracking-[0.3em] transition-colors" to="#">JOB</Link>
+          <button className="text-secondary hover:text-surface transition-colors">
+            <Search size={18} />
           </button>
         </div>
       </div>
 
-      {/* Main Navigation */}
-      <nav
-        className={`w-full transition-all duration-500 ${isScrolled
-          ? "bg-garage-green/95 backdrop-blur-lg py-3 shadow-2xl translate-y-[40px]"
-          : "bg-transparent py-6"
-          }`}
-      >
-        <div className="max-w-[1440px] mx-auto px-8 relative">
-          <div className="flex items-center justify-between md:justify-center gap-12 lg:gap-20">
-            {/* Left Links */}
-            <div className="hidden md:flex items-center gap-8 lg:gap-12 flex-1 justify-end">
-              {navLinks.slice(0, 3).map((link) => (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className="text-[11px] font-bold tracking-[0.25em] text-white hover:text-garage-gold transition-colors"
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </div>
-
-            {/* Centered Logo */}
-            <Link to="/" className="flex-shrink-0 group flex flex-col items-center">
-              <span className="font-serif text-3xl lg:text-4xl text-garage-gold tracking-[0.15em] leading-none mb-1">
-                MY
-              </span>
-              <span className="text-[9px] font-bold tracking-[0.6em] text-garage-gold leading-none uppercase">
-                Garage
-              </span>
-            </Link>
-
-            {/* Right Links */}
-            <div className="hidden md:flex items-center gap-8 lg:gap-12 flex-1">
-              {navLinks.slice(3).map((link) => (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className="text-[11px] font-bold tracking-[0.25em] text-white hover:text-garage-gold transition-colors"
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </div>
-
-            {/* Mobile Toggle */}
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden group flex flex-col items-end gap-1.5 focus:outline-none"
-            >
-              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "w-8 translate-y-2 rotate-45" : "w-8 group-hover:w-6"}`} />
-              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "opacity-0" : "w-6 group-hover:w-8"}`} />
-              <span className={`h-0.5 bg-white transition-all duration-300 ${isMenuOpen ? "w-8 -translate-y-2 -rotate-45" : "w-4 group-hover:w-8"}`} />
-            </button>
+      {/* MAIN NAVIGATION */}
+      <div className="max-w-screen-2xl mx-auto px-6 md:px-12 py-6 transition-all duration-500">
+        <div className="flex items-center justify-between">
+          {/* Left Links */}
+          <div className="hidden lg:flex items-center space-x-10 w-[40%]">
+            {leftLinks.map((link) => (
+              <NavLink
+                key={link.name}
+                to={link.path}
+                onClick={handleLinkClick}
+                className={({ isActive }) =>
+                  `text-surface/80 text-[11px] font-sans uppercase tracking-[0.4em] hover:text-secondary transition-colors whitespace-nowrap ${isActive ? "text-secondary border-b border-secondary pb-1" : ""}`
+                }
+              >
+                {link.name}
+              </NavLink>
+            ))}
           </div>
-        </div>
-      </nav>
 
-      {/* Fullscreen Overlay Menu (Mobile) */}
-      <div className={`fixed inset-0 bg-garage-green z-[100] transition-all duration-700 ${isMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <div className="h-full flex flex-col items-center justify-center space-y-6">
-          {navLinks.map((link) => (
+          {/* Center Logo */}
+          <div className="flex flex-col items-center w-full lg:w-[20%]">
+            <Link to="/home" onClick={handleLinkClick} className="flex flex-col items-center group">
+              <span className="text-secondary text-4xl font-serif tracking-[0.15em] leading-none italic group-hover:scale-105 transition-transform">MY</span>
+              <span className="text-secondary text-[9px] font-sans tracking-[0.8em] mt-1 uppercase">GARAGE</span>
+            </Link>
+          </div>
+
+          {/* Right Links */}
+          <div className="hidden lg:flex justify-end items-center space-x-10 w-[40%]">
+            {rightLinks.map((link) => (
+              <NavLink
+                key={link.name}
+                to={link.path}
+                onClick={handleLinkClick}
+                className={({ isActive }) =>
+                  `text-surface/80 text-[11px] font-sans uppercase tracking-[0.4em] hover:text-secondary transition-colors whitespace-nowrap ${isActive ? "text-secondary border-b border-secondary pb-1" : ""}`
+                }
+              >
+                {link.name}
+              </NavLink>
+            ))}
+          </div>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="lg:hidden text-secondary focus:outline-none"
+          >
+            {isMenuOpen ? "CLOSE" : "MENU"}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      <div className={`fixed inset-0 bg-primary z-[100] transition-transform duration-700 ${isMenuOpen ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="h-full flex flex-col items-center justify-center space-y-8 p-12">
+          {[...leftLinks, ...rightLinks].map((link) => (
             <Link
               key={link.name}
               to={link.path}
-              onClick={() => setIsMenuOpen(false)}
-              className="font-serif text-3xl text-garage-cream hover:text-garage-gold transition-colors tracking-widest uppercase"
+              onClick={handleLinkClick}
+              className="text-surface text-2xl font-serif uppercase tracking-[0.3em] hover:text-secondary transition-colors"
             >
               {link.name}
             </Link>
           ))}
           <button
             onClick={() => setIsMenuOpen(false)}
-            className="stencil-font text-garage-gold pt-12 hover:text-white tracking-[0.3em]"
+            className="text-secondary border border-secondary px-12 py-4 text-xs tracking-widest uppercase mt-12 hover:bg-secondary hover:text-primary transition-all"
           >
             [ CLOSE ]
           </button>
         </div>
       </div>
-    </div>
+    </nav>
   );
 };
 

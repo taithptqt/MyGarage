@@ -1,148 +1,131 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Phone, Mail, ArrowRight } from "lucide-react";
+import { Home, Phone, Mail, MapPin, Camera, Globe, ArrowRight } from "lucide-react";
 import "./Footer.css";
-
-// Custom UI Icons (Manual SVGs to avoid version conflicts with old lucide-react)
-const Facebook = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>;
-const Instagram = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>;
-const Linkedin = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
-const Navigation = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>;
 
 const Footer = () => {
   return (
-    <footer className="footer-premium">
-      {/* Botanical Pattern Element */}
-      <div className="footer-pattern" />
-
-      <div className="footer-content-wrapper">
-        {/* Tier 1: Contact Form & Info */}
-        <div className="footer-tier-top">
-          <div className="contact-info-block">
-            <span className="gold-label">GET IN TOUCH</span>
-            <h2 className="newsreader-title">CONTACT US</h2>
-            <div className="info-details">
-              <div className="info-item">
-                <MapPin size={18} className="text-garage-gold" />
-                <div>
-                  <p className="item-label">OFFICE</p>
-                  <p>Vejlevej 167, 7100 Vejle, Denmark</p>
-                </div>
+    <footer className="bg-primary-container text-surface px-6 md:px-24 py-24">
+      {/* TOP SECTION (CONTACT / FORM) */}
+      <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-24 mb-32">
+        {/* Contact Details */}
+        <div className="space-y-12">
+          <h3 className="text-secondary text-6xl md:text-7xl font-serif uppercase tracking-tight leading-none">CONTACT <br /> US</h3>
+          <div className="space-y-6">
+            <p className="font-sans text-lg font-bold tracking-widest text-secondary">MY GARAGE A/S</p>
+            <div className="space-y-4">
+              <div className="flex items-start space-x-4">
+                <Home size={20} className="text-secondary mt-1" />
+                <span className="font-sans text-sm opacity-80">Wittrupvej 1, 7120 Vejle East</span>
               </div>
-              <div className="info-item">
-                <Phone size={18} className="text-garage-gold" />
-                <div>
-                  <p className="item-label">PHONE</p>
-                  <p>+45 098 765 4321</p>
-                </div>
+              <div className="flex items-start space-x-4">
+                <Phone size={20} className="text-secondary mt-1" />
+                <span className="font-sans text-sm opacity-80">+45 69 133 911</span>
               </div>
-              <div className="info-item">
-                <Mail size={18} className="text-garage-gold" />
-                <div>
-                  <p className="item-label">EMAIL</p>
-                  <p>contact@mygarage.dk</p>
-                </div>
+              <div className="flex items-start space-x-4">
+                <Mail size={20} className="text-secondary mt-1" />
+                <span className="font-sans text-sm opacity-80">info@mygarage.dk</span>
+              </div>
+              <div className="flex items-start space-x-4">
+                <span className="text-secondary font-sans text-[10px] mt-1.5 font-bold tracking-widest">CVR</span>
+                <span className="font-sans text-sm opacity-80">CVR DK-36953217</span>
+              </div>
+              <div className="flex items-start space-x-4">
+                <MapPin size={20} className="text-secondary mt-1" />
+                <a className="font-sans text-sm opacity-80 underline decoration-secondary/30 hover:decoration-secondary transition-all" href="#">Directions</a>
               </div>
             </div>
           </div>
+        </div>
 
-          <form className="contact-form-premium">
-            <div className="form-row">
-              <div className="form-group">
-                <label>YOUR NAME</label>
-                <input type="text" placeholder="Full Name" />
+        {/* Contact Form */}
+        <div className="pt-8 lg:pt-20">
+          <form className="space-y-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-2">
+                <label className="block text-secondary text-[10px] font-sans uppercase tracking-widest">NAME</label>
+                <input className="footer-input w-full bg-transparent border-b border-secondary/30 focus:border-secondary py-2 outline-none transition-colors" type="text" />
               </div>
-              <div className="form-group">
-                <label>EMAIL ADDRESS</label>
-                <input type="email" placeholder="email@example.com" />
+              <div className="space-y-2">
+                <label className="block text-secondary text-[10px] font-sans uppercase tracking-widest">EMAIL</label>
+                <input className="footer-input w-full bg-transparent border-b border-secondary/30 focus:border-secondary py-2 outline-none transition-colors" type="email" />
               </div>
             </div>
-            <div className="form-group">
-              <label>MESSAGE</label>
-              <textarea placeholder="How can we help you?" rows="3"></textarea>
+            <div className="space-y-2">
+              <label className="block text-secondary text-[10px] font-sans uppercase tracking-widest">MESSAGE</label>
+              <textarea className="footer-input w-full bg-transparent border-b border-secondary/30 focus:border-secondary py-2 outline-none transition-colors resize-none" rows="1"></textarea>
             </div>
-            <button type="submit" className="footer-submit-btn">
-              SEND MESSAGE <Navigation size={14} className="ml-2" />
-            </button>
+            <div className="flex items-center space-x-3 py-4">
+              <input className="w-4 h-4 bg-transparent border-secondary text-secondary focus:ring-0 rounded-none cursor-pointer" type="checkbox" id="consent" />
+              <label htmlFor="consent" className="text-[11px] font-sans text-surface/70 cursor-pointer">
+                Yes please, I would like to be contacted. <a className="text-secondary underline decoration-secondary/40" href="#">Read consent form</a>
+              </label>
+            </div>
+            <div className="flex justify-end">
+              <button className="border border-secondary text-surface px-12 py-4 text-[11px] font-sans uppercase tracking-widest hover:bg-secondary hover:text-primary transition-all duration-300" type="submit">
+                SEND MESSAGE
+              </button>
+            </div>
           </form>
         </div>
+      </div>
 
-        {/* Tier 2: Logo Divider */}
-        <div className="footer-tier-middle">
-          <div className="logo-divider">
-            <div className="divider-line" />
-            <div className="footer-logo">
-              <span className="logo-main">MY GARAGE</span>
-              <span className="logo-sub">AUTOMOTIVE PASSION</span>
-            </div>
-            <div className="divider-line" />
+      {/* BOTTOM SECTION (STAY UPDATED / HOURS) */}
+      <div className="max-w-screen-2xl mx-auto border-t border-secondary/20 pt-24 grid grid-cols-1 lg:grid-cols-2 gap-24">
+        {/* Stay Updated */}
+        <div className="space-y-12">
+          <h4 className="text-secondary text-3xl font-serif tracking-wide uppercase">STAY UPDATED</h4>
+          <div className="flex space-x-6">
+            <a className="text-surface hover:text-secondary transition-colors" href="#"><Globe size={28} /></a>
+            <a className="text-surface hover:text-secondary transition-colors font-bold text-2xl font-sans" href="#">in</a>
+            <a className="text-surface hover:text-secondary transition-colors" href="#"><Camera size={28} /></a>
+          </div>
+          <div className="flex flex-col space-y-4 max-w-xs">
+            <button className="border border-secondary text-surface px-8 py-5 text-[10px] font-sans uppercase tracking-[0.2em] hover:bg-secondary hover:text-primary transition-all text-left">
+              SUBSCRIBE TO OUR NEWSLETTER
+            </button>
+            <button className="border border-secondary text-surface px-8 py-5 text-[10px] font-sans uppercase tracking-[0.2em] hover:bg-secondary hover:text-primary transition-all text-left">
+              READ MAGAZINE
+            </button>
           </div>
         </div>
 
-        {/* Tier 3: Navigation, Hours & Legal */}
-        <div className="footer-tier-bottom">
-          <div className="bottom-grid">
-            {/* Newsletter & Social */}
-            <div className="social-column">
-              <h4 className="footer-sub-title">NEWSLETTER</h4>
-              <p className="text-white/40 text-sm mb-6 max-w-xs">Join our newsletter to receive updates on exclusive car additions and events.</p>
-              <div className="newsletter-box">
-                <input type="email" placeholder="Your email address" />
-                <button aria-label="Subscribe"><ArrowRight size={16} /></button>
-              </div>
-              <div className="social-links">
-                <a href="#" aria-label="Facebook"><Facebook size={20} /></a>
-                <a href="#" aria-label="Instagram"><Instagram size={20} /></a>
-                <a href="#" aria-label="LinkedIn"><Linkedin size={20} /></a>
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <div className="nav-column">
-              <h4 className="footer-sub-title">NAVIGATION</h4>
-              <div className="link-grid">
-                <Link to="/about">About Us</Link>
-                <Link to="/storage">Storage</Link>
-                <Link to="/sales">Sales</Link>
-                <Link to="/events">Events</Link>
-                <Link to="/partners">Partners</Link>
-                <Link to="/news">News</Link>
-              </div>
-            </div>
-
-            {/* Opening Hours */}
-            <div className="hours-column">
-              <h4 className="footer-sub-title">OPENING HOURS</h4>
-              <div className="hours-grid">
-                <div className="hours-row">
-                  <span>Monday - Friday</span>
-                  <span>08:00 - 18:00</span>
-                </div>
-                <div className="hours-row">
-                  <span>Saturday</span>
-                  <span>10:00 - 16:00</span>
-                </div>
-                <div className="hours-row">
-                  <span>Sunday</span>
-                  <span className="text-garage-gold">Closed</span>
-                </div>
-              </div>
-              <div className="legal-links mt-12 pt-8 border-t border-white/5">
-                <Link to="/privacy">Privacy Policy</Link>
-                <span className="text-white/10 mx-2">|</span>
-                <Link to="/terms">Terms & Conditions</Link>
-              </div>
-            </div>
+        {/* Opening Hours & Links */}
+        <div className="space-y-12">
+          <h4 className="text-secondary text-3xl font-serif tracking-wide uppercase">OPENING HOURS</h4>
+          <div className="space-y-6 text-sm font-sans opacity-80 leading-relaxed">
+            <p>Weekdays: Monday – Friday: 08:00 – 17:00</p>
+            <p>Weekend: First Sunday of each month: 11:00 – 15:00</p>
+            <p>Closed on holidays</p>
+          </div>
+          <p className="text-[11px] text-secondary/60 font-sans tracking-wide">See an extended overview of holidays at MY GARAGE</p>
+          <p className="text-sm font-sans opacity-80 leading-relaxed max-w-md italic">
+            Visitors are always welcome at MY GARAGE – however, we encourage you to announce your visit if you plan to come with more than eight people.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-12 pt-8">
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/privacy">Privacy Policy</Link>
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/consent">Declaration of consent</Link>
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/jobs">Jobs</Link>
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/knowledge">Knowledge</Link>
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/terms">Terms of Trade</Link>
+            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/sitemap">Sitemap</Link>
           </div>
         </div>
+      </div>
 
-        {/* Final License/Payment Bar */}
-        <div className="footer-final-bar">
-          <p>© {new Date().getFullYear()} MY GARAGE. All rights reserved.</p>
-          <div className="payment-icons">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" alt="Visa" />
-            <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" alt="Mastercard" />
+      {/* COPYRIGHT & PAYMENT */}
+      <div className="max-w-screen-2xl mx-auto border-t border-secondary/10 mt-24 pt-12 flex flex-col md:flex-row justify-between items-center space-y-8 md:space-y-0">
+        <div className="text-[10px] font-sans tracking-[0.3em] opacity-30 uppercase">
+          © {new Date().getFullYear()} MY GARAGE. ALL RIGHTS RESERVED.
+        </div>
+        <div className="flex items-center space-x-6 grayscale opacity-60">
+          <div className="bg-white px-2 py-1 rounded-none"><span className="text-blue-800 font-bold italic text-[10px]">VISA</span></div>
+          <div className="bg-white px-2 py-1 rounded-none flex items-center space-x-1">
+            <div className="w-2 h-2 rounded-full bg-red-600"></div>
+            <div className="w-2 h-2 rounded-full bg-yellow-500 -ml-1"></div>
+            <span className="text-black font-bold text-[8px]">mastercard</span>
           </div>
+          <div className="bg-blue-500 px-2 py-1 rounded-none"><span className="text-white font-bold text-[10px]">MobilePay</span></div>
         </div>
       </div>
     </footer>
