@@ -71,14 +71,14 @@ jobs:
             git checkout -B main origin/main
             git reset --hard origin/main
 
-            docker compose --env-file ./Frontend/.env config -q
+            docker compose --env-file ./.env config -q
             echo "---- Host resources ----"
             nproc || true
             free -h || true
             df -h || true
             echo "---- Docker compose build ----"
-            time docker compose --env-file ./Frontend/.env build --progress plain mygarage-app
+            time docker compose --env-file ./.env build --progress plain mygarage-app
             echo "---- Docker compose up ----"
-            docker compose --env-file ./Frontend/.env up -d --remove-orphans mygarage-app
-            docker compose --env-file ./Frontend/.env ps
+            docker compose --env-file ./.env up -d --remove-orphans mygarage-app
+            docker compose --env-file ./.env ps
             docker image prune -f

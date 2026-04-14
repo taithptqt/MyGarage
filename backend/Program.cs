@@ -58,6 +58,11 @@ builder.Services.AddDbContext<GarageContext>(options =>
 builder.Services.AddScoped<IGarageContext>(provider => provider.GetRequiredService<GarageContext>());
 
 
+// Read additional production origins from config (e.g. Cors__AllowedOrigins__0=https://yourdomain.com)
+var configuredOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
@@ -65,9 +70,12 @@ builder.Services.AddCors(options =>
         policy.SetIsOriginAllowed(origin =>
                 origin.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase) ||
                 origin.StartsWith("https://localhost:", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(origin, "https://accounts.google.com", StringComparison.OrdinalIgnoreCase))
+                string.Equals(origin, "https://accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
+                configuredOrigins.Any(allowed =>
+                    string.Equals(origin, allowed.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)))
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials(); // Required for SignalR
     });
 });
 
@@ -481,6 +489,7 @@ builder.Services.AddKeyedSingleton("TransferClient", (sp, key) =>
 });
 
 // Add services to the container.
+builder.Services.AddHealthChecks();
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
@@ -525,6 +534,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Health probe — no auth required, used by Docker HEALTHCHECK and load balancers
+app.MapHealthChecks("/api/health");
 
 if (ShouldUseHttpsRedirection(builder.Configuration, app.Environment))
 {
