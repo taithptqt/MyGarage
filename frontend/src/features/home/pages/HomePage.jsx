@@ -37,7 +37,7 @@ const featuredCars = [
     year: "2021",
     mileage: "3,400 KM",
     price: "DKK 4,249,000",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDfpqF1kvCrN9Oaxo6Yqg7IBm2dsPuLry0JiyriOSY3C7sLgDe1-65KDMRxbtIjGLl7-7ZuSOjbFfhiHuofR4PoI94JvDfqf67R4F6eRx6PRq9uoE9hutVIxqliJwZvsyvN5zGMqI69-rop3D6juzphI_kWj48OgShrqEaBmFGbCa1XkE8fi-BXmcemb6JP8EN7leTM3fX_XXLSdGGVxj2ldYoFVkCcZRsF89pFYzi6uZ5RwTl8Ux49HmNLCs2bjhyikYj9wKnzdku3"
+    image: "https://www.hdcarwallpapers.com/walls/ferrari_f8_tributo_2019_4k_5k_2-HD.jpg"
   },
 ];
 
@@ -111,7 +111,7 @@ function HomePage() {
             ))}
           </div>
           <div className="mt-20 text-center">
-            <Link to="/parts-shop" className="text-[11px] font-bold tracking-[0.3em] text-primary hover:text-secondary uppercase transition-all relative group inline-block">
+            <Link to="/parts-shop" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-[11px] font-bold tracking-[0.3em] text-primary hover:text-secondary uppercase transition-all relative group inline-block">
               VIEW ALL CARS FOR SALE
               <div className="absolute -bottom-2 left-0 w-full h-[1px] bg-secondary scale-x-50 group-hover:scale-x-100 transition-transform duration-500"></div>
             </Link>
@@ -125,7 +125,7 @@ function HomePage() {
         <section className="flex flex-col md:flex-row overflow-hidden relative border-none">
           <div className="absolute inset-0 opacity-10 pointer-events-none botanical-pattern" />
           <div className="w-full md:w-1/2 h-[600px] md:h-[800px] overflow-hidden grayscale">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHX1nC6Z_Y_n2XGZ6o9iA0K3VfM4V_4v5I5_6A7S8D9F0GKJLH" alt="Storage" className="w-full h-full object-cover" />
+            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Gentlemans_Garage_MG_2024-9.jpg" alt="Storage" className="w-full h-full object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex flex-col justify-center p-12 md:p-32 z-10">
             <span className="text-secondary text-[10px] font-bold tracking-[0.5em] uppercase mb-8">SECURE FACILITY</span>
@@ -134,7 +134,7 @@ function HomePage() {
               Our specially designed storage facilities ensure the optimal setting for your vehicle collection.
               With precise climate control and 24/7 security monitoring, your investment is in the safest hands.
             </p>
-            <Link to="/storage" className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
+            <Link to="/storage" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
               EXPLORE FACILITY
             </Link>
           </div>
@@ -144,7 +144,7 @@ function HomePage() {
         <section className="flex flex-col md:flex-row-reverse overflow-hidden relative border-none">
           <div className="absolute inset-0 opacity-10 pointer-events-none botanical-pattern-alt" />
           <div className="w-full md:w-1/2 h-[600px] md:h-[800px] overflow-hidden grayscale">
-            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Gentlemans_Garage_MG_2024-9.jpg" alt="Events" className="w-full h-full object-cover" />
+            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Meeting_Garage_MG_2024-8-e1732700312672.jpg" alt="Events" className="w-full h-full object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex flex-col justify-center p-12 md:p-32 z-10">
             <span className="text-secondary text-[10px] font-bold tracking-[0.5em] uppercase mb-8">EXCLUSIVE SPACES</span>
@@ -155,7 +155,7 @@ function HomePage() {
               Create unforgettable experiences in our unique surroundings. From intimate board meetings to large product launches
               - we offer tailored solutions that combine professional service with a passion for automobiles.
             </p>
-            <Link to="/meetings-events" className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
+            <Link to="/meetings-events" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="w-fit px-12 py-5 border border-secondary text-secondary text-[11px] font-bold tracking-[0.3em] hover:bg-secondary hover:text-primary transition-all uppercase block text-center mt-4">
               VIEW VENUES
             </Link>
           </div>

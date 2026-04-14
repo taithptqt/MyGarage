@@ -84,9 +84,9 @@ const Footer = () => {
             <button className="border border-secondary text-surface px-8 py-5 text-[10px] font-sans uppercase tracking-[0.2em] hover:bg-secondary hover:text-primary transition-all text-left">
               SUBSCRIBE TO OUR NEWSLETTER
             </button>
-            <button className="border border-secondary text-surface px-8 py-5 text-[10px] font-sans uppercase tracking-[0.2em] hover:bg-secondary hover:text-primary transition-all text-left">
+            <Link to="/news" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="border border-secondary text-surface px-8 py-5 text-[10px] font-sans uppercase tracking-[0.2em] hover:bg-secondary hover:text-primary transition-all text-left">
               READ MAGAZINE
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -103,12 +103,12 @@ const Footer = () => {
             Visitors are always welcome at MY GARAGE – however, we encourage you to announce your visit if you plan to come with more than eight people.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-12 pt-8">
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/privacy">Privacy Policy</Link>
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/consent">Declaration of consent</Link>
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/jobs">Jobs</Link>
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/knowledge">Knowledge</Link>
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/terms">Terms of Trade</Link>
-            <Link className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/sitemap">Sitemap</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/privacy">Privacy Policy</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/consent">Declaration of consent</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/jobs">Jobs</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/knowledge">Knowledge</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/terms">Terms of Trade</Link>
+            <Link onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-secondary text-[13px] hover:text-surface transition-colors font-sans" to="/sitemap">Sitemap</Link>
           </div>
         </div>
       </div>
@@ -133,5 +133,3 @@ const Footer = () => {
 };
 
 export default Footer;
-
-
