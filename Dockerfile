@@ -1,4 +1,5 @@
-## syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7
+
 ARG DOTNET_VERSION=8.0
 ARG NODE_VERSION=20-alpine
 ARG BUILD_CONFIGURATION=Release
@@ -32,12 +33,18 @@ FROM backend-restore AS backend-publish
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src/backend
 COPY backend/ ./
-# On small VPS instances, Roslyn/analyzers parallelism can make publish look "stuck".
-# Keep publish deterministic and low-memory for reliable container builds.
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false -p:RunAnalyzers=false
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false -p:RunAnalyzers=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
+
+# Install curl for HEALTHCHECK (aspnet base image does not include it)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as non-root for security hardening
+RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS=8080 \
@@ -48,6 +55,11 @@ EXPOSE 8080
 COPY --from=backend-publish /app/publish ./
 COPY --from=frontend-build /src/frontend/dist ./frontend/dist
 
-USER app
-ENTRYPOINT ["dotnet", "MyGarage.dll"]
+# Make /app owned by appuser before switching
+RUN chown -R appuser:appgroup /app
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/api/health || exit 1
+
+USER appuser
+ENTRYPOINT ["dotnet", "MyGarage.dll"]
