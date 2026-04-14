@@ -34,7 +34,7 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src/backend
 COPY backend/ ./
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false -p:RunAnalyzers=false
+    dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false -p:RunAnalyzers=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
