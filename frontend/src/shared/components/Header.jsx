@@ -114,7 +114,12 @@ function Header({ overlay = false }) {
           <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
         </div>
 
-        <div className="mg-header-logo" role="img" aria-label="MY GARAGE">
+        <div
+          className="mg-header-logo cursor-pointer"
+          role="button"
+          aria-label="MY GARAGE"
+          onClick={() => handleNavigate("/home")}
+        >
           <span>MY</span>
           <small>GARAGE</small>
         </div>

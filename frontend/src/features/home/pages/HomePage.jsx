@@ -144,7 +144,7 @@ function HomePage() {
         <section className="flex flex-col md:flex-row-reverse overflow-hidden relative border-none">
           <div className="absolute inset-0 opacity-10 pointer-events-none botanical-pattern-alt" />
           <div className="w-full md:w-1/2 h-[600px] md:h-[800px] overflow-hidden grayscale">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJ_C9X6Y_Z1N2X3C4V5B6N7M8L9K0J1H2G3F4D5S6A" alt="Events" className="w-full h-full object-cover" />
+            <img src="https://mygarage.skaevt.com/wp-content/uploads/2024/11/Gentlemans_Garage_MG_2024-9.jpg" alt="Events" className="w-full h-full object-cover" />
           </div>
           <div className="w-full md:w-1/2 flex flex-col justify-center p-12 md:p-32 z-10">
             <span className="text-secondary text-[10px] font-bold tracking-[0.5em] uppercase mb-8">EXCLUSIVE SPACES</span>
