@@ -21,6 +21,7 @@ namespace MyGarage.Controllers
 {
     [Route("api/service-orders")]
     [ApiController]
+    [Authorize(Roles = "Staff")]
     public class ServiceOrderController : ControllerBase
     {
         private const long MaxInsuranceAssetBytes = 10 * 1024 * 1024;

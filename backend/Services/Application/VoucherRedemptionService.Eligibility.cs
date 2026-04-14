@@ -132,5 +132,26 @@ namespace MyGarage.Services
 
             return result;
         }
+
+        private static bool IsChannelAllowed(Voucher voucher, string? channel)
+        {
+            if (string.IsNullOrWhiteSpace(voucher.AllowedChannels))
+            {
+                return true;
+            }
+
+            var allowedTokens = ParseAllowedTokens(voucher.AllowedChannels);
+            if (allowedTokens.Count == 0)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(channel))
+            {
+                return false;
+            }
+
+            return allowedTokens.Contains(channel.Trim().ToUpperInvariant());
+        }
     }
 }

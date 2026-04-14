@@ -120,9 +120,10 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="#">SHOWROOM</a>
-          <a href="#">TIN TỨC</a>
-          <a href="#">LIÊN HỆ</a>
+          <a href="/showroom" onClick={(event) => { event.preventDefault(); handleNavigate("/showroom"); }}>SHOWROOM</a>
+          <a href="/news" onClick={(event) => { event.preventDefault(); handleNavigate("/news"); }}>TIN TỨC</a>
+          <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
+          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>ABOUT US</a>
         </div>
 
         {isAuthenticated ? (

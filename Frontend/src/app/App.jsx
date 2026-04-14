@@ -45,6 +45,10 @@ import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
 import AccountingMain from "@horizon/AccountingMain";
+import ContactPage from "@features/contact/pages/ContactPage";
+import NewsJournalPage from "@features/news/pages/NewsJournalPage";
+import ShowroomPage from "@features/showroom/pages/ShowroomPage";
+import AboutUsPage from "@features/about/pages/AboutUsPage";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -74,6 +78,10 @@ function App() {
         <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
         <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
         <Route path="/home" element={<HomePage />} />
+        <Route path="/showroom" element={<ShowroomPage />} />
+        <Route path="/about" element={<AboutUsPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/news" element={<NewsJournalPage />} />
         
         {/* Customer Appointment Routes */}
         <Route 

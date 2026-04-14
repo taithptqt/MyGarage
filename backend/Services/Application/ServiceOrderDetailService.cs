@@ -38,9 +38,7 @@ namespace MyGarage.Services
 
             entity.PayerType = InsuranceBillingRules.NormalizePayerType(entity.PayerType);
 
-            entity.SubTotal = NormalizeMoney(entity.SubTotal, "SubTotal");
-            entity.TaxAmount = NormalizeMoney(entity.TaxAmount, "TaxAmount");
-            entity.FinalAmount = NormalizeMoney(entity.FinalAmount, "FinalAmount");
+            RecomputeFinancialAmounts(entity);
 
             if (entity.PayerType == InsuranceBillingRules.PayerTypeInsurance)
             {
@@ -71,6 +69,27 @@ namespace MyGarage.Services
             entity.InsuranceApprovedAmount = 0m;
             entity.CustomerCoPayAmount = NormalizeNullableMoney(entity.CustomerCoPayAmount, entity.FinalAmount, nameof(entity.CustomerCoPayAmount));
             entity.GarageAbsorbedAmount = NormalizeNullableMoney(entity.GarageAbsorbedAmount, 0m, nameof(entity.GarageAbsorbedAmount));
+        }
+
+        private static void RecomputeFinancialAmounts(ServiceOrderDetail entity)
+        {
+            var quantity = decimal.Round(Math.Max(0m, entity.Quantity), 2, MidpointRounding.AwayFromZero);
+            var unitPrice = decimal.Round(Math.Max(0m, entity.UnitPriceAtTime), 2, MidpointRounding.AwayFromZero);
+            var discount = decimal.Round(Math.Max(0m, entity.DiscountAllocatedAmount ?? 0m), 2, MidpointRounding.AwayFromZero);
+            var taxRate = decimal.Round(Math.Max(0m, entity.TaxRate), 2, MidpointRounding.AwayFromZero);
+
+            var subTotal = decimal.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
+            var taxableBase = decimal.Round(Math.Max(0m, subTotal - discount), 2, MidpointRounding.AwayFromZero);
+            var taxAmount = decimal.Round(taxableBase * taxRate / 100m, 2, MidpointRounding.AwayFromZero);
+            var finalAmount = decimal.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
+
+            entity.Quantity = quantity;
+            entity.UnitPriceAtTime = unitPrice;
+            entity.DiscountAllocatedAmount = discount;
+            entity.TaxRate = taxRate;
+            entity.SubTotal = NormalizeMoney(subTotal, "SubTotal");
+            entity.TaxAmount = NormalizeMoney(taxAmount, "TaxAmount");
+            entity.FinalAmount = NormalizeMoney(finalAmount, "FinalAmount");
         }
 
         private static decimal NormalizeMoney(decimal value, string fieldName)

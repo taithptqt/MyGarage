@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import path from "node:path";
@@ -27,6 +28,7 @@ export default defineConfig(({ mode }) => {
   const httpsConfig = resolveHttpsConfig(useHttps);
 
   const plugins = [
+    tailwindcss(),
     react({
       include: /\.(js|jsx|ts|tsx)(?:$|\?)/
     })

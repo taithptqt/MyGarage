@@ -45,6 +45,19 @@ namespace MyGarage.Services
                 return usageCheck;
             }
 
+            if (!IsChannelAllowed(voucher, request.Channel))
+            {
+                return BuildFail("VCH_CHANNEL_NOT_ALLOWED", "Voucher is not allowed for this channel.", voucher);
+            }
+
+            if (voucher.ExcludeDiscountedItems && !request.EligibleAmount.HasValue)
+            {
+                return BuildFail(
+                    "VCH_ELIGIBLE_AMOUNT_REQUIRED",
+                    "EligibleAmount is required because this voucher excludes discounted items.",
+                    voucher);
+            }
+
             if (!await IsPaymentMethodAllowedAsync(voucher, request.PaymentMethodId))
             {
                 return BuildFail("VCH_PAYMENT_METHOD_NOT_ALLOWED", "Payment method is not allowed for this voucher.", voucher);
@@ -54,6 +67,24 @@ namespace MyGarage.Services
             if (discount <= 0)
             {
                 return BuildFail("VCH_DISCOUNT_INVALID", "Discount amount is invalid.", voucher);
+            }
+
+            if (voucher.ApprovalRequired)
+            {
+                return BuildFail(
+                    "VCH_APPROVAL_REQUIRED",
+                    "Voucher application requires approval before redemption.",
+                    voucher,
+                    true);
+            }
+
+            if (voucher.ApprovalThresholdAmount.HasValue && discount >= voucher.ApprovalThresholdAmount.Value)
+            {
+                return BuildFail(
+                    "VCH_APPROVAL_THRESHOLD_REACHED",
+                    "Voucher discount reaches approval threshold.",
+                    voucher,
+                    true);
             }
 
             if (voucher.BudgetLimit.HasValue)

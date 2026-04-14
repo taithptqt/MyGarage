@@ -44,6 +44,7 @@ import {
   getPayslips,
   getStaffSalaryCoefficient,
   markPayrollRunPaid,
+  cancelPayrollRun,
   getStaffBaseSalary,
 } from "../api/accountingApi";
 import {
@@ -69,22 +70,85 @@ function toId(value) {
 }
 
 function derivePayrollAmounts(item) {
+  const readAmount = (...keys) => {
+    const raw = pick(item, ...keys);
+    return {
+      present: raw !== undefined && raw !== null,
+      value: raw !== undefined && raw !== null ? toNumber(raw) : 0,
+    };
+  };
+
   const explicitGrossPay = pick(item, "grossPay", "GrossPay");
   const explicitTotalDeduction = pick(item, "totalDeduction", "TotalDeduction");
   const explicitNetPay = pick(item, "netPay", "NetPay");
 
-  const grossPay = explicitGrossPay !== undefined && explicitGrossPay !== null ? toNumber(explicitGrossPay) : null;
-  const totalDeduction =
-    explicitTotalDeduction !== undefined && explicitTotalDeduction !== null ? toNumber(explicitTotalDeduction) : null;
-  const netPay = explicitNetPay !== undefined && explicitNetPay !== null ? toNumber(explicitNetPay) : null;
+  const baseSalary = readAmount("baseSalary", "BaseSalary");
+  const overtimeAmount = readAmount("overtimeAmount", "OvertimeAmount");
+  const allowanceAmount = readAmount("allowanceAmount", "AllowanceAmount");
+  const commissionAmount = readAmount("commissionAmount", "CommissionAmount");
+  const bonusAmount = readAmount("bonusAmount", "BonusAmount");
+
+  const attendanceDeduction = readAmount("attendanceDeduction", "AttendanceDeduction");
+  const penaltyAmount = readAmount("penaltyAmount", "PenaltyAmount");
+  const advanceDeduction = readAmount("advanceDeduction", "AdvanceDeduction");
+  const loanDeduction = readAmount("loanDeduction", "LoanDeduction");
+  const insuranceEmployeeAmount = readAmount("insuranceEmployeeAmount", "InsuranceEmployeeAmount");
+  const pitAmount = readAmount("pitAmount", "PitAmount");
+  const otherDeduction = readAmount("otherDeduction", "OtherDeduction");
+
+  const hasIncomeComponents = [baseSalary, overtimeAmount, allowanceAmount, commissionAmount, bonusAmount].some(
+    (part) => part.present,
+  );
+  const hasDeductionComponents = [
+    attendanceDeduction,
+    penaltyAmount,
+    advanceDeduction,
+    loanDeduction,
+    insuranceEmployeeAmount,
+    pitAmount,
+    otherDeduction,
+  ].some((part) => part.present);
+
+  const derivedGrossPay = hasIncomeComponents
+    ? baseSalary.value + overtimeAmount.value + allowanceAmount.value + commissionAmount.value + bonusAmount.value
+    : null;
+  const derivedTotalDeduction = hasDeductionComponents
+    ? attendanceDeduction.value +
+      penaltyAmount.value +
+      advanceDeduction.value +
+      loanDeduction.value +
+      insuranceEmployeeAmount.value +
+      pitAmount.value +
+      otherDeduction.value
+    : null;
+
+  const hasOfficialGrossPay = explicitGrossPay !== undefined && explicitGrossPay !== null;
+  const hasOfficialTotalDeduction = explicitTotalDeduction !== undefined && explicitTotalDeduction !== null;
+  const hasOfficialNetPay = explicitNetPay !== undefined && explicitNetPay !== null;
+
+  const grossPay = hasOfficialGrossPay ? toNumber(explicitGrossPay) : derivedGrossPay;
+  const totalDeduction = hasOfficialTotalDeduction ? toNumber(explicitTotalDeduction) : derivedTotalDeduction;
+  const netPay = hasOfficialNetPay
+    ? toNumber(explicitNetPay)
+    : grossPay != null && totalDeduction != null
+    ? grossPay - totalDeduction
+    : null;
+
+  const amountsSource =
+    hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay
+      ? "SERVER"
+      : grossPay != null && totalDeduction != null && netPay != null
+      ? "DERIVED"
+      : "INCOMPLETE";
 
   return {
     grossPay,
     totalDeduction,
     netPay,
-    hasOfficialGrossPay: explicitGrossPay !== undefined && explicitGrossPay !== null,
-    hasOfficialTotalDeduction: explicitTotalDeduction !== undefined && explicitTotalDeduction !== null,
-    hasOfficialNetPay: explicitNetPay !== undefined && explicitNetPay !== null
+    hasOfficialGrossPay,
+    hasOfficialTotalDeduction,
+    hasOfficialNetPay,
+    amountsSource,
   };
 }
 
@@ -142,6 +206,7 @@ function statusColor(status) {
   const code = String(status || "").toUpperCase();
   if (code === "PAID") return "green";
   if (code === "APPROVED") return "blue";
+  if (code === "CANCELED") return "red";
   if (code === "OPEN") return "green";
   if (code === "CLOSED") return "gray";
   if (code === "LOCKED") return "purple";
@@ -153,6 +218,7 @@ function statusLabel(status) {
   if (code === "DRAFT") return "Nháp";
   if (code === "APPROVED") return "Đã duyệt";
   if (code === "PAID") return "Đã chi";
+  if (code === "CANCELED") return "Đã huỷ";
   if (code === "OPEN") return "Đang mở";
   if (code === "LOCKED") return "Tạm khóa";
   if (code === "CLOSED") return "Đã đóng";
@@ -414,7 +480,16 @@ export default function PayrollPage() {
     return map;
   }, [runRows]);
 
-  const periodRows = useMemo(() => {
+  const periodIdsByBranchRuns = useMemo(() => {
+    const set = new Set();
+    runRows.forEach((run) => {
+      const periodId = toId(run.payrollPeriodId);
+      if (periodId) set.add(periodId);
+    });
+    return set;
+  }, [runRows]);
+
+  const allPeriodRows = useMemo(() => {
     const normalized = (periods.items || []).map((period, idx) => {
       const id = toId(pick(period, "id", "Id")) || idx + 1;
       const runStatuses = periodRunStatusesById.get(id) || [];
@@ -436,6 +511,20 @@ export default function PayrollPage() {
       return Number(b.id) - Number(a.id);
     });
   }, [periodRunStatusesById, periods.items]);
+
+  const latestOpenPeriodId = useMemo(() => {
+    const latestOpen = allPeriodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN");
+    return latestOpen ? toId(latestOpen.id) : null;
+  }, [allPeriodRows]);
+
+  const periodRows = useMemo(() => {
+    if (!targetBranchId) return allPeriodRows;
+    return allPeriodRows.filter((period) => {
+      const periodId = toId(period.id);
+      if (!periodId) return false;
+      return periodIdsByBranchRuns.has(periodId) || periodId === latestOpenPeriodId;
+    });
+  }, [allPeriodRows, latestOpenPeriodId, periodIdsByBranchRuns, targetBranchId]);
 
   const runById = useMemo(() => {
     const map = new Map();
@@ -475,9 +564,8 @@ export default function PayrollPage() {
         grossPay,
         totalDeduction,
         netPay,
-        hasOfficialGrossPay,
-        hasOfficialTotalDeduction,
         hasOfficialNetPay,
+        amountsSource,
       } = derivePayrollAmounts(item);
       const runStatus = runRow?.status || "DRAFT";
       const policyAsOfDate = toDateInputValue(
@@ -519,8 +607,7 @@ export default function PayrollPage() {
         grossPay,
         totalDeduction,
         netPay,
-        amountsSource:
-          hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay ? "SERVER" : "INCOMPLETE",
+        amountsSource,
         hasOfficialNetPay,
         hasPayslip: id ? payslipItemIds.has(id) : false,
       };
@@ -549,17 +636,20 @@ export default function PayrollPage() {
     [itemRows],
   );
   const missingPayrollFactsCount = useMemo(
-    () => itemRows.filter((item) => item.amountsSource !== "SERVER").length,
+    () => itemRows.filter((item) => item.amountsSource === "INCOMPLETE").length,
     [itemRows],
   );
 
-  const openPeriod = useMemo(() => periodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN"), [periodRows]);
+  const openPeriod = useMemo(
+    () => allPeriodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN"),
+    [allPeriodRows],
+  );
   const selectedPeriodForBatch = useMemo(() => {
     if (runFilter === "ALL") return openPeriod || null;
     const normalizedFilter = normalizePeriodCode(runFilter);
-    const matched = periodRows.find((period) => normalizePeriodCode(period.periodCode) === normalizedFilter);
+    const matched = allPeriodRows.find((period) => normalizePeriodCode(period.periodCode) === normalizedFilter);
     return matched || openPeriod || null;
-  }, [openPeriod, periodRows, runFilter]);
+  }, [allPeriodRows, openPeriod, runFilter]);
   const selectedPeriodIdForBatch = useMemo(
     () => toId(pick(selectedPeriodForBatch, "id", "Id")),
     [selectedPeriodForBatch],
@@ -608,15 +698,15 @@ export default function PayrollPage() {
   const periodFilterOptions = useMemo(() => {
     const unique = new Set();
     const options = [];
-    periodRows.forEach((period) => {
-      const code = String(period.periodCode || "").trim();
+    runRows.forEach((run) => {
+      const code = String(run.periodCode || "").trim();
       const normalizedCode = normalizePeriodCode(code);
       if (!code || !normalizedCode || unique.has(normalizedCode)) return;
       unique.add(normalizedCode);
       options.push(code);
     });
     return options;
-  }, [periodRows]);
+  }, [runRows]);
 
   useEffect(() => {
     if (
@@ -720,6 +810,10 @@ export default function PayrollPage() {
   }
 
   async function handleCalculateAllStaffPayroll() {
+    if (!targetBranchId) {
+      setError("Vui lòng chọn chi nhánh trước khi tính lương.");
+      return;
+    }
     if (!selectedPeriodIdForBatch) {
       setError("Chưa xác định được kỳ lương để tính. Vui lòng chọn một kỳ đang mở.");
       return;
@@ -733,6 +827,7 @@ export default function PayrollPage() {
     setError("");
     try {
       const result = await calculatePayrollForAllStaff({
+        branchId: targetBranchId,
         payrollPeriodId: selectedPeriodIdForBatch,
         overwriteExisting: true,
         includeInactiveStaff: false,
@@ -832,6 +927,33 @@ export default function PayrollPage() {
       toast({ status: "success", title: `Đã xác nhận chi xong đợt ${run.runNo}.` });
     } catch (err) {
       setError(toFriendlyError(err, "Xác nhận đã chi thất bại."));
+    } finally {
+      setBusyRunId(null);
+    }
+  }
+
+  async function handleCancelRun(runId) {
+    const run = runById.get(runId);
+    if (!run) {
+      setError("Không tìm thấy đợt tính lương.");
+      return;
+    }
+    if (!(run.status === "DRAFT" || run.status === "CALCULATED")) {
+      setError("Chỉ được huỷ mã kỳ khi đợt đang ở trạng thái Nháp/Calculated.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Huỷ mã kỳ ${run.periodCode}?`);
+    if (!confirmed) return;
+
+    setBusyRunId(runId);
+    setError("");
+    try {
+      await cancelPayrollRun(runId, { canceledBy: getCurrentUserId() || null });
+      await reloadRuns();
+      toast({ status: "success", title: `Đã huỷ mã kỳ ${run.periodCode}.` });
+    } catch (err) {
+      setError(toFriendlyError(err, "Huỷ mã kỳ thất bại."));
     } finally {
       setBusyRunId(null);
     }
@@ -1175,8 +1297,13 @@ export default function PayrollPage() {
               <Input value={autoRunLabel} isReadOnly />
             </FormControl>
             <Text color={textColorSecondary} fontSize='sm'>
-              Hệ thống sẽ tự lấy dữ liệu lương và tính cho toàn bộ nhân sự trong kỳ đang mở.
+              Hệ thống sẽ tự lấy dữ liệu lương và chỉ tính cho nhân sự thuộc chi nhánh đang chọn.
             </Text>
+            {!targetBranchId ? (
+              <Text color='orange.400' fontSize='xs'>
+                Cần chọn chi nhánh trước khi tính lương.
+              </Text>
+            ) : null}
             {!selectedPeriodIdForBatch ? (
               <Text color='orange.400' fontSize='xs'>
                 Cần có kỳ lương đang mở trước khi tính lương hàng loạt.
@@ -1193,7 +1320,7 @@ export default function PayrollPage() {
               variant='outline'
               onClick={handleCalculateAllStaffPayroll}
               isLoading={calculatingBatchPayroll}
-              isDisabled={!selectedPeriodIdForBatch || selectedPeriodStatusForBatch !== "OPEN"}>
+              isDisabled={!targetBranchId || !selectedPeriodIdForBatch || selectedPeriodStatusForBatch !== "OPEN"}>
               Tính lương toàn bộ nhân sự
             </Button>
           </SimpleGrid>
@@ -1303,6 +1430,15 @@ export default function PayrollPage() {
                             }>
                             {run.status === "PAID" ? "Đã chi" : "Xác nhận đã chi"}
                           </Button>
+                          <Button
+                            size='xs'
+                            colorScheme='red'
+                            variant='outline'
+                            isDisabled={!(run.status === "DRAFT" || run.status === "CALCULATED")}
+                            isLoading={busyRunId === run.id}
+                            onClick={() => handleCancelRun(run.id)}>
+                            Huỷ mã kỳ
+                          </Button>
                         </Flex>
                       </Td>
                     </Tr>
@@ -1382,7 +1518,11 @@ export default function PayrollPage() {
                       {item.hasPayslip ? "Đã phát hành" : "Chưa phát hành"}
                     </Badge>
                     <Text color={textColorSecondary} fontSize='xs'>
-                      {item.amountsSource === "SERVER" ? "Server" : "Thiếu totals"}
+                      {item.amountsSource === "SERVER"
+                        ? "Server"
+                        : item.amountsSource === "DERIVED"
+                        ? "Suy diễn"
+                        : "Thiếu totals"}
                     </Text>
                     {!item.canIssuePayslip ? (
                       <Text color={textColorSecondary} fontSize='xs'>
@@ -1409,7 +1549,7 @@ export default function PayrollPage() {
           <Text color={textColorSecondary}>Chưa có dòng lương phù hợp bộ lọc.</Text>
         )}
         <Text color={textColorSecondary} fontSize='xs' mt='10px'>
-          * Nếu backend chưa trả explicit totals thì cột sẽ để trống thay vì để frontend tự suy diễn.
+          * Ưu tiên hiển thị totals backend. Nếu backend chưa trả explicit totals, frontend sẽ suy diễn từ các thành phần lương/khấu trừ.
         </Text>
       </Card>
 
@@ -1460,7 +1600,7 @@ export default function PayrollPage() {
               </Text>
             ) : null}
 
-            {selectedPayrollBreakdown?.amountsSource !== "SERVER" ? (
+            {selectedPayrollBreakdown?.amountsSource === "INCOMPLETE" ? (
               <Text color='orange.400' fontSize='sm' mb='10px'>
                 Backend chưa trả đủ breakdown canonical cho dòng lương này. Popup chỉ hiển thị các số server đã cung cấp.
               </Text>
@@ -1563,3 +1703,5 @@ export default function PayrollPage() {
     </Box>
   );
 }
+
+

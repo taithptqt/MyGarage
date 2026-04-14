@@ -65,7 +65,7 @@ export default function HeaderLinks(props) {
   const { colorMode, toggleColorMode } = useColorMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { branches, selectedBranchId, selectedBranch, selectBranch } = useBranch();
+  const { branches, selectedBranchId, selectedBranch, selectBranch, isBranchLocked } = useBranch();
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const displayName = getDisplayName(user);
   const avatarInitials = getAvatarInitials(displayName);
@@ -151,6 +151,7 @@ export default function HeaderLinks(props) {
           borderRadius="20px"
           me="10px"
           borderColor={borderColor}
+          isDisabled={Boolean(isBranchLocked)}
         >
           {selectedBranchId === 0 ? "Tất cả chi nhánh" : (selectedBranch?.name || "Chọn chi nhánh")}
         </MenuButton>
@@ -161,15 +162,17 @@ export default function HeaderLinks(props) {
           p="6px"
           minW="220px"
         >
-          <MenuItem
-            borderRadius="10px"
-            bg={selectedBranchId === 0 ? "gray.100" : "transparent"}
-            onClick={() => selectBranch(0)}
-          >
-            <Text fontSize="sm" fontWeight={selectedBranchId === 0 ? "700" : "500"}>
-              Tất cả chi nhánh
-            </Text>
-          </MenuItem>
+          {!isBranchLocked ? (
+            <MenuItem
+              borderRadius="10px"
+              bg={selectedBranchId === 0 ? "gray.100" : "transparent"}
+              onClick={() => selectBranch(0)}
+            >
+              <Text fontSize="sm" fontWeight={selectedBranchId === 0 ? "700" : "500"}>
+                Tất cả chi nhánh
+              </Text>
+            </MenuItem>
+          ) : null}
           {branches.map((branch) => (
             <MenuItem
               key={branch.id}

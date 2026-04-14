@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 using MyGarage.Data;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -78,9 +79,38 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         "ABSENT",
         "LATE",
         "UNPAID_LEAVE",
-        "PENALTY",
         "EARLY_LEAVE",
         "MISSED_CHECKIN"
+    ];
+
+    private static readonly HashSet<string> BonusAdjustmentTypes =
+    [
+        "BONUS",
+        "INCENTIVE",
+        "REWARD"
+    ];
+
+    private static readonly HashSet<string> PenaltyAdjustmentTypes =
+    [
+        "PENALTY",
+        "DISCIPLINE",
+        "FINE"
+    ];
+
+    private static readonly HashSet<string> OtherDeductionTypes =
+    [
+        "OTHER_DEDUCTION",
+        "DEDUCTION_OTHER",
+        "MISC_DEDUCTION",
+        "WITHHOLDING"
+    ];
+
+    private static readonly HashSet<string> AcceptedCommissionStatuses =
+    [
+        nameof(CommissionTransactionStatusCode.APPROVED),
+        nameof(CommissionTransactionStatusCode.PAID),
+        "POSTED",
+        nameof(PaymentStatusCode.COMPLETED)
     ];
 
     private static readonly HashSet<string> AcceptedAdvanceStatuses =
@@ -180,6 +210,10 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             var staffTierBaseSalaryMap = await LoadStaffTierBaseSalaryMapAsync(staffIdSet, cancellationToken);
             var overtimeAmountMap = await LoadOvertimeAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
             var attendanceDeductionMap = await LoadAttendanceDeductionMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+            var commissionAmountMap = await LoadCommissionAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+            var bonusAmountMap = await LoadBonusAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+            var penaltyAmountMap = await LoadPenaltyAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+            var otherDeductionMap = await LoadOtherDeductionAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
             var salaryAdvanceMap = await LoadSalaryAdvanceDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
             var loanDeductionMap = await LoadLoanDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
             var dependentCountMap = await LoadDependentCountMapAsync(staffIdSet, periodEndDate, cancellationToken);
@@ -233,14 +267,22 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 var plannedLoanDeduction = loanDeductionMap.TryGetValue(staff.StaffId, out var loan)
                     ? RoundVnd(loan)
                     : 0m;
+                var commissionAmount = commissionAmountMap.TryGetValue(staff.StaffId, out var commission)
+                    ? RoundVnd(commission)
+                    : 0m;
+                var bonusAmount = bonusAmountMap.TryGetValue(staff.StaffId, out var bonus)
+                    ? RoundVnd(bonus)
+                    : 0m;
+                var penaltyAmount = penaltyAmountMap.TryGetValue(staff.StaffId, out var penalty)
+                    ? RoundVnd(penalty)
+                    : 0m;
+                var otherDeduction = otherDeductionMap.TryGetValue(staff.StaffId, out var otherDeductionAmount)
+                    ? RoundVnd(otherDeductionAmount)
+                    : 0m;
                 var dependentCount = dependentCountMap.TryGetValue(staff.StaffId, out var deps)
                     ? Math.Max(0, deps)
                     : 0;
 
-                const decimal commissionAmount = 0m;
-                const decimal bonusAmount = 0m;
-                const decimal penaltyAmount = 0m;
-                const decimal otherDeduction = 0m;
                 const string insuranceZone = "I";
 
                 var grossPay = RoundVnd(effectiveBaseSalary + overtimeAmount + allowanceAmount + commissionAmount + bonusAmount);
@@ -276,15 +318,15 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     item.AttendanceDeduction = attendanceDeduction;
                     item.OvertimeAmount = overtimeAmount;
                     item.AllowanceAmount = allowanceAmount;
-                    item.CommissionAmount = 0m;
-                    item.BonusAmount = 0m;
-                    item.PenaltyAmount = 0m;
+                    item.CommissionAmount = commissionAmount;
+                    item.BonusAmount = bonusAmount;
+                    item.PenaltyAmount = penaltyAmount;
                     item.AdvanceDeduction = advanceDeduction;
                     item.LoanDeduction = appliedLoanDeduction;
                     item.InsuranceEmployeeAmount = insuranceEmployeeAmount;
                     item.InsuranceCompanyAmount = insuranceCompanyAmount;
                     item.PitAmount = pitAmount;
-                    item.OtherDeduction = 0m;
+                    item.OtherDeduction = otherDeduction;
                     item.NetPay = netPay;
                     item.Status = PayrollItemStatusDraft;
                     item.UpdatedAt = now;
@@ -300,15 +342,15 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         AttendanceDeduction = attendanceDeduction,
                         OvertimeAmount = overtimeAmount,
                         AllowanceAmount = allowanceAmount,
-                        CommissionAmount = 0m,
-                        BonusAmount = 0m,
-                        PenaltyAmount = 0m,
+                        CommissionAmount = commissionAmount,
+                        BonusAmount = bonusAmount,
+                        PenaltyAmount = penaltyAmount,
                         AdvanceDeduction = advanceDeduction,
                         LoanDeduction = appliedLoanDeduction,
                         InsuranceEmployeeAmount = insuranceEmployeeAmount,
                         InsuranceCompanyAmount = insuranceCompanyAmount,
                         PitAmount = pitAmount,
-                        OtherDeduction = 0m,
+                        OtherDeduction = otherDeduction,
                         NetPay = netPay,
                         Status = PayrollItemStatusDraft,
                         CreatedAt = now,
@@ -667,6 +709,134 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             if (!result.TryAdd(row.StaffId, deduction))
             {
                 result[row.StaffId] += deduction;
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<Dictionary<long, decimal>> LoadCommissionAmountMapAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<long, decimal>();
+        if (staffIds.Count == 0) return result;
+
+        var periodStart = periodStartDate.ToDateTime(TimeOnly.MinValue);
+        var periodEndExclusive = periodEndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        var rows = await _db.CommissionTransactions
+            .AsNoTracking()
+            .Where(x =>
+                staffIds.Contains(x.StaffId) &&
+                x.CreatedAt.HasValue &&
+                x.CreatedAt.Value >= periodStart &&
+                x.CreatedAt.Value < periodEndExclusive)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in rows)
+        {
+            var normalizedStatus = NormalizeKey(row.Status);
+            if (!string.IsNullOrWhiteSpace(normalizedStatus) && !AcceptedCommissionStatuses.Contains(normalizedStatus))
+            {
+                continue;
+            }
+
+            var amount = Math.Max(0m, row.CommissionAmount);
+            if (amount <= 0m)
+            {
+                continue;
+            }
+
+            var normalizedLogType = NormalizeKey(row.LogType);
+            if (normalizedLogType.Contains("REVERSE", StringComparison.Ordinal) || normalizedLogType.Contains("REFUND", StringComparison.Ordinal))
+            {
+                amount = -amount;
+            }
+
+            if (!result.TryAdd(row.StaffId, amount))
+            {
+                result[row.StaffId] += amount;
+            }
+        }
+
+        foreach (var key in result.Keys.ToList())
+        {
+            result[key] = Math.Max(0m, result[key]);
+        }
+
+        return result;
+    }
+
+    private Task<Dictionary<long, decimal>> LoadBonusAmountMapAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, BonusAdjustmentTypes, cancellationToken);
+    }
+
+    private Task<Dictionary<long, decimal>> LoadPenaltyAmountMapAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, PenaltyAdjustmentTypes, cancellationToken);
+    }
+
+    private Task<Dictionary<long, decimal>> LoadOtherDeductionAmountMapAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, OtherDeductionTypes, cancellationToken);
+    }
+
+    private async Task<Dictionary<long, decimal>> LoadAdjustmentAmountMapAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        IReadOnlySet<string> acceptedTypes,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<long, decimal>();
+        if (staffIds.Count == 0 || acceptedTypes.Count == 0) return result;
+
+        var rows = await _db.AttendanceAdjustments
+            .AsNoTracking()
+            .Where(x =>
+                staffIds.Contains(x.StaffId) &&
+                x.WorkDate >= periodStartDate &&
+                x.WorkDate <= periodEndDate)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in rows)
+        {
+            if (!IsAdjustmentStatusAccepted(row.Status))
+            {
+                continue;
+            }
+
+            var normalizedType = NormalizeKey(row.AdjustmentType);
+            if (!acceptedTypes.Contains(normalizedType))
+            {
+                continue;
+            }
+
+            var amount = Math.Abs(row.AmountImpact);
+            if (amount <= 0m)
+            {
+                continue;
+            }
+
+            if (!result.TryAdd(row.StaffId, amount))
+            {
+                result[row.StaffId] += amount;
             }
         }
 

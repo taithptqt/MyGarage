@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Models;
 using AutoMapper;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MyGarage.Controllers
 {
+    [Authorize(Roles = "Staff")]
     [Route("api/invoice-details")]
     [ApiController]
     public class InvoiceDetailController : ControllerBase
@@ -36,7 +38,23 @@ namespace MyGarage.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<InvoiceDetailResponseDto>>> GetAll()
         {
-            var items = await _invoiceDetailService.GetAllAsync();
+            if (!TryResolveAccountingBranchScope(out var scopedBranchId, out var denied)) return denied;
+
+            IQueryable<InvoiceDetail> query = _context.InvoiceDetails
+                .AsNoTracking();
+
+            if (scopedBranchId.HasValue)
+            {
+                var branchId = scopedBranchId.Value;
+                query = query.Where(x =>
+                    x.Invoice != null
+                    && (
+                        (x.Invoice.ServiceOrder != null && (x.Invoice.ServiceOrder.ExecuteBranchId == branchId || x.Invoice.ServiceOrder.OriginBranchId == branchId))
+                        || (x.Invoice.RetailOrder != null && x.Invoice.RetailOrder.BranchId == branchId)
+                    ));
+            }
+
+            var items = await query.ToListAsync();
             var dtos = _mapper.Map<IEnumerable<InvoiceDetailResponseDto>>(items);
             return Ok(dtos);
         }
@@ -44,7 +62,24 @@ namespace MyGarage.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<InvoiceDetailResponseDto>> GetById(long id)
         {
-            var item = await _invoiceDetailService.GetByIdAsync(id);
+            if (!TryResolveAccountingBranchScope(out var scopedBranchId, out var denied)) return denied;
+
+            IQueryable<InvoiceDetail> query = _context.InvoiceDetails
+                .AsNoTracking()
+                .Where(x => x.Id == id);
+
+            if (scopedBranchId.HasValue)
+            {
+                var branchId = scopedBranchId.Value;
+                query = query.Where(x =>
+                    x.Invoice != null
+                    && (
+                        (x.Invoice.ServiceOrder != null && (x.Invoice.ServiceOrder.ExecuteBranchId == branchId || x.Invoice.ServiceOrder.OriginBranchId == branchId))
+                        || (x.Invoice.RetailOrder != null && x.Invoice.RetailOrder.BranchId == branchId)
+                    ));
+            }
+
+            var item = await query.FirstOrDefaultAsync();
             if (item == null)
             {
                 return NotFound();
@@ -58,6 +93,14 @@ namespace MyGarage.Controllers
         {
             try
             {
+                if (!TryResolveAccountingBranchScope(out var scopedBranchId, out var denied)) return denied;
+
+                if (scopedBranchId.HasValue)
+                {
+                    var invoiceInBranch = await IsInvoiceInBranchAsync(itemDto?.InvoiceId ?? 0, scopedBranchId.Value);
+                    if (!invoiceInBranch) return NotFound();
+                }
+
                 var lockError = await ValidateInvoiceDetailMutationAsync(itemDto?.InvoiceId, null);
                 if (!string.IsNullOrWhiteSpace(lockError))
                 {
@@ -80,6 +123,8 @@ namespace MyGarage.Controllers
         {
             try
             {
+                if (!TryResolveAccountingBranchScope(out var scopedBranchId, out var denied)) return denied;
+
                 var existingItem = await _invoiceDetailService.GetByIdAsync(id);
                 if (existingItem == null)
                 {
@@ -87,6 +132,12 @@ namespace MyGarage.Controllers
                 }
 
                 var invoiceId = itemDto?.InvoiceId > 0 ? itemDto.InvoiceId : existingItem.InvoiceId;
+                if (scopedBranchId.HasValue)
+                {
+                    var invoiceInBranch = await IsInvoiceInBranchAsync(invoiceId, scopedBranchId.Value);
+                    if (!invoiceInBranch) return NotFound();
+                }
+
                 var lockError = await ValidateInvoiceDetailMutationAsync(invoiceId, existingItem);
                 if (!string.IsNullOrWhiteSpace(lockError))
                 {
@@ -114,10 +165,18 @@ namespace MyGarage.Controllers
         {
             try
             {
+                if (!TryResolveAccountingBranchScope(out var scopedBranchId, out var denied)) return denied;
+
                 var existingItem = await _invoiceDetailService.GetByIdAsync(id);
                 if (existingItem == null)
                 {
                     return NotFound();
+                }
+
+                if (scopedBranchId.HasValue)
+                {
+                    var invoiceInBranch = await IsInvoiceInBranchAsync(existingItem.InvoiceId, scopedBranchId.Value);
+                    if (!invoiceInBranch) return NotFound();
                 }
 
                 var lockError = await ValidateInvoiceDetailMutationAsync(existingItem.InvoiceId, existingItem);
@@ -180,8 +239,50 @@ namespace MyGarage.Controllers
 
             return null;
         }
+
+        private bool TryResolveAccountingBranchScope(out long? branchId, out ActionResult deniedResult)
+        {
+            branchId = null;
+            deniedResult = null!;
+
+            if (!(User.Identity?.IsAuthenticated ?? false))
+            {
+                deniedResult = Unauthorized();
+                return false;
+            }
+
+            if (this.IsCurrentAccountingStaff())
+            {
+                branchId = this.GetCurrentBranchId();
+                if (!branchId.HasValue)
+                {
+                    deniedResult = Forbid();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private async Task<bool> IsInvoiceInBranchAsync(long invoiceId, long branchId)
+        {
+            if (invoiceId <= 0) return false;
+
+            return await _context.Invoices
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.Id == invoiceId
+                    && (
+                        (x.ServiceOrderId.HasValue && _context.ServiceOrders
+                            .Any(so => so.Id == x.ServiceOrderId.Value
+                                && (so.ExecuteBranchId == branchId || so.OriginBranchId == branchId)))
+                        || (x.RetailOrderId.HasValue && _context.RetailOrders
+                            .Any(ro => ro.Id == x.RetailOrderId.Value && ro.BranchId == branchId))
+                    ));
+        }
     }
 }
+
 
 
 

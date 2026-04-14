@@ -42,5 +42,49 @@ namespace MyGarage.Controllers
                 ? branchId
                 : null;
         }
+
+        internal static bool IsCurrentAccountingStaff(this ControllerBase controller)
+        {
+            var claimRole = controller.GetCurrentRole();
+            var roleCode = controller.GetCurrentRoleCode();
+            var roleNameUpper = (controller.GetCurrentRoleName() ?? string.Empty).Trim().ToUpperInvariant();
+
+            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase)
+                   && (
+                       string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
+                       || roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
+                       || roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase)
+                       || roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase)
+                   );
+        }
+
+        internal static bool IsCurrentAdminStaff(this ControllerBase controller)
+        {
+            var claimRole = controller.GetCurrentRole();
+            var roleCode = controller.GetCurrentRoleCode();
+            var roleNameUpper = (controller.GetCurrentRoleName() ?? string.Empty).Trim().ToUpperInvariant();
+
+            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase)
+                   && (
+                       string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase)
+                       || roleNameUpper.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
+                   );
+        }
+
+        internal static bool IsCurrentFinancePrivilegedStaff(this ControllerBase controller)
+        {
+            return controller.IsCurrentAccountingStaff() || controller.IsCurrentAdminStaff();
+        }
+
+        internal static bool IsCurrentStaff(this ControllerBase controller)
+        {
+            var claimRole = controller.GetCurrentRole();
+            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool RequiresFinanceBranchScope(this ControllerBase controller)
+        {
+            return controller.IsCurrentStaff() && !controller.IsCurrentAdminStaff();
+        }
     }
 }

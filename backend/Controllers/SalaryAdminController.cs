@@ -34,6 +34,7 @@ public class SalaryAdminController : ControllerBase
     public async Task<IActionResult> GetSalaryProfiles([FromQuery] long? branchId = null)
     {
         if (!CanViewSalaryModule()) return Forbid();
+        if (!TryResolveAccountingBranchScope(branchId, out var effectiveBranchId, out var denied)) return denied;
         if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
 
         var rows = await _crud.QueryAsync(
@@ -58,7 +59,7 @@ public class SalaryAdminController : ControllerBase
             WHERE (@branchId IS NULL OR p.branch_id = @branchId)
             ORDER BY p.created_at DESC, p.id DESC;
             """,
-            [new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)]);
+            [new SqlParameter("@branchId", (object?)effectiveBranchId ?? DBNull.Value)]);
 
         return Ok(rows);
     }
@@ -209,6 +210,7 @@ public class SalaryAdminController : ControllerBase
     public async Task<IActionResult> GetInitialSalaryRequests([FromQuery] string? status = null, [FromQuery] long? branchId = null)
     {
         if (!CanViewSalaryModule()) return Forbid();
+        if (!TryResolveAccountingBranchScope(branchId, out var effectiveBranchId, out var denied)) return denied;
         if (!await EnsureTableAsync("finance-approval-requests", "finance_approval_requests")) return NotFound();
 
         var normalizedStatus = string.IsNullOrWhiteSpace(status) || string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase)
@@ -251,7 +253,7 @@ public class SalaryAdminController : ControllerBase
             """,
             [
                 new SqlParameter("@status", (object?)normalizedStatus ?? DBNull.Value),
-                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)effectiveBranchId ?? DBNull.Value)
             ]);
 
         return Ok(rows);
@@ -539,6 +541,38 @@ public class SalaryAdminController : ControllerBase
     private bool CanViewSalaryModule()
     {
         return IsAdminStaff() || IsAccountingStaff();
+    }
+
+    private bool TryResolveAccountingBranchScope(long? requestedBranchId, out long? effectiveBranchId, out ActionResult deniedResult)
+    {
+        effectiveBranchId = requestedBranchId;
+        deniedResult = null!;
+
+        if (!(User.Identity?.IsAuthenticated ?? false))
+        {
+            deniedResult = Unauthorized();
+            return false;
+        }
+
+        if (this.IsCurrentAccountingStaff())
+        {
+            var userBranchId = this.GetCurrentBranchId();
+            if (!userBranchId.HasValue)
+            {
+                deniedResult = Forbid();
+                return false;
+            }
+
+            if (requestedBranchId.HasValue && requestedBranchId.Value != userBranchId.Value)
+            {
+                deniedResult = Forbid();
+                return false;
+            }
+
+            effectiveBranchId = userBranchId.Value;
+        }
+
+        return true;
     }
 
     private long? ResolveCurrentUserId()

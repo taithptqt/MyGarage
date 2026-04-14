@@ -135,18 +135,19 @@ namespace MyGarage.Services
             }
             else
             {
-                invoice.VehicleId ??= serviceOrder.VehicleId;
-                invoice.Phone ??= serviceOrder.Customer?.Phone;
-                invoice.ReceiveEmail ??= serviceOrder.Customer?.Email;
-                invoice.SubTotalAmount ??= serviceOrder.SubTotalAmount ?? 0m;
-                invoice.TaxAmount ??= serviceOrder.TaxAmount ?? 0m;
-                invoice.TotalAmount ??= serviceOrder.FinalAmount ?? 0m;
-                invoice.PayerType = string.IsNullOrWhiteSpace(invoice.PayerType) ? NormalizePayerType(payerType) : invoice.PayerType;
-                invoice.PayerId ??= ResolvePayerId(payerType, payerId, serviceOrder.CustomerId);
+                invoice.VehicleId = serviceOrder.VehicleId;
+                invoice.Phone = serviceOrder.Customer?.Phone;
+                invoice.ReceiveEmail = serviceOrder.Customer?.Email;
+                invoice.SubTotalAmount = serviceOrder.SubTotalAmount ?? 0m;
+                invoice.TaxAmount = serviceOrder.TaxAmount ?? 0m;
+                invoice.TotalAmount = serviceOrder.FinalAmount ?? 0m;
+                invoice.PayerType = NormalizePayerType(payerType);
+                invoice.PayerId = ResolvePayerId(payerType, payerId, serviceOrder.CustomerId);
                 invoice.UpdatedAt = now;
             }
 
             await PopulateServiceOrderInvoiceDetailsAsync(invoice, serviceOrder.ServiceOrderDetails.ToList());
+            await RecomputeInvoicePaymentStatusAsync(invoice.Id);
             await _context.SaveChangesAsync();
             return invoice;
         }
@@ -195,17 +196,18 @@ namespace MyGarage.Services
             }
             else
             {
-                invoice.Phone ??= retailOrder.Customer?.Phone;
-                invoice.ReceiveEmail ??= retailOrder.Customer?.Email;
-                invoice.SubTotalAmount ??= retailOrder.SubTotal;
-                invoice.TaxAmount ??= retailOrder.TaxAmount ?? 0m;
-                invoice.TotalAmount ??= retailOrder.FinalAmount;
-                invoice.PayerType = string.IsNullOrWhiteSpace(invoice.PayerType) ? NormalizePayerType(payerType) : invoice.PayerType;
-                invoice.PayerId ??= ResolvePayerId(payerType, payerId, retailOrder.CustomerId);
+                invoice.Phone = retailOrder.Customer?.Phone;
+                invoice.ReceiveEmail = retailOrder.Customer?.Email;
+                invoice.SubTotalAmount = retailOrder.SubTotal;
+                invoice.TaxAmount = retailOrder.TaxAmount ?? 0m;
+                invoice.TotalAmount = retailOrder.FinalAmount;
+                invoice.PayerType = NormalizePayerType(payerType);
+                invoice.PayerId = ResolvePayerId(payerType, payerId, retailOrder.CustomerId);
                 invoice.UpdatedAt = now;
             }
 
             await PopulateRetailOrderInvoiceDetailsAsync(invoice, retailOrder.RetailOrderItems.ToList());
+            await RecomputeInvoicePaymentStatusAsync(invoice.Id);
             await _context.SaveChangesAsync();
             return invoice;
         }
@@ -252,7 +254,8 @@ namespace MyGarage.Services
         {
             if (invoice.InvoiceDetails.Count > 0)
             {
-                return;
+                _context.InvoiceDetails.RemoveRange(invoice.InvoiceDetails);
+                invoice.InvoiceDetails.Clear();
             }
 
             var invoiceDetails = items
@@ -283,6 +286,31 @@ namespace MyGarage.Services
                 _context.InvoiceDetails.AddRange(invoiceDetails);
                 await _context.SaveChangesAsync();
             }
+        }
+
+        private async Task RecomputeInvoicePaymentStatusAsync(long invoiceId)
+        {
+            var invoice = await _context.Invoices.FirstOrDefaultAsync(x => x.Id == invoiceId);
+            if (invoice == null)
+            {
+                return;
+            }
+
+            var paidAmount = await _context.Payments
+                .Where(x =>
+                    x.InvoiceId == invoiceId &&
+                    x.Status != null &&
+                    x.Status.ToUpper() == nameof(PaymentStatusCode.COMPLETED))
+                .SumAsync(x => (decimal?)x.Amount) ?? 0m;
+
+            invoice.PaidAmount = paidAmount;
+            var invoiceTotal = invoice.TotalAmount ?? 0m;
+            invoice.PaymentStatus = paidAmount <= 0m
+                ? nameof(InvoicePaymentStatusCode.UNPAID)
+                : paidAmount < invoiceTotal
+                    ? nameof(InvoicePaymentStatusCode.PARTIAL)
+                    : nameof(InvoicePaymentStatusCode.PAID);
+            invoice.UpdatedAt = VietnamTime.Now;
         }
 
         private static string NormalizePayerType(string? payerType)
