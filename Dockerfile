@@ -40,6 +40,12 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
 
 EXPOSE 8080
 
+# Ensure healthcheck command dependencies exist in runtime image.
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=backend-publish /app/publish ./
 COPY --from=frontend-build /src/frontend/dist ./frontend/dist
 

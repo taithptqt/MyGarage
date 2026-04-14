@@ -1,5 +1,6 @@
 services:
   mygarage-app:
+    init: true
     build:
       context: .
       dockerfile: Dockerfile
@@ -16,7 +17,10 @@ services:
       # Map configurable host port (default 80) to container port 8080.
       - "${APP_PORT:-80}:8080"
     env_file:
-      - ./Frontend/.env
+      - path: ./.env
+        required: false
+      - path: ./Frontend/.env
+        required: false
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -29,11 +33,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s   # give the app time to migrate DB / warm up
-    deploy:
-      resources:
-        limits:
-          memory: 512M    # prevent OOM on small VPS; raise if needed
-          cpus: "0.75"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
+    # `deploy.resources` is ignored by plain Docker Compose (non-Swarm).
+    # Use these keys so limits actually apply on EC2 with docker compose.
+    mem_limit: 512m        # raise if your workload needs more
+    mem_reservation: 128m
+    cpus: 0.75
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
