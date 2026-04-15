@@ -256,6 +256,46 @@
   background: #f4f7ff;
 }
 
+.inventory-admin-page .inventory-action-col {
+  min-width: 220px;
+}
+
+.inventory-admin-page .inventory-action-col-cell {
+  min-width: 220px;
+}
+
+.inventory-admin-page .inventory-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.inventory-admin-page .inventory-action-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: transform 0.16s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.inventory-admin-page .inventory-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 16px rgba(39, 66, 133, 0.14);
+}
+
+.inventory-admin-page .inventory-action-btn:active {
+  transform: translateY(0);
+}
+
+.inventory-admin-page .inventory-action-btn--warn {
+  border-color: #d8dff1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
 .inventory-admin-page .policy-card {
   margin: 0 28px 14px;
   border: 1px solid var(--inv-panel-border);
