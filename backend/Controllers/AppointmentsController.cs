@@ -759,7 +759,7 @@ namespace MyGarage.Controllers
                 return true;
             }
 
-            var claimRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var claimRole = this.GetCurrentRole();
             if (IsCustomerRole(claimRole))
             {
                 return true;

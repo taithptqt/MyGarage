@@ -11,7 +11,11 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 {
     private const string PayrollPeriodStatusOpen = nameof(PayrollPeriodStatusCode.OPEN);
     private const string PayrollRunStatusDraft = nameof(PayrollRunStatusCode.DRAFT);
+    private const string PayrollRunStatusCalculated = nameof(PayrollRunStatusCode.CALCULATED);
     private const string PayrollItemStatusDraft = nameof(PayrollItemStatusCode.DRAFT);
+    private const string CommissionStatusPending = nameof(CommissionTransactionStatusCode.PENDING);
+    private const string CommissionStatusApproved = nameof(CommissionTransactionStatusCode.APPROVED);
+    private const string CommissionStatusProcessed = "PROCESSED";
     private const string StaffSalaryProfileStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
     private const string StaffContractStatusActive = nameof(StaffContractStatusCode.ACTIVE);
     private const string EmployeeLoanStatusActive = nameof(EmployeeLoanStatusCode.ACTIVE);
@@ -141,6 +145,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             {
                 runResolution.Run.CalculatedBy = command.UserId;
                 runResolution.Run.CalculatedAt = now;
+                runResolution.Run.Status = PayrollRunStatusCalculated;
                 runResolution.Run.UpdatedAt = now;
                 await _db.SaveChangesAsync(cancellationToken);
                 await tx.CommitAsync(cancellationToken);
@@ -183,6 +188,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             var salaryAdvanceMap = await LoadSalaryAdvanceDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
             var loanDeductionMap = await LoadLoanDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
             var dependentCountMap = await LoadDependentCountMapAsync(staffIdSet, periodEndDate, cancellationToken);
+            var commissionAggregation = await LoadCommissionAggregationAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
 
             var existingItems = await _db.PayrollItems
                 .Where(i => i.PayrollRunId == runResolution.Run.Id)
@@ -196,7 +202,9 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             var skippedExisting = 0;
             var grossTotal = 0m;
             var netTotal = 0m;
+            var commissionTotal = 0m;
             var affectedItems = new List<PayrollItem>(staffRows.Count);
+            var processedCommissionIds = new HashSet<long>();
 
             foreach (var staff in staffRows)
             {
@@ -237,7 +245,9 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     ? Math.Max(0, deps)
                     : 0;
 
-                const decimal commissionAmount = 0m;
+                var commissionAmount = commissionAggregation.AmountByStaffId.TryGetValue(staff.StaffId, out var commission)
+                    ? RoundVnd(commission)
+                    : 0m;
                 const decimal bonusAmount = 0m;
                 const decimal penaltyAmount = 0m;
                 const decimal otherDeduction = 0m;
@@ -276,7 +286,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     item.AttendanceDeduction = attendanceDeduction;
                     item.OvertimeAmount = overtimeAmount;
                     item.AllowanceAmount = allowanceAmount;
-                    item.CommissionAmount = 0m;
+                    item.CommissionAmount = commissionAmount;
                     item.BonusAmount = 0m;
                     item.PenaltyAmount = 0m;
                     item.AdvanceDeduction = advanceDeduction;
@@ -284,7 +294,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     item.InsuranceEmployeeAmount = insuranceEmployeeAmount;
                     item.InsuranceCompanyAmount = insuranceCompanyAmount;
                     item.PitAmount = pitAmount;
-                    item.OtherDeduction = 0m;
+                    item.OtherDeduction = otherDeduction;
                     item.NetPay = netPay;
                     item.Status = PayrollItemStatusDraft;
                     item.UpdatedAt = now;
@@ -300,7 +310,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         AttendanceDeduction = attendanceDeduction,
                         OvertimeAmount = overtimeAmount,
                         AllowanceAmount = allowanceAmount,
-                        CommissionAmount = 0m,
+                        CommissionAmount = commissionAmount,
                         BonusAmount = 0m,
                         PenaltyAmount = 0m,
                         AdvanceDeduction = advanceDeduction,
@@ -308,7 +318,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         InsuranceEmployeeAmount = insuranceEmployeeAmount,
                         InsuranceCompanyAmount = insuranceCompanyAmount,
                         PitAmount = pitAmount,
-                        OtherDeduction = 0m,
+                        OtherDeduction = otherDeduction,
                         NetPay = netPay,
                         Status = PayrollItemStatusDraft,
                         CreatedAt = now,
@@ -321,14 +331,28 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
                 grossTotal += grossPay;
                 netTotal += netPay;
+                commissionTotal += commissionAmount;
+                if (commissionAggregation.TransactionIdsByStaffId.TryGetValue(staff.StaffId, out var commissionIds))
+                {
+                    foreach (var commissionId in commissionIds)
+                    {
+                        processedCommissionIds.Add(commissionId);
+                    }
+                }
                 affectedItems.Add(item);
             }
 
             runResolution.Run.CalculatedBy = command.UserId;
             runResolution.Run.CalculatedAt = now;
+            runResolution.Run.Status = PayrollRunStatusCalculated;
             runResolution.Run.UpdatedAt = now;
 
             await _db.SaveChangesAsync(cancellationToken);
+            var processedCommissionTransactions = await MarkCommissionTransactionsProcessedAsync(
+                processedCommissionIds,
+                command.UserId,
+                now,
+                cancellationToken);
 
             var payslipsIssued = 0;
             if (command.IssuePayslips)
@@ -361,6 +385,8 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 PayslipsIssued = payslipsIssued,
                 GrossTotal = RoundVnd(grossTotal),
                 NetTotal = RoundVnd(netTotal),
+                CommissionTotal = RoundVnd(commissionTotal),
+                ProcessedCommissionTransactions = processedCommissionTransactions,
                 Message = "Batch payroll calculation completed."
             };
         }
@@ -422,9 +448,10 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 throw new InvalidOperationException("Selected payroll run does not belong to the selected payroll period.");
             }
 
-            if (!string.Equals(NormalizeKey(provided.Status), PayrollRunStatusDraft, StringComparison.Ordinal))
+            var runStatus = NormalizeKey(provided.Status);
+            if (runStatus is not PayrollRunStatusDraft and not PayrollRunStatusCalculated)
             {
-                throw new InvalidOperationException("Batch calculation can only update a DRAFT payroll run.");
+                throw new InvalidOperationException("Batch calculation can only update a DRAFT/CALCULATED payroll run.");
             }
 
             return new PayrollRunResolution(provided, false);
@@ -780,6 +807,68 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         return result;
     }
 
+    private async Task<CommissionAggregationSnapshot> LoadCommissionAggregationAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        var amountByStaffId = new Dictionary<long, decimal>();
+        var transactionIdsByStaffId = new Dictionary<long, List<long>>();
+        if (staffIds.Count == 0)
+        {
+            return new CommissionAggregationSnapshot(amountByStaffId, transactionIdsByStaffId);
+        }
+
+        var periodStart = periodStartDate.ToDateTime(TimeOnly.MinValue);
+        var periodEndExclusive = periodEndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        var rows = await _db.CommissionTransactions
+            .AsNoTracking()
+            .Where(x => staffIds.Contains(x.StaffId) && x.CommissionAmount > 0m)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in rows)
+        {
+            var status = NormalizeStatus(row.Status, CommissionStatusPending);
+            if (status != CommissionStatusPending && status != CommissionStatusApproved)
+            {
+                continue;
+            }
+
+            var effectiveAt = row.ApprovedAt ?? row.CreatedAt ?? row.UpdatedAt;
+            if (!effectiveAt.HasValue)
+            {
+                continue;
+            }
+
+            if (effectiveAt.Value < periodStart || effectiveAt.Value >= periodEndExclusive)
+            {
+                continue;
+            }
+
+            var amount = Math.Max(0m, row.CommissionAmount);
+            if (amount <= 0m)
+            {
+                continue;
+            }
+
+            if (!amountByStaffId.TryAdd(row.StaffId, amount))
+            {
+                amountByStaffId[row.StaffId] += amount;
+            }
+
+            if (!transactionIdsByStaffId.TryGetValue(row.StaffId, out var ids))
+            {
+                ids = [];
+                transactionIdsByStaffId[row.StaffId] = ids;
+            }
+            ids.Add(row.Id);
+        }
+
+        return new CommissionAggregationSnapshot(amountByStaffId, transactionIdsByStaffId);
+    }
+
     private async Task<int> IssuePayslipsAsync(
         int runNo,
         DateTime now,
@@ -825,6 +914,48 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         }
 
         return created;
+    }
+
+    private async Task<int> MarkCommissionTransactionsProcessedAsync(
+        IReadOnlyCollection<long> commissionTransactionIds,
+        long userId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var ids = commissionTransactionIds
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var rows = await _db.CommissionTransactions
+            .Where(x => ids.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        var changed = 0;
+        foreach (var row in rows)
+        {
+            var status = NormalizeStatus(row.Status, CommissionStatusPending);
+            if (status != CommissionStatusPending && status != CommissionStatusApproved)
+            {
+                continue;
+            }
+
+            row.Status = CommissionStatusProcessed;
+            row.UpdatedAt = now;
+            row.UpdatedBy = userId;
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return changed;
     }
 
     private async Task<DateOnly?> ResolveStaffHireDateAsync(long staffId, CancellationToken cancellationToken)
@@ -1026,6 +1157,9 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
     private sealed record PayrollRunResolution(PayrollRun Run, bool CreatedNew);
     private sealed record SalaryCoefficientThreshold(int YearsOfService, decimal CoefficientValue);
     private sealed record ContractCompensationSnapshot(decimal BaseSalary, decimal AllowanceAmount);
+    private sealed record CommissionAggregationSnapshot(
+        Dictionary<long, decimal> AmountByStaffId,
+        Dictionary<long, List<long>> TransactionIdsByStaffId);
     private sealed record PitBracket(decimal UpperLimit, decimal Rate);
     private sealed record VietnamPayrollPolicy(
         decimal EmployeeBhxhRate,
@@ -1082,5 +1216,7 @@ public sealed class PayrollBatchCalculationResult
     public int PayslipsIssued { get; set; }
     public decimal GrossTotal { get; set; }
     public decimal NetTotal { get; set; }
+    public decimal CommissionTotal { get; set; }
+    public int ProcessedCommissionTransactions { get; set; }
     public string Message { get; set; } = "";
 }

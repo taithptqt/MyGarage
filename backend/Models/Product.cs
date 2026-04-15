@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -28,6 +28,14 @@ public partial class Product
     public bool? IsStrictCapacityControl { get; set; }
 
     public bool? RequireEmptyReturn { get; set; }
+
+    public decimal? MinStockLevel { get; set; }
+
+    public decimal? ReorderPoint { get; set; }
+
+    public bool? IsConsumable { get; set; }
+
+    public decimal? ConsumableThresholdAmount { get; set; }
 
     public bool? IsActive { get; set; }
 

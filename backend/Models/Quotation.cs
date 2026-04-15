@@ -32,6 +32,7 @@ public partial class Quotation
     public decimal TotalCustomerAmount { get; set; }
 
     public string? InsuranceClaimNumber { get; set; }
+    public string? InsuranceApprovalEvidenceUrl { get; set; }
 
     public string Status { get; set; } = null!;
 
@@ -70,6 +71,10 @@ public partial class Quotation
     public string? InternalNotes { get; set; }
 
     public bool IsAppliedToServiceOrder { get; set; }
+
+    public bool IsReadyForSplitBilling { get; set; }
+
+    public DateTime? SplitBillingReadyAt { get; set; }
 
     public long? AppliedBy { get; set; }
 

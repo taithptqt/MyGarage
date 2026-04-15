@@ -48,6 +48,20 @@ namespace MyGarage.Controllers
             "WARRANTLY",
         };
 
+        private static readonly HashSet<string> AllowedStartWorkStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            nameof(ServiceOrderLifecycleStatus.APPROVED),
+            nameof(ServiceOrderLifecycleStatus.WAITING_PARTS),
+            nameof(ServiceOrderLifecycleStatus.IN_PROGRESS),
+            nameof(ServiceOrderLifecycleStatus.REPAIRING),
+        };
+
+        private static readonly HashSet<string> ClosedOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            nameof(ServiceOrderLifecycleStatus.CLOSED),
+            nameof(ServiceOrderLifecycleStatus.CANCELED),
+        };
+
         private static readonly JsonSerializerOptions EditRequestJsonOptions = new(JsonSerializerDefaults.Web)
         {
             PropertyNameCaseInsensitive = true
@@ -311,6 +325,374 @@ namespace MyGarage.Controllers
                 message = decision == "APPROVE"
                     ? "Đã duyệt yêu cầu sửa service order."
                     : "Đã từ chối yêu cầu sửa service order."
+            });
+        }
+
+        [Authorize]
+        [HttpPost("{id:long}/start-work")]
+        public async Task<IActionResult> StartWork(long id, [FromBody] ServiceOrderStartWorkRequestDto? dto)
+        {
+            var actorUserId = this.GetCurrentUserId();
+            if (!actorUserId.HasValue || actorUserId.Value <= 0)
+            {
+                return Unauthorized();
+            }
+
+            var order = await _context.ServiceOrders
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (order == null)
+            {
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
+            }
+
+            var normalizedStatus = NormalizeToken(order.Status);
+            if (ClosedOrderStatuses.Contains(normalizedStatus))
+            {
+                return BadRequest(new { message = "Lệnh sửa chữa đã đóng, không thể bắt đầu thi công." });
+            }
+
+            if (!AllowedStartWorkStatuses.Contains(normalizedStatus))
+            {
+                return BadRequest(new { message = $"Trạng thái {order.Status} chưa thể bắt đầu thi công." });
+            }
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var now = VietnamTime.Now;
+
+                if (!string.Equals(normalizedStatus, nameof(ServiceOrderLifecycleStatus.IN_PROGRESS), StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(normalizedStatus, nameof(ServiceOrderLifecycleStatus.REPAIRING), StringComparison.OrdinalIgnoreCase))
+                {
+                    order.Status = nameof(ServiceOrderLifecycleStatus.IN_PROGRESS);
+                }
+
+                order.UpdatedAt = now;
+                order.UpdatedBy = actorUserId.Value;
+
+                var partDetails = await _context.ServiceOrderDetails
+                    .Where(x =>
+                        x.ServiceOrderId == id &&
+                        x.ItemId.HasValue &&
+                        x.ItemId.Value > 0 &&
+                        x.Quantity > 0m)
+                    .ToListAsync();
+
+                var normalizedPartDetails = partDetails
+                    .Where(x => string.Equals(NormalizeServiceOrderDetailItemType(x.ItemType), "PART", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                long? materialRequestId = await _context.MaterialRequests
+                    .Where(x => x.ServiceOrderId == id)
+                    .OrderByDescending(x => x.Id)
+                    .Select(x => (long?)x.Id)
+                    .FirstOrDefaultAsync();
+
+                var createdDetailCount = 0;
+                if (normalizedPartDetails.Count > 0)
+                {
+                    if (!materialRequestId.HasValue || materialRequestId.Value <= 0)
+                    {
+                        var createdRequest = new MaterialRequest
+                        {
+                            ServiceOrderId = id,
+                            TechnicianId = dto?.TechnicianId,
+                            RequestDate = now,
+                            Status = nameof(MaterialRequestStatusCode.PENDING),
+                            Note = string.IsNullOrWhiteSpace(dto?.Note) ? "Auto create from start-work" : dto!.Note!.Trim(),
+                            CreatedAt = now
+                        };
+
+                        _context.MaterialRequests.Add(createdRequest);
+                        await _context.SaveChangesAsync();
+                        materialRequestId = createdRequest.Id;
+                    }
+
+                    var existedDetailServiceOrderDetailIds = await (
+                        from requestDetail in _context.MaterialRequestDetails.AsNoTracking()
+                        join request in _context.MaterialRequests.AsNoTracking()
+                            on requestDetail.RequestId equals request.Id
+                        where request.ServiceOrderId == id &&
+                              requestDetail.ServiceOrderDetailId.HasValue
+                        select requestDetail.ServiceOrderDetailId!.Value)
+                        .ToListAsync();
+                    var existedSet = existedDetailServiceOrderDetailIds.ToHashSet();
+
+                    var warehouseId = await _context.Warehouses
+                        .AsNoTracking()
+                        .Where(x => x.BranchId == order.ExecuteBranchId && x.IsDeleted != true && x.IsActive != false)
+                        .OrderBy(x => x.Type == "MAIN" ? 0 : 1)
+                        .ThenBy(x => x.Id)
+                        .Select(x => (long?)x.Id)
+                        .FirstOrDefaultAsync();
+
+                    if (!warehouseId.HasValue)
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { message = "Không có kho hoạt động tại chi nhánh thực hiện để tạo phiếu vật tư." });
+                    }
+
+                    foreach (var serviceOrderDetail in normalizedPartDetails)
+                    {
+                        if (existedSet.Contains(serviceOrderDetail.Id))
+                        {
+                            continue;
+                        }
+
+                        _context.MaterialRequestDetails.Add(new MaterialRequestDetail
+                        {
+                            RequestId = materialRequestId.Value,
+                            ProductId = serviceOrderDetail.ItemId!.Value,
+                            WarehouseId = warehouseId.Value,
+                            RequestedQuantity = Math.Max(serviceOrderDetail.Quantity, 0m),
+                            RequestedCondition = "NEW",
+                            ServiceOrderDetailId = serviceOrderDetail.Id,
+                            Status = nameof(MaterialRequestDetailStatusCode.PENDING),
+                            Note = "Auto create from start-work",
+                            CreatedAt = now,
+                            CreatedBy = actorUserId.Value,
+                            UpdatedAt = now,
+                            UpdatedBy = actorUserId.Value
+                        });
+
+                        createdDetailCount++;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    serviceOrderId = id,
+                    status = order.Status,
+                    materialRequestId,
+                    createdMaterialRequestDetails = createdDetailCount,
+                    message = "Đã bắt đầu thi công và đồng bộ yêu cầu vật tư."
+                });
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{id:long}/cancel-with-rollback")]
+        public async Task<IActionResult> CancelWithRollback(long id, [FromBody] ServiceOrderCancelWithRollbackRequestDto? dto)
+        {
+            var actorUserId = this.GetCurrentUserId();
+            if (!actorUserId.HasValue || actorUserId.Value <= 0)
+            {
+                return Unauthorized();
+            }
+
+            var serviceOrder = await _context.ServiceOrders
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (serviceOrder == null)
+            {
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
+            }
+
+            if (string.Equals(serviceOrder.Status, nameof(ServiceOrderLifecycleStatus.CANCELED), StringComparison.OrdinalIgnoreCase))
+            {
+                return Ok(new { message = "Lệnh đã ở trạng thái CANCELED.", serviceOrderId = id });
+            }
+
+            var hasCompletedPayment = await _context.Payments
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ServiceOrderId == id &&
+                    (x.Status ?? string.Empty).ToUpper() == nameof(PaymentStatusCode.COMPLETED));
+            if (hasCompletedPayment)
+            {
+                return BadRequest(new { message = "Lệnh đã có thanh toán COMPLETED, không thể rollback tự động." });
+            }
+
+            var hasIssuedInvoice = await _context.Invoices
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ServiceOrderId == id &&
+                    (x.IssuedAt.HasValue || (x.PaidAmount ?? 0m) > 0m));
+            if (hasIssuedInvoice)
+            {
+                return BadRequest(new { message = "Lệnh đã phát sinh hóa đơn/thu tiền, không thể rollback tự động." });
+            }
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            try
+            {
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+
+                    var now = VietnamTime.Now;
+                    var reason = string.IsNullOrWhiteSpace(dto?.Reason)
+                        ? "Rollback one-click"
+                        : dto!.Reason!.Trim();
+
+                    var requestRows = await _context.MaterialRequests
+                        .Where(x => x.ServiceOrderId == id)
+                        .ToListAsync();
+                    if (requestRows.Count > 0)
+                    {
+                        var requestIds = requestRows.Select(x => x.Id).ToList();
+                        var requestDetailRows = await _context.MaterialRequestDetails
+                            .Where(x => requestIds.Contains(x.RequestId))
+                            .ToListAsync();
+                        foreach (var detail in requestDetailRows)
+                        {
+                            detail.Status = nameof(MaterialRequestDetailStatusCode.CANCELED);
+                        }
+
+                        foreach (var row in requestRows)
+                        {
+                            row.Status = nameof(MaterialRequestStatusCode.CANCELED);
+                            row.Note = string.IsNullOrWhiteSpace(row.Note)
+                                ? $"Rollback: {reason}"
+                                : $"{row.Note.Trim()} | Rollback: {reason}";
+                        }
+                    }
+
+                    var qcRows = await _context.QcInspections
+                        .Where(x => x.ServiceOrderId == id &&
+                                    (x.Status ?? string.Empty).ToUpper() != nameof(QcInspectionStatusCode.PASS))
+                        .ToListAsync();
+                    foreach (var qc in qcRows)
+                    {
+                        qc.FailReason = string.IsNullOrWhiteSpace(qc.FailReason)
+                            ? $"Rollback service order: {reason}"
+                            : $"{qc.FailReason.Trim()} | Rollback service order: {reason}";
+                    }
+
+                    var linkRows = await (
+                        from link in _context.QuotationAccessLinks
+                        join quotation in _context.Quotations on link.QuotationId equals quotation.Id
+                        where quotation.ServiceOrderId == id &&
+                              (link.Status ?? string.Empty).ToUpper() == "ACTIVE"
+                        select link
+                    ).ToListAsync();
+                    foreach (var link in linkRows)
+                    {
+                        link.Status = "REVOKED";
+                        link.UpdatedAt = now;
+                        link.UpdatedBy = actorUserId;
+                    }
+
+                    var allocations = await _context.BayAllocations
+                        .Include(x => x.Bay)
+                        .Where(x => x.ServiceOrderId == id && !x.ReleasedAt.HasValue)
+                        .ToListAsync();
+                    foreach (var allocation in allocations)
+                    {
+                        allocation.ReleasedAt = now;
+                        allocation.ReleasedBy = actorUserId;
+                        if (allocation.Bay != null)
+                        {
+                            allocation.Bay.OperationalStatus = "AVAILABLE";
+                            allocation.Bay.CurrentOccupiedVehicleId = null;
+                            allocation.Bay.LastStatusChangedAt = now;
+                        }
+                    }
+
+                    serviceOrder.Status = nameof(ServiceOrderLifecycleStatus.CANCELED);
+                    serviceOrder.CancellationReason = reason;
+                    serviceOrder.InsuranceQuoteState = nameof(QuotationStatusCode.CANCELED);
+                    serviceOrder.UpdatedAt = now;
+                    serviceOrder.UpdatedBy = actorUserId.Value;
+
+                    await _context.SaveChangesAsync();
+                    await tx.CommitAsync();
+                });
+
+                return Ok(new
+                {
+                    serviceOrderId = id,
+                    status = serviceOrder.Status,
+                    message = "Đã rollback và hủy lệnh thành công."
+                });
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{id:long}/warranty-rework")]
+        public async Task<IActionResult> CreateWarrantyRework(long id, [FromBody] ServiceOrderWarrantyReworkCreateRequestDto? dto)
+        {
+            var actorUserId = this.GetCurrentUserId();
+            if (!actorUserId.HasValue || actorUserId.Value <= 0)
+            {
+                return Unauthorized();
+            }
+
+            var original = await _context.ServiceOrders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (original == null)
+            {
+                return NotFound(new { message = "Khong tim thay service order goc." });
+            }
+
+            var hasQcFail = await _context.QcInspections
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ServiceOrderId == id &&
+                    (x.Status ?? string.Empty).ToUpper() == nameof(QcInspectionStatusCode.FAIL));
+            if (!hasQcFail)
+            {
+                return BadRequest(new { message = "Khong co QC FAIL hop le de mo luong bao hanh/rework." });
+            }
+
+            var reason = string.IsNullOrWhiteSpace(dto?.Reason)
+                ? "Warranty rework from QC FAIL"
+                : dto!.Reason!.Trim();
+
+            var duplicateOpenRework = await _context.ServiceOrders
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.OriginalServiceOrderId == id &&
+                    (x.OrderCategory ?? string.Empty).ToUpper() == "REWORK" &&
+                    (x.Status ?? string.Empty).ToUpper() != nameof(ServiceOrderLifecycleStatus.CLOSED) &&
+                    (x.Status ?? string.Empty).ToUpper() != nameof(ServiceOrderLifecycleStatus.CANCELED));
+            if (duplicateOpenRework)
+            {
+                return BadRequest(new { message = "Da ton tai lenh REWORK dang mo cho service order goc nay." });
+            }
+
+            var now = VietnamTime.Now;
+            var reworkOrder = new ServiceOrder
+            {
+                Code = $"RW-{original.Code}-{now:yyyyMMddHHmmss}",
+                CustomerId = original.CustomerId,
+                VehicleId = original.VehicleId,
+                OriginBranchId = original.OriginBranchId,
+                ExecuteBranchId = original.ExecuteBranchId,
+                OriginalServiceOrderId = original.Id,
+                OrderCategory = "REWORK",
+                ServiceAdvisorId = original.ServiceAdvisorId,
+                ReceptionistId = original.ReceptionistId,
+                Status = nameof(ServiceOrderLifecycleStatus.NEW),
+                CustomerNotes = reason,
+                InsuranceQuoteState = null,
+                CreatedAt = now,
+                UpdatedAt = now,
+                CreatedBy = actorUserId.Value,
+                UpdatedBy = actorUserId.Value
+            };
+
+            _context.ServiceOrders.Add(reworkOrder);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Da tao service order REWORK/WARRANTY.",
+                originalServiceOrderId = original.Id,
+                reworkServiceOrderId = reworkOrder.Id,
+                reworkServiceOrderCode = reworkOrder.Code
             });
         }
 
@@ -606,6 +988,17 @@ namespace MyGarage.Controllers
                 file.ContentType,
                 HttpContext.RequestAborted);
             return (url, blobPath);
+        }
+
+        private static string NormalizeServiceOrderDetailItemType(string? itemType)
+        {
+            var token = NormalizeToken(itemType);
+            return token switch
+            {
+                "PART" or "PARTS" or "PRODUCT" or "MATERIAL" or "INVENTORY" => "PART",
+                "SERVICE" or "STANDARD_SERVICE" or "LABOR" => "LABOR",
+                _ => "LABOR"
+            };
         }
 
         private static string? NormalizeInsuranceAssetType(string? assetType)

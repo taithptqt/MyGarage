@@ -27,6 +27,8 @@ public partial class Staff
 
     public int? SkillLevel { get; set; }
 
+    public string? Specialty { get; set; }
+
     public string? CitizenId { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }

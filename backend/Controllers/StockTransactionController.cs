@@ -14,11 +14,16 @@ namespace MyGarage.Controllers
     public class StockTransactionController : ControllerBase
     {
         private readonly IStockTransactionService _stockTransactionService;
+        private readonly IInventoryAdminService _inventoryAdminService;
         private readonly IMapper _mapper;
 
-        public StockTransactionController(IStockTransactionService stockTransactionService, IMapper mapper)
+        public StockTransactionController(
+            IStockTransactionService stockTransactionService,
+            IInventoryAdminService inventoryAdminService,
+            IMapper mapper)
         {
             _stockTransactionService = stockTransactionService;
+            _inventoryAdminService = inventoryAdminService;
             _mapper = mapper;
         }
 
@@ -47,6 +52,7 @@ namespace MyGarage.Controllers
         {
             var entity = _mapper.Map<StockTransaction>(itemDto);
             var createdItem = await _stockTransactionService.AddAsync(entity);
+            await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
             var responseDto = _mapper.Map<StockTransactionResponseDto>(createdItem);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
@@ -67,6 +73,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+            await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
             var responseDto = _mapper.Map<StockTransactionResponseDto>(updatedItem);
             return Ok(responseDto);
         }
@@ -79,6 +86,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+            await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
             return NoContent();
         }
     }

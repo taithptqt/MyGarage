@@ -16,15 +16,18 @@ namespace MyGarage.Controllers
     {
         private readonly IMaterialReturnService _materialReturnService;
         private readonly IServiceOrderService _serviceOrderService;
+        private readonly IInventoryAdminService _inventoryAdminService;
         private readonly IMapper _mapper;
 
         public MaterialReturnController(
             IMaterialReturnService materialReturnService,
             IServiceOrderService serviceOrderService,
+            IInventoryAdminService inventoryAdminService,
             IMapper mapper)
         {
             _materialReturnService = materialReturnService;
             _serviceOrderService = serviceOrderService;
+            _inventoryAdminService = inventoryAdminService;
             _mapper = mapper;
         }
 
@@ -60,6 +63,7 @@ namespace MyGarage.Controllers
 
                 var entity = _mapper.Map<MaterialReturn>(itemDto);
                 var createdItem = await _materialReturnService.AddAsync(entity);
+                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
             }
@@ -93,6 +97,7 @@ namespace MyGarage.Controllers
                     return NotFound();
                 }
 
+                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 var responseDto = _mapper.Map<MaterialReturnResponseDto>(updatedItem);
                 return Ok(responseDto);
             }
@@ -123,6 +128,7 @@ namespace MyGarage.Controllers
                 {
                     return NotFound();
                 }
+                await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 return NoContent();
             }
             catch (InvalidOperationException ex)

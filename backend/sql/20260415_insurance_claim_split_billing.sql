@@ -34,6 +34,7 @@ ALTER TABLE dbo.Quotations
         [Status] IN (
             'DRAFT',
             'PENDING_INSURANCE',
+            'INSURANCE_APPROVED',
             'PENDING_CUSTOMER',
             'WAITING_APPROVAL',
             'SENT_TO_CUSTOMER',
@@ -80,10 +81,11 @@ BEGIN
     EXEC('
         ALTER TABLE dbo.QuotationDetails
             ADD CONSTRAINT CK_QuotationDetails_CoverageSum CHECK (
-                (
-                    ISNULL([InsuranceCoveredAmount], ISNULL([InsuranceRequestedAmount], 0)) +
-                    ISNULL([CustomerCoveredAmount], ISNULL([CustomerCoPayAmount], 0))
-                ) = ISNULL([FinalAmount], 0)
+                ABS(
+                    ISNULL([InsuranceCoveredAmount], 0) +
+                    ISNULL([CustomerCoveredAmount], 0) -
+                    ISNULL([FinalAmount], 0)
+                ) <= 0.01
             );
     ');
 END;

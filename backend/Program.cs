@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using MyGarage.Options;
+using MyGarage.Services.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -105,6 +106,7 @@ builder.Services.AddSingleton<ITransferStore, TransferService>();
 
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<IVehicleHistoryService, VehicleHistoryService>();
 
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
@@ -132,6 +134,7 @@ builder.Services.AddHostedService<AppointmentDispatchBackgroundService>();
 builder.Services.AddHostedService<AppointmentReminderBackgroundService>();
 builder.Services.AddHostedService<AppointmentInsuranceUploadCleanupBackgroundService>();
 builder.Services.AddHostedService<ServiceOrderInsuranceUploadCleanupBackgroundService>();
+builder.Services.AddHostedService<NotificationRetryBackgroundService>();
 
 builder.Services.AddSingleton<IValidateOptions<CustomerAutomationJobsOptions>, CustomerAutomationJobsOptionsValidator>();
 builder.Services.AddOptions<CustomerAutomationJobsOptions>()
@@ -162,6 +165,11 @@ builder.Services.AddScoped<IServiceCategoryService, ServiceCategoryService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IInventoryAdminService, InventoryAdminService>();
+builder.Services.AddScoped<IGrnSnapshotService, GrnSnapshotService>();
+builder.Services.AddScoped<IMaintenanceReminderService, MaintenanceReminderService>();
+builder.Services.AddHostedService<GrnSnapshotBackgroundService>();
+builder.Services.AddHostedService<MaintenanceReminderBackgroundService>();
+builder.Services.AddHostedService<StockAlertBackgroundService>();
 
 builder.Services.AddScoped<IStaffScheduleRepository, StaffScheduleRepository>();
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();
@@ -186,6 +194,11 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 builder.Services.AddScoped<IBayRepository, BayRepository>();
 builder.Services.AddScoped<IBayService, BayService>();
+builder.Services.AddScoped<IBayManagementService, BayManagementService>();
+builder.Services.AddScoped<ITimesheetService, TimesheetService>();
+builder.Services.AddScoped<ITechnicianProductivityService, TechnicianProductivityService>();
+builder.Services.AddScoped<IConsumableReturnService, ConsumableReturnService>();
+builder.Services.AddScoped<IWorkshopDispatchService, WorkshopDispatchService>();
 
 builder.Services.AddScoped<IBranchRepository, BranchRepository>();
 builder.Services.AddScoped<IBranchService, BranchService>();

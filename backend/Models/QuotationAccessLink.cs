@@ -26,6 +26,16 @@ public partial class QuotationAccessLink
 
     public string? ClientNote { get; set; }
 
+    public string? OtpCodeHash { get; set; }
+
+    public DateTime? OtpExpiresAt { get; set; }
+
+    public int OtpAttemptCount { get; set; }
+
+    public DateTime? OtpVerifiedAt { get; set; }
+
+    public DateTime? OtpLastSentAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public long? CreatedBy { get; set; }
@@ -36,4 +46,3 @@ public partial class QuotationAccessLink
 
     public virtual Quotation Quotation { get; set; } = null!;
 }
-

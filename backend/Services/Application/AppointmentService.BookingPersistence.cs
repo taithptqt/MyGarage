@@ -66,6 +66,7 @@ namespace MyGarage.Services
                 };
                 _context.Appointments.Add(appointment);
                 await _context.SaveChangesAsync();
+                await TryMarkMaintenanceReminderBookedAsync(actualCustomerId, vehicleId, appointment.Id);
 
                 await PersistAppointmentInsuranceAssetsAsync(appointment, dto);
 

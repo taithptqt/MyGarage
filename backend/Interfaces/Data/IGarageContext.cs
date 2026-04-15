@@ -58,6 +58,7 @@ namespace MyGarage.Interfaces
         DbSet<ModelSpecificRule> ModelSpecificRules { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }
+        DbSet<MaintenanceReminder> MaintenanceReminders { get; }
         DbSet<Payment> Payments { get; }
         DbSet<PaymentMethod> PaymentMethods { get; }
         DbSet<Package> Packages { get; }
@@ -68,13 +69,23 @@ namespace MyGarage.Interfaces
         DbSet<ProductImage> ProductImages { get; }
         DbSet<PurchaseOrder> PurchaseOrders { get; }
         DbSet<PurchaseOrderItem> PurchaseOrderItems { get; }
+        DbSet<GoodsReceiptNote> GoodsReceiptNotes { get; }
+        DbSet<GoodsReceiptNoteItem> GoodsReceiptNoteItems { get; }
+        DbSet<GrnDailySnapshot> GrnDailySnapshots { get; }
         DbSet<QcInspection> QcInspections { get; }
+        DbSet<QcChecklistTemplate> QcChecklistTemplates { get; }
+        DbSet<QcChecklistItem> QcChecklistItems { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<QuotationDetail> QuotationDetails { get; }
         DbSet<QuotationAccessLink> QuotationAccessLinks { get; }
         DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; }
         DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; }
         DbSet<MandatoryOverrideRequest> MandatoryOverrideRequests { get; }
+        DbSet<BayAllocation> BayAllocations { get; }
+        DbSet<BayStatusLog> BayStatusLogs { get; }
+        DbSet<ConsumableReturnBundle> ConsumableReturnBundles { get; }
+        DbSet<ConsumableReturnBundleItem> ConsumableReturnBundleItems { get; }
+        DbSet<TimesheetEntry> TimesheetEntries { get; }
         DbSet<RetailOrder> RetailOrders { get; }
         DbSet<RetailOrderItem> RetailOrderItems { get; }
         DbSet<RetailReturn> RetailReturns { get; }
@@ -100,6 +111,7 @@ namespace MyGarage.Interfaces
         DbSet<StandardService> StandardServices { get; }
         DbSet<ServiceBom> ServiceBoms { get; }
         DbSet<StockTransaction> StockTransactions { get; }
+        DbSet<StockAlert> StockAlerts { get; }
         DbSet<Supplier> Suppliers { get; }
         DbSet<Vehicle> Vehicles { get; }
         DbSet<VehicleBrand> VehicleBrands { get; }

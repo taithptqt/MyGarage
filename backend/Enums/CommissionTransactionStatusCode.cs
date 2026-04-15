@@ -5,6 +5,7 @@ public enum CommissionTransactionStatusCode
     CANCELED,
     PAID,
     APPROVED,
-    PENDING
+    PENDING,
+    PROCESSED
 }
 

@@ -21,6 +21,7 @@ ALTER TABLE dbo.Quotations
         [Status] IN (
             'DRAFT',
             'PENDING_INSURANCE',
+            'INSURANCE_APPROVED',
             'PENDING_CUSTOMER',
             'WAITING_APPROVAL',
             'SENT_TO_CUSTOMER',
@@ -51,9 +52,9 @@ UPDATE dbo.QuotationDetails
 SET PayerType = CASE
     WHEN UPPER(LTRIM(RTRIM(ISNULL(PayerType, '')))) IN ('INSURANCE', 'CUSTOMER', 'SPLIT')
         THEN UPPER(LTRIM(RTRIM(PayerType)))
-    WHEN ISNULL(InsuranceRequestedAmount, 0) > 0 AND ISNULL(CustomerCoPayAmount, 0) > 0
+    WHEN ISNULL(InsuranceCoveredAmount, 0) > 0 AND ISNULL(CustomerCoveredAmount, 0) > 0
         THEN 'SPLIT'
-    WHEN ISNULL(InsuranceRequestedAmount, 0) > 0
+    WHEN ISNULL(InsuranceCoveredAmount, 0) > 0
         THEN 'INSURANCE'
     ELSE 'CUSTOMER'
 END;

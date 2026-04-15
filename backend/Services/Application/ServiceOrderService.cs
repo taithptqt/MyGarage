@@ -21,9 +21,16 @@ namespace MyGarage.Services
         private readonly IGroupSessionService _groupSessionService;
         private readonly ISystemClock _clock;
         private readonly IServiceOrderCustomerLifecycleNotifier _customerLifecycleNotifier;
+        private readonly IMaintenanceReminderService _maintenanceReminderService;
         private const int MaxCodeGenerationAttempts = 8;
         private const string CheckInLogType = "CHECK_IN";
         private const string CheckInPendingStatus = nameof(DiagnosisStatus.PENDING);
+        private const string CommissionTargetTypeServiceAdvisor = "SERVICE_ADVISOR";
+        private const string CommissionSourceTypeServiceAdvisor = "SOADVISOR";
+        private const string CommissionLogTypeEarned = "EARNED";
+        private const string CommissionTypePercent = "PERCENT";
+        private const string CommissionStatusPending = nameof(CommissionTransactionStatusCode.PENDING);
+        private const string PaymentStatusCompleted = nameof(PaymentStatusCode.COMPLETED);
         private const string WorkshopDetailItemType = "LABOR";
         private const string WorkshopDetailDescription = "Dá»‹ch vá»¥ khÃ¡ch yÃªu cáº§u trÆ°á»›c";
         private const string WorkshopDetailUnit = "Láº§n";
@@ -52,12 +59,14 @@ namespace MyGarage.Services
             IGarageContext context,
             IGroupSessionService groupSessionService,
             ISystemClock clock,
-            IServiceOrderCustomerLifecycleNotifier customerLifecycleNotifier) : base(repository)
+            IServiceOrderCustomerLifecycleNotifier customerLifecycleNotifier,
+            IMaintenanceReminderService maintenanceReminderService) : base(repository)
         {
             _context = context;
             _groupSessionService = groupSessionService;
             _clock = clock;
             _customerLifecycleNotifier = customerLifecycleNotifier;
+            _maintenanceReminderService = maintenanceReminderService;
         }
 
         public override async Task<ServiceOrder> AddAsync(ServiceOrder entity)
@@ -149,7 +158,24 @@ namespace MyGarage.Services
                 : entity.OriginBranchId;
             await EnsureBranchOpenForCheckInAsync(executeBranchId, checkInTime);
             await EnsureWorkshopEditableAsync(serviceOrderId);
-            return await base.UpdateAsync(id, entity);
+
+            var previousLifecycleStatus = await _context.ServiceOrders
+                .AsNoTracking()
+                .Where(x => x.Id == serviceOrderId)
+                .Select(x => x.Status)
+                .FirstOrDefaultAsync() ?? string.Empty;
+
+            var updated = await base.UpdateAsync(id, entity);
+            if (updated != null)
+            {
+                await TryCreateServiceAdvisorCommissionOnClosureAsync(
+                    updated,
+                    previousLifecycleStatus,
+                    entity.UpdatedBy);
+                await TryScheduleMaintenanceReminderAsync(updated, previousLifecycleStatus, entity.UpdatedBy);
+            }
+
+            return updated;
         }
 
         public override async Task<bool> DeleteAsync(object id)
@@ -301,7 +327,10 @@ namespace MyGarage.Services
                 {
                     order.OrderCategory = InsuranceBillingRules.InsuranceRepairCategoryCode;
                 }
-                order.ServiceAdvisorId = dto.ServiceAdvisorId;
+                order.ServiceAdvisorId = ResolveServiceAdvisorForWorkshopEdit(
+                    dto.ServiceAdvisorId,
+                    order.ServiceAdvisorId,
+                    actorStaffId);
                 order.OldPartsReturnOption = NormalizeText(dto.OldPartsReturnOption) ?? order.OldPartsReturnOption;
                 order.RequiredDepositAmount = Math.Max(dto.RequiredDepositAmount ?? 0m, 0m);
                 order.CheckInTime = checkInTime;
@@ -410,6 +439,8 @@ namespace MyGarage.Services
 
                 _customerLifecycleNotifier.EnqueueAfterStatusChange(order, previousLifecycleStatus);
                 await _context.SaveChangesAsync();
+                await TryCreateServiceAdvisorCommissionOnClosureAsync(order, previousLifecycleStatus, actorStaffId);
+                await TryScheduleMaintenanceReminderAsync(order, previousLifecycleStatus, actorStaffId);
                 await ReplaceServiceOrderInsuranceAssetsAsync(
                     order.Id,
                     dto.InsuranceCardImageUrls,
@@ -545,7 +576,7 @@ namespace MyGarage.Services
                 OriginBranchId = originBranchId,
                 ExecuteBranchId = executeBranchId,
                 OrderCategory = normalizedOrderCategory,
-                ServiceAdvisorId = item.ServiceAdvisorId,
+                ServiceAdvisorId = ResolveServiceAdvisorForWorkshopCreate(item.ServiceAdvisorId, actorStaffId),
                 ReceptionistId = actorStaffId,
                 CustomerNotes = NormalizeText(item.CustomerNotes),
                 RequiredDepositAmount = item.RequiredDepositAmount,
@@ -1073,9 +1104,267 @@ namespace MyGarage.Services
             return Math.Round(amount * taxRate / 100m, 2, MidpointRounding.AwayFromZero);
         }
 
+        private async Task TryScheduleMaintenanceReminderAsync(
+            ServiceOrder order,
+            string previousStatus,
+            long? actorUserId)
+        {
+            if (order == null || order.Id <= 0)
+            {
+                return;
+            }
+
+            if (!ShouldCreateMaintenanceReminder(previousStatus, order.Status))
+            {
+                return;
+            }
+
+            await _maintenanceReminderService.ScheduleFromServiceOrderAsync(
+                order.Id,
+                remindAfterDays: 180,
+                remindAfterMileage: 5000,
+                actorUserId,
+                default);
+        }
+
+        private async Task TryCreateServiceAdvisorCommissionOnClosureAsync(
+            ServiceOrder order,
+            string? previousStatus,
+            long? actorUserId)
+        {
+            if (order == null || order.Id <= 0)
+            {
+                return;
+            }
+
+            if (!ShouldCreateServiceAdvisorCommission(previousStatus, order.Status))
+            {
+                return;
+            }
+
+            if (!await HasCompletedPaymentAsync(order))
+            {
+                return;
+            }
+
+            var advisorStaffId = ResolveServiceAdvisorLikeStaffId(order);
+            if (!advisorStaffId.HasValue)
+            {
+                return;
+            }
+
+            var staff = await _context.Staffs
+                .AsNoTracking()
+                .Where(x => x.Id == advisorStaffId.Value && x.IsDeleted != true)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.StaffTierId
+                })
+                .FirstOrDefaultAsync();
+            if (staff == null || !staff.StaffTierId.HasValue || staff.StaffTierId.Value <= 0)
+            {
+                return;
+            }
+
+            var hasExisting = await _context.CommissionTransactions
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ServiceOrderId == order.Id &&
+                    x.StaffId == staff.Id &&
+                    x.SourceType == CommissionSourceTypeServiceAdvisor &&
+                    x.LogType == CommissionLogTypeEarned &&
+                    x.OriginalCommissionId == null &&
+                    x.Status != nameof(CommissionTransactionStatusCode.CANCELED));
+            if (hasExisting)
+            {
+                return;
+            }
+
+            var rule = await _context.CommissionRules
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsDeleted != true &&
+                    (x.IsActive ?? true) &&
+                    x.BranchId == order.ExecuteBranchId &&
+                    x.TargetType == CommissionTargetTypeServiceAdvisor &&
+                    x.StaffTierId == staff.StaffTierId.Value &&
+                    (x.TargetId == null || x.TargetId == staff.Id))
+                .OrderByDescending(x => x.TargetId == staff.Id)
+                .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (rule == null)
+            {
+                return;
+            }
+
+            var baseAmount = ResolveCommissionBaseAmount(order);
+            if (baseAmount <= 0m)
+            {
+                return;
+            }
+
+            var normalizedCommissionType = NormalizeToken(rule.CommissionType) ?? CommissionTypePercent;
+            var commissionAmount = CalculateCommissionAmount(baseAmount, normalizedCommissionType, rule.CommissionValue);
+            if (commissionAmount <= 0m)
+            {
+                return;
+            }
+
+            var now = VietnamTime.Now;
+            _context.CommissionTransactions.Add(new CommissionTransaction
+            {
+                StaffId = staff.Id,
+                ServiceOrderId = order.Id,
+                CommissionRuleId = rule.Id,
+                SourceType = CommissionSourceTypeServiceAdvisor,
+                BaseAmount = baseAmount,
+                AppliedCommissionType = normalizedCommissionType,
+                AppliedCommissionValue = rule.CommissionValue,
+                AppliedSplitRatio = 100m,
+                CommissionAmount = commissionAmount,
+                LogType = CommissionLogTypeEarned,
+                Status = CommissionStatusPending,
+                CreatedAt = now,
+                UpdatedAt = now,
+                CreatedBy = actorUserId,
+                UpdatedBy = actorUserId
+            });
+
+            await _context.SaveChangesAsync();
+        }
+
+        private static bool ShouldCreateMaintenanceReminder(string? previousStatus, string? currentStatus)
+        {
+            var prev = NormalizeToken(previousStatus) ?? string.Empty;
+            var current = NormalizeToken(currentStatus) ?? string.Empty;
+
+            static bool IsClosedOrCompleted(string value)
+            {
+                return string.Equals(value, nameof(ServiceOrderLifecycleStatus.CLOSED), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "COMPLETED", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return !IsClosedOrCompleted(prev) && IsClosedOrCompleted(current);
+        }
+
+        private static bool ShouldCreateServiceAdvisorCommission(string? previousStatus, string? currentStatus)
+        {
+            var prev = NormalizeToken(previousStatus) ?? string.Empty;
+            var current = NormalizeToken(currentStatus) ?? string.Empty;
+
+            static bool IsClosedOrCompleted(string value)
+            {
+                return string.Equals(value, nameof(ServiceOrderLifecycleStatus.CLOSED), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "COMPLETED", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return !IsClosedOrCompleted(prev) && IsClosedOrCompleted(current);
+        }
+
+        private async Task<bool> HasCompletedPaymentAsync(ServiceOrder order)
+        {
+            var normalizedPaymentStatus = NormalizeToken(order.PaymentStatus);
+            if (string.Equals(normalizedPaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedPaymentStatus, PaymentStatusCompleted, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return await _context.Payments
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.ServiceOrderId == order.Id &&
+                    x.Amount > 0m &&
+                    x.Status != null &&
+                    x.Status.ToUpper() == PaymentStatusCompleted);
+        }
+
+        private static long? ResolveServiceAdvisorLikeStaffId(ServiceOrder order)
+        {
+            if (order.ServiceAdvisorId.HasValue && order.ServiceAdvisorId.Value > 0)
+            {
+                return order.ServiceAdvisorId.Value;
+            }
+
+            if (order.ReceptionistId.HasValue && order.ReceptionistId.Value > 0)
+            {
+                return order.ReceptionistId.Value;
+            }
+
+            return null;
+        }
+
+        private static decimal ResolveCommissionBaseAmount(ServiceOrder order)
+        {
+            var finalAmount = order.FinalAmount ?? 0m;
+            if (finalAmount > 0m)
+            {
+                return Math.Round(finalAmount, 2, MidpointRounding.AwayFromZero);
+            }
+
+            var subTotal = order.SubTotalAmount ?? 0m;
+            var tax = order.TaxAmount ?? 0m;
+            var discount = order.TotalDiscount ?? 0m;
+            var fallbackAmount = subTotal + tax - discount;
+            return fallbackAmount > 0m
+                ? Math.Round(fallbackAmount, 2, MidpointRounding.AwayFromZero)
+                : 0m;
+        }
+
+        private static decimal CalculateCommissionAmount(decimal baseAmount, string commissionType, decimal commissionValue)
+        {
+            if (baseAmount <= 0m || commissionValue <= 0m)
+            {
+                return 0m;
+            }
+
+            if (string.Equals(commissionType, CommissionTypePercent, StringComparison.OrdinalIgnoreCase))
+            {
+                return Math.Round(baseAmount * commissionValue / 100m, 2, MidpointRounding.AwayFromZero);
+            }
+
+            return Math.Round(commissionValue, 2, MidpointRounding.AwayFromZero);
+        }
+
         private static long NumberToPositiveLong(long value)
         {
             return value > 0 ? value : 0;
+        }
+
+        private static long? ResolveServiceAdvisorForWorkshopCreate(long? requestedServiceAdvisorId, long? actorStaffId)
+        {
+            if (requestedServiceAdvisorId.HasValue && requestedServiceAdvisorId.Value > 0)
+            {
+                return requestedServiceAdvisorId.Value;
+            }
+
+            if (actorStaffId.HasValue && actorStaffId.Value > 0)
+            {
+                return actorStaffId.Value;
+            }
+
+            return null;
+        }
+
+        private static long? ResolveServiceAdvisorForWorkshopEdit(long? requestedServiceAdvisorId, long? currentServiceAdvisorId, long? actorStaffId)
+        {
+            if (requestedServiceAdvisorId.HasValue && requestedServiceAdvisorId.Value > 0)
+            {
+                return requestedServiceAdvisorId.Value;
+            }
+
+            if (currentServiceAdvisorId.HasValue && currentServiceAdvisorId.Value > 0)
+            {
+                return currentServiceAdvisorId.Value;
+            }
+
+            if (actorStaffId.HasValue && actorStaffId.Value > 0)
+            {
+                return actorStaffId.Value;
+            }
+
+            return null;
         }
 
         private static List<long> NormalizePositiveLongList(IEnumerable<long>? values)

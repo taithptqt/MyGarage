@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace MyGarage.DTOs.Responses;
 
@@ -15,6 +16,8 @@ public sealed class QuotationResponseDto
     public int VersionNo { get; set; }
     public string Status { get; set; } = null!;
     public string? InsuranceClaimNumber { get; set; }
+    [JsonPropertyName("insuranceApprovalEvidenceUrl")]
+    public string? InsuranceApprovalEvidenceUrl { get; set; }
     public long? TechnicalApprovedBy { get; set; }
     public DateTime? TechnicalApprovedAt { get; set; }
     public string? TeamLeaderApprovalStatus { get; set; }
@@ -33,6 +36,8 @@ public sealed class QuotationResponseDto
     public decimal TotalCustomerAmount { get; set; }
     public List<string> Warnings { get; set; } = new();
     public bool IsAppliedToServiceOrder { get; set; }
+    public bool IsReadyForSplitBilling { get; set; }
+    public DateTime? SplitBillingReadyAt { get; set; }
     public DateTime? AppliedAt { get; set; }
     public List<QuotationDetailResponseDto> Details { get; set; } = new();
 }
@@ -57,8 +62,6 @@ public sealed class QuotationDetailResponseDto
     public long? InsuranceCompanyId { get; set; }
     public decimal? InsuranceCoveredAmount { get; set; }
     public decimal? CustomerCoveredAmount { get; set; }
-    public decimal? InsuranceRequestedAmount { get; set; }
-    public decimal? CustomerCoPayAmount { get; set; }
     public string ApprovalStatus { get; set; } = null!;
     public string? RejectReason { get; set; }
     public bool IsBlocking { get; set; }

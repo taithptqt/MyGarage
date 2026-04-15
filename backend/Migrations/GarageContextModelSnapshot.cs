@@ -17,7 +17,7 @@ namespace MyGarage.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.25")
+                .HasAnnotation("ProductVersion", "8.0.26")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -56,6 +56,42 @@ namespace MyGarage.Migrations
                     b.HasIndex("VehicleId");
 
                     b.ToTable("AI_Forecasts", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AiFraudMonitor", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("RiskLevel")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)")
+                        .HasDefaultValue("FLAGGED");
+
+                    b.HasKey("Id")
+                        .HasName("PK__AI_Fraud__3214EC0761F06F3E");
+
+                    b.ToTable("AI_FraudMonitors", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.AiKnowledgeBase", b =>
@@ -186,10 +222,6 @@ namespace MyGarage.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long?>("BookingGroupId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("GroupSessionId");
-
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -214,10 +246,38 @@ namespace MyGarage.Migrations
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<long?>("GroupSessionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("GroupSessionId");
+
+                    b.Property<string>("InsuranceClaimMode")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<long?>("InsuranceCompanyId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("InsuranceDeductibleAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("InsuranceDeductibleOption")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("InsuranceQuoteState")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
                     b.Property<bool?>("IsReminderSent")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("RequestedPackageIds")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RequestedServiceIds")
                         .HasColumnType("nvarchar(max)");
@@ -253,13 +313,128 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("InsuranceCompanyId");
+
                     b.HasIndex("UpdatedBy");
 
                     b.HasIndex("VehicleId");
 
-                    b.HasIndex(new[] { "BookingGroupId" }, "IX_Appointments_BookingGroupId");
+                    b.HasIndex(new[] { "GroupSessionId" }, "IX_Appointments_GroupSessionId");
 
                     b.ToTable("Appointments");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AppointmentInsuranceAsset", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_AppointmentInsuranceAssets");
+
+                    b.HasIndex(new[] { "AppointmentId", "AssetType", "SortOrder" }, "IX_AppointmentInsuranceAssets_Appointment_Type_Order");
+
+                    b.ToTable("AppointmentInsuranceAssets");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AppointmentInsuranceUpload", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("BlobPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_AppointmentInsuranceUploads");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.HasIndex(new[] { "Status", "CreatedAt" }, "IX_AppointmentInsuranceUploads_Status_CreatedAt");
+
+                    b.ToTable("AppointmentInsuranceUploads");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ApprovalRequest", b =>
@@ -328,6 +503,70 @@ namespace MyGarage.Migrations
                     b.HasIndex("ServiceOrderDiscountId");
 
                     b.ToTable("ApprovalRequests");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AttendanceAdjustment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AdjustmentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("adjustment_type");
+
+                    b.Property<decimal>("AmountImpact")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("amount_impact");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("approved_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("Minutes")
+                        .HasColumnType("int")
+                        .HasColumnName("minutes");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("reason");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("work_date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("attendance_adjustments", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.AuditLog", b =>
@@ -450,6 +689,9 @@ namespace MyGarage.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<DateTime?>("LastStatusChangedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("MaxTonnage")
                         .HasColumnType("decimal(5, 2)");
 
@@ -464,6 +706,16 @@ namespace MyGarage.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)")
                         .HasDefaultValue("ACTIVE");
+
+                    b.Property<int>("ReservationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("SequenceOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("ServiceArea")
                         .IsRequired()
@@ -495,7 +747,7 @@ namespace MyGarage.Migrations
                     b.ToTable("Bays");
                 });
 
-            modelBuilder.Entity("MyGarage.Models.BookingGroup", b =>
+            modelBuilder.Entity("MyGarage.Models.BayAllocation", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -503,95 +755,96 @@ namespace MyGarage.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("BranchId")
+                    b.Property<DateTime>("AllocatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("AllocatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("CancelReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("CanceledAppointments")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0)
-                        .HasColumnName("CanceledItems");
-
-                    b.Property<DateTime?>("CanceledAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("ConfirmedAppointments")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0)
-                        .HasColumnName("ConfirmedItems");
-
-                    b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("datetime2");
+                    b.Property<long>("BayId")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("(getdate())");
 
-                    b.Property<long?>("CreatedBy")
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("PlannedDuration")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ReleasedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("CustomerId")
+                    b.Property<long>("ServiceOrderId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("CustomerNote")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long>("VehicleId")
+                        .HasColumnType("bigint");
 
-                    b.Property<string>("GroupCode")
+                    b.HasKey("Id");
+
+                    b.HasIndex("AllocatedBy");
+
+                    b.HasIndex("BayId");
+
+                    b.HasIndex("ReleasedBy");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("BayAllocations", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.BayStatusLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BayId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long>("ChangedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("NewStatus")
                         .IsRequired()
                         .HasMaxLength(50)
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)");
 
-                    b.Property<string>("Status")
+                    b.Property<string>("OldStatus")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
+                        .HasMaxLength(50)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(30)")
-                        .HasDefaultValue("PENDING");
+                        .HasColumnType("varchar(50)");
 
-                    b.Property<int>("TotalAppointments")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0)
-                        .HasColumnName("TotalItems");
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("(getdate())");
+                    b.HasKey("Id");
 
-                    b.Property<long?>("UpdatedBy")
-                        .HasColumnType("bigint");
+                    b.HasIndex("BayId");
 
-                    b.HasKey("Id")
-                        .HasName("PK__BookingG__3214EC077B6FE4D1");
+                    b.HasIndex("ChangedBy");
 
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("UpdatedBy");
-
-                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "IX_BookingGroups_CustomerId_CreatedAt");
-
-                    b.HasIndex(new[] { "Status", "CreatedAt" }, "IX_BookingGroups_Status_CreatedAt");
-
-                    b.HasIndex(new[] { "GroupCode" }, "UQ_BookingGroups_GroupCode")
-                        .IsUnique();
-
-                    b.ToTable("GroupSessions", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_BookingGroups_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
-
-                            t.HasCheckConstraint("CK_GroupSessions_ItemCounters", "[TotalItems] >= 0 AND [ConfirmedItems] >= 0 AND [CanceledItems] >= 0 AND [ConfirmedItems] + [CanceledItems] <= [TotalItems]");
-                        });
+                    b.ToTable("BayStatusLogs", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.Branch", b =>
@@ -795,6 +1048,68 @@ namespace MyGarage.Migrations
                         .IsUnique();
 
                     b.ToTable("BranchOperatingHours");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.CapacityConfig", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("ActiveTechnicians")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("BookingThresholdPercent")
+                        .HasColumnType("decimal(5, 4)");
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreateBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte>("DayOfWeek")
+                        .HasColumnType("tinyint");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("MaxBaysAvailable")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdateBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_CapacityConfigs");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreateBy");
+
+                    b.HasIndex("UpdateBy");
+
+                    b.ToTable("CapacityConfigs");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Category", b =>
@@ -1402,6 +1717,97 @@ namespace MyGarage.Migrations
                     b.ToTable("CommissionTransactions");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.ConsumableReturnBundle", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BundleCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long?>("ReceivedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReturnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<long>("TechnicianId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedBy");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.HasIndex("TechnicianId");
+
+                    b.ToTable("ConsumableReturnBundles", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ConsumableReturnBundleItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BundleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("IssuedQuantity")
+                        .HasColumnType("decimal(18, 3)");
+
+                    b.Property<long?>("MaterialReqDetailId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("UsedQuantity")
+                        .HasColumnType("decimal(18, 3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BundleId");
+
+                    b.HasIndex("MaterialReqDetailId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("ConsumableReturnBundleItems", (string)null);
+                });
+
             modelBuilder.Entity("MyGarage.Models.Conversation", b =>
                 {
                     b.Property<long>("Id")
@@ -1974,7 +2380,10 @@ namespace MyGarage.Migrations
                     b.Property<long?>("CreatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("DiagnoseId")
+                    b.Property<long?>("DiagnosisAssignmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DiagnosisId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("EvidenceMediaUrls")
@@ -1994,6 +2403,15 @@ namespace MyGarage.Migrations
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 3)");
+
+                    b.Property<string>("RecommendationStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SoftDeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("SoftDeletedBy")
+                        .HasColumnType("bigint");
 
                     b.Property<long?>("StandardServiceId")
                         .HasColumnType("bigint");
@@ -2019,7 +2437,9 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("CreatedBy");
 
-                    b.HasIndex("DiagnoseId");
+                    b.HasIndex("DiagnosisAssignmentId");
+
+                    b.HasIndex("DiagnosisId");
 
                     b.HasIndex("InventoryItemId");
 
@@ -2040,8 +2460,8 @@ namespace MyGarage.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long?>("ApprovedByForemanId")
-                        .HasColumnType("bigint");
+                    b.Property<string>("AssignmentNote")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2050,6 +2470,14 @@ namespace MyGarage.Migrations
 
                     b.Property<DateTime?>("DiagnosedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DispatchTag")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<bool>("IsEscalated")
+                        .HasColumnType("bit");
 
                     b.Property<string>("RootCause")
                         .HasColumnType("nvarchar(max)");
@@ -2062,6 +2490,9 @@ namespace MyGarage.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)");
 
+                    b.Property<DateTime?>("SlaDueAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(50)
@@ -2069,11 +2500,11 @@ namespace MyGarage.Migrations
                         .HasColumnType("varchar(50)")
                         .HasDefaultValue("PENDING");
 
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Symptom")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("TechnicianId")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -2086,15 +2517,272 @@ namespace MyGarage.Migrations
                     b.HasKey("Id")
                         .HasName("PK__Diagnose__3214EC071BC3DD6E");
 
-                    b.HasIndex("ApprovedByForemanId");
-
                     b.HasIndex("ServiceOrderId");
-
-                    b.HasIndex("TechnicianId");
 
                     b.HasIndex("UpdatedBy");
 
                     b.ToTable("Diagnoses");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.DiagnosisAssignment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("ApprovedByForemanAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ApprovedByForemanId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ApprovedByTeamLeaderAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ApprovedByTeamLeaderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("AssignedBayId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("AssignedTeamId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("AssistantTechnicianId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CancellationDecisionAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CancellationDecisionBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CancellationDecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("CancellationRequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CancellationRequestedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CancellationStatus")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DiagnosisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("FinalApprovalStatus")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("ForemanNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ForemanRejectReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("OldStatus")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("ProofImageUrl")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<bool>("RequiresInsuranceProof")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("SupportRequestNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("SupportRequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("SupportRequestedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TeamLeaderApprovalStatus")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("TeamLeaderNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("TechnicianAcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("TechnicianCompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("TechnicianId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_DiagnosisAssignments");
+
+                    b.HasIndex("DiagnosisId");
+
+                    b.ToTable("DiagnosisAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.EmployeeDependent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly?>("Dob")
+                        .HasColumnType("date")
+                        .HasColumnName("dob");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("full_name");
+
+                    b.Property<string>("Relationship")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("relationship");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<DateOnly?>("TaxRegistrationDate")
+                        .HasColumnType("date")
+                        .HasColumnName("tax_registration_date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("employee_dependents", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.EmployeeLoan", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("LoanAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("loan_amount");
+
+                    b.Property<decimal>("MonthlyDeduction")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("monthly_deduction");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal>("OutstandingAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("outstanding_amount");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<long?>("StartPayrollPeriodId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("start_payroll_period_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("StartPayrollPeriodId");
+
+                    b.ToTable("employee_loans", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.ExpenseLog", b =>
@@ -2235,6 +2923,107 @@ namespace MyGarage.Migrations
                         .IsUnique();
 
                     b.ToTable("GatePass", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.GroupSession", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("CanceledAppointments")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("CanceledItems");
+
+                    b.Property<DateTime?>("CanceledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ConfirmedAppointments")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("ConfirmedItems");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CustomerNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GroupCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("PENDING");
+
+                    b.Property<int>("TotalAppointments")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("TotalItems");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK__BookingG__3214EC077B6FE4D1");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.HasIndex(new[] { "CustomerId", "CreatedAt" }, "IX_GroupSessions_CustomerId_CreatedAt");
+
+                    b.HasIndex(new[] { "Status", "CreatedAt" }, "IX_GroupSessions_Status_CreatedAt");
+
+                    b.HasIndex(new[] { "GroupCode" }, "UQ_GroupSessions_GroupCode")
+                        .IsUnique();
+
+                    b.ToTable("GroupSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BookingGroups_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
+
+                            t.HasCheckConstraint("CK_GroupSessions_ItemCounters", "[TotalItems] >= 0 AND [ConfirmedItems] >= 0 AND [CanceledItems] >= 0 AND [ConfirmedItems] + [CanceledItems] <= [TotalItems]");
+
+                            t.HasCheckConstraint("CK_GroupSessions_Status", "[Status] IN ('PENDING','CONFIRMED','PARTIAL_CONFIRMED','CANCELED','COMPLETED')");
+                        });
                 });
 
             modelBuilder.Entity("MyGarage.Models.InsuranceCompany", b =>
@@ -2679,6 +3468,59 @@ namespace MyGarage.Migrations
                     b.ToTable("InvoiceDetails");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.MandatoryOverrideRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("DecidedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("QuotationDetailId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("QuotationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("RequestedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuotationDetailId");
+
+                    b.HasIndex("QuotationId");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.ToTable("MandatoryOverrideRequests");
+                });
+
             modelBuilder.Entity("MyGarage.Models.MaterialRequest", b =>
                 {
                     b.Property<long>("Id")
@@ -3059,6 +3901,279 @@ namespace MyGarage.Migrations
                     b.ToTable("NotificationTemplates");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.OvertimeEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("amount");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("approved_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("Hours")
+                        .HasColumnType("decimal(10, 2)")
+                        .HasColumnName("hours");
+
+                    b.Property<string>("OvertimeType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("overtime_type");
+
+                    b.Property<decimal>("RateMultiplier")
+                        .HasColumnType("decimal(5, 2)")
+                        .HasColumnName("rate_multiplier");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("work_date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("overtime_entries", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Package", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("BasePrice")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<long>("CategoryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<bool?>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool?>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("StandardMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_Packages");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex(new[] { "Code" }, "UQ_Packages_Code")
+                        .IsUnique();
+
+                    b.ToTable("Packages");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PackageItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool?>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool?>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool?>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("PackageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(1m);
+
+                    b.Property<int?>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<long>("StandardServiceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_PackageItems");
+
+                    b.HasIndex("StandardServiceId");
+
+                    b.HasIndex(new[] { "PackageId", "StandardServiceId" }, "UQ_PackageItems_Package_Service")
+                        .IsUnique();
+
+                    b.ToTable("PackageItems");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PartInventoryReservation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreateBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ExpiryTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("ReservedQuantity")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("RESERVED");
+
+                    b.Property<DateTime>("UpdateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdateBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("WorkSlotId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_PartInventoryReservations");
+
+                    b.HasIndex("CreateBy");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("UpdateBy");
+
+                    b.HasIndex("WorkSlotId");
+
+                    b.ToTable("PartInventoryReservations");
+                });
+
             modelBuilder.Entity("MyGarage.Models.PasswordResetToken", b =>
                 {
                     b.Property<long>("Id")
@@ -3281,6 +4396,324 @@ namespace MyGarage.Migrations
                     b.ToTable("PaymentMethods");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.PayrollItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AdvanceDeduction")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("advance_deduction");
+
+                    b.Property<decimal>("AllowanceAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("allowance_amount");
+
+                    b.Property<decimal>("AttendanceDeduction")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("attendance_deduction");
+
+                    b.Property<decimal>("BaseSalary")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("base_salary");
+
+                    b.Property<decimal>("BonusAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("bonus_amount");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("commission_amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("InsuranceCompanyAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("insurance_company_amount");
+
+                    b.Property<decimal>("InsuranceEmployeeAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("insurance_employee_amount");
+
+                    b.Property<decimal>("LoanDeduction")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("loan_deduction");
+
+                    b.Property<decimal>("NetPay")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("net_pay");
+
+                    b.Property<decimal>("OtherDeduction")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("other_deduction");
+
+                    b.Property<decimal>("OvertimeAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("overtime_amount");
+
+                    b.Property<long>("PayrollRunId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("payroll_run_id");
+
+                    b.Property<decimal>("PenaltyAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("penalty_amount");
+
+                    b.Property<decimal>("PitAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("pit_amount");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunId");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("payroll_items", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollPeriod", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<DateOnly>("PayrollDate")
+                        .HasColumnType("date")
+                        .HasColumnName("payroll_date");
+
+                    b.Property<string>("PeriodCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("period_code");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("payroll_periods", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("approved_at");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("approved_by");
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTime?>("CalculatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("calculated_at");
+
+                    b.Property<long?>("CalculatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("calculated_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("paid_at");
+
+                    b.Property<long>("PayrollPeriodId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("payroll_period_id");
+
+                    b.Property<int>("RunNo")
+                        .HasColumnType("int")
+                        .HasColumnName("run_no");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CalculatedBy");
+
+                    b.HasIndex("PayrollPeriodId");
+
+                    b.ToTable("payroll_runs", null, t =>
+                        {
+                            t.HasTrigger("trg_payroll_runs_no_direct_paid_without_approval");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Payslip", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("FileUrl")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("file_url");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("issued_at");
+
+                    b.Property<long?>("IssuedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("issued_by");
+
+                    b.Property<long>("PayrollItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("payroll_item_id");
+
+                    b.Property<string>("SlipNo")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)")
+                        .HasColumnName("slip_no");
+
+                    b.Property<DateTime?>("ViewedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("viewed_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IssuedBy");
+
+                    b.HasIndex("PayrollItemId")
+                        .IsUnique();
+
+                    b.ToTable("payslips", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PitProfile", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DependentCount")
+                        .HasColumnType("int")
+                        .HasColumnName("dependent_count");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<string>("ResidentType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("resident_type");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("tax_code");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("pit_profiles", (string)null);
+                });
+
             modelBuilder.Entity("MyGarage.Models.Product", b =>
                 {
                     b.Property<long>("Id")
@@ -3291,6 +4724,9 @@ namespace MyGarage.Migrations
 
                     b.Property<long?>("CategoryId")
                         .HasColumnType("bigint");
+
+                    b.Property<decimal?>("ConsumableThresholdAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("CostPrice")
                         .ValueGeneratedOnAdd()
@@ -3316,6 +4752,9 @@ namespace MyGarage.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
+                    b.Property<bool?>("IsConsumable")
+                        .HasColumnType("bit");
+
                     b.Property<bool?>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -3326,10 +4765,16 @@ namespace MyGarage.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<decimal?>("MinStockLevel")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal?>("ReorderPoint")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool?>("RequireEmptyReturn")
                         .ValueGeneratedOnAdd()
@@ -3407,9 +4852,7 @@ namespace MyGarage.Migrations
 
                     b.Property<string>("ImageUrl")
                         .IsRequired()
-                        .HasMaxLength(500)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(500)");
+                        .HasColumnType("NVARCHAR(MAX)");
 
                     b.Property<bool?>("IsMain")
                         .ValueGeneratedOnAdd()
@@ -3530,6 +4973,100 @@ namespace MyGarage.Migrations
                     b.ToTable("PurchaseOrderItems");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.QcChecklistItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("CheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CheckedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FailNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("PhotoUrl")
+                        .HasMaxLength(1000)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<long?>("QcChecklistTemplateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("QcInspectionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Result")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<long?>("TemplateItemId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckedBy");
+
+                    b.HasIndex("QcChecklistTemplateId");
+
+                    b.HasIndex("QcInspectionId");
+
+                    b.HasIndex("TemplateItemId");
+
+                    b.ToTable("QcChecklistItems", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QcChecklistTemplate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("ServiceCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("QcChecklistTemplates", (string)null);
+                });
+
             modelBuilder.Entity("MyGarage.Models.QcInspection", b =>
                 {
                     b.Property<long>("Id")
@@ -3542,9 +5079,18 @@ namespace MyGarage.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("InspectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("OverallScore")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<long>("QcStaffId")
                         .HasColumnType("bigint")
                         .HasColumnName("QC_StaffId");
+
+                    b.Property<int>("ReInspectionCount")
+                        .HasColumnType("int");
 
                     b.Property<long?>("ReworkTechnicianId")
                         .HasColumnType("bigint");
@@ -3561,6 +5107,9 @@ namespace MyGarage.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)");
 
+                    b.Property<long?>("TemplateId")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id")
                         .HasName("PK__QC_Inspe__3214EC07E74328AB");
 
@@ -3572,7 +5121,420 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("ServiceOrderId");
 
+                    b.HasIndex("TemplateId");
+
                     b.ToTable("QC_Inspections", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Quotation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("AppliedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CustomerDecisionAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CustomerDecisionBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CustomerDecisionStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CustomerNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long?>("DiagnosisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("FinalAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<string>("FinalApprovalStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("FinalApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("FinalApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("InsuranceApprovalEvidenceUrl")
+                        .HasMaxLength(1000)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<string>("InternalNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsAppliedToServiceOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("QuotationType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("NORMAL");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<long?>("ServiceAdvisorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SourceSnapshotId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("DRAFT");
+
+                    b.Property<decimal>("SubTotalAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TaxAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<string>("TeamLeaderApprovalStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("TechnicalApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("TechnicalApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal>("TotalCustomerAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TotalDiscount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TotalInsuranceAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id")
+                        .HasName("PK_Quotations");
+
+                    b.HasIndex("AppliedBy");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("ServiceAdvisorId");
+
+                    b.HasIndex("SourceSnapshotId");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.HasIndex(new[] { "DiagnosisId" }, "IX_Quotations_DiagnosisId");
+
+                    b.HasIndex(new[] { "ServiceOrderId", "Status", "CreatedAt" }, "IX_Quotations_ServiceOrderId_Status_CreatedAt");
+
+                    b.HasIndex(new[] { "ServiceOrderId", "VersionNo" }, "IX_Quotations_ServiceOrderId_VersionNo")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "Code" }, "UQ_Quotations_Code")
+                        .IsUnique();
+
+                    b.ToTable("Quotations");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QuotationAccessLink", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ClientNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DecisionCode")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastAccessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("QuotationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SentToEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("ACTIVE");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ViewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id")
+                        .HasName("PK_QuotationAccessLinks");
+
+                    b.HasIndex(new[] { "ExpiresAt" }, "IX_QuotationAccessLinks_ExpiresAt");
+
+                    b.HasIndex(new[] { "QuotationId", "Status" }, "IX_QuotationAccessLinks_QuotationId_Status");
+
+                    b.HasIndex(new[] { "TokenHash" }, "UQ_QuotationAccessLinks_TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("QuotationAccessLinks");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QuotationDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("PENDING");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("CostPriceAtTime")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("CustomerCoveredAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("DiagnosisRecommendationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("DiscountValue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int?>("EstimatedMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("FinalAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<long?>("InsuranceCompanyId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("InsuranceCoveredAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<bool>("IsBlocking")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsMandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReturnOldPart")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long?>("ItemId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("PayerType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 3)");
+
+                    b.Property<long>("QuotationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<decimal>("TaxRate")
+                        .HasColumnType("decimal(5, 2)");
+
+                    b.Property<decimal>("UnitPriceAtTime")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_QuotationDetails");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("DiagnosisRecommendationId");
+
+                    b.HasIndex("InsuranceCompanyId");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.HasIndex(new[] { "QuotationId", "ApprovalStatus" }, "IX_QuotationDetails_QuotationId_ApprovalStatus");
+
+                    b.HasIndex(new[] { "ServiceOrderId", "DiagnosisRecommendationId" }, "IX_QuotationDetails_ServiceOrderId_DiagnosisRecommendationId");
+
+                    b.ToTable("QuotationDetails");
                 });
 
             modelBuilder.Entity("MyGarage.Models.RetailOrder", b =>
@@ -4003,6 +5965,69 @@ namespace MyGarage.Migrations
                     b.ToTable("Roles");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.SalaryAdvance", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("approved_at");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("approved_by");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("DeductFromPayrollPeriodId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("deduct_from_payroll_period_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("note");
+
+                    b.Property<DateOnly>("RequestDate")
+                        .HasColumnType("date")
+                        .HasColumnName("request_date");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("DeductFromPayrollPeriodId");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("salary_advances", (string)null);
+                });
+
             modelBuilder.Entity("MyGarage.Models.SalaryCoefficient", b =>
                 {
                     b.Property<long>("Id")
@@ -4016,7 +6041,8 @@ namespace MyGarage.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("CoefficientValue")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -4051,6 +6077,68 @@ namespace MyGarage.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SalaryCoefficients");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceBom", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreateBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsMandatory")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<long>("ServiceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("UpdateAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdateBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("VehicleModelId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_ServiceBOMs");
+
+                    b.HasIndex("CreateBy");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("UpdateBy");
+
+                    b.HasIndex("VehicleModelId");
+
+                    b.ToTable("ServiceBOMs", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.ServiceCategory", b =>
@@ -4146,6 +6234,9 @@ namespace MyGarage.Migrations
                     b.Property<long?>("AppointmentId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ArrivalTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("CancellationReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -4204,6 +6295,27 @@ namespace MyGarage.Migrations
                         .HasColumnType("decimal(18, 2)")
                         .HasDefaultValue(0m);
 
+                    b.Property<long?>("GroupSessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("InsuranceClaimMode")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<decimal?>("InsuranceDeductibleAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<string>("InsuranceDeductibleOption")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("InsuranceQuoteState")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
                     b.Property<string>("OldPartsReturnOption")
                         .HasMaxLength(50)
                         .IsUnicode(false)
@@ -4248,6 +6360,10 @@ namespace MyGarage.Migrations
 
                     b.Property<long?>("ReceptionistId")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("RequestedPackageIds")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<decimal?>("RequiredDepositAmount")
                         .ValueGeneratedOnAdd()
@@ -4298,9 +6414,6 @@ namespace MyGarage.Migrations
                     b.Property<long?>("UpdatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime?>("ValidUntil")
-                        .HasColumnType("datetime2");
-
                     b.Property<long>("VehicleId")
                         .HasColumnType("bigint");
 
@@ -4329,12 +6442,19 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("VehicleId");
 
+                    b.HasIndex(new[] { "GroupSessionId" }, "IX_ServiceOrders_GroupSessionId");
+
                     b.HasIndex(new[] { "Status", "CreatedAt" }, "IX_ServiceOrders_Status_CreatedAt");
 
                     b.HasIndex(new[] { "Code" }, "UQ__ServiceO__A25C5AA7FBF72344")
                         .IsUnique();
 
-                    b.ToTable("ServiceOrders");
+                    b.ToTable("ServiceOrders", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceOrders_OrderCategory", "[OrderCategory] IS NULL OR ([OrderCategory]='WARRANTLY' OR [OrderCategory]='REWORK' OR [OrderCategory]='INSURANCE_REPAIR' OR [OrderCategory]='QUICK_SERVICE' OR [OrderCategory]='GENERAL_REPAIR' OR [OrderCategory]='MAINTENANCE')");
+
+                            t.HasCheckConstraint("CK_ServiceOrders_Status", "[Status] IN ('NEW','CHECKED_IN','WAITING','DIAGNOSING','QUOTING','WAITING_APPROVAL','APPROVED','IN_PROGRESS','REPAIRING','READY','WAITING_PAYMENT','CLOSED','CANCELED')");
+                        });
                 });
 
             modelBuilder.Entity("MyGarage.Models.ServiceOrderDetail", b =>
@@ -4370,7 +6490,7 @@ namespace MyGarage.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("DiagnoseRecommendationId")
+                    b.Property<long?>("DiagnosisRecommendationId")
                         .HasColumnType("bigint");
 
                     b.Property<decimal?>("DiscountAllocatedAmount")
@@ -4382,6 +6502,9 @@ namespace MyGarage.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(18, 2)")
                         .HasDefaultValue(0m);
+
+                    b.Property<int?>("EstimatedMinutes")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("FinalAmount")
                         .HasColumnType("decimal(18, 2)");
@@ -4461,6 +6584,9 @@ namespace MyGarage.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18, 3)");
 
+                    b.Property<long?>("QuotationDetailId")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("ServiceOrderId")
                         .HasColumnType("bigint");
 
@@ -4513,11 +6639,13 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("CreatedBy");
 
-                    b.HasIndex("DiagnoseRecommendationId");
+                    b.HasIndex("DiagnosisRecommendationId");
 
                     b.HasIndex("InsuranceCompanyId");
 
                     b.HasIndex("OriginalOrderDetailId");
+
+                    b.HasIndex("QuotationDetailId");
 
                     b.HasIndex("ServiceOrderId");
 
@@ -4592,6 +6720,119 @@ namespace MyGarage.Migrations
                         .HasFilter("[DiscountCategory] IS NOT NULL");
 
                     b.ToTable("ServiceOrderDiscounts");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceOrderInsuranceAsset", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_ServiceOrderInsuranceAssets");
+
+                    b.HasIndex(new[] { "ServiceOrderId", "AssetType", "SortOrder" }, "IX_ServiceOrderInsuranceAssets_ServiceOrder_Type_Order");
+
+                    b.ToTable("ServiceOrderInsuranceAssets");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceOrderInsuranceUpload", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("BlobPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<long?>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_ServiceOrderInsuranceUploads");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.HasIndex(new[] { "Status", "CreatedAt" }, "IX_ServiceOrderInsuranceUploads_Status_CreatedAt");
+
+                    b.ToTable("ServiceOrderInsuranceUploads");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ServiceOrderSnapshot", b =>
@@ -4726,6 +6967,16 @@ namespace MyGarage.Migrations
 
                     b.Property<string>("PauseLog")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProofImageUrl")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<bool>("RequiresInsuranceProof")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("RoleInTask")
                         .IsRequired()
@@ -4933,6 +7184,11 @@ namespace MyGarage.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("GoogleId")
+                        .HasMaxLength(255)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<DateOnly?>("HireDate")
                         .HasColumnType("date");
 
@@ -4974,6 +7230,9 @@ namespace MyGarage.Migrations
                     b.Property<int?>("SkillLevel")
                         .HasColumnType("int");
 
+                    b.Property<string>("Specialty")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<long?>("StaffTierId")
                         .HasColumnType("bigint");
 
@@ -4983,6 +7242,9 @@ namespace MyGarage.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)")
                         .HasDefaultValue("ACTIVE");
+
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint");
 
                     b.Property<DateOnly?>("TerminationDate")
                         .HasColumnType("date");
@@ -5008,9 +7270,167 @@ namespace MyGarage.Migrations
 
                     b.HasIndex("StaffTierId");
 
+                    b.HasIndex("TeamId");
+
                     b.HasIndex("UpdatedBy");
 
                     b.ToTable("Staffs");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.StaffContract", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AllowanceAmount")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("allowance_amount");
+
+                    b.Property<string>("BankAccountName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("bank_account_name");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(120)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(120)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<decimal>("BaseSalary")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("base_salary");
+
+                    b.Property<string>("ContractType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("contract_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<decimal>("InsuranceSalaryBase")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("insurance_salary_base");
+
+                    b.Property<string>("PayFrequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("pay_frequency");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("tax_code");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("staff_contracts", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.StaffSalaryProfile", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("BaseSalary")
+                        .HasColumnType("decimal(18, 2)")
+                        .HasColumnName("base_salary");
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("staff_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.ToTable("staff_salary_profiles", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.StaffSchedule", b =>
@@ -5150,6 +7570,9 @@ namespace MyGarage.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("EngineType")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
                         .IsUnicode(false)
@@ -5184,9 +7607,6 @@ namespace MyGarage.Migrations
                         .HasDefaultValueSql("(getdate())");
 
                     b.Property<long?>("UpdatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("VehicleClassId")
                         .HasColumnType("bigint");
 
                     b.Property<int?>("WarrantyKm")
@@ -5360,6 +7780,236 @@ namespace MyGarage.Migrations
                     b.HasIndex("UpdatedBy");
 
                     b.ToTable("Suppliers");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Team", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool?>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long?>("LeaderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SpecialtyTag")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)")
+                        .HasDefaultValue("ACTIVE");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<long?>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id")
+                        .HasName("PK_Teams");
+
+                    b.HasIndex("LeaderId");
+
+                    b.HasIndex(new[] { "BranchId", "Code" }, "UQ_Teams_BranchId_Code")
+                        .IsUnique()
+                        .HasFilter("[Code] IS NOT NULL");
+
+                    b.ToTable("Teams", (string)null);
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DiagnosisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LockedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("LockedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosisId");
+
+                    b.HasIndex("ServiceOrderId");
+
+                    b.ToTable("TechnicalProposalSnapshots");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshotDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("DiagnosisRecommendationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsMandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ItemId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<long>("SnapshotId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TechnicianNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.ToTable("TechnicalProposalSnapshotDetails");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TimesheetEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("BreakMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CheckInTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CheckOutTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("(getdate())");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("StaffId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("WorkType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("TimesheetEntries", (string)null);
                 });
 
             modelBuilder.Entity("MyGarage.Models.Vehicle", b =>
@@ -5649,8 +8299,7 @@ namespace MyGarage.Migrations
 
                     b.Property<string>("CylinderCapacity")
                         .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(50)");
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
@@ -5660,8 +8309,7 @@ namespace MyGarage.Migrations
 
                     b.Property<string>("FuelType")
                         .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(50)");
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<bool?>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -5675,8 +8323,7 @@ namespace MyGarage.Migrations
 
                     b.Property<string>("Segment")
                         .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(50)");
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -5685,6 +8332,9 @@ namespace MyGarage.Migrations
 
                     b.Property<long?>("UpdatedBy")
                         .HasColumnType("bigint");
+
+                    b.Property<int?>("VehicleClassId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id")
                         .HasName("PK__VehicleM__3214EC0789BEED56");
@@ -6627,7 +9277,10 @@ namespace MyGarage.Migrations
                     b.Property<DateTime?>("ActualStartTime")
                         .HasColumnType("datetime2");
 
-                    b.Property<long>("BayId")
+                    b.Property<long?>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("BayId")
                         .HasColumnType("bigint");
 
                     b.Property<long>("BranchId")
@@ -6639,6 +9292,11 @@ namespace MyGarage.Migrations
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsAdditional")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime?>("LockedUntil")
                         .HasColumnType("datetime2");
 
@@ -6646,6 +9304,14 @@ namespace MyGarage.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<long?>("ParentSlotId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SequenceOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<long?>("ServiceOrderId")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ServiceStaffAssignmentId")
@@ -6666,7 +9332,7 @@ namespace MyGarage.Migrations
                         .HasMaxLength(50)
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)")
-                        .HasDefaultValue("AVAILABLE");
+                        .HasDefaultValue("RESERVED");
 
                     b.Property<long?>("TechnicianId")
                         .HasColumnType("bigint");
@@ -6677,6 +9343,8 @@ namespace MyGarage.Migrations
                     b.HasKey("Id")
                         .HasName("PK__WorkSlot__3214EC0774196CAC");
 
+                    b.HasIndex("AppointmentId");
+
                     b.HasIndex("BayId");
 
                     b.HasIndex("BranchId");
@@ -6684,6 +9352,8 @@ namespace MyGarage.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ParentSlotId");
+
+                    b.HasIndex("ServiceOrderId");
 
                     b.HasIndex("TechnicianId");
 
@@ -6731,11 +9401,6 @@ namespace MyGarage.Migrations
 
             modelBuilder.Entity("MyGarage.Models.Appointment", b =>
                 {
-                    b.HasOne("MyGarage.Models.BookingGroup", "BookingGroup")
-                        .WithMany("Appointments")
-                        .HasForeignKey("BookingGroupId")
-                        .HasConstraintName("FK_Appointments_BookingGroupId");
-
                     b.HasOne("MyGarage.Models.Branch", "Branch")
                         .WithMany("Appointments")
                         .HasForeignKey("BranchId")
@@ -6753,6 +9418,16 @@ namespace MyGarage.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__Appointme__Custo__1C1D2798");
 
+                    b.HasOne("MyGarage.Models.GroupSession", "GroupSession")
+                        .WithMany("Appointments")
+                        .HasForeignKey("GroupSessionId")
+                        .HasConstraintName("FK_Appointments_GroupSessionId");
+
+                    b.HasOne("MyGarage.Models.InsuranceCompany", "InsuranceCompany")
+                        .WithMany("Appointments")
+                        .HasForeignKey("InsuranceCompanyId")
+                        .HasConstraintName("FK_Appointments_InsuranceCompanyId");
+
                     b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
                         .WithMany("AppointmentUpdatedByNavigations")
                         .HasForeignKey("UpdatedBy");
@@ -6762,17 +9437,41 @@ namespace MyGarage.Migrations
                         .HasForeignKey("VehicleId")
                         .HasConstraintName("FK__Appointme__Vehic__1D114BD1");
 
-                    b.Navigation("BookingGroup");
-
                     b.Navigation("Branch");
 
                     b.Navigation("CreatedByNavigation");
 
                     b.Navigation("Customer");
 
+                    b.Navigation("GroupSession");
+
+                    b.Navigation("InsuranceCompany");
+
                     b.Navigation("UpdatedByNavigation");
 
                     b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AppointmentInsuranceAsset", b =>
+                {
+                    b.HasOne("MyGarage.Models.Appointment", "Appointment")
+                        .WithMany("InsuranceAssets")
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_AppointmentInsuranceAssets_Appointments");
+
+                    b.Navigation("Appointment");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AppointmentInsuranceUpload", b =>
+                {
+                    b.HasOne("MyGarage.Models.Appointment", "Appointment")
+                        .WithMany("InsuranceUploads")
+                        .HasForeignKey("AppointmentId")
+                        .HasConstraintName("FK_AppointmentInsuranceUploads_Appointments");
+
+                    b.Navigation("Appointment");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ApprovalRequest", b =>
@@ -6812,6 +9511,23 @@ namespace MyGarage.Migrations
                     b.Navigation("RequestedByNavigation");
 
                     b.Navigation("ServiceOrderDiscount");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.AttendanceAdjustment", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("AttendanceAdjustmentApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("AttendanceAdjustmentStaffs")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("MyGarage.Models.AuditLog", b =>
@@ -6863,37 +9579,65 @@ namespace MyGarage.Migrations
                     b.Navigation("UpdatedByNavigation");
                 });
 
-            modelBuilder.Entity("MyGarage.Models.BookingGroup", b =>
+            modelBuilder.Entity("MyGarage.Models.BayAllocation", b =>
                 {
-                    b.HasOne("MyGarage.Models.Branch", "Branch")
-                        .WithMany("BookingGroups")
-                        .HasForeignKey("BranchId")
-                        .IsRequired()
-                        .HasConstraintName("FK_BookingGroups_BranchId");
+                    b.HasOne("MyGarage.Models.Staff", "AllocatedByStaff")
+                        .WithMany()
+                        .HasForeignKey("AllocatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.HasOne("MyGarage.Models.Staff", "CreatedByNavigation")
-                        .WithMany("BookingGroupCreatedByNavigations")
-                        .HasForeignKey("CreatedBy")
-                        .HasConstraintName("FK_BookingGroups_CreatedBy");
+                    b.HasOne("MyGarage.Models.Bay", "Bay")
+                        .WithMany("BayAllocations")
+                        .HasForeignKey("BayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.HasOne("MyGarage.Models.Customer", "Customer")
-                        .WithMany("BookingGroups")
-                        .HasForeignKey("CustomerId")
-                        .IsRequired()
-                        .HasConstraintName("FK_BookingGroups_CustomerId");
+                    b.HasOne("MyGarage.Models.Staff", "ReleasedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ReleasedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
-                        .WithMany("BookingGroupUpdatedByNavigations")
-                        .HasForeignKey("UpdatedBy")
-                        .HasConstraintName("FK_BookingGroups_UpdatedBy");
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany()
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Navigation("Branch");
+                    b.HasOne("MyGarage.Models.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Navigation("CreatedByNavigation");
+                    b.Navigation("AllocatedByStaff");
 
-                    b.Navigation("Customer");
+                    b.Navigation("Bay");
 
-                    b.Navigation("UpdatedByNavigation");
+                    b.Navigation("ReleasedByStaff");
+
+                    b.Navigation("ServiceOrder");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.BayStatusLog", b =>
+                {
+                    b.HasOne("MyGarage.Models.Bay", "Bay")
+                        .WithMany("BayStatusLogs")
+                        .HasForeignKey("BayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Staff", "ChangedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ChangedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bay");
+
+                    b.Navigation("ChangedByStaff");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Branch", b =>
@@ -6964,6 +9708,30 @@ namespace MyGarage.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("UpdatedByStaff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.CapacityConfig", b =>
+                {
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .HasConstraintName("FK_CapacityConfigs_Branch");
+
+                    b.HasOne("MyGarage.Models.Staff", "CreateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreateBy")
+                        .HasConstraintName("FK_CapacityConfigs_CreateBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("UpdateBy")
+                        .HasConstraintName("FK_CapacityConfigs_UpdateBy");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreateByNavigation");
+
+                    b.Navigation("UpdateByNavigation");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Category", b =>
@@ -7186,6 +9954,58 @@ namespace MyGarage.Migrations
                     b.Navigation("Staff");
 
                     b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ConsumableReturnBundle", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ReceivedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ReceivedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany()
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Staff", "Technician")
+                        .WithMany()
+                        .HasForeignKey("TechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReceivedByStaff");
+
+                    b.Navigation("ServiceOrder");
+
+                    b.Navigation("Technician");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ConsumableReturnBundleItem", b =>
+                {
+                    b.HasOne("MyGarage.Models.ConsumableReturnBundle", "Bundle")
+                        .WithMany("Items")
+                        .HasForeignKey("BundleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.MaterialRequestDetail", "MaterialReqDetail")
+                        .WithMany()
+                        .HasForeignKey("MaterialReqDetailId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyGarage.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bundle");
+
+                    b.Navigation("MaterialReqDetail");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Conversation", b =>
@@ -7490,9 +10310,14 @@ namespace MyGarage.Migrations
                         .HasForeignKey("CreatedBy")
                         .HasConstraintName("FK__DiagnoseR__Creat__5DEAEAF5");
 
-                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnose")
+                    b.HasOne("MyGarage.Models.DiagnosisAssignment", "DiagnosisAssignment")
                         .WithMany("DiagnoseRecommendations")
-                        .HasForeignKey("DiagnoseId")
+                        .HasForeignKey("DiagnosisAssignmentId")
+                        .HasConstraintName("FK_DiagnoseRecommendations_DiagnosisAssignments");
+
+                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnosis")
+                        .WithMany("DiagnoseRecommendations")
+                        .HasForeignKey("DiagnosisId")
                         .IsRequired()
                         .HasConstraintName("FK__DiagnoseR__Diagn__5A1A5A11");
 
@@ -7518,7 +10343,9 @@ namespace MyGarage.Migrations
 
                     b.Navigation("CreatedByNavigation");
 
-                    b.Navigation("Diagnose");
+                    b.Navigation("Diagnosis");
+
+                    b.Navigation("DiagnosisAssignment");
 
                     b.Navigation("InventoryItem");
 
@@ -7531,35 +10358,60 @@ namespace MyGarage.Migrations
 
             modelBuilder.Entity("MyGarage.Models.Diagnosis", b =>
                 {
-                    b.HasOne("MyGarage.Models.Staff", "ApprovedByForeman")
-                        .WithMany("DiagnosisApprovedByForemen")
-                        .HasForeignKey("ApprovedByForemanId")
-                        .HasConstraintName("FK__Diagnoses__Appro__61BB7BD9");
-
                     b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
                         .WithMany("Diagnoses")
                         .HasForeignKey("ServiceOrderId")
                         .IsRequired()
                         .HasConstraintName("FK__Diagnoses__Servi__5FD33367");
 
-                    b.HasOne("MyGarage.Models.Staff", "Technician")
-                        .WithMany("DiagnosisTechnicians")
-                        .HasForeignKey("TechnicianId")
-                        .IsRequired()
-                        .HasConstraintName("FK__Diagnoses__Techn__60C757A0");
-
                     b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
                         .WithMany("DiagnosisUpdatedByNavigations")
                         .HasForeignKey("UpdatedBy")
                         .HasConstraintName("FK__Diagnoses__Updat__62AFA012");
 
-                    b.Navigation("ApprovedByForeman");
-
                     b.Navigation("ServiceOrder");
 
-                    b.Navigation("Technician");
-
                     b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.DiagnosisAssignment", b =>
+                {
+                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnosis")
+                        .WithMany("DiagnosisAssignments")
+                        .HasForeignKey("DiagnosisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_DiagnosisAssignments_Diagnoses");
+
+                    b.Navigation("Diagnosis");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.EmployeeDependent", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("EmployeeDependents")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.EmployeeLoan", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("EmployeeLoans")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.PayrollPeriod", "StartPayrollPeriod")
+                        .WithMany("EmployeeLoans")
+                        .HasForeignKey("StartPayrollPeriodId");
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("StartPayrollPeriod");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ExpenseLog", b =>
@@ -7625,6 +10477,39 @@ namespace MyGarage.Migrations
                     b.Navigation("ScannedByNavigation");
 
                     b.Navigation("ServiceOrder");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.GroupSession", b =>
+                {
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany("GroupSessions")
+                        .HasForeignKey("BranchId")
+                        .IsRequired()
+                        .HasConstraintName("FK_GroupSessions_BranchId");
+
+                    b.HasOne("MyGarage.Models.Staff", "CreatedByNavigation")
+                        .WithMany("GroupSessionCreatedByNavigations")
+                        .HasForeignKey("CreatedBy")
+                        .HasConstraintName("FK_GroupSessions_CreatedBy");
+
+                    b.HasOne("MyGarage.Models.Customer", "Customer")
+                        .WithMany("GroupSessions")
+                        .HasForeignKey("CustomerId")
+                        .IsRequired()
+                        .HasConstraintName("FK_GroupSessions_CustomerId");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
+                        .WithMany("GroupSessionUpdatedByNavigations")
+                        .HasForeignKey("UpdatedBy")
+                        .HasConstraintName("FK_GroupSessions_UpdatedBy");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("UpdatedByNavigation");
                 });
 
             modelBuilder.Entity("MyGarage.Models.InsuranceCompany", b =>
@@ -7790,6 +10675,33 @@ namespace MyGarage.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("StandardService");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.MandatoryOverrideRequest", b =>
+                {
+                    b.HasOne("MyGarage.Models.QuotationDetail", "QuotationDetail")
+                        .WithMany("MandatoryOverrideRequests")
+                        .HasForeignKey("QuotationDetailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Quotation", "Quotation")
+                        .WithMany("MandatoryOverrideRequests")
+                        .HasForeignKey("QuotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("MandatoryOverrideRequests")
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Quotation");
+
+                    b.Navigation("QuotationDetail");
+
+                    b.Navigation("ServiceOrder");
                 });
 
             modelBuilder.Entity("MyGarage.Models.MaterialRequest", b =>
@@ -7965,6 +10877,87 @@ namespace MyGarage.Migrations
                     b.Navigation("UpdatedByNavigation");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.OvertimeEntry", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("OvertimeEntryApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("OvertimeEntryStaffs")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Package", b =>
+                {
+                    b.HasOne("MyGarage.Models.ServiceCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .IsRequired()
+                        .HasConstraintName("FK_Packages_ServiceCategories");
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PackageItem", b =>
+                {
+                    b.HasOne("MyGarage.Models.Package", "Package")
+                        .WithMany("PackageItems")
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_PackageItems_Packages");
+
+                    b.HasOne("MyGarage.Models.StandardService", "StandardService")
+                        .WithMany()
+                        .HasForeignKey("StandardServiceId")
+                        .IsRequired()
+                        .HasConstraintName("FK_PackageItems_StandardServices");
+
+                    b.Navigation("Package");
+
+                    b.Navigation("StandardService");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PartInventoryReservation", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "CreateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreateBy")
+                        .HasConstraintName("FK_PartInventoryReservations_CreateBy");
+
+                    b.HasOne("MyGarage.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .IsRequired()
+                        .HasConstraintName("FK_PartInventoryReservations_Product");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("UpdateBy")
+                        .HasConstraintName("FK_PartInventoryReservations_UpdateBy");
+
+                    b.HasOne("MyGarage.Models.WorkSlot", "WorkSlot")
+                        .WithMany()
+                        .HasForeignKey("WorkSlotId")
+                        .IsRequired()
+                        .HasConstraintName("FK_PartInventoryReservations_WorkSlot");
+
+                    b.Navigation("CreateByNavigation");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("UpdateByNavigation");
+
+                    b.Navigation("WorkSlot");
+                });
+
             modelBuilder.Entity("MyGarage.Models.PasswordResetToken", b =>
                 {
                     b.HasOne("MyGarage.Models.Customer", "Customer")
@@ -8066,6 +11059,82 @@ namespace MyGarage.Migrations
                     b.Navigation("DeletedByNavigation");
 
                     b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollItem", b =>
+                {
+                    b.HasOne("MyGarage.Models.PayrollRun", "PayrollRun")
+                        .WithMany("PayrollItems")
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("PayrollItems")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PayrollRun");
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollRun", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("PayrollRunApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany("PayrollRuns")
+                        .HasForeignKey("BranchId");
+
+                    b.HasOne("MyGarage.Models.Staff", "CalculatedByNavigation")
+                        .WithMany("PayrollRunCalculatedByNavigations")
+                        .HasForeignKey("CalculatedBy");
+
+                    b.HasOne("MyGarage.Models.PayrollPeriod", "PayrollPeriod")
+                        .WithMany("PayrollRuns")
+                        .HasForeignKey("PayrollPeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CalculatedByNavigation");
+
+                    b.Navigation("PayrollPeriod");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Payslip", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "IssuedByNavigation")
+                        .WithMany("Payslips")
+                        .HasForeignKey("IssuedBy");
+
+                    b.HasOne("MyGarage.Models.PayrollItem", "PayrollItem")
+                        .WithOne("Payslip")
+                        .HasForeignKey("MyGarage.Models.Payslip", "PayrollItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("IssuedByNavigation");
+
+                    b.Navigation("PayrollItem");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PitProfile", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("PitProfiles")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Product", b =>
@@ -8170,6 +11239,35 @@ namespace MyGarage.Migrations
                     b.Navigation("PurchaseOrder");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.QcChecklistItem", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "CheckedByStaff")
+                        .WithMany()
+                        .HasForeignKey("CheckedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyGarage.Models.QcChecklistTemplate", null)
+                        .WithMany("QcChecklistItems")
+                        .HasForeignKey("QcChecklistTemplateId");
+
+                    b.HasOne("MyGarage.Models.QcInspection", "QcInspection")
+                        .WithMany("QcChecklistItems")
+                        .HasForeignKey("QcInspectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.QcChecklistItem", "TemplateItem")
+                        .WithMany("InverseTemplateItem")
+                        .HasForeignKey("TemplateItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CheckedByStaff");
+
+                    b.Navigation("QcInspection");
+
+                    b.Navigation("TemplateItem");
+                });
+
             modelBuilder.Entity("MyGarage.Models.QcInspection", b =>
                 {
                     b.HasOne("MyGarage.Models.Staff", "QcStaff")
@@ -8194,6 +11292,10 @@ namespace MyGarage.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__QC_Inspec__Servi__284DF453");
 
+                    b.HasOne("MyGarage.Models.QcChecklistTemplate", "Template")
+                        .WithMany("QcInspections")
+                        .HasForeignKey("TemplateId");
+
                     b.Navigation("QcStaff");
 
                     b.Navigation("ReworkTechnician");
@@ -8201,6 +11303,134 @@ namespace MyGarage.Migrations
                     b.Navigation("ServiceOrder");
 
                     b.Navigation("ServiceOrderDetail");
+
+                    b.Navigation("Template");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Quotation", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "AppliedByNavigation")
+                        .WithMany("QuotationAppliedByNavigations")
+                        .HasForeignKey("AppliedBy")
+                        .HasConstraintName("FK_Quotations_AppliedBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("QuotationApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy")
+                        .HasConstraintName("FK_Quotations_ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "CreatedByNavigation")
+                        .WithMany("QuotationCreatedByNavigations")
+                        .HasForeignKey("CreatedBy")
+                        .HasConstraintName("FK_Quotations_CreatedBy");
+
+                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnosis")
+                        .WithMany("Quotations")
+                        .HasForeignKey("DiagnosisId")
+                        .HasConstraintName("FK_Quotations_Diagnoses");
+
+                    b.HasOne("MyGarage.Models.Staff", "ServiceAdvisor")
+                        .WithMany("QuotationServiceAdvisors")
+                        .HasForeignKey("ServiceAdvisorId")
+                        .HasConstraintName("FK_Quotations_ServiceAdvisor");
+
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("Quotations")
+                        .HasForeignKey("ServiceOrderId")
+                        .IsRequired()
+                        .HasConstraintName("FK_Quotations_ServiceOrders");
+
+                    b.HasOne("MyGarage.Models.TechnicalProposalSnapshot", "SourceSnapshot")
+                        .WithMany()
+                        .HasForeignKey("SourceSnapshotId");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
+                        .WithMany("QuotationUpdatedByNavigations")
+                        .HasForeignKey("UpdatedBy")
+                        .HasConstraintName("FK_Quotations_UpdatedBy");
+
+                    b.Navigation("AppliedByNavigation");
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Diagnosis");
+
+                    b.Navigation("ServiceAdvisor");
+
+                    b.Navigation("ServiceOrder");
+
+                    b.Navigation("SourceSnapshot");
+
+                    b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QuotationAccessLink", b =>
+                {
+                    b.HasOne("MyGarage.Models.Quotation", "Quotation")
+                        .WithMany("QuotationAccessLinks")
+                        .HasForeignKey("QuotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_QuotationAccessLinks_Quotations");
+
+                    b.Navigation("Quotation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QuotationDetail", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("QuotationDetailApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy")
+                        .HasConstraintName("FK_QuotationDetails_ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.Staff", "CreatedByNavigation")
+                        .WithMany("QuotationDetailCreatedByNavigations")
+                        .HasForeignKey("CreatedBy")
+                        .HasConstraintName("FK_QuotationDetails_CreatedBy");
+
+                    b.HasOne("MyGarage.Models.DiagnoseRecommendation", "DiagnoseRecommendation")
+                        .WithMany()
+                        .HasForeignKey("DiagnosisRecommendationId")
+                        .HasConstraintName("FK_QuotationDetails_DiagnoseRecommendations");
+
+                    b.HasOne("MyGarage.Models.InsuranceCompany", "InsuranceCompany")
+                        .WithMany()
+                        .HasForeignKey("InsuranceCompanyId")
+                        .HasConstraintName("FK_QuotationDetails_InsuranceCompanies");
+
+                    b.HasOne("MyGarage.Models.Quotation", "Quotation")
+                        .WithMany("QuotationDetails")
+                        .HasForeignKey("QuotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_QuotationDetails_Quotations");
+
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("QuotationDetails")
+                        .HasForeignKey("ServiceOrderId")
+                        .IsRequired()
+                        .HasConstraintName("FK_QuotationDetails_ServiceOrders");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
+                        .WithMany("QuotationDetailUpdatedByNavigations")
+                        .HasForeignKey("UpdatedBy")
+                        .HasConstraintName("FK_QuotationDetails_UpdatedBy");
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("DiagnoseRecommendation");
+
+                    b.Navigation("InsuranceCompany");
+
+                    b.Navigation("Quotation");
+
+                    b.Navigation("ServiceOrder");
+
+                    b.Navigation("UpdatedByNavigation");
                 });
 
             modelBuilder.Entity("MyGarage.Models.RetailOrder", b =>
@@ -8375,6 +11605,70 @@ namespace MyGarage.Migrations
                     b.Navigation("UpdatedByNavigation");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.SalaryAdvance", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByNavigation")
+                        .WithMany("SalaryAdvanceApprovedByNavigations")
+                        .HasForeignKey("ApprovedBy");
+
+                    b.HasOne("MyGarage.Models.PayrollPeriod", "DeductFromPayrollPeriod")
+                        .WithMany("SalaryAdvances")
+                        .HasForeignKey("DeductFromPayrollPeriodId");
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("SalaryAdvanceStaffs")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("DeductFromPayrollPeriod");
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceBom", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "CreateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreateBy")
+                        .HasConstraintName("FK_ServiceBOMs_CreateBy");
+
+                    b.HasOne("MyGarage.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .IsRequired()
+                        .HasConstraintName("FK_ServiceBOMs_Product");
+
+                    b.HasOne("MyGarage.Models.StandardService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .IsRequired()
+                        .HasConstraintName("FK_ServiceBOMs_Service");
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdateByNavigation")
+                        .WithMany()
+                        .HasForeignKey("UpdateBy")
+                        .HasConstraintName("FK_ServiceBOMs_UpdateBy");
+
+                    b.HasOne("MyGarage.Models.VehicleModel", "VehicleModel")
+                        .WithMany()
+                        .HasForeignKey("VehicleModelId")
+                        .IsRequired()
+                        .HasConstraintName("FK_ServiceBOMs_VehicleModel");
+
+                    b.Navigation("CreateByNavigation");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("UpdateByNavigation");
+
+                    b.Navigation("VehicleModel");
+                });
+
             modelBuilder.Entity("MyGarage.Models.ServiceCategory", b =>
                 {
                     b.HasOne("MyGarage.Models.Staff", "CreatedByNavigation")
@@ -8430,6 +11724,11 @@ namespace MyGarage.Migrations
                         .IsRequired()
                         .HasConstraintName("FK__ServiceOr__Execu__55209ACA");
 
+                    b.HasOne("MyGarage.Models.GroupSession", "GroupSession")
+                        .WithMany("ServiceOrders")
+                        .HasForeignKey("GroupSessionId")
+                        .HasConstraintName("FK_ServiceOrders_GroupSessionId");
+
                     b.HasOne("MyGarage.Models.Branch", "OriginBranch")
                         .WithMany("ServiceOrderOriginBranches")
                         .HasForeignKey("OriginBranchId")
@@ -8475,6 +11774,8 @@ namespace MyGarage.Migrations
 
                     b.Navigation("ExecuteBranch");
 
+                    b.Navigation("GroupSession");
+
                     b.Navigation("OriginBranch");
 
                     b.Navigation("OriginalServiceOrder");
@@ -8504,7 +11805,7 @@ namespace MyGarage.Migrations
 
                     b.HasOne("MyGarage.Models.DiagnoseRecommendation", "DiagnoseRecommendation")
                         .WithMany("ServiceOrderDetails")
-                        .HasForeignKey("DiagnoseRecommendationId")
+                        .HasForeignKey("DiagnosisRecommendationId")
                         .HasConstraintName("FK__ServiceOr__Diagn__47C69FAC");
 
                     b.HasOne("MyGarage.Models.InsuranceCompany", "InsuranceCompany")
@@ -8516,6 +11817,11 @@ namespace MyGarage.Migrations
                         .WithMany("InverseOriginalOrderDetail")
                         .HasForeignKey("OriginalOrderDetailId")
                         .HasConstraintName("FK__ServiceOr__Origi__4AA30C57");
+
+                    b.HasOne("MyGarage.Models.QuotationDetail", "QuotationDetail")
+                        .WithMany("ServiceOrderDetails")
+                        .HasForeignKey("QuotationDetailId")
+                        .HasConstraintName("FK_ServiceOrderDetails_QuotationDetails");
 
                     b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
                         .WithMany("ServiceOrderDetails")
@@ -8552,6 +11858,8 @@ namespace MyGarage.Migrations
                     b.Navigation("InsuranceCompany");
 
                     b.Navigation("OriginalOrderDetail");
+
+                    b.Navigation("QuotationDetail");
 
                     b.Navigation("ServiceOrder");
 
@@ -8595,6 +11903,28 @@ namespace MyGarage.Migrations
                     b.Navigation("ServiceOrder");
 
                     b.Navigation("Voucher");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceOrderInsuranceAsset", b =>
+                {
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("InsuranceAssets")
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_ServiceOrderInsuranceAssets_ServiceOrders");
+
+                    b.Navigation("ServiceOrder");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.ServiceOrderInsuranceUpload", b =>
+                {
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("InsuranceUploads")
+                        .HasForeignKey("ServiceOrderId")
+                        .HasConstraintName("FK_ServiceOrderInsuranceUploads_ServiceOrders");
+
+                    b.Navigation("ServiceOrder");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ServiceOrderSnapshot", b =>
@@ -8753,6 +12083,11 @@ namespace MyGarage.Migrations
                         .HasForeignKey("StaffTierId")
                         .HasConstraintName("FK__Staffs__StaffTie__6C040022");
 
+                    b.HasOne("MyGarage.Models.Team", "Team")
+                        .WithMany("Staff")
+                        .HasForeignKey("TeamId")
+                        .HasConstraintName("FK_Staffs_TeamId");
+
                     b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
                         .WithMany("InverseUpdatedByNavigation")
                         .HasForeignKey("UpdatedBy")
@@ -8767,6 +12102,42 @@ namespace MyGarage.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("StaffTier");
+
+                    b.Navigation("Team");
+
+                    b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.StaffContract", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("StaffContracts")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.StaffSalaryProfile", b =>
+                {
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany("StaffSalaryProfiles")
+                        .HasForeignKey("BranchId");
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany("StaffSalaryProfileStaffs")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
+                        .WithMany("StaffSalaryProfileUpdatedByNavigations")
+                        .HasForeignKey("UpdatedBy");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Staff");
 
                     b.Navigation("UpdatedByNavigation");
                 });
@@ -8911,6 +12282,80 @@ namespace MyGarage.Migrations
                     b.Navigation("DeletedByNavigation");
 
                     b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Team", b =>
+                {
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany("Teams")
+                        .HasForeignKey("BranchId")
+                        .IsRequired()
+                        .HasConstraintName("FK_Teams_BranchId");
+
+                    b.HasOne("MyGarage.Models.Staff", "Leader")
+                        .WithMany()
+                        .HasForeignKey("LeaderId")
+                        .HasConstraintName("FK_Teams_LeaderId");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Leader");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
+                {
+                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnosis")
+                        .WithMany("TechnicalProposalSnapshots")
+                        .HasForeignKey("DiagnosisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("TechnicalProposalSnapshots")
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Diagnosis");
+
+                    b.Navigation("ServiceOrder");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshotDetail", b =>
+                {
+                    b.HasOne("MyGarage.Models.TechnicalProposalSnapshot", "Snapshot")
+                        .WithMany("TechnicalProposalSnapshotDetails")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Snapshot");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TimesheetEntry", b =>
+                {
+                    b.HasOne("MyGarage.Models.Staff", "ApprovedByStaff")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyGarage.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByStaff");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Vehicle", b =>
@@ -9376,10 +12821,14 @@ namespace MyGarage.Migrations
 
             modelBuilder.Entity("MyGarage.Models.WorkSlot", b =>
                 {
+                    b.HasOne("MyGarage.Models.Appointment", "Appointment")
+                        .WithMany("WorkSlots")
+                        .HasForeignKey("AppointmentId")
+                        .HasConstraintName("FK_WorkSlots_AppointmentId");
+
                     b.HasOne("MyGarage.Models.Bay", "Bay")
                         .WithMany("WorkSlots")
                         .HasForeignKey("BayId")
-                        .IsRequired()
                         .HasConstraintName("FK__WorkSlots__BayId__19CACAD2");
 
                     b.HasOne("MyGarage.Models.Branch", "Branch")
@@ -9398,6 +12847,11 @@ namespace MyGarage.Migrations
                         .HasForeignKey("ParentSlotId")
                         .HasConstraintName("FK__WorkSlots__Paren__17E28260");
 
+                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
+                        .WithMany("WorkSlots")
+                        .HasForeignKey("ServiceOrderId")
+                        .HasConstraintName("FK_WorkSlots_ServiceOrderId");
+
                     b.HasOne("MyGarage.Models.Staff", "Technician")
                         .WithMany("WorkSlots")
                         .HasForeignKey("TechnicianId")
@@ -9408,6 +12862,8 @@ namespace MyGarage.Migrations
                         .HasForeignKey("VehicleId")
                         .HasConstraintName("FK__WorkSlots__Vehic__1CA7377D");
 
+                    b.Navigation("Appointment");
+
                     b.Navigation("Bay");
 
                     b.Navigation("Branch");
@@ -9415,6 +12871,8 @@ namespace MyGarage.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("ParentSlot");
+
+                    b.Navigation("ServiceOrder");
 
                     b.Navigation("Technician");
 
@@ -9438,17 +12896,22 @@ namespace MyGarage.Migrations
 
             modelBuilder.Entity("MyGarage.Models.Appointment", b =>
                 {
+                    b.Navigation("InsuranceAssets");
+
+                    b.Navigation("InsuranceUploads");
+
                     b.Navigation("ServiceOrders");
+
+                    b.Navigation("WorkSlots");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Bay", b =>
                 {
-                    b.Navigation("WorkSlots");
-                });
+                    b.Navigation("BayAllocations");
 
-            modelBuilder.Entity("MyGarage.Models.BookingGroup", b =>
-                {
-                    b.Navigation("Appointments");
+                    b.Navigation("BayStatusLogs");
+
+                    b.Navigation("WorkSlots");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Branch", b =>
@@ -9461,8 +12924,6 @@ namespace MyGarage.Migrations
 
                     b.Navigation("Bays");
 
-                    b.Navigation("BookingGroups");
-
                     b.Navigation("BranchExceptions");
 
                     b.Navigation("BranchOperatingHours");
@@ -9470,6 +12931,10 @@ namespace MyGarage.Migrations
                     b.Navigation("CommissionRules");
 
                     b.Navigation("ExpenseLogs");
+
+                    b.Navigation("GroupSessions");
+
+                    b.Navigation("PayrollRuns");
 
                     b.Navigation("PurchaseOrders");
 
@@ -9486,6 +12951,10 @@ namespace MyGarage.Migrations
                     b.Navigation("Shifts");
 
                     b.Navigation("Staff");
+
+                    b.Navigation("StaffSalaryProfiles");
+
+                    b.Navigation("Teams");
 
                     b.Navigation("VoucherApprovalRequests");
 
@@ -9526,6 +12995,11 @@ namespace MyGarage.Migrations
                     b.Navigation("InverseOriginalCommission");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.ConsumableReturnBundle", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("MyGarage.Models.Conversation", b =>
                 {
                     b.Navigation("ChatMessages");
@@ -9539,8 +13013,6 @@ namespace MyGarage.Migrations
                 {
                     b.Navigation("Appointments");
 
-                    b.Navigation("BookingGroups");
-
                     b.Navigation("Conversations");
 
                     b.Navigation("CustomerFeedbacks");
@@ -9548,6 +13020,8 @@ namespace MyGarage.Migrations
                     b.Navigation("CustomerVehicles");
 
                     b.Navigation("CustomerVouchers");
+
+                    b.Navigation("GroupSessions");
 
                     b.Navigation("Notifications");
 
@@ -9577,6 +13051,17 @@ namespace MyGarage.Migrations
             modelBuilder.Entity("MyGarage.Models.Diagnosis", b =>
                 {
                     b.Navigation("DiagnoseRecommendations");
+
+                    b.Navigation("DiagnosisAssignments");
+
+                    b.Navigation("Quotations");
+
+                    b.Navigation("TechnicalProposalSnapshots");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.DiagnosisAssignment", b =>
+                {
+                    b.Navigation("DiagnoseRecommendations");
                 });
 
             modelBuilder.Entity("MyGarage.Models.GatePass", b =>
@@ -9584,8 +13069,17 @@ namespace MyGarage.Migrations
                     b.Navigation("ApprovalRequests");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.GroupSession", b =>
+                {
+                    b.Navigation("Appointments");
+
+                    b.Navigation("ServiceOrders");
+                });
+
             modelBuilder.Entity("MyGarage.Models.InsuranceCompany", b =>
                 {
+                    b.Navigation("Appointments");
+
                     b.Navigation("ServiceOrderDetails");
 
                     b.Navigation("VehicleInsurances");
@@ -9619,6 +13113,11 @@ namespace MyGarage.Migrations
                     b.Navigation("StockTransactions");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.Package", b =>
+                {
+                    b.Navigation("PackageItems");
+                });
+
             modelBuilder.Entity("MyGarage.Models.Payment", b =>
                 {
                     b.Navigation("InverseReversedPayment");
@@ -9629,6 +13128,25 @@ namespace MyGarage.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("VoucherRedemptions");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollItem", b =>
+                {
+                    b.Navigation("Payslip");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollPeriod", b =>
+                {
+                    b.Navigation("EmployeeLoans");
+
+                    b.Navigation("PayrollRuns");
+
+                    b.Navigation("SalaryAdvances");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.PayrollRun", b =>
+                {
+                    b.Navigation("PayrollItems");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Product", b =>
@@ -9661,6 +13179,39 @@ namespace MyGarage.Migrations
                     b.Navigation("PurchaseOrderItems");
 
                     b.Navigation("StockTransactions");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QcChecklistItem", b =>
+                {
+                    b.Navigation("InverseTemplateItem");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QcChecklistTemplate", b =>
+                {
+                    b.Navigation("QcChecklistItems");
+
+                    b.Navigation("QcInspections");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QcInspection", b =>
+                {
+                    b.Navigation("QcChecklistItems");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Quotation", b =>
+                {
+                    b.Navigation("MandatoryOverrideRequests");
+
+                    b.Navigation("QuotationAccessLinks");
+
+                    b.Navigation("QuotationDetails");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.QuotationDetail", b =>
+                {
+                    b.Navigation("MandatoryOverrideRequests");
+
+                    b.Navigation("ServiceOrderDetails");
                 });
 
             modelBuilder.Entity("MyGarage.Models.RetailOrder", b =>
@@ -9724,9 +13275,15 @@ namespace MyGarage.Migrations
 
                     b.Navigation("GatePasses");
 
+                    b.Navigation("InsuranceAssets");
+
+                    b.Navigation("InsuranceUploads");
+
                     b.Navigation("InverseOriginalServiceOrder");
 
                     b.Navigation("Invoices");
+
+                    b.Navigation("MandatoryOverrideRequests");
 
                     b.Navigation("MaterialRequests");
 
@@ -9736,6 +13293,10 @@ namespace MyGarage.Migrations
 
                     b.Navigation("QcInspections");
 
+                    b.Navigation("QuotationDetails");
+
+                    b.Navigation("Quotations");
+
                     b.Navigation("ServiceOrderDetails");
 
                     b.Navigation("ServiceOrderDiscounts");
@@ -9744,11 +13305,15 @@ namespace MyGarage.Migrations
 
                     b.Navigation("ServiceRefunds");
 
+                    b.Navigation("TechnicalProposalSnapshots");
+
                     b.Navigation("VehicleConditionLogs");
 
                     b.Navigation("VoucherApprovalRequests");
 
                     b.Navigation("VoucherRedemptions");
+
+                    b.Navigation("WorkSlots");
                 });
 
             modelBuilder.Entity("MyGarage.Models.ServiceOrderDetail", b =>
@@ -9796,15 +13361,15 @@ namespace MyGarage.Migrations
 
                     b.Navigation("ApprovalRequestRequestedByNavigations");
 
+                    b.Navigation("AttendanceAdjustmentApprovedByNavigations");
+
+                    b.Navigation("AttendanceAdjustmentStaffs");
+
                     b.Navigation("BayCreatedByNavigations");
 
                     b.Navigation("BayDeletedByNavigations");
 
                     b.Navigation("BayUpdatedByNavigations");
-
-                    b.Navigation("BookingGroupCreatedByNavigations");
-
-                    b.Navigation("BookingGroupUpdatedByNavigations");
 
                     b.Navigation("BranchCreatedByNavigations");
 
@@ -9868,11 +13433,11 @@ namespace MyGarage.Migrations
 
                     b.Navigation("DiagnoseRecommendationUpdatedByNavigations");
 
-                    b.Navigation("DiagnosisApprovedByForemen");
-
-                    b.Navigation("DiagnosisTechnicians");
-
                     b.Navigation("DiagnosisUpdatedByNavigations");
+
+                    b.Navigation("EmployeeDependents");
+
+                    b.Navigation("EmployeeLoans");
 
                     b.Navigation("ExpenseLogApprovedByNavigations");
 
@@ -9883,6 +13448,10 @@ namespace MyGarage.Migrations
                     b.Navigation("GatePassIssuedByNavigations");
 
                     b.Navigation("GatePassScannedByNavigations");
+
+                    b.Navigation("GroupSessionCreatedByNavigations");
+
+                    b.Navigation("GroupSessionUpdatedByNavigations");
 
                     b.Navigation("InsuranceCompanyCreatedByNavigations");
 
@@ -9930,6 +13499,10 @@ namespace MyGarage.Migrations
 
                     b.Navigation("NotificationTemplateUpdatedByNavigations");
 
+                    b.Navigation("OvertimeEntryApprovedByNavigations");
+
+                    b.Navigation("OvertimeEntryStaffs");
+
                     b.Navigation("PaymentCashiers");
 
                     b.Navigation("PaymentMethodCreatedByNavigations");
@@ -9939,6 +13512,16 @@ namespace MyGarage.Migrations
                     b.Navigation("PaymentMethodUpdatedByNavigations");
 
                     b.Navigation("PaymentUpdatedByNavigations");
+
+                    b.Navigation("PayrollItems");
+
+                    b.Navigation("PayrollRunApprovedByNavigations");
+
+                    b.Navigation("PayrollRunCalculatedByNavigations");
+
+                    b.Navigation("Payslips");
+
+                    b.Navigation("PitProfiles");
 
                     b.Navigation("ProductCreatedByNavigations");
 
@@ -9953,6 +13536,22 @@ namespace MyGarage.Migrations
                     b.Navigation("QcInspectionQcStaffs");
 
                     b.Navigation("QcInspectionReworkTechnicians");
+
+                    b.Navigation("QuotationAppliedByNavigations");
+
+                    b.Navigation("QuotationApprovedByNavigations");
+
+                    b.Navigation("QuotationCreatedByNavigations");
+
+                    b.Navigation("QuotationDetailApprovedByNavigations");
+
+                    b.Navigation("QuotationDetailCreatedByNavigations");
+
+                    b.Navigation("QuotationDetailUpdatedByNavigations");
+
+                    b.Navigation("QuotationServiceAdvisors");
+
+                    b.Navigation("QuotationUpdatedByNavigations");
 
                     b.Navigation("RetailOrderCreatedByNavigations");
 
@@ -9975,6 +13574,10 @@ namespace MyGarage.Migrations
                     b.Navigation("RoleDeletedByNavigations");
 
                     b.Navigation("RoleUpdatedByNavigations");
+
+                    b.Navigation("SalaryAdvanceApprovedByNavigations");
+
+                    b.Navigation("SalaryAdvanceStaffs");
 
                     b.Navigation("ServiceCategoryCreatedByNavigations");
 
@@ -10019,6 +13622,12 @@ namespace MyGarage.Migrations
                     b.Navigation("ShiftClosingCashiers");
 
                     b.Navigation("ShiftClosingManagers");
+
+                    b.Navigation("StaffContracts");
+
+                    b.Navigation("StaffSalaryProfileStaffs");
+
+                    b.Navigation("StaffSalaryProfileUpdatedByNavigations");
 
                     b.Navigation("StaffSchedules");
 
@@ -10136,6 +13745,16 @@ namespace MyGarage.Migrations
                     b.Navigation("PurchaseOrders");
 
                     b.Navigation("ServiceOrderDetails");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.Team", b =>
+                {
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
+                {
+                    b.Navigation("TechnicalProposalSnapshotDetails");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Vehicle", b =>

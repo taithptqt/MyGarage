@@ -1655,8 +1655,7 @@ public class VehicleAdminController : ControllerBase
 
     private long? ResolveCurrentUserId()
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return long.TryParse(claim, out var userId) ? userId : null;
+        return this.GetCurrentUserId();
     }
 
     private string? ResolveCurrentUserDisplayName()

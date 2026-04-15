@@ -33,8 +33,6 @@ public sealed class QuotationCreateItemDto
     public long? InsuranceCompanyId { get; set; }
     public decimal? InsuranceCoveredAmount { get; set; }
     public decimal? CustomerCoveredAmount { get; set; }
-    public decimal? InsuranceRequestedAmount { get; set; }
-    public decimal? CustomerCoPayAmount { get; set; }
     public bool IsBlocking { get; set; } = true;
     public bool IsMandatory { get; set; }
     public int? EstimatedMinutes { get; set; }

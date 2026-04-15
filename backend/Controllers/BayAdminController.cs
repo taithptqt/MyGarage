@@ -1667,8 +1667,7 @@ public class BayAdminController : ControllerBase
 
     private long? ResolveCurrentUserId()
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return long.TryParse(claim, out var userId) ? userId : null;
+        return this.GetCurrentUserId();
     }
 
     private async Task<int> GetNextSequenceOrderAsync(long branchId, long? excludeBayId = null)

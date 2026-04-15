@@ -18,7 +18,11 @@ public interface IQuotationWorkflowService
     Task DecideMandatoryOverrideAsync(long requestId, MandatoryOverrideDecisionRequestDto request);
     Task<IReadOnlyList<MandatoryOverrideRequestResponseDto>> GetMandatoryOverrideRequestsByServiceOrderAsync(long serviceOrderId);
     Task<QuotationResponseDto> SubmitQuotationAsync(long quotationId, long actorStaffId, string? note = null);
+    Task<QuotationResponseDto> ConfirmInsuranceApprovedAsync(long quotationId, QuotationInsuranceApprovalRequestDto request);
+    Task<QuotationResponseDto> SendQuotationToCustomerAsync(long quotationId, long actorStaffId, string? note = null, string? idempotencyKey = null);
+    Task<QuotationCustomerLinkResponseDto> PublishQuotationCustomerLinkAsync(long quotationId, QuotationCustomerLinkPublishRequestDto request);
     Task<QuotationResponseDto> SupersedeQuotationAsync(long quotationId, long actorStaffId, string? note = null);
     Task<QuotationPublicViewResponseDto> GetQuotationByPublicTokenAsync(string token);
+    Task<QuotationPublicOtpResponseDto> SendDecisionOtpByPublicTokenAsync(string token, QuotationPublicOtpRequestDto? request = null);
     Task<QuotationResponseDto> ApplyCustomerDecisionByPublicTokenAsync(string token, QuotationPublicDecisionRequestDto request);
 }

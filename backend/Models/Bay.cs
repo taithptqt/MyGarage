@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -56,4 +56,8 @@ public partial class Bay
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual ICollection<WorkSlot> WorkSlots { get; set; } = new List<WorkSlot>();
+
+    public virtual ICollection<BayAllocation> BayAllocations { get; set; } = new List<BayAllocation>();
+
+    public virtual ICollection<BayStatusLog> BayStatusLogs { get; set; } = new List<BayStatusLog>();
 }

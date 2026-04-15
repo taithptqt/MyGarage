@@ -41,10 +41,6 @@ public partial class QuotationDetail
 
     public long? InsuranceCompanyId { get; set; }
 
-    public decimal? InsuranceRequestedAmount { get; set; }
-
-    public decimal? CustomerCoPayAmount { get; set; }
-
     public decimal? InsuranceCoveredAmount { get; set; }
 
     public decimal? CustomerCoveredAmount { get; set; }

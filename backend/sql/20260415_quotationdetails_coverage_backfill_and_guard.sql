@@ -6,10 +6,10 @@ BEGIN TRANSACTION;
         qd.Id,
         CAST(ISNULL(qd.FinalAmount, 0) AS DECIMAL(18,2)) AS FinalAmount,
         UPPER(LTRIM(RTRIM(ISNULL(qd.PayerType, 'CUSTOMER')))) AS PayerTypeNorm,
-        CAST(COALESCE(qd.InsuranceCoveredAmount, qd.InsuranceRequestedAmount,
+        CAST(COALESCE(qd.InsuranceCoveredAmount,
             CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(qd.PayerType, '')))) = 'INSURANCE' THEN ISNULL(qd.FinalAmount,0) ELSE 0 END
         ) AS DECIMAL(18,2)) AS InsuranceSeed,
-        CAST(COALESCE(qd.CustomerCoveredAmount, qd.CustomerCoPayAmount,
+        CAST(COALESCE(qd.CustomerCoveredAmount,
             CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(qd.PayerType, '')))) = 'CUSTOMER' THEN ISNULL(qd.FinalAmount,0) ELSE 0 END
         ) AS DECIMAL(18,2)) AS CustomerSeed
     FROM dbo.QuotationDetails qd
@@ -41,8 +41,6 @@ UPDATE qd
 SET
     InsuranceCoveredAmount = r.InsuranceResolved,
     CustomerCoveredAmount = CAST(r.FinalAmount - r.InsuranceResolved AS DECIMAL(18,2)),
-    InsuranceRequestedAmount = r.InsuranceResolved,
-    CustomerCoPayAmount = CAST(r.FinalAmount - r.InsuranceResolved AS DECIMAL(18,2)),
     PayerType = CASE
         WHEN r.InsuranceResolved = r.FinalAmount THEN 'INSURANCE'
         WHEN r.InsuranceResolved = 0 THEN 'CUSTOMER'
@@ -63,10 +61,11 @@ END;
 
 ALTER TABLE dbo.QuotationDetails WITH CHECK
 ADD CONSTRAINT CK_QuotationDetails_CoverageSum CHECK (
-    (
-        ISNULL([InsuranceCoveredAmount], ISNULL([InsuranceRequestedAmount], 0)) +
-        ISNULL([CustomerCoveredAmount], ISNULL([CustomerCoPayAmount], 0))
-    ) = ISNULL([FinalAmount], 0)
+    ABS(
+        ISNULL([InsuranceCoveredAmount], 0) +
+        ISNULL([CustomerCoveredAmount], 0) -
+        ISNULL([FinalAmount], 0)
+    ) <= 0.01
 );
 
 COMMIT TRANSACTION;

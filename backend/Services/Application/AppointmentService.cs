@@ -30,6 +30,7 @@ namespace MyGarage.Services
         private readonly IEmailService _emailService;
         private readonly ILogger<AppointmentService> _logger;
         private readonly IGarageContext _context;
+        private readonly IMaintenanceReminderService _maintenanceReminderService;
         private const int GraceArrivalMinutes = 15;
         private const int NoShowMinutes = 30;
         private const int StandardCheckInSetupMinutes = 15;
@@ -54,7 +55,8 @@ namespace MyGarage.Services
             ISystemClock clock,
             IConfiguration configuration,
             IEmailService emailService,
-            ILogger<AppointmentService> logger)
+            ILogger<AppointmentService> logger,
+            IMaintenanceReminderService maintenanceReminderService)
             : base(repository)
         {
             _appointmentRepository = repository;
@@ -68,6 +70,7 @@ namespace MyGarage.Services
             _configuration = configuration;
             _emailService = emailService;
             _logger = logger;
+            _maintenanceReminderService = maintenanceReminderService;
         }
 
     }

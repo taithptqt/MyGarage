@@ -351,6 +351,8 @@ public partial class GarageContext
         ConfigurePayrollModule(modelBuilder);
         ConfigureChatbotModule(modelBuilder);
         ConfigureAuthModule(modelBuilder);
+        ConfigureExecutionModule(modelBuilder);
+        ConfigureCustomerLifecycleModule(modelBuilder);
     }
 }
 

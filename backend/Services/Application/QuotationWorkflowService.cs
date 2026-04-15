@@ -1,16 +1,19 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
+using MyGarage.Hubs;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -22,13 +25,14 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private readonly IServiceOrderDetailService _serviceOrderDetailService;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<ChatHub> _chatHubContext;
 
     private const string StatusDraft = nameof(QuotationStatusCode.DRAFT);
     private const string StatusWaitingApproval = nameof(QuotationStatusCode.WAITING_APPROVAL);
     private const string StatusSentToCustomer = nameof(QuotationStatusCode.SENT_TO_CUSTOMER);
     private const string StatusPendingInsurance = nameof(QuotationStatusCode.PENDING_INSURANCE);
+    private const string StatusInsuranceApproved = nameof(QuotationStatusCode.INSURANCE_APPROVED);
     private const string StatusPendingCustomer = nameof(QuotationStatusCode.PENDING_CUSTOMER);
-    private const string StatusApproved = nameof(QuotationStatusCode.APPROVED);
     private const string StatusCustomerApproved = nameof(QuotationStatusCode.CUSTOMER_APPROVED);
     private const string StatusCustomerRejected = nameof(QuotationStatusCode.CUSTOMER_REJECTED);
     private const string StatusRejected = nameof(QuotationStatusCode.REJECTED);
@@ -43,17 +47,23 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private const string LinkStatusRevoked = "REVOKED";
     private const string LinkStatusUsed = "USED";
     private const int DefaultPortalExpiryDays = 15;
+    private const int OtpLength = 6;
+    private const int OtpTtlMinutes = 10;
+    private const int OtpMaxAttempts = 5;
+    private const int OtpResendCooldownSeconds = 60;
 
     public QuotationWorkflowService(
         IGarageContext context,
         IServiceOrderDetailService serviceOrderDetailService,
         IEmailService emailService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHubContext<ChatHub> chatHubContext)
     {
         _context = context;
         _serviceOrderDetailService = serviceOrderDetailService;
         _emailService = emailService;
         _configuration = configuration;
+        _chatHubContext = chatHubContext;
     }
 
     public async Task<QuotationResponseDto> CreateQuotationAsync(long serviceOrderId, QuotationCreateRequestDto request, long? actorStaffId = null)
@@ -68,8 +78,17 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("B\u00E1o gi\u00E1 ph\u1EA3i c\u00F3 \u00EDt nh\u1EA5t 1 h\u1EA1ng m\u1EE5c.");
         }
 
-        var serviceOrderExists = await _context.ServiceOrders.AsNoTracking().AnyAsync(x => x.Id == serviceOrderId);
-        if (!serviceOrderExists)
+        var serviceOrder = await _context.ServiceOrders
+            .AsNoTracking()
+            .Where(x => x.Id == serviceOrderId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ServiceAdvisorId,
+                x.ReceptionistId
+            })
+            .FirstOrDefaultAsync();
+        if (serviceOrder == null)
         {
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
@@ -80,7 +99,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 .AnyAsync(x => x.Id == request.DiagnosisId.Value && x.ServiceOrderId == serviceOrderId);
             if (!diagnosisBelongsToServiceOrder)
             {
-                throw new InvalidOperationException("DiagnosisId không thuộc lệnh sửa chữa hiện tại.");
+                throw new InvalidOperationException("DiagnosisId khÃ´ng thuá»™c lá»‡nh sá»­a chá»¯a hiá»‡n táº¡i.");
             }
         }
 
@@ -103,7 +122,10 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             Status = request.SubmitForApproval ? StatusWaitingApproval : StatusDraft,
             InsuranceClaimNumber = NormalizeText(request.InsuranceClaimNumber, 100),
             ValidUntil = request.ValidUntil,
-            ServiceAdvisorId = request.ServiceAdvisorId,
+            ServiceAdvisorId = ResolveServiceAdvisorForQuotation(
+                request.ServiceAdvisorId,
+                serviceOrder.ServiceAdvisorId,
+                serviceOrder.ReceptionistId),
             CustomerNotes = NormalizeText(request.CustomerNotes, 1000),
             InternalNotes = NormalizeText(request.InternalNotes, 1000),
             TeamLeaderApprovalStatus = ApprovalPending,
@@ -132,7 +154,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .Where(x =>
                 x.ServiceOrderId == serviceOrderId &&
                 x.Status != StatusSuperseded &&
-                x.Status != StatusApproved)
+                x.Status != StatusCustomerApproved)
             .ToListAsync();
 
         foreach (var row in priorOpenQuotations)
@@ -254,6 +276,10 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 DiagnosisId = latestDiagnosis.Id,
                 Title = BuildQuotationTitle(nextSnapshotVersion),
                 QuotationType = nameof(QuotationTypeCode.INSURANCE),
+                ServiceAdvisorId = ResolveServiceAdvisorForQuotation(
+                    null,
+                    serviceOrder.ServiceAdvisorId,
+                    serviceOrder.ReceptionistId),
                 InternalNotes = note,
                 SubmitForApproval = false
             };
@@ -461,7 +487,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                     string.Equals(detail.PayerType, "SPLIT", StringComparison.OrdinalIgnoreCase))
                 {
                     removedInsuranceAmount += detail.InsuranceCoveredAmount
-                        ?? detail.InsuranceRequestedAmount
                         ?? (string.Equals(detail.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ? detail.FinalAmount : 0m);
                 }
 
@@ -485,8 +510,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 InsuranceCompanyId = detail.InsuranceCompanyId,
                 InsuranceCoveredAmount = detail.InsuranceCoveredAmount,
                 CustomerCoveredAmount = detail.CustomerCoveredAmount,
-                InsuranceRequestedAmount = detail.InsuranceRequestedAmount,
-                CustomerCoPayAmount = detail.CustomerCoPayAmount,
                 IsBlocking = detail.IsBlocking,
                 IsMandatory = detail.IsMandatory,
                 EstimatedMinutes = detail.EstimatedMinutes,
@@ -535,7 +558,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var warnings = new List<string>();
         if (removedInsuranceAmount > 0)
         {
-            warnings.Add("Tổng bồi thường đã thay đổi. Vui lòng cập nhật với Giám định viên");
+            warnings.Add("Tá»•ng bá»“i thÆ°á»ng Ä‘Ã£ thay Ä‘á»•i. Vui lÃ²ng cáº­p nháº­t vá»›i GiÃ¡m Ä‘á»‹nh viÃªn");
         }
 
         var latest = await GetQuotationAsync(clonedEntity.Id);
@@ -556,12 +579,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     {
         if (request == null || request.ActorStaffId <= 0)
         {
-            throw new InvalidOperationException("Thiếu nhân sự cập nhật tách bill.");
+            throw new InvalidOperationException("Thiáº¿u nhÃ¢n sá»± cáº­p nháº­t tÃ¡ch bill.");
         }
 
         if (request.Items == null || request.Items.Count == 0)
         {
-            throw new InvalidOperationException("Thiếu dòng báo giá cần cập nhật tách bill.");
+            throw new InvalidOperationException("Thiáº¿u dÃ²ng bÃ¡o giÃ¡ cáº§n cáº­p nháº­t tÃ¡ch bill.");
         }
 
         var quotation = await _context.Quotations
@@ -569,14 +592,16 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
-            throw new InvalidOperationException("Không tìm thấy báo giá.");
+            throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y bÃ¡o giÃ¡.");
         }
 
         if (string.Equals(quotation.Status, StatusSuperseded, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(quotation.Status, StatusCanceled, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusInsuranceApproved, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(quotation.Status, StatusCustomerApproved, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Không thể cập nhật tách bill cho báo giá đã khóa.");
+            throw new InvalidOperationException("KhÃ´ng thá»ƒ cáº­p nháº­t tÃ¡ch bill cho bÃ¡o giÃ¡ Ä‘Ã£ khÃ³a.");
         }
 
         var now = VietnamTime.Now;
@@ -601,8 +626,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             detail.PayerType = split.PayerType;
             detail.InsuranceCoveredAmount = split.InsuranceCoveredAmount;
             detail.CustomerCoveredAmount = split.CustomerCoveredAmount;
-            detail.InsuranceRequestedAmount = split.InsuranceCoveredAmount;
-            detail.CustomerCoPayAmount = split.CustomerCoveredAmount;
             detail.UpdatedAt = now;
             detail.UpdatedBy = request.ActorStaffId;
         }
@@ -615,7 +638,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 : $"{quotation.InternalNotes.Trim()} | {cleaned}";
         }
 
-        quotation.Status = StatusPendingCustomer;
+        quotation.Status = StatusPendingInsurance;
         quotation.UpdatedAt = now;
         quotation.UpdatedBy = request.ActorStaffId;
         RecalculateQuotationTotals(quotation);
@@ -671,7 +694,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("B\u00E1o gi\u00E1 \u0111\u00E3 b\u1ECB thay th\u1EBF b\u1EDFi phi\u00EAn b\u1EA3n m\u1EDBi.");
         }
 
-        if (quotation.Status == StatusApproved && quotation.IsAppliedToServiceOrder)
+        if (quotation.Status == StatusCustomerApproved && quotation.IsAppliedToServiceOrder)
         {
             return MapQuotationResponse(quotation);
         }
@@ -717,7 +740,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .Where(x => string.Equals(x.ApprovalStatus, ApprovalApproved, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        quotation.Status = approvedDetails.Count > 0 ? StatusApproved : StatusRejected;
+        quotation.Status = approvedDetails.Count > 0 ? StatusPendingInsurance : StatusRejected;
         quotation.ApprovedBy = request.ApprovedBy;
         quotation.ApprovedAt = now;
         quotation.FinalApprovedBy = request.ApprovedBy;
@@ -768,7 +791,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("B\u00E1o gi\u00E1 \u0111\u00E3 b\u1ECB thay th\u1EBF.");
         }
 
-        var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == quotation.ServiceOrderId);
+        var serviceOrder = await _context.ServiceOrders
+            .Include(x => x.Vehicle)
+            .FirstOrDefaultAsync(x => x.Id == quotation.ServiceOrderId);
         if (serviceOrder == null)
         {
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
@@ -783,15 +808,23 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 : $"{quotation.InternalNotes.Trim()} | {cleanedNote}";
         }
 
-        if (request.Approved)
+        if (!string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.Equals(quotation.Status, StatusApproved, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(quotation.Status, StatusSentToCustomer, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase))
+            if (request.Approved && string.Equals(quotation.Status, StatusCustomerApproved, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("B\u00E1o gi\u00E1 ch\u01B0a \u0111\u01B0\u1EE3c qu\u1EA3n \u0111\u1ED1c duy\u1EC7t cu\u1ED1i.");
+                return MapQuotationResponse(quotation);
             }
 
+            if (!request.Approved && string.Equals(quotation.Status, StatusCustomerRejected, StringComparison.OrdinalIgnoreCase))
+            {
+                return MapQuotationResponse(quotation);
+            }
+
+            throw new InvalidOperationException("Bao gia chua o trang thai cho khach hang xac nhan.");
+        }
+
+        if (request.Approved)
+        {
             var hasPendingMandatoryOverride = await _context.MandatoryOverrideRequests.AsNoTracking()
                 .AnyAsync(x =>
                     x.QuotationId == quotationId &&
@@ -805,9 +838,13 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             quotation.CustomerDecisionStatus = ApprovalApproved;
             quotation.CustomerDecisionBy = actorId;
             quotation.CustomerDecisionAt = now;
+            quotation.IsReadyForSplitBilling = true;
+            quotation.SplitBillingReadyAt = now;
             quotation.UpdatedAt = now;
             quotation.UpdatedBy = actorId;
+            serviceOrder.InsuranceQuoteState = StatusCustomerApproved;
             await ApplyQuotationToServiceOrderAsync(quotation, serviceOrder, actorId, now);
+            await TryNotifyInsuranceApprovalChainAsync(quotation, serviceOrder, true);
             return MapQuotationResponse(quotation);
         }
 
@@ -821,13 +858,17 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         quotation.CustomerDecisionStatus = ApprovalRejected;
         quotation.CustomerDecisionBy = actorId;
         quotation.CustomerDecisionAt = now;
+        quotation.IsReadyForSplitBilling = false;
+        quotation.SplitBillingReadyAt = null;
         quotation.UpdatedAt = now;
         quotation.UpdatedBy = actorId;
+        serviceOrder.InsuranceQuoteState = StatusCustomerRejected;
         serviceOrder.Status = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
         serviceOrder.UpdatedAt = now;
         serviceOrder.UpdatedBy = actorId;
 
         await _context.SaveChangesAsync();
+        await TryNotifyInsuranceApprovalChainAsync(quotation, serviceOrder, false);
         return MapQuotationResponse(quotation);
     }
 
@@ -893,29 +934,25 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     {
         if (quotationId <= 0)
         {
-            throw new InvalidOperationException("M\u00E3 b\u00E1o gi\u00E1 kh\u00F4ng h\u1EE3p l\u1EC7.");
+            throw new InvalidOperationException("Ma bao gia khong hop le.");
         }
 
         if (actorStaffId <= 0)
         {
-            throw new InvalidOperationException("Thi\u1EBFu nh\u00E2n s\u1EF1 g\u1EEDi b\u00E1o gi\u00E1.");
+            throw new InvalidOperationException("Thieu nhan su gui bao gia.");
         }
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
-            .Include(x => x.ServiceOrder)
-                .ThenInclude(x => x.Customer)
-            .Include(x => x.ServiceOrder)
-                .ThenInclude(x => x.Vehicle)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
-            throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y b\u00E1o gi\u00E1.");
+            throw new InvalidOperationException("Khong tim thay bao gia.");
         }
 
         if (quotation.Status == StatusSuperseded)
         {
-            throw new InvalidOperationException("B\u00E1o gi\u00E1 \u0111\u00E3 b\u1ECB thay th\u1EBF.");
+            throw new InvalidOperationException("Bao gia da bi thay the.");
         }
 
         if (quotation.Status == StatusCustomerApproved || quotation.Status == StatusCustomerRejected || quotation.Status == StatusCanceled)
@@ -923,15 +960,18 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             return MapQuotationResponse(quotation);
         }
 
-        var customerEmail = NormalizeText(quotation.ServiceOrder?.Customer?.Email, 255);
-        if (string.IsNullOrWhiteSpace(customerEmail))
+        if (string.Equals(quotation.Status, StatusPendingInsurance, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Kh\u00E1ch h\u00E0ng ch\u01B0a c\u00F3 email h\u1EE3p l\u1EC7 \u0111\u1EC3 g\u1EEDi b\u00E1o gi\u00E1.");
+            return MapQuotationResponse(quotation);
+        }
+
+        if (!string.Equals(quotation.Status, StatusDraft, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Chi co the gui bao gia sang trang thai cho bao hiem tu ban nhap.");
         }
 
         var now = VietnamTime.Now;
-        var previousStatus = quotation.Status;
-        quotation.Status = StatusSentToCustomer;
+        quotation.Status = StatusPendingInsurance;
         quotation.CustomerDecisionStatus = ApprovalPending;
         quotation.UpdatedAt = now;
         quotation.UpdatedBy = actorStaffId;
@@ -944,10 +984,211 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 : $"{quotation.InternalNotes.Trim()} | {cleaned}";
         }
 
+        var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == quotation.ServiceOrderId);
+        if (serviceOrder != null)
+        {
+            serviceOrder.InsuranceQuoteState = StatusPendingInsurance;
+            serviceOrder.UpdatedAt = now;
+            serviceOrder.UpdatedBy = actorStaffId;
+        }
+
+        await _context.SaveChangesAsync();
+        return MapQuotationResponse(quotation);
+    }
+
+    public async Task<QuotationResponseDto> ConfirmInsuranceApprovedAsync(long quotationId, QuotationInsuranceApprovalRequestDto request)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Ma bao gia khong hop le.");
+        }
+
+        if (request == null || request.ActorStaffId <= 0)
+        {
+            throw new InvalidOperationException("Thieu nhan su xac nhan bao hiem.");
+        }
+
+        var evidenceUrl = NormalizeText(request.InsuranceApprovalEvidenceUrl, 1000);
+        if (string.IsNullOrWhiteSpace(evidenceUrl))
+        {
+            throw new InvalidOperationException("Vui long tai len bang chung phe duyet bao hiem truoc khi xac nhan.");
+        }
+
+        var quotation = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .FirstOrDefaultAsync(x => x.Id == quotationId);
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Khong tim thay bao gia.");
+        }
+
+        if (string.Equals(quotation.Status, StatusInsuranceApproved, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(quotation.InsuranceApprovalEvidenceUrl))
+            {
+                quotation.InsuranceApprovalEvidenceUrl = evidenceUrl;
+                quotation.UpdatedAt = VietnamTime.Now;
+                quotation.UpdatedBy = request.ActorStaffId;
+                await _context.SaveChangesAsync();
+            }
+
+            return MapQuotationResponse(quotation);
+        }
+
+        if (!string.Equals(quotation.Status, StatusPendingInsurance, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Chi xac nhan bao hiem khi bao gia dang o trang thai cho bao hiem.");
+        }
+
+        quotation.InsuranceApprovalEvidenceUrl = evidenceUrl;
+        quotation.Status = StatusInsuranceApproved;
+        quotation.CustomerDecisionStatus = ApprovalPending;
+        var now = VietnamTime.Now;
+        quotation.UpdatedAt = now;
+        quotation.UpdatedBy = request.ActorStaffId;
+
+        var cleaned = NormalizeText(request.Note, 1000);
+        if (!string.IsNullOrWhiteSpace(cleaned))
+        {
+            quotation.InternalNotes = string.IsNullOrWhiteSpace(quotation.InternalNotes)
+                ? cleaned
+                : $"{quotation.InternalNotes.Trim()} | {cleaned}";
+        }
+
+        var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == quotation.ServiceOrderId);
+        if (serviceOrder != null)
+        {
+            serviceOrder.InsuranceQuoteState = StatusInsuranceApproved;
+            serviceOrder.UpdatedAt = now;
+            serviceOrder.UpdatedBy = request.ActorStaffId;
+        }
+
+        await _context.SaveChangesAsync();
+        return MapQuotationResponse(quotation);
+    }
+
+    public async Task<QuotationResponseDto> SendQuotationToCustomerAsync(long quotationId, long actorStaffId, string? note = null, string? idempotencyKey = null)
+    {
+        var _ = await PublishQuotationCustomerLinkAsync(quotationId, new QuotationCustomerLinkPublishRequestDto
+        {
+            ActorStaffId = actorStaffId,
+            Note = note,
+            SendEmail = true,
+            IdempotencyKey = idempotencyKey
+        });
+
+        var updated = await GetQuotationAsync(quotationId);
+        if (updated == null)
+        {
+            throw new InvalidOperationException("Khong tim thay bao gia.");
+        }
+
+        return updated;
+    }
+
+    public async Task<QuotationCustomerLinkResponseDto> PublishQuotationCustomerLinkAsync(long quotationId, QuotationCustomerLinkPublishRequestDto request)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Ma bao gia khong hop le.");
+        }
+
+        if (request == null || request.ActorStaffId <= 0)
+        {
+            throw new InvalidOperationException("Thieu nhan su gui bao gia cho khach.");
+        }
+
+        var quotation = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .Include(x => x.ServiceOrder)
+                .ThenInclude(x => x.Customer)
+            .Include(x => x.ServiceOrder)
+                .ThenInclude(x => x.Vehicle)
+            .FirstOrDefaultAsync(x => x.Id == quotationId);
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Khong tim thay bao gia.");
+        }
+
+        if (quotation.Status == StatusSuperseded)
+        {
+            throw new InvalidOperationException("Bao gia da bi thay the.");
+        }
+
+        if (quotation.Status == StatusCustomerApproved || quotation.Status == StatusCustomerRejected || quotation.Status == StatusCanceled)
+        {
+            throw new InvalidOperationException("Bao gia da ket thuc trang thai quyet dinh cua khach.");
+        }
+
+        if (!string.Equals(quotation.Status, StatusInsuranceApproved, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Chi duoc tao link cho khach sau khi bao hiem da duyet.");
+        }
+
+        if (string.IsNullOrWhiteSpace(quotation.InsuranceApprovalEvidenceUrl))
+        {
+            throw new InvalidOperationException("Thieu bang chung duyet bao hiem. Khong the tao link cho khach.");
+        }
+
+        var cleanedNote = NormalizeText(request.Note, 1000);
+        var targetEmail = NormalizeText(request.Email, 255)
+            ?? NormalizeText(quotation.ServiceOrder?.Customer?.Email, 255);
+        if (request.SendEmail && string.IsNullOrWhiteSpace(targetEmail))
+        {
+            throw new InvalidOperationException("Khach hang chua co email hop le de gui bao gia.");
+        }
+
+        var now = VietnamTime.Now;
+        var previousStatus = quotation.Status;
+        var previousInsuranceQuoteState = quotation.ServiceOrder?.InsuranceQuoteState;
+        var normalizedIdempotencyKey = NormalizeIdempotencyKey(request.IdempotencyKey);
+
+        if (!string.IsNullOrWhiteSpace(normalizedIdempotencyKey))
+        {
+            var existingActiveLink = await _context.QuotationAccessLinks
+                .Where(x => x.QuotationId == quotation.Id && x.Status == LinkStatusActive && x.ExpiresAt > now)
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            if (existingActiveLink != null &&
+                !string.IsNullOrWhiteSpace(existingActiveLink.ClientNote) &&
+                existingActiveLink.ClientNote.Contains($"idem:{normalizedIdempotencyKey}", StringComparison.Ordinal))
+            {
+                var existingToken = GenerateDeterministicPublicToken(existingActiveLink);
+                return new QuotationCustomerLinkResponseDto
+                {
+                    QuotationId = quotation.Id,
+                    QuotationCode = quotation.Code,
+                    Status = quotation.Status,
+                    PublicLink = BuildPublicPortalUrl(existingToken),
+                    ExpiresAt = existingActiveLink.ExpiresAt,
+                    EmailSent = false,
+                    SentToEmail = existingActiveLink.SentToEmail
+                };
+            }
+        }
+
+        quotation.Status = StatusPendingCustomer;
+        quotation.CustomerDecisionStatus = ApprovalPending;
+        quotation.UpdatedAt = now;
+        quotation.UpdatedBy = request.ActorStaffId;
+
+        if (quotation.ServiceOrder != null)
+        {
+            quotation.ServiceOrder.InsuranceQuoteState = StatusPendingCustomer;
+            quotation.ServiceOrder.UpdatedAt = now;
+            quotation.ServiceOrder.UpdatedBy = request.ActorStaffId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cleanedNote))
+        {
+            quotation.InternalNotes = string.IsNullOrWhiteSpace(quotation.InternalNotes)
+                ? cleanedNote
+                : $"{quotation.InternalNotes.Trim()} | {cleanedNote}";
+        }
+
         var expiresAt = ResolvePortalExpiry(quotation.ValidUntil, now);
-        var rawToken = GeneratePublicToken();
-        var tokenHash = ComputeTokenHash(rawToken);
-        var publicLink = BuildPublicPortalUrl(rawToken);
 
         var existingActiveLinks = await _context.QuotationAccessLinks
             .Where(x => x.QuotationId == quotation.Id && x.Status == LinkStatusActive)
@@ -957,45 +1198,78 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             link.Status = LinkStatusRevoked;
             link.UpdatedAt = now;
-            link.UpdatedBy = actorStaffId;
+            link.UpdatedBy = request.ActorStaffId;
         }
 
         var newLink = new QuotationAccessLink
         {
             QuotationId = quotation.Id,
-            TokenHash = tokenHash,
+            TokenHash = string.Empty,
             Status = LinkStatusActive,
             ExpiresAt = expiresAt,
-            SentToEmail = customerEmail,
-            ClientNote = cleaned,
+            SentToEmail = targetEmail,
+            ClientNote = string.IsNullOrWhiteSpace(normalizedIdempotencyKey)
+                ? cleanedNote
+                : string.IsNullOrWhiteSpace(cleanedNote)
+                    ? $"idem:{normalizedIdempotencyKey}"
+                    : $"{cleanedNote} | idem:{normalizedIdempotencyKey}",
             CreatedAt = now,
-            CreatedBy = actorStaffId,
+            CreatedBy = request.ActorStaffId,
             UpdatedAt = now,
-            UpdatedBy = actorStaffId
+            UpdatedBy = request.ActorStaffId
         };
 
         _context.QuotationAccessLinks.Add(newLink);
         await _context.SaveChangesAsync();
 
-        try
+        var rawToken = GenerateDeterministicPublicToken(newLink);
+        newLink.TokenHash = ComputeTokenHash(rawToken);
+        newLink.UpdatedAt = VietnamTime.Now;
+        newLink.UpdatedBy = request.ActorStaffId;
+        await _context.SaveChangesAsync();
+
+        var publicLink = BuildPublicPortalUrl(rawToken);
+
+        if (request.SendEmail)
         {
-            var emailSubject = BuildQuotationEmailSubject(quotation);
-            var emailBody = BuildQuotationEmailHtml(quotation, publicLink, cleaned, expiresAt);
-            await _emailService.SendEmailAsync(customerEmail, emailSubject, emailBody);
-        }
-        catch
-        {
-            newLink.Status = LinkStatusRevoked;
-            newLink.UpdatedAt = VietnamTime.Now;
-            newLink.UpdatedBy = actorStaffId;
-            quotation.Status = previousStatus;
-            quotation.UpdatedAt = VietnamTime.Now;
-            quotation.UpdatedBy = actorStaffId;
-            await _context.SaveChangesAsync();
-            throw new InvalidOperationException("Kh\u00F4ng th\u1EC3 g\u1EEDi email b\u00E1o gi\u00E1. Vui l\u00F2ng ki\u1EC3m tra c\u1EA5u h\u00ECnh SMTP.");
+            try
+            {
+                var emailSubject = BuildQuotationEmailSubject(quotation);
+                var emailBody = BuildQuotationEmailHtml(quotation, publicLink, cleanedNote, expiresAt);
+                await _emailService.SendEmailAsync(targetEmail!, emailSubject, emailBody);
+            }
+            catch
+            {
+                newLink.Status = LinkStatusRevoked;
+                newLink.UpdatedAt = VietnamTime.Now;
+                newLink.UpdatedBy = request.ActorStaffId;
+
+                quotation.Status = previousStatus;
+                quotation.UpdatedAt = VietnamTime.Now;
+                quotation.UpdatedBy = request.ActorStaffId;
+
+                if (quotation.ServiceOrder != null)
+                {
+                    quotation.ServiceOrder.InsuranceQuoteState = previousInsuranceQuoteState;
+                    quotation.ServiceOrder.UpdatedAt = VietnamTime.Now;
+                    quotation.ServiceOrder.UpdatedBy = request.ActorStaffId;
+                }
+
+                await _context.SaveChangesAsync();
+                throw new InvalidOperationException("Khong the gui email bao gia. Vui long kiem tra cau hinh SMTP.");
+            }
         }
 
-        return MapQuotationResponse(quotation);
+        return new QuotationCustomerLinkResponseDto
+        {
+            QuotationId = quotation.Id,
+            QuotationCode = quotation.Code,
+            Status = quotation.Status,
+            PublicLink = publicLink,
+            ExpiresAt = expiresAt,
+            EmailSent = request.SendEmail,
+            SentToEmail = targetEmail
+        };
     }
 
     public async Task<QuotationPublicViewResponseDto> GetQuotationByPublicTokenAsync(string token)
@@ -1031,6 +1305,83 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return MapPublicQuotationResponse(quotation);
     }
 
+    public async Task<QuotationPublicOtpResponseDto> SendDecisionOtpByPublicTokenAsync(string token, QuotationPublicOtpRequestDto? request = null)
+    {
+        var accessLink = await ResolveActiveAccessLinkAsync(token);
+        var quotation = await _context.Quotations
+            .Include(x => x.ServiceOrder)
+                .ThenInclude(x => x.Customer)
+            .FirstOrDefaultAsync(x => x.Id == accessLink.QuotationId);
+
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Khong tim thay bao gia.");
+        }
+
+        if (!string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Bao gia hien khong o trang thai cho khach xac nhan.");
+        }
+
+        var targetEmail = NormalizeText(request?.Email, 255)
+            ?? NormalizeText(accessLink.SentToEmail, 255)
+            ?? NormalizeText(quotation.ServiceOrder?.Customer?.Email, 255);
+        if (string.IsNullOrWhiteSpace(targetEmail))
+        {
+            throw new InvalidOperationException("Khong tim thay email hop le de gui OTP.");
+        }
+
+        var now = VietnamTime.Now;
+        if (accessLink.OtpLastSentAt.HasValue)
+        {
+            var elapsed = now - accessLink.OtpLastSentAt.Value;
+            if (elapsed.TotalSeconds < OtpResendCooldownSeconds)
+            {
+                var retryAfter = Math.Max(1, OtpResendCooldownSeconds - (int)elapsed.TotalSeconds);
+                throw new InvalidOperationException($"Vui long cho {retryAfter} giay de gui lai OTP.");
+            }
+        }
+
+        var otpCode = GenerateOtpCode();
+        accessLink.OtpCodeHash = ComputeTokenHash(otpCode);
+        accessLink.OtpExpiresAt = now.AddMinutes(OtpTtlMinutes);
+        accessLink.OtpAttemptCount = 0;
+        accessLink.OtpVerifiedAt = null;
+        accessLink.OtpLastSentAt = now;
+        accessLink.SentToEmail = targetEmail;
+        accessLink.UpdatedAt = now;
+        accessLink.UpdatedBy = quotation.ServiceOrder?.CustomerId;
+        await _context.SaveChangesAsync();
+
+        try
+        {
+            var plate = quotation.ServiceOrder?.Vehicle?.LicensePlate?.Trim();
+            var subject = string.IsNullOrWhiteSpace(plate)
+                ? "MyGarage mã OTP xác nhận báo giá"
+                : $"MyGarage mã OTP xác nhận báo giá xe {plate}";
+            var body = BuildOtpEmailHtml(quotation, otpCode, accessLink.OtpExpiresAt.Value);
+            await _emailService.SendEmailAsync(targetEmail, subject, body);
+        }
+        catch
+        {
+            accessLink.OtpCodeHash = null;
+            accessLink.OtpExpiresAt = null;
+            accessLink.OtpAttemptCount = 0;
+            accessLink.OtpVerifiedAt = null;
+            accessLink.UpdatedAt = VietnamTime.Now;
+            await _context.SaveChangesAsync();
+            throw new InvalidOperationException("Khong the gui OTP. Vui long kiem tra cau hinh email.");
+        }
+
+        return new QuotationPublicOtpResponseDto
+        {
+            Sent = true,
+            MaskedEmail = MaskEmail(targetEmail),
+            OtpExpiresAt = accessLink.OtpExpiresAt.Value,
+            RetryAfterSeconds = OtpResendCooldownSeconds
+        };
+    }
+
     public async Task<QuotationResponseDto> ApplyCustomerDecisionByPublicTokenAsync(string token, QuotationPublicDecisionRequestDto request)
     {
         if (request == null)
@@ -1055,6 +1406,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
 
+        await ValidateOtpForDecisionAsync(accessLink, request.OtpCode);
+
         var updated = await ApplyCustomerDecisionAsync(quotation.Id, new QuotationCustomerDecisionRequestDto
         {
             Approved = request.Approved,
@@ -1066,6 +1419,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         accessLink.DecidedAt = now;
         accessLink.DecisionCode = request.Approved ? "APPROVED" : "REJECTED";
         accessLink.Status = LinkStatusUsed;
+        accessLink.OtpVerifiedAt = now;
+        accessLink.OtpCodeHash = null;
+        accessLink.OtpExpiresAt = null;
         accessLink.UpdatedAt = now;
         accessLink.UpdatedBy = serviceOrder.CustomerId;
 
@@ -1103,7 +1459,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y b\u00E1o gi\u00E1.");
         }
 
-        if (quotation.IsAppliedToServiceOrder || quotation.Status == StatusApproved)
+        if (quotation.IsAppliedToServiceOrder || quotation.Status == StatusInsuranceApproved)
         {
             throw new InvalidOperationException("Kh\u00F4ng th\u1EC3 thay th\u1EBF b\u00E1o gi\u00E1 \u0111\u00E3 \u00E1p v\u00E0o l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
@@ -1129,11 +1485,269 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return MapQuotationResponse(quotation);
     }
 
+    private async Task TryNotifyInsuranceApprovalChainAsync(Quotation quotation, ServiceOrder serviceOrder, bool approved)
+    {
+        string subject = string.Empty;
+        string content = string.Empty;
+        var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var statusText = approved ? "đã duyệt báo giá" : "đã từ chối báo giá";
+            var vehiclePlate = serviceOrder.Vehicle?.LicensePlate?.Trim() ?? "-";
+            var serviceOrderCode = serviceOrder.Code?.Trim() ?? serviceOrder.Id.ToString(CultureInfo.InvariantCulture);
+            subject = approved
+                ? $"Khách đã duyệt báo giá - {vehiclePlate}"
+                : $"Khách từ chối báo giá - {vehiclePlate}";
+
+            content = $@"
+<div style=""font-family:Arial,sans-serif;color:#1a202c;line-height:1.5;"">
+  <h3 style=""margin:0 0 10px;color:#1a365d;"">Thông báo tự động từ MyGarage</h3>
+  <p>Khách xe <strong>{WebUtility.HtmlEncode(vehiclePlate)}</strong> {statusText}.</p>
+  <p>Lệnh sửa chữa: <strong>{WebUtility.HtmlEncode(serviceOrderCode)}</strong><br/>
+     Báo giá: <strong>{WebUtility.HtmlEncode(quotation.Code)}</strong></p>
+  <p>Trạng thái hiện tại: <strong>{WebUtility.HtmlEncode(quotation.Status)}</strong></p>
+</div>";
+
+            var serviceAdvisorEmail = await _context.Staffs.AsNoTracking()
+                .Where(x => x.Id == serviceOrder.ServiceAdvisorId)
+                .Select(x => x.Email)
+                .FirstOrDefaultAsync();
+
+            var roleCodes = new[] { "WORKSHOP_MANAGER", "FOREMAN", "TEAM_LEADER", "STOREKEEPER" };
+            var fallbackRoleHints = new[] { "quan doc", "to truong", "thu kho", "manager", "foreman", "leader", "storekeeper" };
+
+            var branchStaffCandidates = await (
+                from staff in _context.Staffs.AsNoTracking()
+                join role in _context.Roles.AsNoTracking() on staff.RoleId equals role.Id
+                where staff.BranchId == serviceOrder.ExecuteBranchId
+                select new
+                {
+                    staff.Id,
+                    staff.Email,
+                    RoleCode = role.RoleCode,
+                    RoleName = role.RoleName
+                }
+            ).ToListAsync();
+
+            var branchStaffEmails = branchStaffCandidates
+                .Where(x =>
+                    !string.IsNullOrWhiteSpace(x.Email) &&
+                    (
+                        roleCodes.Contains((x.RoleCode ?? string.Empty).Trim().ToUpperInvariant()) ||
+                        fallbackRoleHints.Any(h =>
+                            (x.RoleName ?? string.Empty).Trim().ToLowerInvariant().Contains(h) ||
+                            (x.RoleCode ?? string.Empty).Trim().ToLowerInvariant().Contains(h))
+                    ))
+                .Select(x => x.Email!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(serviceAdvisorEmail))
+            {
+                recipients.Add(serviceAdvisorEmail.Trim());
+            }
+
+            foreach (var email in branchStaffEmails.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                recipients.Add(email.Trim());
+            }
+
+            foreach (var recipient in recipients)
+            {
+                await _emailService.SendEmailAsync(recipient, subject, content);
+            }
+
+            var payload = new
+            {
+                eventType = "QUOTATION_CUSTOMER_DECISION",
+                approved,
+                quotationId = quotation.Id,
+                quotationCode = quotation.Code,
+                serviceOrderId = serviceOrder.Id,
+                serviceOrderCode = serviceOrder.Code,
+                vehiclePlate,
+                decidedAt = quotation.CustomerDecisionAt
+            };
+
+            if (serviceOrder.ExecuteBranchId > 0)
+            {
+                await _chatHubContext.Clients
+                    .Group($"WorkshopBranch_{serviceOrder.ExecuteBranchId}")
+                    .SendAsync("QuotationWorkflowUpdated", payload);
+
+                await _chatHubContext.Clients
+                    .Group($"WorkshopBranch_{serviceOrder.ExecuteBranchId}")
+                    .SendAsync("ServiceOrderExecutionReady", new
+                    {
+                        serviceOrderId = serviceOrder.Id,
+                        serviceOrderCode = serviceOrder.Code,
+                        quotationId = quotation.Id,
+                        quotationCode = quotation.Code,
+                        approved,
+                        message = approved
+                            ? "KhÃ¡ch hÃ ng Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡, sáºµn sÃ ng phÃ¡t lá»‡nh thi cÃ´ng."
+                            : "KhÃ¡ch hÃ ng Ä‘Ã£ tá»« chá»‘i bÃ¡o giÃ¡, cáº§n xá»­ lÃ½ láº¡i phÆ°Æ¡ng Ã¡n."
+                    });
+            }
+
+            if (serviceOrder.ServiceAdvisorId.HasValue && serviceOrder.ServiceAdvisorId.Value > 0)
+            {
+                await _chatHubContext.Clients
+                    .Group($"User_{serviceOrder.ServiceAdvisorId.Value}")
+                    .SendAsync("QuotationWorkflowUpdated", payload);
+
+                await _chatHubContext.Clients
+                    .Group($"User_{serviceOrder.ServiceAdvisorId.Value}")
+                    .SendAsync("ServiceAdvisorNotification", new
+                    {
+                        serviceOrderId = serviceOrder.Id,
+                        quotationId = quotation.Id,
+                        approved,
+                        message = approved
+                            ? "KhÃ¡ch Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡."
+                            : "KhÃ¡ch Ä‘Ã£ tá»« chá»‘i bÃ¡o giÃ¡."
+                    });
+            }
+
+            var foremanIds = branchStaffCandidates
+                .Where(x =>
+                    (x.RoleCode ?? string.Empty).Contains("FOREMAN", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleCode ?? string.Empty).Contains("TEAM_LEADER", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleName ?? string.Empty).Contains("quáº£n Ä‘á»‘c", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleName ?? string.Empty).Contains("tá»• trÆ°á»Ÿng", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.Id)
+                .Distinct()
+                .ToList();
+
+            var storekeeperIds = branchStaffCandidates
+                .Where(x =>
+                    (x.RoleCode ?? string.Empty).Contains("STOREKEEPER", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleCode ?? string.Empty).Contains("WAREHOUSE", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleName ?? string.Empty).Contains("thá»§ kho", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.Id)
+                .Distinct()
+                .ToList();
+
+            foreach (var staffId in foremanIds)
+            {
+                await _chatHubContext.Clients
+                    .Group($"User_{staffId}")
+                    .SendAsync("ForemanDispatchNotification", new
+                    {
+                        serviceOrderId = serviceOrder.Id,
+                        quotationId = quotation.Id,
+                        approved,
+                        message = approved
+                            ? "BÃ¡o giÃ¡ Ä‘Ã£ Ä‘Æ°á»£c khÃ¡ch duyá»‡t, Ä‘iá»u phá»‘i xe vÃ o khoang thi cÃ´ng."
+                            : "BÃ¡o giÃ¡ bá»‹ tá»« chá»‘i, táº¡m dá»«ng Ä‘iá»u phá»‘i thi cÃ´ng."
+                    });
+            }
+
+            foreach (var staffId in storekeeperIds)
+            {
+                await _chatHubContext.Clients
+                    .Group($"User_{staffId}")
+                    .SendAsync("StorekeeperDispatchNotification", new
+                    {
+                        serviceOrderId = serviceOrder.Id,
+                        quotationId = quotation.Id,
+                        approved,
+                        message = approved
+                            ? "BÃ¡o giÃ¡ Ä‘Ã£ duyá»‡t, chuáº©n bá»‹ xuáº¥t Ä‘Ãºng váº­t tÆ° theo lá»‡nh."
+                            : "BÃ¡o giÃ¡ bá»‹ tá»« chá»‘i, giá»¯ nguyÃªn káº¿ hoáº¡ch xuáº¥t kho."
+                    });
+            }
+        }
+        catch
+        {
+            await EnqueueNotificationRetryAsync(
+                quotation,
+                serviceOrder,
+                subject,
+                content,
+                recipients.ToList());
+        }
+    }
+
+    private async Task EnqueueNotificationRetryAsync(
+        Quotation quotation,
+        ServiceOrder serviceOrder,
+        string subject,
+        string content,
+        IReadOnlyList<string> recipients)
+    {
+        try
+        {
+            var sanitizedRecipients = recipients
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (sanitizedRecipients.Count == 0)
+            {
+                return;
+            }
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                subject,
+                content,
+                recipients = sanitizedRecipients,
+                retryCount = 0,
+                maxRetries = 5,
+                quotationId = quotation.Id,
+                serviceOrderId = serviceOrder.Id
+            });
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                UserId = quotation.UpdatedBy ?? quotation.CreatedBy ?? 0,
+                UserType = "SYSTEM",
+                BranchId = serviceOrder.ExecuteBranchId,
+                Action = "NOTIFY_RETRY_PENDING",
+                TableName = "QUOTATIONS",
+                RecordId = quotation.Id,
+                NewValue = payload,
+                Timestamp = VietnamTime.Now
+            });
+
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            // Do not block workflow when retry queue logging fails.
+        }
+    }
+
     private static string BuildQuotationCode(long serviceOrderId, int versionNo, DateTime now)
     {
         return string.Create(
             CultureInfo.InvariantCulture,
             $"QT-{now:yyyyMMddHHmmss}-{serviceOrderId}-{versionNo:D3}");
+    }
+
+    private static long? ResolveServiceAdvisorForQuotation(
+        long? requestedServiceAdvisorId,
+        long? serviceOrderServiceAdvisorId,
+        long? serviceOrderReceptionistId)
+    {
+        if (requestedServiceAdvisorId.HasValue && requestedServiceAdvisorId.Value > 0)
+        {
+            return requestedServiceAdvisorId.Value;
+        }
+
+        if (serviceOrderServiceAdvisorId.HasValue && serviceOrderServiceAdvisorId.Value > 0)
+        {
+            return serviceOrderServiceAdvisorId.Value;
+        }
+
+        if (serviceOrderReceptionistId.HasValue && serviceOrderReceptionistId.Value > 0)
+        {
+            return serviceOrderReceptionistId.Value;
+        }
+
+        return null;
     }
 
     private static string BuildQuotationTitle(int versionNo)
@@ -1184,6 +1798,32 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return normalized.Length <= maxLen ? normalized : normalized[..maxLen];
     }
 
+    private static string? NormalizeIdempotencyKey(string? key)
+    {
+        var normalized = (key ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        if (normalized.Length > 120)
+        {
+            normalized = normalized[..120];
+        }
+
+        return normalized;
+    }
+
+    private static string GenerateDeterministicPublicToken(QuotationAccessLink link)
+    {
+        var payload = $"{link.QuotationId}:{link.Id}:{link.CreatedAt.Ticks}";
+        var bytes = Encoding.UTF8.GetBytes(payload);
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
     private DateTime ResolvePortalExpiry(DateTime? quotationValidUntil, DateTime now)
     {
         var configuredDays = _configuration.GetValue<int?>("QuotationPortal:TokenExpiryDays");
@@ -1210,6 +1850,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .Replace('+', '-')
             .Replace('/', '_')
             .TrimEnd('=');
+    }
+
+    private static string GenerateOtpCode()
+    {
+        var value = RandomNumberGenerator.GetInt32(0, 1_000_000);
+        return value.ToString($"D{OtpLength}", CultureInfo.InvariantCulture);
     }
 
     private static string ComputeTokenHash(string token)
@@ -1272,12 +1918,83 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 </div>";
     }
 
+    private static string BuildOtpEmailHtml(Quotation quotation, string otpCode, DateTime expiresAt)
+    {
+        var customer = WebUtility.HtmlEncode(quotation.ServiceOrder?.Customer?.FullName?.Trim() ?? "Quý khách");
+        var plate = WebUtility.HtmlEncode(quotation.ServiceOrder?.Vehicle?.LicensePlate?.Trim() ?? "-");
+        var expiryText = expiresAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("vi-VN"));
+        var amount = quotation.TotalCustomerAmount.ToString("#,##0", CultureInfo.GetCultureInfo("vi-VN"));
+
+        return $@"
+<div style=""font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#1a202c;line-height:1.5;"">
+  <h2 style=""margin:0 0 12px;color:#1a365d;"">MyGarage - Xác nhận duyệt báo giá</h2>
+  <p>Kính chào anh/chị <strong>{customer}</strong>, vui lòng nhập mã OTP bên dưới để xác nhận báo giá cho xe <strong>{plate}</strong>.</p>
+  <div style=""margin:14px 0;padding:14px 16px;background:#f0f7ff;border:1px solid #c6dcf8;border-radius:10px;"">
+    <p style=""margin:0 0 6px;color:#31577c;font-size:13px;"">Mã OTP</p>
+    <p style=""margin:0;font-size:30px;font-weight:800;letter-spacing:8px;color:#0f3b67;"">{WebUtility.HtmlEncode(otpCode)}</p>
+  </div>
+  <p style=""margin:8px 0;color:#4a5568;"">Tổng phần khách cần thanh toán: <strong>{amount} đ</strong></p>
+  <p style=""margin:8px 0;color:#4a5568;"">OTP hết hạn lúc: <strong>{expiryText}</strong></p>
+  <p style=""margin:14px 0 0;color:#4a5568;"">Nếu không thực hiện thao tác này, vui lòng bỏ qua email.</p>
+</div>";
+    }
+
+    private static string MaskEmail(string email)
+    {
+        var normalized = (email ?? string.Empty).Trim();
+        var at = normalized.IndexOf('@');
+        if (at <= 1)
+        {
+            return normalized;
+        }
+
+        var local = normalized[..at];
+        var domain = normalized[(at + 1)..];
+        var visible = Math.Min(2, local.Length);
+        var masked = $"{local[..visible]}{new string('*', Math.Max(1, local.Length - visible))}";
+        return $"{masked}@{domain}";
+    }
+
+    private async Task ValidateOtpForDecisionAsync(QuotationAccessLink accessLink, string? rawOtpCode)
+    {
+        var otpCode = (rawOtpCode ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(otpCode))
+        {
+            throw new InvalidOperationException("Vui long nhap ma OTP truoc khi xac nhan.");
+        }
+
+        if (string.IsNullOrWhiteSpace(accessLink.OtpCodeHash) || !accessLink.OtpExpiresAt.HasValue)
+        {
+            throw new InvalidOperationException("Vui long bam gui OTP de xac thuc truoc khi duyet bao gia.");
+        }
+
+        var now = VietnamTime.Now;
+        if (accessLink.OtpExpiresAt.Value <= now)
+        {
+            throw new InvalidOperationException("Ma OTP da het han. Vui long gui lai OTP moi.");
+        }
+
+        if (accessLink.OtpAttemptCount >= OtpMaxAttempts)
+        {
+            throw new InvalidOperationException("OTP da nhap sai qua so lan cho phep. Vui long gui lai OTP moi.");
+        }
+
+        var otpHash = ComputeTokenHash(otpCode);
+        if (!string.Equals(otpHash, accessLink.OtpCodeHash, StringComparison.OrdinalIgnoreCase))
+        {
+            accessLink.OtpAttemptCount += 1;
+            accessLink.UpdatedAt = now;
+            await _context.SaveChangesAsync();
+            throw new InvalidOperationException("Ma OTP khong dung.");
+        }
+    }
+
     private async Task<QuotationAccessLink> ResolveActiveAccessLinkAsync(string token)
     {
         var normalizedToken = (token ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(normalizedToken))
         {
-            throw new InvalidOperationException("Liên kết báo giá không hợp lệ.");
+            throw new InvalidOperationException("LiÃªn káº¿t bÃ¡o giÃ¡ khÃ´ng há»£p lá»‡.");
         }
 
         var tokenHash = ComputeTokenHash(normalizedToken);
@@ -1286,12 +2003,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         if (link == null)
         {
-            throw new InvalidOperationException("Liên kết báo giá không tồn tại hoặc đã bị thu hồi.");
+            throw new InvalidOperationException("LiÃªn káº¿t bÃ¡o giÃ¡ khÃ´ng tá»“n táº¡i hoáº·c Ä‘Ã£ bá»‹ thu há»“i.");
         }
 
         if (!string.Equals(link.Status, LinkStatusActive, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Liên kết báo giá không còn hiệu lực.");
+            throw new InvalidOperationException("LiÃªn káº¿t bÃ¡o giÃ¡ khÃ´ng cÃ²n hiá»‡u lá»±c.");
         }
 
         if (link.ExpiresAt <= VietnamTime.Now)
@@ -1299,7 +2016,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             link.Status = LinkStatusExpired;
             link.UpdatedAt = VietnamTime.Now;
             await _context.SaveChangesAsync();
-            throw new InvalidOperationException("Báo giá đã hết hiệu lực, vui lòng liên hệ CVDV để cập nhật giá mới.");
+            throw new InvalidOperationException("BÃ¡o giÃ¡ Ä‘Ã£ háº¿t hiá»‡u lá»±c, vui lÃ²ng liÃªn há»‡ CVDV Ä‘á»ƒ cáº­p nháº­t giÃ¡ má»›i.");
         }
 
         return link;
@@ -1308,9 +2025,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private static QuotationPublicViewResponseDto MapPublicQuotationResponse(Quotation quotation)
     {
         var status = quotation.Status ?? StatusDraft;
-        var canAct = string.Equals(status, StatusApproved, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(status, StatusSentToCustomer, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase);
+        var canAct = string.Equals(status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase);
 
         return new QuotationPublicViewResponseDto
         {
@@ -1355,7 +2070,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
         var finalAmount = Math.Round(Math.Max(0, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
         var normalizedPayerType = string.IsNullOrWhiteSpace(dto.PayerType) ? "CUSTOMER" : dto.PayerType.Trim().ToUpperInvariant();
-        var split = CalculateSplitBilling(finalAmount, dto.InsuranceCoveredAmount ?? dto.InsuranceRequestedAmount, dto.CustomerCoveredAmount ?? dto.CustomerCoPayAmount, normalizedPayerType);
+        var split = CalculateSplitBilling(finalAmount, dto.InsuranceCoveredAmount, dto.CustomerCoveredAmount, normalizedPayerType);
 
         return new QuotationDetail
         {
@@ -1377,8 +2092,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             InsuranceCompanyId = dto.InsuranceCompanyId,
             InsuranceCoveredAmount = split.InsuranceCoveredAmount,
             CustomerCoveredAmount = split.CustomerCoveredAmount,
-            InsuranceRequestedAmount = split.InsuranceCoveredAmount,
-            CustomerCoPayAmount = split.CustomerCoveredAmount,
             ApprovalStatus = ApprovalPending,
             IsBlocking = dto.IsBlocking,
             IsMandatory = dto.IsMandatory,
@@ -1451,6 +2164,10 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private static ServiceOrderDetail BuildServiceOrderDetailFromQuotation(QuotationDetail detail, long serviceOrderId, long actorStaffId, DateTime now)
     {
         var normalizedItemType = NormalizeServiceOrderDetailItemType(detail.ItemType);
+        var normalizedPayerType = NormalizeServiceOrderDetailPayerType(
+            detail.PayerType,
+            detail.InsuranceCoveredAmount,
+            detail.CustomerCoveredAmount);
         var itemId = detail.ItemId;
         var standardServiceId = normalizedItemType == "LABOR" && itemId.HasValue && itemId.Value > 0
             ? itemId
@@ -1476,10 +2193,10 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             TaxRate = detail.TaxRate,
             TaxAmount = detail.TaxAmount,
             FinalAmount = detail.FinalAmount,
-            PayerType = detail.PayerType,
+            PayerType = normalizedPayerType,
             InsuranceCompanyId = detail.InsuranceCompanyId,
-            InsuranceRequestedAmount = detail.InsuranceCoveredAmount ?? detail.InsuranceRequestedAmount,
-            CustomerCoPayAmount = detail.CustomerCoveredAmount ?? detail.CustomerCoPayAmount,
+            InsuranceRequestedAmount = detail.InsuranceCoveredAmount,
+            CustomerCoPayAmount = detail.CustomerCoveredAmount,
             Status = nameof(ServiceOrderDetailStatusCode.APPROVED),
             IsReturnOldPart = detail.IsReturnOldPart,
             CreatedAt = now,
@@ -1499,6 +2216,21 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             "SERVICE" or "STANDARD_SERVICE" or "LABOR" => "LABOR",
             _ => "LABOR"
         };
+    }
+
+    private static string NormalizeServiceOrderDetailPayerType(string? payerType, decimal? insuranceAmount, decimal? customerAmount)
+    {
+        var normalized = (payerType ?? string.Empty).Trim().ToUpperInvariant();
+        if (normalized == "INSURANCE" || normalized == "CUSTOMER")
+        {
+            return normalized;
+        }
+
+        // ServiceOrderDetails currently supports only INSURANCE/CUSTOMER.
+        // For split rows, keep accounting split amounts and mark payer by dominant coverage side.
+        var insurance = insuranceAmount ?? 0m;
+        var customer = customerAmount ?? 0m;
+        return insurance > 0m && insurance >= customer ? "INSURANCE" : "CUSTOMER";
     }
 
     private static bool IsMandatoryByUrgency(string? urgency)
@@ -1587,14 +2319,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         quotation.FinalAmount = details.Sum(x => x.FinalAmount);
         quotation.TotalInsuranceAmount = details.Sum(x =>
             x.InsuranceCoveredAmount
-            ?? x.InsuranceRequestedAmount
             ?? (string.Equals(x.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ? x.FinalAmount : 0m));
         quotation.TotalCustomerAmount = details.Sum(x =>
             x.CustomerCoveredAmount
-            ?? x.CustomerCoPayAmount
             ?? (!string.Equals(x.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase)
                 ? x.FinalAmount
-                : Math.Max(0m, x.FinalAmount - (x.InsuranceCoveredAmount ?? x.InsuranceRequestedAmount ?? 0m))));
+                : Math.Max(0m, x.FinalAmount - (x.InsuranceCoveredAmount ?? 0m))));
     }
 
     private async Task RecalculateServiceOrderTotalsAsync(long serviceOrderId, long actorStaffId, DateTime now)
@@ -1639,6 +2369,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             VersionNo = quotation.VersionNo,
             Status = quotation.Status,
             InsuranceClaimNumber = quotation.InsuranceClaimNumber,
+            InsuranceApprovalEvidenceUrl = quotation.InsuranceApprovalEvidenceUrl,
             TechnicalApprovedBy = quotation.TechnicalApprovedBy,
             TechnicalApprovedAt = quotation.TechnicalApprovedAt,
             TeamLeaderApprovalStatus = quotation.TeamLeaderApprovalStatus,
@@ -1657,6 +2388,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             TotalCustomerAmount = quotation.TotalCustomerAmount,
             Warnings = warnings?.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList() ?? new List<string>(),
             IsAppliedToServiceOrder = quotation.IsAppliedToServiceOrder,
+            IsReadyForSplitBilling = quotation.IsReadyForSplitBilling,
+            SplitBillingReadyAt = quotation.SplitBillingReadyAt,
             AppliedAt = quotation.AppliedAt,
             Details = (quotation.QuotationDetails ?? new List<QuotationDetail>())
                 .OrderBy(x => x.Id)
@@ -1680,8 +2413,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                     InsuranceCompanyId = x.InsuranceCompanyId,
                     InsuranceCoveredAmount = x.InsuranceCoveredAmount,
                     CustomerCoveredAmount = x.CustomerCoveredAmount,
-                    InsuranceRequestedAmount = x.InsuranceRequestedAmount,
-                    CustomerCoPayAmount = x.CustomerCoPayAmount,
                     ApprovalStatus = x.ApprovalStatus,
                     RejectReason = x.RejectReason,
                     IsBlocking = x.IsBlocking,
@@ -1693,6 +2424,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         };
     }
 }
+
 
 
 

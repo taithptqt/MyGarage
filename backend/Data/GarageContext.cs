@@ -1994,8 +1994,12 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
             entity.Property(e => e.IsStrictCapacityControl).HasDefaultValue(false);
+            entity.Property(e => e.MinStockLevel).HasColumnType("decimal(18, 3)");
             entity.Property(e => e.Name).HasMaxLength(255);
+            entity.Property(e => e.ReorderPoint).HasColumnType("decimal(18, 3)");
             entity.Property(e => e.RequireEmptyReturn).HasDefaultValue(false);
+            entity.Property(e => e.ConsumableThresholdAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.IsConsumable).HasDefaultValue(false);
             entity.Property(e => e.RetailPrice)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2111,6 +2115,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.ToTable("QC_Inspections");
 
             entity.Property(e => e.FailReason).HasMaxLength(500);
+            entity.Property(e => e.OverallScore).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.QcStaffId).HasColumnName("QC_StaffId");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
@@ -2138,6 +2143,10 @@ public partial class GarageContext : DbContext, IGarageContext
         modelBuilder.Entity<Quotation>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK_Quotations");
+            entity.ToTable("Quotations", t =>
+                t.HasCheckConstraint(
+                    "CK_Quotations_InsuranceApprovalEvidence_Required",
+                    "[Status] <> 'INSURANCE_APPROVED' OR NULLIF(LTRIM(RTRIM([InsuranceApprovalEvidenceUrl])), '') IS NOT NULL"));
 
             entity.HasIndex(e => e.Code, "UQ_Quotations_Code").IsUnique();
 
@@ -2178,10 +2187,14 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasColumnType("decimal(18, 2)");
             // Hotfix for environments where the column is not deployed yet.
             entity.Ignore(e => e.InsuranceClaimNumber);
+            entity.Property(e => e.InsuranceApprovalEvidenceUrl)
+                .HasMaxLength(1000)
+                .IsUnicode(false);
             entity.Property(e => e.RejectReason).HasMaxLength(500);
             entity.Property(e => e.CustomerNotes).HasMaxLength(1000);
             entity.Property(e => e.InternalNotes).HasMaxLength(1000);
             entity.Property(e => e.IsAppliedToServiceOrder).HasDefaultValue(false);
+            entity.Property(e => e.IsReadyForSplitBilling).HasDefaultValue(false);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
@@ -2247,8 +2260,6 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.InsuranceCoveredAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CustomerCoveredAmount).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.InsuranceRequestedAmount).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.CustomerCoPayAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.IsBlocking).HasDefaultValue(true);
             entity.Property(e => e.IsReturnOldPart).HasDefaultValue(false);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
@@ -2308,6 +2319,10 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.Property(e => e.SentToEmail).HasMaxLength(255);
             entity.Property(e => e.ClientNote).HasMaxLength(1000);
+            entity.Property(e => e.OtpCodeHash)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+            entity.Property(e => e.OtpAttemptCount).HasDefaultValue(0);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 

@@ -129,6 +129,32 @@ namespace MyGarage.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, $"BranchInbox_{branchId}");
         }
 
+        public async Task JoinWorkshopBranchGroup(long branchId)
+        {
+            var userId = ResolveCurrentUserId();
+            if (!userId.HasValue)
+            {
+                throw new HubException("Unauthorized.");
+            }
+
+            var role = ResolveCurrentRole();
+            var roleCode = ResolveCurrentRoleCode();
+            if (IsCustomerRole(role, roleCode))
+            {
+                throw new HubException("Forbidden.");
+            }
+
+            var staff = await _context.Staffs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == userId.Value && s.IsDeleted != true);
+            if (staff is null || staff.BranchId != branchId)
+            {
+                throw new HubException("Forbidden.");
+            }
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"WorkshopBranch_{branchId}");
+        }
+
         public async Task JoinUserGroup(long userId)
         {
             var currentUserId = ResolveCurrentUserId();
