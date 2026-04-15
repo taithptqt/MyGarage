@@ -345,23 +345,45 @@
 }
 
 .brand-strip {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 26px;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 56px;
+  padding: 72px 32px 36px;
+  max-width: 1320px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+.brand-tile {
+  flex: 1 0 0;
+  min-width: 180px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 28px 32px;
+  gap: 26px;
 }
 
 .brand-strip img {
   width: 100%;
-  max-height: 14px;
+  max-width: 210px;
+  height: 78px;
   object-fit: contain;
-  opacity: 0.36;
+  opacity: 0.64;
   filter: grayscale(1);
 }
 
+.brand-line {
+  width: 150px;
+  height: 4px;
+  background: #1f4a2f;
+}
+
 .cars-section {
-  padding: 92px 34px 80px;
+  padding: 72px 28px 68px;
+  background: var(--surface-mid);
 }
 
 .cars-head {
@@ -369,17 +391,48 @@
   margin: 0 auto 38px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 24px;
 }
 
 .cars-head h2 {
   margin: 0;
-  max-width: 680px;
+  max-width: none;
   font-family: "Newsreader", serif;
-  font-size: clamp(40px, 5vw, 66px);
-  letter-spacing: -0.025em;
-  line-height: 0.92;
+  font-size: clamp(34px, 3.2vw, 56px);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  line-height: 1.04;
+  text-transform: uppercase;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.cars-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-dot {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid rgba(197, 160, 89, 0.5);
+  background: transparent;
+  color: rgba(29, 42, 38, 0.45);
+  font-size: 24px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.nav-dot.active,
+.nav-dot:hover,
+.nav-dot:focus-visible {
+  border-color: var(--gold);
   color: var(--primary);
 }
 
@@ -387,8 +440,13 @@
   max-width: 1320px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.car-card {
+  background: #f8f4ec;
+  box-shadow: 0 10px 20px rgba(9, 16, 13, 0.08);
 }
 
 .car-image {
@@ -408,27 +466,156 @@
   transform: scale(1.06);
 }
 
-.car-card h3 {
-  margin: 9px 0 12px;
-  font-family: "Newsreader", serif;
-  font-size: 26px;
-  line-height: 1;
-  color: var(--primary);
-}
-
-.car-meta {
-  border-top: 1px solid rgba(26, 38, 33, 0.18);
-  padding-top: 10px;
+.car-content {
+  padding: 24px 18px 28px;
+  text-align: center;
+  min-height: 210px;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  justify-content: center;
   gap: 10px;
 }
 
-.car-meta span {
-  font-size: 9px;
-  letter-spacing: 0.22em;
+.car-card h3 {
+  margin: 0;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-size: clamp(24px, 1.6vw, 34px);
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(29, 42, 38, 0.62);
+  color: var(--primary);
+}
+
+.car-subtitle {
+  margin: 0;
+  color: rgba(29, 42, 38, 0.86);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.car-facts {
+  margin: 20px auto 0;
+  max-width: 220px;
+  color: rgba(29, 42, 38, 0.9);
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.cars-cta-btn {
+  margin: 54px auto 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 22px;
+  border: 2px solid var(--gold);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.cars-section .cars-cta-btn {
+  margin-left: max(calc((100vw - 1320px) / 2), 0px);
+}
+
+.experience-section {
+  position: relative;
+  background:
+    radial-gradient(circle at 8% 18%, rgba(22, 75, 47, 0.24) 0, rgba(22, 75, 47, 0) 28%),
+    linear-gradient(135deg, #032b1d 0%, #053820 55%, #042714 100%);
+  padding: 88px 0 100px;
+  overflow: hidden;
+}
+
+.experience-section::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(160px, 14vw);
+  background-image:
+    radial-gradient(ellipse 36px 62px at 50% 14%, rgba(4, 41, 19, 0.95) 0 52%, transparent 53%),
+    radial-gradient(ellipse 30px 48px at 40% 32%, rgba(4, 41, 19, 0.88) 0 52%, transparent 53%),
+    radial-gradient(ellipse 34px 54px at 64% 52%, rgba(4, 41, 19, 0.92) 0 52%, transparent 53%),
+    radial-gradient(ellipse 28px 44px at 42% 72%, rgba(4, 41, 19, 0.86) 0 52%, transparent 53%),
+    radial-gradient(ellipse 34px 58px at 58% 92%, rgba(4, 41, 19, 0.9) 0 52%, transparent 53%);
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.experience-row {
+  width: min(1520px, calc(100% - 72px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 60px;
+  position: relative;
+  z-index: 1;
+}
+
+.experience-row + .experience-row {
+  margin-top: 64px;
+}
+
+.experience-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 26px 58px rgba(0, 0, 0, 0.42);
+}
+
+.experience-content {
+  color: #f2f5ec;
+  padding: 18px 4px;
+  max-width: 620px;
+}
+
+.experience-content h2 {
+  margin: 0 0 24px;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-size: clamp(34px, 3.3vw, 56px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #f4f7ef;
+  white-space: nowrap;
+}
+
+.experience-content p {
+  margin: 0 0 30px;
+  color: rgba(244, 247, 239, 0.9);
+  font-size: clamp(16px, 1.02vw, 19px);
+  line-height: 1.66;
+  max-width: 600px;
+}
+
+.experience-btn {
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: #f5f0dc;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 16px 26px;
+}
+
+.experience-btn:hover,
+.experience-btn:focus-visible {
+  background: var(--gold);
+  color: #1f2d1b;
 }
 
 .split {
@@ -510,18 +697,21 @@
 }
 
 .partners-grid {
-  max-width: 980px;
+  max-width: 1320px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 48px 56px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 42px 56px;
+  align-items: center;
+  justify-items: center;
 }
 
 .partners-grid img {
-  width: 100%;
-  max-height: 22px;
+  width: clamp(180px, 18vw, 280px);
+  max-width: 100%;
+  height: clamp(84px, 8vw, 120px);
   object-fit: contain;
-  opacity: 0.36;
+  opacity: 0.78;
   filter: grayscale(1);
 }
 
@@ -732,12 +922,28 @@
   }
 
   .cars-grid,
-  .brand-strip,
   .partners-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .cars-head h2 {
+    font-size: clamp(34px, 6vw, 54px);
+    letter-spacing: 0.025em;
+    white-space: normal;
+  }
+
+  .car-subtitle {
+    font-size: 16px;
+  }
+
+  .car-facts {
+    font-size: 14px;
+    max-width: 200px;
+  }
+
   .split,
+  .experience-row,
+  .experience-row.reverse,
   .contact-section-home,
   .footer-columns {
     grid-template-columns: 1fr;
@@ -751,12 +957,37 @@
   .split.reverse .split-content {
     order: initial;
   }
+
+  .experience-section::before {
+    width: 120px;
+    opacity: 0.68;
+  }
+
+  .experience-row {
+    width: min(1520px, calc(100% - 48px));
+    gap: 28px;
+  }
+
+  .experience-row.reverse .experience-media,
+  .experience-row.reverse .experience-content {
+    order: initial;
+  }
+
+  .experience-media {
+    aspect-ratio: 16 / 10;
+  }
+
+  .experience-content {
+    max-width: 620px;
+    padding: 2px 0 8px;
+  }
 }
 
 @media (max-width: 760px) {
   .hero-nav-wrap,
   .cars-section,
   .partners-section,
+  .experience-section,
   .contact-section-home,
   .home-footer {
     padding-left: 16px;
@@ -774,10 +1005,44 @@
   }
 
 
-  .brand-strip,
   .cars-grid,
   .partners-grid {
     grid-template-columns: 1fr;
+  }
+
+  .cars-head {
+    align-items: flex-start;
+  }
+
+  .cars-head h2 {
+    font-size: clamp(30px, 10vw, 40px);
+    letter-spacing: 0.02em;
+    line-height: 1.08;
+  }
+
+  .car-content {
+    min-height: 180px;
+    padding: 18px 14px 20px;
+  }
+
+  .car-card h3 {
+    font-size: 28px;
+  }
+
+  .car-facts {
+    font-size: 13px;
+    max-width: 180px;
+  }
+
+  .cars-nav {
+    margin-top: 8px;
+  }
+
+  .cars-cta-btn,
+  .cars-section .cars-cta-btn {
+    margin-left: 0;
+    margin-top: 30px;
+    width: 100%;
   }
 
   .cars-head,
@@ -789,5 +1054,45 @@
   .hero-scroll {
     right: 8px;
     bottom: 18px;
+  }
+
+  .experience-section {
+    padding-top: 56px;
+    padding-bottom: 60px;
+  }
+
+  .experience-section::before {
+    display: none;
+  }
+
+  .experience-row {
+    width: 100%;
+    gap: 16px;
+  }
+
+  .experience-row + .experience-row {
+    margin-top: 30px;
+  }
+
+  .experience-media {
+    aspect-ratio: 16 / 11;
+  }
+
+  .experience-content h2 {
+    font-size: clamp(32px, 12vw, 46px);
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+    white-space: normal;
+  }
+
+  .experience-content p {
+    font-size: 14px;
+    line-height: 1.62;
+    margin-bottom: 20px;
+  }
+
+  .experience-btn {
+    width: 100%;
+    max-width: 210px;
   }
 }

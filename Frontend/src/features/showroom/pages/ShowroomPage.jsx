@@ -8,13 +8,22 @@ const ShowroomPage = () => {
     <main className="bg-surface">
       <Header />
 
-      <header className="relative w-full h-[716px] flex items-center justify-center overflow-hidden pt-[180px] bg-primary">
+      <header className="relative w-full h-screen min-h-[100svh] flex items-center justify-center overflow-hidden pt-[180px] bg-primary">
         <div className="absolute inset-0 bg-primary/60 z-10"></div>
-        <img
-          alt="Luxury Garage Hero"
+        <video
           className="absolute inset-0 w-full h-full object-cover"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZO_wUvoCfqzL0eHg496AZJnIrDUKkMT7y9nckwjd4pj_C-RSTXJcS9PKEJBgsi7XOzp1yerfZ3GdRii-Y5jGeqVweeDkwZiHSxlOFItN647rHd5MtUlSkPzKIxnGtpMsjCB9lITnPASGXoS2cbCOrTFibybp-qxxrC4r_YppSb-WKWn2y-acDon6KXBnaf7RiIswVJi9U_arnQWf4g_cTsyn6ZuZpNFC4Kiy5w8j_gVjsnP-6eVJsEem7yyyhLXmlGVcTEgVHuMgV"
-        />
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-label="Luxury Garage Hero Video"
+        >
+          <source
+            src="https://mygarage.skaevt.com/wp-content/uploads/2025/01/MG_storage_4K_downscaled_V1.mp4"
+            type="video/mp4"
+          />
+        </video>
         <div className="relative z-20 text-center px-6">
           <h1 className="font-serif text-5xl md:text-7xl font-light text-white uppercase tracking-wider mb-4">PRIVATE AUTOMOTIVE STORAGE</h1>
           <p className="font-sans text-surface text-sm md:text-base tracking-[0.2rem] uppercase font-bold">WHERE YOUR COLLECTION IS TREATED AS TREASURE</p>
