@@ -2,7 +2,6 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
-  deleteStaff,
   getAllRoles,
   getAllStaff,
   updateStaff
@@ -11,10 +10,8 @@ import {
   createCustomerVehicle,
   createCustomer,
   createVehicle,
-  deleteCustomerVehicle,
   getAllCustomerTiers,
   getAllCustomerVehicles,
-  deleteCustomer,
   getAllCustomers,
   getAllVehicles,
   updateVehicle,
@@ -40,7 +37,6 @@ import {
 } from "@features/admin/api/serviceApi";
 import {
   createBranch,
-  deleteBranch,
   getAllBranches,
   updateBranch
 } from "@features/admin/api/branchApi";
@@ -122,40 +118,40 @@ const EMPTY_BRANCH_FORM = {
 
 const SECTION_META = {
   staff: {
-    title: "Staff Management",
-    subtitle: "Manage internal staff accounts and role assignment",
-    addLabel: "+ Add Staff",
-    searchPlaceholder: "Search staff by name, email, phone or role..."
+    title: "Quản lý nhân sự",
+    subtitle: "Quản trị tài khoản nhân sự nội bộ và vai trò làm việc",
+    addLabel: "+ Thêm nhân sự",
+    searchPlaceholder: "Tìm theo tên, email, số điện thoại hoặc vai trò..."
   },
   branches: {
-    title: "Branch Management",
-    subtitle: "Configure branch information and operating setup",
-    addLabel: "+ Add Branch",
-    searchPlaceholder: "Search branch by name, address, hotline or email..."
+    title: "Quản lý chi nhánh",
+    subtitle: "Cấu hình thông tin chi nhánh và vận hành",
+    addLabel: "+ Thêm chi nhánh",
+    searchPlaceholder: "Tìm chi nhánh theo tên, địa chỉ, hotline hoặc email..."
   },
   customers: {
-    title: "Users (Customers)",
-    subtitle: "Manage customer accounts only",
-    addLabel: "+ Add Customer",
-    searchPlaceholder: "Search by name, phone, tier, plate, brand or model..."
+    title: "Quản lý khách hàng",
+    subtitle: "Quản trị tài khoản khách hàng",
+    addLabel: "+ Thêm khách hàng",
+    searchPlaceholder: "Tìm theo tên, số điện thoại, hạng, biển số, hãng hoặc dòng xe..."
   },
   brands: {
-    title: "Vehicle Brands",
-    subtitle: "Manage car brands for service catalog",
-    addLabel: "+ Add Brand",
-    searchPlaceholder: "Search by code, brand name or country..."
+    title: "Quản lý hãng xe",
+    subtitle: "Quản trị danh sách hãng xe dùng trong hệ thống",
+    addLabel: "+ Thêm hãng xe",
+    searchPlaceholder: "Tìm theo mã, tên hãng hoặc quốc gia..."
   },
   models: {
-    title: "Vehicle Models",
-    subtitle: "Manage car models for each brand",
-    addLabel: "+ Add Model",
-    searchPlaceholder: "Search by model, segment or fuel type..."
+    title: "Quản lý dòng xe",
+    subtitle: "Quản trị dòng xe theo từng hãng",
+    addLabel: "+ Thêm dòng xe",
+    searchPlaceholder: "Tìm theo dòng xe, phân khúc hoặc nhiên liệu..."
   },
   services: {
-    title: "Service Management",
-    subtitle: "Manage repair and maintenance service catalog",
-    addLabel: "+ Add Service",
-    searchPlaceholder: "Search by code, service name, category or status..."
+    title: "Quản lý dịch vụ",
+    subtitle: "Quản trị danh mục dịch vụ sửa chữa và bảo dưỡng",
+    addLabel: "+ Thêm dịch vụ",
+    searchPlaceholder: "Tìm theo mã, tên dịch vụ, nhóm dịch vụ hoặc trạng thái..."
   }
 };
 
@@ -207,10 +203,10 @@ function ConfirmDialog({ message, onConfirm, onCancel, loading }) {
       <p>{message}</p>
       <div className="form-actions">
         <button className="btn-ghost" onClick={onCancel} type="button" disabled={loading}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-danger" onClick={onConfirm} type="button" disabled={loading}>
-          {loading ? "Deleting..." : "Delete"}
+          {loading ? "Đang xóa..." : "Xóa"}
         </button>
       </div>
     </div>
@@ -239,11 +235,11 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Full Name *</label>
+        <label>Họ và tên *</label>
         <input name="fullName" value={form.fullName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Phone *</label>
+        <label>Số điện thoại *</label>
         <input
           name="phone"
           type="tel"
@@ -260,18 +256,18 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Role *</label>
+        <label>Vai trò *</label>
         <select name="roleId" value={form.roleId} onChange={handleChange} required>
-          <option value="">Select role</option>
+          <option value="">Chọn vai trò</option>
           {roles.map((role) => (
             <option key={role.id} value={role.id}>
-              {role.roleName || role.roleCode || `Role #${role.id}`}
+              {role.roleName || role.roleCode || `Vai trò #${role.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>{initial.id ? "New Password (optional)" : "Password *"}</label>
+        <label>{initial.id ? "Mật khẩu mới (không bắt buộc)" : "Mật khẩu *"}</label>
         <input
           name="password"
           type="password"
@@ -281,20 +277,20 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="suspended">Suspended</option>
+          <option value="active">Đang hoạt động</option>
+          <option value="inactive">Ngừng hoạt động</option>
+          <option value="suspended">Tạm khóa</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -343,11 +339,11 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Full Name *</label>
+        <label>Họ và tên *</label>
         <input name="fullName" value={form.fullName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Phone *</label>
+        <label>Số điện thoại *</label>
         <input
           name="phone"
           type="tel"
@@ -375,7 +371,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>{initial.id ? "New Password (optional)" : "Password *"}</label>
+        <label>{initial.id ? "Mật khẩu mới (không bắt buộc)" : "Mật khẩu *"}</label>
         <input
           name="password"
           type="password"
@@ -401,7 +397,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
           <option value="">Chọn hãng xe</option>
           {brands.map((brand) => (
             <option key={brand.id} value={brand.id}>
-              {brand.name || brand.code || `Brand #${brand.id}`}
+              {brand.name || brand.code || `Hãng #${brand.id}`}
             </option>
           ))}
         </select>
@@ -437,23 +433,23 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         <input name="note" value={form.note || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="true">Đang hoạt động</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -513,11 +509,11 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
         <input name="code" value={form.code || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Brand Name *</label>
+        <label>Tên hãng *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Country Of Origin</label>
+        <label>Quốc gia</label>
         <input
           name="countryOfOrigin"
           value={form.countryOfOrigin || ""}
@@ -529,36 +525,36 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
         <input name="logoUrl" value={form.logoUrl || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Upload Logo</label>
+        <label>Tải logo</label>
         <input type="file" accept="image/*" onChange={handleImageUpload} />
         {uploadingImage ? <small>Đang tải ảnh...</small> : null}
         {cropSource ? <small>Vui lòng cắt ảnh trước khi lưu.</small> : null}
         {form.logoUrl ? (
           <img
             src={form.logoUrl}
-            alt="Logo preview"
+            alt="Xem trước logo"
             style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, marginTop: 8 }}
           />
         ) : null}
       </div>
       <div className="form-group">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="true">Đang hoạt động</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
       {cropSource ? (
@@ -594,30 +590,30 @@ function VehicleModelForm({ initial, brands, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Brand *</label>
+        <label>Hãng xe *</label>
         <select name="brandId" value={form.brandId} onChange={handleChange} required>
-          <option value="">Select a brand</option>
+          <option value="">Chọn hãng xe</option>
           {brands.map((brand) => (
             <option key={brand.id} value={brand.id}>
-              {brand.name || brand.code || `Brand #${brand.id}`}
+              {brand.name || brand.code || `Hãng #${brand.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Model Name *</label>
+        <label>Tên dòng xe *</label>
         <input name="modelName" value={form.modelName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Segment</label>
+        <label>Phân khúc</label>
         <input name="segment" value={form.segment || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Fuel Type</label>
+        <label>Loại nhiên liệu</label>
         <input name="fuelType" value={form.fuelType || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Cylinder Capacity</label>
+        <label>Dung tích xi-lanh</label>
         <input
           name="cylinderCapacity"
           value={form.cylinderCapacity || ""}
@@ -627,10 +623,10 @@ function VehicleModelForm({ initial, brands, onSubmit, onCancel, loading }) {
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -676,28 +672,28 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Service Code *</label>
+        <label>Mã dịch vụ *</label>
         <input name="code" value={form.code || ""} onChange={handleChange} required />
-        <small className="form-helper">Codes starting with PKG- belong to Packages and should not be created here.</small>
+        <small className="form-helper">Mã bắt đầu bằng PKG- thuộc gói dịch vụ, không tạo mới tại đây.</small>
         {codeError ? <small className="form-error-text">{codeError}</small> : null}
       </div>
       <div className="form-group">
-        <label>Service Name *</label>
+        <label>Tên dịch vụ *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Category *</label>
+        <label>Nhóm dịch vụ *</label>
         <select name="categoryId" value={form.categoryId} onChange={handleChange} required>
-          <option value="">Select category</option>
+          <option value="">Chọn nhóm dịch vụ</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name || category.code || `Category #${category.id}`}
+              {category.name || category.code || `Nhóm #${category.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Base Price</label>
+        <label>Giá cơ bản</label>
         <input
           name="basePrice"
           type="number"
@@ -708,7 +704,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Estimated Minutes *</label>
+        <label>Thời lượng dự kiến (phút) *</label>
         <input
           name="standardMinutes"
           type="number"
@@ -719,27 +715,27 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Description</label>
+        <label>Mô tả</label>
         <input name="description" value={form.description || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="true">Đang hoạt động</option>
+          <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading || Boolean(codeError)}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -771,11 +767,11 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Branch Name *</label>
+        <label>Tên chi nhánh *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Address</label>
+        <label>Địa chỉ</label>
         <input name="address" value={form.address || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
@@ -795,7 +791,7 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Max Work Slots</label>
+        <label>Số ô làm việc tối đa</label>
         <input
           name="maxWorkSlots"
           type="number"
@@ -805,23 +801,23 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Status</label>
+        <label>Trạng thái</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="active">Đang hoạt động</option>
+          <option value="inactive">Ngừng hoạt động</option>
         </select>
       </div>
       <div className="form-group">
-        <label>Description</label>
+        <label>Mô tả</label>
         <input name="description" value={form.description || ""} onChange={handleChange} />
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -834,6 +830,15 @@ function getStatusBadge(status) {
   if (normalized === "suspended") return "badge-suspended";
   if (normalized === "deleted") return "badge-deleted";
   return "badge-inactive";
+}
+
+function getStatusLabel(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "active" || normalized === "true") return "Đang hoạt động";
+  if (normalized === "inactive" || normalized === "false") return "Ngừng hoạt động";
+  if (normalized === "suspended") return "Tạm khóa";
+  if (normalized === "deleted") return "Đã xóa";
+  return status || "-";
 }
 
 function fileToDataUrl(file) {
@@ -964,7 +969,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const roleNameMap = useMemo(() => {
     const map = new Map();
-    (roles || []).forEach((role) => map.set(role.id, role.roleName || role.roleCode || `Role #${role.id}`));
+    (roles || []).forEach((role) => map.set(role.id, role.roleName || role.roleCode || `Vai trò #${role.id}`));
     return map;
   }, [roles]);
 
@@ -990,14 +995,14 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const brandNameMap = useMemo(() => {
     const map = new Map();
-    (brands || []).forEach((brand) => map.set(brand.id, brand.name || brand.code || `Brand #${brand.id}`));
+    (brands || []).forEach((brand) => map.set(brand.id, brand.name || brand.code || `Hãng #${brand.id}`));
     return map;
   }, [brands]);
 
   const serviceCategoryNameMap = useMemo(() => {
     const map = new Map();
     (serviceCategories || []).forEach((item) => {
-      map.set(item.id, item.name || item.code || `Category #${item.id}`);
+      map.set(item.id, item.name || item.code || `Nhóm #${item.id}`);
     });
     return map;
   }, [serviceCategories]);
@@ -1248,7 +1253,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         else await updateBranch(modal.item.id, payload);
       } else if (modal.entity === "staff") {
         if (!selectedBranchId) {
-          throw new Error("Please select a branch before creating/updating staff.");
+          throw new Error("Vui lòng chọn chi nhánh trước khi thêm/cập nhật nhân sự.");
         }
         const phone = String(formData.phone || "").trim();
         const email = String(formData.email || "").trim();
@@ -1342,16 +1347,16 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (modal.mode === "create") await createVehicleBrand(formData);
         else await updateVehicleBrand(modal.item.id, formData);
       } else if (modal.entity === "model") {
-        if (!formData.brandId || Number.isNaN(formData.brandId)) throw new Error("Brand is required.");
+        if (!formData.brandId || Number.isNaN(formData.brandId)) throw new Error("Vui lòng chọn hãng xe.");
 
         if (modal.mode === "create") await createVehicleModel(formData);
         else await updateVehicleModel(modal.item.id, formData);
       } else {
         if (!formData.categoryId || Number.isNaN(formData.categoryId)) {
-          throw new Error("Service category is required.");
+          throw new Error("Vui lòng chọn nhóm dịch vụ.");
         }
         if (!formData.standardMinutes || Number(formData.standardMinutes) <= 0) {
-          throw new Error("Estimated minutes must be greater than 0.");
+          throw new Error("Thời lượng dự kiến phải lớn hơn 0.");
         }
 
         const payload = {
@@ -1371,7 +1376,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       await reloadSectionData(modal.entity);
       closeModal();
     } catch (apiError) {
-      setFormError(apiError.message || "Save failed.");
+      setFormError(apiError.message || "Lưu dữ liệu thất bại.");
     } finally {
       setSaving(false);
     }
@@ -1383,23 +1388,14 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     setFormError("");
 
     try {
-      if (modal.entity === "branch") await deleteBranch(modal.item.id);
-      else if (modal.entity === "staff") await deleteStaff(modal.item.id);
-      else if (modal.entity === "customer") {
-        const links = customerVehicles.filter((link) => link.customerId === modal.item.id);
-        for (const link of links) {
-          await deleteCustomerVehicle(link.id);
-        }
-        await deleteCustomer(modal.item.id);
-      }
-      else if (modal.entity === "brand") await deleteVehicleBrand(modal.item.id);
+      if (modal.entity === "brand") await deleteVehicleBrand(modal.item.id);
       else if (modal.entity === "model") await deleteVehicleModel(modal.item.id);
       else await deleteStandardService(modal.item.id);
 
       await reloadSectionData(modal.entity);
       closeModal();
     } catch (apiError) {
-      setFormError(apiError.message || "Delete failed.");
+      setFormError(apiError.message || "Xóa dữ liệu thất bại.");
     } finally {
       setSaving(false);
     }
@@ -1417,25 +1413,25 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
             <nav className="sidebar-nav">
               <button className={`nav-item ${section === "branches" ? "active" : ""}`} type="button" onClick={() => { setSection("branches"); }}>
-                Branches
+                Chi nhánh
               </button>
               <button className={`nav-item ${section === "staff" ? "active" : ""}`} type="button" onClick={() => { setSection("staff"); }}>
-                Staff
+                Nhân sự
               </button>
               <button className={`nav-item ${section === "customers" ? "active" : ""}`} type="button" onClick={() => { setSection("customers"); }}>
-                Users
+                Khách hàng
               </button>
               <button className={`nav-item ${section === "brands" ? "active" : ""}`} type="button" onClick={() => { setSection("brands"); }}>
-                Vehicle Brands
+                Hãng xe
               </button>
               <button className={`nav-item ${section === "models" ? "active" : ""}`} type="button" onClick={() => { setSection("models"); }}>
-                Vehicle Models
+                Dòng xe
               </button>
               <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
-                Services
+                Dịch vụ
               </button>
               <button className="nav-item" type="button" onClick={handleLogout}>
-                Logout
+                Đăng xuất
               </button>
             </nav>
         </aside>
@@ -1447,7 +1443,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <h1>{sectionMeta.title}</h1>
             <p className="header-sub">{sectionMeta.subtitle}</p>
             {selectedBranch?.name && section !== "branches" && (
-              <p className="header-sub">Current branch: {selectedBranch.name}</p>
+              <p className="header-sub">Chi nhánh đang chọn: {selectedBranch.name}</p>
             )}
           </div>
           <button className="btn-primary" onClick={handleCreateClick} type="button">
@@ -1458,64 +1454,64 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         <div className="stats-bar">
           {section === "branches" && (
             <>
-              <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Total Branches</div></div>
-              <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Selected Branch</div></div>
+              <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Tổng chi nhánh</div></div>
+              <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Chi nhánh đã chọn</div></div>
             </>
           )}
 
           {section === "staff" && (
             <>
-              <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Total Staff</div></div>
-              <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Roles Used</div></div>
+              <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Tổng nhân sự</div></div>
+              <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Số vai trò sử dụng</div></div>
             </>
           )}
 
           {section === "customers" && (
             <>
-              <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Total Customers</div></div>
-              <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Tier Levels</div></div>
+              <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Tổng khách hàng</div></div>
+              <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Số hạng khách hàng</div></div>
             </>
           )}
 
           {section === "brands" && (
             <>
-              <div className="stat-card"><div className="stat-value">{brands.length}</div><div className="stat-label">Total Brands</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === false).length}</div><div className="stat-label">Inactive</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.length}</div><div className="stat-label">Tổng hãng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === false).length}</div><div className="stat-label">Ngừng hoạt động</div></div>
             </>
           )}
 
           {section === "models" && (
             <>
-              <div className="stat-card"><div className="stat-value">{models.length}</div><div className="stat-label">Total Models</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(models.map((item) => item.brandId)).size}</div><div className="stat-label">Brand Coverage</div></div>
-              <div className="stat-card"><div className="stat-value">{models.filter((item) => !item.isDeleted).length}</div><div className="stat-label">Active Models</div></div>
+              <div className="stat-card"><div className="stat-value">{models.length}</div><div className="stat-label">Tổng dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{new Set(models.map((item) => item.brandId)).size}</div><div className="stat-label">Số hãng có dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{models.filter((item) => !item.isDeleted).length}</div><div className="stat-label">Dòng xe đang dùng</div></div>
             </>
           )}
 
           {section === "services" && (
             <>
-              <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Total Services</div></div>
-              <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Active</div></div>
-              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Categories</div></div>
+              <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Tổng dịch vụ</div></div>
+              <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Số nhóm dịch vụ</div></div>
             </>
           )}
         </div>
 
         <div className="table-toolbar">
-          <span className="result-count">{visibleRows.length} result(s)</span>
+          <span className="result-count">{visibleRows.length} kết quả</span>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="table-wrapper">
           {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Loading data...</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang tải dữ liệu...</p></div>
           ) : visibleRows.length === 0 ? (
-            <div className="empty-state"><p>No records found.</p></div>
+            <div className="empty-state"><p>Không có dữ liệu phù hợp.</p></div>
           ) : (
             <table className="admin-table">
               {section === "branches" && (
@@ -1523,13 +1519,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Name</th>
-                      <th>Address</th>
+                      <th>Tên chi nhánh</th>
+                      <th>Địa chỉ</th>
                       <th>Hotline</th>
                       <th>Email</th>
-                      <th>Status</th>
-                      <th>Max Slots</th>
-                      <th className="th-center">Actions</th>
+                      <th>Trạng thái</th>
+                      <th>Số ô tối đa</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1540,12 +1536,11 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.address || "-"}</td>
                         <td>{item.hotline || "-"}</td>
                         <td className="td-email">{item.email || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{getStatusLabel(item.status)}</span></td>
                         <td>{item.maxWorkSlots ?? "-"}</td>
                         <td className="td-center">
                           <div className="row-actions">
-                            <button className="btn-icon btn-edit" type="button" onClick={() => openModal("branch", "edit", item)}>Edit</button>
-                            <button className="btn-icon btn-del" type="button" onClick={() => openModal("branch", "delete", item)}>Del</button>
+                            <button className="btn-icon btn-edit" type="button" onClick={() => openModal("branch", "edit", item)}>Sửa</button>
                           </div>
                         </td>
                       </tr>
@@ -1556,15 +1551,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "staff" && (
                 <>
-                  <thead><tr><th>ID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Họ và tên</th><th>Số điện thoại</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.fullName || "-"}</td><td>{item.phone || "-"}</td><td className="td-email">{item.email || "-"}</td>
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{getStatusLabel(item.status)}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1576,16 +1571,16 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Full Name</th>
-                      <th>Phone</th>
+                      <th>Họ và tên</th>
+                      <th>Số điện thoại</th>
                       <th>Email</th>
-                      <th>Tier</th>
-                      <th>Plate</th>
-                      <th>Brand</th>
-                      <th>Model</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th className="th-center">Actions</th>
+                      <th>Hạng</th>
+                      <th>Biển số</th>
+                      <th>Hãng xe</th>
+                      <th>Dòng xe</th>
+                      <th>Trạng thái</th>
+                      <th>Ngày tạo</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1596,9 +1591,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.licensePlate || "-"}</td>
                         <td>{item.brandName || "-"}</td>
                         <td>{item.modelName || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1607,12 +1602,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "brands" && (
                 <>
-                  <thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Country</th><th>Status</th><th>Updated</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Mã</th><th>Tên hãng</th><th>Quốc gia</th><th>Trạng thái</th><th>Cập nhật</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
                         <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>Xóa</button></div></td>
                       </tr>
@@ -1623,11 +1618,11 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "models" && (
                 <>
-                  <thead><tr><th>ID</th><th>Brand</th><th>Model</th><th>Segment</th><th>Fuel</th><th>Cylinder</th><th className="th-center">Actions</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Hãng xe</th><th>Dòng xe</th><th>Phân khúc</th><th>Nhiên liệu</th><th>Dung tích xi-lanh</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
-                        <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Brand #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
+                        <td className="td-id">#{item.id}</td><td>{brandNameMap.get(item.brandId) || `Hãng #${item.brandId}`}</td><td>{item.modelName || "-"}</td><td>{item.segment || "-"}</td><td>{item.fuelType || "-"}</td><td>{item.cylinderCapacity || "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("model", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("model", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1640,13 +1635,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Code</th>
-                      <th>Service Name</th>
-                      <th>Category</th>
-                      <th>Price</th>
-                      <th>Est. Time</th>
-                      <th>Status</th>
-                      <th className="th-center">Actions</th>
+                      <th>Mã</th>
+                      <th>Tên dịch vụ</th>
+                      <th>Nhóm dịch vụ</th>
+                      <th>Giá</th>
+                      <th>Thời lượng</th>
+                      <th>Trạng thái</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1655,10 +1650,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td>
                         <td>{item.code || "-"}</td>
                         <td>{item.name || "-"}</td>
-                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Category #${item.categoryId}`}</td>
+                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Nhóm #${item.categoryId}`}</td>
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
-                        <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
+                        <td>{item.standardMinutes ? `${item.standardMinutes} phút` : "-"}</td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1682,7 +1677,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       </main>
 
       {modal?.mode === "create" && (
-        <Modal title={modal.entity === "branch" ? "Add Branch" : modal.entity === "staff" ? "Add Staff" : modal.entity === "customer" ? "Add Customer" : modal.entity === "brand" ? "Add Vehicle Brand" : modal.entity === "model" ? "Add Vehicle Model" : "Add Service"} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? "Thêm chi nhánh" : modal.entity === "staff" ? "Thêm nhân sự" : modal.entity === "customer" ? "Thêm khách hàng" : modal.entity === "brand" ? "Thêm hãng xe" : modal.entity === "model" ? "Thêm dòng xe" : "Thêm dịch vụ"} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && <BranchForm initial={EMPTY_BRANCH_FORM} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
@@ -1705,7 +1700,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       {modal?.mode === "edit" && modal.item && (
-        <Modal title={modal.entity === "branch" ? `Edit Branch #${modal.item.id}` : modal.entity === "staff" ? `Edit Staff #${modal.item.id}` : modal.entity === "customer" ? `Edit Customer #${modal.item.id}` : modal.entity === "brand" ? `Edit Brand #${modal.item.id}` : modal.entity === "model" ? `Edit Model #${modal.item.id}` : `Edit Service #${modal.item.id}`} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? `Sửa chi nhánh #${modal.item.id}` : modal.entity === "staff" ? `Sửa nhân sự #${modal.item.id}` : modal.entity === "customer" ? `Sửa khách hàng #${modal.item.id}` : modal.entity === "brand" ? `Sửa hãng xe #${modal.item.id}` : modal.entity === "model" ? `Sửa dòng xe #${modal.item.id}` : `Sửa dịch vụ #${modal.item.id}`} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && (
@@ -1803,9 +1798,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       {modal?.mode === "delete" && modal.item && (
-        <Modal title="Confirm Delete" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
-          <ConfirmDialog message={`Delete this ${modal.entity} record (#${modal.item.id})?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
+          <ConfirmDialog message={`Bạn có chắc muốn xóa bản ghi ${modal.entity} (#${modal.item.id})?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>
