@@ -343,53 +343,72 @@ public class SalaryAdminController : ControllerBase
                 new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
                 new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive)
             ])).FirstOrDefault();
-        if (overlapping is not null)
-        {
-            return Conflict(new { message = "Staff already has an active salary profile for the selected effective date." });
-        }
+        var overlappingProfileId = ToNullableLong(overlapping?.GetValueOrDefault("id"));
+        var updatedExistingProfile = overlappingProfileId.HasValue && overlappingProfileId.Value > 0;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
-            await _crud.ExecuteAsync(
-                """
-                INSERT INTO dbo.staff_salary_profiles
-                (
-                    staff_id,
-                    branch_id,
-                    base_salary,
-                    effective_from,
-                    effective_to,
-                    status,
-                    note,
-                    updated_by,
-                    created_at,
-                    updated_at
-                )
-                VALUES
-                (
-                    @staffId,
-                    @branchId,
-                    @baseSalary,
-                    @effectiveFrom,
-                    NULL,
-                    @staffSalaryStatusActive,
-                    @note,
-                    @updatedBy,
-                    SYSDATETIME(),
-                    SYSDATETIME()
-                );
-                """,
-                [
-                    new SqlParameter("@staffId", staffId.Value),
-                    new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
-                    new SqlParameter("@baseSalary", baseSalary.Value),
-                    new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
-                    new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
-                    new SqlParameter("@note", (object?)note ?? DBNull.Value),
-                    new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value),
-                    new SqlParameter("@activeStatus", nameof(AccountingStatus.ACTIVE))
-                ]);
+            if (updatedExistingProfile)
+            {
+                await _crud.ExecuteAsync(
+                    """
+                    UPDATE dbo.staff_salary_profiles
+                    SET
+                        base_salary = @baseSalary,
+                        note = @note,
+                        updated_by = @updatedBy,
+                        updated_at = SYSDATETIME()
+                    WHERE id = @profileId;
+                    """,
+                    [
+                        new SqlParameter("@profileId", overlappingProfileId!.Value),
+                        new SqlParameter("@baseSalary", baseSalary.Value),
+                        new SqlParameter("@note", (object?)note ?? DBNull.Value),
+                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
+                    ]);
+            }
+            else
+            {
+                await _crud.ExecuteAsync(
+                    """
+                    INSERT INTO dbo.staff_salary_profiles
+                    (
+                        staff_id,
+                        branch_id,
+                        base_salary,
+                        effective_from,
+                        effective_to,
+                        status,
+                        note,
+                        updated_by,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES
+                    (
+                        @staffId,
+                        @branchId,
+                        @baseSalary,
+                        @effectiveFrom,
+                        NULL,
+                        @staffSalaryStatusActive,
+                        @note,
+                        @updatedBy,
+                        SYSDATETIME(),
+                        SYSDATETIME()
+                    );
+                    """,
+                    [
+                        new SqlParameter("@staffId", staffId.Value),
+                        new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
+                        new SqlParameter("@baseSalary", baseSalary.Value),
+                        new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
+                        new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
+                        new SqlParameter("@note", (object?)note ?? DBNull.Value),
+                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
+                    ]);
+            }
 
             await _crud.ExecuteAsync(
                 """
@@ -417,7 +436,9 @@ public class SalaryAdminController : ControllerBase
 
         return Ok(new
         {
-            message = "Initial salary request approved and salary profile created.",
+            message = updatedExistingProfile
+                ? "Initial salary request approved and active salary profile updated."
+                : "Initial salary request approved and salary profile created.",
             requestId = id,
             staffId = staffId.Value,
             baseSalary = baseSalary.Value,

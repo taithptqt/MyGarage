@@ -270,9 +270,12 @@ export async function getStaffSalaryCoefficient(staffId, asOfDate) {
   });
 }
 
-export async function getStaffBaseSalary(staffId, asOfDate) {
+export async function getStaffBaseSalary(staffId, asOfDate, options = {}) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
+  if (typeof options.includeTierFallback === "boolean") {
+    params.includeTierFallback = options.includeTierFallback;
+  }
   return request({
     url: `/api/accounting/staff-salary/${staffId}/base`,
     method: "GET",

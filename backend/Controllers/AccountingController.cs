@@ -679,7 +679,10 @@ public class AccountingController : ControllerBase
     }
 
     [HttpGet("staff-salary/{staffId:long}/base")]
-    public async Task<IActionResult> StaffBaseSalary(long staffId, [FromQuery] DateTime? asOfDate = null)
+    public async Task<IActionResult> StaffBaseSalary(
+        long staffId,
+        [FromQuery] DateTime? asOfDate = null,
+        [FromQuery] bool includeTierFallback = true)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
 
@@ -690,7 +693,8 @@ public class AccountingController : ControllerBase
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
         var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
-        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
+        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf, includeTierFallback);
+        var hasBaseSalary = baseSalary.HasValue && baseSalary.Value > 0m;
 
         return Ok(new
         {
@@ -698,7 +702,9 @@ public class AccountingController : ControllerBase
             staffName = staff.FullName,
             branchId = staff.BranchId,
             asOfDate = asOf.ToString("yyyy-MM-dd"),
-            baseSalary
+            includeTierFallback,
+            hasBaseSalary,
+            baseSalary = hasBaseSalary ? baseSalary!.Value : 0m
         });
     }
 
@@ -768,11 +774,6 @@ public class AccountingController : ControllerBase
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
         var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? VietnamTime.Now).Date);
-        var existingBaseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, effectiveFromDate);
-        if (existingBaseSalary.HasValue && existingBaseSalary.Value > 0m)
-        {
-            return BadRequest(new { message = "Staff already has an active base salary profile for the selected effective date." });
-        }
 
         var pendingRequest = (await _crud.QueryAsync(
             $"""
@@ -866,7 +867,7 @@ public class AccountingController : ControllerBase
             staffName = staff.FullName,
             baseSalary = requestedBaseSalary,
             effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
-            message = "Initial salary request has been sent to admin for approval."
+            message = "Da gui duyet thanh cong. Yeu cau da chuyen den Admin de phe duyet."
         });
     }
 
@@ -2115,7 +2116,11 @@ public class AccountingController : ControllerBase
         return null;
     }
 
-    private async Task<decimal?> ResolveStaffBaseSalaryAsync(long staffId, long? branchId, DateOnly asOfDate)
+    private async Task<decimal?> ResolveStaffBaseSalaryAsync(
+        long staffId,
+        long? branchId,
+        DateOnly asOfDate,
+        bool includeTierFallback = true)
     {
         var asOf = asOfDate.ToDateTime(TimeOnly.MinValue);
 
@@ -2163,18 +2168,21 @@ public class AccountingController : ControllerBase
             if (baseSalary > 0m) return baseSalary;
         }
 
-        // Keep this fallback consistent with PayrollBatchCalculationService.
-        var tierBaseSalary = await (
-            from staff in _db.Staffs.AsNoTracking()
-            join tier in _db.StaffTiers.AsNoTracking() on staff.StaffTierId equals tier.Id
-            where staff.Id == staffId
-                  && staff.IsDeleted != true
-                  && tier.IsDeleted != true
-                  && tier.BaseSalary.HasValue
-                  && tier.BaseSalary.Value > 0m
-            select (decimal?)tier.BaseSalary!.Value
-        ).FirstOrDefaultAsync();
-        if (tierBaseSalary.HasValue && tierBaseSalary.Value > 0m) return tierBaseSalary.Value;
+        if (includeTierFallback)
+        {
+            // Keep this fallback consistent with PayrollBatchCalculationService.
+            var tierBaseSalary = await (
+                from staff in _db.Staffs.AsNoTracking()
+                join tier in _db.StaffTiers.AsNoTracking() on staff.StaffTierId equals tier.Id
+                where staff.Id == staffId
+                      && staff.IsDeleted != true
+                      && tier.IsDeleted != true
+                      && tier.BaseSalary.HasValue
+                      && tier.BaseSalary.Value > 0m
+                select (decimal?)tier.BaseSalary!.Value
+            ).FirstOrDefaultAsync();
+            if (tierBaseSalary.HasValue && tierBaseSalary.Value > 0m) return tierBaseSalary.Value;
+        }
 
         return null;
     }

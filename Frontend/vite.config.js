@@ -24,7 +24,7 @@ function resolveHttpsConfig(useHttps) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const useHttps = (env.VITE_DEV_HTTPS || "true").toLowerCase() === "true";
+  const useHttps = (env.VITE_DEV_HTTPS || "false").toLowerCase() === "true";
   const httpsConfig = resolveHttpsConfig(useHttps);
 
   const plugins = [

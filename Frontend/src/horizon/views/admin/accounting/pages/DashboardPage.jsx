@@ -91,10 +91,6 @@ export default function DashboardPage() {
   const paymentHistory = Array.isArray(dashboard?.paymentHistory) ? dashboard.paymentHistory : [];
   const refundTrail = Array.isArray(dashboard?.refundTrail) ? dashboard.refundTrail : [];
   const approvalTrail = Array.isArray(dashboard?.approvalTrail) ? dashboard.approvalTrail : [];
-  const lockPeriodBadge = dashboard?.lockPeriodBadge || {};
-
-  const accountingPeriod = lockPeriodBadge?.accountingPeriod || {};
-  const payrollPeriod = lockPeriodBadge?.payrollPeriod || {};
 
   const warningRows = useMemo(() => {
     const rows = [];
@@ -173,17 +169,6 @@ export default function DashboardPage() {
             <Button size='sm' variant='outline' onClick={loadDashboard}>Làm mới</Button>
             <Button size='sm' colorScheme='blue' onClick={handleExportCsv} isLoading={exporting}>Xuất CSV</Button>
           </Flex>
-        </Flex>
-        <Flex mt='10px' gap='8px' wrap='wrap'>
-          <Badge colorScheme={lockPeriodBadge?.isLocked ? "red" : "green"}>
-            {lockPeriodBadge?.badgeText || "OPEN PERIOD"}
-          </Badge>
-          <Badge colorScheme='blue'>
-            Kỳ kế toán: {fieldOf(accountingPeriod, "periodCode", "period_code") || "N/A"}
-          </Badge>
-          <Badge colorScheme='purple'>
-            Payroll period: {fieldOf(payrollPeriod, "periodCode", "period_code") || "N/A"}
-          </Badge>
         </Flex>
       </Card>
 
@@ -387,3 +372,4 @@ export default function DashboardPage() {
     </Box>
   );
 }
+

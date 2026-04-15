@@ -207,7 +207,6 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 
             var profileBaseSalaryMap = await LoadProfileBaseSalaryMapAsync(staffIdSet, command.BranchId, periodEndDate, cancellationToken);
             var contractCompensationMap = await LoadContractCompensationMapAsync(staffIdSet, periodEndDate, cancellationToken);
-            var staffTierBaseSalaryMap = await LoadStaffTierBaseSalaryMapAsync(staffIdSet, cancellationToken);
             var overtimeAmountMap = await LoadOvertimeAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
             var attendanceDeductionMap = await LoadAttendanceDeductionMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
             var commissionAmountMap = await LoadCommissionAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
@@ -237,8 +236,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 var baseSalary = ResolveBaseSalary(
                     staff.StaffId,
                     profileBaseSalaryMap,
-                    contractCompensationMap,
-                    staffTierBaseSalaryMap);
+                    contractCompensationMap);
                 if (baseSalary <= 0m)
                 {
                     skippedNoBaseSalary++;
@@ -1027,8 +1025,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
     private static decimal ResolveBaseSalary(
         long staffId,
         IReadOnlyDictionary<long, decimal> profileBaseSalaryMap,
-        IReadOnlyDictionary<long, ContractCompensationSnapshot> contractCompensationMap,
-        IReadOnlyDictionary<long, decimal> staffTierBaseSalaryMap)
+        IReadOnlyDictionary<long, ContractCompensationSnapshot> contractCompensationMap)
     {
         if (profileBaseSalaryMap.TryGetValue(staffId, out var profileBaseSalary) && profileBaseSalary > 0m)
         {
@@ -1038,11 +1035,6 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         if (contractCompensationMap.TryGetValue(staffId, out var compensation) && compensation.BaseSalary > 0m)
         {
             return compensation.BaseSalary;
-        }
-
-        if (staffTierBaseSalaryMap.TryGetValue(staffId, out var tierBaseSalary) && tierBaseSalary > 0m)
-        {
-            return tierBaseSalary;
         }
 
         return 0m;

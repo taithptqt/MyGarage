@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "sZ70l/SG1/M=",
+  "dgSpecHash": "43UVk0EaQHg=",
   "success": true,
-  "projectFilePath": "E:\\project\\MyGarage\\backend\\MyGarage.csproj",
+  "projectFilePath": "D:\\MyGarage\\backend\\MyGarage.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\taith\\.nuget\\packages\\automapper\\12.0.1\\automapper.12.0.1.nupkg.sha512",
     "C:\\Users\\taith\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.1\\automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",
