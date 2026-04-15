@@ -264,6 +264,51 @@
   gap: 8px;
 }
 
+.inventory-stock-alert-banner {
+  margin: 0 28px 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #d9e4fb;
+  background: #f6f9ff;
+}
+
+.inventory-stock-alert-banner.is-warning {
+  background: linear-gradient(180deg, #fff9ee 0%, #fff5e2 100%);
+  border-color: #f6d08d;
+}
+
+.inventory-stock-alert-banner.is-ok {
+  background: linear-gradient(180deg, #eefaf4 0%, #e4f6ee 100%);
+  border-color: #9cd4b1;
+}
+
+.inventory-stock-alert-banner.is-error {
+  background: linear-gradient(180deg, #fff1f1 0%, #ffe8e8 100%);
+  border-color: #f2abab;
+}
+
+.inventory-stock-alert-title {
+  font-weight: 800;
+  color: #2c3f6a;
+}
+
+.inventory-stock-alert-list {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.inventory-stock-alert-item {
+  border: 1px solid #f0d8ad;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .inventory-admin-page .row-actions .btn-icon {
   min-width: 68px;
   min-height: 34px;

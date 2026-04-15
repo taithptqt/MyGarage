@@ -50,6 +50,23 @@ export const serviceOrderApi = {
     request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "POST", data }),
   submitQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/submit`, method: "POST", data }),
+  confirmQuotationInsuranceApproval: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/insurance-approval`, method: "POST", data }),
+  sendQuotationToCustomer: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/send-to-customer`, method: "POST", data }),
+  publishQuotationCustomerLink: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/publish-customer-link`, method: "POST", data }),
+  uploadQuotationInsuranceEvidence: (quotationId, file, note = "") => {
+    const formData = new FormData();
+    formData.append("file", file, file?.name || "insurance-evidence.jpg");
+    if (note) formData.append("note", note);
+    return request({
+      url: `/api/quotations/${quotationId}/insurance-evidence`,
+      method: "POST",
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
   approveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
   cloneQuotation: (quotationId, data) =>
@@ -60,6 +77,8 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/customer-decision`, method: "POST", data }),
   getQuotationByPublicToken: (token) =>
     request({ url: `/api/quotations/public/${token}`, method: "GET" }),
+  sendQuotationPublicDecisionOtp: (token, data) =>
+    request({ url: `/api/quotations/public/${token}/otp/send`, method: "POST", data }),
   applyQuotationPublicDecision: (token, data) =>
     request({ url: `/api/quotations/public/${token}/decision`, method: "POST", data }),
   decideMandatoryOverride: (requestId, data) =>

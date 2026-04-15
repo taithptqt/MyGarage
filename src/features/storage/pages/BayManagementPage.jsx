@@ -1,6 +1,8 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "../../admin/components/AdminModals";
 import { bayApi } from "../api/bayApi";
+import { executionApi } from "@features/workshop/api/executionApi";
+import { createChatHubConnection } from "@features/chat/realtime/chatHubConnection";
 import { useSearch } from "@context/SearchContext";
 import { useBranch } from "../../../context/BranchContext";
 import TablePagination from "@shared/components/TablePagination";
@@ -351,6 +353,8 @@ export default function BayManagementPage({ section }) {
   const [summary, setSummary] = useState(null);
   const [usage, setUsage] = useState({ byBay: [], mostUsed: [], leastUsed: [], frequentOverload: [], longestOccupied: [] });
   const [layout, setLayout] = useState({ branches: [] });
+  const [timelineRows, setTimelineRows] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [alerts, setAlerts] = useState({ items: [], total: 0 });
 
   const [selectedBayId, setSelectedBayId] = useState(null);
@@ -439,6 +443,27 @@ export default function BayManagementPage({ section }) {
     }
   }, [filters, searchQuery, selectedBayId]);
 
+  const loadTimeline = useCallback(async () => {
+    const branchId = Number(filters.branchId || selectedBranchId || 0);
+    if (!branchId) {
+      setTimelineRows([]);
+      return;
+    }
+
+    setTimelineLoading(true);
+    try {
+      const result = await executionApi.getBayTimeline({
+        branchId,
+        date: new Date().toISOString(),
+      });
+      setTimelineRows(Array.isArray(result) ? result : []);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, "Không thể tải timeline khoang thời gian thực."));
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, [filters.branchId, selectedBranchId]);
+
   useEffect(() => {
     refreshLookups().catch((err) => setError(getFriendlyErrorMessage(err, "Không thể tải dữ liệu tham chiếu.")));
   }, [refreshLookups]);
@@ -446,6 +471,43 @@ export default function BayManagementPage({ section }) {
   useEffect(() => {
     refreshDashboard();
   }, [refreshDashboard]);
+
+  useEffect(() => {
+    if (currentTab !== "layout") return;
+    loadTimeline();
+  }, [currentTab, loadTimeline]);
+
+  useEffect(() => {
+    const branchId = Number(filters.branchId || selectedBranchId || 0);
+    if (!branchId) return undefined;
+
+    const connection = createChatHubConnection();
+    let active = true;
+
+    connection.on("BayTimelineUpdated", (payload) => {
+      const payloadBranchId = Number(payload?.branchId || 0);
+      if (!active) return;
+      if (payloadBranchId > 0 && payloadBranchId !== branchId) return;
+      if (currentTab === "layout") {
+        loadTimeline();
+      }
+    });
+
+    (async () => {
+      try {
+        await connection.start();
+        await connection.invoke("JoinWorkshopBranchGroup", branchId);
+      } catch {
+        // Keep silent: page still works without realtime.
+      }
+    })();
+
+    return () => {
+      active = false;
+      connection.off("BayTimelineUpdated");
+      connection.stop().catch(() => { });
+    };
+  }, [currentTab, filters.branchId, loadTimeline, selectedBranchId]);
 
   const loadSelectedBayDetails = useCallback(async (bayId) => {
     if (!bayId) return;
@@ -1092,6 +1154,51 @@ export default function BayManagementPage({ section }) {
 
           {currentTab === "layout" && (
             <div className="bay-layout-wrap">
+              <div className="table-toolbar bay-filter-bar">
+                <span className="result-count">Realtime timeline {timelineLoading ? "(đang cập nhật...)" : ""}</span>
+                <button className="btn-ghost" type="button" onClick={loadTimeline}>
+                  Làm mới timeline
+                </button>
+              </div>
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Khoang</th>
+                      <th>Khu vực</th>
+                      <th>Trạng thái</th>
+                      <th>Xe hiện tại</th>
+                      <th>Lệnh sửa chữa</th>
+                      <th>Bắt đầu</th>
+                      <th>Thời lượng</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timelineRows.length === 0 ? (
+                      <tr><td colSpan={7}><div className="empty-state"><p>Chưa có dữ liệu timeline.</p></div></td></tr>
+                    ) : (
+                      timelineRows.map((row) => {
+                        const activeAllocation = (row.allocations || []).find((item) => !item.releasedAt) || null;
+                        return (
+                          <tr key={row.bayId}>
+                            <td>{row.bayName || `Bay #${row.bayId}`}</td>
+                            <td>{row.serviceArea || "-"}</td>
+                            <td>
+                              <span className={`badge ${statusBadge(String(row.operationalStatus || "").toUpperCase())}`}>
+                                {STATUS_LABELS[String(row.operationalStatus || "").toUpperCase()] || row.operationalStatus}
+                              </span>
+                            </td>
+                            <td>{activeAllocation?.licensePlate || "-"}</td>
+                            <td>{activeAllocation?.serviceOrderCode || "-"}</td>
+                            <td>{formatDateTime(activeAllocation?.allocatedAt)}</td>
+                            <td>{activeAllocation?.actualDuration ? `${activeAllocation.actualDuration} phút` : "-"}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
               {(layout.branches || []).map((branch) => (
                 <div key={branch.branchId} className="bay-layout-branch">
                   <h3>{branch.branchName}</h3>

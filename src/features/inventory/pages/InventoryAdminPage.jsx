@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
 import { Modal } from "@features/admin/components/AdminModals";
 import TablePagination from "@shared/components/TablePagination";
+import StockAlertBanner from "@features/workshop/components/StockAlertBanner";
 import "../../admin/pages/AdminPage.css";
 import "./InventoryAdminPage.css";
 
@@ -1120,6 +1121,7 @@ export default function InventoryAdminPage({ section }) {
   return (
     <div className="management-content inventory-admin-page">
       <SectionHeader section={section} />
+      <StockAlertBanner maxItems={6} />
       {error ? <div className="alert alert-error">{error}</div> : null}
 
       {loading ? (

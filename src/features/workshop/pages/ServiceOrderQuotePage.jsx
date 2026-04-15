@@ -6,6 +6,7 @@ import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/ve
 import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { getApiBaseUrl } from "@app/apiClient";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import {
   extractLatestDiagnosisId,
@@ -63,6 +64,22 @@ function normalizeOrderDetailType(rawType) {
   if (["LABOR", "SERVICE", "SERVICES", "WORK"].includes(normalized)) return "SERVICE";
   if (["PART", "PARTS", "PRODUCT", "MATERIAL", "INVENTORY"].includes(normalized)) return "PART";
   return normalized;
+}
+
+function isValidHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function toCsvCell(value) {
+  const normalized = String(value ?? "").replace(/"/g, "\"\"");
+  return `"${normalized}"`;
 }
 
 function resolveCustomerDisplay(order, customerById) {
@@ -183,6 +200,10 @@ export default function ServiceOrderQuotePage() {
 
   const [cloneNote, setCloneNote] = useState("");
   const [sendEmailNote, setSendEmailNote] = useState("");
+  const [insuranceEvidenceUrl, setInsuranceEvidenceUrl] = useState("");
+  const [insuranceApprovalNote, setInsuranceApprovalNote] = useState("");
+  const [insuranceEvidenceUploading, setInsuranceEvidenceUploading] = useState(false);
+  const [insuranceEvidenceUploadMessage, setInsuranceEvidenceUploadMessage] = useState("");
   const [removeIdsForClone, setRemoveIdsForClone] = useState([]);
   const [splitBillingDraft, setSplitBillingDraft] = useState({});
   const [cancelReason, setCancelReason] = useState("Khách vội");
@@ -410,7 +431,7 @@ export default function ServiceOrderQuotePage() {
     const quoteStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
     const totalInsuranceAmount = Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0);
     const shouldAutoFillInsuranceDefault =
-      ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE", "SENT_TO_CUSTOMER", "PENDING_CUSTOMER"].includes(quoteStatus) &&
+      ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quoteStatus) &&
       totalInsuranceAmount <= 0 &&
       details.length > 0 &&
       details.every((row) => {
@@ -443,6 +464,12 @@ export default function ServiceOrderQuotePage() {
       nextDraft[detailId] = safeInsurance;
     });
     setSplitBillingDraft(nextDraft);
+  }, [activeQuotationId, activeQuotation]);
+
+  useEffect(() => {
+    setInsuranceEvidenceUrl(String(readField(activeQuotation, "insuranceApprovalEvidenceUrl", "InsuranceApprovalEvidenceUrl") || ""));
+    setInsuranceApprovalNote("");
+    setInsuranceEvidenceUploadMessage("");
   }, [activeQuotationId, activeQuotation]);
 
   const loadData = useCallback(async () => {
@@ -860,20 +887,135 @@ export default function ServiceOrderQuotePage() {
     setActionMessage("");
 
     try {
-      const note = String(sendEmailNote || "").trim();
+      const note = String(insuranceApprovalNote || "").trim();
       await serviceOrderApi.submitQuotation(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gửi báo giá qua email",
+        note: note || "Gui bao gia sang buoc cho bao hiem duyet",
       });
-      setActionMessage("Đã gửi email báo giá cho khách hàng.");
-      setMailSentNotice("Gửi email báo giá thành công cho khách hàng.");
+      setActionMessage("Da chuyen bao gia sang trang thai cho bao hiem duyet.");
+      setMailSentNotice("");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể gửi báo giá.");
+      setError(err?.message || "Khong the gui bao gia cho bao hiem.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, insuranceApprovalNote, loadData]);
+
+  const handleConfirmInsuranceApproval = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    const evidenceUrl = String(insuranceEvidenceUrl || "").trim();
+    if (!evidenceUrl) {
+      setError("Vui long nhap link bang chung phe duyet bao hiem.");
+      setActionMessage("");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const note = String(insuranceApprovalNote || "").trim();
+      await serviceOrderApi.confirmQuotationInsuranceApproval(quoteId, {
+        actorStaffId: staffId,
+        insuranceApprovalEvidenceUrl: evidenceUrl,
+        note: note || "Bao hiem da xac nhan duyet",
+      });
+      setActionMessage("Da xac nhan bao hiem duyet va khoa du lieu boi thuong.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Khong the xac nhan bao hiem duyet.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, insuranceEvidenceUrl, insuranceApprovalNote, loadData]);
+
+  const handleSendQuotationToCustomer = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const note = String(sendEmailNote || "").trim();
+      await serviceOrderApi.sendQuotationToCustomer(quoteId, {
+        actorStaffId: staffId,
+        note: note || "Gui bao gia cho khach sau khi bao hiem da duyet",
+      });
+      setActionMessage("Da gui bao gia cho khach hang.");
+      setMailSentNotice("Gui email bao gia thanh cong cho khach hang.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Khong the gui bao gia cho khach hang.");
     } finally {
       setSaving(false);
     }
   }, [activeQuotation, staffId, sendEmailNote, loadData]);
+
+  const handleUploadInsuranceEvidence = useCallback(async (file) => {
+    if (!file) return;
+    if (!staffId) return;
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId) return;
+
+    setInsuranceEvidenceUploading(true);
+    setInsuranceEvidenceUploadMessage("");
+    setError("");
+
+    try {
+      const response = await serviceOrderApi.uploadQuotationInsuranceEvidence(quoteId, file);
+      const uploadedUrl = String(response?.insuranceApprovalEvidenceUrl || response?.url || response?.Url || "").trim();
+      if (!uploadedUrl) {
+        throw new Error("Khong nhan duoc URL anh sau khi upload.");
+      }
+
+      setInsuranceEvidenceUrl(uploadedUrl);
+      setInsuranceEvidenceUploadMessage("Da tai anh len thanh cong. He thong da dien URL bang chung.");
+    } catch (err) {
+      setError(err?.message || "Khong the tai anh bang chung.");
+      setInsuranceEvidenceUploadMessage("");
+    } finally {
+      setInsuranceEvidenceUploading(false);
+    }
+  }, [activeQuotation, staffId]);
+
+  const handleExportQuotationExcel = useCallback(() => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId) return;
+    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
+    if (!token) {
+      setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      return;
+    }
+    const exportUrl = `${getApiBaseUrl()}/api/quotations/${quoteId}/export/excel`;
+    fetch(exportUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("Không thể xuất file Excel từ server.");
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const quotationCode = String(readField(activeQuotation, "code", "Code") || `quotation-${Date.now()}`).replace(/[^\w\-]/g, "_");
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = `${quotationCode}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(objectUrl);
+        setActionMessage("Đã xuất Excel theo mẫu backend.");
+      })
+      .catch((err) => {
+        setError(err?.message || "Không thể xuất Excel.");
+      });
+  }, [activeQuotation]);
 
   const handleToggleCloneRemove = useCallback((detailId) => {
     setRemoveIdsForClone((prev) => {
@@ -1055,9 +1197,15 @@ export default function ServiceOrderQuotePage() {
   }, [numericOrderId, staffId, cancelReason, loadData]);
 
   const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
-  const canSubmit = ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quotationStatus);
-  const canCustomerDecision = ["APPROVED", "SENT_TO_CUSTOMER", "PENDING_CUSTOMER"].includes(quotationStatus);
+  const canEditSplitBilling = ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quotationStatus);
+  const canSubmit = ["DRAFT"].includes(quotationStatus);
+  const canConfirmInsuranceApproved = ["PENDING_INSURANCE"].includes(quotationStatus);
+  const canSendToCustomer = ["INSURANCE_APPROVED", "PENDING_CUSTOMER"].includes(quotationStatus);
+  const canCustomerDecision = ["PENDING_CUSTOMER"].includes(quotationStatus);
   const canClone = !["CUSTOMER_APPROVED", "CANCELED", "CANCELLED"].includes(quotationStatus);
+  const evidenceUrlValue = String(insuranceEvidenceUrl || "").trim();
+  const evidenceUrlValid = isValidHttpUrl(evidenceUrlValue);
+  const evidenceUrlError = canConfirmInsuranceApproved && evidenceUrlValue.length > 0 && !evidenceUrlValid;
   const hasCloneReason = String(cloneNote || "").trim().length > 0;
 
   const isSuperseded = quotationStatus === "SUPERSEDED";
@@ -1182,11 +1330,25 @@ export default function ServiceOrderQuotePage() {
               <section className="reception-quote-action-card">
                 <h3>Thao tác thương mại</h3>
                 <div className="reception-quote-action-row">
-                  <button type="button" className="btn-primary" onClick={handleSaveSplitBilling} disabled={saving || !staffId}>
+                  <button type="button" className="btn-primary" onClick={handleExportQuotationExcel} disabled={saving || !activeQuotation}>
+                    Xuất Excel
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleSaveSplitBilling} disabled={saving || !staffId || !canEditSplitBilling}>
                     Lưu tách bill
                   </button>
                   <button type="button" className="btn-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit || !staffId}>
-                    Gửi khách hàng
+                    Chuyển chờ bảo hiểm
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleConfirmInsuranceApproval}
+                    disabled={saving || !canConfirmInsuranceApproved || !staffId || !evidenceUrlValid}
+                  >
+                    Xác nhận BH đã duyệt
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer || !staffId}>
+                    Gửi báo giá cho khách
                   </button>
                   <button type="button" className="btn-primary" onClick={handleCloneQuotation} disabled={saving || !canClone || !staffId || !hasCloneReason}>
                     Tạo bản mới
@@ -1205,8 +1367,55 @@ export default function ServiceOrderQuotePage() {
 
                 <div className="reception-quote-approval-note">
                   <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Bằng chứng duyệt bảo hiểm (URL)</span>
+                    <small className="reception-quote-approval-note-hint">Bắt buộc trước khi gửi báo giá cho khách.</small>
+                  </div>
+                  <input
+                    type="url"
+                    className="reception-quote-approval-note-input"
+                    value={insuranceEvidenceUrl}
+                    onChange={(event) => setInsuranceEvidenceUrl(event.target.value)}
+                    placeholder="https://.../zalo-approval.jpg"
+                    disabled={saving || !staffId || !canConfirmInsuranceApproved}
+                  />
+                  {evidenceUrlError ? <small className="reception-quote-error">Link bằng chứng chưa hợp lệ (chỉ nhận http/https).</small> : null}
+                  <div style={{ marginTop: 8 }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={saving || insuranceEvidenceUploading || !staffId || !canConfirmInsuranceApproved}
+                      onChange={(event) => {
+                        const selectedFile = event.target.files?.[0];
+                        if (selectedFile) {
+                          void handleUploadInsuranceEvidence(selectedFile);
+                        }
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {insuranceEvidenceUploading ? <small className="reception-quote-note">Đang tải ảnh bằng chứng...</small> : null}
+                  {insuranceEvidenceUploadMessage ? <small className="reception-quote-success">{insuranceEvidenceUploadMessage}</small> : null}
+                </div>
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Ghi chú làm việc bảo hiểm</span>
+                    <small className="reception-quote-approval-note-hint">Lưu nội dung đàm phán/chốt bồi thường.</small>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={2}
+                    value={insuranceApprovalNote}
+                    onChange={(event) => setInsuranceApprovalNote(event.target.value)}
+                    placeholder="Ví dụ: GĐV duyệt 30tr, phần hao mòn khách tự chi trả."
+                    disabled={saving || !staffId}
+                  />
+                </div>
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
                     <span className="reception-quote-approval-note-title">Ghi chú gửi email cho khách</span>
-                    <small className="reception-quote-approval-note-hint">Đoạn này sẽ xuất hiện trong email báo giá.</small>
+                    <small className="reception-quote-approval-note-hint">Đoạn này sẽ xuất hiện trong email báo giá cho khách.</small>
                   </div>
                   <textarea
                     className="reception-quote-approval-note-input"
@@ -1250,6 +1459,14 @@ export default function ServiceOrderQuotePage() {
                   <article>
                     <span>Khách quyết định</span>
                     <strong>{readField(activeQuotation, "customerDecisionStatus", "CustomerDecisionStatus") || "-"}</strong>
+                  </article>
+                  <article>
+                    <span>Sẵn sàng tách bill</span>
+                    <strong>{readField(activeQuotation, "isReadyForSplitBilling", "IsReadyForSplitBilling") ? "Đã sẵn sàng" : "Chưa sẵn sàng"}</strong>
+                  </article>
+                  <article>
+                    <span>Thời điểm sẵn sàng</span>
+                    <strong>{formatDateTime(readField(activeQuotation, "splitBillingReadyAt", "SplitBillingReadyAt"))}</strong>
                   </article>
                   <article>
                     <span>Cập nhật</span>
@@ -1380,7 +1597,7 @@ export default function ServiceOrderQuotePage() {
                                   max={Math.max(0, finalAmount)}
                                   value={String(insuranceCovered)}
                                   onChange={(event) => handleSplitInsuranceChange(detailId, finalAmount, event.target.value)}
-                                  disabled={saving || !staffId}
+                                  disabled={saving || !staffId || !canEditSplitBilling}
                                   style={{ width: 140, padding: "6px 8px", borderRadius: 8, border: "1px solid #cfd8e6" }}
                                 />
                               </td>

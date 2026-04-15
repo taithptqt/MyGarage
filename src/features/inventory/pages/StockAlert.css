@@ -1,0 +1,91 @@
+/* StockAlert.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+.stka-page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e293b;
+}
+
+.stka-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+.stka-title { margin: 0 0 4px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.stka-subtitle { margin: 0; color: #64748b; font-size: 14px; }
+
+.stka-global-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  color: #b91c1c;
+}
+.stka-banner-icon { font-size: 24px; }
+.stka-banner-text { font-size: 14px; }
+
+.stka-alert { padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+.stka-alert-err { background: #fef2f2; color: #b91c1c; border-left: 4px solid #ef4444; }
+
+.stka-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stka-tab {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1.5px solid transparent;
+  transition: all 0.2s;
+}
+.stka-tab:hover { background: #e2e8f0; color: #1e293b; }
+.stka-tab.active { background: #fff; color: #1d4ed8; border-color: #3b82f6; box-shadow: 0 2px 4px rgba(59,130,246,0.1); }
+
+.stka-board {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  min-height: 300px;
+}
+
+.stka-loading, .stka-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.stka-empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+.stka-table-wrap { overflow-x: auto; }
+.stka-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.stka-table th { padding: 12px 14px; background: #f8fafc; color: #64748b; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+.stka-table td { padding: 14px; border-bottom: 1px solid #e2e8f0; }
+.stka-table .t-right { text-align: right; }
+
+.stka-btn { font-size: 13px; font-weight: 700; padding: 10px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: none; }
+.stka-btn-primary { background: #1d4ed8; color: #fff; }
+.stka-btn-primary:hover { background: #1e40af; }
+.stka-btn-ghost { background: #fff; border: 1.5px solid #cbd5e1; color: #475569; }
+.stka-btn-ghost:hover { border-color: #94a3b8; color: #1e293b; background: #f8fafc; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+.stka-status { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }

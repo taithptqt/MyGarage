@@ -7,6 +7,7 @@ import { getStatusBadge } from "@features/admin/utils/adminUtils";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { useSearch } from "@shared/core/context/SearchContext";
 import TablePagination from "@shared/components/TablePagination";
+import QcChecklistForm from "./QcChecklistForm";
 
 export default function QCDashboard() {
   const { searchQuery } = useSearch();
@@ -153,6 +154,8 @@ export default function QCDashboard() {
           setCurrentPage(1);
         }}
       />
+
+      <QcChecklistForm staffId={staffId} />
 
       {activeInspection && (
         <Modal title="Báo cáo lỗi kiểm định" onClose={() => setActiveInspection(null)}>

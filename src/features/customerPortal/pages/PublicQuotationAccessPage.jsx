@@ -39,6 +39,9 @@ export default function PublicQuotationAccessPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpSentAt, setOtpSentAt] = useState(null);
   const [quotation, setQuotation] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -179,6 +182,12 @@ export default function PublicQuotationAccessPage() {
 
   async function submitDecision(approved) {
     if (!token) return;
+    const normalizedOtp = String(otpCode || "").trim();
+    if (!normalizedOtp) {
+      setError("Vui lòng nhập mã OTP trước khi xác nhận.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setMessage("");
@@ -186,14 +195,33 @@ export default function PublicQuotationAccessPage() {
       const payload = {
         approved,
         note: (note || "").trim() || null,
+        otpCode: normalizedOtp,
       };
       await serviceOrderApi.applyQuotationPublicDecision(token, payload);
       setMessage(approved ? "Bạn đã xác nhận duyệt báo giá thành công." : "Bạn đã từ chối báo giá.");
+      setOtpCode("");
       await loadQuotation();
     } catch (err) {
       setError(err?.message || "Không thể ghi nhận quyết định.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendOtp() {
+    if (!token) return;
+    setSendingOtp(true);
+    setError("");
+    setMessage("");
+    try {
+      const data = await serviceOrderApi.sendQuotationPublicDecisionOtp(token, {});
+      setOtpSentAt(new Date());
+      const masked = data?.maskedEmail ? ` (${data.maskedEmail})` : "";
+      setMessage(`Mã OTP đã được gửi${masked}. Vui lòng kiểm tra email và nhập mã để xác nhận.`);
+    } catch (err) {
+      setError(err?.message || "Không thể gửi mã OTP.");
+    } finally {
+      setSendingOtp(false);
     }
   }
 
@@ -386,11 +414,36 @@ export default function PublicQuotationAccessPage() {
         </section>
 
         <section className="quote-portal-action-area">
+          <div className="quote-portal-otp-wrap">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              className="quote-portal-otp-input"
+              value={otpCode}
+              onChange={(e) => setOtpCode((e.target.value || "").replace(/\D/g, "").slice(0, 6))}
+              placeholder="Nhập OTP 6 số"
+              disabled={saving}
+            />
+            <button
+              type="button"
+              className="quote-portal-btn quote-portal-btn-outline"
+              onClick={sendOtp}
+              disabled={saving || sendingOtp || !quotation.canApprove}
+            >
+              {sendingOtp ? "Đang gửi OTP..." : "Gửi mã OTP"}
+            </button>
+            {otpSentAt ? (
+              <span className="quote-portal-otp-hint">
+                OTP đã gửi lúc {otpSentAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            ) : null}
+          </div>
           <button
             type="button"
             className="quote-portal-btn quote-portal-btn-approve"
             onClick={() => submitDecision(true)}
-            disabled={saving || !quotation.canApprove}
+            disabled={saving || !quotation.canApprove || !String(otpCode || "").trim()}
           >
             Đồng ý toàn bộ
           </button>
@@ -398,7 +451,7 @@ export default function PublicQuotationAccessPage() {
             type="button"
             className="quote-portal-btn quote-portal-btn-reject"
             onClick={() => submitDecision(false)}
-            disabled={saving || !quotation.canReject}
+            disabled={saving || !quotation.canReject || !String(otpCode || "").trim()}
           >
             Từ chối sửa chữa
           </button>

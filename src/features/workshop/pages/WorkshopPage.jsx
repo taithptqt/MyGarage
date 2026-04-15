@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./Workshop.css";
@@ -358,6 +358,33 @@ export default function WorkshopPage() {
                 >
                   Lịch sử đã xử lý
                 </button>
+                {userRole === "FOREMAN" && (
+                  <>
+                    <button
+                      type="button"
+                      className={`role-sub-item ${currentNormalizedPath === "/workshop/foreman/board" ? "active" : ""}`}
+                      onClick={() => navigate("/workshop/foreman/board")}
+                    >
+                      🗂️ Kanban xưởng
+                    </button>
+                    <button
+                      type="button"
+                      className={`role-sub-item ${currentNormalizedPath === "/workshop/foreman/bay-timeline" ? "active" : ""}`}
+                      onClick={() => navigate("/workshop/foreman/bay-timeline")}
+                    >
+                      🏭 Timeline khoang
+                    </button>
+                  </>
+                )}
+                {userRole === "TECH" && (
+                  <button
+                    type="button"
+                    className={`role-sub-item ${currentNormalizedPath === "/workshop/technician/my-tasks" ? "active" : ""}`}
+                    onClick={() => navigate("/workshop/technician/my-tasks")}
+                  >
+                    📋 Tác vụ của tôi
+                  </button>
+                )}
               </div>
             )}
               </nav>

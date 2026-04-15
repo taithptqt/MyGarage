@@ -591,6 +591,39 @@
   padding: 12px;
 }
 
+.quote-portal-otp-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 100%;
+}
+
+.quote-portal-otp-input {
+  min-width: 180px;
+  max-width: 220px;
+  border: 1px solid #9fbad9;
+  border-radius: 10px;
+  height: 42px;
+  padding: 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #12395f;
+  letter-spacing: 3px;
+}
+
+.quote-portal-otp-input:focus {
+  outline: none;
+  border-color: #4f8ac6;
+  box-shadow: 0 0 0 3px rgba(79, 138, 198, 0.2);
+}
+
+.quote-portal-otp-hint {
+  color: #476588;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .quote-portal-btn {
   border-radius: 12px;
   border: 1px solid transparent;

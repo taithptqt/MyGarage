@@ -1,0 +1,78 @@
+/* CommissionBreakdown.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+.comm-page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e293b;
+}
+
+.comm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+.comm-title { margin: 0 0 4px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.comm-subtitle { margin: 0; color: #64748b; font-size: 14px; }
+
+.comm-filters { display: flex; gap: 12px; align-items: center; }
+.comm-month-input {
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  outline: none;
+}
+.comm-btn-export {
+  padding: 10px 16px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.comm-btn-export:hover { background: #f8fafc; }
+
+.comm-list { display: flex; flex-direction: column; gap: 24px; }
+
+.comm-group {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.comm-group-header {
+  background: #f8fafc;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.comm-group-header h2 { margin: 0; font-size: 16px; font-weight: 700; color: #334155; }
+.comm-group-total { font-size: 14px; color: #64748b; }
+.comm-group-total span { font-weight: 700; color: #059669; font-size: 16px; margin-left: 8px; }
+
+.comm-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.comm-table th { padding: 12px 20px; color: #64748b; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+.comm-table td { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.comm-table tbody tr:last-child td { border-bottom: none; }
+.t-right { text-align: right; }
+
+.comm-badge-source { font-family: monospace; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #475569; }
+
+.comm-role-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.r-primary { background: #dbeafe; color: #1d4ed8; }
+.r-assistant { background: #fef3c7; color: #d97706; }
+.r-advisor { background: #f3e8ff; color: #7e22ce; }
+.r-tech { background: #e0e7ff; color: #4338ca; }
+
+.comm-empty { text-align: center; color: #94a3b8; font-style: italic; padding: 60px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; }
+.comm-loading { text-align: center; color: #64748b; padding: 40px; }
