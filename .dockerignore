@@ -12,15 +12,23 @@ Frontend/.vite/
 
 backend/bin/
 backend/obj/
+backend/artifacts/
+backend/bin-temp/
 backend/build-auth-check/
 backend/build-commit2-check/
 backend/build-commit3-check/
+backend/tmp_build_chatbot_update/
 
 **/bin/
 **/obj/
 **/TestResults/
 **/.vs/
 **/node_modules/
+
+.dotnet-home/
+.DS_Store
+*.user
+*.suo
 
 Frontend/.env*
 backend/appsettings.Development.json
