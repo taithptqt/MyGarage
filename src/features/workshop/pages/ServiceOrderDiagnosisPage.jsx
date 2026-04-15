@@ -11,6 +11,7 @@ import {
   Stack,
   Text,
   Textarea,
+  SimpleGrid,
   VStack,
   useToast,
   Grid,
@@ -28,6 +29,7 @@ import {
   Wrench,
   AlertTriangle,
   MessageSquare,
+  StickyNote,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -99,6 +101,60 @@ function DiagnosisDropdown({
 function toPositiveNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeStatusCode(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isDiagnosisApprovedAndLocked(diagnosis) {
+  if (!diagnosis) return false;
+
+  const teamLeaderApproved =
+    toPositiveNumber(
+      diagnosis?.approvedByTeamLeaderId ??
+      diagnosis?.ApprovedByTeamLeaderId ??
+      diagnosis?.technicalApprovedByTeamLeaderId ??
+      diagnosis?.TechnicalApprovedByTeamLeaderId ??
+      diagnosis?.teamLeaderApprovedById ??
+      diagnosis?.TeamLeaderApprovedById
+    ) > 0 ||
+    Boolean(
+      diagnosis?.approvedByTeamLeaderAt ??
+      diagnosis?.ApprovedByTeamLeaderAt ??
+      diagnosis?.technicalApprovedAt ??
+      diagnosis?.TechnicalApprovedAt ??
+      diagnosis?.finalApprovedAt ??
+      diagnosis?.FinalApprovedAt
+    ) ||
+    normalizeStatusCode(
+      diagnosis?.teamLeaderApprovalStatus ??
+      diagnosis?.TeamLeaderApprovalStatus ??
+      diagnosis?.technicalApprovalStatus ??
+      diagnosis?.TechnicalApprovalStatus
+    ) === "APPROVED";
+
+  const foremanApproved =
+    toPositiveNumber(
+      diagnosis?.approvedByForemanId ??
+      diagnosis?.ApprovedByForemanId ??
+      diagnosis?.foremanApprovedById ??
+      diagnosis?.ForemanApprovedById
+    ) > 0 ||
+    Boolean(
+      diagnosis?.approvedByForemanAt ??
+      diagnosis?.ApprovedByForemanAt ??
+      diagnosis?.managerApprovedAt ??
+      diagnosis?.ManagerApprovedAt
+    ) ||
+    normalizeStatusCode(
+      diagnosis?.foremanApprovalStatus ??
+      diagnosis?.ForemanApprovalStatus ??
+      diagnosis?.finalApprovalStatus ??
+      diagnosis?.FinalApprovalStatus
+    ) === "APPROVED";
+
+  return teamLeaderApproved || foremanApproved;
 }
 
 function parseIdList(value) {
@@ -282,6 +338,11 @@ function toEvidenceMediaUrlsValue(urls) {
   return normalized.length > 0 ? JSON.stringify(normalized) : "";
 }
 
+function normalizeQuantity(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
 function isNewRecommendationItem(item) {
   return Boolean(item?.isNew) || String(item?.id || "").startsWith("tmp-");
 }
@@ -458,13 +519,49 @@ export default function ServiceOrderDiagnosisPage() {
 
   const isTechnician = String(user?.roleCode || "").toUpperCase() === "TECH";
   const activeDiagnosis = allDiagnoses.find(d => d.id === activeDiagId);
+  const activeDiagnosisTechnicianId = toPositiveNumber(activeDiagnosis?.technicianId ?? activeDiagnosis?.TechnicianId);
+  const isDiagnosisOwnedByCurrentTechnician =
+    activeDiagnosis &&
+    (String(activeDiagnosis.id).startsWith("tmp-") || Number(activeDiagnosisTechnicianId) === Number(user?.id));
+  const isDiagnosisInEditableStatus = ["ASSIGNED", "COMPLETED", "PENDING"].includes(
+    normalizeStatusCode(activeDiagnosis?.status ?? activeDiagnosis?.Status ?? "PENDING")
+  );
+  const isDiagnosisApprovalLocked = isDiagnosisApprovedAndLocked(activeDiagnosis);
   const canEdit =
     isTechnician &&
-    activeDiagnosis &&
-    (String(activeDiagnosis.id).startsWith("tmp-") || Number(activeDiagnosis.technicianId) === Number(user?.id)) &&
-    ["ASSIGNED", "COMPLETED", "PENDING"].includes(String(activeDiagnosis.status || "PENDING").toUpperCase());
+    Boolean(activeDiagnosis) &&
+    Boolean(isDiagnosisOwnedByCurrentTechnician) &&
+    isDiagnosisInEditableStatus &&
+    !isDiagnosisApprovalLocked;
 
-  const backPath = isTechnician ? "/workshop/technician" : "/workshop/reception";
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const fromHistoryQuery = queryParams.get("from") === "history";
+  const requestedReturnPath = String(location?.state?.returnToPath || "").trim();
+  const safeReturnPath = requestedReturnPath.startsWith("/workshop/") ? requestedReturnPath : "";
+  const defaultBackPath = isTechnician ? "/workshop/technician" : "/workshop/reception";
+  const fallbackHistoryPath = isTechnician && fromHistoryQuery ? "/workshop/technician/history" : "";
+  const backPath = safeReturnPath || fallbackHistoryPath || defaultBackPath;
+  const backButtonLabel = "Quay lại";
+  const customerDescription = useMemo(() => {
+    const raw = String(order?.customerNotes || "").trim();
+    if (!raw) return "Khách chưa mô tả chi tiết.";
+    try {
+      const parsed = JSON.parse(raw);
+      const values = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.symptoms) ? parsed.symptoms : [];
+      const merged = values.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+      return merged || raw;
+    } catch {
+      return raw;
+    }
+  }, [order?.customerNotes]);
+  const diagnosisAssignmentNote = useMemo(
+    () =>
+      firstNonEmptyText(
+        activeDiagnosis?.assignmentNote,
+        activeDiagnosis?.AssignmentNote
+      ),
+    [activeDiagnosis]
+  );
   const routeVehicleContext = useMemo(
     () => location?.state?.vehicleSnapshot || location?.state?.orderSummary || null,
     [location?.state]
@@ -880,6 +977,7 @@ export default function ServiceOrderDiagnosisPage() {
   }, [form.rootCause, form.primarySystem, form.symptomTypes, form.occurrenceCondition, form.severity, form.symptom]);
 
   const addServiceRecommendation = () => {
+    if (!canEdit) return;
     setRecommendations((prev) => [
       ...prev,
       {
@@ -964,6 +1062,7 @@ export default function ServiceOrderDiagnosisPage() {
   };
 
   const addMaterialRecommendation = (parentRecommendationId) => {
+    if (!canEdit) return;
     const parentKey = String(parentRecommendationId || "");
     setRecommendations((prev) => [
       ...prev,
@@ -988,6 +1087,7 @@ export default function ServiceOrderDiagnosisPage() {
 
   const handleServiceSelectionChange = useCallback(
     async (recommendationId, selectedServiceIdRaw) => {
+      if (!canEdit) return;
       const recommendationKey = String(recommendationId || "");
       const selectedServiceId = toPositiveNumber(selectedServiceIdRaw);
       const inferredServiceCategoryId = String(serviceCategoryByServiceId.get(String(selectedServiceId || "")) || "");
@@ -1046,36 +1146,35 @@ export default function ServiceOrderDiagnosisPage() {
           }
         }
 
-        if (bomItems.length === 0) {
-          if (lastBomError) {
-            throw lastBomError;
-          }
-          return;
-        }
+	        if (bomItems.length === 0) {
+	          if (lastBomError) {
+	            throw lastBomError;
+	          }
+	          return;
+	        }
+	        setRecommendations((prev) => {
+	          if (!prev.some((item) => String(item.id) === recommendationKey)) return prev;
 
-        setRecommendations((prev) => {
-          if (!prev.some((item) => String(item.id) === recommendationKey)) return prev;
-
-          const existingChildProductIds = new Set(
-            prev
-              .filter((item) => String(item.parentRecommendationId || "") === recommendationKey)
+	          const existingChildProductIds = new Set(
+	            prev
+	              .filter((item) => String(item.parentRecommendationId || "") === recommendationKey)
               .map((item) => String(toPositiveNumber(item.inventoryItemId) || ""))
               .filter(Boolean)
           );
 
-          const rowsToAdd = bomItems
-            .filter((bom) => !existingChildProductIds.has(String(bom.productId)))
-            .map((bom, index) => ({
+	          const rowsToAdd = bomItems
+	            .filter((bom) => !existingChildProductIds.has(String(bom.productId)))
+	            .map((bom, index) => ({
               id: `tmp-bom-${Date.now()}-${index}-${Math.random()}`,
               diagnoseId: activeDiagId,
               parentRecommendationId: recommendationId,
               itemType: "PART",
               standardServiceId: null,
               inventoryItemId: bom.productId,
-              quantity: bom.quantity,
-              urgency: bom.isMandatory ? "CRITICAL" : "RECOMMENDED",
-              evidenceMediaUrls: "",
-              technicianNotes: "",
+	              quantity: bom.quantity,
+	              urgency: bom.isMandatory ? "CRITICAL" : "RECOMMENDED",
+	              evidenceMediaUrls: "",
+	              technicianNotes: "",
               isNew: true,
               isAutoFromBom: true,
             }));
@@ -1095,14 +1194,16 @@ export default function ServiceOrderDiagnosisPage() {
         });
       }
     },
-    [activeDiagId, resolvedVehicleModelIdForBom, serviceCategoryByServiceId, toast]
+    [activeDiagId, canEdit, resolvedVehicleModelIdForBom, serviceCategoryByServiceId, toast]
   );
 
   const updateRecommendation = (id, patch) => {
+    if (!canEdit) return;
     setRecommendations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
   const handleServiceCategoryChange = useCallback((recommendationId, categoryId) => {
+    if (!canEdit) return;
     const recommendationKey = String(recommendationId || "");
     setRecommendations((prev) =>
       prev
@@ -1125,9 +1226,10 @@ export default function ServiceOrderDiagnosisPage() {
             )
         )
     );
-  }, []);
+  }, [canEdit]);
 
   const removeRecommendation = (rec) => {
+    if (!canEdit) return;
     const targetId = String(rec?.id || "");
     if (!targetId) return;
 
@@ -1157,6 +1259,7 @@ export default function ServiceOrderDiagnosisPage() {
   };
 
   const addEvidenceImagesToRecommendation = (recommendationId, fileList) => {
+    if (!canEdit) return;
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
 
@@ -1180,6 +1283,7 @@ export default function ServiceOrderDiagnosisPage() {
   };
 
   const removeEvidenceImageFromRecommendation = (recommendationId, imageIndex) => {
+    if (!canEdit) return;
     setRecommendations((prev) =>
       prev.map((item) => {
         if (String(item.id) !== String(recommendationId)) return item;
@@ -1271,6 +1375,9 @@ export default function ServiceOrderDiagnosisPage() {
         if (!toPositiveNumber(root.standardServiceId)) {
           throw new Error("Vui lòng chọn dịch vụ sửa chữa cho từng dòng dịch vụ.");
         }
+        if (!String(root.technicianNotes || "").trim()) {
+          throw new Error("Vui lòng nhập lý do cho từng dịch vụ đã chọn trước khi lưu.");
+        }
         if (isNewRecommendationItem(root) && normalizeImageUrls(root.evidenceMediaUrls).length === 0) {
           throw new Error("Mỗi dịch vụ phải có ít nhất 1 ảnh hiện trạng trước khi lưu.");
         }
@@ -1343,7 +1450,7 @@ export default function ServiceOrderDiagnosisPage() {
         }
       }
 
-      toast({ title: `Đã lưu chuẩn đoán cho triệu chứng này`, status: "success", duration: 2500, isClosable: true });
+      toast({ title: "Đã lưu chẩn đoán", status: "success", duration: 2500, isClosable: true });
       await loadData();
     } catch (err) {
       toast({ title: "Lưu chuẩn đoán thất bại", description: err.message, status: "error" });
@@ -1390,7 +1497,7 @@ export default function ServiceOrderDiagnosisPage() {
             </strong>
           </Text>
         </Box>
-        <Button colorScheme="blue" onClick={() => navigate(backPath)}>Quay lại Bảng điều khiển</Button>
+        <Button colorScheme="blue" onClick={() => navigate(backPath)}>{backButtonLabel}</Button>
       </HStack>
 
       {error ? (
@@ -1398,68 +1505,24 @@ export default function ServiceOrderDiagnosisPage() {
       ) : allDiagnoses.length === 0 ? (
         <Text color="#707eae">Chưa có yêu cầu chuẩn đoán nào.</Text>
       ) : (
-        <Grid templateColumns={{ base: "1fr", lg: "280px 1fr" }} gap={6} minH="70vh">
-          
-          {/* LEFT SIDEBAR: Symtoms Tab List */}
-          <GridItem>
-            <Box bg="white" borderRadius="xl" border="1px solid #e9edf7" p={4} position="sticky" top="20px">
-              <Text fontWeight="700" color="#2b3674" mb={4}>Danh sách Triệu chứng</Text>
-              <VStack align="stretch" spacing={2}>
-                {allDiagnoses.map((diag, index) => {
-                  const isActive = activeDiagId === diag.id;
-                  const isCompleted = String(diag.status).toUpperCase() === "COMPLETED";
-                  return (
-                    <Box 
-                      key={diag.id}
-                      p={3}
-                      bg={isActive ? "blue.50" : "transparent"}
-                      border="1px solid"
-                      borderColor={isActive ? "blue.200" : "#e9edf7"}
-                      borderRadius="lg"
-                      cursor="pointer"
-                      onClick={() => selectDiagnosis(diag.id)}
-                      _hover={{ bg: isActive ? "blue.50" : "gray.50" }}
-                      transition="all 0.2s"
-                    >
-                      <HStack justify="space-between" mb={2}>
-                        <Text fontWeight="600" fontSize="sm" color={isActive ? "blue.700" : "#2b3674"}>
-                          Triệu chứng #{index + 1}
-                        </Text>
-                        <Badge colorScheme={isCompleted ? "green" : "orange"} fontSize="0.65em">
-                          {isCompleted ? "Đã khám" : "Chờ khám"}
-                        </Badge>
-                      </HStack>
-                      <Text fontSize="xs" color="#707eae" noOfLines={2}>{diag.symptom}</Text>
-                    </Box>
-                  )
-                })}
-              </VStack>
-            </Box>
-          </GridItem>
-
-          {/* RIGHT CONTENT: Diagnosis Form */}
-          <GridItem>
-            <VStack align="stretch" spacing={5}>
-              {!canEdit && (
-                <Box p={3} bg="orange.50" color="orange.800" borderRadius="md" fontSize="sm">
-                  Phiếu chuẩn đoán này đang ở trạng thái chỉ xem (Chỉ thợ nhận việc mới có quyền chỉnh sửa).
-                </Box>
-              )}
-
+        <VStack align="stretch" spacing={5}>
               {/* KHU VỰC 1: Lời khách hàng */}
               <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                 <HStack color="#f56565" mb={3}>
                   <Icon as={MessageSquare} size={20} />
                   <Heading size="sm">Mô tả của Khách hàng</Heading>
                 </HStack>
-                <Textarea
-                  value={form.symptom}
-                  onChange={(e) => setForm(f => ({ ...f, symptom: e.target.value }))}
-                  isDisabled={!canEdit}
-                  bg="gray.50"
-                  borderColor="#e2e8f0"
-                  rows={2}
-                />
+                <Box
+                  bg="#f8fbff"
+                  border="1px solid #dbe7ff"
+                  borderRadius="md"
+                  px={4}
+                  py={3}
+                >
+                  <Text color="#2b3674" whiteSpace="pre-wrap" lineHeight="1.6">
+                    {customerDescription}
+                  </Text>
+                </Box>
               </Box>
 
               {/* KHU VỰC 3: Nguyên nhân gốc rễ */}
@@ -1471,7 +1534,7 @@ export default function ServiceOrderDiagnosisPage() {
                 <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={4}>
                   <GridItem>
                     <FormControl>
-                      <FormLabel fontSize="sm" fontWeight="600" color="#2b3674">Kết luận nguyên nhân gốc rễ (Root Cause)</FormLabel>
+                      <FormLabel fontSize="sm" fontWeight="600" color="#2b3674">Kết luận nguyên nhân</FormLabel>
                       <Textarea
                         value={form.rootCause}
                         onChange={(e) => setForm((prev) => ({ ...prev, rootCause: e.target.value }))}
@@ -1508,6 +1571,24 @@ export default function ServiceOrderDiagnosisPage() {
                     </FormControl>
                   </GridItem>
                 </Grid>
+              </Box>
+
+              <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
+                <HStack color="#2b6cb0" mb={3}>
+                  <Icon as={StickyNote} size={20} />
+                  <Heading size="sm">Ghi chú điều phối</Heading>
+                </HStack>
+                <Box
+                  bg="#f8fbff"
+                  border="1px solid #dbe7ff"
+                  borderRadius="md"
+                  px={4}
+                  py={3}
+                >
+                  <Text color="#2b3674" whiteSpace="pre-wrap" lineHeight="1.6">
+                    {diagnosisAssignmentNote || "Không có ghi chú điều phối."}
+                  </Text>
+                </Box>
               </Box>
 
               {/* KHU VỰC 4: Đề xuất Sửa chữa */}
@@ -1620,7 +1701,7 @@ export default function ServiceOrderDiagnosisPage() {
 
                 {recommendations.length === 0 ? (
                   <Text color="#707eae" fontSize="sm">
-                    Chưa có dịch vụ đề xuất cho triệu chứng này. Hãy thêm dịch vụ trước, sau đó thêm vật tư cho từng dịch vụ.
+                    Chưa có dịch vụ đề xuất cho lệnh sửa chữa này. Hãy thêm dịch vụ trước, sau đó thêm vật tư cho từng dịch vụ.
                   </Text>
                 ) : (
                   <VStack align="stretch" spacing={3}>
@@ -1646,8 +1727,9 @@ export default function ServiceOrderDiagnosisPage() {
                           onAddMaterial={addMaterialRecommendation}
                             onSelectService={handleServiceSelectionChange}
                             onSelectServiceCategory={handleServiceCategoryChange}
-                            onAddEvidenceImages={addEvidenceImagesToRecommendation}
-                            onRemoveEvidenceImage={removeEvidenceImageFromRecommendation}
+                          onAddEvidenceImages={addEvidenceImagesToRecommendation}
+                          onRemoveEvidenceImage={removeEvidenceImageFromRecommendation}
+                          materialItems={childItems}
                           materialCount={childItems.length}
                           isMaterialExpanded={isMaterialExpanded}
                           onToggleMaterials={
@@ -1690,18 +1772,17 @@ export default function ServiceOrderDiagnosisPage() {
                     })}
                   </VStack>
                 )}
+
               </Box>
 
               {canEdit && (
                 <HStack justify="flex-end" pt={4} pb={10}>
                   <Button size="lg" colorScheme="blue" onClick={saveAllDiagnoses} isLoading={saving}>
-                    Lưu Kết Luận Triệu Chứng Này
+                    Lưu chẩn đoán
                   </Button>
                 </HStack>
               )}
             </VStack>
-          </GridItem>
-        </Grid>
       )}
     </Box>
   );
@@ -1721,6 +1802,7 @@ function RecommendationRow({
   onAddEvidenceImages,
   onRemoveEvidenceImage,
   parentServiceName,
+  materialItems = [],
   materialCount = 0,
   isMaterialExpanded = false,
   onToggleMaterials = null,
@@ -1754,6 +1836,7 @@ function RecommendationRow({
   const selectedProductName = !isServiceMode
     ? String(selectedProduct?.name ?? selectedProduct?.Name ?? "").trim() || "Chưa chọn vật tư"
     : "";
+  const itemQuantity = normalizeQuantity(item.quantity);
   const isAutoMaterial = Boolean(item?.isAutoFromBom);
   const serviceEvidenceUrls = isServiceMode ? normalizeImageUrls(item.evidenceMediaUrls) : [];
   const requiresEvidenceImage = isServiceMode && isNewRecommendationItem(item);
@@ -1920,6 +2003,39 @@ function RecommendationRow({
               display="inline-flex"
               alignItems="center"
             >
+              Số lượng
+            </Text>
+            <NumberInput
+              size="sm"
+              min={1}
+              value={itemQuantity}
+              isDisabled={!canEdit}
+              onChange={(_, valueNumber) =>
+                onChange(item.id, { quantity: Number.isFinite(valueNumber) && valueNumber > 0 ? valueNumber : 1 })
+              }
+              keepWithinRange
+              clampValueOnBlur
+              w="110px"
+            >
+              <NumberInputField
+                bg="rgba(255,255,255,0.92)"
+                borderColor="#d6e4ff"
+                borderRadius="10px"
+                _focus={{ borderColor: "#7aa6ff", boxShadow: "0 0 0 1px #7aa6ff" }}
+              />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+            <Text
+              fontSize="xs"
+              fontWeight="600"
+              color="#a3aed0"
+              h="36px"
+              display="inline-flex"
+              alignItems="center"
+            >
               Độ cần thiết
             </Text>
             <Box h="36px" minH="36px" display="flex" alignItems="center" my="0" alignSelf="center">
@@ -1931,7 +2047,7 @@ function RecommendationRow({
                 onChange={(value) => onChange(item.id, { urgency: value })}
                 fullWidth={false}
               >
-                <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
+                <option value="CRITICAL">Khẩn cấp</option>
                 <option value="RECOMMENDED">Nên làm</option>
                 <option value="OPTIONAL">Không bắt buộc</option>
               </DiagnosisDropdown>
@@ -1973,12 +2089,12 @@ function RecommendationRow({
           </HStack>
           <Box pt={2} mt={2} borderTop="1px dashed #d6e4ff">
             <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#6f83b3" mb={1.5}>
-              Ghi chú kỹ thuật
+              Lý do
             </Text>
             <Textarea
               size="sm"
               minH="72px"
-              placeholder="Nhập ghi chú cho dịch vụ này..."
+              placeholder="Nhập lý do chọn dịch vụ này..."
               value={item.technicianNotes || ""}
               isDisabled={!canEdit}
               onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
@@ -1991,56 +2107,60 @@ function RecommendationRow({
       )}
 
       {!isServiceMode && (
-        <Grid
-          templateColumns={{ base: "1fr", sm: "1fr 1fr", lg: "170px minmax(280px, 1fr) 110px 210px" }}
-          gap={2}
-          alignItems="start"
-        >
-          <Box>
-            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Loại vật tư</Text>
-            <Text fontSize="sm" fontWeight="700" color="#7f4f1f">{itemTypeLabel}</Text>
-          </Box>
-          <Box>
-            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Vật tư cụ thể</Text>
-            <Text fontSize="sm" fontWeight="700" color="#7f4f1f" lineHeight="1.4">{selectedProductName}</Text>
-          </Box>
-          <Box>
-            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Số lượng</Text>
-            <NumberInput
-              size="sm"
-              min={1}
-              value={item.quantity ?? 1}
-              isDisabled={!canEdit}
-              onChange={(_, valueNumber) => onChange(item.id, { quantity: Number.isFinite(valueNumber) && valueNumber > 0 ? valueNumber : 1 })}
-              keepWithinRange
-              clampValueOnBlur
-            >
-              <NumberInputField
-                bg="rgba(255,255,255,0.92)"
-                borderColor="#e7d5b6"
-                _focus={{ borderColor: "#d4a15a", boxShadow: "0 0 0 1px #d4a15a" }}
-              />
-              <NumberInputStepper>
-                <NumberIncrementStepper />
-                <NumberDecrementStepper />
-              </NumberInputStepper>
-            </NumberInput>
-          </Box>
-          <Box>
-            <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Độ cần thiết</Text>
-            <DiagnosisDropdown
-              minW="100%"
-              value={item.urgency || "RECOMMENDED"}
-              isDisabled={!canEdit}
-              onChange={(value) => onChange(item.id, { urgency: value })}
-              fullWidth={false}
-            >
-              <option value="CRITICAL">Khẩn cấp (Phải thay)</option>
-              <option value="RECOMMENDED">Nên làm</option>
-              <option value="OPTIONAL">Không bắt buộc</option>
-            </DiagnosisDropdown>
-          </Box>
-        </Grid>
+        <Stack spacing={2}>
+          <Grid
+            templateColumns={{ base: "1fr", sm: "1fr 1fr", lg: "180px minmax(280px, 1fr) 150px 210px" }}
+            gap={2}
+            alignItems="end"
+          >
+            <Box>
+              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Loại vật tư</Text>
+              <Text fontSize="sm" fontWeight="700" color="#7f4f1f">{itemTypeLabel}</Text>
+            </Box>
+            <Box>
+              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Vật tư cụ thể</Text>
+              <Text fontSize="sm" fontWeight="700" color="#7f4f1f" lineHeight="1.4">{selectedProductName}</Text>
+            </Box>
+            <Box p={2} bg="rgba(255,255,255,0.55)" border="1px solid #f1dec1" borderRadius="10px" w="150px" maxW="150px" justifySelf={{ base: "stretch", lg: "start" }}>
+              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Số lượng</Text>
+              <NumberInput
+                size="sm"
+                min={1}
+                value={item.quantity ?? 1}
+                isDisabled={!canEdit}
+                onChange={(_, valueNumber) => onChange(item.id, { quantity: Number.isFinite(valueNumber) && valueNumber > 0 ? valueNumber : 1 })}
+                keepWithinRange
+                clampValueOnBlur
+                w="100%"
+              >
+                <NumberInputField
+                  bg="rgba(255,255,255,0.92)"
+                  borderColor="#e7d5b6"
+                  borderRadius="10px"
+                  _focus={{ borderColor: "#d4a15a", boxShadow: "0 0 0 1px #d4a15a" }}
+                />
+                <NumberInputStepper>
+                  <NumberIncrementStepper />
+                  <NumberDecrementStepper />
+                </NumberInputStepper>
+              </NumberInput>
+            </Box>
+            <Box p={2} bg="rgba(255,255,255,0.55)" border="1px solid #f1dec1" borderRadius="10px" w="210px" maxW="210px" justifySelf={{ base: "stretch", lg: "start" }}>
+              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Độ cần thiết</Text>
+              <DiagnosisDropdown
+                minW="100%"
+                value={item.urgency || "RECOMMENDED"}
+                isDisabled={!canEdit}
+                onChange={(value) => onChange(item.id, { urgency: value })}
+                fullWidth
+              >
+                <option value="CRITICAL">Khẩn cấp</option>
+                <option value="RECOMMENDED">Nên làm</option>
+                <option value="OPTIONAL">Không bắt buộc</option>
+              </DiagnosisDropdown>
+            </Box>
+          </Grid>
+        </Stack>
       )}
 
       {!isServiceMode && (
@@ -2060,12 +2180,18 @@ function RecommendationRow({
       )}
 
       {isServiceMode && materialCount > 0 && (
-        <HStack justify="flex-end" pt={1}>
+        <HStack justify="flex-start" pt={1} w="100%">
           <Button
-            size="xs"
-            variant="ghost"
+            size={canEdit ? "md" : "sm"}
+            variant={canEdit ? "solid" : "outline"}
             colorScheme="blue"
-            leftIcon={<Icon as={isMaterialExpanded ? ChevronDown : ChevronRight} boxSize={3.5} />}
+            fontSize={canEdit ? "md" : "sm"}
+            fontWeight="700"
+            px={canEdit ? 5 : 4}
+            color={canEdit ? "white" : "#1d4ed8"}
+            bg={canEdit ? "#2563eb" : undefined}
+            _hover={canEdit ? { bg: "#1d4ed8" } : undefined}
+            leftIcon={<Icon as={isMaterialExpanded ? ChevronDown : ChevronRight} boxSize={canEdit ? 4 : 3.5} />}
             onClick={onToggleMaterials}
           >
             {isMaterialExpanded ? "Thu gọn vật tư" : `Xem vật tư (${materialCount})`}
@@ -2075,12 +2201,3 @@ function RecommendationRow({
     </Stack>
   );
 }
-
-
-
-
-
-
-
-
-

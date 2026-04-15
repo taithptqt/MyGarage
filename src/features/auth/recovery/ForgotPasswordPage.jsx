@@ -80,7 +80,7 @@ function ForgotPasswordPage() {
 
           <div className="auth-recovery-actions auth-recovery-actions--compact">
             <Link to="/login" className="auth-recovery-link">
-              Quay lại đăng nhập
+            Quay lại
             </Link>
           </div>
         </section>

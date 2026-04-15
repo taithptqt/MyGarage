@@ -134,11 +134,3 @@ export function isQuickCategory(category) {
   );
 }
 
-export function buildCustomerNotesPayload(symptomInputs) {
-  const normalizedSymptoms = (symptomInputs || [])
-    .map((x) => String(x || "").trim())
-    .filter(Boolean);
-  return normalizedSymptoms.length > 0
-    ? JSON.stringify({ symptoms: normalizedSymptoms })
-    : null;
-}

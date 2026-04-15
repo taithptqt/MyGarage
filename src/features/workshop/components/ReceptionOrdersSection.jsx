@@ -51,6 +51,8 @@ const ORDER_VIEW_MODE = {
 
 const GROUP_STATUS_PRIORITY = [
   "WAITING_APPROVAL",
+  "SENT_TO_CUSTOMER",
+  "CUSTOMER_REJECTED",
   "QUOTING",
   "DIAGNOSING",
   "IN_PROGRESS",
@@ -65,6 +67,8 @@ const GROUP_STATUS_PRIORITY = [
   "CANCELED",
   "CANCELED",
 ];
+
+const QUOTE_WAITING_STATUSES = ["WAITING_APPROVAL", "SENT_TO_CUSTOMER", "CUSTOMER_REJECTED", "QUOTING"];
 
 function resolveGroupStatus(statuses) {
   if (!Array.isArray(statuses) || statuses.length === 0) return "NEW";
@@ -587,7 +591,7 @@ export default function ReceptionOrdersSection() {
           <div className="stat-label">Mới tiếp nhận</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value" style={{ color: "#ffb547" }}>{orders.filter((order) => order.status === "WAITING_APPROVAL").length}</div>
+          <div className="stat-value" style={{ color: "#ffb547" }}>{orders.filter((order) => QUOTE_WAITING_STATUSES.includes(normalizeStatus(order.status))).length}</div>
           <div className="stat-label">Chờ báo giá</div>
         </div>
         <div className="stat-card">
@@ -719,17 +723,6 @@ function OrdersTableContent({
 
   const renderOrderActionButtons = useCallback((order) => (
     <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", width: "100%" }}>
-      {normalizeStatus(order.status) === "WAITING_APPROVAL" ? (
-        <button
-          className="btn-primary btn-sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            navigate(`/workshop/reception/orders/${order.id}/quote`);
-          }}
-        >
-          ✍ Báo giá
-        </button>
-      ) : null}
       {normalizeStatus(order.status) === "READY" ? (
         <button
           className="btn-success btn-sm"

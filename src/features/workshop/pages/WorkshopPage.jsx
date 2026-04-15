@@ -239,6 +239,9 @@ export default function WorkshopPage() {
   const roleDashboardPath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "/workshop";
   const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
   const currentNormalizedPath = normalizePath(location.pathname);
+  const locationQuery = new URLSearchParams(location.search || "");
+  const fromHistoryContext =
+    locationQuery.get("from") === "history" || locationQuery.has("from-history");
   const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
@@ -250,12 +253,18 @@ export default function WorkshopPage() {
       : "orders";
   const supportsHistoryView = ["TECH", "TEAM_LEADER", "FOREMAN"].includes(userRole);
   const currentRolePath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "";
-  const isRoleDashboardPage = Boolean(currentRolePath) && (
+  const isRoleDashboardPage = Boolean(currentRolePath) && !fromHistoryContext && (
     currentNormalizedPath === currentRolePath ||
     currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`) ||
     currentNormalizedPath.startsWith(`${currentRolePath}/orders/`)
   );
-  const isRoleHistoryPage = Boolean(currentRolePath) && currentNormalizedPath === `${currentRolePath}/history`;
+  const isRoleHistoryPage = Boolean(currentRolePath) && (
+    currentNormalizedPath === `${currentRolePath}/history` ||
+    (fromHistoryContext && (
+      currentNormalizedPath.startsWith(`${currentRolePath}/orders/`) ||
+      currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`)
+    ))
+  );
 
   const goReceptionTab = useCallback((tab) => {
     if (tab === "chat") {

@@ -14,8 +14,12 @@ import TechnicianDashboard from "@features/workshop/components/TechnicianDashboa
 import QCDashboard from "@features/workshop/components/QCDashboard";
 import CreateServiceOrderPage from "@features/workshop/pages/CreateServiceOrderPage";
 import ServiceOrderDiagnosisPage from "@features/workshop/pages/ServiceOrderDiagnosisPage";
+import ServiceOrderDiagnosisReportPage from "@features/workshop/pages/ServiceOrderDiagnosisReportPage";
 import ServiceOrderItemsPage from "@features/workshop/pages/ServiceOrderItemsPage";
 import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePage";
+import TeamLeaderDiagnosisApprovalPage from "@features/workshop/pages/TeamLeaderDiagnosisApprovalPage";
+import ForemanDiagnosisApprovalPage from "@features/workshop/pages/ForemanDiagnosisApprovalPage";
+import ManagerDiagnosisApprovalPage from "@features/workshop/pages/ManagerDiagnosisApprovalPage";
 import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
@@ -42,6 +46,8 @@ import GarageDashboardPage from "@features/customerPortal/pages/GarageDashboardP
 import MyVehiclesPage from "@features/customerPortal/pages/MyVehiclesPage";
 import VehicleDetailPage from "@features/customerPortal/pages/VehicleDetailPage";
 import MyNotificationsPage from "@features/customerPortal/pages/MyNotificationsPage";
+import QuotationDetailPage from "@features/customerPortal/pages/QuotationDetailPage";
+import PublicQuotationAccessPage from "@features/customerPortal/pages/PublicQuotationAccessPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
@@ -72,6 +78,7 @@ function App() {
         <Route path="/login" element={<AuthPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/quote-access/:token" element={<PublicQuotationAccessPage />} />
         <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
         <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
         <Route path="/home" element={<HomePage />} />
@@ -129,6 +136,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><MyNotificationsPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-quotations/:quotationId"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><QuotationDetailPage /></CustomerRoute>
             </ProtectedRoute>
           }
         />
@@ -245,19 +260,20 @@ function App() {
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/appointments/:appointmentId/edit" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionEditAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
+          <Route path="reception/orders/:orderId/diagnosis-report" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisReportPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/vehicleconditionlogs" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><VehicleConditionLogsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/edit" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderEditPage /></ProtectedRoute>} />
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="manager/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
-          <Route path="manager/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="manager/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
           <Route path="foreman/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
-          <Route path="foreman/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="foreman/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="team-leader" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
           <Route path="team-leader/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
-          <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
           <Route path="technician/history" element={<ProtectedRoute allowedRoles={["TECH"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />

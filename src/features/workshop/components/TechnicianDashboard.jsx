@@ -23,6 +23,7 @@ import {
   Stack,
   Text,
   Textarea,
+  Tooltip,
   useToast,
   VStack,
 } from "@chakra-ui/react";
@@ -36,6 +37,7 @@ import {
   MdPerson,
   MdPlayArrow,
   MdPriorityHigh,
+  MdSecurity,
   MdSupportAgent,
   MdTimer,
 } from "react-icons/md";
@@ -110,6 +112,24 @@ function resolveApiErrorMessage(error, fallback = "Đã có lỗi xảy ra") {
   return fallback;
 }
 
+function resolveProofImageUrl(payload) {
+  return toText(
+    readValue(
+      payload,
+      "url",
+      "Url",
+      "assetUrl",
+      "AssetUrl",
+      "fileUrl",
+      "FileUrl",
+      "absoluteUrl",
+      "AbsoluteUrl",
+      "proofImageUrl",
+      "ProofImageUrl",
+    ),
+  );
+}
+
 function mapAssignmentStatusToPersisted(status) {
   const normalized = String(status || "").trim().toUpperCase();
   if (normalized === INTERNAL_ASSIGNMENT_STATUS_REJECTED) {
@@ -143,6 +163,21 @@ function resolveCurrentStaff(staffs, user) {
 function getQueueCardMeta(queueColor) {
   const normalized = normalizeCode(queueColor);
   return QUEUE_CARD_META[normalized] || QUEUE_CARD_META.WHITE;
+}
+
+function isCompletedDiagnosisTask(item) {
+  const queueState = normalizeCode(readValue(item, "queueState", "QueueState"));
+  if (["DIAGNOSED", "COMPLETED", "DONE"].includes(queueState)) return true;
+  if (readValue(item, "finalApprovedAt", "FinalApprovedAt")) return true;
+  if (readValue(item, "technicalApprovedAt", "TechnicalApprovedAt")) return true;
+  return Boolean(readValue(item, "technicianCompletedAt", "TechnicianCompletedAt"));
+}
+
+function isInsuranceProtectedAssignment(assignment) {
+  const requiresProof = Boolean(readValue(assignment, "requiresInsuranceProof", "RequiresInsuranceProof"));
+  if (requiresProof) return true;
+  const payerType = normalizeCode(readValue(assignment?.detail, "payerType", "PayerType"));
+  return payerType === "INSURANCE" || payerType === "SPLIT";
 }
 
 function resolveVehicleDetails(item, order, vehicleMap, vehicleModelMap = new Map(), vehicleBrandMap = new Map()) {
@@ -235,6 +270,7 @@ export default function TechnicianDashboard() {
 
   const [supportTarget, setSupportTarget] = useState(null);
   const [supportNote, setSupportNote] = useState("");
+  const [uploadingProofAssignmentId, setUploadingProofAssignmentId] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -315,6 +351,7 @@ export default function TechnicianDashboard() {
       setAssignments(myAssignments);
 
       const myDiagnosisTasks = board
+        .filter((item) => !isCompletedDiagnosisTask(item))
         .map((item) => {
           const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId"));
           const order = orders.find((row) => toPositiveNumber(readValue(row, "id", "Id")) === serviceOrderId) || null;
@@ -395,11 +432,26 @@ export default function TechnicianDashboard() {
       const persistedStatus = mapAssignmentStatusToPersisted(normalizedStatus);
       const isRejectedInternal = normalizedStatus === INTERNAL_ASSIGNMENT_STATUS_REJECTED;
       const isPausedPersisted = persistedStatus === "PAUSED";
+      const requiresInsuranceProof = isInsuranceProtectedAssignment(assignment);
+      const currentProofImageUrl = toText(readValue(assignment, "proofImageUrl", "ProofImageUrl"));
+
+      if (persistedStatus === "COMPLETED" && requiresInsuranceProof && !currentProofImageUrl) {
+        toast({
+          title: "Thiếu ảnh nghiệm thu bảo hiểm",
+          description: "Hạng mục bảo hiểm cần chụp ảnh nghiệm thu trước khi hoàn thành.",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
 
       const payload = {
         ...assignment,
         status: persistedStatus,
         pauseLog: isPausedPersisted ? (reason || assignment.pauseLog) : assignment.pauseLog,
+        requiresInsuranceProof,
+        proofImageUrl: currentProofImageUrl || null,
         updatedBy: staffId,
         updatedAt: new Date().toISOString(),
       };
@@ -419,6 +471,50 @@ export default function TechnicianDashboard() {
       fetchData();
     } catch (err) {
       toast({ title: "Lỗi cập nhật", description: resolveApiErrorMessage(err), status: "error" });
+    }
+  };
+
+  const handleUploadInsuranceProof = async (assignment, file) => {
+    const assignmentId = toPositiveNumber(readValue(assignment, "id", "Id"));
+    if (!assignmentId || !file) return;
+
+    try {
+      setUploadingProofAssignmentId(assignmentId);
+
+      const uploadResult = await serviceOrderApi.uploadInsuranceAsset(file, "TECHNICAL_PROOF");
+      const proofImageUrl = resolveProofImageUrl(uploadResult);
+      if (!proofImageUrl) {
+        throw new Error("Không nhận được URL ảnh nghiệm thu từ hệ thống.");
+      }
+
+      const payload = {
+        ...assignment,
+        status: normalizeCode(readValue(assignment, "status", "Status")) || "IN_PROGRESS",
+        requiresInsuranceProof: isInsuranceProtectedAssignment(assignment),
+        proofImageUrl,
+        updatedBy: staffId,
+        updatedAt: new Date().toISOString(),
+      };
+      delete payload.detail;
+      delete payload.order;
+
+      await serviceOrderApi.updateAssignment(assignmentId, payload);
+
+      toast({
+        title: "Đã cập nhật ảnh nghiệm thu",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+      await fetchData();
+    } catch (err) {
+      toast({
+        title: "Không thể tải ảnh nghiệm thu",
+        description: resolveApiErrorMessage(err),
+        status: "error",
+      });
+    } finally {
+      setUploadingProofAssignmentId(null);
     }
   };
 
@@ -754,6 +850,8 @@ export default function TechnicianDashboard() {
                           key={readValue(assignment, "id", "Id")}
                           assignment={assignment}
                           isActive
+                          uploadingProof={uploadingProofAssignmentId === toPositiveNumber(readValue(assignment, "id", "Id"))}
+                          onUploadProof={(file) => handleUploadInsuranceProof(assignment, file)}
                           onOpenDiagnosis={(orderId) =>
                             navigate(`/workshop/technician/orders/${orderId}/diagnosis`, {
                               state: {
@@ -1088,11 +1186,15 @@ function InfoTile({ title, icon, lines, footer = null }) {
   );
 }
 
-const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagnosis, onFinish }) => {
+const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagnosis, onFinish, onUploadProof, uploadingProof = false }) => {
   const order = assignment.order;
   const detail = assignment.detail;
   const isDiagnosing = normalizeCode(readValue(order, "status", "Status")) === "DIAGNOSING";
   const accentColor = isActive ? "#0ea5e9" : "#94a3b8";
+  const isInsuranceProtected = isInsuranceProtectedAssignment(assignment);
+  const proofImageUrl = toText(readValue(assignment, "proofImageUrl", "ProofImageUrl"));
+  const hasProofImage = Boolean(proofImageUrl);
+  const isFinishDisabled = isInsuranceProtected && !hasProofImage;
 
   return (
     <Box
@@ -1121,6 +1223,23 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagn
             {toText(readValue(detail, "itemName", "ItemName")) || "Dịch vụ không xác định"}
           </Text>
         </HStack>
+        {isInsuranceProtected ? (
+          <HStack spacing={1.5}>
+            <Icon as={MdSecurity} color="blue.500" />
+            <Badge colorScheme="blue" variant="subtle" borderRadius="full">
+              Hạng mục bảo hiểm
+            </Badge>
+            {hasProofImage ? (
+              <Badge colorScheme="green" variant="subtle" borderRadius="full">
+                Đã có ảnh nghiệm thu
+              </Badge>
+            ) : (
+              <Badge colorScheme="orange" variant="subtle" borderRadius="full">
+                Chưa có ảnh nghiệm thu
+              </Badge>
+            )}
+          </HStack>
+        ) : null}
 
         <Box bg="gray.50" p={3} borderRadius="lg" border="1px solid" borderColor="gray.100">
           <HStack justify="space-between" spacing={2} align="start">
@@ -1169,9 +1288,70 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagn
                 Mở màn hình chẩn đoán
               </Button>
             ) : (
-              <Button colorScheme="green" size="sm" h="36px" minH="36px" borderRadius="full" onClick={onFinish}>
-                Hoàn thành hạng mục
-              </Button>
+              <>
+                {isInsuranceProtected ? (
+                  <HStack spacing={2}>
+                    <Button
+                      as="label"
+                      colorScheme="blue"
+                      variant="outline"
+                      size="sm"
+                      h="36px"
+                      minH="36px"
+                      borderRadius="full"
+                      cursor="pointer"
+                      isLoading={uploadingProof}
+                    >
+                      Chụp ảnh nghiệm thu
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file && typeof onUploadProof === "function") {
+                            onUploadProof(file);
+                          }
+                          event.target.value = "";
+                        }}
+                      />
+                    </Button>
+                    {hasProofImage ? (
+                      <Button
+                        as="a"
+                        href={proofImageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        variant="ghost"
+                        colorScheme="gray"
+                        size="sm"
+                        h="36px"
+                        minH="36px"
+                        borderRadius="full"
+                      >
+                        Xem ảnh
+                      </Button>
+                    ) : null}
+                  </HStack>
+                ) : null}
+                <Tooltip
+                  hasArrow
+                  isDisabled={!isFinishDisabled}
+                  label="Cần ảnh nghiệm thu bảo hiểm trước khi hoàn thành."
+                >
+                  <Button
+                    colorScheme="green"
+                    size="sm"
+                    h="36px"
+                    minH="36px"
+                    borderRadius="full"
+                    onClick={onFinish}
+                    isDisabled={isFinishDisabled}
+                  >
+                    Hoàn thành hạng mục
+                  </Button>
+                </Tooltip>
+              </>
             )}
           </>
         )}

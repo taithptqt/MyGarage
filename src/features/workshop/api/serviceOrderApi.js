@@ -42,6 +42,8 @@ export const serviceOrderApi = {
   // --- Quotation ---
   getQuotationsByServiceOrder: (serviceOrderId) =>
     request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "GET" }),
+  getMandatoryOverridesByServiceOrder: (serviceOrderId) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/mandatory-overrides`, method: "GET" }),
   getQuotationById: (quotationId) =>
     request({ url: `/api/quotations/${quotationId}`, method: "GET" }),
   createQuotation: (serviceOrderId, data) =>
@@ -50,6 +52,18 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/submit`, method: "POST", data }),
   approveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
+  cloneQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/clone`, method: "POST", data }),
+  updateQuotationSplitBilling: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/split-billing`, method: "POST", data }),
+  applyQuotationCustomerDecision: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/customer-decision`, method: "POST", data }),
+  getQuotationByPublicToken: (token) =>
+    request({ url: `/api/quotations/public/${token}`, method: "GET" }),
+  applyQuotationPublicDecision: (token, data) =>
+    request({ url: `/api/quotations/public/${token}/decision`, method: "POST", data }),
+  decideMandatoryOverride: (requestId, data) =>
+    request({ url: `/api/mandatory-overrides/${requestId}/decision`, method: "POST", data }),
   supersedeQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/supersede`, method: "POST", data }),
   getServiceBoms: (serviceId, vehicleModelId = null) =>
@@ -203,9 +217,21 @@ export const serviceOrderApi = {
       method: "POST",
       data,
     }),
+  rejectDiagnosisTechnical: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/technical-rejection`,
+      method: "POST",
+      data,
+    }),
   approveDiagnosisFinal: (serviceOrderId, data) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/final-approval`,
+      method: "POST",
+      data,
+    }),
+  decideDiagnosisForeman: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/foreman-decision`,
       method: "POST",
       data,
     }),

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import { Modal } from "@features/admin/components/AdminModals";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import { formatAppointmentCancelReason } from "@shared/core/utils/appointmentCancelReasonUtils";
@@ -27,9 +27,9 @@ function normalizeDisplayText(value) {
     .trim();
 }
 
-function parseSymptomItems(customerNotes) {
+function parseCustomerNote(customerNotes) {
   const raw = String(customerNotes || "").trim();
-  if (!raw) return [];
+  if (!raw) return "";
 
   try {
     const parsed = JSON.parse(raw);
@@ -38,8 +38,8 @@ function parseSymptomItems(customerNotes) {
       : Array.isArray(parsed?.symptoms)
         ? parsed.symptoms
         : [];
-    const normalizedDirect = directSymptoms.map((entry) => normalizeDisplayText(entry)).filter(Boolean);
-    if (normalizedDirect.length > 0) return normalizedDirect;
+    const normalizedDirect = directSymptoms.map((entry) => normalizeDisplayText(entry)).filter(Boolean).join("; ");
+    if (normalizedDirect) return normalizedDirect;
 
     const groupedSymptoms = Array.isArray(parsed?.symptomsByVehicle) ? parsed.symptomsByVehicle : [];
     const normalizedGrouped = groupedSymptoms
@@ -52,7 +52,8 @@ function parseSymptomItems(customerNotes) {
         return vehicleLabel ? `${vehicleLabel}: ${symptoms.join(" | ")}` : symptoms.join(" | ");
       })
       .filter(Boolean);
-    if (normalizedGrouped.length > 0) return normalizedGrouped;
+    if (normalizedGrouped.length > 0) return normalizedGrouped.join(" | ");
+    if (typeof parsed === "string") return normalizeDisplayText(parsed);
   } catch {
     // Fallback to legacy plain text below.
   }
@@ -60,7 +61,8 @@ function parseSymptomItems(customerNotes) {
   return raw
     .split(/\r?\n|;/g)
     .map((entry) => normalizeDisplayText(entry))
-    .filter(Boolean);
+    .filter(Boolean)
+    .join("; ");
 }
 
 function normalizePartsFollowUpServices(rawValue) {
@@ -157,7 +159,7 @@ export default function AppointmentDetailModal({
     [appointment],
   );
   const cancelReason = appointment.cancelReason || appointment.CancelReason || "";
-  const symptomItems = useMemo(() => parseSymptomItems(customerNotes), [customerNotes]);
+  const customerNoteText = useMemo(() => parseCustomerNote(customerNotes), [customerNotes]);
   const displayCancelReason = useMemo(() => formatAppointmentCancelReason(cancelReason), [cancelReason]);
   const createdAt = appointment.createdAt || appointment.CreatedAt;
   const statusText = appointment.status || appointment.Status || "PENDING";
@@ -306,13 +308,9 @@ export default function AppointmentDetailModal({
             ) : null}
 
             <section className="appt-detail-notes">
-              <h4>Mô tả thêm</h4>
-              {symptomItems.length > 0 ? (
-                <ul className="appt-detail-notes-list">
-                  {symptomItems.map((item, index) => (
-                    <li key={`${appointment.id || appointment.Id || "appt"}-symptom-${index}`}>{item}</li>
-                  ))}
-                </ul>
+              <h4>Ghi chú</h4>
+              {customerNoteText ? (
+                <p className="appt-detail-note-content">{customerNoteText}</p>
               ) : (
                 <p>Không có</p>
               )}

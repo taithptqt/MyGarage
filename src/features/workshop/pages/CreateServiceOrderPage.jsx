@@ -768,10 +768,10 @@ export default function CreateServiceOrderPage() {
     setVehicleNotesByKey((prev) => {
       const next = {};
       selectedVehicleKeys.forEach((key) => {
-        if (Array.isArray(prev[key]) && prev[key].length > 0) {
-          next[key] = [...prev[key]];
+        if (typeof prev[key] === "string") {
+          next[key] = prev[key];
         } else {
-          next[key] = [""];
+          next[key] = "";
         }
       });
       return next;
@@ -1490,10 +1490,9 @@ export default function CreateServiceOrderPage() {
     [activeNoteVehicleKey, selectedVehicleKeys]
   );
 
-  const activeNoteLines = useMemo(() => {
-    if (!activeNoteKey) return [""];
-    const current = vehicleNotesByKey?.[activeNoteKey];
-    return Array.isArray(current) && current.length > 0 ? current : [""];
+  const activeNoteValue = useMemo(() => {
+    if (!activeNoteKey) return "";
+    return String(vehicleNotesByKey?.[activeNoteKey] || "");
   }, [activeNoteKey, vehicleNotesByKey]);
 
   const validateForm = useCallback(
@@ -2395,16 +2394,8 @@ export default function CreateServiceOrderPage() {
     ]
   );
 
-  const handleVehicleNoteChange = useCallback((vehicleKey, index, value) => {
-    setVehicleNotesByKey((prev) => {
-      const current = Array.isArray(prev?.[vehicleKey]) && prev[vehicleKey].length > 0 ? [...prev[vehicleKey]] : [""];
-      current[index] = value;
-
-      const isLast = index === current.length - 1;
-      if (isLast && String(value || "").trim() && current.length < 12) current.push("");
-
-      return { ...prev, [vehicleKey]: current };
-    });
+  const handleVehicleNoteChange = useCallback((vehicleKey, value) => {
+    setVehicleNotesByKey((prev) => ({ ...prev, [vehicleKey]: value }));
   }, []);
 
   const handleSubmit = useCallback(
@@ -2492,7 +2483,7 @@ export default function CreateServiceOrderPage() {
           </p>
           <button className="btn-back reception-create-back-btn" onClick={() => navigate(-1)}>
             <span className="btn-back-icon" aria-hidden="true">←</span>
-            <span>Quay lại dashboard</span>
+              <span>Quay lại</span>
           </button>
         </div>
       </div>
@@ -3277,7 +3268,7 @@ export default function CreateServiceOrderPage() {
                 </div>
               </div>
               <div className="form-group" style={{ marginTop: 14 }}>
-                <label>Mô tả thêm theo từng xe</label>
+                <label>Ghi chú theo từng xe</label>
                 {selectedVehicleKeys.length > 0 ? (
                   <div className="reception-note-editor">
                     {selectedVehicleKeys.length > 1 ? (
@@ -3314,20 +3305,18 @@ export default function CreateServiceOrderPage() {
                     ) : null}
 
                     <div className="reception-note-list">
-                      {activeNoteLines.map((note, index) => (
-                        <textarea
-                          key={`note-${activeNoteKey}-${index}`}
-                          className="reception-note-input"
-                          rows={1}
-                          value={note}
-                          placeholder={`Nhập mô tả ${index + 1}...`}
-                          onChange={(event) => handleVehicleNoteChange(activeNoteKey, index, event.target.value)}
-                        />
-                      ))}
+                      <textarea
+                        key={`note-${activeNoteKey}`}
+                        className="reception-note-input"
+                        rows={3}
+                        value={activeNoteValue}
+                        placeholder="Nhập ghi chú cho xe này..."
+                        onChange={(event) => handleVehicleNoteChange(activeNoteKey, event.target.value)}
+                      />
                     </div>
                   </div>
                 ) : (
-                  <div className="reception-muted-note">Hãy chọn xe trước khi nhập mô tả.</div>
+                  <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
                 )}
               </div>
 
@@ -3493,6 +3482,4 @@ export default function CreateServiceOrderPage() {
     </div>
   );
 }
-
-
 

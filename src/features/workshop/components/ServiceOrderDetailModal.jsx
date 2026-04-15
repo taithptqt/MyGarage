@@ -17,6 +17,11 @@ const STATUS_LABELS = {
   RECEPTION: "Lễ tân tiếp nhận",
   DIAGNOSING: "Đang chuẩn đoán",
   WAITING_APPROVAL: "Chờ duyệt",
+  QUOTING: "Đang làm báo giá",
+  SENT_TO_CUSTOMER: "Đã gửi khách hàng",
+  APPROVED: "Quản đốc đã duyệt",
+  CUSTOMER_APPROVED: "Khách hàng đã duyệt",
+  CUSTOMER_REJECTED: "Khách hàng từ chối",
   REPAIRING: "Đang sửa chữa",
   QC_PENDING: "Chờ kiểm tra chất lượng",
   READY: "Sẵn sàng giao xe",
@@ -146,6 +151,21 @@ function buildIntakePackageLabel(item) {
   return name || code || "--";
 }
 
+function buildAutoDiagnosisAssignmentNote({
+  dispatchTag,
+  selectedServiceNames,
+}) {
+  const dispatchLabel =
+    DISPATCH_TAG_OPTIONS.find((item) => item.value === String(dispatchTag || "").trim().toUpperCase())?.label
+    || "Chuẩn đoán tổng quát";
+  const services = Array.isArray(selectedServiceNames)
+    ? selectedServiceNames.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+
+  const serviceText = services.length > 0 ? services.join(", ") : "chưa có tên dịch vụ cụ thể";
+  return `⚙️ [Hệ thống tự động] Điều phối ${dispatchLabel}. Dịch vụ khách chọn: ${serviceText}.`;
+}
+
 function normalizeImageUrls(value) {
   if (Array.isArray(value)) {
     return value
@@ -173,6 +193,25 @@ function normalizeImageUrls(value) {
     .filter(Boolean);
 }
 
+function getCollectionLength(value) {
+  if (Array.isArray(value)) return value.length;
+  if (!value || typeof value !== "object") return 0;
+  const candidates = [
+    value.items,
+    value.Items,
+    value.data,
+    value.Data,
+    value.rows,
+    value.Rows,
+    value.results,
+    value.Results,
+  ];
+  for (const item of candidates) {
+    if (Array.isArray(item)) return item.length;
+  }
+  return 0;
+}
+
 export default function ServiceOrderDetailModal({
   order,
   onClose,
@@ -183,24 +222,17 @@ export default function ServiceOrderDetailModal({
 }) {
   const navigate = useNavigate();
 
-  const customer = customers.find((item) => Number(item?.id) === Number(order?.customerId));
-  const vehicle = vehicles.find((item) => Number(item?.id) === Number(order?.vehicleId));
-  const advisor = staff.find((item) => Number(item?.id) === Number(order?.serviceAdvisorId));
+  const customer = customers.find(
+    (item) => Number(item?.id ?? item?.Id) === Number(order?.customerId ?? order?.CustomerId)
+  );
+  const vehicle = vehicles.find(
+    (item) => Number(item?.id ?? item?.Id ?? item?.vehicleId ?? item?.VehicleId) === Number(order?.vehicleId ?? order?.VehicleId)
+  );
+  const advisor = staff.find(
+    (item) => Number(item?.id ?? item?.Id) === Number(order?.serviceAdvisorId ?? order?.ServiceAdvisorId)
+  );
 
   const parsedNotes = parseCustomerNotes(order?.customerNotes);
-  const symptomNoteItems = useMemo(() => {
-    try {
-      const parsed = JSON.parse(String(order?.customerNotes || "").trim());
-      const list = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.symptoms)
-          ? parsed.symptoms
-          : [];
-      return list.map((item) => String(item || "").trim()).filter(Boolean);
-    } catch {
-      return [];
-    }
-  }, [order?.customerNotes]);
 
   const [orderDetails, setOrderDetails] = useState([]);
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
@@ -216,35 +248,51 @@ export default function ServiceOrderDetailModal({
   const [selectedDispatchTag, setSelectedDispatchTag] = useState("ENGINE_CHASSIS");
   const [dispatchTagDraft, setDispatchTagDraft] = useState("ENGINE_CHASSIS");
   const [showDispatchPopup, setShowDispatchPopup] = useState(false);
-  const [showDiagnosisReportPopup, setShowDiagnosisReportPopup] = useState(false);
   const [submittingDiagnosisRequest, setSubmittingDiagnosisRequest] = useState(false);
   const [loadingIntakeSuggestion, setLoadingIntakeSuggestion] = useState(false);
   const [intakeSuggestion, setIntakeSuggestion] = useState(null);
   const [intakePackages, setIntakePackages] = useState([]);
+  const [quotationCount, setQuotationCount] = useState(0);
   const [bufferMinutesDraft, setBufferMinutesDraft] = useState(15);
   const [intakePackageDraft, setIntakePackageDraft] = useState("");
   const [bypassConflictGuard, setBypassConflictGuard] = useState(false);
   const [customerConsentAccepted, setCustomerConsentAccepted] = useState(false);
   const [customerConsentChannel, setCustomerConsentChannel] = useState("APP");
   const [customerConsentNote, setCustomerConsentNote] = useState("");
+  const [receptionDiagnosisNote, setReceptionDiagnosisNote] = useState("");
 
   const customerChosenDetails = useMemo(() => {
     const isLaborOrService = (detail) => {
-      const itemType = String(detail?.itemType || "").toUpperCase();
-      return itemType === "LABOR" || itemType === "SERVICE";
+      const itemType = String(detail?.itemType ?? detail?.ItemType ?? "").trim().toUpperCase();
+      const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
+      if (itemType === "PART" || itemType === "PRODUCT") return false;
+      return itemType === "LABOR" || itemType === "SERVICE" || itemType === "STANDARD_SERVICE" || standardServiceId > 0;
+    };
+
+    const hasDiagnosisRecommendationLink = (detail) => {
+      const recommendationId = toPositiveNumber(
+        detail?.diagnosisRecommendationId,
+        detail?.DiagnosisRecommendationId,
+        detail?.diagnoseRecommendationId,
+        detail?.DiagnoseRecommendationId
+      );
+      return recommendationId > 0;
     };
 
     const candidates = (orderDetails || []).filter(
-      (detail) => isLaborOrService(detail) && !detail?.diagnoseRecommendationId
+      (detail) => isLaborOrService(detail) && !hasDiagnosisRecommendationLink(detail)
     );
 
     const uniqueMap = new Map();
     candidates.forEach((detail) => {
-      const key = detail?.standardServiceId
-        ? `std-${detail.standardServiceId}`
-        : detail?.itemId
-          ? `item-${detail.itemId}`
-          : `name-${String(detail?.itemName || "").trim().toLowerCase()}`;
+      const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
+      const itemId = toPositiveNumber(detail?.itemId, detail?.ItemId);
+      const itemName = firstText(detail?.itemName, detail?.ItemName);
+      const key = standardServiceId
+        ? `std-${standardServiceId}`
+        : itemId
+          ? `item-${itemId}`
+          : `name-${String(itemName || "").trim().toLowerCase()}`;
       if (!uniqueMap.has(key)) {
         uniqueMap.set(key, detail);
       }
@@ -252,6 +300,13 @@ export default function ServiceOrderDetailModal({
 
     return Array.from(uniqueMap.values());
   }, [orderDetails]);
+  const customerChosenServiceNames = useMemo(
+    () =>
+      customerChosenDetails
+        .map((detail) => firstText(detail?.itemName, detail?.ItemName))
+        .filter(Boolean),
+    [customerChosenDetails]
+  );
 
   useEffect(() => {
     setLiveOrderStatus(String(order?.status || "").trim().toUpperCase());
@@ -263,7 +318,7 @@ export default function ServiceOrderDetailModal({
       if (!order?.id) return;
       setLoadingDetails(true);
       try {
-        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes, modelRes, brandRes] = await Promise.all([
+        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes, modelRes, brandRes, quotationsRes] = await Promise.all([
           serviceOrderApi.getById(order.id),
           serviceOrderApi.getDetails(order.id),
           serviceOrderApi.getDiagnoses(order.id),
@@ -272,6 +327,7 @@ export default function ServiceOrderDetailModal({
           serviceOrderApi.getDiagnosisIntakePackages().catch(() => []),
           getVehicleModels().catch(() => []),
           getVehicleBrands().catch(() => []),
+          serviceOrderApi.getQuotationsByServiceOrder(order.id).catch(() => []),
         ]);
 
         setLiveOrderStatus(String(orderRes?.status || order?.status || "").trim().toUpperCase());
@@ -282,6 +338,7 @@ export default function ServiceOrderDetailModal({
         setIntakePackages(Array.isArray(intakePackagesRes) ? intakePackagesRes : []);
         setVehicleModels(Array.isArray(modelRes) ? modelRes : []);
         setVehicleBrands(Array.isArray(brandRes) ? brandRes : []);
+        setQuotationCount(getCollectionLength(quotationsRes));
 
         const signedCheckInExists = Array.isArray(conditionLogsRes) && conditionLogsRes.some((log) => {
           const logType = String(log?.logType || log?.LogType || "").toUpperCase();
@@ -342,39 +399,24 @@ export default function ServiceOrderDetailModal({
   }, [order?.id, latestDiagnosis?.dispatchTag]);
 
   const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
-  const isDiagnosisRequested = diagnosisStatus === "PENDING" || diagnosisStatus === "ASSIGNED";
-  const isDiagnosisAssigned = diagnosisStatus === "ASSIGNED";
+  const finalApprovalStatus = String(
+    latestDiagnosis?.finalApprovalStatus
+    ?? latestDiagnosis?.FinalApprovalStatus
+    ?? ""
+  ).trim().toUpperCase();
+  const isFinalDecisionMade = finalApprovalStatus === "APPROVED" || finalApprovalStatus === "REJECTED";
+  const isForemanApproved = finalApprovalStatus === "APPROVED"
+    || toPositiveNumber(latestDiagnosis?.approvedByForemanId, latestDiagnosis?.ApprovedByForemanId) > 0
+    || Boolean(latestDiagnosis?.approvedByForemanAt ?? latestDiagnosis?.ApprovedByForemanAt);
   const isDiagnosisCompleted = diagnosisStatus === "COMPLETED";
-  const isOrderDiagnosing = liveOrderStatus === "DIAGNOSING";
-  const canRecallDiagnosisRequest = isDiagnosisRequested && !isOrderDiagnosing;
-  const hasDiagnosisReport = isDiagnosisCompleted;
-  const canViewQuote = isDiagnosisCompleted;
+  const canCancelDiagnosis = Boolean(latestDiagnosis) && !isFinalDecisionMade && diagnosisStatus !== "CANCELED";
+  const hasDiagnosisReport = isForemanApproved;
+  const canShowQuoteButton = isForemanApproved || hasDiagnosisReport || quotationCount > 0;
 
   const customerIssueText = useMemo(() => {
-    if (symptomNoteItems.length > 0) return symptomNoteItems.join(" | ");
     return parsedNotes.mainNotes || "Không có ghi chú gì";
-  }, [parsedNotes.mainNotes, symptomNoteItems]);
+  }, [parsedNotes.mainNotes]);
 
-  const diagnosisSymptomText = firstText(
-    latestDiagnosis?.symptom,
-    latestDiagnosis?.Symptom,
-    "Chưa có mô tả chuẩn đoán."
-  );
-  const diagnosisRootCauseText = firstText(
-    latestDiagnosis?.rootCause,
-    latestDiagnosis?.RootCause,
-    "Chưa có nguyên nhân gốc."
-  );
-  const diagnosisSeverityText = firstText(
-    latestDiagnosis?.severity,
-    latestDiagnosis?.Severity,
-    "--"
-  );
-  const diagnosisUpdatedAt = latestDiagnosis?.diagnosedAt
-    || latestDiagnosis?.DiagnosedAt
-    || latestDiagnosis?.updatedAt
-    || latestDiagnosis?.UpdatedAt
-    || null;
   const autoDispatchWarning = useMemo(
     () => extractAutoDispatchWarning(firstText(latestDiagnosis?.supportRequestNote, latestDiagnosis?.SupportRequestNote)),
     [latestDiagnosis?.SupportRequestNote, latestDiagnosis?.supportRequestNote]
@@ -496,6 +538,8 @@ export default function ServiceOrderDetailModal({
   const resolvedVehicleModelId = toPositiveNumber(
     order?.vehicleModelId,
     order?.VehicleModelId,
+    orderSnapshot?.vehicleModelId,
+    orderSnapshot?.VehicleModelId,
     vehicle?.vehicleModelId,
     vehicle?.VehicleModelId,
     vehicle?.modelId,
@@ -507,6 +551,8 @@ export default function ServiceOrderDetailModal({
   const resolvedVehicleBrandId = toPositiveNumber(
     order?.vehicleBrandId,
     order?.VehicleBrandId,
+    orderSnapshot?.vehicleBrandId,
+    orderSnapshot?.VehicleBrandId,
     vehicle?.vehicleBrandId,
     vehicle?.VehicleBrandId,
     vehicle?.brandId,
@@ -518,6 +564,8 @@ export default function ServiceOrderDetailModal({
   const vehicleBrand = firstText(
     order?.vehicleBrandName,
     order?.VehicleBrandName,
+    orderSnapshot?.vehicleBrandName,
+    orderSnapshot?.VehicleBrandName,
     vehicle?.brandName,
     vehicle?.BrandName,
     resolvedBrand?.name,
@@ -527,6 +575,8 @@ export default function ServiceOrderDetailModal({
   const vehicleModel = firstText(
     order?.vehicleModelName,
     order?.VehicleModelName,
+    orderSnapshot?.vehicleModelName,
+    orderSnapshot?.VehicleModelName,
     vehicle?.modelName,
     vehicle?.ModelName,
     resolvedModel?.modelName,
@@ -545,8 +595,22 @@ export default function ServiceOrderDetailModal({
     if (model.toLowerCase().includes(brand.toLowerCase())) return model;
     return `${brand} ${model}`.trim();
   }, [vehicleBrand, vehicleModel]);
-  const vehicleColor = firstText(order?.vehicleColor, vehicle?.color);
-  const vehicleVin = firstText(order?.vehicleVin, vehicle?.vin);
+  const vehicleColor = firstText(
+    order?.vehicleColor,
+    order?.VehicleColor,
+    orderSnapshot?.vehicleColor,
+    orderSnapshot?.VehicleColor,
+    vehicle?.color,
+    vehicle?.Color
+  );
+  const vehicleVin = firstText(
+    order?.vehicleVin,
+    order?.VehicleVin,
+    orderSnapshot?.vehicleVin,
+    orderSnapshot?.VehicleVin,
+    vehicle?.vin,
+    vehicle?.Vin
+  );
   const advisorName = firstText(advisor?.fullName, "-");
 
   const statusLabel = formatStatusLabel(liveOrderStatus || order?.status);
@@ -685,6 +749,12 @@ export default function ServiceOrderDetailModal({
     setCustomerConsentAccepted(false);
     setCustomerConsentChannel("APP");
     setCustomerConsentNote("");
+    setReceptionDiagnosisNote(
+      buildAutoDiagnosisAssignmentNote({
+        dispatchTag: selectedDispatchTag || "ENGINE_CHASSIS",
+        selectedServiceNames: customerChosenServiceNames,
+      })
+    );
     setIntakeSuggestion(null);
     setShowDispatchPopup(true);
   };
@@ -696,6 +766,11 @@ export default function ServiceOrderDetailModal({
     const normalizedBuffer = Number(bufferMinutesDraft);
     const safeBuffer = Number.isFinite(normalizedBuffer) ? Math.max(0, Math.min(120, normalizedBuffer)) : 15;
     const selectedPackageCode = String(intakePackageDraft || intakeSuggestion?.finalPackageCode || "").trim().toUpperCase();
+    const autoAssignmentNote = buildAutoDiagnosisAssignmentNote({
+      dispatchTag: normalizedTag,
+      selectedServiceNames: customerChosenServiceNames,
+    });
+    const finalReceptionNote = String(receptionDiagnosisNote || "").trim() || autoAssignmentNote;
     if (requiresCustomerConsent && !customerConsentAccepted) {
       alert("Cần xác nhận đồng ý của khách trước khi tạo yêu cầu gói chuẩn đoán này.");
       return;
@@ -713,6 +788,7 @@ export default function ServiceOrderDetailModal({
         customerConsentAccepted: requiresCustomerConsent ? customerConsentAccepted : undefined,
         customerConsentChannel: requiresCustomerConsent ? customerConsentChannel : undefined,
         customerConsentNote: requiresCustomerConsent ? customerConsentNote : undefined,
+        assignmentNote: finalReceptionNote,
       });
       if (!requestResult?.ok) {
         const message = String(requestResult?.data?.message || "Không xác định");
@@ -736,40 +812,20 @@ export default function ServiceOrderDetailModal({
   };
 
   const handleRecallDiagnosis = async () => {
-    if (isOrderDiagnosing) {
-      alert("SO đã chuyển sang trạng thái Đang chuẩn đoán, không thể thu hồi yêu cầu.");
-      return;
-    }
-    const confirmed = window.confirm(`Thu hồi yêu cầu chuẩn đoán từ ${diagnosisRecallTargetLabel}?`);
+    const confirmed = window.confirm(`Hủy phiếu chuẩn đoán đang xử lý bởi ${diagnosisRecallTargetLabel}?`);
     if (!confirmed) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
       await refreshAfterDiagnosisChange();
     } catch (error) {
-      alert(`Lỗi khi thu hồi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
+      alert(`Lỗi khi hủy chuẩn đoán: ${error?.message || "Không xác định"}`);
     }
   };
 
   const handleOpenDiagnosisReport = () => {
     if (!hasDiagnosisReport) return;
-    setShowDiagnosisReportPopup(true);
+    handleOpenPage(`/workshop/reception/orders/${order.id}/diagnosis-report`);
   };
-
-  const diagnosisHint = useMemo(() => {
-    if (hasDiagnosisReport) return "Đã hoàn tất chuẩn đoán. Có thể xem báo giá.";
-    if (isOrderDiagnosing) return "Đang chuẩn đoán.";
-    if (canRecallDiagnosisRequest) {
-      return "Đang chuẩn đoán (đang chờ kỹ thuật viên nhận)";
-    }
-    if (isDiagnosisAssigned) return "Kỹ thuật viên đang thực hiện chuẩn đoán.";
-    if (!hasSignedCheckIn && !isDiagnosisCompleted && !isDiagnosisRequested) {
-      return "Cần hoàn tất Nhật ký xe và chữ ký CHECK-IN trước khi gửi yêu cầu chuẩn đoán.";
-    }
-    if (!isDiagnosisCompleted && !isDiagnosisRequested) {
-      return "Khi bấm \"Yêu cầu chuẩn đoán\", hệ thống sẽ mở popup để chọn chuyên môn điều phối.";
-    }
-    return "";
-  }, [canRecallDiagnosisRequest, hasDiagnosisReport, hasSignedCheckIn, isDiagnosisAssigned, isDiagnosisCompleted, isDiagnosisRequested, isOrderDiagnosing]);
 
   return (
     <>
@@ -926,12 +982,18 @@ export default function ServiceOrderDetailModal({
                 ) : customerChosenDetails.length > 0 ? (
                   <div className="so-detail-service-list">
                     {customerChosenDetails.map((detail) => (
-                      <div key={detail.id} className="so-detail-service-row">
+                      <div
+                        key={
+                          toPositiveNumber(detail?.id, detail?.Id, detail?.standardServiceId, detail?.StandardServiceId, detail?.itemId, detail?.ItemId)
+                          || `service-${firstText(detail?.itemName, detail?.ItemName)}`
+                        }
+                        className="so-detail-service-row"
+                      >
                         <div className="so-detail-service-copy">
-                          <span>{detail.itemName}</span>
+                          <span>{firstText(detail?.itemName, detail?.ItemName, "Dịch vụ")}</span>
                           <small>{formatDetailPayerLabel(detail)}</small>
                         </div>
-                        <strong>{formatMoney(detail.finalAmount || detail.unitPriceAtTime || 0)}</strong>
+                        <strong>{formatMoney(detail?.finalAmount ?? detail?.FinalAmount ?? detail?.unitPriceAtTime ?? detail?.UnitPriceAtTime ?? 0)}</strong>
                       </div>
                     ))}
                   </div>
@@ -943,20 +1005,12 @@ export default function ServiceOrderDetailModal({
               </article>
 
               <article className="so-detail-panel">
-                <p className="so-detail-panel-title">Mô tả / Yêu cầu thêm</p>
-                {symptomNoteItems.length > 0 ? (
-                  <ul className="so-detail-note-list">
-                    {symptomNoteItems.map((item, index) => (
-                      <li key={`${item}-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="so-detail-body-text">
-                    {String(parsedNotes.mainNotes || "").toLowerCase().includes("không có")
-                      ? "Không có ghi chú gì"
-                      : parsedNotes.mainNotes || "Không có ghi chú gì"}
-                  </p>
-                )}
+                <p className="so-detail-panel-title">Ghi chú</p>
+                <p className="so-detail-body-text so-detail-note-content">
+                  {String(customerIssueText || "").toLowerCase().includes("không có")
+                    ? "Không có ghi chú gì"
+                    : customerIssueText || "Không có ghi chú gì"}
+                </p>
               </article>
             </div>
           </section>
@@ -977,21 +1031,13 @@ export default function ServiceOrderDetailModal({
                 >
                   Xem chuẩn đoán
                 </button>
-              ) : canRecallDiagnosisRequest ? (
+              ) : canCancelDiagnosis ? (
                 <button
                   type="button"
                   className="so-detail-action-btn so-detail-action-warn"
                   onClick={handleRecallDiagnosis}
                 >
-                  Thu hồi yêu cầu
-                </button>
-              ) : isOrderDiagnosing ? (
-                <button
-                  type="button"
-                  className="so-detail-action-btn so-detail-action-primary"
-                  disabled
-                >
-                  Đang chuẩn đoán
+                  Hủy chuẩn đoán
                 </button>
               ) : (
                 <button
@@ -1000,7 +1046,7 @@ export default function ServiceOrderDetailModal({
                   onClick={handleRequestDiagnosis}
                   title={!hasSignedCheckIn ? "Cần vào Nhật ký xe để hoàn tất CHECK-IN trước." : ""}
                 >
-                  Yêu cầu chuẩn đoán
+                  Chuẩn đoán
                 </button>
               )}
 
@@ -1012,19 +1058,18 @@ export default function ServiceOrderDetailModal({
                 Xem hạng mục & phụ tùng
               </button>
 
-              <button
-                type="button"
-                className="so-detail-action-btn so-detail-action-purple"
-                onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/quote`)}
-                disabled={!canViewQuote}
-                title={!canViewQuote ? "Cần hoàn tất chuẩn đoán trước khi xem báo giá." : ""}
-              >
-                Xem báo giá
-              </button>
+              {canShowQuoteButton ? (
+                <button
+                  type="button"
+                  className="so-detail-action-btn so-detail-action-purple"
+                  onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/quote`)}
+                >
+                  Xem báo giá
+                </button>
+              ) : null}
             </div>
 
             {autoDispatchWarning ? <p className="so-detail-diagnosis-warning">{autoDispatchWarning}</p> : null}
-            {diagnosisHint ? <p className="so-detail-diagnosis-hint">{diagnosisHint}</p> : null}
           </section>
         </div>
       </Modal>
@@ -1088,6 +1133,17 @@ export default function ServiceOrderDetailModal({
                 />
               </label>
             </div>
+
+            <label className="so-dispatch-config-item so-dispatch-note-item">
+              <span>Ghi chú lễ tân cho chuẩn đoán</span>
+              <textarea
+                rows={2}
+                value={receptionDiagnosisNote}
+                onChange={(event) => setReceptionDiagnosisNote(event.target.value)}
+                placeholder="Nhập ghi chú trực tiếp của lễ tân (nếu để trống sẽ dùng mẫu tự động theo dịch vụ khách chọn)."
+                disabled={submittingDiagnosisRequest}
+              />
+            </label>
 
             <div className="so-intake-card">
               {loadingIntakeSuggestion ? (
@@ -1218,56 +1274,6 @@ export default function ServiceOrderDetailModal({
         </Modal>
       ) : null}
 
-      {showDiagnosisReportPopup ? (
-        <Modal
-          title="Kết quả chuẩn đoán"
-          onClose={() => setShowDiagnosisReportPopup(false)}
-          className="so-diagnosis-report-modal"
-        >
-          <div className="so-dispatch-popup">
-            <div className="so-intake-card">
-              <div className="so-intake-row">
-                <span>Vấn đề khách mô tả</span>
-                <strong>{customerIssueText}</strong>
-              </div>
-              <div className="so-intake-row">
-                <span>Lý do / hiện tượng ghi nhận</span>
-                <strong>{diagnosisSymptomText}</strong>
-              </div>
-              <div className="so-intake-row">
-                <span>Nguyên nhân gốc</span>
-                <strong>{diagnosisRootCauseText}</strong>
-              </div>
-              <div className="so-intake-row">
-                <span>Mức độ</span>
-                <strong>{diagnosisSeverityText}</strong>
-              </div>
-              <div className="so-intake-row">
-                <span>Cập nhật lúc</span>
-                <strong>{formatDateTimeValue(diagnosisUpdatedAt)}</strong>
-              </div>
-            </div>
-
-            <div className="so-dispatch-popup-actions">
-              <button
-                type="button"
-                className="so-detail-action-btn so-detail-action-ghost"
-                onClick={() => setShowDiagnosisReportPopup(false)}
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                className="so-detail-action-btn so-detail-action-purple"
-                onClick={() => handleOpenPage(`/workshop/reception/orders/${order.id}/quote`)}
-                disabled={!canViewQuote}
-              >
-                Xem báo giá
-              </button>
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </>
   );
 }

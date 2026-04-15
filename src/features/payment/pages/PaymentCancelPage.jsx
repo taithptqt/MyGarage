@@ -39,7 +39,7 @@ export default function PaymentCancelPage() {
                 className="btn-popup-secondary"
                 style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
               >
-                Quay lại Part Shop
+              Quay lại
               </Link>
             </>
           ) : null}

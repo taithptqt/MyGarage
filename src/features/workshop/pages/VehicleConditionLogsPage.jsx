@@ -602,7 +602,7 @@ export default function VehicleConditionLogsPage() {
         <VStack spacing={4}>
           <Icon as={MdWarning} color="red.500" boxSize={12} />
           <Heading size="md">{errorHeader}</Heading>
-          <Button onClick={() => navigate("/workshop/reception")}>Quay lại Reception</Button>
+        <Button onClick={() => navigate("/workshop/reception")}>Quay lại</Button>
         </VStack>
       </Box>
     );

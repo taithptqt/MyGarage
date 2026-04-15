@@ -885,7 +885,7 @@ export default function RetailCartPage() {
                       : "Checkout sản phẩm đã chọn"}
                 </button>
                 <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost retail-cart-checkout-btn">
-                  Quay lại mua tiếp
+                Quay lại
                 </Link>
               </div>
 

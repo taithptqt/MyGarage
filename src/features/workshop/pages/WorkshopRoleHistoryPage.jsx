@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   AlertIcon,
@@ -30,6 +30,7 @@ const ROLE_CONFIG = {
     subtitle: "Theo dõi các yêu cầu chẩn đoán mà bạn đã xử lý xong.",
     dashboardPath: "/workshop/technician",
     openOrderPath: (orderId) => `/workshop/technician/orders/${orderId}/diagnosis`,
+    openDiagnosisPath: (orderId) => `/workshop/technician/orders/${orderId}/diagnosis`,
     processedLabel: "Đã hoàn tất chẩn đoán",
   },
   TEAM_LEADER: {
@@ -37,6 +38,7 @@ const ROLE_CONFIG = {
     subtitle: "Theo dõi các yêu cầu đã được tổ trưởng duyệt kỹ thuật.",
     dashboardPath: "/workshop/team-leader",
     openOrderPath: (orderId) => `/workshop/team-leader/dispatch/${orderId}`,
+    openDiagnosisPath: (orderId) => `/workshop/team-leader/orders/${orderId}/quote`,
     processedLabel: "Đã duyệt kỹ thuật",
   },
   FOREMAN: {
@@ -44,8 +46,27 @@ const ROLE_CONFIG = {
     subtitle: "Theo dõi các yêu cầu đã được quản đốc duyệt cuối.",
     dashboardPath: "/workshop/foreman",
     openOrderPath: (orderId) => `/workshop/foreman/dispatch/${orderId}`,
+    openDiagnosisPath: (orderId) => `/workshop/foreman/orders/${orderId}/quote`,
     processedLabel: "Đã duyệt cuối",
   },
+};
+
+const DIAGNOSIS_WORKFLOW_STATUS_LABELS = {
+  NEW: "Mới tạo",
+  IN_PROGRESS: "Đang chuẩn đoán",
+  SUBMITTED: "Đã gửi duyệt",
+  TL_APPROVED: "Tổ trưởng đã duyệt",
+  TL_REJECTED_REDIAGNOSE: "Tổ trưởng từ chối khám lại",
+  ESCALATED_TO_FOREMAN: "Đã chuyển cấp cho quản đốc",
+  FOREMAN_REJECTED_REDIAGNOSE: "Quản đốc từ chối khám lại",
+  FOREMAN_APPROVED_LOCKED: "Quản đốc duyệt cuối",
+  CANCELED: "Hủy do khách",
+};
+
+const HISTORY_STATUS_BY_ROLE = {
+  FOREMAN: ["FOREMAN_APPROVED_LOCKED", "CANCELED"],
+  TEAM_LEADER: ["TL_APPROVED", "CANCELED"],
+  TECH: ["TL_APPROVED", "FOREMAN_APPROVED_LOCKED", "CANCELED"],
 };
 
 function toText(value) {
@@ -107,13 +128,76 @@ function resolveCurrentStaff(staffs, user) {
 }
 
 function isCompletedRecord(item) {
+  const workflowStatus = resolveWorkflowStatus(item);
+  return [
+    "TL_APPROVED",
+    "TL_REJECTED_REDIAGNOSE",
+    "ESCALATED_TO_FOREMAN",
+    "FOREMAN_REJECTED_REDIAGNOSE",
+    "FOREMAN_APPROVED_LOCKED",
+    "CANCELED",
+  ].includes(workflowStatus);
+}
+
+function resolveWorkflowStatus(item) {
+  const workflowStatus = normalizeCode(readValue(item, "workflowStatus", "WorkflowStatus"));
+  if (workflowStatus && DIAGNOSIS_WORKFLOW_STATUS_LABELS[workflowStatus]) return workflowStatus;
+
+  const diagnosisStatus = normalizeCode(readValue(item, "status", "Status", "diagnosisStatus", "DiagnosisStatus"));
+  const teamLeaderApprovalStatus = normalizeCode(
+    readValue(item, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus", "technicalApprovalStatus", "TechnicalApprovalStatus")
+  );
+  const foremanApprovalStatus = normalizeCode(
+    readValue(item, "foremanApprovalStatus", "ForemanApprovalStatus", "finalApprovalStatus", "FinalApprovalStatus")
+  );
   const queueState = normalizeCode(readValue(item, "queueState", "QueueState"));
   const queueColor = normalizeCode(readValue(item, "queueColor", "QueueColor"));
-  if (["DIAGNOSED", "COMPLETED", "DONE"].includes(queueState)) return true;
-  if (queueColor === "GREEN") return true;
-  if (readValue(item, "finalApprovedAt", "FinalApprovedAt")) return true;
-  if (readValue(item, "technicalApprovedAt", "TechnicalApprovedAt")) return true;
-  return Boolean(readValue(item, "technicianCompletedAt", "TechnicianCompletedAt"));
+  const submittedAt = readValue(item, "submittedAt", "SubmittedAt");
+
+  if (diagnosisStatus === "CANCELED") return "CANCELED";
+  if (foremanApprovalStatus === "APPROVED") return "FOREMAN_APPROVED_LOCKED";
+  if (foremanApprovalStatus === "REJECTED") return "FOREMAN_REJECTED_REDIAGNOSE";
+  if (teamLeaderApprovalStatus === "REJECTED") return "TL_REJECTED_REDIAGNOSE";
+  if (["BYPASSED", "ESCALATED"].includes(teamLeaderApprovalStatus) || queueColor === "RED") return "ESCALATED_TO_FOREMAN";
+  if (teamLeaderApprovalStatus === "APPROVED") return "TL_APPROVED";
+  if (submittedAt) return "SUBMITTED";
+  if (queueState === "IN_PROGRESS") return "IN_PROGRESS";
+  return "NEW";
+}
+
+function getWorkflowStatusLabel(statusCode) {
+  if (!statusCode) return "--";
+  return DIAGNOSIS_WORKFLOW_STATUS_LABELS[statusCode] || statusCode;
+}
+
+function getHistoryStatusLabel(statusCode, roleCode) {
+  const normalized = normalizeCode(statusCode);
+  if (normalized === "CANCELED") return "Đã hủy";
+
+  if (roleCode === "FOREMAN") {
+    if (normalized === "FOREMAN_APPROVED_LOCKED") return "Đã duyệt";
+  }
+
+  if (roleCode === "TEAM_LEADER") {
+    if (normalized === "TL_APPROVED") return "Đã duyệt";
+  }
+
+  if (normalized.endsWith("_APPROVED") || normalized.includes("APPROVED")) return "Đã duyệt";
+  return getWorkflowStatusLabel(statusCode);
+}
+
+function resolveAssignedAt(item) {
+  return readValue(
+    item,
+    "assignedAt",
+    "AssignedAt",
+    "technicianAcceptedAt",
+    "TechnicianAcceptedAt",
+    "leadTechnicianAcceptedAt",
+    "LeadTechnicianAcceptedAt",
+    "startedAt",
+    "StartedAt"
+  );
 }
 
 function resolveCompletedAt(item) {
@@ -121,12 +205,101 @@ function resolveCompletedAt(item) {
     readValue(item, "finalApprovedAt", "FinalApprovedAt") ||
     readValue(item, "technicalApprovedAt", "TechnicalApprovedAt") ||
     readValue(item, "technicianCompletedAt", "TechnicianCompletedAt") ||
+    readValue(item, "leadTechnicianCompletedAt", "LeadTechnicianCompletedAt") ||
     readValue(item, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt") ||
     readValue(item, "assignedAt", "AssignedAt")
   );
 }
 
+function resolveLatestRecordAt(item) {
+  return (
+    resolveCompletedAt(item) ||
+    readValue(item, "updatedAt", "UpdatedAt") ||
+    readValue(item, "diagnosedAt", "DiagnosedAt") ||
+    readValue(item, "createdAt", "CreatedAt") ||
+    readValue(item, "assignedAt", "AssignedAt")
+  );
+}
+
+function resolveHistoryStatusFromDiagnosis(item, roleCode) {
+  const diagnosisStatus = normalizeCode(readValue(item, "status", "Status", "diagnosisStatus", "DiagnosisStatus"));
+  const cancellationStatus = normalizeCode(readValue(item, "cancellationStatus", "CancellationStatus"));
+  const teamLeaderApprovalStatus = normalizeCode(readValue(item, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus"));
+  const finalApprovalStatus = normalizeCode(readValue(item, "finalApprovalStatus", "FinalApprovalStatus"));
+
+  if (
+    diagnosisStatus === "CANCELED" ||
+    ["APPROVED", "ACCEPTED", "CANCELED"].includes(cancellationStatus)
+  ) {
+    return "CANCELED";
+  }
+
+  if (roleCode === "FOREMAN") {
+    return finalApprovalStatus === "APPROVED" ? "FOREMAN_APPROVED_LOCKED" : null;
+  }
+
+  if (roleCode === "TEAM_LEADER") {
+    return teamLeaderApprovalStatus === "APPROVED" ? "TL_APPROVED" : null;
+  }
+
+  if (roleCode === "TECH") {
+    if (finalApprovalStatus === "APPROVED") return "FOREMAN_APPROVED_LOCKED";
+    if (teamLeaderApprovalStatus === "APPROVED") return "TL_APPROVED";
+  }
+
+  return null;
+}
+
+function resolveCompletedAtFromDiagnosis(item, workflowStatus) {
+  if (workflowStatus === "CANCELED") {
+    return (
+      readValue(item, "cancellationDecisionAt", "CancellationDecisionAt") ||
+      readValue(item, "updatedAt", "UpdatedAt") ||
+      readValue(item, "createdAt", "CreatedAt")
+    );
+  }
+
+  if (workflowStatus === "FOREMAN_APPROVED_LOCKED") {
+    return (
+      readValue(item, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt") ||
+      readValue(item, "updatedAt", "UpdatedAt") ||
+      readValue(item, "diagnosedAt", "DiagnosedAt") ||
+      readValue(item, "createdAt", "CreatedAt")
+    );
+  }
+
+  if (workflowStatus === "TL_APPROVED") {
+    return (
+      readValue(item, "approvedByForemanAt", "ApprovedByForemanAt") ||
+      readValue(item, "updatedAt", "UpdatedAt") ||
+      readValue(item, "diagnosedAt", "DiagnosedAt") ||
+      readValue(item, "createdAt", "CreatedAt")
+    );
+  }
+
+  return (
+    readValue(item, "updatedAt", "UpdatedAt") ||
+    readValue(item, "diagnosedAt", "DiagnosedAt") ||
+    readValue(item, "createdAt", "CreatedAt")
+  );
+}
+
+function toTimestamp(value) {
+  const ts = new Date(value || 0).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function resolveAssignmentSequence(item) {
+  return (
+    toPositiveNumber(readValue(item, "diagnosisAssignmentId", "DiagnosisAssignmentId")) ||
+    toPositiveNumber(readValue(item, "latestDiagnosisAssignmentId", "LatestDiagnosisAssignmentId")) ||
+    toPositiveNumber(readValue(item, "assignmentId", "AssignmentId")) ||
+    0
+  );
+}
+
 function toRow(item) {
+  const diagnosisId = toPositiveNumber(readValue(item, "diagnosisId", "DiagnosisId")) || 0;
   const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId")) || 0;
   const code = toText(readValue(item, "serviceOrderCode", "ServiceOrderCode")) || `SO-${serviceOrderId}`;
   const customerName = toText(readValue(item, "customerName", "CustomerName")) || "Khách hàng chưa rõ";
@@ -136,20 +309,31 @@ function toRow(item) {
   const descriptor = toText(readValue(item, "vehicleDescriptor", "VehicleDescriptor")) || [brand, model].filter(Boolean).join(" ");
   const teamName = toText(readValue(item, "primaryTeamName", "PrimaryTeamName", "teamName", "TeamName")) || "--";
   const completedAt = resolveCompletedAt(item);
+  const latestRecordAt = resolveLatestRecordAt(item);
 
   return {
+    diagnosisId,
     serviceOrderId,
     serviceOrderCode: code,
     customerName,
     vehicleLicensePlate: plate,
     vehicleDescriptor: descriptor || "Chưa rõ dòng xe",
-    queueState: toText(readValue(item, "queueState", "QueueState")) || "--",
+    workflowStatus: resolveWorkflowStatus(item),
     teamName,
-    assignedAt: readValue(item, "assignedAt", "AssignedAt"),
-    startedAt: readValue(item, "startedAt", "StartedAt", "technicianAcceptedAt", "TechnicianAcceptedAt"),
+    assignedAt: resolveAssignedAt(item),
+    startedAt: readValue(
+      item,
+      "startedAt",
+      "StartedAt",
+      "technicianAcceptedAt",
+      "TechnicianAcceptedAt",
+      "leadTechnicianAcceptedAt",
+      "LeadTechnicianAcceptedAt"
+    ),
     technicalApprovedAt: readValue(item, "technicalApprovedAt", "TechnicalApprovedAt"),
     finalApprovedAt: readValue(item, "finalApprovedAt", "FinalApprovedAt"),
     completedAt,
+    latestRecordAt,
     raw: item,
   };
 }
@@ -158,6 +342,11 @@ function getProcessedAtLabel(roleCode) {
   if (roleCode === "FOREMAN") return "Duyệt cuối";
   if (roleCode === "TEAM_LEADER") return "Duyệt kỹ thuật";
   return "Hoàn tất xử lý";
+}
+
+function getProcessedTimelineLabel(roleCode) {
+  if (roleCode === "FOREMAN") return "Ghi nhận lịch sử";
+  return getProcessedAtLabel(roleCode);
 }
 
 function toDateText(dateObj) {
@@ -183,6 +372,7 @@ function toEndOfDay(dateText) {
 export default function WorkshopRoleHistoryPage() {
   const { user } = useAuth();
   const { searchQuery } = useSearch();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const roleCode = normalizeCode(readValue(user, "roleCode", "RoleCode"));
@@ -203,12 +393,14 @@ export default function WorkshopRoleHistoryPage() {
     setError("");
 
     try {
-      const [boardRes, staffsRes] = await Promise.all([
+      const [boardRes, diagnosesRes, staffsRes] = await Promise.all([
         serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
+        serviceOrderApi.getDiagnoses(),
         getAllStaff(),
       ]);
 
       const board = Array.isArray(boardRes) ? boardRes : [];
+      const diagnoses = Array.isArray(diagnosesRes) ? diagnosesRes : [];
       const staffs = Array.isArray(staffsRes) ? staffsRes : [];
       const currentStaff = resolveCurrentStaff(staffs, user);
       const currentStaffId = toPositiveNumber(readValue(currentStaff, "id", "Id"));
@@ -220,40 +412,118 @@ export default function WorkshopRoleHistoryPage() {
         return;
       }
 
-      const completed = board.filter(isCompletedRecord);
-      const filteredByRole = completed.filter((item) => {
+      const boardByServiceOrderId = new Map();
+      for (const item of board) {
+        const row = toRow(item);
+        if (row.serviceOrderId > 0 && !boardByServiceOrderId.has(row.serviceOrderId)) {
+          boardByServiceOrderId.set(row.serviceOrderId, row);
+        }
+      }
+
+      const latestByDiagnosisId = new Map();
+      for (const item of diagnoses) {
+        const diagnosisId = toPositiveNumber(readValue(item, "id", "Id")) || 0;
+        if (!diagnosisId) continue;
+
+        const assignmentSequence = resolveAssignmentSequence(item);
+        const latestRecordAt = resolveLatestRecordAt(item);
+        const existing = latestByDiagnosisId.get(diagnosisId);
+        if (!existing) {
+          latestByDiagnosisId.set(diagnosisId, { item, latestRecordAt, diagnosisId, assignmentSequence });
+          continue;
+        }
+
+        if (assignmentSequence > (existing.assignmentSequence || 0)) {
+          latestByDiagnosisId.set(diagnosisId, { item, latestRecordAt, diagnosisId, assignmentSequence });
+          continue;
+        }
+
+        if (assignmentSequence === (existing.assignmentSequence || 0)) {
+          const currentTs = toTimestamp(latestRecordAt);
+          const existingTs = toTimestamp(existing.latestRecordAt);
+          if (currentTs > existingTs) {
+            latestByDiagnosisId.set(diagnosisId, { item, latestRecordAt, diagnosisId, assignmentSequence });
+          }
+        }
+      }
+
+      const latestRows = Array.from(latestByDiagnosisId.values())
+        .map(({ item, latestRecordAt, diagnosisId }) => {
+          const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId")) || 0;
+          const workflowStatus = resolveHistoryStatusFromDiagnosis(item, roleCode);
+          if (!workflowStatus) return null;
+
+          const boardMeta = boardByServiceOrderId.get(serviceOrderId);
+          const completedAt = resolveCompletedAtFromDiagnosis(item, workflowStatus);
+          const assignedAt = readValue(item, "assignedAt", "AssignedAt") || boardMeta?.assignedAt || null;
+          const startedAt =
+            readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt") || boardMeta?.startedAt || null;
+          const technicalApprovedAt =
+            readValue(item, "approvedByForemanAt", "ApprovedByForemanAt", "technicalApprovedAt", "TechnicalApprovedAt") ||
+            boardMeta?.technicalApprovedAt ||
+            null;
+          const finalApprovedAt =
+            readValue(item, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt", "finalApprovedAt", "FinalApprovedAt") ||
+            boardMeta?.finalApprovedAt ||
+            null;
+
+          return {
+            diagnosisId,
+            serviceOrderId,
+            serviceOrderCode: boardMeta?.serviceOrderCode || `SO-${serviceOrderId}`,
+            customerName: boardMeta?.customerName || "Khách hàng chưa rõ",
+            vehicleLicensePlate: boardMeta?.vehicleLicensePlate || "--",
+            vehicleDescriptor: boardMeta?.vehicleDescriptor || "Chưa rõ dòng xe",
+            workflowStatus,
+            teamName:
+              toText(readValue(item, "assignedTeamName", "AssignedTeamName")) ||
+              boardMeta?.teamName ||
+              "--",
+            assignedAt,
+            startedAt,
+            technicalApprovedAt,
+            finalApprovedAt,
+            completedAt,
+            latestRecordAt: completedAt || latestRecordAt,
+            raw: item,
+          };
+        })
+        .filter(Boolean);
+
+      const roleStatuses = HISTORY_STATUS_BY_ROLE[roleCode] || [];
+      const filteredByRole = latestRows.filter((row) => {
+        const item = row.raw;
         const leadId = toPositiveNumber(readValue(item, "technicianId", "TechnicianId"));
         const assistantId = toPositiveNumber(readValue(item, "assistantTechnicianId", "AssistantTechnicianId"));
-        const technicalApprovedByTeamLeaderId = toPositiveNumber(
-          readValue(item, "technicalApprovedByTeamLeaderId", "TechnicalApprovedByTeamLeaderId")
+        const teamLeaderApprovedById = toPositiveNumber(
+          readValue(item, "approvedByForemanId", "ApprovedByForemanId", "teamLeaderApprovedById", "TeamLeaderApprovedById")
         );
-        const primaryTeamId = toPositiveNumber(readValue(item, "primaryTeamId", "PrimaryTeamId", "teamId", "TeamId"));
-        const finalApprovedAt = readValue(item, "finalApprovedAt", "FinalApprovedAt");
-        const technicalApprovedAt = readValue(item, "technicalApprovedAt", "TechnicalApprovedAt");
+        const primaryTeamId = toPositiveNumber(readValue(item, "assignedTeamId", "AssignedTeamId", "primaryTeamId", "PrimaryTeamId"));
+        const workflowStatus = normalizeCode(row.workflowStatus);
+        if (!roleStatuses.includes(workflowStatus)) return false;
 
         if (roleCode === "TECH") {
           return leadId === currentStaffId || assistantId === currentStaffId;
         }
 
         if (roleCode === "TEAM_LEADER") {
-          if (technicalApprovedByTeamLeaderId && technicalApprovedByTeamLeaderId === currentStaffId) return true;
-          return Boolean(technicalApprovedAt) && Boolean(currentTeamId) && primaryTeamId === currentTeamId;
+          if (currentTeamId) {
+            if (primaryTeamId) return primaryTeamId === currentTeamId;
+            if (currentStaffId && teamLeaderApprovedById) return teamLeaderApprovedById === currentStaffId;
+            return true;
+          }
+
+          if (currentStaffId && teamLeaderApprovedById) {
+            return teamLeaderApprovedById === currentStaffId;
+          }
+
+          return true;
         }
 
-        if (roleCode === "FOREMAN") {
-          return Boolean(finalApprovedAt);
-        }
-
-        return false;
+        return true;
       });
 
-      const mapped = filteredByRole
-        .map(toRow)
-        .sort((a, b) => {
-          const left = new Date(a.completedAt || 0).getTime();
-          const right = new Date(b.completedAt || 0).getTime();
-          return right - left;
-        });
+      const mapped = filteredByRole.sort((a, b) => toTimestamp(b.latestRecordAt) - toTimestamp(a.latestRecordAt));
 
       setRows(mapped);
     } catch (err) {
@@ -270,9 +540,8 @@ export default function WorkshopRoleHistoryPage() {
   }, [fetchHistory]);
 
   const statusOptions = useMemo(() => {
-    const unique = Array.from(new Set(rows.map((row) => toText(row.queueState)).filter(Boolean)));
-    return unique.sort((a, b) => a.localeCompare(b, "vi"));
-  }, [rows]);
+    return HISTORY_STATUS_BY_ROLE[roleCode] || [];
+  }, [roleCode]);
 
   const dateFilterButtonLabel = useMemo(
     () =>
@@ -290,7 +559,7 @@ export default function WorkshopRoleHistoryPage() {
     const endDate = toEndOfDay(dateTo);
 
     const list = rows.filter((row) => {
-      const byStatus = statusFilter === "ALL" || toText(row.queueState) === statusFilter;
+      const byStatus = statusFilter === "ALL" || normalizeCode(row.workflowStatus) === statusFilter;
       if (!byStatus) return false;
 
       const completedAtValue = new Date(row.completedAt || 0).getTime();
@@ -334,6 +603,24 @@ export default function WorkshopRoleHistoryPage() {
     }).length;
     return { total, today, sevenDays };
   }, [filteredRows]);
+
+  const openHistoryDetail = useCallback((serviceOrderId) => {
+    const targetOrderId = toPositiveNumber(serviceOrderId);
+    if (!targetOrderId || !roleConfig) return;
+
+    navigate(`${roleConfig.openOrderPath(targetOrderId)}?from=history`, {
+      state: { returnToPath: location.pathname },
+    });
+  }, [location.pathname, navigate, roleConfig]);
+  const openHistoryDiagnosis = useCallback((serviceOrderId) => {
+    const targetOrderId = toPositiveNumber(serviceOrderId);
+    if (!targetOrderId || !roleConfig) return;
+
+    const openPathBuilder = roleConfig.openDiagnosisPath || roleConfig.openOrderPath;
+    navigate(`${openPathBuilder(targetOrderId)}?from=history`, {
+      state: { returnToPath: location.pathname },
+    });
+  }, [location.pathname, navigate, roleConfig]);
 
   if (!roleConfig) {
     return (
@@ -384,7 +671,7 @@ export default function WorkshopRoleHistoryPage() {
                 value={statusFilter}
                 options={[
                   { value: "ALL", label: "Tất cả trạng thái" },
-                  ...statusOptions.map((status) => ({ value: status, label: status })),
+                  ...statusOptions.map((status) => ({ value: status, label: getHistoryStatusLabel(status, roleCode) })),
                 ]}
                 onChange={(value) => setStatusFilter(String(value || "ALL"))}
                 minWidth={210}
@@ -413,9 +700,8 @@ export default function WorkshopRoleHistoryPage() {
                 onClick={() => {
                   setStatusFilter("ALL");
                   setSortBy("COMPLETED_DESC");
-                  const today = toDateText(new Date());
-                  setDateFrom(today);
-                  setDateTo(today);
+                  setDateFrom("");
+                  setDateTo("");
                 }}
               >
                 Xóa lọc
@@ -458,12 +744,23 @@ export default function WorkshopRoleHistoryPage() {
             <VStack align="stretch" spacing={3}>
               {filteredRows.map((row) => (
                 <Box
-                  key={`${row.serviceOrderId}-${row.completedAt || ""}`}
+                  key={`${row.diagnosisId || 0}-${row.serviceOrderId}-${row.completedAt || ""}`}
+                  role="button"
+                  tabIndex={0}
                   p={4}
                   borderRadius="lg"
                   border="1px solid #e6ecf8"
                   bg="#fbfdff"
+                  cursor="pointer"
+                  onClick={() => openHistoryDetail(row.serviceOrderId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openHistoryDetail(row.serviceOrderId);
+                    }
+                  }}
                   _hover={{ borderColor: "#c9d9f3", boxShadow: "0 6px 18px rgba(27, 37, 89, 0.08)" }}
+                  _focusVisible={{ outline: "2px solid #7aa2ff", outlineOffset: "2px" }}
                   transition="all 0.18s ease"
                 >
                   <Stack spacing={3}>
@@ -471,8 +768,8 @@ export default function WorkshopRoleHistoryPage() {
                       <Box>
                         <HStack spacing={2} flexWrap="wrap">
                           <Text fontWeight="800" color="#1b2559">{row.serviceOrderCode}</Text>
-                          <Badge colorScheme="green" borderRadius="full" px={2.5} py={0.5}>
-                            {roleConfig.processedLabel}
+                          <Badge colorScheme="blue" borderRadius="full" px={2.5} py={0.5}>
+                            {getHistoryStatusLabel(row.workflowStatus, roleCode)}
                           </Badge>
                         </HStack>
                         <Text mt={1} color="#4a5568">{row.customerName}</Text>
@@ -482,14 +779,6 @@ export default function WorkshopRoleHistoryPage() {
                           <Badge colorScheme="purple" borderRadius="full">Tổ: {row.teamName || "--"}</Badge>
                         </HStack>
                       </Box>
-                      <Button
-                        size="sm"
-                        colorScheme="blue"
-                        variant="outline"
-                        onClick={() => navigate(roleConfig.openOrderPath(row.serviceOrderId))}
-                      >
-                        Mở chi tiết
-                      </Button>
                     </Flex>
                     <Divider />
                     <SimpleGrid columns={{ base: 1, md: 4 }} spacing={2}>
@@ -509,8 +798,24 @@ export default function WorkshopRoleHistoryPage() {
                     <HStack spacing={2}>
                       <TimeIcon color="#5a6d9a" />
                       <Text fontSize="sm" color="#2b3674">
-                        <strong>{getProcessedAtLabel(roleCode)}:</strong> {formatDateTime(row.completedAt)}
+                        <strong>{getProcessedTimelineLabel(roleCode)}:</strong> {formatDateTime(row.completedAt)}
                       </Text>
+                    </HStack>
+                    <HStack justify="flex-end" spacing={2} pt={1} borderTop="1px solid" borderColor="gray.100">
+                      <Button
+                        size="sm"
+                        colorScheme="blue"
+                        variant="solid"
+                        borderRadius="full"
+                        fontWeight="700"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openHistoryDiagnosis(row.serviceOrderId);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        Xem chuẩn đoán
+                      </Button>
                     </HStack>
                   </Stack>
                 </Box>
@@ -522,4 +827,3 @@ export default function WorkshopRoleHistoryPage() {
     </Box>
   );
 }
-

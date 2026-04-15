@@ -32,7 +32,7 @@ const TEXT = {
   notEditableWindow: "Không thể sửa lịch hẹn vì xe đã đến xưởng.",
   loadingData: "Đang tải dữ liệu lịch hẹn...",
   pageTitle: "Chỉnh sửa lịch hẹn (Lễ tân)",
-  back: "<- Quay lại lịch hẹn",
+  back: "Quay lại",
   submit: "Lưu cập nhật",
   successTitle: "Cập nhật lịch hẹn thành công",
   successMessage: "Hệ thống đã tạo lịch mới và thay thế lịch cũ.",
