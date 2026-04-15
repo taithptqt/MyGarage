@@ -93,7 +93,8 @@ const EMPTY_CATEGORY_FORM = {
   categoryName: "",
   parentId: "",
   description: "",
-  isDepositRequired: false
+  isDepositRequired: false,
+  isActive: true
 };
 
 const RESERVE_RULE_OPTIONS = [
@@ -704,7 +705,8 @@ export default function InventoryAdminPage({ section }) {
       categoryName: category?.categoryName || "",
       parentId: category?.parentId == null ? "" : String(category.parentId),
       description: category?.description || "",
-      isDepositRequired: !!category?.isDepositRequired
+      isDepositRequired: !!category?.isDepositRequired,
+      isActive: category?.isActive !== false
     });
     setShowCategoryModal(true);
   };
@@ -768,6 +770,7 @@ export default function InventoryAdminPage({ section }) {
       parentId,
       description: categoryForm.description.trim() || null,
       isDepositRequired: !!categoryForm.isDepositRequired,
+      isActive: !!categoryForm.isActive,
       isDeleted: false
     };
   };
@@ -899,22 +902,30 @@ export default function InventoryAdminPage({ section }) {
     }
   };
 
-  const markDiscontinued = async (product) => {
-    await inventoryApi.updateProduct(product.id, { ...product, isActive: false });
+  const handleToggleProductBusiness = async (product) => {
+    const nextIsActive = product?.isActive === false;
+    const ok = window.confirm(
+      `${nextIsActive ? "Mở lại" : "Ngừng"} kinh doanh sản phẩm "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`
+    );
+    if (!ok) return;
+    await inventoryApi.updateProduct(product.id, {
+      ...product,
+      isActive: nextIsActive
+    });
     await fetchData();
   };
 
-  const handleDeleteProduct = async (product) => {
-    const ok = window.confirm(`Xóa sản phẩm "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`);
+  const handleToggleCategoryBusiness = async (category) => {
+    const nextIsActive = category?.isActive === false;
+    const categoryName = category?.categoryName || "-";
+    const ok = window.confirm(
+      `${nextIsActive ? "Mở lại" : "Ngừng"} kinh doanh danh mục "${categoryName}"?`
+    );
     if (!ok) return;
-    await inventoryApi.deleteProduct(product.id);
-    await fetchData();
-  };
-
-  const handleDeleteCategory = async (category) => {
-    const ok = window.confirm(`Xóa danh mục "${category?.categoryName || "-"}"?`);
-    if (!ok) return;
-    await inventoryApi.deletePartCategory(category.id);
+    await inventoryApi.updatePartCategory(category.id, {
+      ...category,
+      isActive: nextIsActive
+    });
     await fetchData();
   };
 
@@ -1494,7 +1505,7 @@ export default function InventoryAdminPage({ section }) {
                       <th>Bảo hành (tháng)</th>
                       <th>K.S sức chứa</th>
                       <th>Trạng thái</th>
-                      <th>Thao tác</th>
+                      <th className="inventory-action-col">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1531,21 +1542,14 @@ export default function InventoryAdminPage({ section }) {
                               {p.isActive ? "Đang kinh doanh" : "Ngừng kinh doanh"}
                             </span>
                           </td>
-                          <td>
-                            <div className="row-actions">
-                              <button className="btn-icon" onClick={() => openEditProductModal(p)}>
+                          <td className="inventory-action-col-cell">
+                            <div className="row-actions inventory-row-actions">
+                              <button className="btn-icon inventory-action-btn" onClick={() => openEditProductModal(p)}>
                                 Sửa
                               </button>
-                              <button className="btn-icon" onClick={() => runAction(() => handleDeleteProduct(p))}>
-                                Xóa
+                              <button className="btn-icon inventory-action-btn inventory-action-btn--warn" onClick={() => runAction(() => handleToggleProductBusiness(p))}>
+                                {p.isActive ? "Ngừng kinh doanh" : "Mở lại"}
                               </button>
-                              {p.isActive ? (
-                                <button className="btn-icon" onClick={() => runAction(() => markDiscontinued(p))}>
-                                  Ngừng KD
-                                </button>
-                              ) : (
-                                <span className="result-count">Đã ngừng</span>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -1562,6 +1566,8 @@ export default function InventoryAdminPage({ section }) {
               <StatCards
                 items={[
                   { label: "Tổng danh mục", value: categories.length },
+                  { label: "Đang kinh doanh", value: categories.filter((c) => c.isActive !== false).length },
+                  { label: "Ngừng kinh doanh", value: categories.filter((c) => c.isActive === false).length },
                   { label: "Sản phẩm đã phân loại", value: products.filter((p) => !!p.categoryId).length },
                   { label: "Sản phẩm chưa gán danh mục", value: products.filter((p) => !p.categoryId).length }
                 ]}
@@ -1662,13 +1668,14 @@ export default function InventoryAdminPage({ section }) {
                       <th>Danh mục cha</th>
                       <th>Mô tả</th>
                       <th>Đặt cọc</th>
+                      <th>Trạng thái KD</th>
                       <th>Số sản phẩm</th>
-                      <th>Thao tác</th>
+                      <th className="inventory-action-col">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {categories.length === 0 ? (
-                      <NoDataRow colSpan={7} message="Chưa có danh mục nào trong kho." />
+                      <NoDataRow colSpan={8} message="Chưa có danh mục nào trong kho." />
                     ) : (
                       categories.map((category) => (
                         <tr key={category.id}>
@@ -1677,14 +1684,19 @@ export default function InventoryAdminPage({ section }) {
                           <td>{category.parentId ? (categoryMap.get(category.parentId) || `#${category.parentId}`) : "-"}</td>
                           <td>{category.description || "-"}</td>
                           <td>{category.isDepositRequired ? "Có" : "Không"}</td>
-                          <td>{toNumber(productCountByCategory.get(String(category.id)), 0)}</td>
                           <td>
-                            <div className="row-actions">
-                              <button className="btn-icon" onClick={() => openEditCategoryModal(category)}>
+                            <span className={`badge ${category.isActive === false ? "badge-deleted" : "badge-active"}`}>
+                              {category.isActive === false ? "Ngừng kinh doanh" : "Đang kinh doanh"}
+                            </span>
+                          </td>
+                          <td>{toNumber(productCountByCategory.get(String(category.id)), 0)}</td>
+                          <td className="inventory-action-col-cell">
+                            <div className="row-actions inventory-row-actions">
+                              <button className="btn-icon inventory-action-btn" onClick={() => openEditCategoryModal(category)}>
                                 Sửa
                               </button>
-                              <button className="btn-icon" onClick={() => runAction(() => handleDeleteCategory(category))}>
-                                Xóa
+                              <button className="btn-icon inventory-action-btn inventory-action-btn--warn" onClick={() => runAction(() => handleToggleCategoryBusiness(category))}>
+                                {category.isActive === false ? "Mở lại" : "Ngừng KD"}
                               </button>
                             </div>
                           </td>
