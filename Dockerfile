@@ -29,7 +29,7 @@ FROM backend-restore AS backend-publish
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src/backend
 COPY backend/ ./
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish --no-restore
+RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
