@@ -24,6 +24,8 @@ namespace MyGarage.DTOs.Requests
         public List<string> InsuranceDamageImageUrls { get; set; } = new();
         public List<long> ServiceIds { get; set; } = new();
         public List<long> PackageIds { get; set; } = new();
-        public List<string> SymptomNotes { get; set; } = new();
+
+        [Display(Name = "Ghi chú")]
+        public string? CustomerNotes { get; set; }
     }
 }

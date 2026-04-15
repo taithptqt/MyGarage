@@ -134,16 +134,18 @@ namespace MyGarage.Services
                 BypassConflictGuard = bypassConflictGuard,
                 ConflictLevel = string.IsNullOrWhiteSpace(intakeSuggestion.ConflictLevel) ? "GREEN" : intakeSuggestion.ConflictLevel.Trim().ToUpperInvariant(),
                 ConflictMinutes = Math.Max(0, intakeSuggestion.ConflictMinutes),
-                AssignedTeamId = newestDiagnosis?.AssignedTeamId ?? intakeSuggestion.SuggestedTeamId,
-                LeadTechnicianId = newestDiagnosis?.TechnicianId > 0 ? newestDiagnosis.TechnicianId : intakeSuggestion.SuggestedLeadTechnicianId,
-                AssistantTechnicianId = newestDiagnosis?.AssistantTechnicianId ?? intakeSuggestion.SuggestedAssistantTechnicianId,
+                AssignedTeamId = newestDiagnosis != null ? GetAssignedTeamId(newestDiagnosis) ?? intakeSuggestion.SuggestedTeamId : intakeSuggestion.SuggestedTeamId,
+                LeadTechnicianId = newestDiagnosis != null && GetTechnicianId(newestDiagnosis).GetValueOrDefault() > 0
+                    ? GetTechnicianId(newestDiagnosis)
+                    : intakeSuggestion.SuggestedLeadTechnicianId,
+                AssistantTechnicianId = newestDiagnosis != null ? GetAssistantTechnicianId(newestDiagnosis) ?? intakeSuggestion.SuggestedAssistantTechnicianId : intakeSuggestion.SuggestedAssistantTechnicianId,
                 CreatedAt = VietnamTime.Now
             };
 
             var createdBy = serviceOrder.ReceptionistId ?? serviceOrder.ServiceAdvisorId;
-            if (autoAssign && newestDiagnosis != null && newestDiagnosis.TechnicianId > 0)
+            if (autoAssign && newestDiagnosis != null && GetTechnicianId(newestDiagnosis).GetValueOrDefault() > 0)
             {
-                createdBy = newestDiagnosis.TechnicianId;
+                createdBy = GetTechnicianId(newestDiagnosis);
             }
 
             await PersistSnapshotAsync(serviceOrder.Id, payload, createdBy);

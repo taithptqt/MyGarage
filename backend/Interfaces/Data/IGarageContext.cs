@@ -71,6 +71,10 @@ namespace MyGarage.Interfaces
         DbSet<QcInspection> QcInspections { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<QuotationDetail> QuotationDetails { get; }
+        DbSet<QuotationAccessLink> QuotationAccessLinks { get; }
+        DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; }
+        DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; }
+        DbSet<MandatoryOverrideRequest> MandatoryOverrideRequests { get; }
         DbSet<RetailOrder> RetailOrders { get; }
         DbSet<RetailOrderItem> RetailOrderItems { get; }
         DbSet<RetailReturn> RetailReturns { get; }

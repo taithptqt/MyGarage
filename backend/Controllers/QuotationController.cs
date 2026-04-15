@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -41,6 +42,13 @@ public class QuotationController : ControllerBase
         return Ok(rows);
     }
 
+    [HttpGet("service-orders/{serviceOrderId:long}/mandatory-overrides")]
+    public async Task<ActionResult> GetMandatoryOverridesByServiceOrder(long serviceOrderId)
+    {
+        var rows = await _quotationWorkflowService.GetMandatoryOverrideRequestsByServiceOrderAsync(serviceOrderId);
+        return Ok(rows);
+    }
+
     [HttpGet("quotations/{quotationId:long}")]
     public async Task<ActionResult<QuotationResponseDto>> GetById(long quotationId)
     {
@@ -60,6 +68,70 @@ public class QuotationController : ControllerBase
         {
             var updated = await _quotationWorkflowService.ApproveQuotationAsync(quotationId, request);
             return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("quotations/{quotationId:long}/customer-decision")]
+    public async Task<ActionResult<QuotationResponseDto>> ApplyCustomerDecision(
+        long quotationId,
+        [FromBody] QuotationCustomerDecisionRequestDto request)
+    {
+        try
+        {
+            var updated = await _quotationWorkflowService.ApplyCustomerDecisionAsync(quotationId, request);
+            return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("quotations/{quotationId:long}/clone")]
+    public async Task<ActionResult<QuotationResponseDto>> CloneQuotation(
+        long quotationId,
+        [FromBody] QuotationCloneRequestDto request)
+    {
+        try
+        {
+            var updated = await _quotationWorkflowService.CloneQuotationAsync(quotationId, request);
+            return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("quotations/{quotationId:long}/split-billing")]
+    public async Task<ActionResult<QuotationResponseDto>> UpdateSplitBilling(
+        long quotationId,
+        [FromBody] QuotationSplitBillingUpdateRequestDto request)
+    {
+        try
+        {
+            var updated = await _quotationWorkflowService.UpdateSplitBillingAsync(quotationId, request);
+            return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("mandatory-overrides/{requestId:long}/decision")]
+    public async Task<ActionResult> DecideMandatoryOverride(
+        long requestId,
+        [FromBody] MandatoryOverrideDecisionRequestDto request)
+    {
+        try
+        {
+            await _quotationWorkflowService.DecideMandatoryOverrideAsync(requestId, request);
+            return Ok(new { message = "Mandatory override updated." });
         }
         catch (InvalidOperationException ex)
         {
@@ -87,6 +159,39 @@ public class QuotationController : ControllerBase
         try
         {
             var updated = await _quotationWorkflowService.SupersedeQuotationAsync(quotationId, request?.ActorStaffId ?? 0, request?.Note);
+            return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("quotations/public/{token}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(QuotationPublicViewResponseDto), 200)]
+    public async Task<ActionResult<QuotationPublicViewResponseDto>> GetByPublicToken(string token)
+    {
+        try
+        {
+            var data = await _quotationWorkflowService.GetQuotationByPublicTokenAsync(token);
+            return Ok(data);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("quotations/public/{token}/decision")]
+    [AllowAnonymous]
+    public async Task<ActionResult<QuotationResponseDto>> ApplyDecisionByPublicToken(
+        string token,
+        [FromBody] QuotationPublicDecisionRequestDto request)
+    {
+        try
+        {
+            var updated = await _quotationWorkflowService.ApplyCustomerDecisionByPublicTokenAsync(token, request);
             return Ok(updated);
         }
         catch (InvalidOperationException ex)

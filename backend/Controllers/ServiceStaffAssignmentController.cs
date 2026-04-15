@@ -86,6 +86,13 @@ namespace MyGarage.Controllers
                 await _serviceOrderService.EnsureAssignmentEditableAsync(serviceOrderId);
 
                 var entity = _mapper.Map<ServiceStaffAssignment>(itemDto);
+                entity.RequiresInsuranceProof = await ResolveRequiresInsuranceProofAsync(itemDto.ServiceOrderDetailId, itemDto.RequiresInsuranceProof);
+                entity.ProofImageUrl = NormalizeProofImageUrl(itemDto.ProofImageUrl);
+                var completionValidationError = ValidateInsuranceProofOnComplete(entity.Status, entity.RequiresInsuranceProof, entity.ProofImageUrl);
+                if (!string.IsNullOrWhiteSpace(completionValidationError))
+                {
+                    return BadRequest(new { message = completionValidationError });
+                }
                 var createdItem = await _serviceStaffAssignmentService.AddAsync(entity);
                 var responseDto = _mapper.Map<ServiceStaffAssignmentResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
@@ -131,6 +138,13 @@ namespace MyGarage.Controllers
                 await _serviceOrderService.EnsureAssignmentEditableAsync(serviceOrderId);
 
                 _mapper.Map(itemDto, existingItem);
+                existingItem.RequiresInsuranceProof = await ResolveRequiresInsuranceProofAsync(detailId, itemDto.RequiresInsuranceProof);
+                existingItem.ProofImageUrl = NormalizeProofImageUrl(itemDto.ProofImageUrl);
+                var completionValidationError = ValidateInsuranceProofOnComplete(existingItem.Status, existingItem.RequiresInsuranceProof, existingItem.ProofImageUrl);
+                if (!string.IsNullOrWhiteSpace(completionValidationError))
+                {
+                    return BadRequest(new { message = completionValidationError });
+                }
                 var updatedItem = await _serviceStaffAssignmentService.UpdateAsync(id, existingItem);
                 if (updatedItem == null)
                 {
@@ -233,6 +247,34 @@ namespace MyGarage.Controllers
         private static string NormalizeStatus(string? status)
             => string.IsNullOrWhiteSpace(status) ? string.Empty : status.Trim().ToUpperInvariant();
 
+        private static string? NormalizeProofImageUrl(string? value)
+        {
+            var trimmed = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return null;
+            }
+
+            return trimmed.Length <= 500 ? trimmed : trimmed[..500];
+        }
+
+        private static string? ValidateInsuranceProofOnComplete(string? status, bool requiresInsuranceProof, string? proofImageUrl)
+        {
+            if (!requiresInsuranceProof)
+            {
+                return null;
+            }
+
+            if (!string.Equals(NormalizeStatus(status), nameof(ServiceProgressStatus.COMPLETED), StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return string.IsNullOrWhiteSpace(proofImageUrl)
+                ? "Hạng mục bảo hiểm bắt buộc ảnh nghiệm thu trước khi hoàn thành."
+                : null;
+        }
+
         private async Task<string?> ValidateSignedCheckInBeforeAssignmentAsync(long serviceOrderDetailId)
         {
             if (serviceOrderDetailId <= 0)
@@ -272,6 +314,28 @@ namespace MyGarage.Controllers
                 .Where(x => x.Id == serviceOrderDetailId)
                 .Select(x => x.ServiceOrderId)
                 .FirstOrDefaultAsync();
+        }
+
+        private async Task<bool> ResolveRequiresInsuranceProofAsync(long serviceOrderDetailId, bool explicitFlag)
+        {
+            if (explicitFlag)
+            {
+                return true;
+            }
+
+            if (serviceOrderDetailId <= 0)
+            {
+                return false;
+            }
+
+            var payerType = await _context.ServiceOrderDetails
+                .AsNoTracking()
+                .Where(x => x.Id == serviceOrderDetailId)
+                .Select(x => x.PayerType)
+                .FirstOrDefaultAsync();
+
+            return string.Equals(payerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(payerType, "SPLIT", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

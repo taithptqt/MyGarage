@@ -16,6 +16,10 @@ public partial class DiagnosisService
     private const string DiagnoseLogEventCanceled = "CANCELED";
     private const string DiagnoseLogEventCompleted = "COMPLETED";
     private const string DiagnoseLogEventArchived = "ARCHIVED";
+    private const string DiagnoseLogEventTechnicalApproved = "TECHNICAL_APPROVED";
+    private const string DiagnoseLogEventTechnicalRejected = "TECHNICAL_REJECTED";
+    private const string DiagnoseLogEventFinalApproved = "FINAL_APPROVED";
+    private const string DiagnoseLogEventFinalApprovedBypass = "FINAL_APPROVED_BYPASS";
 
     private DiagnosisAssignment BuildDiagnosisAssignment(
         Diagnosis diagnosis,
@@ -29,55 +33,45 @@ public partial class DiagnosisService
         return new DiagnosisAssignment
         {
             DiagnosisId = diagnosis.Id,
-            AssignedTeamId = diagnosis.AssignedTeamId,
-            TechnicianId = diagnosis.TechnicianId,
-            AssistantTechnicianId = diagnosis.AssistantTechnicianId,
-            AssignedBayId = diagnosis.AssignedBayId,
+            AssignedTeamId = GetAssignedTeamId(diagnosis),
+            TechnicianId = GetTechnicianId(diagnosis),
+            AssistantTechnicianId = GetAssistantTechnicianId(diagnosis),
+            AssignedBayId = GetAssignedBayId(diagnosis),
             Status = diagnosis.Status,
-            AssignedAt = diagnosis.AssignedAt,
-            TechnicianAcceptedAt = diagnosis.TechnicianAcceptedAt,
-            TechnicianCompletedAt = diagnosis.TechnicianCompletedAt,
-            ApprovedByTeamLeaderAt = diagnosis.ApprovedByTeamLeaderAt,
-            TeamLeaderNote = diagnosis.TeamLeaderNote,
-            ApprovedByForemanId = diagnosis.ApprovedByForemanId,
-            ApprovedByForemanAt = diagnosis.ApprovedByForemanAt,
-            ForemanNote = diagnosis.ForemanNote,
-            CancellationStatus = diagnosis.CancellationStatus,
-            CancellationReason = string.IsNullOrWhiteSpace(cancelReason) ? diagnosis.CancellationReason : cancelReason,
-            CancellationRequestedBy = diagnosis.CancellationRequestedBy,
-            CancellationRequestedAt = diagnosis.CancellationRequestedAt,
-            CancellationDecisionBy = diagnosis.CancellationDecisionBy,
-            CancellationDecisionAt = diagnosis.CancellationDecisionAt,
-            CancellationDecisionNote = diagnosis.CancellationDecisionNote,
-            SupportRequestedBy = diagnosis.SupportRequestedBy,
-            SupportRequestedAt = diagnosis.SupportRequestedAt,
-            SupportRequestNote = diagnosis.SupportRequestNote,
+            AssignedAt = GetAssignedAt(diagnosis),
+            TechnicianAcceptedAt = GetTechnicianAcceptedAt(diagnosis),
+            TechnicianCompletedAt = GetTechnicianCompletedAt(diagnosis),
+            CancellationStatus = GetCancellationStatus(diagnosis),
+            CancellationReason = string.IsNullOrWhiteSpace(cancelReason) ? GetCancellationReason(diagnosis) : cancelReason,
+            CancellationRequestedBy = GetCancellationRequestedBy(diagnosis),
+            CancellationRequestedAt = GetCancellationRequestedAt(diagnosis),
+            CancellationDecisionBy = GetCancellationDecisionBy(diagnosis),
+            CancellationDecisionAt = GetCancellationDecisionAt(diagnosis),
+            CancellationDecisionNote = GetCancellationDecisionNote(diagnosis),
+            SupportRequestedBy = GetSupportRequestedBy(diagnosis),
+            SupportRequestedAt = GetSupportRequestedAt(diagnosis),
+            SupportRequestNote = GetSupportRequestNote(diagnosis),
+            TeamLeaderApprovalStatus = GetTeamLeaderApprovalStatus(diagnosis),
+            FinalApprovalStatus = GetFinalApprovalStatus(diagnosis),
+            ForemanRejectReason = GetForemanRejectReason(diagnosis),
+            ApprovedByForemanId = GetApprovedByForemanId(diagnosis),
+            ApprovedByForemanAt = GetApprovedByForemanAt(diagnosis),
+            ApprovedByTeamLeaderId = GetApprovedByTeamLeaderId(diagnosis),
+            ApprovedByTeamLeaderAt = GetApprovedByTeamLeaderAt(diagnosis),
+            TeamLeaderNote = GetTeamLeaderNote(diagnosis),
+            ForemanNote = GetForemanNote(diagnosis),
             EventType = eventType,
             OldStatus = oldStatus,
-            Note = ComposeAssignmentNote(note, diagnosis.DispatchCollaborationMeta),
+            Note = ComposeAssignmentNote(note),
             CreatedBy = createdBy,
             CreatedAt = createdAt
         };
     }
 
-    private static string? ComposeAssignmentNote(string? note, string? dispatchCollaborationMeta)
+    private static string? ComposeAssignmentNote(string? note)
     {
         var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-        var normalizedMeta = string.IsNullOrWhiteSpace(dispatchCollaborationMeta) ? null : dispatchCollaborationMeta.Trim();
-
-        if (string.IsNullOrWhiteSpace(normalizedMeta))
-        {
-            return normalizedNote;
-        }
-
-        if (string.IsNullOrWhiteSpace(normalizedNote))
-        {
-            return normalizedMeta;
-        }
-
-        return normalizedNote.Contains(normalizedMeta, StringComparison.Ordinal)
-            ? normalizedNote
-            : $"{normalizedNote} {normalizedMeta}";
+        return normalizedNote;
     }
 
     private void AppendDiagnosisAssignments(IEnumerable<DiagnosisAssignment> logs)
@@ -93,51 +87,8 @@ public partial class DiagnosisService
 
     private async Task ApplyLatestLogOverlayAsync(IReadOnlyList<Diagnosis> diagnoses)
     {
-        if (diagnoses == null || diagnoses.Count == 0)
-        {
-            return;
-        }
-
-        var diagnosisIds = diagnoses.Select(x => x.Id).Distinct().ToList();
-        var latestLogs = await _context.DiagnosisAssignments.AsNoTracking()
-            .Where(x => diagnosisIds.Contains(x.DiagnosisId))
-            .OrderByDescending(x => x.CreatedAt)
-            .ThenByDescending(x => x.Id)
-            .ToListAsync();
-
-        var latestLogByDiagnosisId = latestLogs
-            .GroupBy(x => x.DiagnosisId)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        foreach (var diagnosis in diagnoses)
-        {
-            if (!latestLogByDiagnosisId.TryGetValue(diagnosis.Id, out var latestLog))
-            {
-                continue;
-            }
-
-            diagnosis.AssignedTeamId = latestLog.AssignedTeamId;
-            diagnosis.TechnicianId = latestLog.TechnicianId;
-            diagnosis.AssistantTechnicianId = latestLog.AssistantTechnicianId;
-            diagnosis.AssignedBayId = latestLog.AssignedBayId;
-            diagnosis.AssignedAt = latestLog.AssignedAt;
-            diagnosis.TechnicianAcceptedAt = latestLog.TechnicianAcceptedAt;
-            diagnosis.TechnicianCompletedAt = latestLog.TechnicianCompletedAt;
-            diagnosis.SupportRequestedBy = latestLog.SupportRequestedBy;
-            diagnosis.SupportRequestedAt = latestLog.SupportRequestedAt;
-            diagnosis.SupportRequestNote = latestLog.SupportRequestNote;
-            diagnosis.CancellationStatus = latestLog.CancellationStatus;
-            diagnosis.CancellationReason = latestLog.CancellationReason;
-            diagnosis.CancellationRequestedBy = latestLog.CancellationRequestedBy;
-            diagnosis.CancellationRequestedAt = latestLog.CancellationRequestedAt;
-            diagnosis.CancellationDecisionBy = latestLog.CancellationDecisionBy;
-            diagnosis.CancellationDecisionAt = latestLog.CancellationDecisionAt;
-            diagnosis.CancellationDecisionNote = latestLog.CancellationDecisionNote;
-            diagnosis.ApprovedByForemanId = latestLog.ApprovedByForemanId;
-            diagnosis.ApprovedByForemanAt = latestLog.ApprovedByForemanAt;
-            diagnosis.ApprovedByTeamLeaderAt = latestLog.ApprovedByTeamLeaderAt;
-            diagnosis.TeamLeaderNote = latestLog.TeamLeaderNote;
-            diagnosis.ForemanNote = latestLog.ForemanNote;
-        }
+        await PreloadAssignmentStatesAsync(diagnoses);
     }
 }
+
+

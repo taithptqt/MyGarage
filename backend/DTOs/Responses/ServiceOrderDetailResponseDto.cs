@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 namespace MyGarage.DTOs.Responses
 {
     public class ServiceOrderDetailResponseDto
     {
         public long Id { get; set; }
         public long ServiceOrderId { get; set; }
-        public long? DiagnoseRecommendationId { get; set; }
+        public long? DiagnosisRecommendationId { get; set; }
         public long? StandardServiceId { get; set; }
         public long? TechnicianId { get; set; }
         public long? OriginalOrderDetailId { get; set; }
@@ -45,3 +45,4 @@ namespace MyGarage.DTOs.Responses
         public long? UpdatedBy { get; set; }
     }
 }
+

@@ -64,8 +64,8 @@ namespace MyGarage.Controllers
                 });
             }
 
-            var items = await _categoryService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<CategoryResponseDto>>(items);
+            var allItems = await _categoryService.GetAllAsync();
+            var dtos = _mapper.Map<IEnumerable<CategoryResponseDto>>(allItems);
             return Ok(dtos);
         }
 

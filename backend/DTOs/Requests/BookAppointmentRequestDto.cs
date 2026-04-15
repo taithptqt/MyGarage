@@ -63,6 +63,7 @@ namespace MyGarage.DTOs.Requests
 
         public List<string> InsuranceDamageImageUrls { get; set; } = new();
 
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
 
         public string? SlotHoldToken { get; set; }

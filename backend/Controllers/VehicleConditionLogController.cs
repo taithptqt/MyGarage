@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -135,7 +135,7 @@ namespace MyGarage.Controllers
         {
             if (itemDto == null)
             {
-                return BadRequest(new { message = "D? li?u ki?m tra xe không h?p l?." });
+                return BadRequest(new { message = "D? li?u ki?m tra xe khÃ´ng h?p l?." });
             }
 
             var logType = NormalizeLogType(itemDto.LogType);
@@ -144,7 +144,7 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
                 if (!hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "Ch? du?c t?o CHECK_OUT sau khi khách dã ký CHECK_IN." });
+                    return BadRequest(new { message = "Ch? du?c t?o CHECK_OUT sau khi khÃ¡ch dÃ£ kÃ½ CHECK_IN." });
                 }
             }
             else if (logType == LogTypeCheckIn)
@@ -152,13 +152,13 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(itemDto.ServiceOrderId);
                 if (hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "CHECK_IN dã du?c khách hàng ký xác nh?n, không th? t?o m?i." });
+                    return BadRequest(new { message = "CHECK_IN dÃ£ du?c khÃ¡ch hÃ ng kÃ½ xÃ¡c nh?n, khÃ´ng th? t?o m?i." });
                 }
 
                 if (!string.IsNullOrWhiteSpace(itemDto.CustomerSignatureUrl) &&
                     !HasRequiredCornerImages(itemDto.DefectsAndImages))
                 {
-                    return BadRequest(new { message = "C?n ch?p d? 4 góc xe (tru?c trái, tru?c ph?i, sau trái, sau ph?i) tru?c khi khách ký CHECK_IN." });
+                    return BadRequest(new { message = "C?n ch?p d? 4 gÃ³c xe (tru?c trÃ¡i, tru?c ph?i, sau trÃ¡i, sau ph?i) tru?c khi khÃ¡ch kÃ½ CHECK_IN." });
                 }
             }
 
@@ -191,14 +191,14 @@ namespace MyGarage.Controllers
 
             if (itemDto == null)
             {
-                return BadRequest(new { message = "D? li?u ki?m tra xe không h?p l?." });
+                return BadRequest(new { message = "D? li?u ki?m tra xe khÃ´ng h?p l?." });
             }
             var updateDto = itemDto;
 
             var existingType = NormalizeLogType(existingItem.LogType);
             if (existingType == LogTypeCheckIn && !string.IsNullOrWhiteSpace(existingItem.CustomerSignatureUrl))
             {
-                return BadRequest(new { message = "CHECK_IN dã du?c khách ký, không th? ch?nh s?a." });
+                return BadRequest(new { message = "CHECK_IN dÃ£ du?c khÃ¡ch kÃ½, khÃ´ng th? ch?nh s?a." });
             }
 
             var targetType = NormalizeLogType(updateDto.LogType);
@@ -212,7 +212,7 @@ namespace MyGarage.Controllers
                 var hasSignedCheckIn = await _vehicleConditionLogService.HasSignedCheckInAsync(updateDto.ServiceOrderId);
                 if (!hasSignedCheckIn)
                 {
-                    return BadRequest(new { message = "Ch? du?c c?p nh?t CHECK_OUT sau khi khách dã ký CHECK_IN." });
+                    return BadRequest(new { message = "Ch? du?c c?p nh?t CHECK_OUT sau khi khÃ¡ch dÃ£ kÃ½ CHECK_IN." });
                 }
             }
 
@@ -228,7 +228,7 @@ namespace MyGarage.Controllers
                 !string.IsNullOrWhiteSpace(effectiveSignature) &&
                 !HasRequiredCornerImages(effectiveDefects))
             {
-                return BadRequest(new { message = "C?n ch?p d? 4 góc xe (tru?c trái, tru?c ph?i, sau trái, sau ph?i) tru?c khi khách ký CHECK_IN." });
+                return BadRequest(new { message = "C?n ch?p d? 4 gÃ³c xe (tru?c trÃ¡i, tru?c ph?i, sau trÃ¡i, sau ph?i) tru?c khi khÃ¡ch kÃ½ CHECK_IN." });
             }
 
             _mapper.Map(updateDto, existingItem);
@@ -262,7 +262,7 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "D? li?u ?nh không h?p l?." });
+                return BadRequest(new { message = "D? li?u ?nh khÃ´ng h?p l?." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) ||
@@ -279,7 +279,7 @@ namespace MyGarage.Controllers
             }
             catch
             {
-                return BadRequest(new { message = "Không th? t?i t?p lên máy ch?." });
+                return BadRequest(new { message = "KhÃ´ng th? t?i t?p lÃªn mÃ¡y ch?." });
             }
         }
 
@@ -288,13 +288,13 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "D? li?u ch? ký không h?p l?." });
+                return BadRequest(new { message = "D? li?u ch? kÃ½ khÃ´ng h?p l?." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) ||
                 !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Ch? h? tr? t?p ?nh cho ch? ký." });
+                return BadRequest(new { message = "Ch? h? tr? t?p ?nh cho ch? kÃ½." });
             }
 
             try
@@ -304,7 +304,7 @@ namespace MyGarage.Controllers
             }
             catch
             {
-                return BadRequest(new { message = "Không th? t?i ch? ký lên máy ch?." });
+                return BadRequest(new { message = "KhÃ´ng th? t?i ch? kÃ½ lÃªn mÃ¡y ch?." });
             }
         }
 
@@ -331,7 +331,7 @@ namespace MyGarage.Controllers
             var orderExists = await _vehicleConditionLogService.ServiceOrderExistsAsync(serviceOrderId);
             if (!orderExists)
             {
-                return NotFound(new { message = "Không tìm th?y l?nh s?a ch?a." });
+                return NotFound(new { message = "KhÃ´ng tÃ¬m th?y l?nh s?a ch?a." });
             }
 
             var existing = await _vehicleConditionLogService.GetActiveRequestAsync(serviceOrderId, requestType);
@@ -344,8 +344,8 @@ namespace MyGarage.Controllers
             if (hasCompletedLog)
             {
                 var message = requestType == "CHECK_IN"
-                    ? "Xe dã du?c check-in."
-                    : "Xe dã du?c checkout.";
+                    ? "Xe dÃ£ du?c check-in."
+                    : "Xe dÃ£ du?c checkout.";
                 return BadRequest(new { message });
             }
 
@@ -358,7 +358,7 @@ namespace MyGarage.Controllers
             _ = serviceOrderId;
             _ = requestType;
             _ = technicianId;
-            return BadRequest(new { message = "Yêu c?u CHECK_IN/CHECK_OUT do l? tân x? lý tr?c ti?p, không phân công cho k? thu?t viên." });
+            return BadRequest(new { message = "YÃªu c?u CHECK_IN/CHECK_OUT do l? tÃ¢n x? lÃ½ tr?c ti?p, khÃ´ng phÃ¢n cÃ´ng cho k? thu?t viÃªn." });
         }
 
         private static string NormalizeLogType(string? logType)
@@ -513,7 +513,7 @@ namespace MyGarage.Controllers
                 .AsNoTracking()
                 .Where(x => x.ServiceOrderId == serviceOrderId)
                 .Where(x => x.StandardServiceId.HasValue && x.StandardServiceId.Value > 0)
-                .Where(x => x.DiagnoseRecommendationId == null)
+                .Where(x => x.DiagnosisRecommendationId == null)
                 .Select(x => x.StandardServiceId!.Value)
                 .Distinct()
                 .ToListAsync();
@@ -869,6 +869,7 @@ namespace MyGarage.Controllers
         }
     }
 }
+
 
 
 

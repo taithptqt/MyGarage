@@ -58,7 +58,14 @@ namespace MyGarage.Services
                     _logger.LogError(ex, "Appointment reminder cycle failed.");
                 }
 
-                await Task.Delay(ScanInterval, stoppingToken);
+                try
+                {
+                    await Task.Delay(ScanInterval, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
 

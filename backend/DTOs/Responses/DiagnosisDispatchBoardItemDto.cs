@@ -12,6 +12,7 @@ namespace MyGarage.DTOs.Responses
         public IReadOnlyList<long> DiagnosisIds { get; set; } = Array.Empty<long>();
         public string? QueueState { get; set; }
         public string? QueueColor { get; set; }
+        public string? WorkflowStatus { get; set; }
         public string? DispatchTag { get; set; }
         public long? TeamId { get; set; }
         public string? TeamName { get; set; }
@@ -45,6 +46,8 @@ namespace MyGarage.DTOs.Responses
         public DateTime? ApprovedByTeamLeaderAt { get; set; }
         public string? TeamLeaderNote { get; set; }
         public string? ForemanNote { get; set; }
+        public string? TeamLeaderApprovalStatus { get; set; }
+        public string? ForemanApprovalStatus { get; set; }
     }
 }
 

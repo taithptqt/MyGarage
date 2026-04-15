@@ -27,11 +27,6 @@ namespace MyGarage.DTOs.Requests
         public DateTime? CancellationDecisionAt { get; set; }
         public long? CancellationDecisionBy { get; set; }
         public string? CancellationDecisionNote { get; set; }
-        public long? ApprovedByForemanId { get; set; }
-        public DateTime? ApprovedByForemanAt { get; set; }
-        public DateTime? ApprovedByTeamLeaderAt { get; set; }
-        public string? TeamLeaderNote { get; set; }
-        public string? ForemanNote { get; set; }
         public long? UpdatedBy { get; set; }
     }
 }

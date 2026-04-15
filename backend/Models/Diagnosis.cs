@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MyGarage.Models;
 
@@ -10,15 +9,6 @@ public partial class Diagnosis
 
     public long ServiceOrderId { get; set; }
 
-    [NotMapped]
-    public long? TechnicianId { get; set; }
-
-    [NotMapped]
-    public long? AssistantTechnicianId { get; set; }
-
-    [NotMapped]
-    public long? AssignedBayId { get; set; }
-
     public string? Symptom { get; set; }
 
     public string? RootCause { get; set; }
@@ -27,69 +17,17 @@ public partial class Diagnosis
 
     public string? Status { get; set; }
 
+    public string? AssignmentNote { get; set; }
+
+    public DateTime? SubmittedAt { get; set; }
+
+    public DateTime? SlaDueAt { get; set; }
+
+    public bool IsEscalated { get; set; }
+
     public string? DispatchTag { get; set; }
 
-    [NotMapped]
-    public long? AssignedTeamId { get; set; }
-
-    [NotMapped]
-    public DateTime? AssignedAt { get; set; }
-
-    [NotMapped]
-    public DateTime? TechnicianAcceptedAt { get; set; }
-
-    [NotMapped]
-    public DateTime? TechnicianCompletedAt { get; set; }
-
     public DateTime? DiagnosedAt { get; set; }
-
-    [NotMapped]
-    public DateTime? SupportRequestedAt { get; set; }
-
-    [NotMapped]
-    public long? SupportRequestedBy { get; set; }
-
-    [NotMapped]
-    public string? SupportRequestNote { get; set; }
-
-    [NotMapped]
-    public string? CancellationStatus { get; set; }
-
-    [NotMapped]
-    public string? CancellationReason { get; set; }
-
-    [NotMapped]
-    public DateTime? CancellationRequestedAt { get; set; }
-
-    [NotMapped]
-    public long? CancellationRequestedBy { get; set; }
-
-    [NotMapped]
-    public DateTime? CancellationDecisionAt { get; set; }
-
-    [NotMapped]
-    public long? CancellationDecisionBy { get; set; }
-
-    [NotMapped]
-    public string? CancellationDecisionNote { get; set; }
-
-    [NotMapped]
-    public long? ApprovedByForemanId { get; set; }
-
-    [NotMapped]
-    public DateTime? ApprovedByForemanAt { get; set; }
-
-    [NotMapped]
-    public DateTime? ApprovedByTeamLeaderAt { get; set; }
-
-    [NotMapped]
-    public string? TeamLeaderNote { get; set; }
-
-    [NotMapped]
-    public string? ForemanNote { get; set; }
-
-    [NotMapped]
-    public string? DispatchCollaborationMeta { get; set; }
 
     public DateTime? CreatedAt { get; set; }
 
@@ -101,8 +39,11 @@ public partial class Diagnosis
 
     public virtual ICollection<DiagnosisAssignment> DiagnosisAssignments { get; set; } = new List<DiagnosisAssignment>();
 
+    public virtual ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; set; } = new List<TechnicalProposalSnapshot>();
+
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }
-

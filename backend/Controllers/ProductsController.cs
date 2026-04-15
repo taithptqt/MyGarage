@@ -55,10 +55,10 @@ namespace MyGarage.Controllers
                     .Take(normalizedPageSize)
                     .ToListAsync();
 
-                var dtos = _mapper.Map<List<ProductResponseDto>>(items);
+                var pagedDtos = _mapper.Map<List<ProductResponseDto>>(items);
                 return Ok(new
                 {
-                    items = dtos,
+                    items = pagedDtos,
                     total,
                     page = normalizedPage,
                     pageSize = normalizedPageSize,
@@ -66,9 +66,9 @@ namespace MyGarage.Controllers
                 });
             }
 
-            var items = await _productService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<ProductResponseDto>>(items);
-            return Ok(dtos);
+            var allItems = await _productService.GetAllAsync();
+            var allDtos = _mapper.Map<IEnumerable<ProductResponseDto>>(allItems);
+            return Ok(allDtos);
         }
 
         [HttpGet("{id:long}")]

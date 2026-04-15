@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
@@ -143,6 +143,14 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<Quotation> Quotations { get; set; }
 
     public virtual DbSet<QuotationDetail> QuotationDetails { get; set; }
+
+    public virtual DbSet<QuotationAccessLink> QuotationAccessLinks { get; set; }
+
+    public virtual DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; set; }
+
+    public virtual DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; set; }
+
+    public virtual DbSet<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; }
 
     public virtual DbSet<RetailOrder> RetailOrders { get; set; }
 
@@ -1200,10 +1208,14 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK__DiagnoseR__Creat__5DEAEAF5");
 
-            entity.HasOne(d => d.Diagnose).WithMany(p => p.DiagnoseRecommendations)
-                .HasForeignKey(d => d.DiagnoseId)
+            entity.HasOne(d => d.Diagnosis).WithMany(p => p.DiagnoseRecommendations)
+                .HasForeignKey(d => d.DiagnosisId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__DiagnoseR__Diagn__5A1A5A11");
+
+            entity.HasOne(d => d.DiagnosisAssignment).WithMany(p => p.DiagnoseRecommendations)
+                .HasForeignKey(d => d.DiagnosisAssignmentId)
+                .HasConstraintName("FK_DiagnoseRecommendations_DiagnosisAssignments");
 
             entity.HasOne(d => d.InventoryItem).WithMany(p => p.DiagnoseRecommendations)
                 .HasForeignKey(d => d.InventoryItemId)
@@ -1243,8 +1255,19 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.CancellationReason).HasMaxLength(500);
             entity.Property(e => e.CancellationDecisionNote).HasMaxLength(500);
             entity.Property(e => e.SupportRequestNote).HasMaxLength(500);
-            entity.Property(e => e.TeamLeaderNote).HasMaxLength(500);
-            entity.Property(e => e.ForemanNote).HasMaxLength(500);
+            entity.Property(e => e.TeamLeaderApprovalStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.FinalApprovalStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ForemanRejectReason).HasMaxLength(500);
+            entity.Property(e => e.TeamLeaderNote).HasMaxLength(1000);
+            entity.Property(e => e.ForemanNote).HasMaxLength(1000);
+            entity.Property(e => e.RequiresInsuranceProof).HasDefaultValue(false);
+            entity.Property(e => e.ProofImageUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.Note).HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
 
@@ -2121,6 +2144,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasIndex(e => new { e.ServiceOrderId, e.VersionNo }, "IX_Quotations_ServiceOrderId_VersionNo").IsUnique();
 
             entity.HasIndex(e => new { e.ServiceOrderId, e.Status, e.CreatedAt }, "IX_Quotations_ServiceOrderId_Status_CreatedAt");
+            entity.HasIndex(e => e.DiagnosisId, "IX_Quotations_DiagnosisId");
 
             entity.Property(e => e.Code)
                 .HasMaxLength(50)
@@ -2152,6 +2176,8 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.TotalCustomerAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            // Hotfix for environments where the column is not deployed yet.
+            entity.Ignore(e => e.InsuranceClaimNumber);
             entity.Property(e => e.RejectReason).HasMaxLength(500);
             entity.Property(e => e.CustomerNotes).HasMaxLength(1000);
             entity.Property(e => e.InternalNotes).HasMaxLength(1000);
@@ -2163,6 +2189,10 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.ServiceOrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Quotations_ServiceOrders");
+
+            entity.HasOne(d => d.Diagnosis).WithMany(p => p.Quotations)
+                .HasForeignKey(d => d.DiagnosisId)
+                .HasConstraintName("FK_Quotations_Diagnoses");
 
             entity.HasOne(d => d.ServiceAdvisor).WithMany(p => p.QuotationServiceAdvisors)
                 .HasForeignKey(d => d.ServiceAdvisorId)
@@ -2191,7 +2221,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.HasIndex(e => new { e.QuotationId, e.ApprovalStatus }, "IX_QuotationDetails_QuotationId_ApprovalStatus");
 
-            entity.HasIndex(e => new { e.ServiceOrderId, e.DiagnoseRecommendationId }, "IX_QuotationDetails_ServiceOrderId_DiagnoseRecommendationId");
+            entity.HasIndex(e => new { e.ServiceOrderId, e.DiagnosisRecommendationId }, "IX_QuotationDetails_ServiceOrderId_DiagnosisRecommendationId");
 
             entity.Property(e => e.ItemType)
                 .HasMaxLength(50)
@@ -2215,6 +2245,8 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.TaxRate).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.TaxAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.InsuranceCoveredAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CustomerCoveredAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.InsuranceRequestedAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CustomerCoPayAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.IsBlocking).HasDefaultValue(true);
@@ -2233,7 +2265,7 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK_QuotationDetails_ServiceOrders");
 
             entity.HasOne(d => d.DiagnoseRecommendation).WithMany()
-                .HasForeignKey(d => d.DiagnoseRecommendationId)
+                .HasForeignKey(d => d.DiagnosisRecommendationId)
                 .HasConstraintName("FK_QuotationDetails_DiagnoseRecommendations");
 
             entity.HasOne(d => d.InsuranceCompany).WithMany()
@@ -2251,6 +2283,38 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.QuotationDetailUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_QuotationDetails_UpdatedBy");
+        });
+
+        modelBuilder.Entity<QuotationAccessLink>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_QuotationAccessLinks");
+
+            entity.HasIndex(e => e.TokenHash, "UQ_QuotationAccessLinks_TokenHash").IsUnique();
+            entity.HasIndex(e => new { e.QuotationId, e.Status }, "IX_QuotationAccessLinks_QuotationId_Status");
+            entity.HasIndex(e => e.ExpiresAt, "IX_QuotationAccessLinks_ExpiresAt");
+
+            entity.Property(e => e.TokenHash)
+                .HasMaxLength(64)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("ACTIVE");
+
+            entity.Property(e => e.DecisionCode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+
+            entity.Property(e => e.SentToEmail).HasMaxLength(255);
+            entity.Property(e => e.ClientNote).HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Quotation).WithMany(p => p.QuotationAccessLinks)
+                .HasForeignKey(d => d.QuotationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_QuotationAccessLinks_Quotations");
         });
 
         modelBuilder.Entity<RetailOrder>(entity =>
@@ -2710,7 +2774,7 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasConstraintName("FK__ServiceOr__Creat__44EA3301");
 
             entity.HasOne(d => d.DiagnoseRecommendation).WithMany(p => p.ServiceOrderDetails)
-                .HasForeignKey(d => d.DiagnoseRecommendationId)
+                .HasForeignKey(d => d.DiagnosisRecommendationId)
                 .HasConstraintName("FK__ServiceOr__Diagn__47C69FAC");
 
             entity.HasOne(d => d.QuotationDetail).WithMany(p => p.ServiceOrderDetails)
@@ -2891,6 +2955,10 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.SplitRatio)
                 .HasDefaultValue(100.00m)
                 .HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.RequiresInsuranceProof).HasDefaultValue(false);
+            entity.Property(e => e.ProofImageUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -3651,4 +3719,5 @@ public partial class GarageContext : DbContext, IGarageContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+
 

@@ -153,6 +153,10 @@ public partial class ServiceOrder
 
     public virtual ICollection<ServiceRefund> ServiceRefunds { get; set; } = new List<ServiceRefund>();
 
+    public virtual ICollection<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; set; } = new List<TechnicalProposalSnapshot>();
+
+    public virtual ICollection<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; } = new List<MandatoryOverrideRequest>();
+
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual Vehicle Vehicle { get; set; } = null!;

@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 namespace MyGarage.DTOs.Requests
 {
     public class DiagnoseRecommendationCreateDto
     {
-        public long DiagnoseId { get; set; }
+        public long? DiagnosisId { get; set; }
+        public long? DiagnosisAssignmentId { get; set; }
         public long? ParentRecommendationId { get; set; }
         public string? ItemType { get; set; }
         public long? StandardServiceId { get; set; }
@@ -16,3 +17,4 @@ namespace MyGarage.DTOs.Requests
         public long? UpdatedBy { get; set; }
     }
 }
+

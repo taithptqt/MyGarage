@@ -9,7 +9,7 @@ public partial class ServiceOrderDetail
 
     public long ServiceOrderId { get; set; }
 
-    public long? DiagnoseRecommendationId { get; set; }
+    public long? DiagnosisRecommendationId { get; set; }
 
     public long? QuotationDetailId { get; set; }
 
@@ -119,3 +119,4 @@ public partial class ServiceOrderDetail
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }
+

@@ -18,6 +18,21 @@ using MyGarage.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Use stable cross-environment loggers and avoid Windows EventLog provider
+// because it can throw during host shutdown/restart and mask root-cause errors.
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+    options.SingleLine = true;
+});
+builder.Logging.AddDebug();
+builder.Logging.AddEventSourceLogger();
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 static string ResolvePayOsCredential(
     IConfiguration config,
     IHostEnvironment env,
@@ -54,7 +69,15 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddSingleton<ISlotHoldService, SlotHoldService>();
 builder.Services.AddDbContext<GarageContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("GarageDbConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("GarageDbConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null);
+        }));
 builder.Services.AddScoped<IGarageContext>(provider => provider.GetRequiredService<GarageContext>());
 
 
@@ -527,7 +550,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles(); // Serve files from wwwroot (uploads, etc.)
 
 if (hasFrontendBuild && frontendFileProvider is not null)

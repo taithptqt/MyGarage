@@ -29,6 +29,10 @@ public partial class ServiceStaffAssignment
 
     public bool? IsRework { get; set; }
 
+    public bool RequiresInsuranceProof { get; set; }
+
+    public string? ProofImageUrl { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

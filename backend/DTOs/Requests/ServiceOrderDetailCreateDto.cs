@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 namespace MyGarage.DTOs.Requests
 {
     public class ServiceOrderDetailCreateDto
     {
         public long ServiceOrderId { get; set; }
-        public long? DiagnoseRecommendationId { get; set; }
+        public long? DiagnosisRecommendationId { get; set; }
         public long? StandardServiceId { get; set; }
         public long? TechnicianId { get; set; }
         public long? OriginalOrderDetailId { get; set; }
@@ -42,3 +42,4 @@ namespace MyGarage.DTOs.Requests
         public long? UpdatedBy { get; set; }
     }
 }
+

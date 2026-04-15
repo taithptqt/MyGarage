@@ -7,7 +7,9 @@ public partial class DiagnoseRecommendation
 {
     public long Id { get; set; }
 
-    public long DiagnoseId { get; set; }
+    public long DiagnosisId { get; set; }
+
+    public long? DiagnosisAssignmentId { get; set; }
 
     public long? ParentRecommendationId { get; set; }
 
@@ -18,6 +20,12 @@ public partial class DiagnoseRecommendation
     public long? InventoryItemId { get; set; }
 
     public decimal Quantity { get; set; }
+
+    public string? RecommendationStatus { get; set; }
+
+    public long? SoftDeletedBy { get; set; }
+
+    public DateTime? SoftDeletedAt { get; set; }
 
     public string? Urgency { get; set; }
 
@@ -35,7 +43,9 @@ public partial class DiagnoseRecommendation
 
     public virtual Staff? CreatedByNavigation { get; set; }
 
-    public virtual Diagnosis Diagnose { get; set; } = null!;
+    public virtual Diagnosis Diagnosis { get; set; } = null!;
+
+    public virtual DiagnosisAssignment? DiagnosisAssignment { get; set; }
 
     public virtual Product? InventoryItem { get; set; }
 
@@ -49,3 +59,4 @@ public partial class DiagnoseRecommendation
 
     public virtual Staff? UpdatedByNavigation { get; set; }
 }
+

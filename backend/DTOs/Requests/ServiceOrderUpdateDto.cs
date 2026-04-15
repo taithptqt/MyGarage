@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+
 namespace MyGarage.DTOs.Requests
 {
     public class ServiceOrderUpdateDto
@@ -19,7 +20,10 @@ namespace MyGarage.DTOs.Requests
         public string? OrderCategory { get; set; }
         public long? ServiceAdvisorId { get; set; }
         public long? ReceptionistId { get; set; }
+
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
+
         public int? RevisionNumber { get; set; }
         public string? CancellationReason { get; set; }
         public long? QcinspectorId { get; set; }

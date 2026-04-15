@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.DTOs.Responses;
+using MyGarage.Enums;
 using MyGarage.Models;
 
 namespace MyGarage.Services
@@ -11,6 +12,59 @@ namespace MyGarage.Services
     public partial class DiagnosisService
     {
         private const string LogTypeCheckIn = "CHECK_IN";
+
+        private static string ResolveDiagnosisWorkflowStatus(
+            Diagnosis latestDiagnosis,
+            bool hasAssigned,
+            bool isEscalated,
+            string? teamLeaderApprovalStatus,
+            string? finalApprovalStatus)
+        {
+            static bool EqualsCode(string? source, string code) =>
+                string.Equals(source?.Trim(), code, StringComparison.OrdinalIgnoreCase);
+
+            var diagnosisStatus = (latestDiagnosis.Status ?? string.Empty).Trim();
+            if (EqualsCode(diagnosisStatus, nameof(DiagnosisStatus.CANCELED)))
+            {
+                return nameof(DiagnosisWorkflowStatusCode.CANCELED);
+            }
+
+            if (EqualsCode(finalApprovalStatus, nameof(ApprovalDecisionStatusCode.APPROVED)))
+            {
+                return nameof(DiagnosisWorkflowStatusCode.FOREMAN_APPROVED_LOCKED);
+            }
+
+            if (EqualsCode(finalApprovalStatus, nameof(ApprovalDecisionStatusCode.REJECTED)))
+            {
+                return nameof(DiagnosisWorkflowStatusCode.FOREMAN_REJECTED_REDIAGNOSE);
+            }
+
+            if (EqualsCode(teamLeaderApprovalStatus, nameof(ApprovalDecisionStatusCode.REJECTED)))
+            {
+                return nameof(DiagnosisWorkflowStatusCode.TL_REJECTED_REDIAGNOSE);
+            }
+
+            if (EqualsCode(teamLeaderApprovalStatus, nameof(ApprovalDecisionStatusCode.BYPASSED)) ||
+                EqualsCode(teamLeaderApprovalStatus, nameof(ApprovalDecisionStatusCode.ESCALATED)) ||
+                isEscalated)
+            {
+                return nameof(DiagnosisWorkflowStatusCode.ESCALATED_TO_FOREMAN);
+            }
+
+            if (EqualsCode(teamLeaderApprovalStatus, nameof(ApprovalDecisionStatusCode.APPROVED)))
+            {
+                return nameof(DiagnosisWorkflowStatusCode.TL_APPROVED);
+            }
+
+            if (latestDiagnosis.SubmittedAt.HasValue)
+            {
+                return nameof(DiagnosisWorkflowStatusCode.SUBMITTED);
+            }
+
+            return hasAssigned
+                ? nameof(DiagnosisWorkflowStatusCode.IN_PROGRESS)
+                : nameof(DiagnosisWorkflowStatusCode.NEW);
+        }
 
         public async Task<IReadOnlyList<Diagnosis>> GetAllFilteredAsync(long? serviceOrderId, bool requestOnly, long? teamId = null)
         {
@@ -44,10 +98,10 @@ namespace MyGarage.Services
                 .FirstOrDefaultAsync();
 
             var filtered = rows.Where(x =>
-                x.AssignedTeamId == teamId.Value ||
-                (TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.ForemanNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
+                GetAssignedTeamId(x) == teamId.Value ||
+                (TryParseDispatchCollaborationNote(null, GetForemanNote(x))?.TeamIds.Contains(teamId.Value) ?? false) ||
                 (
-                    x.AssignedTeamId == null &&
+                    !GetAssignedTeamId(x).HasValue &&
                     IsPendingLikeStatus(x.Status) &&
                     (
                         teamProfile == null ||
@@ -84,6 +138,42 @@ namespace MyGarage.Services
             return rows;
         }
 
+        public async Task<IReadOnlyList<Diagnosis>> GetLatestWorkflowDiagnosesByServiceOrderAsync(long serviceOrderId)
+        {
+            var rows = await _context.Diagnoses
+                .Where(x => x.ServiceOrderId == serviceOrderId)
+                .ToListAsync();
+            await ApplyLatestLogOverlayAsync(rows);
+            if (rows.Count == 0)
+            {
+                return rows;
+            }
+
+            static bool IsFinalDecided(string? finalStatus) =>
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+
+            var candidates = rows
+                .Where(x => !string.Equals(x.Status, DiagnosisStatusCanceled, StringComparison.OrdinalIgnoreCase))
+                .Where(x =>
+                {
+                    var supportNote = GetSupportRequestNote(x) ?? string.Empty;
+                    return !supportNote.Contains("[SUPERSEDED_REQUEUED]", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+
+            var unresolved = candidates
+                .Where(x => !IsFinalDecided(GetFinalApprovalStatus(x)))
+                .ToList();
+
+            if (unresolved.Count > 0)
+            {
+                return unresolved;
+            }
+
+            return candidates;
+        }
+
         public async Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted)
         {
             var query = _context.Diagnoses.AsNoTracking().AsQueryable();
@@ -105,10 +195,10 @@ namespace MyGarage.Services
 
                 diagnoses = diagnoses
                     .Where(x =>
-                        x.AssignedTeamId == teamId.Value ||
-                        (TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.ForemanNote)?.TeamIds.Contains(teamId.Value) ?? false) ||
+                        GetAssignedTeamId(x) == teamId.Value ||
+                        (TryParseDispatchCollaborationNote(null, GetForemanNote(x))?.TeamIds.Contains(teamId.Value) ?? false) ||
                         (
-                            x.AssignedTeamId == null &&
+                            !GetAssignedTeamId(x).HasValue &&
                             IsPendingLikeStatus(x.Status) &&
                             (
                                 teamProfile == null ||
@@ -152,13 +242,14 @@ namespace MyGarage.Services
             diagnoses = diagnoses.Where(x => orderIds.Contains(x.ServiceOrderId)).ToList();
 
             var teamIds = diagnoses
-                .Where(x => x.AssignedTeamId.HasValue)
-                .Select(x => x.AssignedTeamId!.Value)
+                .Select(GetAssignedTeamId)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
                 .Distinct()
                 .ToList();
 
             var collaborationTeamIds = diagnoses
-                .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.ForemanNote))
+                .Select(x => TryParseDispatchCollaborationNote(null, GetForemanNote(x)))
                 .Where(x => x != null)
                 .SelectMany(x => x!.TeamIds)
                 .Where(x => x > 0)
@@ -182,9 +273,9 @@ namespace MyGarage.Services
             var technicianIds = diagnoses
                 .SelectMany(x => new long?[]
                 {
-                    x.TechnicianId,
-                    x.AssistantTechnicianId,
-                    x.ApprovedByForemanId,
+                    GetTechnicianId(x),
+                    GetAssistantTechnicianId(x),
+                    GetApprovedByForemanId(x),
                 })
                 .Where(x => x.HasValue && x.Value > 0)
                 .Select(x => x!.Value)
@@ -192,7 +283,7 @@ namespace MyGarage.Services
                 .ToList();
 
             var collaborationTechnicianIds = diagnoses
-                .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.ForemanNote))
+                .Select(x => TryParseDispatchCollaborationNote(null, GetForemanNote(x)))
                 .Where(x => x != null)
                 .SelectMany(x => x!.TeamAssignments)
                 .SelectMany(x => new long?[] { x.TechnicianId, x.AssistantTechnicianId })
@@ -216,8 +307,9 @@ namespace MyGarage.Services
                     .ToDictionaryAsync(x => x.Id, x => x.FullName ?? string.Empty);
 
             var bayIds = diagnoses
-                .Where(x => x.AssignedBayId.HasValue && x.AssignedBayId.Value > 0)
-                .Select(x => x.AssignedBayId!.Value)
+                .Select(GetAssignedBayId)
+                .Where(x => x.HasValue && x.Value > 0)
+                .Select(x => x!.Value)
                 .Distinct()
                 .ToList();
             var bayCodeMap = bayIds.Count == 0
@@ -242,7 +334,7 @@ namespace MyGarage.Services
 
                     var assignedDiagnosis = list
                         .Where(x => x.Status == DiagnosisStatusAssigned)
-                        .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                        .OrderByDescending(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .FirstOrDefault();
 
                     var pendingSince = list
@@ -255,7 +347,7 @@ namespace MyGarage.Services
 
                     var assignedSince = list
                         .Where(x => x.Status == DiagnosisStatusAssigned)
-                        .Select(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt)
+                        .Select(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt)
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderBy(x => x)
@@ -266,13 +358,13 @@ namespace MyGarage.Services
 
                     var allCompleted = list.Count > 0 && list.All(x => x.Status == DiagnosisStatusCompleted);
                     var hasAssigned = list.Any(x => x.Status == DiagnosisStatusAssigned);
-                    var hasSupport = list.Any(x => x.SupportRequestedAt.HasValue);
+                    var hasSupport = list.Any(x => GetSupportRequestedAt(x).HasValue);
                     var hasCancelPending = list.Any(IsCancellationPending);
                     var isPendingOverdue = pendingMinutes >= UnclaimedEscalationMinutes;
                     var isAssignedOverdue = assignedMinutes >= DiagnosisSlaMinutes;
                     var latestSupportEntry = list
-                        .Where(x => x.SupportRequestedAt.HasValue)
-                        .OrderByDescending(x => x.SupportRequestedAt ?? DateTime.MinValue)
+                        .Where(x => GetSupportRequestedAt(x).HasValue)
+                        .OrderByDescending(x => GetSupportRequestedAt(x) ?? DateTime.MinValue)
                         .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .FirstOrDefault();
 
@@ -300,7 +392,7 @@ namespace MyGarage.Services
                     }
 
                     var collaborationMeta = list
-                        .Select(x => TryParseDispatchCollaborationNote(x.DispatchCollaborationMeta, x.ForemanNote))
+                        .Select(x => TryParseDispatchCollaborationNote(null, GetForemanNote(x)))
                         .FirstOrDefault(x => x != null);
 
                     // Only expose assignment identity when there is an actual handled diagnosis
@@ -309,13 +401,14 @@ namespace MyGarage.Services
                     var preferredPrimaryTeamId = collaborationMeta?.PrimaryTeamId;
                     var handledDiagnosis = list
                         .Where(x => x.Status == DiagnosisStatusAssigned || x.Status == DiagnosisStatusCompleted)
-                        .OrderByDescending(x => preferredPrimaryTeamId.HasValue && x.AssignedTeamId == preferredPrimaryTeamId.Value)
-                        .ThenByDescending(x => x.AssignedAt ?? x.DiagnosedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                        .OrderByDescending(x => preferredPrimaryTeamId.HasValue && GetAssignedTeamId(x) == preferredPrimaryTeamId.Value)
+                        .ThenByDescending(x => GetAssignedAt(x) ?? x.DiagnosedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .FirstOrDefault();
 
                     var assignedTeamIds = list
-                        .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                        .Select(x => x.AssignedTeamId!.Value)
+                        .Select(GetAssignedTeamId)
+                        .Where(x => x.HasValue && x.Value > 0)
+                        .Select(x => x!.Value)
                         .Distinct()
                         .ToList();
 
@@ -327,7 +420,7 @@ namespace MyGarage.Services
                             .ToList();
                     }
 
-                    var primaryTeamId = collaborationMeta?.PrimaryTeamId ?? handledDiagnosis?.AssignedTeamId;
+                    var primaryTeamId = collaborationMeta?.PrimaryTeamId ?? (handledDiagnosis != null ? GetAssignedTeamId(handledDiagnosis) : null);
                     if (!primaryTeamId.HasValue && assignedTeamIds.Count > 0)
                     {
                         primaryTeamId = assignedTeamIds[0];
@@ -344,9 +437,11 @@ namespace MyGarage.Services
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    var primaryTeamName = primaryTeamId.HasValue && teamNameMap.TryGetValue(primaryTeamId.Value, out var resolvedPrimaryTeamName)
-                        ? resolvedPrimaryTeamName
-                        : null;
+                    string? primaryTeamName = null;
+                    if (primaryTeamId.HasValue && teamNameMap.TryGetValue(primaryTeamId.Value, out var resolvedPrimaryTeamName))
+                    {
+                        primaryTeamName = resolvedPrimaryTeamName;
+                    }
 
                     List<DiagnosisSupportingAssignmentDto> supportingAssignments;
                     if (collaborationMeta?.TeamAssignments?.Count > 0)
@@ -384,29 +479,29 @@ namespace MyGarage.Services
                     else
                     {
                         supportingAssignments = list
-                            .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                            .Where(x => !primaryTeamId.HasValue || x.AssignedTeamId.GetValueOrDefault() != primaryTeamId.Value)
-                            .GroupBy(x => x.AssignedTeamId!.Value)
+                            .Where(x => GetAssignedTeamId(x).HasValue && GetAssignedTeamId(x)!.Value > 0)
+                            .Where(x => !primaryTeamId.HasValue || GetAssignedTeamId(x).GetValueOrDefault() != primaryTeamId.Value)
+                            .GroupBy(x => GetAssignedTeamId(x)!.Value)
                             .Select(group =>
                             {
                                 var latestTeamDiagnosis = group
-                                    .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                                    .OrderByDescending(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                                     .First();
 
                                 return new DiagnosisSupportingAssignmentDto
                                 {
                                     TeamId = group.Key,
                                     TeamName = teamNameMap.TryGetValue(group.Key, out var supportingTeamName) ? supportingTeamName : null,
-                                    TechnicianId = latestTeamDiagnosis.TechnicianId.HasValue && latestTeamDiagnosis.TechnicianId.Value > 0
-                                        ? latestTeamDiagnosis.TechnicianId.Value
+                                    TechnicianId = GetTechnicianId(latestTeamDiagnosis).HasValue && GetTechnicianId(latestTeamDiagnosis)!.Value > 0
+                                        ? GetTechnicianId(latestTeamDiagnosis)!.Value
                                         : null,
-                                    TechnicianName = latestTeamDiagnosis.TechnicianId.HasValue
-                                        && latestTeamDiagnosis.TechnicianId.Value > 0
-                                        && technicianNameMap.TryGetValue(latestTeamDiagnosis.TechnicianId.Value, out var supportingTechnicianName)
+                                    TechnicianName = GetTechnicianId(latestTeamDiagnosis).HasValue
+                                        && GetTechnicianId(latestTeamDiagnosis)!.Value > 0
+                                        && technicianNameMap.TryGetValue(GetTechnicianId(latestTeamDiagnosis)!.Value, out var supportingTechnicianName)
                                         ? supportingTechnicianName
                                         : null,
-                                    AssistantTechnicianId = latestTeamDiagnosis.AssistantTechnicianId,
-                                    AssistantTechnicianName = latestTeamDiagnosis.AssistantTechnicianId.HasValue && technicianNameMap.TryGetValue(latestTeamDiagnosis.AssistantTechnicianId.Value, out var supportingAssistantName)
+                                    AssistantTechnicianId = GetAssistantTechnicianId(latestTeamDiagnosis),
+                                    AssistantTechnicianName = GetAssistantTechnicianId(latestTeamDiagnosis).HasValue && technicianNameMap.TryGetValue(GetAssistantTechnicianId(latestTeamDiagnosis)!.Value, out var supportingAssistantName)
                                         ? supportingAssistantName
                                         : null,
                                     RequestedTechnicianCount = null
@@ -416,24 +511,24 @@ namespace MyGarage.Services
                             .ToList();
                     }
 
-                    var technicianId = handledDiagnosis?.TechnicianId ?? 0;
-                    var assistantTechnicianId = handledDiagnosis?.AssistantTechnicianId;
-                    var assignedBayId = handledDiagnosis?.AssignedBayId;
+                    var technicianId = handledDiagnosis != null ? GetTechnicianId(handledDiagnosis) ?? 0 : 0;
+                    var assistantTechnicianId = handledDiagnosis != null ? GetAssistantTechnicianId(handledDiagnosis) : null;
+                    var assignedBayId = handledDiagnosis != null ? GetAssignedBayId(handledDiagnosis) : null;
                     var technicianAcceptedAt = list
-                        .Select(x => x.TechnicianAcceptedAt)
+                        .Select(GetTechnicianAcceptedAt)
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderBy(x => x)
                         .FirstOrDefault();
                     var technicianCompletedAt = list
-                        .Select(x => x.TechnicianCompletedAt)
+                        .Select(GetTechnicianCompletedAt)
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderByDescending(x => x)
                         .FirstOrDefault();
 
                     var technicalApprovedEntries = list
-                        .Where(x => x.ApprovedByForemanId.HasValue)
+                        .Where(x => GetApprovedByForemanId(x).HasValue)
                         .ToList();
                     var technicalApprovedAt = technicalApprovedEntries
                         .Select(x => x.UpdatedAt ?? x.DiagnosedAt)
@@ -442,30 +537,43 @@ namespace MyGarage.Services
                         .OrderByDescending(x => x)
                         .FirstOrDefault();
                     var technicalApprovedBy = technicalApprovedEntries
-                        .Select(x => x.ApprovedByForemanId)
+                        .Select(x => GetApprovedByForemanId(x))
                         .FirstOrDefault(x => x.HasValue);
                     var approvedByForemanAt = list
-                        .Select(x => x.ApprovedByForemanAt)
+                        .Select(x => GetApprovedByForemanAt(x))
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderByDescending(x => x)
                         .FirstOrDefault();
 
                     var approvedByTeamLeaderAt = list
-                        .Select(x => x.ApprovedByTeamLeaderAt)
+                        .Select(x => GetApprovedByTeamLeaderAt(x))
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderByDescending(x => x)
                         .FirstOrDefault();
+                    var teamLeaderApprovalStatus = list
+                        .Select(x => GetTeamLeaderApprovalStatus(x))
+                        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                    var finalApprovalStatus = list
+                        .Select(x => GetFinalApprovalStatus(x))
+                        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                    var isEscalated = list.Any(x => x.IsEscalated);
                     var teamLeaderNote = list
-                        .Select(x => x.TeamLeaderNote)
+                        .Select(x => GetTeamLeaderNote(x))
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
                     var foremanNote = list
-                        .Select(x => x.ForemanNote)
+                        .Select(x => GetForemanNote(x))
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
                     var cancelReason = list
-                        .Select(x => x.CancellationReason)
+                        .Select(GetCancellationReason)
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                    var workflowStatus = ResolveDiagnosisWorkflowStatus(
+                        latest,
+                        hasAssigned,
+                        isEscalated,
+                        teamLeaderApprovalStatus,
+                        finalApprovalStatus);
 
                     return new DiagnosisDispatchBoardItemDto
                     {
@@ -476,6 +584,7 @@ namespace MyGarage.Services
                         DiagnosisIds = list.Select(x => x.Id).OrderBy(x => x).ToArray(),
                         QueueState = queueState,
                         QueueColor = queueColor,
+                        WorkflowStatus = workflowStatus,
                         DispatchTag = latest.DispatchTag,
                         TeamId = primaryTeamId,
                         TeamName = primaryTeamName,
@@ -498,9 +607,9 @@ namespace MyGarage.Services
                         PendingMinutes = Math.Max(0, pendingMinutes),
                         AssignedMinutes = Math.Max(0, assignedMinutes),
                         IsSupportRequested = hasSupport,
-                        SupportRequestedAt = latestSupportEntry?.SupportRequestedAt,
-                        SupportRequestedBy = latestSupportEntry?.SupportRequestedBy,
-                        SupportRequestNote = latestSupportEntry?.SupportRequestNote,
+                        SupportRequestedAt = latestSupportEntry != null ? GetSupportRequestedAt(latestSupportEntry) : null,
+                        SupportRequestedBy = latestSupportEntry != null ? GetSupportRequestedBy(latestSupportEntry) : null,
+                        SupportRequestNote = latestSupportEntry != null ? GetSupportRequestNote(latestSupportEntry) : null,
                         IsCancelPendingApproval = hasCancelPending,
                         CancelReason = cancelReason,
                         TechnicalApprovedByTeamLeaderId = technicalApprovedBy,
@@ -509,6 +618,8 @@ namespace MyGarage.Services
                         ApprovedByTeamLeaderAt = approvedByTeamLeaderAt == default ? null : approvedByTeamLeaderAt,
                         TeamLeaderNote = teamLeaderNote,
                         ForemanNote = foremanNote,
+                        TeamLeaderApprovalStatus = teamLeaderApprovalStatus,
+                        ForemanApprovalStatus = finalApprovalStatus,
                     };
                 })
                 .OrderByDescending(x => x.QueueColor == "RED")
@@ -525,8 +636,15 @@ namespace MyGarage.Services
             var idList = diagnosisIds?.Distinct().ToList() ?? new List<long>();
             if (idList.Count == 0) return;
 
+            var assignmentIds = await _context.DiagnosisAssignments.AsNoTracking()
+                .Where(x => idList.Contains(x.DiagnosisId))
+                .Select(x => x.Id)
+                .Distinct()
+                .ToListAsync();
+
             var recs = await _context.DiagnoseRecommendations
-                .Where(x => idList.Contains(x.DiagnoseId))
+                .Where(x => idList.Contains(x.DiagnosisId) ||
+                            (x.DiagnosisAssignmentId.HasValue && assignmentIds.Contains(x.DiagnosisAssignmentId.Value)))
                 .ToListAsync();
             if (recs.Count == 0) return;
 
@@ -557,18 +675,18 @@ namespace MyGarage.Services
             {
                 diagnosis.Status = DiagnosisStatusCompleted;
                 diagnosis.DiagnosedAt ??= now;
-                diagnosis.CancellationStatus = nameof(DiagnosisCancellationStatusCode.NONE);
-                diagnosis.CancellationRequestedAt = null;
-                diagnosis.CancellationRequestedBy = null;
-                diagnosis.CancellationDecisionAt = null;
-                diagnosis.CancellationDecisionBy = null;
-                diagnosis.CancellationDecisionNote = null;
-                diagnosis.DispatchCollaborationMeta = null;
-                diagnosis.SupportRequestNote = string.IsNullOrWhiteSpace(diagnosis.SupportRequestNote)
+                SetCancellationStatus(diagnosis, nameof(DiagnosisCancellationStatusCode.NONE));
+                SetCancellationRequestedAt(diagnosis, null);
+                SetCancellationRequestedBy(diagnosis, null);
+                SetCancellationDecisionAt(diagnosis, null);
+                SetCancellationDecisionBy(diagnosis, null);
+                SetCancellationDecisionNote(diagnosis, null);
+                var supportNote = GetSupportRequestNote(diagnosis);
+                SetSupportRequestNote(diagnosis, string.IsNullOrWhiteSpace(supportNote)
                     ? tag
-                    : diagnosis.SupportRequestNote.Contains(tag, StringComparison.OrdinalIgnoreCase)
-                        ? diagnosis.SupportRequestNote
-                        : $"{diagnosis.SupportRequestNote.Trim()} {tag}";
+                    : supportNote!.Contains(tag, StringComparison.OrdinalIgnoreCase)
+                        ? supportNote
+                        : $"{supportNote.Trim()} {tag}");
                 diagnosis.UpdatedAt = now;
                 diagnosis.UpdatedBy = actorStaffId;
             }
@@ -585,6 +703,8 @@ namespace MyGarage.Services
         }
     }
 }
+
+
 
 
 

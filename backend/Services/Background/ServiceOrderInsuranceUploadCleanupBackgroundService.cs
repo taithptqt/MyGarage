@@ -41,7 +41,14 @@ public class ServiceOrderInsuranceUploadCleanupBackgroundService : BackgroundSer
                 _logger.LogWarning(ex, "Không thể dọn ảnh bảo hiểm service order upload dở dang.");
             }
 
-            await Task.Delay(CleanupInterval, stoppingToken);
+            try
+            {
+                await Task.Delay(CleanupInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 

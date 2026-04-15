@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -90,7 +90,7 @@ namespace MyGarage.Services
 
             if (serviceOrder == null)
             {
-                throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
+                throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y lá»‡nh sá»­a chá»¯a.");
             }
 
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
@@ -102,7 +102,7 @@ namespace MyGarage.Services
             var bufferMinutes = NormalizeBufferMinutes(bufferMinutesOverride);
             var mainServiceMinutes = await EstimateMainServiceMinutesAsync(serviceOrderId, serviceOrder.OrderCategory);
             var requestedServiceCount = await _context.ServiceOrderDetails.AsNoTracking()
-                .Where(x => x.ServiceOrderId == serviceOrderId && !x.DiagnoseRecommendationId.HasValue)
+                .Where(x => x.ServiceOrderId == serviceOrderId && !x.DiagnosisRecommendationId.HasValue)
                 .CountAsync();
 
             var reasons = new List<string>();
@@ -120,7 +120,7 @@ namespace MyGarage.Services
             var isMinorQuickFlow = IsMinorQuickFlow(serviceOrder.OrderCategory, mainServiceMinutes, requestedServiceCount);
             if (isMinorQuickFlow)
             {
-                reasons.Add("Xe thuộc nhóm quick service nhẹ, ưu tiên gói intake mức cơ bản.");
+                reasons.Add("Xe thuá»™c nhÃ³m quick service nháº¹, Æ°u tiÃªn gÃ³i intake má»©c cÆ¡ báº£n.");
             }
 
             var packageProfiles = await GetIntakePackageProfilesAsync();
@@ -142,7 +142,7 @@ namespace MyGarage.Services
 
             while (probe.ConflictLevel == "RED" && TryGetLowerPackage(packageProfiles, finalPolicy.Code, out var lowerPolicy))
             {
-                reasons.Add($"Gói {finalPolicy.Code} gây xung đột lịch > {IntakeConflictRedThresholdMinutes} phút, hạ về {lowerPolicy.Code}.");
+                reasons.Add($"GÃ³i {finalPolicy.Code} gÃ¢y xung Ä‘á»™t lá»‹ch > {IntakeConflictRedThresholdMinutes} phÃºt, háº¡ vá» {lowerPolicy.Code}.");
                 finalPolicy = lowerPolicy;
                 usedFallback = true;
                 probe = await EvaluateAppointmentConflictAsync(
@@ -173,7 +173,7 @@ namespace MyGarage.Services
 
             if (finalPolicy.RequiresBayBlock && dispatchSuggestion?.SuggestedBayId == null && TryGetLowerPackage(packageProfiles, finalPolicy.Code, out var lowerByBay))
             {
-                reasons.Add($"Không còn cầu nâng trống cho gói {finalPolicy.Code}, hạ về {lowerByBay.Code}.");
+                reasons.Add($"KhÃ´ng cÃ²n cáº§u nÃ¢ng trá»‘ng cho gÃ³i {finalPolicy.Code}, háº¡ vá» {lowerByBay.Code}.");
                 finalPolicy = lowerByBay;
                 usedFallback = true;
                 probe = await EvaluateAppointmentConflictAsync(
@@ -188,16 +188,16 @@ namespace MyGarage.Services
             if (finalPolicy.RequiresBayBlock && dispatchSuggestion?.SuggestedBayId == null)
             {
                 canApply = false;
-                reasons.Add("Không có cầu nâng phù hợp để block cho gói tổng quát.");
+                reasons.Add("KhÃ´ng cÃ³ cáº§u nÃ¢ng phÃ¹ há»£p Ä‘á»ƒ block cho gÃ³i tá»•ng quÃ¡t.");
             }
 
             if (probe.NextBookingStartTime.HasValue)
             {
-                reasons.Add($"Booking tiếp theo lúc {probe.NextBookingStartTime.Value:yyyy-MM-dd HH:mm}.");
+                reasons.Add($"Booking tiáº¿p theo lÃºc {probe.NextBookingStartTime.Value:yyyy-MM-dd HH:mm}.");
             }
             else
             {
-                reasons.Add("Không có booking phía sau trong khung giờ hiện tại.");
+                reasons.Add("KhÃ´ng cÃ³ booking phÃ­a sau trong khung giá» hiá»‡n táº¡i.");
             }
 
             return new DiagnosisIntakeSuggestionDto
@@ -239,7 +239,7 @@ namespace MyGarage.Services
         private async Task<string?> InferDispatchTagFromRequestedServicesAsync(long serviceOrderId)
         {
             var serviceCodes = await _context.ServiceOrderDetails.AsNoTracking()
-                .Where(x => x.ServiceOrderId == serviceOrderId && x.StandardServiceId.HasValue && !x.DiagnoseRecommendationId.HasValue)
+                .Where(x => x.ServiceOrderId == serviceOrderId && x.StandardServiceId.HasValue && !x.DiagnosisRecommendationId.HasValue)
                 .Join(
                     _context.StandardServices.AsNoTracking(),
                     detail => detail.StandardServiceId!.Value,
@@ -386,7 +386,7 @@ namespace MyGarage.Services
                 if (daysSinceLastVisit > 180)
                 {
                     score += 35;
-                    reasons.Add($"Xe quá {daysSinceLastVisit} ngày chưa quay lại.");
+                    reasons.Add($"Xe quÃ¡ {daysSinceLastVisit} ngÃ y chÆ°a quay láº¡i.");
                 }
             }
 
@@ -394,29 +394,29 @@ namespace MyGarage.Services
             if (normalizedCategory == "GENERAL_REPAIR" || normalizedCategory == "INSURANCE_REPAIR" || normalizedCategory == "REWORK")
             {
                 score += 20;
-                reasons.Add("Lệnh thuộc nhóm sửa chữa trung bình/chuyên sâu.");
+                reasons.Add("Lá»‡nh thuá»™c nhÃ³m sá»­a chá»¯a trung bÃ¬nh/chuyÃªn sÃ¢u.");
             }
             else if (normalizedCategory == "MAINTENANCE")
             {
                 score += 10;
-                reasons.Add("Lệnh bảo dưỡng có nguy cơ phát hiện lỗi phát sinh.");
+                reasons.Add("Lá»‡nh báº£o dÆ°á»¡ng cÃ³ nguy cÆ¡ phÃ¡t hiá»‡n lá»—i phÃ¡t sinh.");
             }
 
             if (mainServiceMinutes >= 90)
             {
                 score += 15;
-                reasons.Add("Tổng thời lượng dịch vụ chính cao.");
+                reasons.Add("Tá»•ng thá»i lÆ°á»£ng dá»‹ch vá»¥ chÃ­nh cao.");
             }
             else if (mainServiceMinutes >= 45)
             {
                 score += 8;
-                reasons.Add("Tổng thời lượng dịch vụ chính ở mức trung bình.");
+                reasons.Add("Tá»•ng thá»i lÆ°á»£ng dá»‹ch vá»¥ chÃ­nh á»Ÿ má»©c trung bÃ¬nh.");
             }
 
             if (requestedServiceCount >= 3)
             {
                 score += 10;
-                reasons.Add("Khách đang yêu cầu nhiều hạng mục.");
+                reasons.Add("KhÃ¡ch Ä‘ang yÃªu cáº§u nhiá»u háº¡ng má»¥c.");
             }
 
             var normalizedNotes = (customerNotes ?? string.Empty).Trim().ToLowerInvariant();
@@ -428,7 +428,7 @@ namespace MyGarage.Services
                     normalizedNotes.Contains("den bao", StringComparison.OrdinalIgnoreCase))
                 {
                     score += 20;
-                    reasons.Add("Có dấu hiệu đèn báo/mã lỗi hệ thống.");
+                    reasons.Add("CÃ³ dáº¥u hiá»‡u Ä‘Ã¨n bÃ¡o/mÃ£ lá»—i há»‡ thá»‘ng.");
                 }
 
                 if (normalizedNotes.Contains("run", StringComparison.OrdinalIgnoreCase) ||
@@ -438,14 +438,14 @@ namespace MyGarage.Services
                     normalizedNotes.Contains("dieu hoa", StringComparison.OrdinalIgnoreCase))
                 {
                     score += 10;
-                    reasons.Add("Mô tả triệu chứng liên quan hệ thống cần test nhanh.");
+                    reasons.Add("MÃ´ táº£ triá»‡u chá»©ng liÃªn quan há»‡ thá»‘ng cáº§n test nhanh.");
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(normalizedDispatchTag))
             {
                 score += 6;
-                reasons.Add($"Có chuyên môn điều phối {normalizedDispatchTag}.");
+                reasons.Add($"CÃ³ chuyÃªn mÃ´n Ä‘iá»u phá»‘i {normalizedDispatchTag}.");
             }
 
             var hasRecentReworkOrWarranty = await _context.ServiceOrders.AsNoTracking()
@@ -460,7 +460,7 @@ namespace MyGarage.Services
             if (hasRecentReworkOrWarranty)
             {
                 score += 10;
-                reasons.Add("Xe có lịch sử warranty/rework gần đây.");
+                reasons.Add("Xe cÃ³ lá»‹ch sá»­ warranty/rework gáº§n Ä‘Ã¢y.");
             }
 
             return Math.Max(0, score);
@@ -470,7 +470,7 @@ namespace MyGarage.Services
         {
             var serviceRows = await _context.ServiceOrderDetails.AsNoTracking()
                 .Where(x => x.ServiceOrderId == serviceOrderId)
-                .Where(x => x.StandardServiceId.HasValue && !x.DiagnoseRecommendationId.HasValue)
+                .Where(x => x.StandardServiceId.HasValue && !x.DiagnosisRecommendationId.HasValue)
                 .Join(
                     _context.StandardServices.AsNoTracking(),
                     detail => detail.StandardServiceId!.Value,
@@ -814,3 +814,4 @@ namespace MyGarage.Services
         }
     }
 }
+

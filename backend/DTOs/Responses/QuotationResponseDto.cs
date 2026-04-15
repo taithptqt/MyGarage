@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.DTOs.Responses;
@@ -8,10 +8,22 @@ public sealed class QuotationResponseDto
     public long Id { get; set; }
     public string Code { get; set; } = null!;
     public long ServiceOrderId { get; set; }
+    public long? DiagnosisId { get; set; }
+    public long? SourceSnapshotId { get; set; }
     public string? Title { get; set; }
     public string QuotationType { get; set; } = null!;
     public int VersionNo { get; set; }
     public string Status { get; set; } = null!;
+    public string? InsuranceClaimNumber { get; set; }
+    public long? TechnicalApprovedBy { get; set; }
+    public DateTime? TechnicalApprovedAt { get; set; }
+    public string? TeamLeaderApprovalStatus { get; set; }
+    public long? FinalApprovedBy { get; set; }
+    public DateTime? FinalApprovedAt { get; set; }
+    public string? FinalApprovalStatus { get; set; }
+    public long? CustomerDecisionBy { get; set; }
+    public DateTime? CustomerDecisionAt { get; set; }
+    public string? CustomerDecisionStatus { get; set; }
     public DateTime? ValidUntil { get; set; }
     public decimal SubTotalAmount { get; set; }
     public decimal TotalDiscount { get; set; }
@@ -19,6 +31,7 @@ public sealed class QuotationResponseDto
     public decimal FinalAmount { get; set; }
     public decimal TotalInsuranceAmount { get; set; }
     public decimal TotalCustomerAmount { get; set; }
+    public List<string> Warnings { get; set; } = new();
     public bool IsAppliedToServiceOrder { get; set; }
     public DateTime? AppliedAt { get; set; }
     public List<QuotationDetailResponseDto> Details { get; set; } = new();
@@ -27,7 +40,7 @@ public sealed class QuotationResponseDto
 public sealed class QuotationDetailResponseDto
 {
     public long Id { get; set; }
-    public long? DiagnoseRecommendationId { get; set; }
+    public long? DiagnosisRecommendationId { get; set; }
     public string ItemType { get; set; } = null!;
     public long? ItemId { get; set; }
     public string ItemName { get; set; } = null!;
@@ -42,11 +55,15 @@ public sealed class QuotationDetailResponseDto
     public decimal FinalAmount { get; set; }
     public string PayerType { get; set; } = null!;
     public long? InsuranceCompanyId { get; set; }
+    public decimal? InsuranceCoveredAmount { get; set; }
+    public decimal? CustomerCoveredAmount { get; set; }
     public decimal? InsuranceRequestedAmount { get; set; }
     public decimal? CustomerCoPayAmount { get; set; }
     public string ApprovalStatus { get; set; } = null!;
     public string? RejectReason { get; set; }
     public bool IsBlocking { get; set; }
+    public bool IsMandatory { get; set; }
     public int? EstimatedMinutes { get; set; }
     public bool IsReturnOldPart { get; set; }
 }
+

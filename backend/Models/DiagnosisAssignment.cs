@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+
 
 namespace MyGarage.Models;
 
@@ -24,16 +26,6 @@ public partial class DiagnosisAssignment
 
     public DateTime? TechnicianCompletedAt { get; set; }
 
-    public DateTime? ApprovedByTeamLeaderAt { get; set; }
-
-    public string? TeamLeaderNote { get; set; }
-
-    public long? ApprovedByForemanId { get; set; }
-
-    public DateTime? ApprovedByForemanAt { get; set; }
-
-    public string? ForemanNote { get; set; }
-
     public string? CancellationStatus { get; set; }
 
     public string? CancellationReason { get; set; }
@@ -54,6 +46,28 @@ public partial class DiagnosisAssignment
 
     public string? SupportRequestNote { get; set; }
 
+    public string? TeamLeaderApprovalStatus { get; set; }
+
+    public string? FinalApprovalStatus { get; set; }
+
+    public string? ForemanRejectReason { get; set; }
+
+    public long? ApprovedByForemanId { get; set; }
+
+    public DateTime? ApprovedByForemanAt { get; set; }
+
+    public DateTime? ApprovedByTeamLeaderAt { get; set; }
+
+    public long? ApprovedByTeamLeaderId { get; set; }
+
+    public string? TeamLeaderNote { get; set; }
+
+    public string? ForemanNote { get; set; }
+
+    public bool RequiresInsuranceProof { get; set; }
+
+    public string? ProofImageUrl { get; set; }
+
     public string EventType { get; set; } = null!;
 
     public string? OldStatus { get; set; }
@@ -65,5 +79,10 @@ public partial class DiagnosisAssignment
     public DateTime CreatedAt { get; set; }
 
     public virtual Diagnosis Diagnosis { get; set; } = null!;
+
+    public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendations { get; set; } = new List<DiagnoseRecommendation>();
 }
+
+
+
 

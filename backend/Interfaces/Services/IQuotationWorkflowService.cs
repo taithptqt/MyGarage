@@ -11,6 +11,14 @@ public interface IQuotationWorkflowService
     Task<QuotationResponseDto?> GetQuotationAsync(long quotationId);
     Task<IReadOnlyList<QuotationResponseDto>> GetQuotationsByServiceOrderAsync(long serviceOrderId);
     Task<QuotationResponseDto> ApproveQuotationAsync(long quotationId, QuotationApproveRequestDto request);
+    Task<QuotationResponseDto> ApplyCustomerDecisionAsync(long quotationId, QuotationCustomerDecisionRequestDto request);
+    Task<QuotationResponseDto> GenerateInitialQuotationFromDiagnosisAsync(long serviceOrderId, long actorStaffId, string? note = null, IReadOnlyList<long>? diagnosisIds = null);
+    Task<QuotationResponseDto> CloneQuotationAsync(long quotationId, QuotationCloneRequestDto request);
+    Task<QuotationResponseDto> UpdateSplitBillingAsync(long quotationId, QuotationSplitBillingUpdateRequestDto request);
+    Task DecideMandatoryOverrideAsync(long requestId, MandatoryOverrideDecisionRequestDto request);
+    Task<IReadOnlyList<MandatoryOverrideRequestResponseDto>> GetMandatoryOverrideRequestsByServiceOrderAsync(long serviceOrderId);
     Task<QuotationResponseDto> SubmitQuotationAsync(long quotationId, long actorStaffId, string? note = null);
     Task<QuotationResponseDto> SupersedeQuotationAsync(long quotationId, long actorStaffId, string? note = null);
+    Task<QuotationPublicViewResponseDto> GetQuotationByPublicTokenAsync(string token);
+    Task<QuotationResponseDto> ApplyCustomerDecisionByPublicTokenAsync(string token, QuotationPublicDecisionRequestDto request);
 }

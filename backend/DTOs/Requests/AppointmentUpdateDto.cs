@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel.DataAnnotations;
+
 namespace MyGarage.DTOs.Requests
 {
     public class AppointmentUpdateDto
@@ -10,7 +12,10 @@ namespace MyGarage.DTOs.Requests
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
         public string? RequestedServiceIds { get; set; }
+
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
+
         public bool? IsReminderSent { get; set; }
         public string? Status { get; set; }
         public string? CancelReason { get; set; }

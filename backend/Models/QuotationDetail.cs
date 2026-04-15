@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -11,7 +11,7 @@ public partial class QuotationDetail
 
     public long ServiceOrderId { get; set; }
 
-    public long? DiagnoseRecommendationId { get; set; }
+    public long? DiagnosisRecommendationId { get; set; }
 
     public string ItemType { get; set; } = null!;
 
@@ -45,6 +45,10 @@ public partial class QuotationDetail
 
     public decimal? CustomerCoPayAmount { get; set; }
 
+    public decimal? InsuranceCoveredAmount { get; set; }
+
+    public decimal? CustomerCoveredAmount { get; set; }
+
     public string ApprovalStatus { get; set; } = null!;
 
     public long? ApprovedBy { get; set; }
@@ -54,6 +58,8 @@ public partial class QuotationDetail
     public string? RejectReason { get; set; }
 
     public bool IsBlocking { get; set; }
+
+    public bool IsMandatory { get; set; }
 
     public int? EstimatedMinutes { get; set; }
 
@@ -82,4 +88,7 @@ public partial class QuotationDetail
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetails { get; set; } = new List<ServiceOrderDetail>();
+
+    public virtual ICollection<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; } = new List<MandatoryOverrideRequest>();
 }
+

@@ -42,7 +42,14 @@ public class AppointmentInsuranceUploadCleanupBackgroundService : BackgroundServ
                 _logger.LogWarning(ex, "Không thể dọn ảnh bảo hiểm upload dở dang.");
             }
 
-            await Task.Delay(CleanupInterval, stoppingToken);
+            try
+            {
+                await Task.Delay(CleanupInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 

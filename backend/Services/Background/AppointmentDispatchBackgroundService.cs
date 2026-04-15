@@ -71,7 +71,14 @@ namespace MyGarage.Services
                     _logger.LogError(ex, "Appointment dispatch background cycle failed.");
                 }
 
-                await Task.Delay(DispatchInterval, stoppingToken);
+                try
+                {
+                    await Task.Delay(DispatchInterval, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }

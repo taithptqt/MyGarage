@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="backend/MyGarage.csproj" />
+  <Project Path="backend/tests/MyGarage.Tests/MyGarage.Tests.csproj" />
 </Solution>

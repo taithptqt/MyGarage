@@ -15,7 +15,10 @@ namespace MyGarage.DTOs.Requests
         public long? ExecuteBranchId { get; set; }
         public string? OrderCategory { get; set; }
         public long? ServiceAdvisorId { get; set; }
+
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
+
         public decimal? RequiredDepositAmount { get; set; }
         public string? OldPartsReturnOption { get; set; }
         public DateTime? CheckInTime { get; set; }

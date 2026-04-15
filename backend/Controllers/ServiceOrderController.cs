@@ -10,6 +10,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Common;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -569,6 +570,7 @@ namespace MyGarage.Controllers
             long? insuranceCompanyId)
         {
             var dto = _mapper.Map<ServiceOrderResponseDto>(item);
+            dto.CustomerNotes = CustomerNoteFormatter.ToDisplayText(dto.CustomerNotes);
             dto.InsuranceCompanyId = insuranceCompanyId > 0 ? insuranceCompanyId : null;
             dto.InsuranceCardImageUrls = assets?
                 .Where(asset => string.Equals(asset.AssetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase))

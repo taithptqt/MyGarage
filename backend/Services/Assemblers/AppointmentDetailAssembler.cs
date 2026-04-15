@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Common;
 using MyGarage.Data;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
@@ -241,7 +242,7 @@ namespace MyGarage.Services
                         .Select(asset => asset.FileUrl)
                         .Where(url => !string.IsNullOrWhiteSpace(url))
                         .ToList(),
-                    CustomerNotes = a.CustomerNotes,
+                    CustomerNotes = CustomerNoteFormatter.ToDisplayText(a.CustomerNotes),
                     RequiresDispatchReview = requiresDispatchReview,
                     DispatchReviewNote = dispatchReviewNote,
                     RequiresPartsFollowUp = requiresPartsFollowUp,

@@ -1,8 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -26,10 +25,10 @@ namespace MyGarage.Services
         private const string CheckInLogType = "CHECK_IN";
         private const string CheckInPendingStatus = nameof(DiagnosisStatus.PENDING);
         private const string WorkshopDetailItemType = "LABOR";
-        private const string WorkshopDetailDescription = "Dịch vụ khách yêu cầu trước";
-        private const string WorkshopDetailUnit = "Lần";
+        private const string WorkshopDetailDescription = "Dá»‹ch vá»¥ khÃ¡ch yÃªu cáº§u trÆ°á»›c";
+        private const string WorkshopDetailUnit = "Láº§n";
         private const string WorkshopDetailStatus = nameof(ServiceOrderDetailStatusCode.APPROVED);
-        private const string WorkshopEditWindowPassedMessage = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
+        private const string WorkshopEditWindowPassedMessage = "KhÃ´ng thá»ƒ sá»­a service order vÃ¬ Ä‘Ã£ qua má»‘c váº­n hÃ nh cho phÃ©p chá»‰nh sá»­a.";
         private static readonly HashSet<string> WorkshopMilestoneLockedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             nameof(ServiceOrderLifecycleStatus.READY),
@@ -139,7 +138,7 @@ namespace MyGarage.Services
         {
             if (!TryParsePositiveServiceOrderId(id, out var serviceOrderId))
             {
-                throw new InvalidOperationException("Mã lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             ArgumentNullException.ThrowIfNull(entity);
@@ -157,7 +156,7 @@ namespace MyGarage.Services
         {
             if (!TryParsePositiveServiceOrderId(id, out var serviceOrderId))
             {
-                throw new InvalidOperationException("Mã lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             await EnsureWorkshopEditableAsync(serviceOrderId);
@@ -168,13 +167,13 @@ namespace MyGarage.Services
         {
             if (dto == null)
             {
-                throw new InvalidOperationException("Dữ liệu tạo lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("Dá»¯ liá»‡u táº¡o lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             var items = dto.Items?.Where(item => item != null).ToList() ?? new List<WorkshopServiceOrderCreateDto>();
             if (items.Count == 0)
             {
-                throw new InvalidOperationException("Danh sách lệnh sửa chữa không được để trống.");
+                throw new InvalidOperationException("Danh sÃ¡ch lá»‡nh sá»­a chá»¯a khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng.");
             }
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -189,7 +188,7 @@ namespace MyGarage.Services
                     var branchId = dto.BranchId.GetValueOrDefault();
                     if (customerId <= 0 || branchId <= 0)
                     {
-                        throw new InvalidOperationException("CustomerId và BranchId phải lớn hơn 0 khi tạo nhóm lệnh.");
+                        throw new InvalidOperationException("CustomerId vÃ  BranchId pháº£i lá»›n hÆ¡n 0 khi táº¡o nhÃ³m lá»‡nh.");
                     }
 
                     await EnsureCustomerExistsAsync(customerId);
@@ -231,12 +230,12 @@ namespace MyGarage.Services
         {
             if (id <= 0)
             {
-                throw new InvalidOperationException("Mã lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             if (dto == null)
             {
-                throw new InvalidOperationException("Dữ liệu cập nhật lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("Dá»¯ liá»‡u cáº­p nháº­t lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == id);
@@ -251,7 +250,7 @@ namespace MyGarage.Services
             var selectedServiceIds = selection.EffectiveServiceIds;
             if (!selection.HasSelection)
             {
-                throw new InvalidOperationException("Vui lòng chọn ít nhất một dịch vụ.");
+                throw new InvalidOperationException("Vui lÃ²ng chá»n Ã­t nháº¥t má»™t dá»‹ch vá»¥.");
             }
 
             await EnsureWorkshopSelectionCompatibleWithVehicleAsync(selection, order.VehicleId);
@@ -260,7 +259,7 @@ namespace MyGarage.Services
             if (!string.IsNullOrWhiteSpace(normalizedOrderCategory) &&
                 !AllowedWorkshopOrderCategories.Contains(normalizedOrderCategory))
             {
-                throw new InvalidOperationException($"Phân loại lệnh sửa chữa không hợp lệ: {dto.OrderCategory}.");
+                throw new InvalidOperationException($"PhÃ¢n loáº¡i lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡: {dto.OrderCategory}.");
             }
 
             var serviceMap = selection.ServiceMap;
@@ -286,12 +285,12 @@ namespace MyGarage.Services
 
                 if (estimatedHandover.HasValue && estimatedHandover.Value < checkInTime)
                 {
-                    throw new InvalidOperationException("Thời gian dự kiến hoàn thành phải lớn hơn hoặc bằng thời điểm xe vào xưởng.");
+                    throw new InvalidOperationException("Thá»i gian dá»± kiáº¿n hoÃ n thÃ nh pháº£i lá»›n hÆ¡n hoáº·c báº±ng thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng.");
                 }
 
                 if (promisedHandover.HasValue && promisedHandover.Value < checkInTime)
                 {
-                    throw new InvalidOperationException("Thời gian cam kết trả xe phải lớn hơn hoặc bằng thời điểm xe vào xưởng.");
+                    throw new InvalidOperationException("Thá»i gian cam káº¿t tráº£ xe pháº£i lá»›n hÆ¡n hoáº·c báº±ng thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(normalizedOrderCategory))
@@ -310,7 +309,11 @@ namespace MyGarage.Services
                 order.PromisedHandoverTime = promisedHandover;
                 var previousLifecycleStatus = order.Status;
                 order.Status = ResolveOrderStatus(dto.Status ?? order.Status);
-                order.CustomerNotes = BuildSymptomsJson(dto.SymptomNotes, order.CustomerNotes);
+                if (dto.CustomerNotes != null)
+                {
+                    // Keep current note when field is omitted in partial workshop edit payload.
+                    order.CustomerNotes = NormalizeText(dto.CustomerNotes);
+                }
                 order.RequestedPackageIds = selection.RequestedPackageIds;
                 ApplyInsuranceSnapshot(
                     order,
@@ -328,7 +331,7 @@ namespace MyGarage.Services
                 var editableDetails = await _context.ServiceOrderDetails
                     .Where(d =>
                         d.ServiceOrderId == id &&
-                        d.DiagnoseRecommendationId == null &&
+                        d.DiagnosisRecommendationId == null &&
                         (d.ItemType == "LABOR" || d.ItemType == "SERVICE"))
                     .OrderBy(d => d.Id)
                     .ToListAsync();
@@ -456,12 +459,12 @@ namespace MyGarage.Services
         {
             if (item == null)
             {
-                throw new InvalidOperationException("Dữ liệu lệnh sửa chữa không hợp lệ.");
+                throw new InvalidOperationException("Dá»¯ liá»‡u lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
             }
 
             if (item.IsQuickOrder && item.IsNewVehicle)
             {
-                throw new InvalidOperationException("Không thể vừa là khách vãng lai vừa là xe mới của khách đã đăng ký.");
+                throw new InvalidOperationException("KhÃ´ng thá»ƒ vá»«a lÃ  khÃ¡ch vÃ£ng lai vá»«a lÃ  xe má»›i cá»§a khÃ¡ch Ä‘Ã£ Ä‘Äƒng kÃ½.");
             }
 
             long customerId;
@@ -484,7 +487,7 @@ namespace MyGarage.Services
                 customerId = item.CustomerId.GetValueOrDefault();
                 if (customerId <= 0)
                 {
-                    throw new InvalidOperationException("Vui lòng chọn khách hàng hợp lệ.");
+                    throw new InvalidOperationException("Vui lÃ²ng chá»n khÃ¡ch hÃ ng há»£p lá»‡.");
                 }
                 await EnsureCustomerExistsAsync(customerId);
 
@@ -504,7 +507,7 @@ namespace MyGarage.Services
                     vehicleId = item.VehicleId.GetValueOrDefault();
                     if (vehicleId <= 0)
                     {
-                        throw new InvalidOperationException("Vui lòng chọn xe hợp lệ.");
+                        throw new InvalidOperationException("Vui lÃ²ng chá»n xe há»£p lá»‡.");
                     }
                     await EnsureVehicleOwnershipAsync(customerId, vehicleId);
                 }
@@ -514,7 +517,7 @@ namespace MyGarage.Services
             var originBranchId = item.OriginBranchId.GetValueOrDefault();
             if (executeBranchId <= 0 && originBranchId <= 0)
             {
-                throw new InvalidOperationException("Thiếu thông tin chi nhánh thực hiện lệnh.");
+                throw new InvalidOperationException("Thiáº¿u thÃ´ng tin chi nhÃ¡nh thá»±c hiá»‡n lá»‡nh.");
             }
             if (executeBranchId <= 0) executeBranchId = originBranchId;
             if (originBranchId <= 0) originBranchId = executeBranchId;
@@ -589,8 +592,8 @@ namespace MyGarage.Services
             var isToday = checkInVietnamTime.Date == now.Date;
             throw new InvalidOperationException(
                 isToday
-                    ? "Gara không hoạt động vào hôm nay, vui lòng quay lại vào hôm sau."
-                    : "Gara không hoạt động vào ngày này, vui lòng chọn ngày khác.");
+                    ? "Gara khÃ´ng hoáº¡t Ä‘á»™ng vÃ o hÃ´m nay, vui lÃ²ng quay láº¡i vÃ o hÃ´m sau."
+                    : "Gara khÃ´ng hoáº¡t Ä‘á»™ng vÃ o ngÃ y nÃ y, vui lÃ²ng chá»n ngÃ y khÃ¡c.");
         }
 
         private async Task<long> ResolveOrCreateQuickCustomerAsync(WorkshopServiceOrderCreateDto item, long? actorStaffId)
@@ -598,13 +601,13 @@ namespace MyGarage.Services
             var guestName = NormalizeText(item.GuestName);
             if (string.IsNullOrWhiteSpace(guestName))
             {
-                throw new InvalidOperationException("Vui lòng nhập họ tên khách vãng lai.");
+                throw new InvalidOperationException("Vui lÃ²ng nháº­p há» tÃªn khÃ¡ch vÃ£ng lai.");
             }
 
             var normalizedPhone = NormalizePhone(item.GuestPhone);
             if (string.IsNullOrWhiteSpace(normalizedPhone))
             {
-                throw new InvalidOperationException("Vui lòng nhập số điện thoại khách vãng lai.");
+                throw new InvalidOperationException("Vui lÃ²ng nháº­p sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch vÃ£ng lai.");
             }
 
             var existing = await _context.Customers
@@ -682,18 +685,18 @@ namespace MyGarage.Services
             var licensePlate = NormalizeLicensePlate(rawLicensePlate);
             if (string.IsNullOrWhiteSpace(licensePlate))
             {
-                throw new InvalidOperationException("Vui lòng nhập biển số xe hợp lệ.");
+                throw new InvalidOperationException("Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe há»£p lá»‡.");
             }
 
             var modelId = rawModelId.GetValueOrDefault();
             if (modelId <= 0)
             {
-                throw new InvalidOperationException("Vui lòng chọn dòng xe hợp lệ.");
+                throw new InvalidOperationException("Vui lÃ²ng chá»n dÃ²ng xe há»£p lá»‡.");
             }
 
             if (!rawYear.HasValue || rawYear.Value <= 0)
             {
-                throw new InvalidOperationException("Vui lòng chọn năm sản xuất.");
+                throw new InvalidOperationException("Vui lÃ²ng chá»n nÄƒm sáº£n xuáº¥t.");
             }
 
             var existing = await _context.Vehicles
@@ -813,7 +816,7 @@ namespace MyGarage.Services
                 .AnyAsync(c => c.Id == customerId && c.IsDeleted != true);
             if (!exists)
             {
-                throw new InvalidOperationException("Khách hàng đã chọn không còn hợp lệ.");
+                throw new InvalidOperationException("KhÃ¡ch hÃ ng Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡.");
             }
         }
 
@@ -827,7 +830,7 @@ namespace MyGarage.Services
                     cv.IsDeleted != true);
             if (!owned)
             {
-                throw new InvalidOperationException("Xe đã chọn không thuộc khách hàng hiện tại.");
+                throw new InvalidOperationException("Xe Ä‘Ã£ chá»n khÃ´ng thuá»™c khÃ¡ch hÃ ng hiá»‡n táº¡i.");
             }
         }
 
@@ -857,7 +860,7 @@ namespace MyGarage.Services
 
             if (packages.Count != requestedPackageIds.Count)
             {
-                throw new InvalidOperationException("Có gói dịch vụ đã chọn không còn hợp lệ hoặc đã bị xóa.");
+                throw new InvalidOperationException("CÃ³ gÃ³i dá»‹ch vá»¥ Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡ hoáº·c Ä‘Ã£ bá»‹ xÃ³a.");
             }
 
             var packageServiceIds = packages
@@ -886,7 +889,7 @@ namespace MyGarage.Services
 
             if (serviceMap.Count != effectiveServiceIds.Count)
             {
-                throw new InvalidOperationException("Có dịch vụ trong gói hoặc dịch vụ đã chọn không còn hợp lệ hoặc đã bị xóa.");
+                throw new InvalidOperationException("CÃ³ dá»‹ch vá»¥ trong gÃ³i hoáº·c dá»‹ch vá»¥ Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡ hoáº·c Ä‘Ã£ bá»‹ xÃ³a.");
             }
 
             return new WorkshopServiceSelection(
@@ -1061,34 +1064,13 @@ namespace MyGarage.Services
                 .AnyAsync(company => company.Id == insuranceCompanyId && company.IsDeleted != true);
             if (!exists)
             {
-                throw new InvalidOperationException("Không tìm thấy công ty bảo hiểm đã chọn.");
+                throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y cÃ´ng ty báº£o hiá»ƒm Ä‘Ã£ chá»n.");
             }
         }
 
         private static decimal CalculateTaxAmount(decimal amount, decimal taxRate)
         {
             return Math.Round(amount * taxRate / 100m, 2, MidpointRounding.AwayFromZero);
-        }
-
-        private static string BuildSymptomsJson(IReadOnlyCollection<string>? symptomNotes, string? fallbackCustomerNotes)
-        {
-            if (symptomNotes == null)
-            {
-                return string.IsNullOrWhiteSpace(fallbackCustomerNotes)
-                    ? JsonSerializer.Serialize(new { symptoms = new[] { "Không có ghi chú gì" } })
-                    : fallbackCustomerNotes;
-            }
-
-            var normalized = symptomNotes
-                .Select(note => note?.Trim())
-                .Where(note => !string.IsNullOrWhiteSpace(note))
-                .ToList();
-            if (normalized.Count == 0)
-            {
-                normalized.Add("Không có ghi chú gì");
-            }
-
-            return JsonSerializer.Serialize(new { symptoms = normalized });
         }
 
         private static long NumberToPositiveLong(long value)
@@ -1222,7 +1204,7 @@ namespace MyGarage.Services
 
             if (!Enum.TryParse<ServiceOrderLifecycleStatus>(token, ignoreCase: true, out _))
             {
-                throw new InvalidOperationException($"Trạng thái lệnh sửa chữa không hợp lệ: {status}.");
+                throw new InvalidOperationException($"Tráº¡ng thÃ¡i lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡: {status}.");
             }
 
             return token;
@@ -1331,3 +1313,4 @@ namespace MyGarage.Services
         }
     }
 }
+
