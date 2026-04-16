@@ -51,6 +51,8 @@ const ORDER_VIEW_MODE = {
 
 const GROUP_STATUS_PRIORITY = [
   "WAITING_APPROVAL",
+  "SENT_TO_CUSTOMER",
+  "CUSTOMER_REJECTED",
   "QUOTING",
   "DIAGNOSING",
   "IN_PROGRESS",
@@ -62,9 +64,11 @@ const GROUP_STATUS_PRIORITY = [
   "NEW",
   "CLOSED",
   "COMPLETED",
-  "CANCELLED",
+  "CANCELED",
   "CANCELED",
 ];
+
+const QUOTE_WAITING_STATUSES = ["WAITING_APPROVAL", "SENT_TO_CUSTOMER", "CUSTOMER_REJECTED", "QUOTING"];
 
 function resolveGroupStatus(statuses) {
   if (!Array.isArray(statuses) || statuses.length === 0) return "NEW";
@@ -450,13 +454,13 @@ export default function ReceptionOrdersSection() {
   }, [orderViewMode, orderStatusFilter, orderSortBy, dateFrom, dateTo, searchQuery]);
 
   const activeOrdersCount = useMemo(
-    () => orders.filter((order) => !["COMPLETED", "CANCELED", "CANCELLED"].includes(normalizeStatus(order.status))).length,
+    () => orders.filter((order) => !["COMPLETED", "CANCELED", "CANCELED"].includes(normalizeStatus(order.status))).length,
     [orders]
   );
 
 
   const statusPermitUpdate = useCallback(
-    (status) => !["COMPLETED", "CANCELED", "CANCELLED"].includes(normalizeStatus(status)),
+    (status) => !["COMPLETED", "CANCELED", "CANCELED"].includes(normalizeStatus(status)),
     []
   );
 
@@ -479,7 +483,7 @@ export default function ReceptionOrdersSection() {
   }, [fetchData, statusPermitUpdate]);
 
   const handleCancelOrder = useCallback(async (order) => {
-    if (["COMPLETED", "CANCEL_REQUESTED", "CANCELLED"].includes(order.status)) {
+    if (["COMPLETED", "CANCEL_REQUESTED", "CANCELED"].includes(order.status)) {
       alert("Lệnh này không thể hủy ở trạng thái hiện tại.");
       return;
     }
@@ -489,7 +493,7 @@ export default function ReceptionOrdersSection() {
 
     setSaving(true);
     try {
-      await serviceOrderApi.update(order.id, { ...order, status: "CANCELLED" });
+      await serviceOrderApi.update(order.id, { ...order, status: "CANCELED" });
       await fetchData();
     } catch (err) {
       setError("Lỗi khi hủy lệnh: " + err.message);
@@ -522,7 +526,7 @@ export default function ReceptionOrdersSection() {
     setSaving(true);
     try {
       await Promise.all(
-        cancellableOrders.map((order) => serviceOrderApi.update(order.id, { ...order, status: "CANCELLED", cancelReason: reason })),
+        cancellableOrders.map((order) => serviceOrderApi.update(order.id, { ...order, status: "CANCELED", cancelReason: reason })),
       );
       await fetchData();
     } catch (err) {
@@ -587,7 +591,7 @@ export default function ReceptionOrdersSection() {
           <div className="stat-label">Mới tiếp nhận</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value" style={{ color: "#ffb547" }}>{orders.filter((order) => order.status === "WAITING_APPROVAL").length}</div>
+          <div className="stat-value" style={{ color: "#ffb547" }}>{orders.filter((order) => QUOTE_WAITING_STATUSES.includes(normalizeStatus(order.status))).length}</div>
           <div className="stat-label">Chờ báo giá</div>
         </div>
         <div className="stat-card">
@@ -605,6 +609,7 @@ export default function ReceptionOrdersSection() {
 
       <OrdersTableContent
         navigate={navigate}
+        onRefresh={fetchData}
         orderStatusFilter={orderStatusFilter}
         setOrderStatusFilter={setOrderStatusFilter}
         orderStatusOptions={orderStatusOptions}
@@ -665,6 +670,7 @@ export default function ReceptionOrdersSection() {
 }
 function OrdersTableContent({
   navigate,
+  onRefresh,
   orderStatusFilter,
   setOrderStatusFilter,
   orderStatusOptions,
@@ -717,17 +723,6 @@ function OrdersTableContent({
 
   const renderOrderActionButtons = useCallback((order) => (
     <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", width: "100%" }}>
-      {normalizeStatus(order.status) === "WAITING_APPROVAL" ? (
-        <button
-          className="btn-primary btn-sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            navigate(`/workshop/reception/orders/${order.id}/quote`);
-          }}
-        >
-          ✍ Báo giá
-        </button>
-      ) : null}
       {normalizeStatus(order.status) === "READY" ? (
         <button
           className="btn-success btn-sm"
@@ -762,6 +757,17 @@ function OrdersTableContent({
 
   return (
     <>
+      <div className="workshop-global-actions" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          className="toolbar-action-btn toolbar-action-outline workshop-global-refresh-btn"
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          ⟳ Làm mới
+        </button>
+      </div>
+
       <div className="table-toolbar">
         <button className="btn-primary" onClick={() => navigate("/workshop/reception/create")}>+ Tiếp nhận xe mới</button>
         <div className="toolbar-controls">
@@ -1061,3 +1067,4 @@ function OrdersTableContent({
     </>
   );
 }
+

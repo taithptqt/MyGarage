@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 const SYSTEM_CATEGORIES = [
-  { id: "engine", label: "??ng co", icon: Activity },
+  { id: "engine", label: "Động cơ", icon: Activity },
   { id: "transmission", label: "Hộp số", icon: Wrench },
   { id: "brakes", label: "Phanh & ABS", icon: AlertTriangle },
   { id: "steering", label: "Hệ thống Lái / Gầm", icon: Car },
@@ -134,35 +134,35 @@ export default function CustomerSymptomDiagnosticsPage() {
                 <Icon as={Car} />
                 <Heading size="sm">Thông tin đầu vào</Heading>
               </HStack>
-              
+
               <VStack spacing={4} align="stretch">
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Biển số / Lệnh tham chiếu *</FormLabel>
-                  <Input 
-                    placeholder="VD: 51H-123.45 hoặc ORD-001" 
+                  <Input
+                    placeholder="VD: 51H-123.45 hoặc ORD-001"
                     value={form.vehicleInfo}
-                    onChange={(e) => setForm({...form, vehicleInfo: e.target.value})}
+                    onChange={(e) => setForm({ ...form, vehicleInfo: e.target.value })}
                     focusBorderColor="#4318ff"
                   />
                 </FormControl>
 
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Số ODO hiện tại (km)</FormLabel>
-                  <Input 
+                  <Input
                     type="number"
-                    placeholder="VD: 45000" 
+                    placeholder="VD: 45000"
                     value={form.mileage}
-                    onChange={(e) => setForm({...form, mileage: e.target.value})}
+                    onChange={(e) => setForm({ ...form, mileage: e.target.value })}
                     focusBorderColor="#4318ff"
                   />
                 </FormControl>
 
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Mã lỗi OBD / Đèn cảnh báo</FormLabel>
-                  <Input 
-                    placeholder="VD: Đèn cá vàng sáng, mã P0300..." 
+                  <Input
+                    placeholder="VD: Đèn cá vàng sáng, mã P0300..."
                     value={form.dashboardCodes}
-                    onChange={(e) => setForm({...form, dashboardCodes: e.target.value})}
+                    onChange={(e) => setForm({ ...form, dashboardCodes: e.target.value })}
                     focusBorderColor="#4318ff"
                   />
                 </FormControl>
@@ -174,15 +174,15 @@ export default function CustomerSymptomDiagnosticsPage() {
                 <Icon as={Clock} />
                 <Heading size="sm">Tình trạng xuất hiện</Heading>
               </HStack>
-              
+
               <VStack spacing={4} align="stretch">
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Thời gian bắt đầu</FormLabel>
-                  <Select 
-                    placeholder="Chọn khung thời gian" 
+                  <Select
+                    placeholder="Chọn khung thời gian"
                     focusBorderColor="#4318ff"
                     value={form.timeline}
-                    onChange={(e) => setForm({...form, timeline: e.target.value})}
+                    onChange={(e) => setForm({ ...form, timeline: e.target.value })}
                   >
                     <option value="today">Vừa mới xảy ra (Hôm nay)</option>
                     <option value="few_days">Vài ngày trước</option>
@@ -193,11 +193,11 @@ export default function CustomerSymptomDiagnosticsPage() {
 
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Tần suất</FormLabel>
-                  <Select 
-                    placeholder="Tần suất xảy ra" 
+                  <Select
+                    placeholder="Tần suất xảy ra"
                     focusBorderColor="#4318ff"
                     value={form.frequency}
-                    onChange={(e) => setForm({...form, frequency: e.target.value})}
+                    onChange={(e) => setForm({ ...form, frequency: e.target.value })}
                   >
                     <option value="constant">Liên tục (Lúc nào cũng bị)</option>
                     <option value="intermittent">Thỉnh thoảng (Lúc bị lúc không)</option>
@@ -207,11 +207,11 @@ export default function CustomerSymptomDiagnosticsPage() {
 
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Điều kiện xảy ra rõ nhất</FormLabel>
-                  <Select 
-                    placeholder="Hoàn cảnh phát sinh lỗi" 
+                  <Select
+                    placeholder="Hoàn cảnh phát sinh lỗi"
                     focusBorderColor="#4318ff"
                     value={form.occurrenceCondition}
-                    onChange={(e) => setForm({...form, occurrenceCondition: e.target.value})}
+                    onChange={(e) => setForm({ ...form, occurrenceCondition: e.target.value })}
                   >
                     <option value="cold_start">Khi nổ máy nguội (Sáng sớm)</option>
                     <option value="idling">Khi nổ máy không tải (Dừng đèn đỏ)</option>
@@ -229,7 +229,7 @@ export default function CustomerSymptomDiagnosticsPage() {
           {/* Right Column - Symptoms Details */}
           <VStack spacing={6} align="stretch" gridColumn={{ lg: "span 2" }}>
             <Box bg="white" p={5} borderRadius="xl" boxShadow="sm" border="1px solid #e2e8f0">
-               <HStack mb={4} color="#ffb547">
+              <HStack mb={4} color="#ffb547">
                 <Icon as={AlertTriangle} />
                 <Heading size="sm">Phân loại Triệu chứng *</Heading>
               </HStack>
@@ -300,17 +300,17 @@ export default function CustomerSymptomDiagnosticsPage() {
                   <Heading size="sm">Mô tả chi tiết của khách hàng</Heading>
                 </HStack>
               </HStack>
-              
+
               <FormControl>
-                 <Textarea 
-                    placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rít rít rồi lên đèn check engine, xe rung bần bật không chạy được...'" 
-                    rows={4}
-                    value={form.customerDescription}
-                    onChange={(e) => setForm({...form, customerDescription: e.target.value})}
-                    focusBorderColor="#05cd99"
-                    borderRadius="lg"
-                  />
-                  <Text fontSize="xs" color="#a3aed0" mt={2}>Trích dẫn nguyên văn lời khách hàng để mô hình AI nắm bắt bối cảnh tốt nhất.</Text>
+                <Textarea
+                  placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rít rít rồi lên đèn check engine, xe rung bần bật không chạy được...'"
+                  rows={4}
+                  value={form.customerDescription}
+                  onChange={(e) => setForm({ ...form, customerDescription: e.target.value })}
+                  focusBorderColor="#05cd99"
+                  borderRadius="lg"
+                />
+                <Text fontSize="xs" color="#a3aed0" mt={2}>Trích dẫn nguyên văn lời khách hàng để mô hình AI nắm bắt bối cảnh tốt nhất.</Text>
               </FormControl>
             </Box>
 

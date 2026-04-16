@@ -1,0 +1,184 @@
+/* MyPayslip.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+.ps-page {
+  padding: 24px 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e293b;
+}
+
+.ps-header { margin-bottom: 24px; }
+.ps-title { margin: 0 0 4px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.ps-subtitle { margin: 0; color: #64748b; font-size: 14px; }
+
+.ps-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+/* Sidebar List */
+.ps-sidebar {
+  width: 320px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  flex-shrink: 0;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+}
+.ps-sidebar-title {
+  padding: 16px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+}
+.ps-list { list-style: none; padding: 0; margin: 0; }
+.ps-list-item {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ps-list-item:hover { background: #f8fafc; }
+.ps-list-item.active { background: #eef2ff; border-left: 4px solid #4f46e5; }
+.ps-li-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.ps-li-header strong { font-size: 14px; color: #334155; }
+.ps-li-amount { font-weight: 700; font-size: 16px; color: #059669; }
+
+.ps-st { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.st-draft { background: #f1f5f9; color: #475569; }
+.st-approved { background: #dbeafe; color: #1e40af; }
+.st-paid { background: #d1fae5; color: #065f46; }
+
+/* Detail Area */
+.ps-detail-area {
+  flex-grow: 1;
+}
+.ps-empty {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 60px;
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Detail Card */
+.ps-detail-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}
+
+.ps-dc-header {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px dashed #cbd5e1;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+}
+.ps-dc-brand { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: #0f172a; }
+.ps-dc-period { font-size: 16px; font-weight: 700; color: #4f46e5; background: #eef2ff; padding: 6px 12px; border-radius: 8px; }
+
+.ps-dc-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+.ps-dc-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+.ps-dc-name { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1e293b; }
+.ps-dc-role { margin: 0; font-size: 14px; color: #64748b; }
+
+.ps-dc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+.ps-dc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ps-dc-sec-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ps-dc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 4px 0;
+}
+.ps-row-label { color: #475569; font-weight: 500; }
+.ps-row-val { font-weight: 600; color: #1e293b; }
+
+.ps-dc-total {
+  background: #1e293b;
+  color: #fff;
+  padding: 20px 24px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+.ps-dc-total-val {
+  font-size: 28px;
+  color: #10b981; /* emerald-500 */
+}
+
+.ps-dc-footer {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+.ps-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ps-btn-print { background: #fff; border: 1px solid #cbd5e1; color: #334155; margin: 0 auto; display: block; }
+.ps-btn-print:hover { background: #f8fafc; }
+
+@media print {
+  .ps-sidebar, .ps-header, .ps-btn-print { display: none !important; }
+  .ps-page { padding: 0 !important; max-width: 100% !important; }
+  .ps-detail-card { box-shadow: none !important; border: none !important; padding: 0 !important; }
+}

@@ -1,4 +1,4 @@
-﻿import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "@features/auth/pages/AuthPage";
 import ForgotPasswordPage from "@features/auth/recovery/ForgotPasswordPage";
 import ResetPasswordPage from "@features/auth/recovery/ResetPasswordPage";
@@ -14,13 +14,35 @@ import TechnicianDashboard from "@features/workshop/components/TechnicianDashboa
 import QCDashboard from "@features/workshop/components/QCDashboard";
 import CreateServiceOrderPage from "@features/workshop/pages/CreateServiceOrderPage";
 import ServiceOrderDiagnosisPage from "@features/workshop/pages/ServiceOrderDiagnosisPage";
+import ServiceOrderDiagnosisReportPage from "@features/workshop/pages/ServiceOrderDiagnosisReportPage";
 import ServiceOrderItemsPage from "@features/workshop/pages/ServiceOrderItemsPage";
 import ServiceOrderQuotePage from "@features/workshop/pages/ServiceOrderQuotePage";
+import TeamLeaderDiagnosisApprovalPage from "@features/workshop/pages/TeamLeaderDiagnosisApprovalPage";
+import ForemanDiagnosisApprovalPage from "@features/workshop/pages/ForemanDiagnosisApprovalPage";
+import ManagerDiagnosisApprovalPage from "@features/workshop/pages/ManagerDiagnosisApprovalPage";
 import VehicleConditionLogsPage from "@features/workshop/pages/VehicleConditionLogsPage";
 import ServiceOrderEditPage from "@features/workshop/pages/ServiceOrderEditPage";
 import ReceptionCreateAppointmentPage from "@features/workshop/pages/ReceptionCreateAppointmentPage";
 import ReceptionEditAppointmentPage from "@features/workshop/pages/ReceptionEditAppointmentPage";
 import ReceptionAppointmentsPage from "@features/workshop/pages/ReceptionAppointmentsPage";
+import WorkshopRoleHistoryPage from "@features/workshop/pages/WorkshopRoleHistoryPage";
+import ForemanBoardPage from "@features/workshop/pages/ForemanBoardPage";
+import BayTimelinePage from "@features/workshop/pages/BayTimelinePage";
+import MyTasksPage from "@features/workshop/pages/MyTasksPage";
+import TechnicianAssignmentPage from "@features/workshop/pages/TechnicianAssignmentPage";
+import QcChecklistPage from "@features/workshop/pages/QcChecklistPage";
+import HandoverPage from "@features/workshop/pages/HandoverPage";
+import MaterialRequestQueuePage from "@features/inventory/pages/MaterialRequestQueuePage";
+import MaterialReturnPage from "@features/inventory/pages/MaterialReturnPage";
+import StockAlertPage from "@features/inventory/pages/StockAlertPage";
+import PurchaseOrderPage from "@features/inventory/pages/PurchaseOrderPage";
+import GoodsReceiptPage from "@features/inventory/pages/GoodsReceiptPage";
+import TimesheetPage from "@features/technician/pages/TimesheetPage";
+import PayrollRunPage from "@features/hr/pages/PayrollRunPage";
+import CommissionBreakdownPage from "@features/hr/pages/CommissionBreakdownPage";
+import MyPayslipPage from "@features/payslip/pages/MyPayslipPage";
+import QcTemplateAdminPage from "@features/qc/pages/QcTemplateAdminPage";
+import StockHistoryPage from "@features/inventory/pages/StockHistoryPage";
 import HorizonMain from "@horizon/Main";
 import ProtectedRoute from "@shared/core/components/auth/ProtectedRoute";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -41,13 +63,12 @@ import GarageDashboardPage from "@features/customerPortal/pages/GarageDashboardP
 import MyVehiclesPage from "@features/customerPortal/pages/MyVehiclesPage";
 import VehicleDetailPage from "@features/customerPortal/pages/VehicleDetailPage";
 import MyNotificationsPage from "@features/customerPortal/pages/MyNotificationsPage";
+import QuotationDetailPage from "@features/customerPortal/pages/QuotationDetailPage";
+import PublicQuotationAccessPage from "@features/customerPortal/pages/PublicQuotationAccessPage";
 import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
 import AccountingMain from "@horizon/AccountingMain";
-import ContactPage from "@features/contact/pages/ContactPage";
-import ShowroomPage from "@features/showroom/pages/ShowroomPage";
-import AboutUsPage from "@features/about/pages/AboutUsPage";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -74,12 +95,10 @@ function App() {
         <Route path="/login" element={<AuthPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/quote-access/:token" element={<PublicQuotationAccessPage />} />
         <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
         <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
         <Route path="/home" element={<HomePage />} />
-        <Route path="/showroom" element={<ShowroomPage />} />
-        <Route path="/about" element={<AboutUsPage />} />
-        <Route path="/contact" element={<ContactPage />} />
         
         {/* Customer Appointment Routes */}
         <Route 
@@ -134,6 +153,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["CUSTOMER"]}>
               <CustomerRoute><MyNotificationsPage /></CustomerRoute>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-quotations/:quotationId"
+          element={
+            <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+              <CustomerRoute><QuotationDetailPage /></CustomerRoute>
             </ProtectedRoute>
           }
         />
@@ -250,23 +277,67 @@ function App() {
           <Route path="reception/appointments/new" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionCreateAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/appointments/:appointmentId/edit" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionEditAppointmentPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
+          <Route path="reception/orders/:orderId/diagnosis-report" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderDiagnosisReportPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/items" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderItemsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/vehicleconditionlogs" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><VehicleConditionLogsPage /></ProtectedRoute>} />
           <Route path="reception/orders/:orderId/edit" element={<ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ServiceOrderEditPage /></ProtectedRoute>} />
           <Route path="manager" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
           <Route path="manager/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDashboard /></ProtectedRoute>} />
-          <Route path="manager/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="manager/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["MANAGER"]}><ManagerDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="foreman" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
           <Route path="foreman/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDashboard /></ProtectedRoute>} />
-          <Route path="foreman/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="foreman/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="team-leader" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
           <Route path="team-leader/dispatch/:orderId" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDashboard /></ProtectedRoute>} />
-          <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><ServiceOrderQuotePage /></ProtectedRoute>} />
+          <Route path="team-leader/orders/:orderId/quote" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><TeamLeaderDiagnosisApprovalPage /></ProtectedRoute>} />
           <Route path="technician" element={<ProtectedRoute allowedRoles={["TECH"]}><TechnicianDashboard /></ProtectedRoute>} />
           <Route path="technician/orders/:orderId/diagnosis" element={<ProtectedRoute allowedRoles={["TECH"]}><ServiceOrderDiagnosisPage /></ProtectedRoute>} />
+          <Route path="technician/history" element={<ProtectedRoute allowedRoles={["TECH"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
           <Route path="qc" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL"]}><QCDashboard /></ProtectedRoute>} />
+          <Route path="team-leader/history" element={<ProtectedRoute allowedRoles={["TEAM_LEADER"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
+          <Route path="foreman/history" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><WorkshopRoleHistoryPage /></ProtectedRoute>} />
+          {/* A17 – Foreman Kanban Board */}
+          <Route path="foreman/board" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><ForemanBoardPage /></ProtectedRoute>} />
+          {/* A14 – Bay Timeline */}
+          <Route path="foreman/bay-timeline" element={<ProtectedRoute allowedRoles={["FOREMAN"]}><BayTimelinePage /></ProtectedRoute>} />
+          {/* A16 – Technician My Tasks */}
+          <Route path="technician/my-tasks" element={<ProtectedRoute allowedRoles={["TECH"]}><MyTasksPage /></ProtectedRoute>} />
+          {/* A15 – Technician Assignment */}
+          <Route path="foreman/orders/:orderId/assign" element={<ProtectedRoute allowedRoles={["FOREMAN","TEAM_LEADER"]}><TechnicianAssignmentPage /></ProtectedRoute>} />
+          {/* A18 – QC Checklist */}
+          <Route path="qc/orders/:orderId/checklist" element={<ProtectedRoute allowedRoles={["QUALITY_CONTROL","FOREMAN"]}><QcChecklistPage /></ProtectedRoute>} />
+          {/* Admin QC Templates */}
+          <Route path="qc/templates" element={<ProtectedRoute allowedRoles={["ADMIN","MANAGER"]}><QcTemplateAdminPage /></ProtectedRoute>} />
+          {/* A19 – Handover */}
+          <Route path="reception/orders/:orderId/handover" element={<ProtectedRoute allowedRoles={["RECEPTIONIST","FOREMAN","ADMIN"]}><HandoverPage /></ProtectedRoute>} />
+          {/* B04 – Material Request Queue */}
+          <Route path="inventory/material-requests" element={<ProtectedRoute allowedRoles={["STOREKEEPER","FOREMAN","ADMIN"]}><MaterialRequestQueuePage /></ProtectedRoute>} />
+          {/* B06 – Material Returns */}
+          <Route path="inventory/material-returns" element={<ProtectedRoute allowedRoles={["STOREKEEPER","FOREMAN","ADMIN"]}><MaterialReturnPage /></ProtectedRoute>} />
+          {/* B07 – Stock Alerts */}
+          <Route path="inventory/stock-alerts" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><StockAlertPage /></ProtectedRoute>} />
+          {/* B08 – Purchase Orders */}
+          <Route path="inventory/purchase-orders" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
+          <Route path="inventory/purchase-orders/new" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
+          {/* B09 – Goods Receipt Notes (GRN) */}
+          <Route path="inventory/goods-receipts" element={<ProtectedRoute allowedRoles={["STOREKEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
+          <Route path="inventory/goods-receipt/new" element={<ProtectedRoute allowedRoles={["STOREKEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
+          {/* Stock History */}
+          <Route path="inventory/history" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><StockHistoryPage /></ProtectedRoute>} />
+
+          {/* C03 – Timesheet (Technician) */}
+          <Route path="technician/timesheet" element={<ProtectedRoute allowedRoles={["TECH","FOREMAN","TEAM_LEADER"]}><TimesheetPage /></ProtectedRoute>} />
+
+          {/* C05 - Payroll Run */}
+          <Route path="hr/payroll-run" element={<ProtectedRoute allowedRoles={["ADMIN","MANAGER"]}><PayrollRunPage /></ProtectedRoute>} />
           
+          {/* C06 - Commission Breakdown */}
+          <Route path="hr/commissions" element={<ProtectedRoute allowedRoles={["ADMIN","MANAGER","ACCOUNTANT"]}><CommissionBreakdownPage /></ProtectedRoute>} />
+          
+          {/* C07 - My Payslip */}
+          <Route path="payslip" element={<ProtectedRoute allowedRoles={["TECH","FOREMAN","TEAM_LEADER","RECEPTIONIST","MANAGER","STOREKEEPER","QUALITY_CONTROL"]}><MyPayslipPage /></ProtectedRoute>} />
+
         </Route>
 
         <Route path="/horizon/*" element={<Navigate to="/admin/default" replace />} />

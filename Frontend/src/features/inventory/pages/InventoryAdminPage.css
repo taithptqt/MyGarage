@@ -256,44 +256,70 @@
   background: #f4f7ff;
 }
 
-.inventory-admin-page .inventory-action-col {
-  min-width: 220px;
-}
-
-.inventory-admin-page .inventory-action-col-cell {
-  min-width: 220px;
-}
-
-.inventory-admin-page .inventory-row-actions {
+.inventory-admin-page .row-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.inventory-admin-page .inventory-action-btn {
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-weight: 700;
+.inventory-stock-alert-banner {
+  margin: 0 28px 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #d9e4fb;
+  background: #f6f9ff;
+}
+
+.inventory-stock-alert-banner.is-warning {
+  background: linear-gradient(180deg, #fff9ee 0%, #fff5e2 100%);
+  border-color: #f6d08d;
+}
+
+.inventory-stock-alert-banner.is-ok {
+  background: linear-gradient(180deg, #eefaf4 0%, #e4f6ee 100%);
+  border-color: #9cd4b1;
+}
+
+.inventory-stock-alert-banner.is-error {
+  background: linear-gradient(180deg, #fff1f1 0%, #ffe8e8 100%);
+  border-color: #f2abab;
+}
+
+.inventory-stock-alert-title {
+  font-weight: 800;
+  color: #2c3f6a;
+}
+
+.inventory-stock-alert-list {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.inventory-stock-alert-item {
+  border: 1px solid #f0d8ad;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inventory-admin-page .row-actions .btn-icon {
+  min-width: 68px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  line-height: 1;
   white-space: nowrap;
-  flex: 0 0 auto;
-  transition: transform 0.16s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.inventory-admin-page .inventory-action-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 7px 16px rgba(39, 66, 133, 0.14);
-}
-
-.inventory-admin-page .inventory-action-btn:active {
-  transform: translateY(0);
-}
-
-.inventory-admin-page .inventory-action-btn--warn {
-  border-color: #d8dff1;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .inventory-admin-page .policy-card {

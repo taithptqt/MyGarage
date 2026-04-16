@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { request } from "@app/apiClient";
-import { useAuth } from "@shared/core/context/AuthContext";
 
 const BranchContext = createContext(undefined);
 const STORAGE_KEY = "mygarage_branch_id";
@@ -48,51 +47,21 @@ function writeStoredBranchId(branchId) {
 }
 
 export function BranchProvider({ children }) {
-  const { user } = useAuth();
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState(readStoredBranchId);
   const [loading, setLoading] = useState(false);
-
-  const roleCode = String(user?.roleCode || "").trim().toUpperCase();
-  const parsedUserBranchId = parseBranchId(user?.branchId);
-  const lockedBranchId =
-    roleCode === "ACCOUNTANT" &&
-    Number.isFinite(Number(parsedUserBranchId)) &&
-    Number(parsedUserBranchId) > 0
-      ? Number(parsedUserBranchId)
-      : null;
-  const isBranchLocked = lockedBranchId !== null;
-
-  const applyBranchScope = useCallback(
-    (branchList) => {
-      const activeList = (branchList || []).filter((item) => item?.isDeleted !== true);
-      if (!isBranchLocked) return activeList;
-
-      const scoped = activeList.filter((item) => Number(item?.id) === Number(lockedBranchId));
-      if (scoped.length) return scoped;
-
-      return [
-        {
-          id: Number(lockedBranchId),
-          name: user?.branchName || `Chi nhánh #${lockedBranchId}`,
-          isDeleted: false,
-        },
-      ];
-    },
-    [isBranchLocked, lockedBranchId, user?.branchName]
-  );
 
   const refreshBranches = useCallback(async () => {
     setLoading(true);
     try {
       const list = await fetchBranches();
-      const active = applyBranchScope(list);
+      const active = list.filter((item) => item?.isDeleted !== true);
       setBranches(active);
       return active;
     } finally {
       setLoading(false);
     }
-  }, [applyBranchScope]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -103,17 +72,8 @@ export function BranchProvider({ children }) {
 
         setSelectedBranchId((currentId) => {
           if (!list.length) {
-            if (isBranchLocked && lockedBranchId) {
-              writeStoredBranchId(lockedBranchId);
-              return lockedBranchId;
-            }
             writeStoredBranchId(ALL_BRANCHES_ID);
             return ALL_BRANCHES_ID;
-          }
-
-          if (isBranchLocked && lockedBranchId) {
-            writeStoredBranchId(lockedBranchId);
-            return lockedBranchId;
           }
 
           const nextId = isBranchInList(list, currentId) ? currentId : Number(list[0]?.id) || ALL_BRANCHES_ID;
@@ -127,23 +87,20 @@ export function BranchProvider({ children }) {
     return () => {
       mounted = false;
     };
-  }, [refreshBranches, isBranchLocked, lockedBranchId]);
+  }, [refreshBranches]);
 
   const selectBranch = useCallback((branchId) => {
-    let parsed = parseBranchId(branchId);
+    const parsed = parseBranchId(branchId);
     if (parsed === null) return;
-    if (isBranchLocked && lockedBranchId) {
-      parsed = lockedBranchId;
-    }
     setSelectedBranchId(parsed);
     writeStoredBranchId(parsed);
-  }, [isBranchLocked, lockedBranchId]);
+  }, []);
 
   const selectedBranch = useMemo(
     () => branches.find((item) => Number(item?.id) === Number(selectedBranchId)) || null,
     [branches, selectedBranchId]
   );
-  const isAllBranches = !isBranchLocked && selectedBranchId === ALL_BRANCHES_ID;
+  const isAllBranches = selectedBranchId === ALL_BRANCHES_ID;
 
   const value = useMemo(
     () => ({
@@ -151,23 +108,11 @@ export function BranchProvider({ children }) {
       selectedBranchId,
       selectedBranch,
       isAllBranches,
-      isBranchLocked,
-      lockedBranchId,
       selectBranch,
       refreshBranches,
       loading
     }),
-    [
-      branches,
-      selectedBranchId,
-      selectedBranch,
-      isAllBranches,
-      isBranchLocked,
-      lockedBranchId,
-      selectBranch,
-      refreshBranches,
-      loading,
-    ]
+    [branches, selectedBranchId, selectedBranch, isAllBranches, selectBranch, refreshBranches, loading]
   );
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;

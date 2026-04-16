@@ -1,4 +1,4 @@
-import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
+﻿import { formatLicensePlate } from "@features/workshop/utils/serviceOrderDetailUtils";
 import { splitBookingItemIds } from "@features/appointments/utils/bookingPackages";
 import { buildInsuranceSnapshotPayload } from "@features/appointments/utils/bookingInsurance";
 
@@ -38,15 +38,13 @@ function toLocalDateTimeValue(value) {
   return `${year}-${month}-${day}T${hour}:${minute}:00`;
 }
 
-function normalizeNoteLines(lines) {
-  if (!Array.isArray(lines)) return [];
-  return lines.map((line) => String(line || "").trim()).filter(Boolean);
-}
-
-function buildCustomerNotes(lines) {
-  const normalized = normalizeNoteLines(lines);
-  const payload = normalized.length > 0 ? normalized : ["Không có ghi chú gì"];
-  return JSON.stringify({ symptoms: payload });
+function buildCustomerNotes(value) {
+  if (Array.isArray(value)) {
+    const merged = value.map((line) => String(line || "").trim()).filter(Boolean).join("; ");
+    return merged || null;
+  }
+  const text = String(value || "").trim();
+  return text || null;
 }
 
 function getVehicleIdFromKey(vehicleKey) {
@@ -178,11 +176,9 @@ export function buildWorkshopEditPayload({
   formData,
   suggestedFinishIso,
   insuranceActive = false,
-  symptomInputs,
+  customerNote,
 }) {
-  const normalizedSymptoms = (Array.isArray(symptomInputs) ? symptomInputs : [])
-    .map((line) => String(line || "").trim())
-    .filter(Boolean);
+  const normalizedCustomerNote = String(customerNote || "").trim();
   const insuranceSnapshot = insuranceActive ? buildInsuranceSnapshotPayload(formData) : buildInsuranceSnapshotPayload();
 
   return {
@@ -197,6 +193,6 @@ export function buildWorkshopEditPayload({
     serviceIds: splitBookingItemIds(toNumberList(formData?.serviceIds)).serviceIds,
     packageIds: splitBookingItemIds(toNumberList(formData?.serviceIds)).packageIds,
     ...insuranceSnapshot,
-    symptomNotes: normalizedSymptoms,
+    customerNotes: normalizedCustomerNote || null,
   };
 }

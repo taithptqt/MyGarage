@@ -10,7 +10,19 @@ const STAGES = [
 ];
 
 export default function WorkflowTimeline({ currentStatus }) {
-  const currentIndex = STAGES.findIndex(s => s.key === currentStatus);
+  const normalized = String(currentStatus || "").trim().toUpperCase();
+  const statusAlias = {
+    QUOTING: "WAITING_APPROVAL",
+    SENT_TO_CUSTOMER: "WAITING_APPROVAL",
+    APPROVED: "WAITING_APPROVAL",
+    CUSTOMER_APPROVED: "REPAIRING",
+    CUSTOMER_REJECTED: "WAITING_APPROVAL",
+    IN_PROGRESS: "REPAIRING",
+    QUALITY_CONTROL: "QC_PENDING",
+    COMPLETED: "READY",
+  };
+  const effectiveStatus = statusAlias[normalized] || normalized;
+  const currentIndex = STAGES.findIndex((s) => s.key === effectiveStatus);
   
   return (
     <div className="workflow-timeline">

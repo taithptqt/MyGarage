@@ -1939,6 +1939,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #1d2a26;
 }
 
+.summary-note-line {
+  display: grid;
+  gap: 4px;
+}
+
+.summary-note-text {
+  font-weight: 500;
+  color: rgba(29, 42, 38, 0.9);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .summary-vehicle-content p.summary-vehicle-flow-note {
   margin-top: 6px;
   padding: 0;

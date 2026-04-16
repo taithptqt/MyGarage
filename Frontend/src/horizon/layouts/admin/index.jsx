@@ -201,6 +201,7 @@ export default function Dashboard(props) {
                 pt={{ base: '130px', md: '110px', xl: '110px' }}
               >
                 <Routes>
+                  <Route index element={<Navigate to="default" replace />} />
                   {getRoutes(routes)}
                   <Route
                     path="*"

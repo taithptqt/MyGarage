@@ -28,7 +28,7 @@ import {
   VStack,
   useToast,
 } from "@chakra-ui/react";
-import { ArrowBackIcon, RepeatIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon } from "@chakra-ui/icons";
 import { keyframes } from "@emotion/react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getAllRoles, getAllStaff } from "@features/admin/api/staffApi";
@@ -43,6 +43,28 @@ import { useSearch } from "@shared/core/context/SearchContext";
 const COLUMN_ORDER = ["WHITE", "YELLOW", "RED", "GREEN"];
 
 const COLOR_META = {
+  NEEDS_APPROVAL: {
+    label: "Cần duyệt",
+    description: "Phiếu tổ trưởng đã duyệt hoặc phiếu cờ đỏ quá SLA",
+    tabBg: "#eff6ff",
+    tabBorder: "#93c5fd",
+    tabText: "#1d4ed8",
+    activeBg: "#2563eb",
+    activeText: "white",
+    cardAccent: "#2563eb",
+    cardBg: "#eff6ff",
+  },
+  ALL_ITEMS: {
+    label: "Tất cả",
+    description: "Tổng của 4 tab còn lại trong màn hình điều phối",
+    tabBg: "#f0fdfa",
+    tabBorder: "#5eead4",
+    tabText: "#0f766e",
+    activeBg: "#0f766e",
+    activeText: "white",
+    cardAccent: "#0f766e",
+    cardBg: "#f0fdfa",
+  },
   WHITE: {
     label: "Mới tiếp nhận",
     description: "Chờ tổ trưởng nhận xe và phân công",
@@ -55,7 +77,7 @@ const COLOR_META = {
     cardBg: "white",
   },
   YELLOW: {
-    label: "Đang chuẩn đoán",
+    label: "Đang chẩn đoán",
     description: "Đã có tổ nhận và đang xử lý",
     tabBg: "#fff8db",
     tabBorder: "#f6d365",
@@ -90,6 +112,18 @@ const COLOR_META = {
 };
 
 const STATUS_CARD_THEME = {
+  NEEDS_APPROVAL: {
+    dot: "#2563eb",
+    activeBorder: "#2563eb",
+    activeBg: "linear-gradient(150deg, #eff6ff 0%, #dbeafe 58%, #bfdbfe 100%)",
+    activeShadow: "0 12px 26px rgba(37, 99, 235, 0.24)",
+  },
+  ALL_ITEMS: {
+    dot: "#0f766e",
+    activeBorder: "#0f766e",
+    activeBg: "linear-gradient(150deg, #f0fdfa 0%, #ccfbf1 58%, #99f6e4 100%)",
+    activeShadow: "0 12px 26px rgba(15, 118, 110, 0.22)",
+  },
   WHITE: {
     dot: "#64748b",
     activeBorder: "#334155",
@@ -412,6 +446,13 @@ function isDiagnosisCompletedItem(item) {
   return Boolean(item.technicalApprovedByTeamLeaderId || item.approvedByTeamLeaderAt);
 }
 
+function isForemanMyTaskItem(item) {
+  if (!item) return false;
+  const isOverSlaRed = normalizeCode(item.queueColor) === "RED";
+  const isTeamLeaderApproved = Boolean(item.technicalApprovedAt || item.technicalApprovedByTeamLeaderId);
+  return isOverSlaRed || isTeamLeaderApproved;
+}
+
 function resolveStaffNameById(staffs, id) {
   const staffId = toPositiveNumber(id);
   if (!staffId || !Array.isArray(staffs)) return "";
@@ -433,7 +474,7 @@ const cancelAttentionPulse = keyframes`
 
 const QUEUE_STATE_META = {
   NEW: { label: "Mới tiếp nhận", colorScheme: "gray" },
-  IN_PROGRESS: { label: "Đang chuẩn đoán", colorScheme: "yellow" },
+  IN_PROGRESS: { label: "Đang chẩn đoán", colorScheme: "yellow" },
   ALERT: { label: "Cần can thiệp", colorScheme: "red" },
   DIAGNOSED: { label: "Đã chuẩn đoán", colorScheme: "green" },
 };
@@ -706,7 +747,8 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
   const assignedBayId = toPositiveNumber(readValue(raw, "bayId", "BayId", "assignedBayId", "AssignedBayId"));
   const assignedBayCode = toText(readValue(raw, "bayCode", "BayCode", "assignedBayCode", "AssignedBayCode"));
   const assignedAt = readValue(raw, "assignedAt", "AssignedAt");
-  const startedAt = readValue(raw, "startedAt", "StartedAt");
+  const startedAt = readValue(raw, "technicianAcceptedAt", "TechnicianAcceptedAt", "startedAt", "StartedAt");
+  const technicianCompletedAt = readValue(raw, "technicianCompletedAt", "TechnicianCompletedAt");
   const customerNotesRaw = toText(readValue(order, "customerNotes", "CustomerNotes"));
   const parsedCustomerNotes = parseCustomerNotes(customerNotesRaw);
   const vehicleInfo = resolveVehicleInfo(raw, order, vehicleMap, vehicleModelMap, vehicleBrandMap);
@@ -753,6 +795,8 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
     requestedAt: readValue(raw, "requestedAt", "RequestedAt"),
     assignedAt: hasRealAssignment ? assignedAt : null,
     startedAt: hasRealAssignment ? startedAt : null,
+    technicianAcceptedAt: hasRealAssignment ? startedAt : null,
+    technicianCompletedAt: hasRealAssignment ? technicianCompletedAt : null,
     pendingMinutes: Number(readValue(raw, "pendingMinutes", "PendingMinutes") || 0),
     assignedMinutes: Number(readValue(raw, "assignedMinutes", "AssignedMinutes") || 0),
     isSupportRequested: Boolean(readValue(raw, "isSupportRequested", "IsSupportRequested")),
@@ -764,7 +808,9 @@ function normalizeBoardItem(raw, orderMap, customerMap, vehicleMap, vehicleModel
     technicalApprovedByTeamLeaderId: toPositiveNumber(readValue(raw, "technicalApprovedByTeamLeaderId", "TechnicalApprovedByTeamLeaderId")),
     technicalApprovedAt: readValue(raw, "technicalApprovedAt", "TechnicalApprovedAt"),
     approvedByTeamLeaderAt: readValue(raw, "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt", "finalApprovedAt", "FinalApprovedAt"),
-    finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt"),
+    finalApprovedAt: readValue(raw, "finalApprovedAt", "FinalApprovedAt", "approvedByTeamLeaderAt", "ApprovedByTeamLeaderAt"),
+    teamLeaderNote: toText(readValue(raw, "teamLeaderNote", "TeamLeaderNote")),
+    foremanNote: toText(readValue(raw, "foremanNote", "ForemanNote")),
     customerName: resolveCustomerName(raw, order, customerMap),
     vehicleLicensePlate: resolveVehiclePlate(raw, order, vehicleMap),
     vehicleBrandName: vehicleInfo.vehicleBrandName,
@@ -937,7 +983,7 @@ function DispatchQueueCard({
                   onViewQuote(item);
                 }}
               >
-                Xem báo giá
+                Xem chuẩn đoán
               </Button>
             )}
           </HStack>
@@ -998,6 +1044,7 @@ export default function DispatchOpsDashboard({
 
   const isTeamLeaderMode = mode === "team_leader";
   const isManagerMode = mode === "manager";
+  const useManagerStyleStatusCards = isManagerMode || isTeamLeaderMode;
   const isAssignmentPage = pageMode === "assignment";
 
   const [boardItems, setBoardItems] = useState([]);
@@ -1012,7 +1059,7 @@ export default function DispatchOpsDashboard({
 
   const [teamFilter, setTeamFilter] = useState("");
   const [dispatchTagFilter, setDispatchTagFilter] = useState("");
-  const [activeColorTab, setActiveColorTab] = useState("WHITE");
+  const [activeColorTab, setActiveColorTab] = useState(useManagerStyleStatusCards ? "ALL_ITEMS" : "WHITE");
   const [teamLeaderBoardTab, setTeamLeaderBoardTab] = useState("dispatch");
   const [selectedServiceOrderId, setSelectedServiceOrderId] = useState(
     toPositiveNumber(assignmentServiceOrderId)
@@ -1040,7 +1087,6 @@ export default function DispatchOpsDashboard({
   const [managerBayId, setManagerBayId] = useState("");
   const [managerOverrideReason, setManagerOverrideReason] = useState("");
   const [managerDecisionNote, setManagerDecisionNote] = useState("");
-  const [managerFinalApprovalNote, setManagerFinalApprovalNote] = useState("");
   const [managerCancelDecisionModalOpen, setManagerCancelDecisionModalOpen] = useState(false);
   const [isManagerSupportSectionExpanded, setIsManagerSupportSectionExpanded] = useState(false);
 
@@ -1397,7 +1443,7 @@ export default function DispatchOpsDashboard({
     setLoading(true);
     setError("");
 
-    const boardParams = { includeCompleted: false };
+    const boardParams = { includeCompleted: isTeamLeaderMode || isAssignmentPage || isManagerMode };
     const teamFilterId = toPositiveNumber(teamFilter);
     if (branchId) {
       boardParams.branchId = branchId;
@@ -1529,14 +1575,57 @@ export default function DispatchOpsDashboard({
     });
   }, [scopedItems, searchQuery, dispatchTagFilter]);
 
+  const managerScopedItems = useMemo(() => {
+    if (!isManagerMode) return visibleItems;
+    return visibleItems;
+  }, [isManagerMode, visibleItems]);
+
   const boardByColor = useMemo(() => {
-    const grouped = { WHITE: [], YELLOW: [], RED: [], GREEN: [] };
-    visibleItems.forEach((item) => {
-      const color = COLUMN_ORDER.includes(item.queueColor) ? item.queueColor : "WHITE";
-      grouped[color].push(item);
+    const grouped = { NEEDS_APPROVAL: [], ALL_ITEMS: [], WHITE: [], YELLOW: [], RED: [], GREEN: [] };
+    const source = (isManagerMode ? managerScopedItems : visibleItems).filter((item) => {
+      const queueState = normalizeCode(item?.queueState);
+      const queueColor = normalizeCode(item?.queueColor);
+      if (queueColor === "GREEN") return false;
+      if (["DIAGNOSED", "COMPLETED", "DONE", "APPROVED"].includes(queueState)) return false;
+      return true;
     });
+
+    if (isManagerMode) {
+      grouped.NEEDS_APPROVAL = source.filter(isForemanMyTaskItem);
+      const needApprovalIds = new Set(
+        grouped.NEEDS_APPROVAL
+          .map((item) => toPositiveNumber(item?.serviceOrderId))
+          .filter(Boolean)
+      );
+
+      source.forEach((item) => {
+        const itemId = toPositiveNumber(item?.serviceOrderId);
+        if (itemId && needApprovalIds.has(itemId)) return;
+        const color = COLUMN_ORDER.includes(item.queueColor) ? item.queueColor : "WHITE";
+        if (color === "WHITE" || color === "YELLOW" || color === "RED") {
+          grouped[color].push(item);
+        }
+      });
+
+      grouped.ALL_ITEMS = [
+        ...grouped.NEEDS_APPROVAL,
+        ...grouped.WHITE,
+        ...grouped.YELLOW,
+        ...grouped.RED,
+      ];
+      return grouped;
+    }
+
+    source.forEach((item) => {
+      const color = COLUMN_ORDER.includes(item.queueColor) ? item.queueColor : "WHITE";
+      if (color === "WHITE" || color === "YELLOW" || color === "RED") {
+        grouped[color].push(item);
+      }
+    });
+
+    grouped.ALL_ITEMS = [...grouped.WHITE, ...grouped.YELLOW, ...grouped.RED];
     return grouped;
-  }, [visibleItems]);
+  }, [isManagerMode, managerScopedItems, visibleItems]);
 
   const teamLeaderSupportNotifications = useMemo(() => {
     if (!isTeamLeaderMode || !currentStaffTeamId) return [];
@@ -1566,6 +1655,12 @@ export default function DispatchOpsDashboard({
 
   const totalStats = useMemo(
     () => ({
+      NEEDS_APPROVAL: boardByColor.NEEDS_APPROVAL.length,
+      ALL_ITEMS:
+        boardByColor.NEEDS_APPROVAL.length +
+        boardByColor.WHITE.length +
+        boardByColor.YELLOW.length +
+        boardByColor.RED.length,
       WHITE: boardByColor.WHITE.length,
       YELLOW: boardByColor.YELLOW.length,
       RED: boardByColor.RED.length,
@@ -1573,6 +1668,18 @@ export default function DispatchOpsDashboard({
     }),
     [boardByColor]
   );
+
+  const dashboardTabOrder = useMemo(() => {
+    if (isManagerMode) {
+      // Manager uses a single-row 5-tab layout.
+      return ["ALL_ITEMS", "NEEDS_APPROVAL", "WHITE", "YELLOW", "RED"];
+    }
+    if (isTeamLeaderMode) {
+      // Team leader uses the same 5-tab overview style as foreman.
+      return ["ALL_ITEMS", "NEEDS_APPROVAL", "WHITE", "YELLOW", "RED"];
+    }
+    return ["WHITE", "YELLOW", "RED"];
+  }, [isManagerMode, isTeamLeaderMode]);
 
   const activeTabItems = useMemo(() => boardByColor[activeColorTab] || [], [activeColorTab, boardByColor]);
   const activeBoardListItems = useMemo(() => {
@@ -1625,13 +1732,17 @@ export default function DispatchOpsDashboard({
   }, [isAssignmentPage, activeBoardListItems, selectedItem, onOpenAssignment]);
 
   useEffect(() => {
+    if (dashboardTabOrder.includes(activeColorTab)) return;
+    setActiveColorTab(dashboardTabOrder[0] || "WHITE");
+  }, [dashboardTabOrder, activeColorTab]);
+
+  useEffect(() => {
     if (!isAssignmentPage) return;
     if (!selectedItem?.queueColor) return;
     const color = COLUMN_ORDER.includes(selectedItem.queueColor) ? selectedItem.queueColor : "WHITE";
-    if (color !== activeColorTab) {
-      setActiveColorTab(color);
-    }
-  }, [isAssignmentPage, selectedItem?.serviceOrderId, selectedItem?.queueColor, activeColorTab]);
+    const targetTab = dashboardTabOrder.includes(color) ? color : (dashboardTabOrder[0] || "WHITE");
+    if (targetTab !== activeColorTab) setActiveColorTab(targetTab);
+  }, [isAssignmentPage, selectedItem?.serviceOrderId, selectedItem?.queueColor, activeColorTab, dashboardTabOrder]);
   useEffect(() => {
     if (!selectedItem) return;
 
@@ -2325,27 +2436,6 @@ export default function DispatchOpsDashboard({
     setManagerCancelDecisionModalOpen(false);
   };
 
-  const handleManagerFinalApproval = async () => {
-    if (!selectedItem || !currentStaffId) return;
-
-    setSaving(true);
-    try {
-      await serviceOrderApi.approveDiagnosisFinal(selectedItem.serviceOrderId, {
-        teamLeaderId: currentStaffId,
-        note: toText(managerFinalApprovalNote) || null,
-      });
-
-      toast({ title: "Đã duyệt báo giá cuối cùng", status: "success", duration: 2500, isClosable: true });
-      setManagerFinalApprovalNote("");
-      await fetchData();
-      setSelectedServiceOrderId(selectedItem.serviceOrderId);
-    } catch (err) {
-      toast({ title: "Không thể duyệt cuối", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const selectedPrimaryTeamId =
     toPositiveNumber(selectedItem?.primaryTeamId) || toPositiveNumber(selectedItem?.teamId);
   const canCurrentTeamLeadPrimaryFlow =
@@ -2379,8 +2469,6 @@ export default function DispatchOpsDashboard({
   const canManagerOverride = Boolean(selectedItem);
   const canManagerConfigureSupportingTeams = Boolean(toPositiveNumber(managerTeamId)) || managerSupportingTeamIds.length > 0;
   const canManagerCancelDecision = Boolean(selectedItem?.isCancelPendingApproval);
-  const canManagerFinalApprove = Boolean(selectedItem?.technicalApprovedByTeamLeaderId) && !selectedItem?.approvedByTeamLeaderAt;
-  const canShowManagerQuoteSection = Boolean(selectedItem && isDiagnosisCompletedItem(selectedItem));
   const canViewSelectedQuote = Boolean(isAssignmentPage && selectedItem && isDiagnosisCompletedItem(selectedItem) && typeof onOpenQuote === "function");
   const selectedDispatchTagLabel = resolveDispatchTagLabel(
     selectedItem?.dispatchTag,
@@ -2515,7 +2603,7 @@ export default function DispatchOpsDashboard({
                 colorScheme="blue"
                 onClick={onBack}
               >
-                Quay lại danh sách
+                Quay lại
               </Button>
             )}
             {canViewSelectedQuote && (
@@ -2523,19 +2611,21 @@ export default function DispatchOpsDashboard({
                 colorScheme="blue"
                 onClick={handleViewSelectedQuote}
               >
-                Xem báo giá
+                Xem chuẩn đoán
               </Button>
             )}
-            <Button
-              leftIcon={<RepeatIcon />}
-              colorScheme="blue"
-              variant="outline"
-              onClick={fetchData}
-              isLoading={loading}
-            >
-              Làm mới bảng
-            </Button>
           </HStack>
+        </HStack>
+
+        <HStack justify="flex-end" align="center" mt={1} mb={1}>
+          <Button
+            variant="outline"
+            colorScheme="blue"
+            onClick={fetchData}
+            isLoading={loading}
+          >
+            ⟳ Làm mới
+          </Button>
         </HStack>
 
         {!isAssignmentPage && (
@@ -2569,8 +2659,17 @@ export default function DispatchOpsDashboard({
               </Badge>
             </HStack>
 
-            <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} spacing={3} mt={4}>
-              {COLUMN_ORDER.map((color) => {
+              <SimpleGrid
+                columns={{
+                  base: 1,
+                  sm: 2,
+                  md: useManagerStyleStatusCards ? 3 : 2,
+                  xl: useManagerStyleStatusCards ? 5 : 4,
+                }}
+                spacing={3}
+                mt={4}
+              >
+              {dashboardTabOrder.map((color) => {
                 const isActive = activeColorTab === color;
                 const meta = COLOR_META[color];
                 const theme = STATUS_CARD_THEME[color] || STATUS_CARD_THEME.WHITE;
@@ -2596,7 +2695,7 @@ export default function DispatchOpsDashboard({
                     }}
                   >
                     <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
+                      <VStack align="start" spacing={1} minH="60px">
                         <HStack spacing={2}>
                           <Box
                             w="10px"
@@ -2613,15 +2712,10 @@ export default function DispatchOpsDashboard({
                           {meta.description}
                         </Text>
                       </VStack>
-                      {isActive && (
-                        <Badge borderRadius="full" bg="white" color={theme.dot} border="1px solid" borderColor={theme.activeBorder}>
-                          Lọc
-                        </Badge>
-                      )}
                     </HStack>
 
                     <Text mt={3} fontSize={{ base: "3xl", md: "4xl" }} lineHeight="1" fontWeight="800" letterSpacing="-0.02em" color={isActive ? theme.dot : "#0f172a"}>
-                      {totalStats[color]}
+                      {Number(totalStats[color] ?? 0)}
                     </Text>
                   </Box>
                 );
@@ -3057,10 +3151,17 @@ export default function DispatchOpsDashboard({
                                   mt={3}
                                   size="sm"
                                   colorScheme="orange"
-                                  variant="outline"
+                                  variant="solid"
                                   onClick={handleLeaderSupport}
                                   isLoading={saving}
                                   isDisabled={!canLeaderSupport || leaderSupportTeamIds.length === 0}
+                                  bg={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.200" : "orange.500"}
+                                  color={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.500" : "white"}
+                                  borderWidth="1px"
+                                  borderColor={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? "gray.300" : "orange.600"}
+                                  _hover={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.600", transform: "translateY(-1px)" }}
+                                  _active={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.700" }}
+                                  _disabled={{ opacity: 1, cursor: "not-allowed" }}
                                 >
                                   Gửi yêu cầu đến tổ phụ
                                 </Button>
@@ -3224,6 +3325,7 @@ export default function DispatchOpsDashboard({
                   ) : (
                     <VStack align="stretch" spacing={4}>
                       <Divider />
+                      <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
 
                       <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
                         <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và override phân công</Text>
@@ -3425,31 +3527,7 @@ export default function DispatchOpsDashboard({
                           <Text mt={1} fontSize="sm" color="gray.500">Không có yêu cầu hủy chờ duyệt.</Text>
                         )}
                       </Box>
-
-                      {canShowManagerQuoteSection && (
-                        <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                          <Text fontWeight="700" color="gray.700" mb={2}>4) Duyệt báo giá cuối cùng</Text>
-                          <Textarea
-                            size="sm"
-                            value={managerFinalApprovalNote}
-                            onChange={(event) => setManagerFinalApprovalNote(event.target.value)}
-                            placeholder="Ghi chú duyệt cuối (ca lớn / yêu cầu đặc biệt)..."
-                          />
-                          <Button
-                            mt={3}
-                            size="sm"
-                            colorScheme="green"
-                            onClick={handleManagerFinalApproval}
-                            isLoading={saving}
-                            isDisabled={!canManagerFinalApprove}
-                          >
-                            Duyệt báo giá cuối
-                          </Button>
-                          {selectedItem.finalApprovedAt && (
-                            <Text mt={2} fontSize="sm" color="green.600">Lệnh này đã được duyệt cuối lúc {formatDateTime(selectedItem.finalApprovedAt)}.</Text>
-                          )}
-                        </Box>
-                      )}
+                      </SimpleGrid>
                     </VStack>
                   )}
                 </VStack>
@@ -3893,3 +3971,4 @@ function SupportingTeamSelector({
     </Box>
   );
 }
+

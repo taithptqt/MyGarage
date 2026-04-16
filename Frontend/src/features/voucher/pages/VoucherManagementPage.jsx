@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@features/admin/components/AdminModals";
 import { voucherApi } from "@features/voucher/api/voucherApi";
+import TablePagination from "@shared/components/TablePagination";
 import "../../admin/pages/AdminPage.css";
 import "./VoucherManagementPage.css";
 
@@ -249,6 +250,18 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   const [confA, setConfA] = useState("");
   const [confB, setConfB] = useState("");
+  const [voucherPage, setVoucherPage] = useState(1);
+  const [voucherPageSize, setVoucherPageSize] = useState(10);
+  const [campaignPage, setCampaignPage] = useState(1);
+  const [campaignPageSize, setCampaignPageSize] = useState(10);
+  const [redemptionPage, setRedemptionPage] = useState(1);
+  const [redemptionPageSize, setRedemptionPageSize] = useState(10);
+  const [approvalPage, setApprovalPage] = useState(1);
+  const [approvalPageSize, setApprovalPageSize] = useState(10);
+  const [reportVoucherPage, setReportVoucherPage] = useState(1);
+  const [reportVoucherPageSize, setReportVoucherPageSize] = useState(10);
+  const [reportRedemptionPage, setReportRedemptionPage] = useState(1);
+  const [reportRedemptionPageSize, setReportRedemptionPageSize] = useState(10);
   async function load(targetSection = section) {
     const timeoutMs = 9000;
     const errors = [];
@@ -314,10 +327,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const budgetLimit = useMemo(() => vouchers.reduce((s, x) => s + num(x.budgetLimit, 0), 0), [vouchers]);
   const budgetUsed = useMemo(() => vouchers.reduce((s, x) => s + num(x.budgetUsed, 0), 0), [vouchers]);
 
-  const topVouchers = useMemo(() => [...vouchers]
+  const voucherRanking = useMemo(() => [...vouchers]
     .map((x) => ({ ...x, issued: num(x.issuedCount, num(x.usageLimit, 0)), redeemed: num(x.redeemedCount, num(x.usedCount, 0)) }))
-    .sort((a, b) => b.redeemed - a.redeemed)
-    .slice(0, 8), [vouchers]);
+    .sort((a, b) => b.redeemed - a.redeemed), [vouchers]);
+  const topVouchers = useMemo(() => voucherRanking.slice(0, 8), [voucherRanking]);
 
   const nearQuotaVouchers = useMemo(() => [...vouchers]
     .map((x) => {
@@ -386,9 +399,9 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   );
   const filteredRedemptions = useMemo(() => redemptions.filter((x) => up(`${x.voucherCode} ${x.id} ${x.customerId}`).includes(up(q))), [redemptions, q]);
   const filteredApprovals = useMemo(() => approvals.filter((x) => up(`${x.requestType} ${x.reason} ${x.id} ${x.voucherId}`).includes(up(q))), [approvals, q]);
-  const topDiscountRedemptions = useMemo(() => [...redemptions].sort((a, b) => num(b.discountAmount, 0) - num(a.discountAmount, 0)).slice(0, 10), [redemptions]);
+  const reportVoucherRows = useMemo(() => voucherRanking, [voucherRanking]);
+  const topDiscountRedemptions = useMemo(() => [...redemptions].sort((a, b) => num(b.discountAmount, 0) - num(a.discountAmount, 0)), [redemptions]);
 
-  const [title, subtitle] = TITLES[section] || TITLES.dashboard;
   const isDashboard = section === "dashboard";
   const isList = section === "list";
   const isCampaigns = section === "campaigns";
@@ -397,6 +410,39 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const isApprovals = section === "approvals";
   const isReports = section === "reports";
   const isSettings = section === "settings";
+  const pagedVouchers = useMemo(
+    () => filteredVouchers.slice((voucherPage - 1) * voucherPageSize, voucherPage * voucherPageSize),
+    [filteredVouchers, voucherPage, voucherPageSize]
+  );
+  const pagedCampaigns = useMemo(
+    () => filteredCampaignRows.slice((campaignPage - 1) * campaignPageSize, campaignPage * campaignPageSize),
+    [filteredCampaignRows, campaignPage, campaignPageSize]
+  );
+  const pagedRedemptions = useMemo(
+    () => filteredRedemptions.slice((redemptionPage - 1) * redemptionPageSize, redemptionPage * redemptionPageSize),
+    [filteredRedemptions, redemptionPage, redemptionPageSize]
+  );
+  const pagedApprovals = useMemo(
+    () => filteredApprovals.slice((approvalPage - 1) * approvalPageSize, approvalPage * approvalPageSize),
+    [filteredApprovals, approvalPage, approvalPageSize]
+  );
+  const pagedReportVouchers = useMemo(
+    () => reportVoucherRows.slice((reportVoucherPage - 1) * reportVoucherPageSize, reportVoucherPage * reportVoucherPageSize),
+    [reportVoucherRows, reportVoucherPage, reportVoucherPageSize]
+  );
+  const pagedReportRedemptions = useMemo(
+    () => topDiscountRedemptions.slice((reportRedemptionPage - 1) * reportRedemptionPageSize, reportRedemptionPage * reportRedemptionPageSize),
+    [topDiscountRedemptions, reportRedemptionPage, reportRedemptionPageSize]
+  );
+
+  useEffect(() => {
+    setVoucherPage(1);
+    setCampaignPage(1);
+    setRedemptionPage(1);
+    setApprovalPage(1);
+    setReportVoucherPage(1);
+    setReportRedemptionPage(1);
+  }, [section, q, status, campaignFilterStatus]);
 
   const refresh = async () => {
     setBusy(true);
@@ -590,7 +636,6 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   return (
     <div className="management-content voucher-admin-page">
-      <header className="admin-header"><div><h1>{title}</h1><p className="header-sub">{subtitle}</p></div></header>
       {error ? <div className="alert alert-error">{error}</div> : null}
 
       {isDashboard ? (
@@ -658,7 +703,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Mã</th><th>Tên voucher</th><th>Loại</th><th>Giá trị</th><th>Thời gian hiệu lực</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredVouchers.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : filteredVouchers.map((v) => (
+                {filteredVouchers.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : pagedVouchers.map((v) => (
                   <tr key={v.id}>
                     <td className="td-id">#{v.id}</td><td>{v.code}</td><td>{v.voucherName}</td><td>{v.type}</td>
                     <td>{v.type === "PERCENT" ? `${v.value || 0}%` : money(v.value)}</td>
@@ -675,6 +720,18 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={filteredVouchers.length}
+              currentPage={voucherPage}
+              pageSize={voucherPageSize}
+              onPageChange={setVoucherPage}
+              onPageSizeChange={(size) => {
+                setVoucherPageSize(size);
+                setVoucherPage(1);
+              }}
+            />
           </div>
         </>
       ) : null}
@@ -711,7 +768,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Mã chiến dịch</th><th>Tên chiến dịch</th><th>Thời gian</th><th>Voucher áp dụng</th><th>Đã sử dụng</th><th>Ngân sách đã dùng</th><th>Tỷ lệ ngân sách</th><th>Cảnh báo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredCampaignRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : filteredCampaignRows.map((r) => (
+                {filteredCampaignRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : pagedCampaigns.map((r) => (
                   <tr key={r.id}>
                     <td className="td-id">#{r.id}</td>
                     <td>{r.campaignCode || "-"}</td>
@@ -737,6 +794,18 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={filteredCampaignRows.length}
+              currentPage={campaignPage}
+              pageSize={campaignPageSize}
+              onPageChange={setCampaignPage}
+              onPageSizeChange={(size) => {
+                setCampaignPageSize(size);
+                setCampaignPage(1);
+              }}
+            />
           </div>
         </>
       ) : null}
@@ -772,11 +841,23 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
-                {filteredRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : filteredRedemptions.map((r) => (
+                {filteredRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : pagedRedemptions.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td><span className={`badge ${STATUS_BADGE[up(r.redemptionStatus)] || "badge-inactive"}`}>{statusText(r.redemptionStatus)}</span></td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={filteredRedemptions.length}
+              currentPage={redemptionPage}
+              pageSize={redemptionPageSize}
+              onPageChange={setRedemptionPage}
+              onPageSizeChange={(size) => {
+                setRedemptionPageSize(size);
+                setRedemptionPage(1);
+              }}
+            />
           </div>
         </>
       ) : null}
@@ -795,11 +876,23 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Loại yêu cầu</th><th>Voucher</th><th>Mức rủi ro</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredApprovals.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : filteredApprovals.map((a) => (
+                {filteredApprovals.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : pagedApprovals.map((a) => (
                   <tr key={a.id}><td>#{a.id}</td><td>{a.requestType}</td><td>{a.voucherId ? `#${a.voucherId}` : "-"}</td><td>{a.riskLevel || "-"}</td><td><span className={`badge ${STATUS_BADGE[up(a.status)] || "badge-inactive"}`}>{statusText(a.status)}</span></td><td>{up(a.status) === "PENDING" ? <div className="row-actions"><button className="btn-icon" onClick={() => decide(a, "approve")}>Duyệt</button><button className="btn-icon" onClick={() => decide(a, "reject")}>Từ chối</button></div> : "Đã xử lý"}</td></tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={filteredApprovals.length}
+              currentPage={approvalPage}
+              pageSize={approvalPageSize}
+              onPageChange={setApprovalPage}
+              onPageSizeChange={(size) => {
+                setApprovalPageSize(size);
+                setApprovalPage(1);
+              }}
+            />
           </div>
         </>
       ) : null}
@@ -818,21 +911,45 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>Voucher</th><th>Mã</th><th>Đã phát hành</th><th>Đã sử dụng</th><th>Tỷ lệ</th><th>Ngân sách đã dùng</th></tr></thead>
               <tbody>
-                {topVouchers.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : topVouchers.map((v) => (
+                {reportVoucherRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : pagedReportVouchers.map((v) => (
                   <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.issued}</td><td>{v.redeemed}</td><td>{pct(v.redeemed, v.issued)}%</td><td>{money(v.budgetUsed)}</td></tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={reportVoucherRows.length}
+              currentPage={reportVoucherPage}
+              pageSize={reportVoucherPageSize}
+              onPageChange={setReportVoucherPage}
+              onPageSizeChange={(size) => {
+                setReportVoucherPageSize(size);
+                setReportVoucherPage(1);
+              }}
+            />
+          </div>
           <div className="table-wrapper">
             <table className="admin-table">
               <thead><tr><th>ID sử dụng</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
-                {topDiscountRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : topDiscountRedemptions.map((r) => (
+                {topDiscountRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : pagedReportRedemptions.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td>{statusText(r.redemptionStatus)}</td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <TablePagination
+              totalItems={topDiscountRedemptions.length}
+              currentPage={reportRedemptionPage}
+              pageSize={reportRedemptionPageSize}
+              onPageChange={setReportRedemptionPage}
+              onPageSizeChange={(size) => {
+                setReportRedemptionPageSize(size);
+                setReportRedemptionPage(1);
+              }}
+            />
           </div>
         </>
       ) : null}

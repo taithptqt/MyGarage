@@ -1,9 +1,19 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getCustomerById, getVehicleById } from "@features/admin/api/customerApi";
 import {
   calculateOrderTotal,
   parseCustomerNotes,
 } from "@features/workshop/utils/serviceOrderDetailUtils";
+
+function toPositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function toText(value) {
+  return String(value ?? "").trim();
+}
 
 export function useServiceOrderDetailData(orderId) {
   const [order, setOrder] = useState(null);
@@ -28,7 +38,32 @@ export function useServiceOrderDetailData(orderId) {
         serviceOrderApi.getDetails(id),
         serviceOrderApi.getDiagnoses(id),
       ]);
-      setOrder(oRes || null);
+
+      const customerId = toPositiveNumber(oRes?.customerId ?? oRes?.CustomerId);
+      const vehicleId = toPositiveNumber(oRes?.vehicleId ?? oRes?.VehicleId);
+      const [customerRes, vehicleRes] = await Promise.all([
+        customerId ? getCustomerById(customerId).catch(() => null) : Promise.resolve(null),
+        vehicleId ? getVehicleById(vehicleId).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const customerName = toText(
+        oRes?.customerName ??
+        oRes?.CustomerName ??
+        customerRes?.fullName ??
+        customerRes?.FullName ??
+        oRes?.guestName ??
+        oRes?.GuestName
+      );
+      const vehicleLicensePlate = toText(
+        oRes?.vehicleLicensePlate ??
+        oRes?.VehicleLicensePlate ??
+        vehicleRes?.licensePlate ??
+        vehicleRes?.LicensePlate ??
+        oRes?.guestVehicleInfo ??
+        oRes?.GuestVehicleInfo
+      );
+
+      setOrder(oRes ? { ...oRes, customerName, vehicleLicensePlate } : null);
       setDetails(dRes || []);
       setDiagnoses(diagRes || []);
     } catch (err) {

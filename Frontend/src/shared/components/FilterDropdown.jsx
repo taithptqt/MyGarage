@@ -74,6 +74,7 @@ export default function FilterDropdown({
           style={{
             width: "100%",
             height: 36,
+            margin: 0,
             borderRadius: 12,
             border: open ? "1px solid #95b7f6" : "1px solid #d8e1ef",
             background: disabled ? "#f3f4f6" : "linear-gradient(180deg, #ffffff 0%, #f7faff 100%)",
@@ -144,6 +145,7 @@ export default function FilterDropdown({
                   disabled={isOptionDisabled}
                   style={{
                     width: "100%",
+                    margin: 0,
                     textAlign: "left",
                     border: "none",
                     borderRadius: 9,

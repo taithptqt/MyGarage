@@ -36,6 +36,7 @@ function Header({ overlay = false }) {
   const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
   const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode);
+  const isCustomer = !isStaffOrAdmin;
   const customerPortalLinks = useMemo(
     () => [
       { label: "Garage", path: "/my-garage-dashboard" },
@@ -120,9 +121,9 @@ function Header({ overlay = false }) {
         </div>
 
         <div className="mg-header-side right">
-          <a href="/showroom" onClick={(event) => { event.preventDefault(); handleNavigate("/showroom"); }}>SHOWROOM</a>
-          <a href="/contact" onClick={(event) => { event.preventDefault(); handleNavigate("/contact"); }}>LIÊN HỆ</a>
-          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>ABOUT US</a>
+          <a href="#">SHOWROOM</a>
+          <a href="#">TIN TỨC</a>
+          <a href="#">LIÊN HỆ</a>
         </div>
 
         {isAuthenticated ? (
@@ -149,16 +150,18 @@ function Header({ overlay = false }) {
             {menuOpen && (
               <div className="mg-header-user-menu">
                 <div className="mg-header-user-menu-head">Xin chào, {displayName}</div>
-                {customerPortalLinks.map((item) => (
-                  <button
-                    key={item.path}
-                    type="button"
-                    className="mg-header-user-menu-item"
-                    onClick={() => handleNavigate(item.path)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                {isCustomer
+                  ? customerPortalLinks.map((item) => (
+                      <button
+                        key={item.path}
+                        type="button"
+                        className="mg-header-user-menu-item"
+                        onClick={() => handleNavigate(item.path)}
+                      >
+                        {item.label}
+                      </button>
+                    ))
+                  : null}
                 <button
                   type="button"
                   className="mg-header-user-menu-item"

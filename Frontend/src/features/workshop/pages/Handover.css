@@ -1,0 +1,216 @@
+/* Handover.css — A19 Handover Page */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --ho-bg:      #f1f5f9;
+  --ho-surface: #ffffff;
+  --ho-border:  #e2e8f0;
+  --ho-text:    #1e293b;
+  --ho-muted:   #64748b;
+  --ho-rad-sm:  6px;
+  --ho-rad-md:  10px;
+  --ho-rad-lg:  16px;
+  --ho-shad:    0 1px 3px rgba(0,0,0,.08);
+  --ho-font:    'Inter', system-ui, sans-serif;
+}
+
+.ho-page {
+  min-height: 100vh;
+  background: var(--ho-bg);
+  padding: 24px 22px 60px;
+  font-family: var(--ho-font);
+  color: var(--ho-text);
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+/* header */
+.ho-header {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; flex-wrap: wrap; gap: 12px;
+}
+.ho-title   { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.ho-subtitle { margin: 4px 0 0; font-size: 13px; color: var(--ho-muted); }
+.ho-btn-back {
+  font-size: 13px; font-weight: 700;
+  padding: 9px 16px; border-radius: var(--ho-rad-md);
+  border: 1px solid var(--ho-border);
+  background: var(--ho-surface); color: var(--ho-muted);
+  cursor: pointer; transition: all 0.18s;
+}
+.ho-btn-back:hover { color: var(--ho-text); background: #f8fafc; }
+
+/* alerts */
+.ho-alert { padding: 12px 16px; border-radius: var(--ho-rad-md); font-size: 14px; font-weight: 500; }
+.ho-alert-error   { background: #fef2f2; color: #b91c1c; border-left: 4px solid #ef4444; }
+.ho-alert-success { background: #f0fdf4; color: #166534; border-left: 4px solid #22c55e; }
+
+/* success card */
+.ho-success-card {
+  background: var(--ho-surface);
+  border: 1px solid #6ee7b7;
+  border-radius: var(--ho-rad-lg);
+  padding: 48px 32px;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  box-shadow: var(--ho-shad);
+}
+.ho-success-icon { font-size: 64px; animation: ho-pop 0.4s ease; }
+@keyframes ho-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.ho-success-card h2 { margin: 0; font-size: 24px; font-weight: 800; color: #065f46; }
+.ho-success-card p  { margin: 0; font-size: 15px; color: var(--ho-muted); max-width: 400px; }
+.ho-success-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* body layout */
+.ho-body { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+@media (max-width: 1024px) { .ho-body { grid-template-columns: 1fr; } }
+
+/* card */
+.ho-card {
+  background: var(--ho-surface);
+  border: 1px solid var(--ho-border);
+  border-radius: var(--ho-rad-lg);
+  overflow: hidden;
+  box-shadow: var(--ho-shad);
+}
+.ho-card-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ho-border);
+  font-size: 14px; font-weight: 800;
+  background: #f8fafc;
+}
+.ho-left, .ho-right { display: flex; flex-direction: column; gap: 14px; }
+
+/* info grid */
+.ho-info-grid { padding: 14px 18px; display: grid; gap: 8px; }
+.ho-info-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.ho-lbl  { color: var(--ho-muted); font-weight: 600; min-width: 100px; flex-shrink: 0; }
+.ho-val  { color: var(--ho-text);  font-weight: 600; }
+.ho-code { color: #1d4ed8; font-weight: 800; font-size: 14px; }
+
+/* chip */
+.ho-chip {
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+/* readiness */
+.ho-ready-list { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ho-ready-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--ho-rad-md);
+  border: 1px solid var(--ho-border);
+  font-size: 13px;
+}
+.ho-ready-ok   { background: #f0fdf4; border-color: #6ee7b7; }
+.ho-ready-fail { background: #fef2f2; border-color: #fca5a5; }
+.ho-ready-icon { font-size: 16px; flex-shrink: 0; }
+.ho-ready-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ho-ready-label  { font-weight: 700; }
+.ho-ready-detail { font-size: 11px; color: var(--ho-muted); }
+.ho-ready-status { font-size: 11px; font-weight: 700; white-space: nowrap; color: var(--ho-muted); }
+
+/* form */
+.ho-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 18px; }
+@media (max-width: 640px) { .ho-form-grid { grid-template-columns: 1fr; } }
+.ho-form-group { display: flex; flex-direction: column; gap: 5px; padding: 0 18px; }
+.ho-form-group:first-child { padding: 0; }
+.ho-form-group label { font-size: 12px; font-weight: 700; color: var(--ho-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ho-req { color: #ef4444; }
+.ho-input, .ho-textarea {
+  width: 100%;
+  border: 1px solid var(--ho-border);
+  border-radius: var(--ho-rad-md);
+  padding: 9px 12px;
+  font-size: 14px; font-family: var(--ho-font);
+  color: var(--ho-text); background: #f8fafc;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+.ho-input:focus, .ho-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+  background: #fff;
+}
+.ho-textarea { resize: vertical; min-height: 64px; }
+
+/* checklist */
+.ho-cl-hint { margin: 0 0 10px; padding: 0 18px; font-size: 12px; color: var(--ho-muted); }
+.ho-checklist { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ho-checklist-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--ho-rad-md);
+  border: 1.5px solid var(--ho-border);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-size: 13px; font-weight: 500;
+}
+.ho-checklist-row:hover:not(.ho-cl-disabled) { border-color: #93c5fd; background: #f8fbff; }
+.ho-cl-checked { border-color: #6ee7b7; background: #f0fdf4; }
+.ho-cl-disabled { opacity: 0.6; cursor: default; }
+.ho-cl-checkbox { width: 16px; height: 16px; flex-shrink: 0; accent-color: #2563eb; }
+.ho-cl-label { color: var(--ho-text); }
+.ho-all-checked {
+  margin: 0 14px 14px;
+  padding: 10px 14px;
+  border-radius: var(--ho-rad-md);
+  background: #d1fae5; color: #065f46;
+  font-size: 13px; font-weight: 700;
+  text-align: center;
+  animation: ho-slide 0.3s ease;
+}
+@keyframes ho-slide { from { opacity: 0; transform: translateY(-6px); } }
+
+/* validation card */
+.ho-validate-card {
+  border-radius: var(--ho-rad-lg);
+  padding: 16px 18px;
+  border: 1px solid var(--ho-border);
+}
+.ho-validate-ok    { background: #d1fae5; border-color: #6ee7b7; }
+.ho-validate-block { background: #fffbeb; border-color: #fde68a; }
+.ho-validate-title { font-size: 14px; font-weight: 800; margin-bottom: 8px; }
+.ho-validate-list  { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; }
+.ho-validate-list li { font-size: 13px; font-weight: 600; color: #b45309; }
+
+/* CTA button */
+.ho-btn-handover {
+  width: 100%;
+  font-size: 16px; font-weight: 800;
+  padding: 16px 24px;
+  border-radius: var(--ho-rad-lg);
+  border: 0;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 56px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(16,185,129,.35);
+}
+.ho-btn-handover:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16,185,129,.45);
+}
+.ho-btn-handover:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* shared secondary buttons */
+.ho-btn-primary, .ho-btn-secondary {
+  font-size: 14px; font-weight: 700;
+  padding: 11px 20px; border-radius: var(--ho-rad-md);
+  cursor: pointer; transition: all 0.18s; min-height: 42px;
+}
+.ho-btn-primary   { background: #2563eb; border: 0; color: #fff; }
+.ho-btn-primary:hover { background: #1d4ed8; }
+.ho-btn-secondary { background: var(--ho-surface); border: 1px solid var(--ho-border); color: var(--ho-text); }
+.ho-btn-secondary:hover { background: #f8fafc; }
+
+/* loading */
+.ho-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 14px; color: var(--ho-muted); }
+.ho-spinner { width: 30px; height: 30px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: ho-spin 0.7s linear infinite; }
+@keyframes ho-spin { to { transform: rotate(360deg); } }
