@@ -135,7 +135,7 @@ function ResetPasswordPage() {
               Yêu cầu liên kết mới
             </Link>
             <Link to="/login" className="auth-recovery-link">
-              Quay lại đăng nhập
+            Quay lại
             </Link>
           </div>
         </section>

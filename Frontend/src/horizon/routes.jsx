@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 import { Icon } from '@chakra-ui/react';
 import {
@@ -35,6 +35,9 @@ import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
 import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
 import BayManagementPage from "@features/storage/pages/BayManagementPage";
+import TechnicianProductivityDashboard from "@features/workshop/components/TechnicianProductivityDashboard";
+import MaintenanceReminderManager from "@features/workshop/components/MaintenanceReminderManager";
+import ConsumableBulkReturn from "@features/workshop/components/ConsumableBulkReturn";
 
 const inventoryItems = [
   {
@@ -335,6 +338,27 @@ const routes = [
     items: inventoryItems,
   },
   {
+    name: 'Năng suất KTV',
+    layout: '/admin',
+    icon: <Icon as={MdAssessment} width="20px" height="20px" color="inherit" />,
+    path: '/execution/productivity',
+    component: <TechnicianProductivityDashboard />,
+  },
+  {
+    name: 'Nhắc bảo dưỡng',
+    layout: '/admin',
+    icon: <Icon as={MdCalendarToday} width="20px" height="20px" color="inherit" />,
+    path: '/execution/maintenance-reminders',
+    component: <MaintenanceReminderManager />,
+  },
+  {
+    name: 'Hoàn tiêu hao',
+    layout: '/admin',
+    icon: <Icon as={MdSwapHoriz} width="20px" height="20px" color="inherit" />,
+    path: '/execution/consumable-returns',
+    component: <ConsumableBulkReturn />,
+  },
+  {
     name: 'Nhật ký chỉnh sửa',
     layout: '/admin',
     icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />,
@@ -344,6 +368,7 @@ const routes = [
 ];
 
 export default routes;
+
 
 
 

@@ -18,7 +18,7 @@ export default function ServiceOrderItemsPage() {
           </Text>
         </Box>
         <Button colorScheme="blue" onClick={() => navigate("/workshop/reception")}>
-          Quay lại reception
+        Quay lại
         </Button>
       </HStack>
 

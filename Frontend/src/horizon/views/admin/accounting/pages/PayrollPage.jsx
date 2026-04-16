@@ -17,7 +17,6 @@ import {
   ModalOverlay,
   Select,
   SimpleGrid,
-  Textarea,
   Spinner,
   Table,
   Tbody,
@@ -32,12 +31,10 @@ import {
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
 import { getAllStaff } from "../../../../../features/admin/api/staffApi";
-import { getInitialSalaryRequests } from "../../../../../features/admin/api/salaryAdminApi";
 import { useBranch } from "../../../../../context/BranchContext";
 import {
   approvePayrollRun,
   calculatePayrollForAllStaff,
-  createInitialSalaryRequest,
   createPayrollPeriod,
   createPayslip,
   getBranches,
@@ -47,7 +44,6 @@ import {
   getPayslips,
   getStaffSalaryCoefficient,
   markPayrollRunPaid,
-  cancelPayrollRun,
   getStaffBaseSalary,
 } from "../api/accountingApi";
 import {
@@ -73,85 +69,22 @@ function toId(value) {
 }
 
 function derivePayrollAmounts(item) {
-  const readAmount = (...keys) => {
-    const raw = pick(item, ...keys);
-    return {
-      present: raw !== undefined && raw !== null,
-      value: raw !== undefined && raw !== null ? toNumber(raw) : 0,
-    };
-  };
-
   const explicitGrossPay = pick(item, "grossPay", "GrossPay");
   const explicitTotalDeduction = pick(item, "totalDeduction", "TotalDeduction");
   const explicitNetPay = pick(item, "netPay", "NetPay");
 
-  const baseSalary = readAmount("baseSalary", "BaseSalary");
-  const overtimeAmount = readAmount("overtimeAmount", "OvertimeAmount");
-  const allowanceAmount = readAmount("allowanceAmount", "AllowanceAmount");
-  const commissionAmount = readAmount("commissionAmount", "CommissionAmount");
-  const bonusAmount = readAmount("bonusAmount", "BonusAmount");
-
-  const attendanceDeduction = readAmount("attendanceDeduction", "AttendanceDeduction");
-  const penaltyAmount = readAmount("penaltyAmount", "PenaltyAmount");
-  const advanceDeduction = readAmount("advanceDeduction", "AdvanceDeduction");
-  const loanDeduction = readAmount("loanDeduction", "LoanDeduction");
-  const insuranceEmployeeAmount = readAmount("insuranceEmployeeAmount", "InsuranceEmployeeAmount");
-  const pitAmount = readAmount("pitAmount", "PitAmount");
-  const otherDeduction = readAmount("otherDeduction", "OtherDeduction");
-
-  const hasIncomeComponents = [baseSalary, overtimeAmount, allowanceAmount, commissionAmount, bonusAmount].some(
-    (part) => part.present,
-  );
-  const hasDeductionComponents = [
-    attendanceDeduction,
-    penaltyAmount,
-    advanceDeduction,
-    loanDeduction,
-    insuranceEmployeeAmount,
-    pitAmount,
-    otherDeduction,
-  ].some((part) => part.present);
-
-  const derivedGrossPay = hasIncomeComponents
-    ? baseSalary.value + overtimeAmount.value + allowanceAmount.value + commissionAmount.value + bonusAmount.value
-    : null;
-  const derivedTotalDeduction = hasDeductionComponents
-    ? attendanceDeduction.value +
-      penaltyAmount.value +
-      advanceDeduction.value +
-      loanDeduction.value +
-      insuranceEmployeeAmount.value +
-      pitAmount.value +
-      otherDeduction.value
-    : null;
-
-  const hasOfficialGrossPay = explicitGrossPay !== undefined && explicitGrossPay !== null;
-  const hasOfficialTotalDeduction = explicitTotalDeduction !== undefined && explicitTotalDeduction !== null;
-  const hasOfficialNetPay = explicitNetPay !== undefined && explicitNetPay !== null;
-
-  const grossPay = hasOfficialGrossPay ? toNumber(explicitGrossPay) : derivedGrossPay;
-  const totalDeduction = hasOfficialTotalDeduction ? toNumber(explicitTotalDeduction) : derivedTotalDeduction;
-  const netPay = hasOfficialNetPay
-    ? toNumber(explicitNetPay)
-    : grossPay != null && totalDeduction != null
-    ? grossPay - totalDeduction
-    : null;
-
-  const amountsSource =
-    hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay
-      ? "SERVER"
-      : grossPay != null && totalDeduction != null && netPay != null
-      ? "DERIVED"
-      : "INCOMPLETE";
+  const grossPay = explicitGrossPay !== undefined && explicitGrossPay !== null ? toNumber(explicitGrossPay) : null;
+  const totalDeduction =
+    explicitTotalDeduction !== undefined && explicitTotalDeduction !== null ? toNumber(explicitTotalDeduction) : null;
+  const netPay = explicitNetPay !== undefined && explicitNetPay !== null ? toNumber(explicitNetPay) : null;
 
   return {
     grossPay,
     totalDeduction,
     netPay,
-    hasOfficialGrossPay,
-    hasOfficialTotalDeduction,
-    hasOfficialNetPay,
-    amountsSource,
+    hasOfficialGrossPay: explicitGrossPay !== undefined && explicitGrossPay !== null,
+    hasOfficialTotalDeduction: explicitTotalDeduction !== undefined && explicitTotalDeduction !== null,
+    hasOfficialNetPay: explicitNetPay !== undefined && explicitNetPay !== null
   };
 }
 
@@ -209,7 +142,6 @@ function statusColor(status) {
   const code = String(status || "").toUpperCase();
   if (code === "PAID") return "green";
   if (code === "APPROVED") return "blue";
-  if (code === "CANCELED") return "red";
   if (code === "OPEN") return "green";
   if (code === "CLOSED") return "gray";
   if (code === "LOCKED") return "purple";
@@ -221,7 +153,6 @@ function statusLabel(status) {
   if (code === "DRAFT") return "Nháp";
   if (code === "APPROVED") return "Đã duyệt";
   if (code === "PAID") return "Đã chi";
-  if (code === "CANCELED") return "Đã huỷ";
   if (code === "OPEN") return "Đang mở";
   if (code === "LOCKED") return "Tạm khóa";
   if (code === "CLOSED") return "Đã đóng";
@@ -306,8 +237,6 @@ const TENURE_BRACKETS = [
   { minYears: 25, label: "Từ 25 năm trở lên" },
 ];
 
-const PAYROLL_EXCLUDED_STAFF_STATUSES = new Set(["TERMINATED", "SUSPENDED", "INACTIVE"]);
-
 function tenureRangeLabel(yearsOfService) {
   const years = toNumber(yearsOfService);
   if (years < 0) return "--";
@@ -346,20 +275,7 @@ export default function PayrollPage() {
   const [selectedPayrollSalaryInfo, setSelectedPayrollSalaryInfo] = useState(null);
   const [loadingPayrollDetail, setLoadingPayrollDetail] = useState(false);
   const [payrollDetailError, setPayrollDetailError] = useState("");
-  const [loadingMissingBaseSalary, setLoadingMissingBaseSalary] = useState(false);
-  const [missingBaseSalaryRows, setMissingBaseSalaryRows] = useState([]);
-  const [initialSalaryTarget, setInitialSalaryTarget] = useState(null);
-  const [initialSalaryForm, setInitialSalaryForm] = useState({
-    baseSalary: "",
-    reason: "",
-    note: "",
-  });
-  const [sendingInitialSalaryRequest, setSendingInitialSalaryRequest] = useState(false);
-  const [initialSalaryDecisionRows, setInitialSalaryDecisionRows] = useState([]);
   const payrollDetailRequestSeqRef = useRef(0);
-  const missingBaseSalaryRequestSeqRef = useRef(0);
-  const initialSalaryRequestStatusRef = useRef(new Map());
-  const hasSeededInitialSalaryRequestStatusRef = useRef(false);
 
   const [periodForm, setPeriodForm] = useState(() => createDefaultPeriodForm());
 
@@ -498,16 +414,7 @@ export default function PayrollPage() {
     return map;
   }, [runRows]);
 
-  const periodIdsByBranchRuns = useMemo(() => {
-    const set = new Set();
-    runRows.forEach((run) => {
-      const periodId = toId(run.payrollPeriodId);
-      if (periodId) set.add(periodId);
-    });
-    return set;
-  }, [runRows]);
-
-  const allPeriodRows = useMemo(() => {
+  const periodRows = useMemo(() => {
     const normalized = (periods.items || []).map((period, idx) => {
       const id = toId(pick(period, "id", "Id")) || idx + 1;
       const runStatuses = periodRunStatusesById.get(id) || [];
@@ -529,20 +436,6 @@ export default function PayrollPage() {
       return Number(b.id) - Number(a.id);
     });
   }, [periodRunStatusesById, periods.items]);
-
-  const latestOpenPeriodId = useMemo(() => {
-    const latestOpen = allPeriodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN");
-    return latestOpen ? toId(latestOpen.id) : null;
-  }, [allPeriodRows]);
-
-  const periodRows = useMemo(() => {
-    if (!targetBranchId) return allPeriodRows;
-    return allPeriodRows.filter((period) => {
-      const periodId = toId(period.id);
-      if (!periodId) return false;
-      return periodIdsByBranchRuns.has(periodId) || periodId === latestOpenPeriodId;
-    });
-  }, [allPeriodRows, latestOpenPeriodId, periodIdsByBranchRuns, targetBranchId]);
 
   const runById = useMemo(() => {
     const map = new Map();
@@ -582,8 +475,9 @@ export default function PayrollPage() {
         grossPay,
         totalDeduction,
         netPay,
+        hasOfficialGrossPay,
+        hasOfficialTotalDeduction,
         hasOfficialNetPay,
-        amountsSource,
       } = derivePayrollAmounts(item);
       const runStatus = runRow?.status || "DRAFT";
       const policyAsOfDate = toDateInputValue(
@@ -625,7 +519,8 @@ export default function PayrollPage() {
         grossPay,
         totalDeduction,
         netPay,
-        amountsSource,
+        amountsSource:
+          hasOfficialGrossPay && hasOfficialTotalDeduction && hasOfficialNetPay ? "SERVER" : "INCOMPLETE",
         hasOfficialNetPay,
         hasPayslip: id ? payslipItemIds.has(id) : false,
       };
@@ -654,20 +549,17 @@ export default function PayrollPage() {
     [itemRows],
   );
   const missingPayrollFactsCount = useMemo(
-    () => itemRows.filter((item) => item.amountsSource === "INCOMPLETE").length,
+    () => itemRows.filter((item) => item.amountsSource !== "SERVER").length,
     [itemRows],
   );
 
-  const openPeriod = useMemo(
-    () => allPeriodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN"),
-    [allPeriodRows],
-  );
+  const openPeriod = useMemo(() => periodRows.find((period) => String(period.status || "").toUpperCase() === "OPEN"), [periodRows]);
   const selectedPeriodForBatch = useMemo(() => {
     if (runFilter === "ALL") return openPeriod || null;
     const normalizedFilter = normalizePeriodCode(runFilter);
-    const matched = allPeriodRows.find((period) => normalizePeriodCode(period.periodCode) === normalizedFilter);
+    const matched = periodRows.find((period) => normalizePeriodCode(period.periodCode) === normalizedFilter);
     return matched || openPeriod || null;
-  }, [allPeriodRows, openPeriod, runFilter]);
+  }, [openPeriod, periodRows, runFilter]);
   const selectedPeriodIdForBatch = useMemo(
     () => toId(pick(selectedPeriodForBatch, "id", "Id")),
     [selectedPeriodForBatch],
@@ -681,38 +573,6 @@ export default function PayrollPage() {
     () => String(pick(selectedPeriodForBatch, "status", "Status") || "").toUpperCase(),
     [selectedPeriodForBatch],
   );
-  const salaryCheckAsOfDate = useMemo(() => {
-    const periodDate =
-      pick(selectedPeriodForBatch, "endDate", "EndDate") ||
-      pick(selectedPeriodForBatch, "payrollDate", "PayrollDate") ||
-      pick(selectedPeriodForBatch, "startDate", "StartDate");
-    return toDateInputValue(periodDate || new Date());
-  }, [selectedPeriodForBatch]);
-
-  const activeStaffForSalaryCheck = useMemo(
-    () =>
-      (staffs || [])
-        .map((staff) => {
-          const staffId = toId(pick(staff, "id", "Id"));
-          const branchId = toId(pick(staff, "branchId", "BranchId"));
-          const hireDate = pick(staff, "hireDate", "HireDate", "createdAt", "CreatedAt");
-          const status = String(pick(staff, "status", "Status") || "").trim().toUpperCase();
-          return {
-            staffId,
-            branchId,
-            staffName: pick(staff, "fullName", "FullName", "name", "Name", "email", "Email") || `Staff #${staffId || "--"}`,
-            hireDate,
-            status: status || "UNKNOWN",
-          };
-        })
-        .filter((staff) => {
-          if (!staff.staffId) return false;
-          if (!staff.status || staff.status === "UNKNOWN") return true;
-          return !PAYROLL_EXCLUDED_STAFF_STATUSES.has(staff.status);
-        }),
-    [staffs],
-  );
-
   const runSummary = useMemo(() => {
     return {
       draft: runRows.filter((run) => run.status === "DRAFT").length,
@@ -748,15 +608,15 @@ export default function PayrollPage() {
   const periodFilterOptions = useMemo(() => {
     const unique = new Set();
     const options = [];
-    runRows.forEach((run) => {
-      const code = String(run.periodCode || "").trim();
+    periodRows.forEach((period) => {
+      const code = String(period.periodCode || "").trim();
       const normalizedCode = normalizePeriodCode(code);
       if (!code || !normalizedCode || unique.has(normalizedCode)) return;
       unique.add(normalizedCode);
       options.push(code);
     });
     return options;
-  }, [runRows]);
+  }, [periodRows]);
 
   useEffect(() => {
     if (
@@ -792,167 +652,6 @@ export default function PayrollPage() {
       amountsSource: selectedPayrollItem.amountsSource,
     };
   }, [selectedPayrollItem, selectedPayrollSalaryInfo]);
-
-  const refreshMissingBaseSalary = useCallback(async () => {
-    const requestSeq = missingBaseSalaryRequestSeqRef.current + 1;
-    missingBaseSalaryRequestSeqRef.current = requestSeq;
-
-    if (!activeStaffForSalaryCheck.length) {
-      setMissingBaseSalaryRows([]);
-      setLoadingMissingBaseSalary(false);
-      return;
-    }
-
-    setLoadingMissingBaseSalary(true);
-    try {
-      const salaryChecks = await Promise.allSettled(
-        activeStaffForSalaryCheck.map(async (staff) => {
-          const baseInfo = await getStaffBaseSalary(staff.staffId, salaryCheckAsOfDate, {
-            includeTierFallback: false,
-          });
-          const baseSalary = toNumber(pick(baseInfo, "baseSalary", "BaseSalary"));
-          const hasBaseSalary = Boolean(pick(baseInfo, "hasBaseSalary", "HasBaseSalary")) || baseSalary > 0;
-          return {
-            ...staff,
-            baseSalary,
-            hasBaseSalary,
-            checkError: "",
-          };
-        }),
-      );
-
-      if (requestSeq !== missingBaseSalaryRequestSeqRef.current) return;
-
-      const rows = [];
-      salaryChecks.forEach((result, index) => {
-        const staff = activeStaffForSalaryCheck[index];
-        if (!staff) return;
-
-        if (result.status === "fulfilled") {
-          if (!result.value.hasBaseSalary) {
-            rows.push(result.value);
-          }
-          return;
-        }
-
-        rows.push({
-          ...staff,
-          baseSalary: 0,
-          hasBaseSalary: false,
-          checkError: toFriendlyError(result.reason, "Không đọc được lương cơ bản."),
-        });
-      });
-
-      rows.sort((a, b) => String(a.staffName || "").localeCompare(String(b.staffName || "")));
-      setMissingBaseSalaryRows(rows);
-    } finally {
-      if (requestSeq === missingBaseSalaryRequestSeqRef.current) {
-        setLoadingMissingBaseSalary(false);
-      }
-    }
-  }, [activeStaffForSalaryCheck, salaryCheckAsOfDate]);
-
-  useEffect(() => {
-    if (loading) return;
-    refreshMissingBaseSalary();
-  }, [loading, refreshMissingBaseSalary]);
-
-  const pollInitialSalaryRequestUpdates = useCallback(async () => {
-    const currentUserId = getCurrentUserId();
-    if (!currentUserId) return;
-
-    try {
-      const params = {};
-      if (targetBranchId) params.branchId = targetBranchId;
-      const rows = await getInitialSalaryRequests(params);
-      const list = Array.isArray(rows) ? rows : [];
-      const decisionRows = list
-        .map((row) => {
-          const requestId = toId(pick(row, "id", "Id"));
-          const status = String(pick(row, "status", "Status") || "").toUpperCase();
-          if (!requestId || (status !== "APPROVED" && status !== "REJECTED")) return null;
-          return {
-            requestId,
-            staffName: pick(row, "staffName", "StaffName", "staff_name") || "--",
-            status,
-            approverName: pick(row, "approverName", "ApproverName", "approver_name") || "--",
-            updatedAt: pick(row, "updatedAt", "UpdatedAt", "updated_at", "createdAt", "CreatedAt", "created_at"),
-            rejectReason: pick(row, "rejectReason", "RejectReason", "reject_reason") || "",
-          };
-        })
-        .filter(Boolean)
-        .sort((a, b) => {
-          const byTime = safeTime(b.updatedAt) - safeTime(a.updatedAt);
-          if (byTime !== 0) return byTime;
-          return Number(b.requestId) - Number(a.requestId);
-        });
-      setInitialSalaryDecisionRows(decisionRows);
-
-      const nextStatusMap = new Map();
-      const changedRows = [];
-
-      list.forEach((row) => {
-        const requestId = toId(pick(row, "id", "Id"));
-        const requestedBy = toId(pick(row, "requestedBy", "RequestedBy", "requested_by"));
-        const status = String(pick(row, "status", "Status") || "").toUpperCase();
-
-        if (!requestId || !requestedBy || requestedBy !== currentUserId) return;
-        nextStatusMap.set(requestId, status);
-
-        if (!hasSeededInitialSalaryRequestStatusRef.current) return;
-        const previousStatus = initialSalaryRequestStatusRef.current.get(requestId);
-        if (!previousStatus || previousStatus === status) return;
-        if (status === "APPROVED" || status === "REJECTED") {
-          changedRows.push({ row, status });
-        }
-      });
-
-      initialSalaryRequestStatusRef.current = nextStatusMap;
-      if (!hasSeededInitialSalaryRequestStatusRef.current) {
-        hasSeededInitialSalaryRequestStatusRef.current = true;
-        return;
-      }
-
-      if (!changedRows.length) return;
-
-      changedRows.forEach(({ row, status }) => {
-        const staffName = pick(row, "staffName", "StaffName", "staff_name") || "nhan su";
-        const rejectReason = pick(row, "rejectReason", "RejectReason", "reject_reason");
-        if (status === "APPROVED") {
-          toast({
-            status: "success",
-            title: "Yeu cau luong da duoc Admin duyet",
-            description: String(staffName),
-          });
-        } else {
-          toast({
-            status: "warning",
-            title: "Yeu cau luong bi Admin tu choi",
-            description: rejectReason ? `${staffName}: ${rejectReason}` : String(staffName),
-          });
-        }
-      });
-
-      await refreshMissingBaseSalary();
-    } catch {
-      // Ignore polling errors; user can still manually refresh payroll data.
-    }
-  }, [refreshMissingBaseSalary, targetBranchId, toast]);
-
-  const initialSalaryDecisionSummary = useMemo(() => {
-    const approved = initialSalaryDecisionRows.filter((row) => row.status === "APPROVED").length;
-    const rejected = initialSalaryDecisionRows.filter((row) => row.status === "REJECTED").length;
-    return { approved, rejected };
-  }, [initialSalaryDecisionRows]);
-
-  useEffect(() => {
-    if (loading) return undefined;
-    pollInitialSalaryRequestUpdates();
-    const timer = setInterval(() => {
-      pollInitialSalaryRequestUpdates();
-    }, 20000);
-    return () => clearInterval(timer);
-  }, [loading, pollInitialSalaryRequestUpdates]);
 
   async function reloadRuns() {
     const data = await getPayrollRuns();
@@ -1021,10 +720,6 @@ export default function PayrollPage() {
   }
 
   async function handleCalculateAllStaffPayroll() {
-    if (!targetBranchId) {
-      setError("Vui lòng chọn chi nhánh trước khi tính lương.");
-      return;
-    }
     if (!selectedPeriodIdForBatch) {
       setError("Chưa xác định được kỳ lương để tính. Vui lòng chọn một kỳ đang mở.");
       return;
@@ -1038,7 +733,6 @@ export default function PayrollPage() {
     setError("");
     try {
       const result = await calculatePayrollForAllStaff({
-        branchId: targetBranchId,
         payrollPeriodId: selectedPeriodIdForBatch,
         overwriteExisting: true,
         includeInactiveStaff: false,
@@ -1138,33 +832,6 @@ export default function PayrollPage() {
       toast({ status: "success", title: `Đã xác nhận chi xong đợt ${run.runNo}.` });
     } catch (err) {
       setError(toFriendlyError(err, "Xác nhận đã chi thất bại."));
-    } finally {
-      setBusyRunId(null);
-    }
-  }
-
-  async function handleCancelRun(runId) {
-    const run = runById.get(runId);
-    if (!run) {
-      setError("Không tìm thấy đợt tính lương.");
-      return;
-    }
-    if (!(run.status === "DRAFT" || run.status === "CALCULATED")) {
-      setError("Chỉ được huỷ mã kỳ khi đợt đang ở trạng thái Nháp/Calculated.");
-      return;
-    }
-
-    const confirmed = window.confirm(`Huỷ mã kỳ ${run.periodCode}?`);
-    if (!confirmed) return;
-
-    setBusyRunId(runId);
-    setError("");
-    try {
-      await cancelPayrollRun(runId, { canceledBy: getCurrentUserId() || null });
-      await reloadRuns();
-      toast({ status: "success", title: `Đã huỷ mã kỳ ${run.periodCode}.` });
-    } catch (err) {
-      setError(toFriendlyError(err, "Huỷ mã kỳ thất bại."));
     } finally {
       setBusyRunId(null);
     }
@@ -1405,68 +1072,6 @@ export default function PayrollPage() {
     }
   }
 
-  function handleOpenInitialSalaryRequest(staff) {
-    if (!staff?.staffId) return;
-    setInitialSalaryTarget(staff);
-    setInitialSalaryForm({
-      baseSalary: "",
-      reason: "Đề nghị thiết lập lương cơ bản ban đầu",
-      note: "",
-    });
-  }
-
-  function handleCloseInitialSalaryRequest() {
-    setInitialSalaryTarget(null);
-    setInitialSalaryForm({
-      baseSalary: "",
-      reason: "",
-      note: "",
-    });
-    setSendingInitialSalaryRequest(false);
-  }
-
-  async function handleSubmitInitialSalaryRequest() {
-    const staffId = toId(initialSalaryTarget?.staffId);
-    if (!staffId) {
-      setError("Không xác định được nhân sự để gửi duyệt.");
-      return;
-    }
-
-    const baseSalary = toNumber(initialSalaryForm.baseSalary);
-    if (baseSalary <= 0) {
-      setError("Lương cơ bản đề xuất phải lớn hơn 0.");
-      return;
-    }
-
-    setSendingInitialSalaryRequest(true);
-    setError("");
-    try {
-      const result = await createInitialSalaryRequest(staffId, {
-        baseSalary,
-        effectiveFrom: salaryCheckAsOfDate,
-        reason: initialSalaryForm.reason?.trim() || null,
-        note: initialSalaryForm.note?.trim() || null,
-      });
-      toast({
-        status: "success",
-        title: "Da gui duyet thanh cong",
-        description:
-          result?.message ||
-          `Yeu cau luong cua ${initialSalaryTarget?.staffName || `Staff #${staffId}`} da duoc chuyen den Admin.`,
-      });
-      handleCloseInitialSalaryRequest();
-      await refreshMissingBaseSalary();
-    } catch (err) {
-      setError(toFriendlyError(err, "Gửi yêu cầu duyệt lương thất bại."));
-    } finally {
-      setSendingInitialSalaryRequest(false);
-    }
-  }
-
-  async function handleReloadMissingBaseSalary() {
-    await loadData();
-  }
-
   if (loading) {
     return (
       <Flex minH='260px' align='center' justify='center' direction='column' gap='10px'>
@@ -1570,13 +1175,8 @@ export default function PayrollPage() {
               <Input value={autoRunLabel} isReadOnly />
             </FormControl>
             <Text color={textColorSecondary} fontSize='sm'>
-              Hệ thống sẽ tự lấy dữ liệu lương và chỉ tính cho nhân sự thuộc chi nhánh đang chọn.
+              Hệ thống sẽ tự lấy dữ liệu lương và tính cho toàn bộ nhân sự trong kỳ đang mở.
             </Text>
-            {!targetBranchId ? (
-              <Text color='orange.400' fontSize='xs'>
-                Cần chọn chi nhánh trước khi tính lương.
-              </Text>
-            ) : null}
             {!selectedPeriodIdForBatch ? (
               <Text color='orange.400' fontSize='xs'>
                 Cần có kỳ lương đang mở trước khi tính lương hàng loạt.
@@ -1593,139 +1193,12 @@ export default function PayrollPage() {
               variant='outline'
               onClick={handleCalculateAllStaffPayroll}
               isLoading={calculatingBatchPayroll}
-              isDisabled={!targetBranchId || !selectedPeriodIdForBatch || selectedPeriodStatusForBatch !== "OPEN"}>
+              isDisabled={!selectedPeriodIdForBatch || selectedPeriodStatusForBatch !== "OPEN"}>
               Tính lương toàn bộ nhân sự
             </Button>
           </SimpleGrid>
         </Card>
       </SimpleGrid>
-
-      <Card p='20px' mb='20px'>
-        <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
-          <Text color={textColor} fontWeight='700'>
-            Nhân sự chưa có lương cơ bản
-          </Text>
-          <Flex align='center' gap='8px'>
-            <Badge colorScheme={missingBaseSalaryRows.length ? "orange" : "green"}>
-              Cần duyệt: {missingBaseSalaryRows.length}
-            </Badge>
-            <Button
-              size='xs'
-              variant='outline'
-              onClick={handleReloadMissingBaseSalary}
-              isLoading={loading || loadingMissingBaseSalary}>
-              Tải lại
-            </Button>
-          </Flex>
-        </Flex>
-
-        {loadingMissingBaseSalary ? (
-          <Flex align='center' gap='8px'>
-            <Spinner size='sm' />
-            <Text color={textColorSecondary} fontSize='sm'>
-              Đang quét lương cơ bản...
-            </Text>
-          </Flex>
-        ) : missingBaseSalaryRows.length ? (
-          <Box maxH='320px' overflowY='auto' overflowX='auto'>
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Nhân sự</Th>
-                  <Th>Trạng thái</Th>
-                  <Th>Ngày vào</Th>
-                  <Th isNumeric>Lương cơ bản</Th>
-                  <Th textAlign='right'>Xử lý</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {missingBaseSalaryRows.map((row) => (
-                  <Tr key={row.staffId}>
-                    <Td color={textColor} fontWeight='600'>
-                      {row.staffName}
-                      {row.checkError ? (
-                        <Text color='orange.400' fontSize='xs'>
-                          {row.checkError}
-                        </Text>
-                      ) : null}
-                    </Td>
-                    <Td>
-                      <Badge colorScheme='gray'>{row.status || "--"}</Badge>
-                    </Td>
-                    <Td color={textColorSecondary}>{formatDate(row.hireDate)}</Td>
-                    <Td isNumeric color={textColor}>
-                      {row.baseSalary > 0 ? formatCurrency(row.baseSalary) : "--"}
-                    </Td>
-                    <Td textAlign='right'>
-                      <Button
-                        size='xs'
-                        colorScheme='orange'
-                        variant='outline'
-                        onClick={() => handleOpenInitialSalaryRequest(row)}>
-                        Gửi duyệt lương
-                      </Button>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </Box>
-        ) : (
-          <Text color={textColorSecondary}>Không có nhân sự nào thiếu lương cơ bản.</Text>
-        )}
-      </Card>
-
-      <Card p='20px' mb='20px'>
-        <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
-          <Text color={textColor} fontWeight='700'>
-            Ket qua duyet luong khoi tao
-          </Text>
-          <Flex align='center' gap='8px'>
-            <Badge colorScheme='green'>Duoc duyet: {initialSalaryDecisionSummary.approved}</Badge>
-            <Badge colorScheme='red'>Bi tu choi: {initialSalaryDecisionSummary.rejected}</Badge>
-            <Button size='xs' variant='outline' onClick={pollInitialSalaryRequestUpdates}>
-              Tai lai
-            </Button>
-          </Flex>
-        </Flex>
-
-        {initialSalaryDecisionRows.length ? (
-          <Box maxH='320px' overflowY='auto' overflowX='auto'>
-            <Table size='sm'>
-              <Thead>
-                <Tr>
-                  <Th>Nhan su</Th>
-                  <Th>Ket qua</Th>
-                  <Th>Admin xu ly</Th>
-                  <Th>Thoi gian</Th>
-                  <Th>Ghi chu</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {initialSalaryDecisionRows.slice(0, 100).map((row) => (
-                  <Tr key={row.requestId}>
-                    <Td color={textColor} fontWeight='600'>
-                      {row.staffName}
-                    </Td>
-                    <Td>
-                      <Badge colorScheme={row.status === "APPROVED" ? "green" : "red"}>
-                        {row.status === "APPROVED" ? "Da duyet" : "Tu choi"}
-                      </Badge>
-                    </Td>
-                    <Td color={textColorSecondary}>{row.approverName || "--"}</Td>
-                    <Td color={textColorSecondary}>{formatDateTime(row.updatedAt)}</Td>
-                    <Td color={textColorSecondary}>
-                      {row.status === "REJECTED" ? row.rejectReason || "--" : "--"}
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </Box>
-        ) : (
-          <Text color={textColorSecondary}>Chua co ket qua duyet/tu choi.</Text>
-        )}
-      </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px' mb='20px'>
         <Card p='20px'>
@@ -1830,15 +1303,6 @@ export default function PayrollPage() {
                             }>
                             {run.status === "PAID" ? "Đã chi" : "Xác nhận đã chi"}
                           </Button>
-                          <Button
-                            size='xs'
-                            colorScheme='red'
-                            variant='outline'
-                            isDisabled={!(run.status === "DRAFT" || run.status === "CALCULATED")}
-                            isLoading={busyRunId === run.id}
-                            onClick={() => handleCancelRun(run.id)}>
-                            Huỷ mã kỳ
-                          </Button>
                         </Flex>
                       </Td>
                     </Tr>
@@ -1918,11 +1382,7 @@ export default function PayrollPage() {
                       {item.hasPayslip ? "Đã phát hành" : "Chưa phát hành"}
                     </Badge>
                     <Text color={textColorSecondary} fontSize='xs'>
-                      {item.amountsSource === "SERVER"
-                        ? "Server"
-                        : item.amountsSource === "DERIVED"
-                        ? "Suy diễn"
-                        : "Thiếu totals"}
+                      {item.amountsSource === "SERVER" ? "Server" : "Thiếu totals"}
                     </Text>
                     {!item.canIssuePayslip ? (
                       <Text color={textColorSecondary} fontSize='xs'>
@@ -1949,7 +1409,7 @@ export default function PayrollPage() {
           <Text color={textColorSecondary}>Chưa có dòng lương phù hợp bộ lọc.</Text>
         )}
         <Text color={textColorSecondary} fontSize='xs' mt='10px'>
-          * Ưu tiên hiển thị totals backend. Nếu backend chưa trả explicit totals, frontend sẽ suy diễn từ các thành phần lương/khấu trừ.
+          * Nếu backend chưa trả explicit totals thì cột sẽ để trống thay vì để frontend tự suy diễn.
         </Text>
       </Card>
 
@@ -2000,7 +1460,7 @@ export default function PayrollPage() {
               </Text>
             ) : null}
 
-            {selectedPayrollBreakdown?.amountsSource === "INCOMPLETE" ? (
+            {selectedPayrollBreakdown?.amountsSource !== "SERVER" ? (
               <Text color='orange.400' fontSize='sm' mb='10px'>
                 Backend chưa trả đủ breakdown canonical cho dòng lương này. Popup chỉ hiển thị các số server đã cung cấp.
               </Text>
@@ -2100,78 +1560,6 @@ export default function PayrollPage() {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={Boolean(initialSalaryTarget)} onClose={handleCloseInitialSalaryRequest} isCentered size='lg'>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Gửi duyệt lương khởi tạo</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <SimpleGrid columns={1} gap='10px'>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Nhân sự
-                </FormLabel>
-                <Input value={initialSalaryTarget?.staffName || "--"} isReadOnly />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Hiệu lực từ ngày
-                </FormLabel>
-                <Input type='date' value={salaryCheckAsOfDate} isReadOnly />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Lương cơ bản đề xuất
-                </FormLabel>
-                <Input
-                  type='number'
-                  min='0'
-                  step='1000'
-                  value={initialSalaryForm.baseSalary}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, baseSalary: e.target.value }))}
-                  placeholder='VD: 12.000.000'
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Lý do
-                </FormLabel>
-                <Input
-                  value={initialSalaryForm.reason}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, reason: e.target.value }))}
-                  placeholder='Lý do đề xuất'
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>
-                  Ghi chú
-                </FormLabel>
-                <Textarea
-                  value={initialSalaryForm.note}
-                  onChange={(e) => setInitialSalaryForm((prev) => ({ ...prev, note: e.target.value }))}
-                  placeholder='Thông tin bổ sung'
-                  rows={3}
-                />
-              </FormControl>
-            </SimpleGrid>
-          </ModalBody>
-          <ModalFooter gap='8px'>
-            <Button variant='ghost' onClick={handleCloseInitialSalaryRequest}>
-              Hủy
-            </Button>
-            <Button
-              colorScheme='orange'
-              onClick={handleSubmitInitialSalaryRequest}
-              isLoading={sendingInitialSalaryRequest}>
-              Gửi duyệt
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
     </Box>
   );
 }
-
-
-

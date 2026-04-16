@@ -6,7 +6,6 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import RetailCartEntry from "@features/retail/components/RetailCartEntry";
 import RetailImage from "@features/retail/components/RetailImage";
 import {
-  getBranches,
   getCategories,
   getProductImages,
   getProducts,
@@ -16,7 +15,6 @@ import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
   clampQuantityToAvailable,
   formatVnd,
-  getBranchLabel,
   getCategoryLabel,
   getProductDescription,
   getProductImageAlt,
@@ -124,9 +122,7 @@ export default function PartsSalesPage() {
   const [products, setProducts] = useState([]);
   const [productImages, setProductImages] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [branches, setBranches] = useState([]);
   const [stockByProductId, setStockByProductId] = useState({});
-  const [selectedBranchId, setSelectedBranchId] = useState(() => readStoredRetailBranchId());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -135,28 +131,29 @@ export default function PartsSalesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [draftQty, setDraftQty] = useState({});
   const [bannerMessage, setBannerMessage] = useState("");
+  const [branchStockTick, setBranchStockTick] = useState(0);
   const {
     totalLineItems,
     addToCart,
   } = useRetailCart();
 
   useEffect(() => {
-    function syncBranchStockFromStorage() {
-      setSelectedBranchId(readStoredRetailBranchId());
+    function bumpBranchStock() {
+      setBranchStockTick((value) => value + 1);
     }
 
-    window.addEventListener(RETAIL_BRANCH_CHANGED_EVENT, syncBranchStockFromStorage);
+    window.addEventListener(RETAIL_BRANCH_CHANGED_EVENT, bumpBranchStock);
 
     function handleStorage(event) {
       if (event.key === RETAIL_SELECTED_BRANCH_STORAGE_KEY) {
-        syncBranchStockFromStorage();
+        bumpBranchStock();
       }
     }
 
     window.addEventListener("storage", handleStorage);
 
     return () => {
-      window.removeEventListener(RETAIL_BRANCH_CHANGED_EVENT, syncBranchStockFromStorage);
+      window.removeEventListener(RETAIL_BRANCH_CHANGED_EVENT, bumpBranchStock);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
@@ -169,11 +166,10 @@ export default function PartsSalesPage() {
       setError("");
 
       try {
-        const [productData, productImageData, categoryData, branchData] = await Promise.all([
+        const [productData, productImageData, categoryData] = await Promise.all([
           getProducts(),
           getProductImages(),
           getCategories(),
-          getBranches(),
         ]);
 
         if (ignore) return;
@@ -185,23 +181,16 @@ export default function PartsSalesPage() {
         const nextCategories = Array.isArray(categoryData)
           ? categoryData.filter((item) => item?.isDeleted !== true)
           : [];
-        const nextBranches = Array.isArray(branchData)
-          ? branchData.filter(
-              (item) => item?.isDeleted !== true && item?.isActive !== false
-            )
-          : [];
 
         setProducts(nextProducts);
         setProductImages(nextProductImages);
         setCategories(nextCategories);
-        setBranches(nextBranches);
       } catch (loadError) {
         if (!ignore) {
           setError(loadError?.message || "Không thể tải danh sách phụ tùng lúc này.");
           setProducts([]);
           setProductImages([]);
           setCategories([]);
-          setBranches([]);
           setStockByProductId({});
         }
       } finally {
@@ -219,17 +208,6 @@ export default function PartsSalesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedBranchId) return;
-    const isSelectedBranchValid = branches.some(
-      (item) => String(item?.id) === String(selectedBranchId)
-    );
-    if (isSelectedBranchValid) return;
-
-    setSelectedBranchId("");
-    writeStoredRetailBranchId("");
-  }, [branches, selectedBranchId]);
-
-  useEffect(() => {
     let ignore = false;
 
     async function loadStock() {
@@ -241,7 +219,7 @@ export default function PartsSalesPage() {
       }
 
       const productIds = products.map((item) => item?.id);
-      let branchId = selectedBranchId || "";
+      let branchId = readStoredRetailBranchId();
 
       let result = await getProductStockAvailabilitySafe({
         productIds,
@@ -254,7 +232,6 @@ export default function PartsSalesPage() {
         result.data?.branchId != null
       ) {
         writeStoredRetailBranchId("");
-        setSelectedBranchId("");
         branchId = "";
         result = await getProductStockAvailabilitySafe({
           productIds,
@@ -289,7 +266,7 @@ export default function PartsSalesPage() {
     return () => {
       ignore = true;
     };
-  }, [products, selectedBranchId]);
+  }, [products, branchStockTick]);
 
   useEffect(() => {
     setDraftQty((previous) => {
@@ -387,12 +364,6 @@ export default function PartsSalesPage() {
     });
 
     rows.sort((left, right) => {
-      const leftInStock = normalizeAvailableQuantity(stockByProductId[String(left?.id)]) > 0;
-      const rightInStock = normalizeAvailableQuantity(stockByProductId[String(right?.id)]) > 0;
-      if (leftInStock !== rightInStock) {
-        return leftInStock ? -1 : 1;
-      }
-
       if (sortBy === "price-asc") {
         return Number(left?.retailPrice || 0) - Number(right?.retailPrice || 0);
       }
@@ -406,15 +377,7 @@ export default function PartsSalesPage() {
     });
 
     return rows;
-  }, [catFilter, categoriesById, productImagesByProductId, products, search, sortBy, stockByProductId]);
-
-  const sortedBranches = useMemo(
-    () =>
-      [...branches].sort((left, right) =>
-        getBranchLabel(left).localeCompare(getBranchLabel(right), "vi")
-      ),
-    [branches]
-  );
+  }, [catFilter, categoriesById, productImagesByProductId, products, search, sortBy]);
 
   const totalPages = useMemo(
     () => Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE),
@@ -535,15 +498,6 @@ export default function PartsSalesPage() {
     );
   }
 
-  function handleBranchChange(nextBranchId) {
-    const normalized = String(nextBranchId || "");
-    setSelectedBranchId(normalized);
-    writeStoredRetailBranchId(normalized);
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-  }
-
   return (
     <div className="parts-shop-page">
       <section className="parts-shop-hero">
@@ -625,22 +579,6 @@ export default function PartsSalesPage() {
               </p>
             </div>
             <div className="parts-shop-panel-side">
-              <div className="parts-shop-branch-control">
-                <label htmlFor="parts-shop-branch-select">Chi nhánh</label>
-                <select
-                  id="parts-shop-branch-select"
-                  value={selectedBranchId}
-                  onChange={(event) => handleBranchChange(event.target.value)}
-                  aria-label="Chọn chi nhánh để ưu tiên tồn kho"
-                >
-                  <option value="">Tất cả chi nhánh</option>
-                  {sortedBranches.map((branch) => (
-                    <option key={branch.id} value={String(branch.id)}>
-                      {getBranchLabel(branch)}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div className="parts-shop-results-meta">
                 <strong>{filteredProducts.length}</strong>
                 <span>sản phẩm đang hiển thị</span>

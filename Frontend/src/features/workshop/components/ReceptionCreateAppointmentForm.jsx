@@ -214,31 +214,28 @@ function parseServiceIdsFromInput(value) {
   );
 }
 
-function parseInitialNoteLines(value) {
+function parseInitialNoteText(value) {
   const raw = String(value || "").trim();
-  if (!raw) return [];
+  if (!raw) return "";
 
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed?.symptoms)) {
-      return parsed.symptoms.map((item) => String(item || "").trim()).filter(Boolean);
+      return parsed.symptoms.map((item) => String(item || "").trim()).filter(Boolean).join("; ");
     }
     if (Array.isArray(parsed?.symptomsByVehicle)) {
       const firstWithSymptoms = parsed.symptomsByVehicle.find(
         (item) => Array.isArray(item?.symptoms) && item.symptoms.length > 0
       );
       if (firstWithSymptoms) {
-        return firstWithSymptoms.symptoms.map((item) => String(item || "").trim()).filter(Boolean);
+        return firstWithSymptoms.symptoms.map((item) => String(item || "").trim()).filter(Boolean).join("; ");
       }
     }
   } catch {
     // Fallback to plain text parsing.
   }
 
-  return raw
-    .split(/\r?\n|;/g)
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  return raw;
 }
 
 function buildPlanFromServiceIds(serviceIds, serviceCategoryMap) {
@@ -794,10 +791,10 @@ export default function ReceptionCreateAppointmentForm({
         ? nextSharedPlan.categoryIds?.[0] || ""
         : (nextVehiclePlans[initialVehicleKeys[0]]?.categoryIds?.[0] || "");
 
-    const initialNoteLines = parseInitialNoteLines(initialValues?.customerNotes || nextFormData.customerNotes);
+    const initialNoteText = parseInitialNoteText(initialValues?.customerNotes || nextFormData.customerNotes);
     const seededVehicleNotes =
-      initialVehicleKeys.length === 1 && initialNoteLines.length > 0
-        ? { [initialVehicleKeys[0]]: [...initialNoteLines, ""] }
+      initialVehicleKeys.length === 1 && initialNoteText
+        ? { [initialVehicleKeys[0]]: initialNoteText }
         : {};
     const seededSelectedDates = nextFormData.appointmentDate
       ? initialVehicleKeys.reduce((acc, vehicleKey) => {
@@ -987,18 +984,18 @@ export default function ReceptionCreateAppointmentForm({
     setVehicleNotesByKey((prev) => {
       const next = {};
       selectedVehicleKeys.forEach((key) => {
-        if (Array.isArray(prev[key]) && prev[key].length > 0) {
-          next[key] = [...prev[key]];
+        if (typeof prev[key] === "string") {
+          next[key] = prev[key];
           return;
         }
 
         if (selectedVehicleKeys.length === 1) {
           const legacyNotes = String(formData.customerNotes || "").trim();
-          next[key] = legacyNotes ? [legacyNotes, ""] : [""];
+          next[key] = legacyNotes;
           return;
         }
 
-        next[key] = [""];
+        next[key] = "";
       });
       return next;
     });
@@ -1981,48 +1978,21 @@ export default function ReceptionCreateAppointmentForm({
     [activeNoteVehicleKey, selectedVehicleKeys]
   );
 
-  const activeNoteVehicleLines = useMemo(() => {
-    if (!activeNoteKey) return [""];
-    const current = vehicleNotesByKey?.[activeNoteKey];
-    if (!Array.isArray(current) || current.length === 0) return [""];
-    return current;
+  const activeNoteValue = useMemo(() => {
+    if (!activeNoteKey) return "";
+    return String(vehicleNotesByKey?.[activeNoteKey] || "");
   }, [activeNoteKey, vehicleNotesByKey]);
 
-  const normalizeNoteLines = useCallback((lines) => {
-    if (!Array.isArray(lines)) return [];
-    return lines
-      .map((line) => String(line || "").trim())
-      .filter(Boolean);
+  const normalizeNoteText = useCallback((value) => {
+    const text = String(value || "").trim();
+    return text || null;
   }, []);
 
-  const buildVehicleCustomerNote = useCallback(
-    (lines) => {
-      const normalized = normalizeNoteLines(lines);
-      return normalized.length > 0 ? JSON.stringify({ symptoms: normalized }) : null;
-    },
-    [normalizeNoteLines]
-  );
-
-  const onVehicleNoteChange = useCallback((vehicleKey, index, value) => {
-    setVehicleNotesByKey((prev) => {
-      const current = Array.isArray(prev?.[vehicleKey]) && prev[vehicleKey].length > 0
-        ? [...prev[vehicleKey]]
-        : [""];
-      current[index] = value;
-
-      if (
-        index === current.length - 1 &&
-        String(value || "").trim() &&
-        current.length < 12
-      ) {
-        current.push("");
-      }
-
-      return {
-        ...prev,
-        [vehicleKey]: current
-      };
-    });
+  const onVehicleNoteChange = useCallback((vehicleKey, value) => {
+    setVehicleNotesByKey((prev) => ({
+      ...prev,
+      [vehicleKey]: value
+    }));
   }, []);
 
   useEffect(() => {
@@ -2637,24 +2607,18 @@ export default function ReceptionCreateAppointmentForm({
     const primarySlot = vehicleSlotSelections[0] || null;
     const primarySlotParts = primarySlot?.startTime ? toDateTimeParts(primarySlot.startTime) : null;
     const vehicleNotePlans = selectedVehicleKeys.map((vehicleKey) => {
-      const noteLines = normalizeNoteLines(vehicleNotesByKey?.[vehicleKey]);
+      const customerNotes = normalizeNoteText(vehicleNotesByKey?.[vehicleKey]);
       return {
         vehicleKey,
         vehicleId: getVehicleIdFromKey(vehicleKey),
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
-        noteLines,
-        customerNotes: buildVehicleCustomerNote(noteLines)
+        customerNotes
       };
     });
-    const groupCustomerNotesPayload = (() => {
-      const items = vehicleNotePlans
-        .filter((plan) => Array.isArray(plan.noteLines) && plan.noteLines.length > 0)
-        .map((plan) => ({
-          vehicle: plan.vehicleLabel,
-          symptoms: plan.noteLines
-        }));
-      return items.length > 0 ? JSON.stringify({ symptomsByVehicle: items }) : null;
-    })();
+    const groupCustomerNotesPayload = vehicleNotePlans
+      .filter((plan) => plan.customerNotes)
+      .map((plan) => `${plan.vehicleLabel}: ${plan.customerNotes}`)
+      .join("\n") || null;
     const fallbackCustomerNotesPayload =
       selectedVehicleKeys.length === 1
         ? (vehicleNotePlans[0]?.customerNotes || null)
@@ -3458,7 +3422,7 @@ export default function ReceptionCreateAppointmentForm({
             </div>
 
             <div className="form-group">
-              <label>Mô tả thêm theo từng xe</label>
+              <label>Ghi chú theo từng xe</label>
               {selectedVehicleKeys.length > 0 ? (
                 <div className="reception-note-editor">
                   {selectedVehicleKeys.length > 1 ? (
@@ -3495,23 +3459,21 @@ export default function ReceptionCreateAppointmentForm({
                   ) : null}
 
                   <div className="reception-note-list">
-                    {activeNoteVehicleLines.map((noteValue, index) => (
-                      <textarea
-                        key={`note-${activeNoteKey || "none"}-${index}`}
-                        className="reception-note-input"
-                        rows={1}
-                        value={noteValue}
-                        placeholder={`Nhập mô tả ${index + 1}...`}
-                        onChange={(event) => onVehicleNoteChange(activeNoteKey, index, event.target.value)}
-                      />
-                    ))}
+                    <textarea
+                      key={`note-${activeNoteKey || "none"}`}
+                      className="reception-note-input"
+                      rows={3}
+                      value={activeNoteValue}
+                      placeholder="Nhập ghi chú cho xe này..."
+                      onChange={(event) => onVehicleNoteChange(activeNoteKey, event.target.value)}
+                    />
                   </div>
                   {selectedVehicleKeys.length > 1 ? (
                     <p className="reception-muted-note">Chọn xe ở tab bên trên để nhập ghi chú theo từng xe.</p>
                   ) : null}
                 </div>
               ) : (
-                <div className="reception-muted-note">Hãy chọn xe trước khi nhập mô tả.</div>
+                <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
               )}
             </div>
 

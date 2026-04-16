@@ -17,21 +17,35 @@ export function formatOrderDateTime(isoString) {
 }
 
 export function parseCustomerNotes(notes) {
+  const sanitizeText = (value) =>
+    String(value || "")
+      .replace(/\[[A-Z_]+:[^\]]*]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const sanitizeRequestedServices = (value) => {
+    const cleaned = sanitizeText(value);
+    return cleaned && cleaned.toUpperCase() !== "N/A" ? cleaned : null;
+  };
+
   if (!notes) {
     return {
       isAppt: false,
-      mainNotes: "KhÃ´ng cÃ³ ghi chÃº Ä‘áº·c biá»‡t.",
+      mainNotes: "Không có ghi chú gì.",
       requestedServices: null,
     };
   }
+
+  const rawNotes = String(notes).trim();
+
   try {
-    const parsed = JSON.parse(String(notes).trim());
+    const parsed = JSON.parse(rawNotes);
     const symptoms = Array.isArray(parsed)
       ? parsed
       : Array.isArray(parsed?.symptoms)
         ? parsed.symptoms
         : [];
-    const cleaned = symptoms.map((x) => String(x || "").trim()).filter(Boolean);
+    const cleaned = symptoms.map((x) => sanitizeText(x)).filter(Boolean);
     if (cleaned.length > 0) {
       return {
         isAppt: false,
@@ -42,47 +56,52 @@ export function parseCustomerNotes(notes) {
   } catch {
     // Keep backward-compat format parsing below
   }
-  const isAppt = /^\[(Lá»‹ch háº¹n|Lich hen)\]/i.test(notes);
-  const isReception = /^\[(Tiáº¿p nháº­n|Tiep nhan)\]/i.test(notes);
+
+  const isAppt = /^\[(Lịch hẹn|Lich hen)\]/i.test(rawNotes);
+  const isReception = /^\[(Tiếp nhận|Tiep nhan)\]/i.test(rawNotes);
   
   // If it doesn't have either prefix, it only has mainNotes
   if (!isAppt && !isReception) {
-    // Try to extract anyway if it has "Dá»‹ch vá»¥ yÃªu cáº§u"
-    const splitToken = /(?:\.\s*)?(Dá»‹ch vá»¥ yÃªu cáº§u|Dich vu yeu cau):\s*/i;
-    const parts = notes.split(splitToken);
+    // Try to extract anyway if it has "Dịch vụ yêu cầu"
+    const splitToken = /(?:\.\s*)?(Dịch vụ yêu cầu|Dich vu yeu cau):\s*/i;
+    const parts = rawNotes.split(splitToken);
     if (parts.length >= 3) {
-      const requested = parts[2]?.trim();
+      const requested = sanitizeRequestedServices(parts[2]);
+      const mainNotes = sanitizeText(parts[0]);
       return {
         isAppt: false,
-        mainNotes: parts[0]?.trim() || "KhÃ´ng cÃ³ ghi chÃº",
-        requestedServices: requested && requested !== "N/A" ? requested : null,
+        mainNotes: mainNotes || "Không có ghi chú gì.",
+        requestedServices: requested,
       };
     }
 
+    const cleanedMain = sanitizeText(rawNotes);
     return {
       isAppt: false,
-      mainNotes: notes,
+      mainNotes: cleanedMain || "Không có ghi chú gì.",
       requestedServices: null,
     };
   }
 
   // Handle prefixed notes
-  const withoutPrefix = notes.replace(/^\[(Lá»‹ch háº¹n|Lich hen|Tiáº¿p nháº­n|Tiep nhan)\]\s*/i, "");
-  const splitToken = /(?:\.\s*)?(Dá»‹ch vá»¥ yÃªu cáº§u|Dich vu yeu cau):\s*/i;
+  const withoutPrefix = rawNotes.replace(/^\[(Lịch hẹn|Lich hen|Tiếp nhận|Tiep nhan)\]\s*/i, "");
+  const splitToken = /(?:\.\s*)?(Dịch vụ yêu cầu|Dich vu yeu cau):\s*/i;
   const parts = withoutPrefix.split(splitToken);
 
   if (parts.length >= 3) {
-    const requested = parts[2]?.trim();
+    const requested = sanitizeRequestedServices(parts[2]);
+    const mainNotes = sanitizeText(parts[0]);
     return {
       isAppt: isAppt,
-      mainNotes: parts[0]?.trim() || "KhÃ´ng cÃ³ ghi chÃº",
-      requestedServices: requested && requested !== "N/A" ? requested : null,
+      mainNotes: mainNotes || "Không có ghi chú gì.",
+      requestedServices: requested,
     };
   }
 
+  const cleanedWithoutPrefix = sanitizeText(withoutPrefix);
   return {
     isAppt: isAppt,
-    mainNotes: withoutPrefix || "KhÃ´ng cÃ³ ghi chÃº",
+    mainNotes: cleanedWithoutPrefix || "Không có ghi chú gì.",
     requestedServices: null,
   };
 }

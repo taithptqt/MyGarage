@@ -1,7 +1,8 @@
-import { Navigate, useNavigate } from "react-router-dom";
+﻿import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
+  deleteStaff,
   getAllRoles,
   getAllStaff,
   updateStaff
@@ -10,8 +11,10 @@ import {
   createCustomerVehicle,
   createCustomer,
   createVehicle,
+  deleteCustomerVehicle,
   getAllCustomerTiers,
   getAllCustomerVehicles,
+  deleteCustomer,
   getAllCustomers,
   getAllVehicles,
   updateVehicle,
@@ -37,6 +40,7 @@ import {
 } from "@features/admin/api/serviceApi";
 import {
   createBranch,
+  deleteBranch,
   getAllBranches,
   updateBranch
 } from "@features/admin/api/branchApi";
@@ -118,40 +122,40 @@ const EMPTY_BRANCH_FORM = {
 
 const SECTION_META = {
   staff: {
-    title: "Quản lý nhân sự",
-    subtitle: "Quản trị tài khoản nhân sự nội bộ và vai trò làm việc",
+    title: "Nhân sự",
+    subtitle: "Quản lý tài khoản nội bộ và phân quyền vai trò",
     addLabel: "+ Thêm nhân sự",
     searchPlaceholder: "Tìm theo tên, email, số điện thoại hoặc vai trò..."
   },
   branches: {
-    title: "Quản lý chi nhánh",
-    subtitle: "Cấu hình thông tin chi nhánh và vận hành",
+    title: "Chi nhánh",
+    subtitle: "Quản lý thông tin và cấu hình vận hành chi nhánh",
     addLabel: "+ Thêm chi nhánh",
-    searchPlaceholder: "Tìm chi nhánh theo tên, địa chỉ, hotline hoặc email..."
+    searchPlaceholder: "Tìm theo tên, địa chỉ, hotline hoặc email..."
   },
   customers: {
-    title: "Quản lý khách hàng",
-    subtitle: "Quản trị tài khoản khách hàng",
+    title: "Khách hàng",
+    subtitle: "Quản lý tài khoản khách hàng",
     addLabel: "+ Thêm khách hàng",
-    searchPlaceholder: "Tìm theo tên, số điện thoại, hạng, biển số, hãng hoặc dòng xe..."
+    searchPlaceholder: "Tìm theo tên, số điện thoại, hạng, biển số, hãng xe hoặc dòng xe..."
   },
   brands: {
-    title: "Quản lý hãng xe",
-    subtitle: "Quản trị danh sách hãng xe dùng trong hệ thống",
+    title: "Hãng xe",
+    subtitle: "Quản lý hãng xe cho danh mục dịch vụ",
     addLabel: "+ Thêm hãng xe",
-    searchPlaceholder: "Tìm theo mã, tên hãng hoặc quốc gia..."
+    searchPlaceholder: "Tìm theo code, tên hãng hoặc quốc gia..."
   },
   models: {
-    title: "Quản lý dòng xe",
-    subtitle: "Quản trị dòng xe theo từng hãng",
+    title: "Dòng xe",
+    subtitle: "Quản lý dòng xe theo từng hãng",
     addLabel: "+ Thêm dòng xe",
     searchPlaceholder: "Tìm theo dòng xe, phân khúc hoặc nhiên liệu..."
   },
   services: {
-    title: "Quản lý dịch vụ",
-    subtitle: "Quản trị danh mục dịch vụ sửa chữa và bảo dưỡng",
+    title: "Dịch vụ",
+    subtitle: "Quản lý danh mục dịch vụ sửa chữa và bảo dưỡng",
     addLabel: "+ Thêm dịch vụ",
-    searchPlaceholder: "Tìm theo mã, tên dịch vụ, nhóm dịch vụ hoặc trạng thái..."
+    searchPlaceholder: "Tìm theo code, tên dịch vụ, danh mục hoặc trạng thái..."
   }
 };
 
@@ -203,10 +207,10 @@ function ConfirmDialog({ message, onConfirm, onCancel, loading }) {
       <p>{message}</p>
       <div className="form-actions">
         <button className="btn-ghost" onClick={onCancel} type="button" disabled={loading}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-danger" onClick={onConfirm} type="button" disabled={loading}>
-          {loading ? "Đang xóa..." : "Xóa"}
+          {loading ? "Deleting..." : "Delete"}
         </button>
       </div>
     </div>
@@ -235,17 +239,17 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Họ và tên *</label>
+        <label>Full Name *</label>
         <input name="fullName" value={form.fullName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Số điện thoại *</label>
+        <label>Phone *</label>
         <input
           name="phone"
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.phone || ""}
           onChange={handleChange}
           required
@@ -256,18 +260,18 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Vai trò *</label>
+        <label>Role *</label>
         <select name="roleId" value={form.roleId} onChange={handleChange} required>
-          <option value="">Chọn vai trò</option>
+          <option value="">Select role</option>
           {roles.map((role) => (
             <option key={role.id} value={role.id}>
-              {role.roleName || role.roleCode || `Vai trò #${role.id}`}
+              {role.roleName || role.roleCode || `Role #${role.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>{initial.id ? "Mật khẩu mới (không bắt buộc)" : "Mật khẩu *"}</label>
+        <label>{initial.id ? "New Password (optional)" : "Password *"}</label>
         <input
           name="password"
           type="password"
@@ -277,20 +281,20 @@ function StaffForm({ initial, roles, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Trạng thái</label>
+        <label>Status</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
-          <option value="active">Đang hoạt động</option>
+          <option value="active">Active</option>
           <option value="inactive">Ngừng hoạt động</option>
-          <option value="suspended">Tạm khóa</option>
+          <option value="suspended">Suspended</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -339,17 +343,17 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Họ và tên *</label>
+        <label>Full Name *</label>
         <input name="fullName" value={form.fullName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Số điện thoại *</label>
+        <label>Phone *</label>
         <input
           name="phone"
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.phone || ""}
           onChange={handleChange}
           required
@@ -360,9 +364,9 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Hạng khách</label>
+        <label>Háº¡ng khÃ¡ch</label>
         <select name="tierId" value={form.tierId} onChange={handleChange}>
-          <option value="">Chọn hạng</option>
+          <option value="">Chá»n háº¡ng</option>
           {tiers.map((tier) => (
             <option key={tier.id} value={tier.id}>
               {tier.tierName || `Tier #${tier.id}`}
@@ -371,7 +375,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>{initial.id ? "Mật khẩu mới (không bắt buộc)" : "Mật khẩu *"}</label>
+        <label>{initial.id ? "New Password (optional)" : "Password *"}</label>
         <input
           name="password"
           type="password"
@@ -381,7 +385,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Biển số xe</label>
+        <label>Biá»ƒn sá»‘ xe</label>
         <input
           name="licensePlate"
           value={form.licensePlate || ""}
@@ -392,20 +396,20 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         />
       </div>
       <div className="form-group">
-        <label>Hãng xe</label>
+        <label>HÃ£ng xe</label>
         <select name="brandId" value={form.brandId} onChange={handleChange}>
-          <option value="">Chọn hãng xe</option>
+          <option value="">Chá»n hÃ£ng xe</option>
           {brands.map((brand) => (
             <option key={brand.id} value={brand.id}>
-              {brand.name || brand.code || `Hãng #${brand.id}`}
+              {brand.name || brand.code || `Brand #${brand.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Dòng xe</label>
+        <label>DÃ²ng xe</label>
         <select name="modelId" value={form.modelId} onChange={handleChange}>
-          <option value="">Chọn dòng xe</option>
+          <option value="">Chá»n dÃ²ng xe</option>
           {modelOptions.map((model) => (
             <option key={model.id} value={model.id}>
               {model.modelName || `Model #${model.id}`}
@@ -414,7 +418,7 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         </select>
       </div>
       <div className="form-group">
-        <label>Màu xe</label>
+        <label>MÃ u xe</label>
         <input name="color" value={form.color || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
@@ -433,23 +437,23 @@ function CustomerForm({ initial, tiers, brands, models, onSubmit, onCancel, load
         <input name="note" value={form.note || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Trạng thái</label>
+        <label>Status</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Đang hoạt động</option>
+          <option value="true">Active</option>
           <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -509,11 +513,11 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
         <input name="code" value={form.code || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Tên hãng *</label>
+        <label>Brand Name *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Quốc gia</label>
+        <label>Country Of Origin</label>
         <input
           name="countryOfOrigin"
           value={form.countryOfOrigin || ""}
@@ -525,36 +529,36 @@ function VehicleBrandForm({ initial, onSubmit, onCancel, loading }) {
         <input name="logoUrl" value={form.logoUrl || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Tải logo</label>
+        <label>Upload Logo</label>
         <input type="file" accept="image/*" onChange={handleImageUpload} />
-        {uploadingImage ? <small>Đang tải ảnh...</small> : null}
-        {cropSource ? <small>Vui lòng cắt ảnh trước khi lưu.</small> : null}
+        {uploadingImage ? <small>Äang táº£i áº£nh...</small> : null}
+        {cropSource ? <small>Vui lÃ²ng cáº¯t áº£nh trÆ°á»›c khi lÆ°u.</small> : null}
         {form.logoUrl ? (
           <img
             src={form.logoUrl}
-            alt="Xem trước logo"
+            alt="Logo preview"
             style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, marginTop: 8 }}
           />
         ) : null}
       </div>
       <div className="form-group">
-        <label>Trạng thái</label>
+        <label>Status</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Đang hoạt động</option>
+          <option value="true">Active</option>
           <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
       {cropSource ? (
@@ -590,30 +594,30 @@ function VehicleModelForm({ initial, brands, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Hãng xe *</label>
+        <label>Brand *</label>
         <select name="brandId" value={form.brandId} onChange={handleChange} required>
-          <option value="">Chọn hãng xe</option>
+          <option value="">Select a brand</option>
           {brands.map((brand) => (
             <option key={brand.id} value={brand.id}>
-              {brand.name || brand.code || `Hãng #${brand.id}`}
+              {brand.name || brand.code || `Brand #${brand.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Tên dòng xe *</label>
+        <label>Model Name *</label>
         <input name="modelName" value={form.modelName || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Phân khúc</label>
+        <label>Segment</label>
         <input name="segment" value={form.segment || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Loại nhiên liệu</label>
+        <label>Fuel Type</label>
         <input name="fuelType" value={form.fuelType || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Dung tích xi-lanh</label>
+        <label>Cylinder Capacity</label>
         <input
           name="cylinderCapacity"
           value={form.cylinderCapacity || ""}
@@ -623,10 +627,10 @@ function VehicleModelForm({ initial, brands, onSubmit, onCancel, loading }) {
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -672,28 +676,28 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Mã dịch vụ *</label>
+        <label>Service Code *</label>
         <input name="code" value={form.code || ""} onChange={handleChange} required />
-        <small className="form-helper">Mã bắt đầu bằng PKG- thuộc gói dịch vụ, không tạo mới tại đây.</small>
+        <small className="form-helper">Codes starting with PKG- belong to Packages and should not be created here.</small>
         {codeError ? <small className="form-error-text">{codeError}</small> : null}
       </div>
       <div className="form-group">
-        <label>Tên dịch vụ *</label>
+        <label>Service Name *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Nhóm dịch vụ *</label>
+        <label>Category *</label>
         <select name="categoryId" value={form.categoryId} onChange={handleChange} required>
-          <option value="">Chọn nhóm dịch vụ</option>
+          <option value="">Select category</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name || category.code || `Nhóm #${category.id}`}
+              {category.name || category.code || `Category #${category.id}`}
             </option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Giá cơ bản</label>
+        <label>Base Price</label>
         <input
           name="basePrice"
           type="number"
@@ -704,7 +708,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Thời lượng dự kiến (phút) *</label>
+        <label>Estimated Minutes *</label>
         <input
           name="standardMinutes"
           type="number"
@@ -715,27 +719,27 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Mô tả</label>
+        <label>Description</label>
         <input name="description" value={form.description || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Trạng thái</label>
+        <label>Status</label>
         <select
           name="isActive"
           value={String(form.isActive ?? true)}
           onChange={handleChange}
         >
-          <option value="true">Đang hoạt động</option>
+          <option value="true">Active</option>
           <option value="false">Ngừng hoạt động</option>
         </select>
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading || Boolean(codeError)}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -767,11 +771,11 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Tên chi nhánh *</label>
+        <label>Branch Name *</label>
         <input name="name" value={form.name || ""} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Địa chỉ</label>
+        <label>Address</label>
         <input name="address" value={form.address || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
@@ -781,7 +785,7 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
           type="tel"
           inputMode="tel"
           pattern={VIETNAM_PHONE_PATTERN}
-          title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+          title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
           value={form.hotline || ""}
           onChange={handleChange}
         />
@@ -791,7 +795,7 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
         <input name="email" type="email" value={form.email || ""} onChange={handleChange} />
       </div>
       <div className="form-group">
-        <label>Số ô làm việc tối đa</label>
+        <label>Max Work Slots</label>
         <input
           name="maxWorkSlots"
           type="number"
@@ -801,23 +805,23 @@ function BranchForm({ initial, onSubmit, onCancel, loading }) {
         />
       </div>
       <div className="form-group">
-        <label>Trạng thái</label>
+        <label>Status</label>
         <select name="status" value={form.status || "active"} onChange={handleChange}>
-          <option value="active">Đang hoạt động</option>
+          <option value="active">Active</option>
           <option value="inactive">Ngừng hoạt động</option>
         </select>
       </div>
       <div className="form-group">
-        <label>Mô tả</label>
+        <label>Description</label>
         <input name="description" value={form.description || ""} onChange={handleChange} />
       </div>
 
       <div className="form-actions">
         <button className="btn-ghost" type="button" onClick={onCancel}>
-          Hủy
+          Cancel
         </button>
         <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? "Đang lưu..." : "Lưu"}
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -832,20 +836,11 @@ function getStatusBadge(status) {
   return "badge-inactive";
 }
 
-function getStatusLabel(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "active" || normalized === "true") return "Đang hoạt động";
-  if (normalized === "inactive" || normalized === "false") return "Ngừng hoạt động";
-  if (normalized === "suspended") return "Tạm khóa";
-  if (normalized === "deleted") return "Đã xóa";
-  return status || "-";
-}
-
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Không thể đọc file ảnh."));
+    reader.onerror = () => reject(new Error("KhÃ´ng thá»ƒ Ä‘á»c file áº£nh."));
     reader.readAsDataURL(file);
   });
 }
@@ -854,7 +849,7 @@ function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Không thể xử lý ảnh đã cắt."));
+    reader.onerror = () => reject(new Error("KhÃ´ng thá»ƒ xá»­ lÃ½ áº£nh Ä‘Ã£ cáº¯t."));
     reader.readAsDataURL(blob);
   });
 }
@@ -969,7 +964,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const roleNameMap = useMemo(() => {
     const map = new Map();
-    (roles || []).forEach((role) => map.set(role.id, role.roleName || role.roleCode || `Vai trò #${role.id}`));
+    (roles || []).forEach((role) => map.set(role.id, role.roleName || role.roleCode || `Role #${role.id}`));
     return map;
   }, [roles]);
 
@@ -995,14 +990,14 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const brandNameMap = useMemo(() => {
     const map = new Map();
-    (brands || []).forEach((brand) => map.set(brand.id, brand.name || brand.code || `Hãng #${brand.id}`));
+    (brands || []).forEach((brand) => map.set(brand.id, brand.name || brand.code || `Brand #${brand.id}`));
     return map;
   }, [brands]);
 
   const serviceCategoryNameMap = useMemo(() => {
     const map = new Map();
     (serviceCategories || []).forEach((item) => {
-      map.set(item.id, item.name || item.code || `Nhóm #${item.id}`);
+      map.set(item.id, item.name || item.code || `Category #${item.id}`);
     });
     return map;
   }, [serviceCategories]);
@@ -1147,7 +1142,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   }, [branches, searchQuery]);
 
   // Early returns AFTER all hooks (required by React Rules of Hooks)
-  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Đang xác thực...</p></div>;
+  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Äang xÃ¡c thá»±c...</p></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   const visibleRows =
@@ -1233,10 +1228,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         const hotline = String(formData.hotline || "").trim();
         const email = String(formData.email || "").trim();
         if (hotline && !isValidVietnamesePhone(hotline)) {
-          throw new Error("Hotline chi nhánh phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Hotline chi nhÃ¡nh pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email chi nhánh không đúng định dạng.");
+          throw new Error("Email chi nhÃ¡nh khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1253,15 +1248,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         else await updateBranch(modal.item.id, payload);
       } else if (modal.entity === "staff") {
         if (!selectedBranchId) {
-          throw new Error("Vui lòng chọn chi nhánh trước khi thêm/cập nhật nhân sự.");
+          throw new Error("Please select a branch before creating/updating staff.");
         }
         const phone = String(formData.phone || "").trim();
         const email = String(formData.email || "").trim();
         if (!isValidVietnamesePhone(phone)) {
-          throw new Error("Số điện thoại nhân viên phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Sá»‘ Ä‘iá»‡n thoáº¡i nhÃ¢n viÃªn pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email nhân viên không đúng định dạng.");
+          throw new Error("Email nhÃ¢n viÃªn khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1280,10 +1275,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         const phone = String(formData.phone || "").trim();
         const email = String(formData.email || "").trim();
         if (!isValidVietnamesePhone(phone)) {
-          throw new Error("Số điện thoại khách hàng phải đúng định dạng Việt Nam (0xxxxxxxxx hoặc +84xxxxxxxxx).");
+          throw new Error("Sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch hÃ ng pháº£i Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
         }
         if (email && !isOptionalEmailValid(email)) {
-          throw new Error("Email khách hàng không đúng định dạng.");
+          throw new Error("Email khÃ¡ch hÃ ng khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng.");
         }
 
         const payload = {
@@ -1298,15 +1293,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
         const formattedLicensePlate = formatLicensePlateByFieldName("licensePlate", formData.licensePlate || "");
         if (formattedLicensePlate && !isValidVietnameseLicensePlate(formattedLicensePlate)) {
-          throw new Error("Biển số xe không đúng định dạng Việt Nam.");
+          throw new Error("Biá»ƒn sá»‘ xe khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.");
         }
 
         const hasVehicleInput = Boolean(formattedLicensePlate || Number(formData.modelId));
         if (hasVehicleInput && !formattedLicensePlate) {
-          throw new Error("Vui lòng nhập biển số xe.");
+          throw new Error("Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe.");
         }
         if (hasVehicleInput && !formData.modelId) {
-          throw new Error("Vui lòng chọn dòng xe khi nhập thông tin xe.");
+          throw new Error("Vui lÃ²ng chá»n dÃ²ng xe khi nháº­p thÃ´ng tin xe.");
         }
 
         let savedCustomer = null;
@@ -1347,16 +1342,16 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         if (modal.mode === "create") await createVehicleBrand(formData);
         else await updateVehicleBrand(modal.item.id, formData);
       } else if (modal.entity === "model") {
-        if (!formData.brandId || Number.isNaN(formData.brandId)) throw new Error("Vui lòng chọn hãng xe.");
+        if (!formData.brandId || Number.isNaN(formData.brandId)) throw new Error("Brand is required.");
 
         if (modal.mode === "create") await createVehicleModel(formData);
         else await updateVehicleModel(modal.item.id, formData);
       } else {
         if (!formData.categoryId || Number.isNaN(formData.categoryId)) {
-          throw new Error("Vui lòng chọn nhóm dịch vụ.");
+          throw new Error("Service category is required.");
         }
         if (!formData.standardMinutes || Number(formData.standardMinutes) <= 0) {
-          throw new Error("Thời lượng dự kiến phải lớn hơn 0.");
+          throw new Error("Estimated minutes must be greater than 0.");
         }
 
         const payload = {
@@ -1376,7 +1371,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       await reloadSectionData(modal.entity);
       closeModal();
     } catch (apiError) {
-      setFormError(apiError.message || "Lưu dữ liệu thất bại.");
+      setFormError(apiError.message || "Save failed.");
     } finally {
       setSaving(false);
     }
@@ -1388,14 +1383,23 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     setFormError("");
 
     try {
-      if (modal.entity === "brand") await deleteVehicleBrand(modal.item.id);
+      if (modal.entity === "branch") await deleteBranch(modal.item.id);
+      else if (modal.entity === "staff") await deleteStaff(modal.item.id);
+      else if (modal.entity === "customer") {
+        const links = customerVehicles.filter((link) => link.customerId === modal.item.id);
+        for (const link of links) {
+          await deleteCustomerVehicle(link.id);
+        }
+        await deleteCustomer(modal.item.id);
+      }
+      else if (modal.entity === "brand") await deleteVehicleBrand(modal.item.id);
       else if (modal.entity === "model") await deleteVehicleModel(modal.item.id);
       else await deleteStandardService(modal.item.id);
 
       await reloadSectionData(modal.entity);
       closeModal();
     } catch (apiError) {
-      setFormError(apiError.message || "Xóa dữ liệu thất bại.");
+      setFormError(apiError.message || "Delete failed.");
     } finally {
       setSaving(false);
     }
@@ -1413,13 +1417,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
             <nav className="sidebar-nav">
               <button className={`nav-item ${section === "branches" ? "active" : ""}`} type="button" onClick={() => { setSection("branches"); }}>
-                Chi nhánh
+                Branches
               </button>
               <button className={`nav-item ${section === "staff" ? "active" : ""}`} type="button" onClick={() => { setSection("staff"); }}>
-                Nhân sự
+                Staff
               </button>
               <button className={`nav-item ${section === "customers" ? "active" : ""}`} type="button" onClick={() => { setSection("customers"); }}>
-                Khách hàng
+                Users
               </button>
               <button className={`nav-item ${section === "brands" ? "active" : ""}`} type="button" onClick={() => { setSection("brands"); }}>
                 Hãng xe
@@ -1428,24 +1432,26 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                 Dòng xe
               </button>
               <button className={`nav-item ${section === "services" ? "active" : ""}`} type="button" onClick={() => { setSection("services"); }}>
-                Dịch vụ
+                Services
               </button>
               <button className="nav-item" type="button" onClick={handleLogout}>
-                Đăng xuất
+                Logout
               </button>
             </nav>
         </aside>
       )}
 
       <main className="admin-main">
-        <header className="admin-header">
-          <div>
-            <h1>{sectionMeta.title}</h1>
-            <p className="header-sub">{sectionMeta.subtitle}</p>
-            {selectedBranch?.name && section !== "branches" && (
-              <p className="header-sub">Chi nhánh đang chọn: {selectedBranch.name}</p>
-            )}
-          </div>
+        <header className={`admin-header ${embedded ? "header-actions-only" : ""}`}>
+          {!embedded ? (
+            <div>
+              <h1>{sectionMeta.title}</h1>
+              <p className="header-sub">{sectionMeta.subtitle}</p>
+              {selectedBranch?.name && section !== "branches" && (
+                <p className="header-sub">Chi nhánh hiện tại: {selectedBranch.name}</p>
+              )}
+            </div>
+          ) : null}
           <button className="btn-primary" onClick={handleCreateClick} type="button">
             {sectionMeta.addLabel}
           </button>
@@ -1456,7 +1462,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <>
               <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Tổng chi nhánh</div></div>
               <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Chi nhánh đã chọn</div></div>
+              <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Chi nhánh chọn</div></div>
             </>
           )}
 
@@ -1464,7 +1470,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <>
               <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Tổng nhân sự</div></div>
               <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Số vai trò sử dụng</div></div>
+              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Vai trò sử dụng</div></div>
             </>
           )}
 
@@ -1472,7 +1478,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <>
               <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Tổng khách hàng</div></div>
               <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Số hạng khách hàng</div></div>
+              <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Hạng thành viên</div></div>
             </>
           )}
 
@@ -1496,7 +1502,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
             <>
               <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Tổng dịch vụ</div></div>
               <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Số nhóm dịch vụ</div></div>
+              <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Danh mục</div></div>
             </>
           )}
         </div>
@@ -1511,7 +1517,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
           {loading ? (
             <div className="loading-state"><div className="spinner" /><p>Đang tải dữ liệu...</p></div>
           ) : visibleRows.length === 0 ? (
-            <div className="empty-state"><p>Không có dữ liệu phù hợp.</p></div>
+            <div className="empty-state"><p>Không có dữ liệu.</p></div>
           ) : (
             <table className="admin-table">
               {section === "branches" && (
@@ -1519,12 +1525,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Tên chi nhánh</th>
+                      <th>Tên</th>
                       <th>Địa chỉ</th>
                       <th>Hotline</th>
                       <th>Email</th>
                       <th>Trạng thái</th>
-                      <th>Số ô tối đa</th>
+                      <th>Số chỗ tối đa</th>
                       <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
@@ -1536,11 +1542,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.address || "-"}</td>
                         <td>{item.hotline || "-"}</td>
                         <td className="td-email">{item.email || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{getStatusLabel(item.status)}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
                         <td>{item.maxWorkSlots ?? "-"}</td>
                         <td className="td-center">
                           <div className="row-actions">
                             <button className="btn-icon btn-edit" type="button" onClick={() => openModal("branch", "edit", item)}>Sửa</button>
+                            <button className="btn-icon btn-del" type="button" onClick={() => openModal("branch", "delete", item)}>Xóa</button>
                           </div>
                         </td>
                       </tr>
@@ -1551,15 +1558,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "staff" && (
                 <>
-                  <thead><tr><th>ID</th><th>Họ và tên</th><th>Số điện thoại</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th className="th-center">Thao tác</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Họ tên</th><th>Số điện thoại</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.fullName || "-"}</td><td>{item.phone || "-"}</td><td className="td-email">{item.email || "-"}</td>
                         <td>{roleNameMap.get(item.roleId) || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{getStatusLabel(item.status)}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.status)}`}>{item.status || "-"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("staff", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("staff", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1571,7 +1578,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Họ và tên</th>
+                      <th>Họ tên</th>
                       <th>Số điện thoại</th>
                       <th>Email</th>
                       <th>Hạng</th>
@@ -1591,9 +1598,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td>{item.licensePlate || "-"}</td>
                         <td>{item.brandName || "-"}</td>
                         <td>{item.modelName || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
-                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button></div></td>
+                        <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("customer", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("customer", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1602,12 +1609,12 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "brands" && (
                 <>
-                  <thead><tr><th>ID</th><th>Mã</th><th>Tên hãng</th><th>Quốc gia</th><th>Trạng thái</th><th>Cập nhật</th><th className="th-center">Thao tác</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Code</th><th>Tên</th><th>Quốc gia</th><th>Trạng thái</th><th>Cập nhật</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
                         <td className="td-id">#{item.id}</td><td>{item.code || "-"}</td><td>{item.name || "-"}</td><td>{item.countryOfOrigin || "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("brand", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("brand", "delete", item)}>Xóa</button></div></td>
                       </tr>
@@ -1618,7 +1625,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
               {section === "models" && (
                 <>
-                  <thead><tr><th>ID</th><th>Hãng xe</th><th>Dòng xe</th><th>Phân khúc</th><th>Nhiên liệu</th><th>Dung tích xi-lanh</th><th className="th-center">Thao tác</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Hãng xe</th><th>Dòng xe</th><th>Phân khúc</th><th>Nhiên liệu</th><th>Dung tích xi lanh</th><th className="th-center">Thao tác</th></tr></thead>
                   <tbody>
                     {pagedRows.map((item) => (
                       <tr key={item.id}>
@@ -1635,11 +1642,11 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Mã</th>
+                      <th>Code</th>
                       <th>Tên dịch vụ</th>
-                      <th>Nhóm dịch vụ</th>
+                      <th>Danh mục</th>
                       <th>Giá</th>
-                      <th>Thời lượng</th>
+                      <th>Thời gian dự kiến</th>
                       <th>Trạng thái</th>
                       <th className="th-center">Thao tác</th>
                     </tr>
@@ -1650,10 +1657,10 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
                         <td className="td-id">#{item.id}</td>
                         <td>{item.code || "-"}</td>
                         <td>{item.name || "-"}</td>
-                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Nhóm #${item.categoryId}`}</td>
+                        <td>{(serviceCategoryNameMap && serviceCategoryNameMap.get ? serviceCategoryNameMap.get(item.categoryId) : null) || `Danh mục #${item.categoryId}`}</td>
                         <td>{item.basePrice != null ? Number(item.basePrice).toLocaleString() : "-"}</td>
-                        <td>{item.standardMinutes ? `${item.standardMinutes} phút` : "-"}</td>
-                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "đang hoạt động" : "ngừng hoạt động"}</span></td>
+                        <td>{item.standardMinutes ? `${item.standardMinutes} min` : "-"}</td>
+                        <td><span className={`badge ${getStatusBadge(item.isActive)}`}>{item.isActive ? "active" : "inactive"}</span></td>
                         <td className="td-center"><div className="row-actions"><button className="btn-icon btn-edit" type="button" onClick={() => openModal("service", "edit", item)}>Sửa</button><button className="btn-icon btn-del" type="button" onClick={() => openModal("service", "delete", item)}>Xóa</button></div></td>
                       </tr>
                     ))}
@@ -1677,7 +1684,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       </main>
 
       {modal?.mode === "create" && (
-        <Modal title={modal.entity === "branch" ? "Thêm chi nhánh" : modal.entity === "staff" ? "Thêm nhân sự" : modal.entity === "customer" ? "Thêm khách hàng" : modal.entity === "brand" ? "Thêm hãng xe" : modal.entity === "model" ? "Thêm dòng xe" : "Thêm dịch vụ"} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? "Add Branch" : modal.entity === "staff" ? "Add Staff" : modal.entity === "customer" ? "Add Customer" : modal.entity === "brand" ? "Add Vehicle Brand" : modal.entity === "model" ? "Add Vehicle Model" : "Add Service"} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && <BranchForm initial={EMPTY_BRANCH_FORM} onSubmit={handleSave} onCancel={closeModal} loading={saving} />}
@@ -1700,7 +1707,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       {modal?.mode === "edit" && modal.item && (
-        <Modal title={modal.entity === "branch" ? `Sửa chi nhánh #${modal.item.id}` : modal.entity === "staff" ? `Sửa nhân sự #${modal.item.id}` : modal.entity === "customer" ? `Sửa khách hàng #${modal.item.id}` : modal.entity === "brand" ? `Sửa hãng xe #${modal.item.id}` : modal.entity === "model" ? `Sửa dòng xe #${modal.item.id}` : `Sửa dịch vụ #${modal.item.id}`} onClose={closeModal}>
+        <Modal title={modal.entity === "branch" ? `Edit Branch #${modal.item.id}` : modal.entity === "staff" ? `Edit Staff #${modal.item.id}` : modal.entity === "customer" ? `Edit Customer #${modal.item.id}` : modal.entity === "brand" ? `Edit Brand #${modal.item.id}` : modal.entity === "model" ? `Edit Model #${modal.item.id}` : `Edit Service #${modal.item.id}`} onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
 
           {modal.entity === "branch" && (
@@ -1798,11 +1805,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       )}
 
       {modal?.mode === "delete" && modal.item && (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="Confirm Delete" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
-          <ConfirmDialog message={`Bạn có chắc muốn xóa bản ghi ${modal.entity} (#${modal.item.id})?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
+          <ConfirmDialog message={`Delete this ${modal.entity} record (#${modal.item.id})?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>
   );
 }
+
+

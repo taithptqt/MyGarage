@@ -135,12 +135,12 @@ export default function ReceptionCreateAppointmentPage() {
   return (
     <div className="create-order-page reception-create-appointment-page">
       <div className="page-header-actions reception-create-header">
-        <button className="btn-back" type="button" onClick={handleGoBack}>
-          {TEXT.back}
-        </button>
         <div className="reception-create-header-copy">
           <h2 className="page-title">{TEXT.pageTitle}</h2>
           {TEXT.infoNote ? <p className="reception-create-header-note">{TEXT.infoNote}</p> : null}
+          <button className="btn-back reception-create-back-btn" type="button" onClick={handleGoBack}>
+            {TEXT.back}
+          </button>
         </div>
       </div>
 

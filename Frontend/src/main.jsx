@@ -6,7 +6,6 @@ import { AuthProvider } from "@shared/core/context/AuthContext";
 import { SearchProvider } from "@shared/core/context/SearchContext";
 import { forceVietnamTimezone } from "@shared/core/utils/forceVietnamTimezone";
 import "./shared/core/styles/global.css";
-import "./styles/news-contact-theme.css";
 
 forceVietnamTimezone();
 

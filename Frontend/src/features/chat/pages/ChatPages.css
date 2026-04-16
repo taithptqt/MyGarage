@@ -105,6 +105,12 @@
   border: 1px solid #c5e5cc;
 }
 
+.chat-live-chip.offline {
+  color: #596579;
+  background: #f3f5f8;
+  border-color: #d8dee8;
+}
+
 .chat-error {
   margin: 10px 14px 0;
   border: 1px solid #f5c2c2;

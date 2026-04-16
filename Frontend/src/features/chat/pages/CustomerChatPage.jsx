@@ -89,7 +89,7 @@ export default function CustomerChatPage() {
           null;
         setSelectedConversationId(wantedId);
       } catch (err) {
-        setError(err.message || "Khong tai duoc danh sach hoi thoai.");
+      setError(err.message || "Không tải được danh sách hội thoại.");
       } finally {
         setLoadingConversations(false);
       }
@@ -111,7 +111,7 @@ export default function CustomerChatPage() {
         markCustomerRead(conversationId, { lastReadMessageId: lastMessageId }).catch(() => {});
       }
     } catch (err) {
-      setError(err.message || "Khong tai duoc tin nhan.");
+      setError(err.message || "Không tải được tin nhắn.");
     } finally {
       setLoadingMessages(false);
     }
@@ -154,7 +154,7 @@ export default function CustomerChatPage() {
       });
       await loadConversations(createdId);
     } catch (err) {
-      setError(err.message || "Khong tao duoc hoi thoai.");
+      setError(err.message || "Không tạo được hội thoại.");
     } finally {
       setCreating(false);
     }
@@ -177,7 +177,7 @@ export default function CustomerChatPage() {
       await loadMessages(selectedConversationId);
       await loadConversations(selectedConversationId);
     } catch (err) {
-      setError(err.message || "Gui tin nhan that bai.");
+      setError(err.message || "Gửi tin nhắn thất bại.");
     } finally {
       setSending(false);
     }
@@ -188,19 +188,19 @@ export default function CustomerChatPage() {
       <div className="chat-page-grid">
         <aside className="chat-sidebar">
           <div className="chat-panel-header">
-            <h2>Tin nhan cua toi</h2>
+            <h2>Tin nhắn của tôi</h2>
             <button
               type="button"
               className="chat-btn ghost"
               onClick={() => loadConversations(selectedConversationId)}
               disabled={loadingConversations}
             >
-              Tai lai
+              Tải lại
             </button>
           </div>
 
           <div className="chat-filter-row">
-            <label htmlFor="customer-chat-status">Trang thai</label>
+            <label htmlFor="customer-chat-status">Trạng thái</label>
             <select
               id="customer-chat-status"
               value={statusFilter}
@@ -215,9 +215,9 @@ export default function CustomerChatPage() {
           </div>
 
           <div className="chat-conversation-list">
-            {loadingConversations ? <p className="chat-empty">Dang tai hoi thoai...</p> : null}
+            {loadingConversations ? <p className="chat-empty">Đang tải hội thoại...</p> : null}
             {!loadingConversations && conversations.length === 0 ? (
-              <p className="chat-empty">Chua co hoi thoai. Tao moi ben duoi.</p>
+              <p className="chat-empty">Chưa có hội thoại. Tạo mới bên dưới.</p>
             ) : null}
 
             {conversations.map((item) => {
@@ -231,21 +231,21 @@ export default function CustomerChatPage() {
                   onClick={() => setSelectedConversationId(id)}
                 >
                   <div className="chat-conversation-top">
-                    <span>Hoi thoai #{id}</span>
+                    <span>Hội thoại #{id}</span>
                     <span className="chat-badge">{item.unreadCount ?? item.UnreadCount ?? 0}</span>
                   </div>
                   <div className="chat-conversation-bottom">
                     <span className="chat-status">{item.status ?? item.Status ?? "--"}</span>
                     <small>{formatTime(item.lastMessageAt ?? item.LastMessageAt)}</small>
                   </div>
-                  <p>{item.lastMessage ?? item.LastMessage ?? "(Khong co noi dung)"}</p>
+                  <p>{item.lastMessage ?? item.LastMessage ?? "(Không có nội dung)"}</p>
                 </button>
               );
             })}
           </div>
 
           <form className="chat-create-form" onSubmit={handleCreateConversation}>
-            <h3>Tao hoi thoai moi</h3>
+            <h3>Tạo hội thoại mới</h3>
             <div className="chat-form-grid">
               <input
                 type="number"
@@ -278,12 +278,12 @@ export default function CustomerChatPage() {
             </div>
             <textarea
               rows={3}
-              placeholder="Tin nhan mo dau (tu chon)"
+              placeholder="Tin nhắn mở đầu (tùy chọn)"
               value={createForm.initialMessage}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, initialMessage: e.target.value }))}
             />
             <button type="submit" className="chat-btn primary" disabled={creating}>
-              {creating ? "Dang tao..." : "Tao hoi thoai"}
+              {creating ? "Đang tạo..." : "Tạo hội thoại"}
             </button>
           </form>
         </aside>
@@ -292,8 +292,8 @@ export default function CustomerChatPage() {
           <div className="chat-panel-header">
             <h2>
               {selectedConversation
-                ? `Hoi thoai #${selectedConversation.id ?? selectedConversation.Id}`
-                : "Chon hoi thoai"}
+                  ? `Hội thoại #${selectedConversation.id ?? selectedConversation.Id}`
+                  : "Chọn hội thoại"}
             </h2>
             {selectedConversation ? (
               <span className="chat-status-chip">{selectedConversation.status ?? selectedConversation.Status}</span>
@@ -303,10 +303,10 @@ export default function CustomerChatPage() {
           {error ? <p className="chat-error">{error}</p> : null}
 
           <div className="chat-message-list">
-            {!selectedConversation ? <p className="chat-empty">Vui long chon hoi thoai de nhan tin.</p> : null}
-            {selectedConversation && loadingMessages ? <p className="chat-empty">Dang tai tin nhan...</p> : null}
+            {!selectedConversation ? <p className="chat-empty">Vui lòng chọn hội thoại để nhắn tin.</p> : null}
+            {selectedConversation && loadingMessages ? <p className="chat-empty">Đang tải tin nhắn...</p> : null}
             {selectedConversation && !loadingMessages && messages.length === 0 ? (
-              <p className="chat-empty">Chua co tin nhan.</p>
+              <p className="chat-empty">Chưa có tin nhắn.</p>
             ) : null}
 
             {messages.map((message) => {
@@ -329,13 +329,13 @@ export default function CustomerChatPage() {
           <form className="chat-compose-form" onSubmit={handleSendMessage}>
             <textarea
               rows={3}
-              placeholder="Nhap noi dung tin nhan..."
+              placeholder="Nhập nội dung tin nhắn..."
               value={composeText}
               onChange={(e) => setComposeText(e.target.value)}
               disabled={!selectedConversation || sending}
             />
             <button type="submit" className="chat-btn primary" disabled={!selectedConversation || sending || !composeText.trim()}>
-              {sending ? "Dang gui..." : "Gui tin nhan"}
+              {sending ? "Đang gửi..." : "Gửi tin nhắn"}
             </button>
           </form>
         </section>

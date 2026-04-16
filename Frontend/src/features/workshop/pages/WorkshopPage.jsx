@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./Workshop.css";
@@ -239,6 +239,9 @@ export default function WorkshopPage() {
   const roleDashboardPath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "/workshop";
   const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
   const currentNormalizedPath = normalizePath(location.pathname);
+  const locationQuery = new URLSearchParams(location.search || "");
+  const fromHistoryContext =
+    locationQuery.get("from") === "history" || locationQuery.has("from-history");
   const isStaffRoleInWorkshop = Object.prototype.hasOwnProperty.call(ROLES_META, userRole || "");
   const isInsideWorkshop = currentNormalizedPath.startsWith("/workshop");
   const shouldShowHomeAction = isStaffRoleInWorkshop && isInsideWorkshop;
@@ -248,6 +251,20 @@ export default function WorkshopPage() {
     : currentNormalizedPath.startsWith("/workshop/reception/appointments")
       ? "appointments"
       : "orders";
+  const supportsHistoryView = ["TECH", "TEAM_LEADER", "FOREMAN"].includes(userRole);
+  const currentRolePath = currentRoleMeta?.path ? `/workshop/${currentRoleMeta.path}` : "";
+  const isRoleDashboardPage = Boolean(currentRolePath) && !fromHistoryContext && (
+    currentNormalizedPath === currentRolePath ||
+    currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`) ||
+    currentNormalizedPath.startsWith(`${currentRolePath}/orders/`)
+  );
+  const isRoleHistoryPage = Boolean(currentRolePath) && (
+    currentNormalizedPath === `${currentRolePath}/history` ||
+    (fromHistoryContext && (
+      currentNormalizedPath.startsWith(`${currentRolePath}/orders/`) ||
+      currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`)
+    ))
+  );
 
   const goReceptionTab = useCallback((tab) => {
     if (tab === "chat") {
@@ -260,6 +277,15 @@ export default function WorkshopPage() {
     }
     navigate("/workshop/reception");
   }, [navigate]);
+
+  const goRoleWorkspaceTab = useCallback((tab) => {
+    if (!currentRolePath) return;
+    if (tab === "history") {
+      navigate(`${currentRolePath}/history`);
+      return;
+    }
+    navigate(currentRolePath);
+  }, [currentRolePath, navigate]);
   return (
     <ChakraProvider theme={initialTheme}>
       <div className={`workshop-page ${isDarkMode ? "dark" : ""}`}>
@@ -314,6 +340,51 @@ export default function WorkshopPage() {
                 >
                   Chat khách hàng
                 </button>
+              </div>
+            )}
+            {supportsHistoryView && (
+              <div className="role-sub-nav">
+                <button
+                  type="button"
+                  className={`role-sub-item ${isRoleDashboardPage ? "active" : ""}`}
+                  onClick={() => goRoleWorkspaceTab("dashboard")}
+                >
+                  Bảng điều phối
+                </button>
+                <button
+                  type="button"
+                  className={`role-sub-item ${isRoleHistoryPage ? "active" : ""}`}
+                  onClick={() => goRoleWorkspaceTab("history")}
+                >
+                  Lịch sử đã xử lý
+                </button>
+                {userRole === "FOREMAN" && (
+                  <>
+                    <button
+                      type="button"
+                      className={`role-sub-item ${currentNormalizedPath === "/workshop/foreman/board" ? "active" : ""}`}
+                      onClick={() => navigate("/workshop/foreman/board")}
+                    >
+                      🗂️ Kanban xưởng
+                    </button>
+                    <button
+                      type="button"
+                      className={`role-sub-item ${currentNormalizedPath === "/workshop/foreman/bay-timeline" ? "active" : ""}`}
+                      onClick={() => navigate("/workshop/foreman/bay-timeline")}
+                    >
+                      🏭 Timeline khoang
+                    </button>
+                  </>
+                )}
+                {userRole === "TECH" && (
+                  <button
+                    type="button"
+                    className={`role-sub-item ${currentNormalizedPath === "/workshop/technician/my-tasks" ? "active" : ""}`}
+                    onClick={() => navigate("/workshop/technician/my-tasks")}
+                  >
+                    📋 Tác vụ của tôi
+                  </button>
+                )}
               </div>
             )}
               </nav>

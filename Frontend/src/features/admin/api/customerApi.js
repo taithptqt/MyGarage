@@ -90,3 +90,10 @@ export async function updateVehicle(id, payload) {
     data: payload
   });
 }
+
+export async function getVehicleById(id) {
+  return request({
+    url: `/api/vehicles/${id}`,
+    method: "GET",
+  });
+}

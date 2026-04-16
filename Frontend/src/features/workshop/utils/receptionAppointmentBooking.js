@@ -1,6 +1,5 @@
 import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
-import { buildCustomerNotesPayload } from "@features/appointments/utils/bookingCommon";
 import {
   buildFlexibleTriggerServiceIdSet,
   buildInsuranceFlexiblePackageIdSet,
@@ -202,13 +201,6 @@ function getSelectedVehicleKeys(formData) {
   return selectedVehicleIds.map((vehicleId) => `existing-${vehicleId}`);
 }
 
-function splitCustomerNotesInput(value) {
-  return String(value || "")
-    .split(/\r?\n|;/g)
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-}
-
 function resolveFallbackStartIso(formData) {
   const appointmentDate = String(formData.appointmentDate || "").trim();
   const startTime = String(formData.startTime || "").trim();
@@ -253,9 +245,7 @@ export async function saveReceptionAppointment({
   const insuranceFlexiblePackageIdSet = buildInsuranceFlexiblePackageIdSet(services);
   const fallbackServiceIds = toNumberList(formData.serviceIds);
   const fallbackDuration = Math.max(Number(formData.totalMinutes || 0), 30);
-  const splitCustomerNotes = splitCustomerNotesInput(formData.customerNotes);
-  const normalizedCustomerNotes =
-    buildCustomerNotesPayload(splitCustomerNotes) || readText(formData.customerNotes) || null;
+  const normalizedCustomerNotes = readText(formData.customerNotes);
   const planMaps = normalizeVehicleServicePlanMaps(formData.vehicleServicePlans, serviceLookup);
   const selectedVehicleKeys = getSelectedVehicleKeys(formData);
 

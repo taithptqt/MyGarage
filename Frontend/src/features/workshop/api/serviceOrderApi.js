@@ -39,6 +39,61 @@ export const serviceOrderApi = {
   createDetail: (data) => request({ url: "/api/service-order-details", method: "POST", data }),
   updateDetail: (id, data) => request({ url: `/api/service-order-details/${id}`, method: "PUT", data }),
   deleteDetail: (id) => request({ url: `/api/service-order-details/${id}`, method: "DELETE" }),
+  // --- Quotation ---
+  getQuotationsByServiceOrder: (serviceOrderId) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "GET" }),
+  getMandatoryOverridesByServiceOrder: (serviceOrderId) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/mandatory-overrides`, method: "GET" }),
+  getQuotationById: (quotationId) =>
+    request({ url: `/api/quotations/${quotationId}`, method: "GET" }),
+  createQuotation: (serviceOrderId, data) =>
+    request({ url: `/api/service-orders/${serviceOrderId}/quotations`, method: "POST", data }),
+  submitQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/submit`, method: "POST", data }),
+  confirmQuotationInsuranceApproval: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/insurance-approval`, method: "POST", data }),
+  sendQuotationToCustomer: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/send-to-customer`, method: "POST", data }),
+  publishQuotationCustomerLink: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/publish-customer-link`, method: "POST", data }),
+  uploadQuotationInsuranceEvidence: (quotationId, file, note = "") => {
+    const formData = new FormData();
+    formData.append("file", file, file?.name || "insurance-evidence.jpg");
+    if (note) formData.append("note", note);
+    return request({
+      url: `/api/quotations/${quotationId}/insurance-evidence`,
+      method: "POST",
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  approveQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
+  cloneQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/clone`, method: "POST", data }),
+  updateQuotationSplitBilling: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/split-billing`, method: "POST", data }),
+  applyQuotationCustomerDecision: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/customer-decision`, method: "POST", data }),
+  getQuotationByPublicToken: (token) =>
+    request({ url: `/api/quotations/public/${token}`, method: "GET" }),
+  sendQuotationPublicDecisionOtp: (token, data) =>
+    request({ url: `/api/quotations/public/${token}/otp/send`, method: "POST", data }),
+  applyQuotationPublicDecision: (token, data) =>
+    request({ url: `/api/quotations/public/${token}/decision`, method: "POST", data }),
+  decideMandatoryOverride: (requestId, data) =>
+    request({ url: `/api/mandatory-overrides/${requestId}/decision`, method: "POST", data }),
+  supersedeQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/supersede`, method: "POST", data }),
+  getServiceBoms: (serviceId, vehicleModelId = null) =>
+    request({
+      url: "/api/service-boms",
+      method: "GET",
+      params: {
+        serviceId,
+        ...(vehicleModelId ? { vehicleModelId } : {}),
+      },
+    }),
 
   // --- Check-in Requests ---
   getCheckInRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_IN" } }),
@@ -181,9 +236,21 @@ export const serviceOrderApi = {
       method: "POST",
       data,
     }),
+  rejectDiagnosisTechnical: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/technical-rejection`,
+      method: "POST",
+      data,
+    }),
   approveDiagnosisFinal: (serviceOrderId, data) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/final-approval`,
+      method: "POST",
+      data,
+    }),
+  decideDiagnosisForeman: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/foreman-decision`,
       method: "POST",
       data,
     }),

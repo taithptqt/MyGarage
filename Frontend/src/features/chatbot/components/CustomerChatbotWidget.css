@@ -13,8 +13,8 @@
   right: 20px;
   bottom: 92px;
   z-index: 1400;
-  width: 68px;
-  height: 68px;
+  width: 58px;
+  height: 58px;
   border: none;
   border-radius: 999px;
   display: inline-flex;
@@ -55,7 +55,7 @@
 
 .chatbot-ai-welcome-hint {
   position: fixed;
-  right: 102px;
+  right: 92px;
   bottom: 96px;
   z-index: 1399;
   width: min(340px, calc(100vw - 116px));
@@ -545,7 +545,7 @@
 
 @media (max-width: 768px) {
   .chatbot-ai-welcome-hint {
-    right: 94px;
+    right: 84px;
     bottom: 96px;
     width: min(280px, calc(100vw - 108px));
     padding: 12px 14px;

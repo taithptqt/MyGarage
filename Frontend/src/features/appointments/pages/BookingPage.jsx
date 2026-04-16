@@ -24,7 +24,6 @@ import {
   uploadBookingInsuranceAsset,
 } from "@features/appointments/api/bookingFormApi";
 import {
-  buildCustomerNotesPayload,
   extractField,
   formatStoredVehicleLabel,
   formatVehicleTabLabel,
@@ -642,7 +641,7 @@ export default function BookingPage() {
       const next = {};
       (multi.vehicles || []).forEach((vehicle) => {
         const key = vehicle.key;
-        next[key] = Array.isArray(prev[key]) && prev[key].length > 0 ? prev[key] : [""];
+        next[key] = typeof prev[key] === "string" ? prev[key] : "";
       });
       return next;
     });
@@ -1142,7 +1141,7 @@ export default function BookingPage() {
         const schedule = buildFixedFlowSchedule(startTime, totalVehicleMinutes, fallbackDate);
         const displayStart = schedule.startDate || startTime;
         const displayEnd = schedule.endDate || extractField(selectedSlot, ["endTime", "EndTime"], null);
-        const symptomValues = (vehicleSymptoms[vehicle.key] || []).map((item) => String(item || "").trim()).filter(Boolean);
+        const noteValue = String(vehicleSymptoms[vehicle.key] || "").trim();
         return {
           key: vehicle.key,
           label: vehicle.displayLabel,
@@ -1154,7 +1153,7 @@ export default function BookingPage() {
           slotLabel: displayStart && displayEnd ? `${timeLabel(displayStart)} - ${timeLabel(displayEnd)}` : "Chưa chọn",
           slotStartLabel: formatDateTimeWithDate(displayStart),
           slotEndLabel: formatDateTimeWithDate(displayEnd),
-          symptomValues,
+          noteValue,
           totalVehiclePrice,
           totalVehicleMinutes,
           durationLabel: `${totalVehicleMinutes} phút`,
@@ -2006,32 +2005,24 @@ export default function BookingPage() {
     setShowOddSlots((prev) => ({ ...prev, [sessionKey]: !prev[sessionKey] }));
   }
 
-  function onSymptomChange(vehicleKey, index, value) {
-    setVehicleSymptoms((prev) => {
-      const current = Array.isArray(prev[vehicleKey]) ? [...prev[vehicleKey]] : [""];
-      current[index] = value;
-      if (index === current.length - 1 && String(value || "").trim() && current.length < 12) {
-        current.push("");
-      }
-      return { ...prev, [vehicleKey]: current };
-    });
+  function onSymptomChange(vehicleKey, value) {
+    setVehicleSymptoms((prev) => ({ ...prev, [vehicleKey]: value }));
   }
 
   function buildVehicleNote(vehicle) {
-    return buildCustomerNotesPayload(vehicleSymptoms[vehicle.key] || []);
+    const note = String(vehicleSymptoms[vehicle.key] || "").trim();
+    return note || null;
   }
 
   function buildBatchCustomerNote() {
     const items = (multi.vehicles || [])
       .map((vehicle) => {
-        const symptoms = (vehicleSymptoms[vehicle.key] || [])
-          .map((item) => String(item || "").trim())
-          .filter(Boolean);
-        if (symptoms.length === 0) return null;
-        return { vehicle: vehicle.displayLabel, symptoms };
+        const note = String(vehicleSymptoms[vehicle.key] || "").trim();
+        if (!note) return null;
+        return `${vehicle.displayLabel}: ${note}`;
       })
       .filter(Boolean);
-    return items.length > 0 ? JSON.stringify({ symptomsByVehicle: items }) : null;
+    return items.length > 0 ? items.join("\n") : null;
   }
 
   async function handleConfirm() {
@@ -2175,25 +2166,20 @@ export default function BookingPage() {
                 </div>
                 <VehicleActionPanel linkedVehicles={linkedVehicles} selectedVehicles={multi.vehicles} brands={brands} models={models} activeVehicleKey={activeSymptomVehicleKey} forceNewVehicleWhenNoSaved={customerHasNoSavedVehicles} onSelectVehicle={setActiveSymptomVehicleKey} draftVehicle={draftVehicle} onDraftChange={updateDraftVehicle} onToggleExistingVehicle={toggleExistingVehicle} onAddNewVehicle={addNewVehicle} onRemoveVehicle={handleRemoveVehicle} />
                 <label className="notes-field">
-                  Mô tả thêm
+                  Ghi chú
                   {(multi.vehicles || []).length > 0 ? (
                     <div style={{ display: "grid", gap: "10px" }}>
                       <strong style={{ fontSize: "15px", fontWeight: 700, color: "rgba(29,42,38,0.86)" }}>
                         {activeSymptomVehicle?.displayLabel || ""}
                       </strong>
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        {(vehicleSymptoms[activeSymptomVehicle?.key] || [""]).map((item, index) => (
-                          <textarea
-                            key={`symptom-${activeSymptomVehicle?.key || "none"}-${index}`}
-                            rows={1}
-                            value={item}
-                            placeholder={`Nhập mô tả ${index + 1}...`}
-                            onChange={(e) => onSymptomChange(activeSymptomVehicle?.key || "", index, e.target.value)}
-                          />
-                        ))}
-                      </div>
+                      <textarea
+                        rows={3}
+                        value={vehicleSymptoms[activeSymptomVehicle?.key] || ""}
+                        placeholder="Nhập ghi chú cho xe này..."
+                        onChange={(e) => onSymptomChange(activeSymptomVehicle?.key || "", e.target.value)}
+                      />
                       <p className="vehicle-batch-note">
-                        Chọn xe ở danh sách phía trên để nhập mô tả cho xe cụ thể. Mỗi xe có thể nhập nhiều mô tả (1, 2, 3...).
+                        Chọn xe ở danh sách phía trên để nhập ghi chú cho từng xe.
                       </p>
                     </div>
                   ) : null}
@@ -2378,7 +2364,10 @@ export default function BookingPage() {
                               </section>
                               <section className="summary-vehicle-section">
                                 <p className="summary-vehicle-section-title">Thông tin thêm</p>
-                                <p><span>Mô tả thêm:</span> {vehicle.symptomValues.length > 0 ? vehicle.symptomValues.join(" | ") : "Không có"}</p>
+                                <p className="summary-note-line">
+                                  <span>Ghi chú:</span>
+                                  <span className="summary-note-text">{vehicle.noteValue || "Không có"}</span>
+                                </p>
                                 <p><span>{SERVICE_PRICE_LABEL}:</span> {formatVnd(vehicle.totalVehiclePrice)}</p>
                                 <p><span>Thời lượng xe:</span> {vehicle.durationLabel}</p>
                               </section>

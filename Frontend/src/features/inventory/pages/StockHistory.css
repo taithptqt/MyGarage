@@ -1,0 +1,65 @@
+/* StockHistory.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+.sh-page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e293b;
+}
+
+.sh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+.sh-title { margin: 0 0 4px; font-size: 24px; font-weight: 800; }
+.sh-subtitle { margin: 0; color: #64748b; font-size: 14px; }
+
+.sh-search {
+  display: flex;
+  gap: 12px;
+}
+.sh-search input {
+  width: 250px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+.sh-search input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+
+.sh-btn-search {
+  padding: 10px 16px;
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.sh-btn-search:hover { background: #4338ca; }
+
+.sh-board {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}
+
+.sh-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.sh-table th { padding: 14px; background: #f8fafc; color: #64748b; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+.sh-table td { padding: 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.sh-table tbody tr:last-child td { border-bottom: none; }
+.t-right { text-align: right; }
+
+.sh-type { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.t-in { background: #d1fae5; color: #065f46; }
+.t-out { background: #fee2e2; color: #991b1b; }
+
+.sh-ref { font-family: monospace; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #475569; }

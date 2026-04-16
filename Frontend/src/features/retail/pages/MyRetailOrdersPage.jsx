@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
 import RetailOrderStatusBadge from "@features/retail/components/RetailOrderStatusBadge";
-import { createPayosOrder, syncOrder } from "@features/payment/api/payosApi";
+import { createPayosOrder } from "@features/payment/api/payosApi";
 import {
   getBranches,
   getMyRetailOrders,
@@ -174,72 +174,6 @@ export default function MyRetailOrdersPage() {
 
     return () => window.clearTimeout(timer);
   }, [loading, orders, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    const queryOrderId = Number(searchParams.get("orderId") || 0);
-    const storedRetailOrderId = Number(localStorage.getItem("payos_last_retail_order_id") || 0);
-    const targetOrderId = Number.isFinite(queryOrderId) && queryOrderId > 0
-      ? queryOrderId
-      : (Number.isFinite(storedRetailOrderId) && storedRetailOrderId > 0 ? storedRetailOrderId : 0);
-    const payosOrderId = Number(localStorage.getItem("payos_last_order_id") || 0);
-
-    if (targetOrderId <= 0) return;
-
-    let disposed = false;
-
-    async function syncAndRefreshRetailStatus() {
-      if (Number.isFinite(payosOrderId) && payosOrderId > 0) {
-        try {
-          await syncOrder(payosOrderId);
-        } catch {
-          // ignore and continue polling retail status
-        }
-      }
-
-      const maxAttempts = 20;
-      for (let attempt = 0; attempt < maxAttempts && !disposed; attempt += 1) {
-        try {
-          const orderData = await getMyRetailOrders();
-          if (disposed) return;
-
-          const nextOrders = Array.isArray(orderData)
-            ? [...orderData].sort(
-                (left, right) =>
-                  new Date(right?.createdAt || 0).getTime() -
-                  new Date(left?.createdAt || 0).getTime()
-              )
-            : [];
-          setOrders(nextOrders);
-
-          const targetOrder = nextOrders.find((order) => Number(order?.id) === targetOrderId);
-          const normalizedStatus = String(targetOrder?.status || "").toUpperCase();
-          if (normalizedStatus === "CONFIRMED") {
-            localStorage.removeItem("payos_last_order_id");
-            localStorage.removeItem("payos_last_retail_order_id");
-            break;
-          }
-
-          if (attempt % 4 === 3 && Number.isFinite(payosOrderId) && payosOrderId > 0) {
-            try {
-              await syncOrder(payosOrderId);
-            } catch {
-              // keep polling
-            }
-          }
-        } catch {
-          // keep retrying
-        }
-
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      }
-    }
-
-    void syncAndRefreshRetailStatus();
-
-    return () => {
-      disposed = true;
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeOrderDetail = () => {
     if (detailLoading || payingOrderId != null) return;

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -17,8 +17,8 @@ import {
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
 import {
-  getAccountingDashboardV2,
   getPayrollRunSummaryReport,
+  getRevenueSnapshots,
   getSupplierPayableSummaryReport,
   getTrialBalanceReport
 } from "../api/accountingApi";
@@ -45,7 +45,7 @@ export default function ReportsPage() {
   const [trialBalance, setTrialBalance] = useState({ available: false, items: [] });
   const [supplierPayableSummary, setSupplierPayableSummary] = useState({ available: false, items: [] });
   const [payrollRunSummary, setPayrollRunSummary] = useState({ available: false, items: [] });
-  const [dashboard, setDashboard] = useState(null);
+  const [snapshots, setSnapshots] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -53,20 +53,20 @@ export default function ReportsPage() {
       setLoading(true);
       setError("");
       try {
-        const [trialData, supplierData, payrollData, dashboardData] = await Promise.all([
+        const [trialData, supplierData, payrollData, snapshotData] = await Promise.all([
           getTrialBalanceReport(),
           getSupplierPayableSummaryReport(),
           getPayrollRunSummaryReport(),
-          getAccountingDashboardV2()
+          getRevenueSnapshots()
         ]);
         if (!mounted) return;
         setTrialBalance(trialData);
         setSupplierPayableSummary(supplierData);
         setPayrollRunSummary(payrollData);
-        setDashboard(dashboardData || null);
+        setSnapshots(snapshotData || []);
       } catch (err) {
         if (!mounted) return;
-        setError(err?.message || "Không tải được dữ liệu báo cáo.");
+        setError(err?.message || "KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u bÃ¡o cÃ¡o.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -77,25 +77,37 @@ export default function ReportsPage() {
     };
   }, []);
 
-  const summary = dashboard?.summary || {};
-  const agingBuckets = Array.isArray(dashboard?.agingBuckets) ? dashboard.agingBuckets : [];
-  const generatedAt = dashboard?.generatedAt || null;
+  const orderedSnapshots = useMemo(
+    () =>
+      [...(snapshots || [])].sort((a, b) => {
+        const left = safeTime(fieldOf(a, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt"));
+        const right = safeTime(fieldOf(b, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt"));
+        return right - left;
+      }),
+    [snapshots]
+  );
+
+  const latestSnapshot = orderedSnapshots[0] || null;
 
   const kpiRows = useMemo(() => {
+    if (!latestSnapshot) return [];
     return [
-      { metric: "Doanh thu", value: formatCurrency(summary.revenue) },
-      { metric: "Đã thu", value: formatCurrency(summary.collected) },
-      { metric: "Net profit", value: formatCurrency(summary.netProfit) },
-      { metric: "Net cash flow", value: formatCurrency(summary.cashFlow) },
-      { metric: "Generated at", value: generatedAt ? String(generatedAt) : "--" }
+      { metric: "Doanh thu", value: formatCurrency(fieldOf(latestSnapshot, "totalRevenue", "TotalRevenue")) },
+      { metric: "Tá»•ng chi phÃ­", value: formatCurrency(fieldOf(latestSnapshot, "totalExpense", "TotalExpense")) },
+      { metric: "Net profit", value: formatCurrency(fieldOf(latestSnapshot, "netProfit", "NetProfit")) },
+      { metric: "Net cash flow", value: formatCurrency(fieldOf(latestSnapshot, "netCashFlow", "NetCashFlow")) },
+      {
+        metric: "NgÃ y snapshot",
+        value: String(fieldOf(latestSnapshot, "snapshotDate", "SnapshotDate", "createdAt", "CreatedAt") || "--")
+      }
     ];
-  }, [summary, generatedAt]);
+  }, [latestSnapshot]);
 
   if (loading) {
     return (
       <Flex minH='260px' align='center' justify='center' direction='column' gap='10px'>
         <Spinner size='lg' color='brand.500' />
-        <Text color={textColorSecondary}>Đang tải dữ liệu báo cáo quản trị...</Text>
+        <Text color={textColorSecondary}>Äang táº£i dá»¯ liá»‡u bÃ¡o cÃ¡o quáº£n trá»‹...</Text>
       </Flex>
     );
   }
@@ -110,46 +122,46 @@ export default function ReportsPage() {
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
         <MiniStatistics
-          name='Doanh thu (dashboard-v2)'
-          value={formatCurrency(summary.revenue)}
+          name='Doanh thu snapshot gáº§n nháº¥t'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "totalRevenue", "TotalRevenue")) : "--"}
         />
         <MiniStatistics
-          name='Net profit (dashboard-v2)'
-          value={formatCurrency(summary.netProfit)}
+          name='Net profit snapshot'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "netProfit", "NetProfit")) : "--"}
         />
         <MiniStatistics
-          name='Cash flow (dashboard-v2)'
-          value={formatCurrency(summary.cashFlow)}
+          name='Cash flow snapshot'
+          value={latestSnapshot ? formatCurrency(fieldOf(latestSnapshot, "netCashFlow", "NetCashFlow")) : "--"}
         />
-        <MiniStatistics name='Pending approvals' value={String(summary.pendingApprovalCount || 0)} />
+        <MiniStatistics name='Sá»‘ snapshot' value={String(orderedSnapshots.length)} />
       </SimpleGrid>
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
           <Badge colorScheme={trialBalance.available ? "green" : "orange"}>
-            vw_gl_trial_balance: {trialBalance.available ? "OK" : "Chưa có endpoint"}
+            vw_gl_trial_balance: {trialBalance.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
           <Badge colorScheme={supplierPayableSummary.available ? "green" : "orange"}>
-            vw_supplier_payable_summary: {supplierPayableSummary.available ? "OK" : "Chưa có endpoint"}
+            vw_supplier_payable_summary: {supplierPayableSummary.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
           <Badge colorScheme={payrollRunSummary.available ? "green" : "orange"}>
-            vw_payroll_run_summary: {payrollRunSummary.available ? "OK" : "Chưa có endpoint"}
+            vw_payroll_run_summary: {payrollRunSummary.available ? "OK" : "ChÆ°a cÃ³ endpoint"}
           </Badge>
-            <Text color={textColorSecondary} fontSize='xs' maxW='460px'>
-              KPI trên trang này dùng cùng source `dashboard-v2` với Dashboard và Export CSV.
-            </Text>
-          </Flex>
-        </Card>
+          <Text color={textColorSecondary} fontSize='xs' maxW='460px'>
+            Trang nÃ y chá»‰ hiá»ƒn thá»‹ snapshot vÃ  cÃ¡c report backend tráº£ vá». UI khÃ´ng tá»± gá»™p invoices/payments Ä‘á»ƒ táº¡o KPI káº¿ toÃ¡n.
+          </Text>
+        </Flex>
+      </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 2 }} gap='20px'>
         <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='12px'>KPI từ snapshot gần nhất</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>KPI tá»« snapshot gáº§n nháº¥t</Text>
           {kpiRows.length ? (
             <Table size='sm'>
               <Thead>
                 <Tr>
-                  <Th>Chỉ số</Th>
-                  <Th>Giá trị</Th>
+                  <Th>Chá»‰ sá»‘</Th>
+                  <Th>GiÃ¡ trá»‹</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -162,22 +174,22 @@ export default function ReportsPage() {
               </Tbody>
             </Table>
           ) : (
-            <Text color={textColorSecondary}>Chưa có revenue snapshot để hiển thị KPI.</Text>
+            <Text color={textColorSecondary}>ChÆ°a cÃ³ revenue snapshot Ä‘á»ƒ hiá»ƒn thá»‹ KPI.</Text>
           )}
         </Card>
 
         <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='12px'>Nguồn dữ liệu báo cáo</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Nguá»“n dá»¯ liá»‡u bÃ¡o cÃ¡o</Text>
           <SimpleGrid columns={1} gap='8px'>
-            <Text color={textColorSecondary}>- Dashboard-v2 aging buckets: {agingBuckets.length} bucket</Text>
+            <Text color={textColorSecondary}>- RevenueSnapshots: {orderedSnapshots.length} báº£n ghi</Text>
             <Text color={textColorSecondary}>
-              - Trial balance view: {trialBalance.available ? `${trialBalance.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Trial balance view: {trialBalance.available ? `${trialBalance.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
             <Text color={textColorSecondary}>
-              - Supplier payable summary view: {supplierPayableSummary.available ? `${supplierPayableSummary.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Supplier payable summary view: {supplierPayableSummary.available ? `${supplierPayableSummary.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
             <Text color={textColorSecondary}>
-              - Payroll run summary view: {payrollRunSummary.available ? `${payrollRunSummary.items.length} bản ghi` : "Chưa tích hợp API"}
+              - Payroll run summary view: {payrollRunSummary.available ? `${payrollRunSummary.items.length} báº£n ghi` : "ChÆ°a tÃ­ch há»£p API"}
             </Text>
           </SimpleGrid>
         </Card>

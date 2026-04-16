@@ -1,300 +1,1257 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@shared/core/context/AuthContext";
-import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
-import InsuranceBillingOverview from "@features/workshop/components/InsuranceBillingOverview";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
+import { getAllStandardServices } from "@features/admin/api/serviceApi";
+import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/vehicleCatalogApi";
+import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
-import { useServiceOrderDetailData } from "@features/workshop/hooks/useServiceOrderDetailData";
-import { formatOrderDateTime } from "@features/workshop/utils/serviceOrderDetailUtils";
-import { summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { getApiBaseUrl } from "@app/apiClient";
+import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
+import {
+  extractLatestDiagnosisId,
+  firstNonEmptyText,
+  formatDateTime,
+  formatMoney,
+  normalizeRecommendationItemType,
+  normalizeStatus,
+  readField,
+  resolveCurrentStaffId,
+  toPositiveNumber,
+} from "./quotationFlowUtils";
 import "./Workshop.css";
 
-function resolveBackConfig(pathname) {
-  const normalizedPath = String(pathname || "").toLowerCase();
-  if (normalizedPath.includes("/workshop/manager/")) {
-    return { path: "/workshop/manager", label: "Quay lại quản đốc" };
+function extractServiceId(service) {
+  return toPositiveNumber(readField(service, "id", "Id"));
+}
+
+function extractServiceName(service) {
+  return String(readField(service, "name", "Name", "serviceName", "ServiceName") || "").trim();
+}
+
+function extractServicePrice(service) {
+  const val = Number(readField(service, "basePrice", "BasePrice", "unitPrice", "UnitPrice", "price", "Price") || 0);
+  return Number.isFinite(val) && val > 0 ? val : 0;
+}
+
+function extractServiceTax(service) {
+  const val = Number(readField(service, "taxRate", "TaxRate") || 0);
+  return Number.isFinite(val) && val >= 0 ? val : 0;
+}
+
+function extractProductId(product) {
+  return toPositiveNumber(readField(product, "id", "Id", "productId", "ProductId"));
+}
+
+function extractProductName(product) {
+  return String(readField(product, "name", "Name", "productName", "ProductName") || "").trim();
+}
+
+function extractProductPrice(product) {
+  const val = Number(
+    readField(product, "salePrice", "SalePrice", "retailPrice", "RetailPrice", "unitPrice", "UnitPrice", "sellingPrice", "SellingPrice") || 0,
+  );
+  return Number.isFinite(val) && val > 0 ? val : 0;
+}
+
+function extractProductTax(product) {
+  const val = Number(readField(product, "taxRate", "TaxRate") || 0);
+  return Number.isFinite(val) && val >= 0 ? val : 0;
+}
+
+function normalizeOrderDetailType(rawType) {
+  const normalized = String(rawType || "").trim().toUpperCase();
+  if (["LABOR", "SERVICE", "SERVICES", "WORK"].includes(normalized)) return "SERVICE";
+  if (["PART", "PARTS", "PRODUCT", "MATERIAL", "INVENTORY"].includes(normalized)) return "PART";
+  return normalized;
+}
+
+function isValidHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
   }
-  if (normalizedPath.includes("/workshop/foreman/")) {
-    return { path: "/workshop/foreman", label: "Quay lại quản đốc" };
+}
+
+function toCsvCell(value) {
+  const normalized = String(value ?? "").replace(/"/g, "\"\"");
+  return `"${normalized}"`;
+}
+
+function resolveCustomerDisplay(order, customerById) {
+  const directText = firstNonEmptyText(
+    readField(order, "customerName", "CustomerName", "customerFullName", "CustomerFullName", "guestName", "GuestName"),
+    order?.customer?.fullName,
+    order?.customer?.FullName,
+    order?.customer?.name,
+    order?.customer?.Name,
+  );
+  if (directText) return directText;
+
+  const customerId = toPositiveNumber(readField(order, "customerId", "CustomerId"));
+  const customer = customerId ? customerById.get(customerId) : null;
+  return firstNonEmptyText(customer?.fullName, customer?.FullName, customer?.name, customer?.Name, "-");
+}
+
+function resolveVehiclePlateDisplay(order, vehicleById) {
+  const directText = firstNonEmptyText(
+    readField(
+      order,
+      "vehicleLicensePlate",
+      "VehicleLicensePlate",
+      "vehiclePlate",
+      "VehiclePlate",
+      "licensePlate",
+      "LicensePlate",
+      "guestVehicleLicensePlate",
+      "GuestVehicleLicensePlate",
+    ),
+    order?.vehicle?.licensePlate,
+    order?.vehicle?.LicensePlate,
+    order?.customerVehicle?.licensePlate,
+    order?.customerVehicle?.LicensePlate,
+  );
+  if (directText) return directText;
+
+  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+  return firstNonEmptyText(vehicle?.licensePlate, vehicle?.LicensePlate, vehicle?.plateNumber, vehicle?.PlateNumber, "-");
+}
+
+function resolveVehicleBrandModelDisplay(order, vehicleById, brandById, modelById) {
+  const directBrand = firstNonEmptyText(
+    readField(order, "vehicleBrandName", "VehicleBrandName", "brandName", "BrandName"),
+    order?.vehicle?.brandName,
+    order?.vehicle?.BrandName,
+    order?.customerVehicle?.brandName,
+    order?.customerVehicle?.BrandName,
+  );
+  const directModel = firstNonEmptyText(
+    readField(order, "vehicleModelName", "VehicleModelName", "modelName", "ModelName"),
+    order?.vehicle?.modelName,
+    order?.vehicle?.ModelName,
+    order?.customerVehicle?.modelName,
+    order?.customerVehicle?.ModelName,
+  );
+  if (directBrand || directModel) {
+    return firstNonEmptyText(`${directBrand} ${directModel}`.trim(), directBrand, directModel, "-");
   }
-  if (normalizedPath.includes("/workshop/team-leader/")) {
-    return { path: "/workshop/team-leader", label: "Quay lại tổ trưởng" };
-  }
 
-  return { path: "/workshop/reception", label: "Quay lại lễ tân" };
-}
+  const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+  const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+  const brandId = toPositiveNumber(
+    readField(order, "vehicleBrandId", "VehicleBrandId", "brandId", "BrandId"),
+    readField(vehicle, "vehicleBrandId", "VehicleBrandId", "brandId", "BrandId"),
+  );
+  const modelId = toPositiveNumber(
+    readField(order, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"),
+    readField(vehicle, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"),
+  );
 
-function normalizeMinutes(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(24 * 60, Math.round(parsed)));
-}
+  const brandFromCatalog = brandId ? brandById.get(brandId) : null;
+  const modelFromCatalog = modelId ? modelById.get(modelId) : null;
 
-function addMinutes(baseDate, minutes) {
-  if (!baseDate) return null;
-  const parsed = new Date(baseDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setMinutes(parsed.getMinutes() + normalizeMinutes(minutes));
-  return parsed;
-}
-
-function formatMoney(value) {
-  return Number(value || 0).toLocaleString("vi-VN");
-}
-
-function formatApprovalState(state) {
-  const normalized = String(state || "").trim().toUpperCase();
-  if (normalized === "APPROVED") return "Đã duyệt";
-  if (normalized === "REJECTED") return "Khách từ chối";
-  return "Chờ khách duyệt";
-}
-
-function resolveCurrentStaffId(user) {
-  const candidates = [
-    user?.id,
-    user?.staffId,
-    user?.StaffId,
-    user?.Id,
-    user?.profile?.id,
-    user?.profile?.staffId,
-  ];
-  for (const candidate of candidates) {
-    const parsed = Number(candidate);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return undefined;
-}
-
-function toPositiveNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  const fallbackBrand = firstNonEmptyText(
+    vehicle?.brandName,
+    vehicle?.BrandName,
+    vehicle?.vehicleBrandName,
+    vehicle?.VehicleBrandName,
+    readField(brandFromCatalog, "name", "Name", "code", "Code"),
+  );
+  const fallbackModel = firstNonEmptyText(
+    vehicle?.modelName,
+    vehicle?.ModelName,
+    vehicle?.vehicleModelName,
+    vehicle?.VehicleModelName,
+    readField(modelFromCatalog, "modelName", "ModelName", "name", "Name"),
+  );
+  return firstNonEmptyText(`${fallbackBrand} ${fallbackModel}`.trim(), fallbackBrand, fallbackModel, "-");
 }
 
 export default function ServiceOrderQuotePage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { orderId } = useParams();
   const { user } = useAuth();
-  const backConfig = useMemo(() => resolveBackConfig(location.pathname), [location.pathname]);
 
-  const {
-    order,
-    details,
-    diagnoses,
-    totalAmount,
-    loading,
-    error,
-    refresh,
-  } = useServiceOrderDetailData(orderId);
-
-  const latestDiagnosis = diagnoses[0] || null;
   const staffId = useMemo(() => resolveCurrentStaffId(user), [user]);
   const numericOrderId = Number(orderId);
 
-  const [handoverSnapshot, setHandoverSnapshot] = useState(null);
-  const [loadingHandoverSnapshot, setLoadingHandoverSnapshot] = useState(false);
-  const [handoverError, setHandoverError] = useState("");
-  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
-  const [additionalRepairMinutes, setAdditionalRepairMinutes] = useState(30);
-  const [quoteChannel, setQuoteChannel] = useState("APP");
-  const [quoteSummary, setQuoteSummary] = useState("");
-  const [quoteAttachmentUrl, setQuoteAttachmentUrl] = useState("");
-  const [decisionChannel, setDecisionChannel] = useState("APP");
-  const [decisionNote, setDecisionNote] = useState("");
-  const [technicalApprovalNote, setTechnicalApprovalNote] = useState("");
-  const [submittingSnapshot, setSubmittingSnapshot] = useState(false);
-  const [submittingDecision, setSubmittingDecision] = useState(false);
-  const [submittingTechnicalApproval, setSubmittingTechnicalApproval] = useState(false);
+  const [order, setOrder] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [serviceOrderDetails, setServiceOrderDetails] = useState([]);
+  const [quotations, setQuotations] = useState([]);
+  const [activeQuotationId, setActiveQuotationId] = useState(null);
 
-  const loadLatestHandoverSnapshot = useCallback(async () => {
-    if (!numericOrderId) return;
-    setLoadingHandoverSnapshot(true);
-    setHandoverError("");
+  const [services, setServices] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [vehicleBrands, setVehicleBrands] = useState([]);
+  const [vehicleModels, setVehicleModels] = useState([]);
+
+  const [cloneNote, setCloneNote] = useState("");
+  const [sendEmailNote, setSendEmailNote] = useState("");
+  const [insuranceEvidenceUrl, setInsuranceEvidenceUrl] = useState("");
+  const [insuranceApprovalNote, setInsuranceApprovalNote] = useState("");
+  const [insuranceEvidenceUploading, setInsuranceEvidenceUploading] = useState(false);
+  const [insuranceEvidenceUploadMessage, setInsuranceEvidenceUploadMessage] = useState("");
+  const [removeIdsForClone, setRemoveIdsForClone] = useState([]);
+  const [splitBillingDraft, setSplitBillingDraft] = useState({});
+  const [cancelReason, setCancelReason] = useState("Khách vội");
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showMandatoryCloneWarning, setShowMandatoryCloneWarning] = useState(false);
+  const [mailSentNotice, setMailSentNotice] = useState("");
+  const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
+
+  const autoCreateTriedRef = useRef(false);
+
+  const customerById = useMemo(() => {
+    const map = new Map();
+    (customers || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id", "customerId", "CustomerId"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [customers]);
+
+  const vehicleById = useMemo(() => {
+    const map = new Map();
+    (vehicles || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id", "vehicleId", "VehicleId"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [vehicles]);
+
+  const vehicleBrandById = useMemo(() => {
+    const map = new Map();
+    (vehicleBrands || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [vehicleBrands]);
+
+  const vehicleModelById = useMemo(() => {
+    const map = new Map();
+    (vehicleModels || []).forEach((item) => {
+      const id = toPositiveNumber(readField(item, "id", "Id"));
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [vehicleModels]);
+
+  const activeVehicleModelId = useMemo(() => {
+    const fromOrder = toPositiveNumber(readField(order, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"));
+    if (fromOrder) return fromOrder;
+    const vehicleId = toPositiveNumber(readField(order, "vehicleId", "VehicleId"));
+    const vehicle = vehicleId ? vehicleById.get(vehicleId) : null;
+    return toPositiveNumber(readField(vehicle, "vehicleModelId", "VehicleModelId", "modelId", "ModelId"));
+  }, [order, vehicleById]);
+
+  const serviceLookup = useMemo(() => {
+    const map = new Map();
+    (services || []).forEach((item) => {
+      const id = extractServiceId(item);
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [services]);
+
+  const productLookup = useMemo(() => {
+    const map = new Map();
+    (products || []).forEach((item) => {
+      const id = extractProductId(item);
+      if (id) map.set(id, item);
+    });
+    return map;
+  }, [products]);
+
+  const activeQuotation = useMemo(
+    () => (quotations || []).find((item) => Number(readField(item, "id", "Id")) === Number(activeQuotationId)) || null,
+    [quotations, activeQuotationId],
+  );
+
+  const recommendationById = useMemo(() => {
+    const map = new Map();
+    (recommendations || []).forEach((item) => {
+      const recommendationId = toPositiveNumber(readField(item, "id", "Id"));
+      if (recommendationId) map.set(recommendationId, item);
+    });
+    return map;
+  }, [recommendations]);
+
+  const quotationDetailRows = useMemo(() => {
+    const source = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
+    if (source.length === 0) return [];
+
+    const baseRows = source.map((row, originalIndex) => {
+      const recommendationId = toPositiveNumber(readField(row, "diagnoseRecommendationId", "DiagnoseRecommendationId"));
+      const recommendation = recommendationId ? recommendationById.get(recommendationId) : null;
+      const itemType = normalizeRecommendationItemType(
+        readField(recommendation, "itemType", "ItemType") || readField(row, "itemType", "ItemType"),
+      );
+      const parentRecommendationId = toPositiveNumber(readField(recommendation, "parentRecommendationId", "ParentRecommendationId"));
+      const parentRecommendation = parentRecommendationId ? recommendationById.get(parentRecommendationId) : null;
+      const explicitParentName = firstNonEmptyText(
+        readField(parentRecommendation, "itemName", "ItemName", "standardServiceName", "StandardServiceName", "serviceName", "ServiceName"),
+      );
+      return {
+        row,
+        originalIndex,
+        detailId: Number(readField(row, "id", "Id")) || null,
+        recommendationId,
+        itemType,
+        itemName: String(readField(row, "itemName", "ItemName") || "").trim(),
+        parentRecommendationId,
+        explicitParentName,
+      };
+    });
+
+    const serviceNameByRecommendationId = new Map();
+    baseRows.forEach((entry) => {
+      if (entry.itemType === "SERVICE" && entry.recommendationId) {
+        serviceNameByRecommendationId.set(entry.recommendationId, entry.itemName || `Dịch vụ #${entry.recommendationId}`);
+      }
+    });
+
+    let nearestServiceGroupKey = null;
+    let nearestServiceName = "";
+    const groupedRows = baseRows.map((entry) => {
+      if (entry.itemType === "SERVICE") {
+        const serviceGroupKey = entry.recommendationId || `service-${entry.originalIndex}`;
+        nearestServiceGroupKey = serviceGroupKey;
+        nearestServiceName = entry.itemName;
+        return {
+          ...entry,
+          groupKey: serviceGroupKey,
+          groupOrder: entry.originalIndex,
+          parentName: "",
+          isDependentPart: false,
+          isMainService: true,
+          classificationLabel: "Dịch vụ chính",
+          classificationRank: 0,
+        };
+      }
+
+      const hasExplicitParent = Boolean(entry.parentRecommendationId);
+      const resolvedParentName = hasExplicitParent
+        ? firstNonEmptyText(entry.explicitParentName, serviceNameByRecommendationId.get(entry.parentRecommendationId))
+        : nearestServiceName;
+      const resolvedGroupKey = hasExplicitParent
+        ? entry.parentRecommendationId
+        : nearestServiceGroupKey || `part-${entry.originalIndex}`;
+
+      return {
+        ...entry,
+        groupKey: resolvedGroupKey,
+        groupOrder: entry.originalIndex,
+        parentName: resolvedParentName,
+        isDependentPart: Boolean(resolvedParentName),
+        isMainService: false,
+        classificationLabel: resolvedParentName ? "Phụ tùng phụ thuộc" : "Phụ tùng",
+        classificationRank: resolvedParentName ? 1 : 2,
+      };
+    });
+
+    const groupOrderByKey = new Map();
+    groupedRows.forEach((entry) => {
+      if (!groupOrderByKey.has(entry.groupKey)) {
+        groupOrderByKey.set(entry.groupKey, entry.groupOrder);
+      }
+    });
+
+    const sortedRows = [...groupedRows].sort((a, b) => {
+      const groupDiff = (groupOrderByKey.get(a.groupKey) || 0) - (groupOrderByKey.get(b.groupKey) || 0);
+      if (groupDiff !== 0) return groupDiff;
+      const rankDiff = a.classificationRank - b.classificationRank;
+      if (rankDiff !== 0) return rankDiff;
+      return a.originalIndex - b.originalIndex;
+    });
+
+    return sortedRows.map((entry, index) => {
+      const prev = index > 0 ? sortedRows[index - 1] : null;
+      const next = index < sortedRows.length - 1 ? sortedRows[index + 1] : null;
+      const isGroupStart = !prev || prev.groupKey !== entry.groupKey;
+      const isGroupEnd = !next || next.groupKey !== entry.groupKey;
+      return {
+        ...entry,
+        isGroupStart,
+        isGroupEnd,
+      };
+    });
+  }, [activeQuotation, recommendationById]);
+
+  const quotationRowByDetailId = useMemo(() => {
+    const map = new Map();
+    quotationDetailRows.forEach((entry) => {
+      if (entry.detailId) map.set(entry.detailId, entry);
+    });
+    return map;
+  }, [quotationDetailRows]);
+
+  const partCountByGroup = useMemo(() => {
+    const counts = new Map();
+    quotationDetailRows.forEach((entry) => {
+      if (!entry?.isDependentPart) return;
+      const key = String(entry.groupKey);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  }, [quotationDetailRows]);
+
+  useEffect(() => {
+    setCollapsedPartGroups((prev) => {
+      const next = { ...prev };
+      const activeKeys = new Set();
+      partCountByGroup.forEach((count, key) => {
+        if (count > 0) {
+          activeKeys.add(key);
+          if (!(key in next)) next[key] = true;
+        }
+      });
+      Object.keys(next).forEach((key) => {
+        if (!activeKeys.has(key)) delete next[key];
+      });
+      return next;
+    });
+  }, [partCountByGroup]);
+
+  useEffect(() => {
+    const details = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
+    const quoteStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+    const totalInsuranceAmount = Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0);
+    const shouldAutoFillInsuranceDefault =
+      ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quoteStatus) &&
+      totalInsuranceAmount <= 0 &&
+      details.length > 0 &&
+      details.every((row) => {
+        const raw = Number(
+          readField(row, "insuranceCoveredAmount", "InsuranceCoveredAmount", "insuranceRequestedAmount", "InsuranceRequestedAmount") || 0,
+        );
+        return !Number.isFinite(raw) || raw <= 0;
+      });
+
+    const nextDraft = {};
+    details.forEach((row) => {
+      const detailId = Number(readField(row, "id", "Id"));
+      if (!detailId) return;
+      const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || 0);
+      const insuranceRaw = readField(
+        row,
+        "insuranceCoveredAmount",
+        "InsuranceCoveredAmount",
+        "insuranceRequestedAmount",
+        "InsuranceRequestedAmount",
+      );
+      const insuranceCovered = shouldAutoFillInsuranceDefault
+        ? finalAmount
+        : insuranceRaw === null || insuranceRaw === undefined || String(insuranceRaw).trim() === ""
+          ? finalAmount
+          : Number(insuranceRaw);
+      const safeInsurance = Number.isFinite(insuranceCovered)
+        ? Math.min(Math.max(insuranceCovered, 0), Math.max(0, finalAmount))
+        : Math.max(0, finalAmount);
+      nextDraft[detailId] = safeInsurance;
+    });
+    setSplitBillingDraft(nextDraft);
+  }, [activeQuotationId, activeQuotation]);
+
+  useEffect(() => {
+    setInsuranceEvidenceUrl(String(readField(activeQuotation, "insuranceApprovalEvidenceUrl", "InsuranceApprovalEvidenceUrl") || ""));
+    setInsuranceApprovalNote("");
+    setInsuranceEvidenceUploadMessage("");
+  }, [activeQuotationId, activeQuotation]);
+
+  const loadData = useCallback(async () => {
+    if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
+      setError("Mã lệnh sửa chữa không hợp lệ.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setActionMessage("");
+
     try {
-      const response = await serviceOrderApi.getLatestDiagnosisHandoverSnapshot(numericOrderId);
-      setHandoverSnapshot(response || null);
-      if (response?.quoteSummary) {
-        setQuoteSummary(response.quoteSummary);
-      }
-      if (response?.quoteChannel) {
-        setQuoteChannel(String(response.quoteChannel).toUpperCase());
-      }
-      if (response?.quoteAttachmentUrl) {
-        setQuoteAttachmentUrl(response.quoteAttachmentUrl);
+      const [orderRes, diagnosesRes, quotationsRes, detailRes, serviceRes, productRes, customerRes, vehicleRes, brandRes, modelRes] = await Promise.all([
+        serviceOrderApi.getById(numericOrderId),
+        serviceOrderApi.getDiagnoses(numericOrderId),
+        serviceOrderApi.getQuotationsByServiceOrder(numericOrderId),
+        serviceOrderApi.getDetails(numericOrderId).catch(() => []),
+        getAllStandardServices().catch(() => []),
+        inventoryApi.getProducts().catch(() => []),
+        getAllCustomers().catch(() => []),
+        getAllVehicles().catch(() => []),
+        getAllVehicleBrands().catch(() => []),
+        getAllVehicleModels().catch(() => []),
+      ]);
+
+      const latestDiagnosisId = extractLatestDiagnosisId(diagnosesRes);
+      const recommendationRes = latestDiagnosisId
+        ? await serviceOrderApi.getDiagnoseRecommendations(latestDiagnosisId).catch(() => [])
+        : [];
+
+      const quoteList = Array.isArray(quotationsRes) ? quotationsRes : [];
+      const sortedQuoteList = [...quoteList].sort((a, b) => {
+        const av = Number(readField(a, "versionNo", "VersionNo") || 0);
+        const bv = Number(readField(b, "versionNo", "VersionNo") || 0);
+        return bv - av;
+      });
+
+      setOrder(orderRes || null);
+      setRecommendations(Array.isArray(recommendationRes) ? recommendationRes : []);
+      setServiceOrderDetails(Array.isArray(detailRes) ? detailRes : []);
+      setQuotations(sortedQuoteList);
+      setServices(Array.isArray(serviceRes) ? serviceRes : []);
+      setProducts(Array.isArray(productRes) ? productRes : []);
+      setCustomers(Array.isArray(customerRes) ? customerRes : []);
+      setVehicles(Array.isArray(vehicleRes) ? vehicleRes : []);
+      setVehicleBrands(Array.isArray(brandRes) ? brandRes : []);
+      setVehicleModels(Array.isArray(modelRes) ? modelRes : []);
+
+      if (sortedQuoteList.length > 0) {
+        setActiveQuotationId(Number(readField(sortedQuoteList[0], "id", "Id")));
+      } else {
+        setActiveQuotationId(null);
       }
     } catch (err) {
-      const message = String(err?.message || "");
-      if (message.toLowerCase().includes("404")) {
-        setHandoverSnapshot(null);
-      } else {
-        setHandoverError(message || "Không thể tải snapshot T2.");
-      }
+      setError(err?.message || "Không thể tải dữ liệu báo giá.");
     } finally {
-      setLoadingHandoverSnapshot(false);
+      setLoading(false);
     }
   }, [numericOrderId]);
 
   useEffect(() => {
-    loadLatestHandoverSnapshot();
-  }, [loadLatestHandoverSnapshot]);
+    void loadData();
+  }, [loadData]);
+
+  const refreshQuotationStatusSilently = useCallback(async () => {
+    if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) return;
+
+    try {
+      const quotationsRes = await serviceOrderApi.getQuotationsByServiceOrder(numericOrderId);
+      const quoteList = Array.isArray(quotationsRes) ? quotationsRes : [];
+      const sortedQuoteList = [...quoteList].sort((a, b) => {
+        const av = Number(readField(a, "versionNo", "VersionNo") || 0);
+        const bv = Number(readField(b, "versionNo", "VersionNo") || 0);
+        return bv - av;
+      });
+
+      const currentActiveId = Number(activeQuotationId);
+      const prevActive = (quotations || []).find((item) => Number(readField(item, "id", "Id")) === currentActiveId) || null;
+      const nextActive = sortedQuoteList.find((item) => Number(readField(item, "id", "Id")) === currentActiveId) || null;
+      const prevStatus = normalizeStatus(readField(prevActive, "status", "Status"));
+      const nextStatus = normalizeStatus(readField(nextActive, "status", "Status"));
+
+      setQuotations(sortedQuoteList);
+      if (sortedQuoteList.length > 0) {
+        setActiveQuotationId((prev) => {
+          const prevId = Number(prev);
+          const stillExists = sortedQuoteList.some((row) => Number(readField(row, "id", "Id")) === prevId);
+          return stillExists ? prevId : Number(readField(sortedQuoteList[0], "id", "Id"));
+        });
+      } else {
+        setActiveQuotationId(null);
+      }
+
+      if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_APPROVED") {
+        setActionMessage("Khách đã duyệt báo giá online.");
+      } else if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_REJECTED") {
+        setActionMessage("Khách đã từ chối báo giá online.");
+      }
+    } catch {
+      // Silent refresh should not interrupt user actions.
+    }
+  }, [numericOrderId, activeQuotationId, quotations]);
 
   useEffect(() => {
-    let active = true;
+    if (loading || saving) return undefined;
+    const timerId = setInterval(() => {
+      void refreshQuotationStatusSilently();
+    }, 15000);
 
-    const loadInsuranceCompanies = async () => {
-      try {
-        const response = await insuranceCompanyApi.getAll();
-        if (active) {
-          setInsuranceCompanies(Array.isArray(response) ? response : []);
-        }
-      } catch {
-        if (active) {
-          setInsuranceCompanies([]);
-        }
+    return () => clearInterval(timerId);
+  }, [loading, saving, refreshQuotationStatusSilently]);
+
+  useEffect(() => {
+    autoCreateTriedRef.current = false;
+  }, [numericOrderId]);
+
+  const buildQuotationItemsForDraft = useCallback(async () => {
+    const recommendationParents = (Array.isArray(recommendations) ? recommendations : []).filter((item) => {
+      const parentId = toPositiveNumber(readField(item, "parentRecommendationId", "ParentRecommendationId"));
+      return !parentId;
+    });
+
+    const toSafeQuantity = (rawValue) => {
+      const quantityRaw = Number(rawValue || 1);
+      return Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+    };
+
+    const draftItems = [];
+    const serviceRowsForBom = [];
+    const seenServiceIds = new Set();
+
+    recommendationParents.forEach((rec) => {
+      const itemType = normalizeRecommendationItemType(readField(rec, "itemType", "ItemType"));
+      const standardServiceId = toPositiveNumber(readField(rec, "standardServiceId", "StandardServiceId"));
+      const inventoryItemId = toPositiveNumber(readField(rec, "inventoryItemId", "InventoryItemId"));
+      const quantity = toSafeQuantity(readField(rec, "quantity", "Quantity"));
+
+      let itemId = null;
+      let itemName = "";
+      let unitPriceAtTime = 0;
+      let taxRate = 0;
+      let normalizedItemType = "PART";
+
+      if (itemType === "SERVICE" && standardServiceId) {
+        const service = serviceLookup.get(standardServiceId);
+        itemId = standardServiceId;
+        itemName = extractServiceName(service) || `Dịch vụ #${standardServiceId}`;
+        unitPriceAtTime = extractServicePrice(service);
+        taxRate = extractServiceTax(service);
+        normalizedItemType = "LABOR";
+        seenServiceIds.add(standardServiceId);
+        serviceRowsForBom.push({ serviceId: standardServiceId, quantity, serviceName: itemName });
+      } else if (inventoryItemId) {
+        const product = productLookup.get(inventoryItemId);
+        itemId = inventoryItemId;
+        itemName = extractProductName(product) || `Vật tư #${inventoryItemId}`;
+        unitPriceAtTime = extractProductPrice(product);
+        taxRate = extractProductTax(product);
+        normalizedItemType = "PART";
       }
-    };
 
-    void loadInsuranceCompanies();
+      if (String(itemName || "").trim().length === 0) return;
 
-    return () => {
-      active = false;
-    };
+      draftItems.push({
+        diagnoseRecommendationId: toPositiveNumber(readField(rec, "id", "Id")),
+        itemType: normalizedItemType,
+        itemId,
+        itemName,
+        description: readField(rec, "technicianNotes", "TechnicianNotes") || null,
+        quantity,
+        unitPriceAtTime,
+        costPriceAtTime: null,
+        discountValue: 0,
+        taxRate,
+        payerType: "INSURANCE",
+        insuranceCompanyId: null,
+        insuranceCoveredAmount: null,
+        customerCoveredAmount: null,
+        insuranceRequestedAmount: null,
+        customerCoPayAmount: null,
+        isBlocking: true,
+        isMandatory: true,
+        estimatedMinutes: null,
+        isReturnOldPart: false,
+      });
+    });
+
+    const normalizedDetailRows = (Array.isArray(serviceOrderDetails) ? serviceOrderDetails : []).filter((row) => {
+      const status = normalizeStatus(readField(row, "status", "Status"));
+      return !["CANCELED", "CANCELLED", "REJECTED", "VOID"].includes(status);
+    });
+
+    const serviceDetailsFromOrder = normalizedDetailRows.filter((row) => {
+      const rawType = normalizeOrderDetailType(readField(row, "itemType", "ItemType"));
+      const serviceId = toPositiveNumber(readField(row, "standardServiceId", "StandardServiceId", "itemId", "ItemId"));
+      return rawType === "SERVICE" && serviceId;
+    });
+
+    serviceDetailsFromOrder.forEach((row) => {
+      const serviceId = toPositiveNumber(readField(row, "standardServiceId", "StandardServiceId", "itemId", "ItemId"));
+      if (!serviceId || seenServiceIds.has(serviceId)) return;
+
+      const quantity = toSafeQuantity(readField(row, "quantity", "Quantity"));
+      const service = serviceLookup.get(serviceId);
+      const itemName = firstNonEmptyText(
+        readField(row, "itemName", "ItemName"),
+        extractServiceName(service),
+        `Dịch vụ #${serviceId}`,
+      );
+      const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractServicePrice(service);
+      const taxRate = Number(readField(row, "taxRate", "TaxRate"));
+      const safeTaxRate = Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : extractServiceTax(service);
+
+      seenServiceIds.add(serviceId);
+      serviceRowsForBom.push({ serviceId, quantity, serviceName: itemName });
+
+      draftItems.push({
+        diagnoseRecommendationId: null,
+        itemType: "LABOR",
+        itemId: serviceId,
+        itemName,
+        description: readField(row, "description", "Description") || "Dịch vụ khách hàng đã chọn",
+        quantity,
+        unitPriceAtTime,
+        costPriceAtTime: null,
+        discountValue: 0,
+        taxRate: safeTaxRate,
+        payerType: "INSURANCE",
+        insuranceCompanyId: null,
+        insuranceCoveredAmount: null,
+        customerCoveredAmount: null,
+        insuranceRequestedAmount: null,
+        customerCoPayAmount: null,
+        isBlocking: true,
+        isMandatory: true,
+        estimatedMinutes: null,
+        isReturnOldPart: false,
+      });
+    });
+
+    const standalonePartRows = normalizedDetailRows.filter((row) => {
+      const rawType = normalizeOrderDetailType(readField(row, "itemType", "ItemType"));
+      const itemId = toPositiveNumber(readField(row, "itemId", "ItemId"));
+      return rawType === "PART" && itemId;
+    });
+
+    standalonePartRows.forEach((row) => {
+      const itemId = toPositiveNumber(readField(row, "itemId", "ItemId"));
+      if (!itemId) return;
+      const product = productLookup.get(itemId);
+      const quantity = toSafeQuantity(readField(row, "quantity", "Quantity"));
+      const itemName = firstNonEmptyText(readField(row, "itemName", "ItemName"), extractProductName(product), `Phụ tùng #${itemId}`);
+      const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractProductPrice(product);
+      const taxRateRaw = Number(readField(row, "taxRate", "TaxRate"));
+      const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw >= 0 ? taxRateRaw : extractProductTax(product);
+
+      draftItems.push({
+        diagnoseRecommendationId: null,
+        itemType: "PART",
+        itemId,
+        itemName,
+        description: readField(row, "description", "Description") || "Phụ tùng khách hàng đã chọn",
+        quantity,
+        unitPriceAtTime,
+        costPriceAtTime: null,
+        discountValue: 0,
+        taxRate,
+        payerType: "INSURANCE",
+        insuranceCompanyId: null,
+        insuranceCoveredAmount: null,
+        customerCoveredAmount: null,
+        insuranceRequestedAmount: null,
+        customerCoPayAmount: null,
+        isBlocking: true,
+        isMandatory: Boolean(readField(row, "isMandatory", "IsMandatory")),
+        estimatedMinutes: null,
+        isReturnOldPart: Boolean(readField(row, "isReturnOldPart", "IsReturnOldPart")),
+      });
+    });
+
+    if (activeVehicleModelId && serviceRowsForBom.length > 0) {
+      const bomResponses = await Promise.all(
+        serviceRowsForBom.map(async (entry) => {
+          try {
+            const rows = await serviceOrderApi.getServiceBoms(entry.serviceId, activeVehicleModelId);
+            return { ...entry, rows: Array.isArray(rows) ? rows : [] };
+          } catch (_) {
+            return { ...entry, rows: [] };
+          }
+        }),
+      );
+
+      bomResponses.forEach((entry) => {
+        (entry.rows || []).forEach((bomRow) => {
+          const productId = toPositiveNumber(readField(bomRow, "productId", "ProductId"));
+          if (!productId) return;
+          const product = productLookup.get(productId);
+          const bomQty = toSafeQuantity(readField(bomRow, "quantity", "Quantity"));
+          const totalQuantity = Math.max(0.001, Number((bomQty * entry.quantity).toFixed(3)));
+          const itemName = firstNonEmptyText(
+            readField(bomRow, "productName", "ProductName"),
+            extractProductName(product),
+            `Phụ tùng #${productId}`,
+          );
+
+          draftItems.push({
+            diagnoseRecommendationId: null,
+            itemType: "PART",
+            itemId: productId,
+            itemName,
+            description: `Phụ tùng BOM cho dịch vụ: ${entry.serviceName || `#${entry.serviceId}`}`,
+            quantity: totalQuantity,
+            unitPriceAtTime: extractProductPrice(product),
+            costPriceAtTime: null,
+            discountValue: 0,
+            taxRate: extractProductTax(product),
+            payerType: "INSURANCE",
+            insuranceCompanyId: null,
+            insuranceCoveredAmount: null,
+            customerCoveredAmount: null,
+            insuranceRequestedAmount: null,
+            customerCoPayAmount: null,
+            isBlocking: true,
+            isMandatory: Boolean(readField(bomRow, "isMandatory", "IsMandatory")),
+            estimatedMinutes: null,
+            isReturnOldPart: false,
+          });
+        });
+      });
+    }
+
+    const merged = new Map();
+    draftItems.forEach((item) => {
+      const nameKey = String(item.itemName || "").trim().toLowerCase();
+      const key = `${item.itemType}-${item.itemId || 0}-${nameKey}`;
+      if (!merged.has(key)) {
+        merged.set(key, { ...item });
+        return;
+      }
+
+      const existing = merged.get(key);
+      existing.quantity = Number(existing.quantity || 0) + Number(item.quantity || 0);
+      existing.isMandatory = Boolean(existing.isMandatory || item.isMandatory);
+      if (!existing.description && item.description) {
+        existing.description = item.description;
+      }
+      if (!existing.unitPriceAtTime && item.unitPriceAtTime) {
+        existing.unitPriceAtTime = item.unitPriceAtTime;
+      }
+      merged.set(key, existing);
+    });
+
+    return [...merged.values()].filter((item) => String(item.itemName || "").trim().length > 0);
+  }, [recommendations, serviceOrderDetails, serviceLookup, productLookup, activeVehicleModelId]);
+
+  const handleCreateDraftQuotation = useCallback(async () => {
+    if (!numericOrderId || !staffId) {
+      setError("Không xác định được mã lệnh hoặc nhân sự thao tác.");
+      return;
+    }
+
+    const items = await buildQuotationItemsForDraft();
+    if (items.length === 0) {
+      setError("Không có dữ liệu dịch vụ/phụ tùng để tạo báo giá.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+    setMailSentNotice("");
+
+    try {
+      const created = await serviceOrderApi.createQuotation(numericOrderId, {
+        title: `Báo giá v${(quotations?.length || 0) + 1}`,
+        quotationType: "NORMAL",
+        validUntil: null,
+        serviceAdvisorId: staffId,
+        customerNotes: null,
+        internalNotes: "Tạo từ chẩn đoán + dịch vụ khách chọn + BOM phụ tùng",
+        submitForApproval: false,
+        items,
+      });
+
+      setActionMessage("Đã tạo báo giá nháp.");
+      await loadData();
+      const createdId = Number(readField(created, "id", "Id"));
+      if (createdId > 0) setActiveQuotationId(createdId);
+    } catch (err) {
+      setError(err?.message || "Không thể tạo báo giá nháp.");
+    } finally {
+      setSaving(false);
+    }
+  }, [numericOrderId, staffId, buildQuotationItemsForDraft, quotations?.length, loadData]);
+
+  useEffect(() => {
+    if (loading || saving) return;
+    if (autoCreateTriedRef.current) return;
+    if ((quotations || []).length > 0) return;
+    if ((recommendations || []).length === 0 && (serviceOrderDetails || []).length === 0) return;
+    if (!staffId) return;
+
+    autoCreateTriedRef.current = true;
+    void handleCreateDraftQuotation();
+  }, [loading, saving, quotations, recommendations, serviceOrderDetails, staffId, handleCreateDraftQuotation]);
+
+  const handleSubmitQuotation = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const note = String(insuranceApprovalNote || "").trim();
+      await serviceOrderApi.submitQuotation(quoteId, {
+        actorStaffId: staffId,
+        note: note || "Gui bao gia sang buoc cho bao hiem duyet",
+      });
+      setActionMessage("Da chuyen bao gia sang trang thai cho bao hiem duyet.");
+      setMailSentNotice("");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Khong the gui bao gia cho bao hiem.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, insuranceApprovalNote, loadData]);
+
+  const handleConfirmInsuranceApproval = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    const evidenceUrl = String(insuranceEvidenceUrl || "").trim();
+    if (!evidenceUrl) {
+      setError("Vui long nhap link bang chung phe duyet bao hiem.");
+      setActionMessage("");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const note = String(insuranceApprovalNote || "").trim();
+      await serviceOrderApi.confirmQuotationInsuranceApproval(quoteId, {
+        actorStaffId: staffId,
+        insuranceApprovalEvidenceUrl: evidenceUrl,
+        note: note || "Bao hiem da xac nhan duyet",
+      });
+      setActionMessage("Da xac nhan bao hiem duyet va khoa du lieu boi thuong.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Khong the xac nhan bao hiem duyet.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, insuranceEvidenceUrl, insuranceApprovalNote, loadData]);
+
+  const handleSendQuotationToCustomer = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const note = String(sendEmailNote || "").trim();
+      await serviceOrderApi.sendQuotationToCustomer(quoteId, {
+        actorStaffId: staffId,
+        note: note || "Gui bao gia cho khach sau khi bao hiem da duyet",
+      });
+      setActionMessage("Da gui bao gia cho khach hang.");
+      setMailSentNotice("Gui email bao gia thanh cong cho khach hang.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Khong the gui bao gia cho khach hang.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, sendEmailNote, loadData]);
+
+  const handleUploadInsuranceEvidence = useCallback(async (file) => {
+    if (!file) return;
+    if (!staffId) return;
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId) return;
+
+    setInsuranceEvidenceUploading(true);
+    setInsuranceEvidenceUploadMessage("");
+    setError("");
+
+    try {
+      const response = await serviceOrderApi.uploadQuotationInsuranceEvidence(quoteId, file);
+      const uploadedUrl = String(response?.insuranceApprovalEvidenceUrl || response?.url || response?.Url || "").trim();
+      if (!uploadedUrl) {
+        throw new Error("Khong nhan duoc URL anh sau khi upload.");
+      }
+
+      setInsuranceEvidenceUrl(uploadedUrl);
+      setInsuranceEvidenceUploadMessage("Da tai anh len thanh cong. He thong da dien URL bang chung.");
+    } catch (err) {
+      setError(err?.message || "Khong the tai anh bang chung.");
+      setInsuranceEvidenceUploadMessage("");
+    } finally {
+      setInsuranceEvidenceUploading(false);
+    }
+  }, [activeQuotation, staffId]);
+
+  const handleExportQuotationExcel = useCallback(() => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId) return;
+    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
+    if (!token) {
+      setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      return;
+    }
+    const exportUrl = `${getApiBaseUrl()}/api/quotations/${quoteId}/export/excel`;
+    fetch(exportUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error("Không thể xuất file Excel từ server.");
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const quotationCode = String(readField(activeQuotation, "code", "Code") || `quotation-${Date.now()}`).replace(/[^\w\-]/g, "_");
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = `${quotationCode}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(objectUrl);
+        setActionMessage("Đã xuất Excel theo mẫu backend.");
+      })
+      .catch((err) => {
+        setError(err?.message || "Không thể xuất Excel.");
+      });
+  }, [activeQuotation]);
+
+  const handleToggleCloneRemove = useCallback((detailId) => {
+    setRemoveIdsForClone((prev) => {
+      const row = quotationRowByDetailId.get(detailId);
+      if (!row || !row.isMainService) {
+        if (prev.includes(detailId)) return prev.filter((id) => id !== detailId);
+        return [...prev, detailId];
+      }
+
+      const groupedPartIds = quotationDetailRows
+        .filter((entry) => entry.groupKey === row.groupKey && !entry.isMainService)
+        .map((entry) => entry.detailId)
+        .filter((id) => Number.isFinite(id) && id > 0);
+      const relatedIds = [detailId, ...groupedPartIds];
+
+      if (prev.includes(detailId)) {
+        return prev.filter((id) => !relatedIds.includes(id));
+      }
+
+      return [...new Set([...prev, ...relatedIds])];
+    });
+  }, [quotationDetailRows, quotationRowByDetailId]);
+
+  const handleSplitInsuranceChange = useCallback((detailId, finalAmount, rawValue) => {
+    const parsed = Number(String(rawValue || "").replace(/[^\d.-]/g, ""));
+    const normalized = Number.isFinite(parsed) ? parsed : 0;
+    const clamped = Math.min(Math.max(normalized, 0), Math.max(0, Number(finalAmount) || 0));
+    setSplitBillingDraft((prev) => ({
+      ...prev,
+      [detailId]: clamped,
+    }));
   }, []);
 
-  const fallbackT1 = order?.estimatedHandover || order?.promisedHandoverTime || order?.checkInTime || null;
-  const effectiveT1 = handoverSnapshot?.t1EstimatedHandover || fallbackT1;
-  const draftT2 = useMemo(
-    () => addMinutes(effectiveT1, additionalRepairMinutes),
-    [effectiveT1, additionalRepairMinutes]
-  );
-  const hasPendingCustomerDecision =
-    String(handoverSnapshot?.approvalState || "").toUpperCase() === "PENDING";
-  const insuranceSummary = useMemo(
-    () => summarizeInsuranceOrderDetails(details),
-    [details]
-  );
-  const insuranceCompanyNames = useMemo(() => {
-    if (!insuranceSummary.hasInsurance) return [];
+  const handleSaveSplitBilling = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
 
-    const companyNameById = new Map(
-      (Array.isArray(insuranceCompanies) ? insuranceCompanies : []).map((company) => [
-        Number(company?.id || company?.Id || 0),
-        String(company?.name || company?.Name || "").trim(),
-      ])
-    );
-
-    return insuranceSummary.companyIds
-      .map((companyId) => companyNameById.get(Number(companyId)) || `Công ty #${companyId}`)
+    const details = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
+    const changedItems = details
+      .map((row) => {
+        const detailId = Number(readField(row, "id", "Id"));
+        const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || 0);
+        const originalInsurance = Number(
+          readField(row, "insuranceCoveredAmount", "InsuranceCoveredAmount", "insuranceRequestedAmount", "InsuranceRequestedAmount") || 0,
+        );
+        const draftInsurance = Number(splitBillingDraft[detailId]);
+        const safeDraft = Number.isFinite(draftInsurance)
+          ? Math.min(Math.max(draftInsurance, 0), Math.max(0, finalAmount))
+          : originalInsurance;
+        const isChanged = Math.abs(safeDraft - originalInsurance) >= 0.01;
+        return isChanged
+          ? {
+            quotationDetailId: detailId,
+            insuranceCoveredAmount: safeDraft,
+          }
+          : null;
+      })
       .filter(Boolean);
-  }, [insuranceCompanies, insuranceSummary]);
 
-  const canShowTechnicalApprovalSection = useMemo(() => {
-    const normalizedPath = String(location.pathname || "").toLowerCase();
-    return normalizedPath.includes("/workshop/team-leader/") || normalizedPath.includes("/workshop/foreman/");
-  }, [location.pathname]);
-
-  const hasDiagnosisData = Array.isArray(diagnoses) && diagnoses.length > 0;
-  const isTechnicalApproved = useMemo(
-    () =>
-      (Array.isArray(diagnoses) ? diagnoses : []).some((item) =>
-        Boolean(toPositiveNumber(item?.approvedByForemanId ?? item?.ApprovedByForemanId))
-      ),
-    [diagnoses]
-  );
-
-  const handleTechnicalApproval = useCallback(async () => {
-    if (!numericOrderId || !staffId || !hasDiagnosisData || isTechnicalApproved) return;
-
-    setSubmittingTechnicalApproval(true);
-    setHandoverError("");
-    try {
-      await serviceOrderApi.approveDiagnosisTechnical(numericOrderId, {
-        teamLeaderId: staffId,
-        note: technicalApprovalNote || undefined,
-      });
-      setTechnicalApprovalNote("");
-      await refresh();
-    } catch (err) {
-      setHandoverError(err?.message || "Không thể duyệt báo cáo kỹ thuật.");
-    } finally {
-      setSubmittingTechnicalApproval(false);
-    }
-  }, [hasDiagnosisData, isTechnicalApproved, numericOrderId, refresh, staffId, technicalApprovalNote]);
-
-  const handleCreateSnapshot = useCallback(async () => {
-    if (!numericOrderId) {
-      setHandoverError("Mã lệnh sửa chữa không hợp lệ.");
+    if (changedItems.length === 0) {
+      setActionMessage("Không có thay đổi tách bill để lưu.");
       return;
     }
 
-    const normalizedAdditionalMinutes = normalizeMinutes(additionalRepairMinutes);
-    setSubmittingSnapshot(true);
-    setHandoverError("");
+    setSaving(true);
+    setError("");
+    setActionMessage("");
     try {
-      const response = await serviceOrderApi.createDiagnosisHandoverSnapshot(numericOrderId, {
-        additionalRepairMinutes: normalizedAdditionalMinutes,
-        quoteChannel,
-        quoteSummary,
-        quoteAttachmentUrl: quoteAttachmentUrl || undefined,
-        createdByStaffId: staffId,
+      await serviceOrderApi.updateQuotationSplitBilling(quoteId, {
+        actorStaffId: staffId,
+        note: "Cập nhật phân bổ bảo hiểm/khách hàng",
+        items: changedItems,
       });
-      setHandoverSnapshot(response || null);
-      await refresh();
+      setActionMessage("Đã lưu tách bill và cập nhật tổng bảo hiểm/khách.");
+      await loadData();
     } catch (err) {
-      setHandoverError(err?.message || "Không thể tạo snapshot báo giá T2.");
+      setError(err?.message || "Không thể lưu tách bill.");
     } finally {
-      setSubmittingSnapshot(false);
+      setSaving(false);
     }
-  }, [
-    additionalRepairMinutes,
-    numericOrderId,
-    quoteAttachmentUrl,
-    quoteChannel,
-    quoteSummary,
-    refresh,
-    staffId,
-  ]);
+  }, [activeQuotation, splitBillingDraft, staffId, loadData]);
+
+  const handleCloneQuotation = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+    const cloneReason = String(cloneNote || "").trim();
+
+    if (!cloneReason) {
+      setError("Vui lòng nhập lý do trước khi tạo bản clone.");
+      setActionMessage("");
+      return;
+    }
+
+    const selectedMandatory = (Array.isArray(activeQuotation?.details) ? activeQuotation.details : []).some((row) => {
+      const detailId = Number(readField(row, "id", "Id"));
+      const isMandatory = Boolean(readField(row, "isMandatory", "IsMandatory"));
+      return removeIdsForClone.includes(detailId) && isMandatory;
+    });
+
+    if (selectedMandatory && !showMandatoryCloneWarning) {
+      setShowMandatoryCloneWarning(true);
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      const created = await serviceOrderApi.cloneQuotation(quoteId, {
+        actorStaffId: staffId,
+        note: cloneReason,
+        removeQuotationDetailIds: removeIdsForClone,
+      });
+
+      const createdId = Number(readField(created, "id", "Id"));
+      setActionMessage("Đã clone sang phiên bản mới.");
+      setCloneNote("");
+      setRemoveIdsForClone([]);
+      setShowMandatoryCloneWarning(false);
+      await loadData();
+      if (createdId > 0) setActiveQuotationId(createdId);
+    } catch (err) {
+      setError(err?.message || "Không thể clone báo giá.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, cloneNote, removeIdsForClone, showMandatoryCloneWarning, loadData]);
 
   const handleCustomerDecision = useCallback(async (approved) => {
-    if (!numericOrderId || !handoverSnapshot?.snapshotId) {
-      return;
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      await serviceOrderApi.applyQuotationCustomerDecision(quoteId, {
+        approved,
+        actorStaffId: staffId,
+        note: approved ? "Khách đồng ý báo giá" : "Khách từ chối báo giá",
+      });
+
+      setActionMessage(
+        approved
+          ? "Khách đã duyệt báo giá. Hệ thống sẽ đồng bộ vào SOD theo backend workflow."
+          : "Khách từ chối báo giá. Bạn có thể clone sang phiên bản mới để đàm phán tiếp.",
+      );
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Không thể cập nhật quyết định khách hàng.");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, loadData]);
+
+  const handleCancelAll = useCallback(async () => {
+    if (!numericOrderId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      await serviceOrderApi.requestDiagnosisCancel(numericOrderId, {
+        requestedByStaffId: staffId,
+        reason: cancelReason,
+      });
+
+      setActionMessage("Đã ghi nhận yêu cầu hủy toàn bộ dịch vụ.");
+      setShowCancelModal(false);
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Không thể gửi yêu cầu hủy toàn bộ.");
+    } finally {
+      setSaving(false);
+    }
+  }, [numericOrderId, staffId, cancelReason, loadData]);
+
+  const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+  const canEditSplitBilling = ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quotationStatus);
+  const canSubmit = ["DRAFT"].includes(quotationStatus);
+  const canConfirmInsuranceApproved = ["PENDING_INSURANCE"].includes(quotationStatus);
+  const canSendToCustomer = ["INSURANCE_APPROVED", "PENDING_CUSTOMER"].includes(quotationStatus);
+  const canCustomerDecision = ["PENDING_CUSTOMER"].includes(quotationStatus);
+  const canClone = !["CUSTOMER_APPROVED", "CANCELED", "CANCELLED"].includes(quotationStatus);
+  const evidenceUrlValue = String(insuranceEvidenceUrl || "").trim();
+  const evidenceUrlValid = isValidHttpUrl(evidenceUrlValue);
+  const evidenceUrlError = canConfirmInsuranceApproved && evidenceUrlValue.length > 0 && !evidenceUrlValid;
+  const hasCloneReason = String(cloneNote || "").trim().length > 0;
+
+  const isSuperseded = quotationStatus === "SUPERSEDED";
+  const customerDisplay = resolveCustomerDisplay(order, customerById);
+  const plateDisplay = resolveVehiclePlateDisplay(order, vehicleById);
+  const vehicleBrandModelDisplay = resolveVehicleBrandModelDisplay(order, vehicleById, vehicleBrandById, vehicleModelById);
+  const splitBillingSummary = useMemo(() => {
+    if (!Array.isArray(quotationDetailRows) || quotationDetailRows.length === 0) {
+      return {
+        insurance: Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0),
+        customer: Number(readField(activeQuotation, "totalCustomerAmount", "TotalCustomerAmount") || 0),
+      };
     }
 
-    setSubmittingDecision(true);
-    setHandoverError("");
-    try {
-      const response = await serviceOrderApi.decideDiagnosisHandoverSnapshot(
-        numericOrderId,
-        handoverSnapshot.snapshotId,
-        {
-          approved,
-          decisionChannel,
-          decisionNote: decisionNote || undefined,
-          decidedByStaffId: staffId,
-        }
-      );
-      setHandoverSnapshot(response || null);
-      await refresh();
-    } catch (err) {
-      setHandoverError(err?.message || "Không thể ghi nhận quyết định của khách.");
-    } finally {
-      setSubmittingDecision(false);
-    }
-  }, [decisionChannel, decisionNote, handoverSnapshot?.snapshotId, numericOrderId, refresh, staffId]);
+    let insurance = 0;
+    let customer = 0;
+
+    quotationDetailRows.forEach((entry) => {
+      const row = entry?.row || {};
+      const detailId = Number(readField(row, "id", "Id"));
+      if (!detailId) return;
+
+      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+      const finalAmount = Math.max(0, Number(readField(row, "finalAmount", "FinalAmount") || quantity * unitPrice));
+      const insuranceRaw = Number(splitBillingDraft[detailId]);
+      const safeInsurance = Number.isFinite(insuranceRaw)
+        ? Math.min(Math.max(insuranceRaw, 0), finalAmount)
+        : Math.max(0, finalAmount);
+      insurance += safeInsurance;
+      customer += Math.max(0, finalAmount - safeInsurance);
+    });
+
+    return { insurance, customer };
+  }, [activeQuotation, quotationDetailRows, splitBillingDraft]);
 
   return (
     <div className="workshop-table-card reception-quote-page">
       <div className="reception-quote-head">
         <div>
-          <h2 className="reception-quote-title">Báo giá & xác nhận khách (T2)</h2>
+          <h2 className="reception-quote-title">Báo giá thương mại</h2>
           <p className="reception-quote-subtitle">
-            Lệnh <strong>{order?.code || `#${orderId}`}</strong> · Snapshot báo giá v1 sau chuẩn đoán
+            Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
           </p>
         </div>
-        <button type="button" className="btn-back" onClick={() => navigate(backConfig.path)}>
-          {backConfig.label}
-        </button>
+        <button type="button" className="btn-back" onClick={() => navigate("/workshop/reception")}>Quay lại</button>
       </div>
 
       {loading ? (
@@ -302,262 +1259,415 @@ export default function ServiceOrderQuotePage() {
           <div className="spinner" />
           <p>Đang tải dữ liệu báo giá...</p>
         </div>
-      ) : error ? (
-        <div className="validation-summary">{error}</div>
       ) : (
         <div className="reception-quote-layout">
           <section className="reception-quote-summary-card">
             <article>
               <span>Khách hàng</span>
-              <strong>{order?.customerName || "-"}</strong>
+              <strong>{customerDisplay}</strong>
             </article>
             <article>
-              <span>Biển số xe</span>
-              <strong>{order?.vehicleLicensePlate || "-"}</strong>
+              <span>Thông tin xe</span>
+              <strong>{plateDisplay}</strong>
+              <small style={{ display: "block", marginTop: 4, color: "#5f6f8a", fontWeight: 600 }}>
+                {vehicleBrandModelDisplay}
+              </small>
             </article>
             <article>
               <span>Trạng thái lệnh</span>
-              <strong>{order?.status || "-"}</strong>
+              <strong>{getStatusLabelVi(readField(order, "status", "Status"), readField(order, "status", "Status") || "-")}</strong>
             </article>
             <article>
-              <span>Dự kiến hiện tại</span>
-              <strong>{formatOrderDateTime(order?.estimatedHandover)}</strong>
+              <span>Số phiên bản báo giá</span>
+              <strong>{quotations.length}</strong>
             </article>
           </section>
 
-          <InsuranceBillingOverview
-            summary={insuranceSummary}
-            companyNames={insuranceCompanyNames}
-            title="Tách bill bảo hiểm"
-            note="Giá trị khách trả bên dưới đã tính theo payer của từng hạng mục, không cộng chồng lên tổng giá trị sửa chữa."
-          />
-
-          <section className="reception-quote-timeline-card">
-            <div className="reception-quote-timeline-row">
-              <p>T1 (sau check-in)</p>
-              <strong>{formatOrderDateTime(effectiveT1)}</strong>
-            </div>
-            <div className="reception-quote-timeline-row">
-              <p>T2 (thêm sửa chữa)</p>
-              <strong>
-                {handoverSnapshot?.t2EstimatedHandover
-                  ? formatOrderDateTime(handoverSnapshot.t2EstimatedHandover)
-                  : formatOrderDateTime(draftT2)}
-              </strong>
-            </div>
-            <div className="reception-quote-timeline-row">
-              <p>Trạng thái duyệt khách</p>
-              <strong>{formatApprovalState(handoverSnapshot?.approvalState)}</strong>
-            </div>
-            {handoverSnapshot?.customerDecisionAt ? (
-              <div className="reception-quote-timeline-row">
-                <p>Thời điểm xác nhận</p>
-                <strong>{formatOrderDateTime(handoverSnapshot.customerDecisionAt)}</strong>
-              </div>
+          <section className="reception-quote-action-card">
+            <h3>Điều phối báo giá</h3>
+            <p className="reception-quote-note">Luồng này dành cho CVDV/Lễ tân. Chỉ khi khách duyệt mới ghi nhận vào SOD.</p>
+            {error ? <p className="reception-quote-error">{error}</p> : null}
+            {actionMessage ? <p className="reception-quote-note">{actionMessage}</p> : null}
+            {isSuperseded ? (
+              <p className="reception-quote-warning">Phiên bản đang chọn thuộc lịch sử và đã bị thay thế bởi phiên bản mới hơn.</p>
             ) : null}
           </section>
 
-          {canShowTechnicalApprovalSection ? (
-            <section className="reception-quote-action-card">
-              <h3>Duyệt báo cáo kỹ thuật</h3>
-              <div className="reception-quote-form-grid">
-                <label className="full-row">
-                  <span>Ghi chú duyệt kỹ thuật (tuỳ chọn)</span>
-                  <textarea
-                    rows={3}
-                    value={technicalApprovalNote}
-                    onChange={(event) => setTechnicalApprovalNote(event.target.value)}
-                    placeholder="Ví dụ: Đã kiểm tra đầy đủ nguyên nhân gốc và hạng mục đề xuất."
-                    disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData}
-                  />
-                </label>
-              </div>
-              <div className="reception-quote-action-row">
-                <button
-                  type="button"
-                  className="btn-success"
-                  onClick={handleTechnicalApproval}
-                  disabled={submittingTechnicalApproval || isTechnicalApproved || !hasDiagnosisData || !staffId}
-                >
-                  {submittingTechnicalApproval ? "Đang duyệt..." : (isTechnicalApproved ? "Đã duyệt kỹ thuật" : "Duyệt kỹ thuật")}
-                </button>
-              </div>
-              {isTechnicalApproved ? (
-                <p className="reception-quote-note">Báo cáo kỹ thuật đã được duyệt.</p>
-              ) : null}
-            </section>
-          ) : null}
-
           <section className="reception-quote-action-card">
-            <h3>Snapshot báo giá v1 (T2)</h3>
-            <div className="reception-quote-form-grid">
-              <label>
-                <span>Phút sửa thêm</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={24 * 60}
-                  value={additionalRepairMinutes}
-                  onChange={(event) => setAdditionalRepairMinutes(event.target.value)}
-                  disabled={submittingSnapshot}
-                />
-              </label>
-              <label>
-                <span>Kênh gửi báo giá</span>
-                <select
-                  value={quoteChannel}
-                  onChange={(event) => setQuoteChannel(String(event.target.value || "APP").toUpperCase())}
-                  disabled={submittingSnapshot}
-                >
-                  <option value="APP">Ứng dụng</option>
-                  <option value="ZALO">Zalo</option>
-                  <option value="PHONE">Điện thoại</option>
-                  <option value="DIRECT">Trực tiếp tại quầy</option>
-                </select>
-              </label>
-              <label className="full-row">
-                <span>Tóm tắt báo giá v1</span>
-                <textarea
-                  rows={3}
-                  value={quoteSummary}
-                  onChange={(event) => setQuoteSummary(event.target.value)}
-                  placeholder="Mô tả ngắn hạng mục sửa thêm và chi phí dự kiến"
-                  disabled={submittingSnapshot}
-                />
-              </label>
-              <label className="full-row">
-                <span>Link ảnh lỗi (tuỳ chọn)</span>
-                <input
-                  type="text"
-                  value={quoteAttachmentUrl}
-                  onChange={(event) => setQuoteAttachmentUrl(event.target.value)}
-                  placeholder="https://..."
-                  disabled={submittingSnapshot}
-                />
-              </label>
-            </div>
-            <div className="reception-quote-action-row">
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleCreateSnapshot}
-                disabled={submittingSnapshot}
-              >
-                {submittingSnapshot ? "Đang gửi snapshot..." : "Gửi báo giá v1 (T2)"}
-              </button>
-              <button
-                type="button"
-                className="toolbar-action-btn toolbar-action-outline"
-                onClick={loadLatestHandoverSnapshot}
-                disabled={loadingHandoverSnapshot || submittingSnapshot}
-              >
-                {loadingHandoverSnapshot ? "Đang tải..." : "Làm mới snapshot"}
-              </button>
-            </div>
-            {handoverError ? <p className="reception-quote-error">{handoverError}</p> : null}
-          </section>
-
-          {handoverSnapshot ? (
-            <section className="reception-quote-action-card">
-              <h3>Quyết định của khách</h3>
-              <div className="reception-quote-form-grid">
-                <label>
-                  <span>Kênh xác nhận</span>
-                  <select
-                    value={decisionChannel}
-                    onChange={(event) => setDecisionChannel(String(event.target.value || "APP").toUpperCase())}
-                    disabled={submittingDecision || !hasPendingCustomerDecision}
-                  >
-                    <option value="APP">Ứng dụng</option>
-                    <option value="ZALO">Zalo</option>
-                    <option value="PHONE">Điện thoại</option>
-                    <option value="DIRECT">Trực tiếp tại quầy</option>
-                  </select>
-                </label>
-                <label className="full-row">
-                  <span>Ghi chú quyết định</span>
-                  <textarea
-                    rows={3}
-                    value={decisionNote}
-                    onChange={(event) => setDecisionNote(event.target.value)}
-                    placeholder="Ví dụ: Khách duyệt qua app lúc 10:35"
-                    disabled={submittingDecision || !hasPendingCustomerDecision}
-                  />
-                </label>
-              </div>
-
+            <h3>Danh sách phiên bản</h3>
+            {quotations.length === 0 ? (
               <div className="reception-quote-action-row">
-                <button
-                  type="button"
-                  className="btn-success"
-                  disabled={submittingDecision || !hasPendingCustomerDecision}
-                  onClick={() => handleCustomerDecision(true)}
-                >
-                  {submittingDecision ? "Đang xử lý..." : "Khách duyệt"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  disabled={submittingDecision || !hasPendingCustomerDecision}
-                  onClick={() => handleCustomerDecision(false)}
-                >
-                  {submittingDecision ? "Đang xử lý..." : "Khách từ chối"}
+                <button type="button" className="btn-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
+                  Tạo báo giá V1
                 </button>
               </div>
-              {!hasPendingCustomerDecision ? (
-                <p className="reception-quote-note">
-                  Snapshot đã có quyết định: <strong>{formatApprovalState(handoverSnapshot?.approvalState)}</strong>.
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-
-          <section className="reception-quote-action-card">
-            <h3>Tóm tắt chuẩn đoán</h3>
-            <p className="reception-quote-note">
-              {latestDiagnosis?.diagnosisDetails || "Chưa có thông tin chuẩn đoán chi tiết."}
-            </p>
-          </section>
-
-          <section className="reception-quote-table-card">
-            <div className="reception-quote-table-head">
-              <h3>Chi tiết báo giá (view-only)</h3>
-              <strong>{formatMoney(totalAmount)} đ</strong>
-            </div>
-            {details.length === 0 ? (
-              <p className="reception-quote-note">Chưa có hạng mục báo giá.</p>
             ) : (
-              <div className="workshop-table-card">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Nội dung</th>
-                      <th>SL</th>
-                      <th>Đơn giá</th>
-                      <th>Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {details.map((item, index) => {
-                      const quantity = Number(item.quantity || 1);
-                      const unitPrice = Number(item.unitPrice || item.unitPriceAtTime || 0);
-                      const amount = Number(item.finalAmount || quantity * unitPrice);
-                      return (
-                        <tr key={item.id || index}>
-                          <td>{item.itemName || "Dịch vụ/Phụ tùng"}</td>
-                          <td>{quantity}</td>
-                          <td>{formatMoney(unitPrice)}</td>
-                          <td style={{ fontWeight: 700 }}>{formatMoney(amount)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="reception-quote-action-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {quotations.map((row) => {
+                  const id = Number(readField(row, "id", "Id"));
+                  const versionNo = Number(readField(row, "versionNo", "VersionNo") || 0);
+                  const status = normalizeStatus(readField(row, "status", "Status"));
+                  const statusLabel = getStatusLabelVi(status, status || "-");
+
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={id === Number(activeQuotationId) ? "btn-primary" : "toolbar-action-btn toolbar-action-outline"}
+                      onClick={() => setActiveQuotationId(id)}
+                      title={`Trạng thái: ${statusLabel}`}
+                    >
+                      Báo giá V{versionNo} ({statusLabel})
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
+
+          {activeQuotation ? (
+            <>
+              <section className="reception-quote-action-card">
+                <h3>Thao tác thương mại</h3>
+                <div className="reception-quote-action-row">
+                  <button type="button" className="btn-primary" onClick={handleExportQuotationExcel} disabled={saving || !activeQuotation}>
+                    Xuất Excel
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleSaveSplitBilling} disabled={saving || !staffId || !canEditSplitBilling}>
+                    Lưu tách bill
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit || !staffId}>
+                    Chuyển chờ bảo hiểm
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleConfirmInsuranceApproval}
+                    disabled={saving || !canConfirmInsuranceApproved || !staffId || !evidenceUrlValid}
+                  >
+                    Xác nhận BH đã duyệt
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer || !staffId}>
+                    Gửi báo giá cho khách
+                  </button>
+                  <button type="button" className="btn-primary" onClick={handleCloneQuotation} disabled={saving || !canClone || !staffId || !hasCloneReason}>
+                    Tạo bản mới
+                  </button>
+                  <button type="button" className="btn-success" onClick={() => handleCustomerDecision(true)} disabled={saving || !canCustomerDecision || !staffId}>
+                    Khách duyệt
+                  </button>
+                  <button type="button" className="btn-danger" onClick={() => handleCustomerDecision(false)} disabled={saving || !canCustomerDecision || !staffId}>
+                    Khách từ chối
+                  </button>
+                  <button type="button" className="btn-danger" onClick={() => setShowCancelModal(true)} disabled={saving || !staffId}>
+                    Hủy toàn bộ phiếu
+                  </button>
+                </div>
+                {mailSentNotice ? <p className="reception-quote-success">{mailSentNotice}</p> : null}
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Bằng chứng duyệt bảo hiểm (URL)</span>
+                    <small className="reception-quote-approval-note-hint">Bắt buộc trước khi gửi báo giá cho khách.</small>
+                  </div>
+                  <input
+                    type="url"
+                    className="reception-quote-approval-note-input"
+                    value={insuranceEvidenceUrl}
+                    onChange={(event) => setInsuranceEvidenceUrl(event.target.value)}
+                    placeholder="https://.../zalo-approval.jpg"
+                    disabled={saving || !staffId || !canConfirmInsuranceApproved}
+                  />
+                  {evidenceUrlError ? <small className="reception-quote-error">Link bằng chứng chưa hợp lệ (chỉ nhận http/https).</small> : null}
+                  <div style={{ marginTop: 8 }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={saving || insuranceEvidenceUploading || !staffId || !canConfirmInsuranceApproved}
+                      onChange={(event) => {
+                        const selectedFile = event.target.files?.[0];
+                        if (selectedFile) {
+                          void handleUploadInsuranceEvidence(selectedFile);
+                        }
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {insuranceEvidenceUploading ? <small className="reception-quote-note">Đang tải ảnh bằng chứng...</small> : null}
+                  {insuranceEvidenceUploadMessage ? <small className="reception-quote-success">{insuranceEvidenceUploadMessage}</small> : null}
+                </div>
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Ghi chú làm việc bảo hiểm</span>
+                    <small className="reception-quote-approval-note-hint">Lưu nội dung đàm phán/chốt bồi thường.</small>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={2}
+                    value={insuranceApprovalNote}
+                    onChange={(event) => setInsuranceApprovalNote(event.target.value)}
+                    placeholder="Ví dụ: GĐV duyệt 30tr, phần hao mòn khách tự chi trả."
+                    disabled={saving || !staffId}
+                  />
+                </div>
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Ghi chú gửi email cho khách</span>
+                    <small className="reception-quote-approval-note-hint">Đoạn này sẽ xuất hiện trong email báo giá cho khách.</small>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={2}
+                    value={sendEmailNote}
+                    onChange={(event) => setSendEmailNote(event.target.value)}
+                    placeholder="Ví dụ: Em đã áp dụng giảm 10% tiền công như đã trao đổi."
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="reception-quote-approval-note">
+                  <div className="reception-quote-approval-note-head">
+                    <span className="reception-quote-approval-note-title">Ghi chú clone phiên bản</span>
+                    <small className="reception-quote-approval-note-hint">Ghi rõ lý do thay đổi để theo dõi V1/V2/V3.</small>
+                  </div>
+                  <textarea
+                    className="reception-quote-approval-note-input"
+                    rows={2}
+                    value={cloneNote}
+                    onChange={(event) => setCloneNote(event.target.value)}
+                    placeholder="Ví dụ: Khách muốn bỏ hạng mục làm đẹp"
+                    disabled={saving}
+                  />
+                  {!hasCloneReason ? <small className="reception-quote-error">Vui lòng nhập lý do để bật chức năng clone.</small> : null}
+                </div>
+
+                <div className="reception-quote-summary-card" style={{ marginTop: 12 }}>
+                  <article>
+                    <span>Trạng thái báo giá</span>
+                    <strong>{getStatusLabelVi(quotationStatus, quotationStatus || "-")}</strong>
+                  </article>
+                  <article>
+                    <span>Duyệt kỹ thuật</span>
+                    <strong>{readField(activeQuotation, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus") || "-"}</strong>
+                  </article>
+                  <article>
+                    <span>Duyệt quản đốc</span>
+                    <strong>{readField(activeQuotation, "finalApprovalStatus", "FinalApprovalStatus") || "-"}</strong>
+                  </article>
+                  <article>
+                    <span>Khách quyết định</span>
+                    <strong>{readField(activeQuotation, "customerDecisionStatus", "CustomerDecisionStatus") || "-"}</strong>
+                  </article>
+                  <article>
+                    <span>Sẵn sàng tách bill</span>
+                    <strong>{readField(activeQuotation, "isReadyForSplitBilling", "IsReadyForSplitBilling") ? "Đã sẵn sàng" : "Chưa sẵn sàng"}</strong>
+                  </article>
+                  <article>
+                    <span>Thời điểm sẵn sàng</span>
+                    <strong>{formatDateTime(readField(activeQuotation, "splitBillingReadyAt", "SplitBillingReadyAt"))}</strong>
+                  </article>
+                  <article>
+                    <span>Cập nhật</span>
+                    <strong>{formatDateTime(readField(activeQuotation, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</strong>
+                  </article>
+                  <article>
+                    <span>Bảo hiểm đền</span>
+                    <strong>{formatMoney(splitBillingSummary.insurance)} đ</strong>
+                  </article>
+                  <article>
+                    <span>Khách tự trả</span>
+                    <strong>{formatMoney(splitBillingSummary.customer)} đ</strong>
+                  </article>
+                </div>
+                {(() => {
+                  const warnings = readField(activeQuotation, "warnings", "Warnings");
+                  return Array.isArray(warnings) && warnings.length > 0 ? (
+                    <div className="reception-quote-warning" style={{ marginTop: 10 }}>
+                      {warnings.join(" | ")}
+                    </div>
+                  ) : null;
+                })()}
+              </section>
+
+              <section className="reception-quote-table-card">
+                <div className="reception-quote-table-head">
+                  <h3>Chi tiết báo giá</h3>
+                  <strong>{formatMoney(readField(activeQuotation, "finalAmount", "FinalAmount"))} d</strong>
+                </div>
+
+                {quotationDetailRows.length > 0 ? (
+                  <div className="workshop-table-card">
+                    <table className="admin-table quoteflow-fixed-table">
+                      <colgroup>
+                        <col className="quoteflow-col-item" />
+                        <col className="quoteflow-col-type" />
+                        <col className="quoteflow-col-qty" />
+                        <col className="quoteflow-col-price" />
+                        <col className="quoteflow-col-total" />
+                        <col className="quoteflow-col-insurance" />
+                        <col className="quoteflow-col-customer" />
+                        <col className="quoteflow-col-clone" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Hạng mục</th>
+                          <th>Phân loại</th>
+                          <th>SL</th>
+                          <th>Đơn giá</th>
+                          <th>Tổng tiền</th>
+                          <th>Bảo hiểm đền</th>
+                          <th>Khách bù</th>
+                          <th className="quoteflow-col-clone">Loại khỏi bản mới</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quotationDetailRows.map((item) => {
+                          const groupKey = String(item.groupKey);
+                          const hasDependentParts = (partCountByGroup.get(groupKey) || 0) > 0;
+                          const isPartCollapsed = hasDependentParts && Boolean(collapsedPartGroups[groupKey]);
+                          if (item.isDependentPart && isPartCollapsed) {
+                            return null;
+                          }
+                          const row = item.row;
+                          const detailId = Number(readField(row, "id", "Id"));
+                          const name = String(readField(row, "itemName", "ItemName") || "-");
+                          const qty = Number(readField(row, "quantity", "Quantity") || 1);
+                          const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+                          const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || qty * unitPrice);
+                          const insuranceRaw = readField(
+                            row,
+                            "insuranceCoveredAmount",
+                            "InsuranceCoveredAmount",
+                            "insuranceRequestedAmount",
+                            "InsuranceRequestedAmount",
+                          );
+                          const originalInsuranceCovered =
+                            insuranceRaw === null || insuranceRaw === undefined || String(insuranceRaw).trim() === ""
+                              ? finalAmount
+                              : Number(insuranceRaw);
+                          const insuranceCoveredDraft = Number(splitBillingDraft[detailId]);
+                          const insuranceCovered = Number.isFinite(insuranceCoveredDraft)
+                            ? Math.min(Math.max(insuranceCoveredDraft, 0), Math.max(0, finalAmount))
+                            : originalInsuranceCovered;
+                          const customerCovered = Math.max(0, finalAmount - insuranceCovered);
+                          const isMandatory = Boolean(readField(row, "isMandatory", "IsMandatory"));
+
+                          return (
+                            <tr
+                              key={detailId}
+                              className={[
+                                "quoteflow-group-row",
+                                item.isMainService ? "quoteflow-row-service" : item.isDependentPart ? "quoteflow-row-part" : "",
+                                item.isGroupStart ? "quoteflow-group-start" : "",
+                                item.isGroupEnd ? "quoteflow-group-end" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              <td>
+                                <div className={item.isDependentPart ? "quoteflow-item-name quoteflow-item-name-part" : "quoteflow-item-name"}>
+                                  {item.isDependentPart ? `└─ ${name}` : name}
+                                </div>
+                                {item.isMainService && hasDependentParts ? (
+                                  <button
+                                    type="button"
+                                    className="quoteflow-part-toggle"
+                                    onClick={() =>
+                                      setCollapsedPartGroups((prev) => ({
+                                        ...prev,
+                                        [groupKey]: !prev[groupKey],
+                                      }))
+                                    }
+                                  >
+                                    {isPartCollapsed ? `Hiện phụ tùng (${partCountByGroup.get(groupKey) || 0})` : "Thu gọn phụ tùng"}
+                                  </button>
+                                ) : null}
+                                {isMandatory ? <span className="quoteflow-mandatory-chip">Bắt buộc</span> : null}
+                              </td>
+                              <td>{item.classificationLabel}</td>
+                              <td>{qty}</td>
+                              <td>{formatMoney(unitPrice)}</td>
+                              <td>{formatMoney(finalAmount)}</td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={Math.max(0, finalAmount)}
+                                  value={String(insuranceCovered)}
+                                  onChange={(event) => handleSplitInsuranceChange(detailId, finalAmount, event.target.value)}
+                                  disabled={saving || !staffId || !canEditSplitBilling}
+                                  style={{ width: 140, padding: "6px 8px", borderRadius: 8, border: "1px solid #cfd8e6" }}
+                                />
+                              </td>
+                              <td>{formatMoney(customerCovered)}</td>
+                              <td className="quoteflow-col-clone-cell">
+                                <label className="quoteflow-clone-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={removeIdsForClone.includes(detailId)}
+                                    onChange={() => handleToggleCloneRemove(detailId)}
+                                    disabled={saving || !canClone}
+                                  />
+                                </label>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="reception-quote-note">Phiên bản này chưa có dòng chi tiết.</p>
+                )}
+              </section>
+            </>
+          ) : null}
         </div>
       )}
+
+      {showMandatoryCloneWarning ? (
+        <div className="quoteflow-modal-backdrop">
+          <div className="quoteflow-modal">
+            <h4>Cảnh báo hạng mục bắt buộc</h4>
+            <p>
+              Bạn đang loại bỏ hạng mục có cờ <strong>Bắt buộc (An toàn)</strong>. Hệ thống sẽ phát sinh yêu cầu ngoại lệ cho quản đốc duyệt.
+            </p>
+            <div className="reception-quote-action-row">
+              <button type="button" className="btn-danger" onClick={handleCloneQuotation} disabled={saving || !staffId}>
+                Tiếp tục clone
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setShowMandatoryCloneWarning(false)} disabled={saving}>
+                Quay lại
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showCancelModal ? (
+        <div className="quoteflow-modal-backdrop">
+          <div className="quoteflow-modal">
+            <h4>Hủy toàn bộ phiếu</h4>
+            <p>Chọn lý do hủy để phục vụ thống kê CSKH.</p>
+            <select value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} disabled={saving}>
+              <option value="Khách vội">Khách vội</option>
+              <option value="Chê đắt">Chê đắt</option>
+              <option value="Đổi ý">Đổi ý</option>
+              <option value="Có việc gấp">Có việc gấp</option>
+            </select>
+            <div className="reception-quote-action-row">
+              <button type="button" className="btn-danger" onClick={handleCancelAll} disabled={saving || !staffId}>
+                Xác nhận hủy
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setShowCancelModal(false)} disabled={saving}>
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
