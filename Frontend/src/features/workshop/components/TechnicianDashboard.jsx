@@ -794,6 +794,22 @@ export default function TechnicianDashboard() {
                             },
                           })
                         }
+                        onOpenRecommendation={() =>
+                          navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`, {
+                            state: {
+                              focusSection: "RECOMMENDATION",
+                              vehicleSnapshot: {
+                                vehicleLicensePlate: task.vehicleLicensePlate,
+                                vehicleBrandName: task.vehicleBrandName,
+                                vehicleModelName: task.vehicleModelName,
+                                vehicleDescriptor: task.vehicleDescriptor,
+                                vehicleManufactureYear: task.vehicleManufactureYear,
+                                vehicleColor: task.vehicleColor,
+                                vehicleVin: task.vehicleVin,
+                              },
+                            },
+                          })
+                        }
                         onRequestSupport={() => {
                           setSupportTarget(task);
                           setSupportNote("");
@@ -992,7 +1008,7 @@ function MetricCard({ title, value, description, color, isInteractive = false, i
   );
 }
 
-function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport }) {
+function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onOpenRecommendation, onRequestSupport }) {
   const canStart = !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt;
   const canOpenDiagnosis = Boolean(task.startedAt);
   const teammateName = task.roleInPair === "Thợ chính" ? task.assistantName : task.leadName;
@@ -1147,6 +1163,18 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
           isDisabled={!canStart}
         >
           {canStart ? "Nhận yêu cầu" : "Đã nhận yêu cầu"}
+        </Button>
+        <Button
+          size="sm"
+          borderRadius="full"
+          h="36px"
+          minH="36px"
+          colorScheme="blue"
+          variant="outline"
+          onClick={onOpenRecommendation}
+          isDisabled={!canOpenDiagnosis}
+        >
+          Đề xuất phát sinh
         </Button>
         <Button
           size="sm"
