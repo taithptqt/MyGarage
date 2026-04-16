@@ -8,6 +8,7 @@ namespace MyGarage.DTOs.Requests
     {
         public string? OrderCategory { get; set; }
         public long? ServiceAdvisorId { get; set; }
+        public string? CustomerNotes { get; set; }
         public string? OldPartsReturnOption { get; set; }
         public decimal? RequiredDepositAmount { get; set; }
         public DateTime? CheckInTime { get; set; }

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Kv8gAFRZ9GA=",
+  "dgSpecHash": "or32ff8KELg=",
   "success": true,
-  "projectFilePath": "E:\\clonee\\MyGarage\\backend\\MyGarage.csproj",
+  "projectFilePath": "E:\\MyGarage\\backend\\MyGarage.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\taith\\.nuget\\packages\\automapper\\12.0.1\\automapper.12.0.1.nupkg.sha512",
     "C:\\Users\\taith\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.1\\automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",

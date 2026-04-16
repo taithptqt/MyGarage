@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Models;
-using AutoMapper;
-using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Enums;
+using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
@@ -63,6 +62,7 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
+
             var dto = _mapper.Map<ServiceOrderDetailResponseDto>(item);
             return Ok(dto);
         }
@@ -75,14 +75,6 @@ namespace MyGarage.Controllers
                 if (itemDto == null || itemDto.ServiceOrderId <= 0)
                 {
                     return BadRequest(new { message = "Thiếu ServiceOrderId hợp lệ để tạo hạng mục service order." });
-                }
-
-                if (IsSupplementaryDetail(itemDto.ServiceSource, itemDto.IsSupplementary, itemDto.SupplementaryReasonCode))
-                {
-                    return BadRequest(new
-                    {
-                        message = "Dịch vụ phát sinh phải đi qua báo giá bổ sung (Quotation #2), không được tạo trực tiếp trên ServiceOrderDetails."
-                    });
                 }
 
                 await _serviceOrderService.EnsureWorkshopEditableAsync(itemDto.ServiceOrderId);
@@ -113,17 +105,6 @@ namespace MyGarage.Controllers
                     ? itemDto.ServiceOrderId
                     : existingItem.ServiceOrderId;
 
-                var targetServiceSource = itemDto?.ServiceSource ?? existingItem.ServiceSource;
-                var targetIsSupplementary = itemDto?.IsSupplementary ?? existingItem.IsSupplementary;
-                var targetSupplementaryReasonCode = itemDto?.SupplementaryReasonCode ?? existingItem.SupplementaryReasonCode;
-                if (IsSupplementaryDetail(targetServiceSource, targetIsSupplementary, targetSupplementaryReasonCode))
-                {
-                    return BadRequest(new
-                    {
-                        message = "Dịch vụ phát sinh chỉ được điều chỉnh qua luồng báo giá bổ sung (Quotation #2)."
-                    });
-                }
-
                 await _serviceOrderService.EnsureWorkshopEditableAsync(targetServiceOrderId);
 
                 _mapper.Map(itemDto, existingItem);
@@ -153,14 +134,6 @@ namespace MyGarage.Controllers
                     return NotFound();
                 }
 
-                if (IsSupplementaryDetail(existingItem.ServiceSource, existingItem.IsSupplementary, existingItem.SupplementaryReasonCode))
-                {
-                    return BadRequest(new
-                    {
-                        message = "Dịch vụ phát sinh chỉ được hủy qua luồng báo giá bổ sung (Quotation #2)."
-                    });
-                }
-
                 await _serviceOrderService.EnsureWorkshopEditableAsync(existingItem.ServiceOrderId);
 
                 var result = await _serviceOrderDetailService.DeleteAsync(id);
@@ -176,35 +149,5 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
-
-        private static bool IsSupplementaryDetail(string? serviceSource, bool? isSupplementary, string? supplementaryReasonCode)
-        {
-            if (isSupplementary == true)
-            {
-                return true;
-            }
-
-            var normalizedSource = NormalizeToken(serviceSource);
-            if (normalizedSource == nameof(ServiceOrderDetailSourceCode.SUPPLEMENTARY_TECHNICIAN) ||
-                normalizedSource == nameof(ServiceOrderDetailSourceCode.SUPPLEMENTARY_CUSTOMER))
-            {
-                return true;
-            }
-
-            return !string.IsNullOrWhiteSpace(NormalizeToken(supplementaryReasonCode));
-        }
-
-        private static string NormalizeToken(string? raw)
-        {
-            return string.IsNullOrWhiteSpace(raw)
-                ? string.Empty
-                : raw.Trim().ToUpperInvariant().Replace("-", "_").Replace(" ", "_");
-        }
     }
 }
-
-
-
-
-
-

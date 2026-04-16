@@ -1039,7 +1039,7 @@ public class AccountingController : ControllerBase
                     created_at,
                     updated_at
                 FROM dbo.accounts_payable
-                WHERE (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
+                WHERE (@branchId IS NULL OR branch_id=@branchId)
                 ORDER BY id DESC;
                 """,
                 [new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)])).ToList();
@@ -1111,7 +1111,6 @@ public class AccountingController : ControllerBase
                 WHERE (
                         @branchId IS NULL
                         OR TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.branchId')) = @branchId
-                        OR JSON_VALUE(request_payload, '$.branchId') IS NULL
                       )
                 ORDER BY updated_at DESC, id DESC;
                 """,
@@ -1205,7 +1204,7 @@ public class AccountingController : ControllerBase
                 SELECT TOP 1
                     id, period_code, start_date, end_date, status, closed_at, note
                 FROM dbo.accounting_periods
-                WHERE (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
+                WHERE (@branchId IS NULL OR branch_id=@branchId)
                 ORDER BY end_date DESC, id DESC;
                 """,
                 [new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)])).FirstOrDefault()
@@ -2396,24 +2395,45 @@ public class AccountingController : ControllerBase
 
     private static bool IsAccountingStaff(string? claimRole, string? roleCode, string? roleName)
     {
-        var roleNameUpper = (roleName ?? "").Trim().ToUpperInvariant();
+        var roleNameUpper = NormalizeRoleName(roleName);
         return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
                (
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(roleCode, "ACCOUNTING", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("K? TO�N", StringComparison.OrdinalIgnoreCase)
+                   roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase)
                );
     }
 
     private static bool IsAdminStaff(string? claimRole, string? roleCode, string? roleName)
     {
-        var roleNameUpper = (roleName ?? "").Trim().ToUpperInvariant();
+        var roleNameUpper = NormalizeRoleName(roleName);
         return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
                (
                    string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
                    roleNameUpper.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
                );
+    }
+
+    private static string NormalizeRoleName(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            return string.Empty;
+        }
+
+        var normalized = roleName.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var ch in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(ch);
+            }
+        }
+
+        return sb.ToString().Normalize(NormalizationForm.FormC).Trim().ToUpperInvariant();
     }
 
     private long? ResolveBranchIdFromClaims()

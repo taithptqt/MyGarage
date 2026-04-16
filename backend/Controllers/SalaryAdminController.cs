@@ -334,7 +334,7 @@ public class SalaryAdminController : ControllerBase
               AND effective_from <= @effectiveFrom
               AND (effective_to IS NULL OR effective_to >= @effectiveFrom)
               AND UPPER(ISNULL(status, @staffSalaryStatusActive)) = @staffSalaryStatusActive
-              AND (@branchId IS NULL OR branch_id = @branchId OR branch_id IS NULL)
+              AND (@branchId IS NULL OR branch_id = @branchId)
             ORDER BY effective_from DESC, id DESC;
             """,
             [

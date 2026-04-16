@@ -370,9 +370,6 @@ namespace MyGarage.Services
                 var editableDetails = await _context.ServiceOrderDetails
                     .Where(d =>
                         d.ServiceOrderId == id &&
-                        d.QuotationDetailId == null &&
-                        !d.IsSupplementary &&
-                        (d.ServiceSource == null || d.ServiceSource == string.Empty || d.ServiceSource == nameof(ServiceOrderDetailSourceCode.INITIAL)) &&
                         (d.ItemType == "LABOR" || d.ItemType == "SERVICE"))
                     .OrderBy(d => d.Id)
                     .ToListAsync();
@@ -1030,9 +1027,6 @@ namespace MyGarage.Services
             var finalAmount = subTotal + taxAmount;
 
             detail.ItemType = WorkshopDetailItemType;
-            detail.ServiceSource = nameof(ServiceOrderDetailSourceCode.INITIAL);
-            detail.IsSupplementary = false;
-            detail.SupplementaryReasonCode = null;
             detail.ItemName = service.Name;
             detail.Description = WorkshopDetailDescription;
             detail.Quantity = 1m;
