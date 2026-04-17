@@ -273,11 +273,14 @@
 .group-row td {
   border: 0;
   background: #fff;
-  background-clip: padding-box;
+}
+
+.premium-table .group-service-row {
+  background: #f8fbff;
 }
 
 .premium-table .group-service-row td {
-  background: #f8fbff;
+  background: transparent;
 }
 
 .premium-table .group-service-row.clickable-service-row td {
@@ -285,34 +288,11 @@
 }
 
 .premium-table .group-service-row.clickable-service-row:hover td {
+  background: transparent;
+}
+
+.premium-table .group-service-row.clickable-service-row:hover {
   background: #f1f6ff;
-}
-
-.premium-table .group-row.group-start td:first-child,
-.premium-table .group-row.group-start td:last-child,
-.premium-table .group-row.group-end td:first-child,
-.premium-table .group-row.group-end td:last-child {
-  overflow: hidden;
-}
-
-.premium-table .group-service-row.clickable-service-row.group-start:hover td:first-child {
-  border-top-left-radius: 12px !important;
-  clip-path: inset(0 0 0 0 round 12px 0 0 0);
-}
-
-.premium-table .group-service-row.clickable-service-row.group-start:hover td:last-child {
-  border-top-right-radius: 12px !important;
-  clip-path: inset(0 0 0 0 round 0 12px 0 0);
-}
-
-.premium-table .group-service-row.clickable-service-row.group-end:hover td:first-child {
-  border-bottom-left-radius: 12px !important;
-  clip-path: inset(0 0 0 0 round 0 0 0 12px);
-}
-
-.premium-table .group-service-row.clickable-service-row.group-end:hover td:last-child {
-  border-bottom-right-radius: 12px !important;
-  clip-path: inset(0 0 0 0 round 0 0 12px 0);
 }
 
 .group-start td {

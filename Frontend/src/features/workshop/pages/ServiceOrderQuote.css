@@ -755,19 +755,19 @@
 }
 
 .group-service-row td:first-child {
-  border-left: 1px solid #d9e1f1 !important;
+  border-left: 0 !important;
 }
 
 .group-service-row td:last-child {
-  border-right: 1px solid #d9e1f1 !important;
+  border-right: 0 !important;
 }
 
 .group-part-row td:first-child {
-  border-left: 1px solid #d9e1f1 !important;
+  border-left: 0 !important;
 }
 
 .group-part-row td:last-child {
-  border-right: 1px solid #d9e1f1 !important;
+  border-right: 0 !important;
 }
 
 .group-start td {
@@ -779,11 +779,11 @@
 }
 
 .group-row td:first-child {
-  border-left: 1px solid #d9e1f1;
+  border-left: 0 !important;
 }
 
 .group-row td:last-child {
-  border-right: 1px solid #d9e1f1;
+  border-right: 0 !important;
 }
 
 .group-middle td {
@@ -799,27 +799,37 @@
 }
 
 .group-hover td:first-child {
-  border-left-color: var(--quota-primary);
+  border-left: 1px solid var(--quota-primary) !important;
 }
 
 .group-hover td:last-child {
-  border-right-color: var(--quota-primary);
+  border-right: 1px solid var(--quota-primary) !important;
 }
 
 .group-hover.group-service-row td:first-child {
-  border-left-color: var(--quota-primary) !important;
+  border-left: 1px solid var(--quota-primary) !important;
 }
 
 .group-hover.group-service-row td:last-child {
-  border-right-color: var(--quota-primary) !important;
+  border-right: 1px solid var(--quota-primary) !important;
 }
 
 .group-hover.group-part-row td:first-child {
-  border-left-color: var(--quota-primary) !important;
+  border-left: 1px solid var(--quota-primary) !important;
 }
 
 .group-hover.group-part-row td:last-child {
-  border-right-color: var(--quota-primary) !important;
+  border-right: 1px solid var(--quota-primary) !important;
+}
+
+.premium-table .group-row td {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.group-hover td:not(:first-child):not(:last-child) {
+  border-left: 0 !important;
+  border-right: 0 !important;
 }
 
 .group-spacer-row td {
