@@ -101,17 +101,31 @@ namespace MyGarage.Controllers
         [HttpGet("conversations/{id:long}")]
         public async Task<ActionResult<ConversationDetailDto>> GetConversation(long id)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
-            var detail = await _chatService.GetCustomerConversationAsync(userId.Value, id);
-            if (detail is null) return NotFound();
-            return Ok(detail);
+            if (IsCustomerRole())
+            {
+                var detail = await _chatService.GetCustomerConversationAsync(userId.Value, id);
+                if (detail is null) return NotFound();
+                return Ok(detail);
+            }
+
+            if (IsStaffRole())
+            {
+                try
+                {
+                    var detail = await _chatService.GetReceptionConversationAsync(userId.Value, this.GetCurrentRoleCode(), id);
+                    if (detail is null) return NotFound();
+                    return Ok(detail);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return Forbid();
+                }
+            }
+
+            return Forbid();
         }
 
         [HttpGet("conversations/{id:long}/messages")]
@@ -120,22 +134,32 @@ namespace MyGarage.Controllers
             [FromQuery] long? beforeMessageId = null,
             [FromQuery] int take = 50)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
             try
             {
-                var messages = await _chatService.GetCustomerMessagesAsync(userId.Value, id, beforeMessageId, take);
-                return Ok(messages);
+                if (IsCustomerRole())
+                {
+                    var messages = await _chatService.GetCustomerMessagesAsync(userId.Value, id, beforeMessageId, take);
+                    return Ok(messages);
+                }
+
+                if (IsStaffRole())
+                {
+                    var messages = await _chatService.GetReceptionMessagesAsync(userId.Value, this.GetCurrentRoleCode(), id, beforeMessageId, take);
+                    return Ok(messages);
+                }
+
+                return Forbid();
             }
             catch (UnauthorizedAccessException)
             {
                 return Forbid();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
             }
         }
 
@@ -168,17 +192,25 @@ namespace MyGarage.Controllers
         [HttpPost("conversations/{id:long}/messages")]
         public async Task<ActionResult<ChatMessageDto>> SendMessage(long id, [FromBody] ChatSendMessageRequestDto request)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
             try
             {
-                var message = await _chatService.SendCustomerMessageAsync(userId.Value, id, request);
+                ChatMessageDto message;
+                if (IsCustomerRole())
+                {
+                    message = await _chatService.SendCustomerMessageAsync(userId.Value, id, request);
+                }
+                else if (IsStaffRole())
+                {
+                    message = await _chatService.SendStaffMessageAsync(userId.Value, this.GetCurrentRoleCode(), id, request);
+                }
+                else
+                {
+                    return Forbid();
+                }
+
                 return Ok(message);
             }
             catch (ChatConflictException ex)
@@ -202,20 +234,32 @@ namespace MyGarage.Controllers
         [HttpGet("conversations/{id:long}/orders")]
         public async Task<ActionResult<IReadOnlyList<ChatOrderCardDto>>> GetConversationOrders(long id)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
             try
             {
-                var orders = await _chatService.GetCustomerConversationOrdersAsync(
-                    userId.Value,
-                    id,
-                    HttpContext.RequestAborted);
+                IReadOnlyList<ChatOrderCardDto> orders;
+                if (IsCustomerRole())
+                {
+                    orders = await _chatService.GetCustomerConversationOrdersAsync(
+                        userId.Value,
+                        id,
+                        HttpContext.RequestAborted);
+                }
+                else if (IsStaffRole())
+                {
+                    orders = await _chatService.GetReceptionConversationOrdersAsync(
+                        userId.Value,
+                        this.GetCurrentRoleCode(),
+                        id,
+                        HttpContext.RequestAborted);
+                }
+                else
+                {
+                    return Forbid();
+                }
+
                 return Ok(orders);
             }
             catch (UnauthorizedAccessException)
@@ -233,17 +277,12 @@ namespace MyGarage.Controllers
             long id,
             [FromForm] List<IFormFile> files)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
             if (files is null || files.Count == 0)
             {
-                return BadRequest(new { message = "Vui long chon it nhat 1 tep dinh kem." });
+            return BadRequest(new { message = "Vui lòng chọn ít nhất 1 tệp đính kèm." });
             }
 
             if (files.Count > MaxAttachmentsPerRequest)
@@ -251,10 +290,32 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = $"Toi da {MaxAttachmentsPerRequest} tep moi lan gui." });
             }
 
-            var conversation = await _chatService.GetCustomerConversationAsync(userId.Value, id, HttpContext.RequestAborted);
-            if (conversation is null)
+            try
             {
-                return NotFound();
+                if (IsCustomerRole())
+                {
+                    var conversation = await _chatService.GetCustomerConversationAsync(userId.Value, id, HttpContext.RequestAborted);
+                    if (conversation is null)
+                    {
+                        return NotFound();
+                    }
+                }
+                else if (IsStaffRole())
+                {
+                    var conversation = await _chatService.GetReceptionConversationAsync(userId.Value, this.GetCurrentRoleCode(), id, HttpContext.RequestAborted);
+                    if (conversation is null)
+                    {
+                        return NotFound();
+                    }
+                }
+                else
+                {
+                    return Forbid();
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
             }
 
             var uploaded = new List<ChatUploadAttachmentDto>(files.Count);
@@ -263,17 +324,17 @@ namespace MyGarage.Controllers
                 var file = files[i];
                 if (file is null || file.Length == 0)
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} khong hop le." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} không hợp lệ." });
                 }
 
                 if (!TryResolveAttachmentMetadata(file, out var extension, out var normalizedContentType))
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} khong duoc ho tro. Chi ho tro {SupportedAttachmentHint}." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} không được hỗ trợ. Chỉ hỗ trợ {SupportedAttachmentHint}." });
                 }
 
                 if (file.Length > MaxAttachmentSizeBytes)
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} vuot qua {MaxAttachmentSizeBytes / (1024 * 1024)}MB." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} vượt quá {MaxAttachmentSizeBytes / (1024 * 1024)}MB." });
                 }
 
                 var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
@@ -300,17 +361,24 @@ namespace MyGarage.Controllers
         [HttpPut("conversations/{id:long}/read-state")]
         public async Task<ActionResult> MarkRead(long id, [FromBody] ChatUpdateReadStateRequestDto request)
         {
-            if (!string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                return Forbid();
-            }
-
             var userId = this.GetCurrentUserId();
             if (!userId.HasValue) return Unauthorized();
 
             try
             {
-                await _chatService.MarkCustomerReadAsync(userId.Value, id, request.LastReadMessageId);
+                if (IsCustomerRole())
+                {
+                    await _chatService.MarkCustomerReadAsync(userId.Value, id, request.LastReadMessageId);
+                }
+                else if (IsStaffRole())
+                {
+                    await _chatService.MarkStaffReadAsync(userId.Value, this.GetCurrentRoleCode(), id, request.LastReadMessageId);
+                }
+                else
+                {
+                    return Forbid();
+                }
+
                 return NoContent();
             }
             catch (ChatConflictException ex)
@@ -395,6 +463,16 @@ namespace MyGarage.Controllers
             }
 
             return normalized;
+        }
+
+        private bool IsCustomerRole()
+        {
+            return string.Equals(this.GetCurrentRole(), "Customer", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsStaffRole()
+        {
+            return string.Equals(this.GetCurrentRole(), "Staff", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

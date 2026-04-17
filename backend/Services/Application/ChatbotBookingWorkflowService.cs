@@ -1,9 +1,10 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -189,7 +190,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             case BookingNavigationCommand.Cancel:
                 await ClearSlotSelectionAsync(state, ct);
                 state = state.Reset();
-                await LogAction(sessionId, ChatbotActionStatus.SKIPPED, "BOOKING_FUNNEL_EXIT", "USER_CANCELLED", "Booking flow cancelled by user command.", null, ct);
+            await LogAction(sessionId, ChatbotActionStatus.SKIPPED, "BOOKING_FUNNEL_EXIT", "USER_CANCELED", "Booking flow canceled by user command.", null, ct);
                 return Build(root, state, true, "Đã hủy luồng đặt lịch. Nếu bạn muốn đặt lịch lại, vui lòng nhập `đặt lịch`.");
 
             case BookingNavigationCommand.Restart:
@@ -912,50 +913,60 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             return null;
         }
 
-        await using var tx = await _context.Database.BeginTransactionAsync(ct);
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == plate && v.IsDeleted != true, ct);
-            if (vehicle is null)
+            await using var tx = await TryBeginTransactionAsync(ct);
+            try
             {
-                vehicle = new Vehicle
+                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.LicensePlate == plate && v.IsDeleted != true, ct);
+                if (vehicle is null)
                 {
-                    LicensePlate = plate,
-                    ModelId = modelId.Value,
-                    Vin = ParseVin(message),
-                    ManufactureYear = ParseManufactureYear(message),
-                    CreatedAt = _clock.UtcNow,
-                    CreatedBy = customerId,
-                    IsDeleted = false
-                };
-                _context.Vehicles.Add(vehicle);
-                await _context.SaveChangesAsync(ct);
-            }
+                    vehicle = new Vehicle
+                    {
+                        LicensePlate = plate,
+                        ModelId = modelId.Value,
+                        Vin = ParseVin(message),
+                        ManufactureYear = ParseManufactureYear(message),
+                        CreatedAt = _clock.UtcNow,
+                        CreatedBy = customerId,
+                        IsDeleted = false
+                    };
+                    _context.Vehicles.Add(vehicle);
+                    await _context.SaveChangesAsync(ct);
+                }
 
-            var linked = await _context.CustomerVehicles.AnyAsync(cv => cv.CustomerId == customerId && cv.VehicleId == vehicle.Id && cv.IsDeleted != true, ct);
-            if (!linked)
+                var linked = await _context.CustomerVehicles.AnyAsync(cv => cv.CustomerId == customerId && cv.VehicleId == vehicle.Id && cv.IsDeleted != true, ct);
+                if (!linked)
+                {
+                    _context.CustomerVehicles.Add(new CustomerVehicle
+                    {
+                        CustomerId = customerId,
+                        VehicleId = vehicle.Id,
+                        IsCurrentOwner = true,
+                        OwnershipStartDate = _clock.LocalToday,
+                        CreatedAt = _clock.UtcNow,
+                        CreatedBy = customerId,
+                        IsDeleted = false
+                    });
+                    await _context.SaveChangesAsync(ct);
+                }
+
+                if (tx is not null)
+                {
+                    await tx.CommitAsync(ct);
+                }
+                return vehicle;
+            }
+            catch
             {
-                _context.CustomerVehicles.Add(new CustomerVehicle
+                if (tx is not null)
                 {
-                    CustomerId = customerId,
-                    VehicleId = vehicle.Id,
-                    IsCurrentOwner = true,
-                    OwnershipStartDate = _clock.LocalToday,
-                    CreatedAt = _clock.UtcNow,
-                    CreatedBy = customerId,
-                    IsDeleted = false
-                });
-                await _context.SaveChangesAsync(ct);
+                    await tx.RollbackAsync(ct);
+                }
+                throw;
             }
-
-            await tx.CommitAsync(ct);
-            return vehicle;
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        });
     }
 
     private async Task<long?> ResolveModelIdFromMessageAsync(string message, CancellationToken ct)
@@ -2600,6 +2611,17 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
     }
 
     private enum BookingStep { IdentifyOrCreateVehicle = 0, SelectServices = 1, SelectBranch = 2, ComputeAvailableSlots = 3, FinalizeBooking = 4, Completed = 5 }
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _context.Database.BeginTransactionAsync(cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 }
 
 internal static class BookingStepLabel
@@ -2615,10 +2637,3 @@ internal static class BookingStepLabel
         _ => "IDENTIFY_OR_CREATE_VEHICLE"
     };
 }
-
-
-
-
-
-
-

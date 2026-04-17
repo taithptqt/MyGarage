@@ -35,6 +35,11 @@ public partial class GarageContext
             entity.Property(e => e.CoefficientValue).HasPrecision(18, 2);
         });
 
+        modelBuilder.Entity<TechnicalProposalSnapshotDetail>(entity =>
+        {
+            entity.Property(e => e.Quantity).HasPrecision(18, 3);
+        });
+
         modelBuilder.Entity<Voucher>(entity =>
         {
             entity.Property(e => e.VoucherName).HasMaxLength(255);
@@ -346,6 +351,8 @@ public partial class GarageContext
         ConfigurePayrollModule(modelBuilder);
         ConfigureChatbotModule(modelBuilder);
         ConfigureAuthModule(modelBuilder);
+        ConfigureExecutionModule(modelBuilder);
+        ConfigureCustomerLifecycleModule(modelBuilder);
     }
 }
 

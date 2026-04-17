@@ -30,97 +30,97 @@ public static class RetailOrderStockCommitter
             return;
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
-
-        var existingOutByProduct = await db.StockTransactions
-            .Where(x =>
-                x.RetailOrderId == retailOrderId &&
-                x.Type == "OUT")
-            .GroupBy(x => x.ProductId)
-            .Select(g => new
-            {
-                ProductId = g.Key,
-                Quantity = g.Sum(x => x.Quantity)
-            })
-            .ToDictionaryAsync(x => x.ProductId, x => x.Quantity, cancellationToken);
-
-        var remainingByProduct = requiredByProduct
-            .ToDictionary(
-                kvp => kvp.Key,
-                kvp => kvp.Value - (existingOutByProduct.TryGetValue(kvp.Key, out var alreadyOut) ? alreadyOut : 0m));
-
-        var targetProductIds = remainingByProduct
-            .Where(x => x.Value > 0)
-            .Select(x => x.Key)
-            .ToList();
-
-        if (targetProductIds.Count == 0)
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            await tx.CommitAsync(cancellationToken);
-            return;
-        }
-
-        var inventoryRows = await db.Inventories
-            .Include(x => x.Warehouse)
-            .Where(x =>
-                targetProductIds.Contains(x.ProductId) &&
-                x.Warehouse.BranchId == order.BranchId &&
-                x.Warehouse.IsDeleted != true &&
-                x.Warehouse.IsActive != false)
-            .ToListAsync(cancellationToken);
-
-        var now = DateTime.UtcNow;
-        var orderCode = string.IsNullOrWhiteSpace(order.OrderCode) ? $"ID:{order.Id}" : order.OrderCode.Trim();
-
-        foreach (var productId in targetProductIds)
-        {
-            var need = remainingByProduct[productId];
-            if (need <= 0)
+            await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                continue;
-            }
+                var existingOutByProduct = await db.StockTransactions
+                    .Where(x =>
+                        x.RetailOrderId == retailOrderId &&
+                        x.Type == "OUT")
+                    .GroupBy(x => x.ProductId)
+                    .Select(g => new
+                    {
+                        ProductId = g.Key,
+                        Quantity = g.Sum(x => x.Quantity)
+                    })
+                    .ToDictionaryAsync(x => x.ProductId, x => x.Quantity, cancellationToken);
 
-            var candidates = SelectWarehouseCandidates(inventoryRows.Where(x => x.ProductId == productId));
+                var remainingByProduct = requiredByProduct
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => kvp.Value - (existingOutByProduct.TryGetValue(kvp.Key, out var alreadyOut) ? alreadyOut : 0m));
 
-            foreach (var inventory in candidates)
-            {
-                if (need <= 0)
+                var targetProductIds = remainingByProduct
+                    .Where(x => x.Value > 0)
+                    .Select(x => x.Key)
+                    .ToList();
+
+                if (targetProductIds.Count == 0)
                 {
-                    break;
+                    await tx.CommitAsync(cancellationToken);
+                    return;
                 }
 
-                var reservedQuantity = inventory.ReservedQuantity ?? 0m;
-                var availableQuantity = inventory.Quantity - reservedQuantity;
-                if (availableQuantity <= 0)
+                var inventoryRows = await db.Inventories
+                    .Include(x => x.Warehouse)
+                    .Where(x =>
+                        targetProductIds.Contains(x.ProductId) &&
+                        x.Warehouse.BranchId == order.BranchId &&
+                        x.Warehouse.IsDeleted != true &&
+                        x.Warehouse.IsActive != false)
+                    .ToListAsync(cancellationToken);
+
+                var now = DateTime.UtcNow;
+                var orderCode = string.IsNullOrWhiteSpace(order.OrderCode) ? $"ID:{order.Id}" : order.OrderCode.Trim();
+
+                foreach (var productId in targetProductIds)
                 {
-                    continue;
+                    var need = remainingByProduct[productId];
+                    var candidates = SelectWarehouseCandidates(inventoryRows.Where(x => x.ProductId == productId));
+
+                    foreach (var inventory in candidates)
+                    {
+                        if (need <= 0) break;
+
+                        var reservedQuantity = inventory.ReservedQuantity ?? 0m;
+                        var availableQuantity = inventory.Quantity - reservedQuantity;
+                        if (availableQuantity <= 0) continue;
+
+                        var consume = Math.Min(need, availableQuantity);
+                        inventory.Quantity -= consume;
+                        need -= consume;
+
+                        db.StockTransactions.Add(new StockTransaction
+                        {
+                            ProductId = productId,
+                            WarehouseId = inventory.WarehouseId,
+                            Type = "OUT",
+                            Quantity = consume,
+                            Note = $"Auto deduct stock for retail order {orderCode}",
+                            RetailOrderId = retailOrderId,
+                            CreatedAt = now
+                        });
+                    }
+
+                    if (need > 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Insufficient stock to fulfill retail order {orderCode}. ProductId={productId}, Remaining={need}");
+                    }
                 }
 
-                var consume = Math.Min(need, availableQuantity);
-                inventory.Quantity -= consume;
-                need -= consume;
-
-                db.StockTransactions.Add(new StockTransaction
-                {
-                    ProductId = productId,
-                    WarehouseId = inventory.WarehouseId,
-                    Type = "OUT",
-                    Quantity = consume,
-                    Note = $"Auto deduct stock for retail order {orderCode}",
-                    RetailOrderId = retailOrderId,
-                    CreatedAt = now
-                });
+                await db.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
             }
-
-            if (need > 0)
+            catch
             {
-                throw new InvalidOperationException(
-                    $"Insufficient stock to fulfill retail order {orderCode}. ProductId={productId}, Remaining={need}");
+                await tx.RollbackAsync(cancellationToken);
+                throw;
             }
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        });
     }
 
     private static List<Inventory> SelectWarehouseCandidates(IEnumerable<Inventory> rows)

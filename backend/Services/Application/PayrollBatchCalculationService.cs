@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using MyGarage.Data;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -12,7 +11,11 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
 {
     private const string PayrollPeriodStatusOpen = nameof(PayrollPeriodStatusCode.OPEN);
     private const string PayrollRunStatusDraft = nameof(PayrollRunStatusCode.DRAFT);
+    private const string PayrollRunStatusCalculated = nameof(PayrollRunStatusCode.CALCULATED);
     private const string PayrollItemStatusDraft = nameof(PayrollItemStatusCode.DRAFT);
+    private const string CommissionStatusPending = nameof(CommissionTransactionStatusCode.PENDING);
+    private const string CommissionStatusApproved = nameof(CommissionTransactionStatusCode.APPROVED);
+    private const string CommissionStatusProcessed = "PROCESSED";
     private const string StaffSalaryProfileStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
     private const string StaffContractStatusActive = nameof(StaffContractStatusCode.ACTIVE);
     private const string EmployeeLoanStatusActive = nameof(EmployeeLoanStatusCode.ACTIVE);
@@ -79,38 +82,9 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         "ABSENT",
         "LATE",
         "UNPAID_LEAVE",
+        "PENALTY",
         "EARLY_LEAVE",
         "MISSED_CHECKIN"
-    ];
-
-    private static readonly HashSet<string> BonusAdjustmentTypes =
-    [
-        "BONUS",
-        "INCENTIVE",
-        "REWARD"
-    ];
-
-    private static readonly HashSet<string> PenaltyAdjustmentTypes =
-    [
-        "PENALTY",
-        "DISCIPLINE",
-        "FINE"
-    ];
-
-    private static readonly HashSet<string> OtherDeductionTypes =
-    [
-        "OTHER_DEDUCTION",
-        "DEDUCTION_OTHER",
-        "MISC_DEDUCTION",
-        "WITHHOLDING"
-    ];
-
-    private static readonly HashSet<string> AcceptedCommissionStatuses =
-    [
-        nameof(CommissionTransactionStatusCode.APPROVED),
-        nameof(CommissionTransactionStatusCode.PAID),
-        "POSTED",
-        nameof(PaymentStatusCode.COMPLETED)
     ];
 
     private static readonly HashSet<string> AcceptedAdvanceStatuses =
@@ -149,30 +123,251 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             throw new InvalidOperationException("Payroll period date range is invalid.");
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
-        try
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<PayrollBatchCalculationResult>(async () =>
         {
-            var runResolution = await ResolveOrCreateDraftPayrollRunAsync(
-                period.Id,
-                command.BranchId,
-                command.UserId,
-                command.PayrollRunId,
-                cancellationToken);
-
-            var staffRows = await LoadStaffRowsAsync(command.BranchId, cancellationToken);
-            if (!command.IncludeInactiveStaff)
+            await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                staffRows = staffRows
-                    .Where(s => IsPayrollActiveStaff(s, periodEndDate))
-                    .ToList();
-            }
+                var runResolution = await ResolveOrCreateDraftPayrollRunAsync(
+                    period.Id,
+                    command.BranchId,
+                    command.UserId,
+                    command.PayrollRunId,
+                    cancellationToken);
 
-            if (staffRows.Count == 0)
-            {
+                var staffRows = await LoadStaffRowsAsync(command.BranchId, cancellationToken);
+                if (!command.IncludeInactiveStaff)
+                {
+                    staffRows = staffRows
+                        .Where(s => IsPayrollActiveStaff(s, periodEndDate))
+                        .ToList();
+                }
+
+                if (staffRows.Count == 0)
+                {
+                    runResolution.Run.CalculatedBy = command.UserId;
+                    runResolution.Run.CalculatedAt = now;
+                    runResolution.Run.Status = PayrollRunStatusCalculated;
+                    runResolution.Run.UpdatedAt = now;
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await tx.CommitAsync(cancellationToken);
+
+                    return new PayrollBatchCalculationResult
+                    {
+                        PayrollPeriodId = period.Id,
+                        PayrollRunId = runResolution.Run.Id,
+                        RunNo = runResolution.Run.RunNo,
+                        CreatedRun = runResolution.CreatedNew,
+                        PeriodStartDate = periodStartDate.ToString("yyyy-MM-dd"),
+                        PeriodEndDate = periodEndDate.ToString("yyyy-MM-dd"),
+                        ProcessedStaffCount = 0,
+                        CalculatedStaffCount = 0,
+                        Inserted = 0,
+                        Updated = 0,
+                        SkippedNoBaseSalary = 0,
+                        SkippedExisting = 0,
+                        IssuePayslips = command.IssuePayslips,
+                        PayslipsIssued = 0,
+                        GrossTotal = 0m,
+                        NetTotal = 0m,
+                        Message = "Batch payroll calculation completed."
+                    };
+                }
+
+                var staffIdSet = staffRows.Select(s => s.StaffId).ToHashSet();
+                var coefficientThresholds = await _db.SalaryCoefficients
+                    .AsNoTracking()
+                    .Where(x => x.IsDeleted != true && x.IsActive != false && x.YearsOfService.HasValue)
+                    .OrderBy(x => x.YearsOfService)
+                    .Select(x => new SalaryCoefficientThreshold(x.YearsOfService!.Value, x.CoefficientValue))
+                    .ToListAsync(cancellationToken);
+
+                var profileBaseSalaryMap = await LoadProfileBaseSalaryMapAsync(staffIdSet, command.BranchId, periodEndDate, cancellationToken);
+                var contractCompensationMap = await LoadContractCompensationMapAsync(staffIdSet, periodEndDate, cancellationToken);
+                var staffTierBaseSalaryMap = await LoadStaffTierBaseSalaryMapAsync(staffIdSet, cancellationToken);
+                var overtimeAmountMap = await LoadOvertimeAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+                var attendanceDeductionMap = await LoadAttendanceDeductionMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+                var salaryAdvanceMap = await LoadSalaryAdvanceDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
+                var loanDeductionMap = await LoadLoanDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
+                var dependentCountMap = await LoadDependentCountMapAsync(staffIdSet, periodEndDate, cancellationToken);
+                var commissionAggregation = await LoadCommissionAggregationAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
+
+                var existingItems = await _db.PayrollItems
+                    .Where(i => i.PayrollRunId == runResolution.Run.Id)
+                    .ToListAsync(cancellationToken);
+                var existingItemByStaffId = existingItems.ToDictionary(i => i.StaffId);
+
+                var policy = ResolveVietnamPayrollPolicy(periodEndDate);
+                var inserted = 0;
+                var updated = 0;
+                var skippedNoBaseSalary = 0;
+                var skippedExisting = 0;
+                var grossTotal = 0m;
+                var netTotal = 0m;
+                var commissionTotal = 0m;
+                var affectedItems = new List<PayrollItem>(staffRows.Count);
+                var processedCommissionIds = new HashSet<long>();
+
+                foreach (var staff in staffRows)
+                {
+                    var baseSalary = ResolveBaseSalary(
+                        staff.StaffId,
+                        profileBaseSalaryMap,
+                        contractCompensationMap,
+                        staffTierBaseSalaryMap);
+                    if (baseSalary <= 0m)
+                    {
+                        skippedNoBaseSalary++;
+                        continue;
+                    }
+
+                    var hireDate = staff.HireDate ?? await ResolveStaffHireDateAsync(staff.StaffId, cancellationToken);
+                    var yearsOfService = hireDate.HasValue && periodEndDate >= hireDate.Value
+                        ? CalculateCompletedYears(hireDate.Value, periodEndDate)
+                        : 0;
+
+                    var coefficient = ResolveSalaryCoefficientForYears(yearsOfService, coefficientThresholds);
+                    var effectiveBaseSalary = RoundVnd(baseSalary * coefficient);
+                    var allowanceAmount = contractCompensationMap.TryGetValue(staff.StaffId, out var comp)
+                        ? RoundVnd(comp.AllowanceAmount)
+                        : 0m;
+                    var overtimeAmount = overtimeAmountMap.TryGetValue(staff.StaffId, out var overtime)
+                        ? RoundVnd(overtime)
+                        : 0m;
+                    var attendanceDeduction = attendanceDeductionMap.TryGetValue(staff.StaffId, out var attendance)
+                        ? RoundVnd(attendance)
+                        : 0m;
+                    var advanceDeduction = salaryAdvanceMap.TryGetValue(staff.StaffId, out var advance)
+                        ? RoundVnd(advance)
+                        : 0m;
+                    var plannedLoanDeduction = loanDeductionMap.TryGetValue(staff.StaffId, out var loan)
+                        ? RoundVnd(loan)
+                        : 0m;
+                    var dependentCount = dependentCountMap.TryGetValue(staff.StaffId, out var deps)
+                        ? Math.Max(0, deps)
+                        : 0;
+
+                    var commissionAmount = commissionAggregation.AmountByStaffId.TryGetValue(staff.StaffId, out var commission)
+                        ? RoundVnd(commission)
+                        : 0m;
+                    const decimal bonusAmount = 0m;
+                    const decimal penaltyAmount = 0m;
+                    const decimal otherDeduction = 0m;
+                    const string insuranceZone = "I";
+
+                    var grossPay = RoundVnd(effectiveBaseSalary + overtimeAmount + allowanceAmount + commissionAmount + bonusAmount);
+                    var statutory = CalculateVietnamStatutoryAmounts(effectiveBaseSalary, grossPay, dependentCount, policy, insuranceZone);
+                    var insuranceEmployeeAmount = statutory.EmployeeInsuranceTotal;
+                    var insuranceCompanyAmount = statutory.EmployerInsuranceTotal;
+                    var pitAmount = statutory.PitAmount;
+
+                    var nonLoanDeductions = RoundVnd(
+                        attendanceDeduction +
+                        penaltyAmount +
+                        advanceDeduction +
+                        insuranceEmployeeAmount +
+                        pitAmount +
+                        otherDeduction);
+
+                    var remainingForLoan = RoundVnd(Math.Max(0m, grossPay - nonLoanDeductions));
+                    var appliedLoanDeduction = RoundVnd(Math.Min(plannedLoanDeduction, remainingForLoan));
+                    var totalDeduction = RoundVnd(nonLoanDeductions + appliedLoanDeduction);
+                    var netPay = RoundVnd(Math.Max(0m, grossPay - totalDeduction));
+
+                    PayrollItem item;
+                    if (existingItemByStaffId.TryGetValue(staff.StaffId, out var existingItem))
+                    {
+                        if (!command.OverwriteExisting)
+                        {
+                            skippedExisting++;
+                            continue;
+                        }
+
+                        item = existingItem;
+                        item.BaseSalary = effectiveBaseSalary;
+                        item.AttendanceDeduction = attendanceDeduction;
+                        item.OvertimeAmount = overtimeAmount;
+                        item.AllowanceAmount = allowanceAmount;
+                        item.CommissionAmount = commissionAmount;
+                        item.BonusAmount = 0m;
+                        item.PenaltyAmount = 0m;
+                        item.AdvanceDeduction = advanceDeduction;
+                        item.LoanDeduction = appliedLoanDeduction;
+                        item.InsuranceEmployeeAmount = insuranceEmployeeAmount;
+                        item.InsuranceCompanyAmount = insuranceCompanyAmount;
+                        item.PitAmount = pitAmount;
+                        item.OtherDeduction = otherDeduction;
+                        item.NetPay = netPay;
+                        item.Status = PayrollItemStatusDraft;
+                        item.UpdatedAt = now;
+                        updated++;
+                    }
+                    else
+                    {
+                        item = new PayrollItem
+                        {
+                            PayrollRunId = runResolution.Run.Id,
+                            StaffId = staff.StaffId,
+                            BaseSalary = effectiveBaseSalary,
+                            AttendanceDeduction = attendanceDeduction,
+                            OvertimeAmount = overtimeAmount,
+                            AllowanceAmount = allowanceAmount,
+                            CommissionAmount = commissionAmount,
+                            BonusAmount = 0m,
+                            PenaltyAmount = 0m,
+                            AdvanceDeduction = advanceDeduction,
+                            LoanDeduction = appliedLoanDeduction,
+                            InsuranceEmployeeAmount = insuranceEmployeeAmount,
+                            InsuranceCompanyAmount = insuranceCompanyAmount,
+                            PitAmount = pitAmount,
+                            OtherDeduction = otherDeduction,
+                            NetPay = netPay,
+                            Status = PayrollItemStatusDraft,
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        };
+                        _db.PayrollItems.Add(item);
+                        existingItemByStaffId[staff.StaffId] = item;
+                        inserted++;
+                    }
+
+                    grossTotal += grossPay;
+                    netTotal += netPay;
+                    commissionTotal += commissionAmount;
+                    if (commissionAggregation.TransactionIdsByStaffId.TryGetValue(staff.StaffId, out var commissionIds))
+                    {
+                        foreach (var commissionId in commissionIds)
+                        {
+                            processedCommissionIds.Add(commissionId);
+                        }
+                    }
+                    affectedItems.Add(item);
+                }
+
                 runResolution.Run.CalculatedBy = command.UserId;
                 runResolution.Run.CalculatedAt = now;
+                runResolution.Run.Status = PayrollRunStatusCalculated;
                 runResolution.Run.UpdatedAt = now;
+
                 await _db.SaveChangesAsync(cancellationToken);
+                var processedCommissionTransactions = await MarkCommissionTransactionsProcessedAsync(
+                    processedCommissionIds,
+                    command.UserId,
+                    now,
+                    cancellationToken);
+
+                var payslipsIssued = 0;
+                if (command.IssuePayslips)
+                {
+                    payslipsIssued = await IssuePayslipsAsync(
+                        runResolution.Run.RunNo,
+                        now,
+                        command.UserId,
+                        affectedItems,
+                        cancellationToken);
+                }
+
                 await tx.CommitAsync(cancellationToken);
 
                 return new PayrollBatchCalculationResult
@@ -183,232 +378,27 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     CreatedRun = runResolution.CreatedNew,
                     PeriodStartDate = periodStartDate.ToString("yyyy-MM-dd"),
                     PeriodEndDate = periodEndDate.ToString("yyyy-MM-dd"),
-                    ProcessedStaffCount = 0,
-                    CalculatedStaffCount = 0,
-                    Inserted = 0,
-                    Updated = 0,
-                    SkippedNoBaseSalary = 0,
-                    SkippedExisting = 0,
+                    ProcessedStaffCount = staffRows.Count,
+                    CalculatedStaffCount = inserted + updated,
+                    Inserted = inserted,
+                    Updated = updated,
+                    SkippedNoBaseSalary = skippedNoBaseSalary,
+                    SkippedExisting = skippedExisting,
                     IssuePayslips = command.IssuePayslips,
-                    PayslipsIssued = 0,
-                    GrossTotal = 0m,
-                    NetTotal = 0m,
+                    PayslipsIssued = payslipsIssued,
+                    GrossTotal = RoundVnd(grossTotal),
+                    NetTotal = RoundVnd(netTotal),
+                    CommissionTotal = RoundVnd(commissionTotal),
+                    ProcessedCommissionTransactions = processedCommissionTransactions,
                     Message = "Batch payroll calculation completed."
                 };
             }
-
-            var staffIdSet = staffRows.Select(s => s.StaffId).ToHashSet();
-            var coefficientThresholds = await _db.SalaryCoefficients
-                .AsNoTracking()
-                .Where(x => x.IsDeleted != true && x.IsActive != false && x.YearsOfService.HasValue)
-                .OrderBy(x => x.YearsOfService)
-                .Select(x => new SalaryCoefficientThreshold(x.YearsOfService!.Value, x.CoefficientValue))
-                .ToListAsync(cancellationToken);
-
-            var profileBaseSalaryMap = await LoadProfileBaseSalaryMapAsync(staffIdSet, command.BranchId, periodEndDate, cancellationToken);
-            var contractCompensationMap = await LoadContractCompensationMapAsync(staffIdSet, periodEndDate, cancellationToken);
-            var overtimeAmountMap = await LoadOvertimeAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var attendanceDeductionMap = await LoadAttendanceDeductionMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var commissionAmountMap = await LoadCommissionAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var bonusAmountMap = await LoadBonusAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var penaltyAmountMap = await LoadPenaltyAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var otherDeductionMap = await LoadOtherDeductionAmountMapAsync(staffIdSet, periodStartDate, periodEndDate, cancellationToken);
-            var salaryAdvanceMap = await LoadSalaryAdvanceDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
-            var loanDeductionMap = await LoadLoanDeductionMapAsync(staffIdSet, period.Id, cancellationToken);
-            var dependentCountMap = await LoadDependentCountMapAsync(staffIdSet, periodEndDate, cancellationToken);
-
-            var existingItems = await _db.PayrollItems
-                .Where(i => i.PayrollRunId == runResolution.Run.Id)
-                .ToListAsync(cancellationToken);
-            var existingItemByStaffId = existingItems.ToDictionary(i => i.StaffId);
-
-            var policy = ResolveVietnamPayrollPolicy(periodEndDate);
-            var inserted = 0;
-            var updated = 0;
-            var skippedNoBaseSalary = 0;
-            var skippedExisting = 0;
-            var grossTotal = 0m;
-            var netTotal = 0m;
-            var affectedItems = new List<PayrollItem>(staffRows.Count);
-
-            foreach (var staff in staffRows)
+            catch
             {
-                var baseSalary = ResolveBaseSalary(
-                    staff.StaffId,
-                    profileBaseSalaryMap,
-                    contractCompensationMap);
-                if (baseSalary <= 0m)
-                {
-                    skippedNoBaseSalary++;
-                    continue;
-                }
-
-                var hireDate = staff.HireDate ?? await ResolveStaffHireDateAsync(staff.StaffId, cancellationToken);
-                var yearsOfService = hireDate.HasValue && periodEndDate >= hireDate.Value
-                    ? CalculateCompletedYears(hireDate.Value, periodEndDate)
-                    : 0;
-
-                var coefficient = ResolveSalaryCoefficientForYears(yearsOfService, coefficientThresholds);
-                var effectiveBaseSalary = RoundVnd(baseSalary * coefficient);
-                var allowanceAmount = contractCompensationMap.TryGetValue(staff.StaffId, out var comp)
-                    ? RoundVnd(comp.AllowanceAmount)
-                    : 0m;
-                var overtimeAmount = overtimeAmountMap.TryGetValue(staff.StaffId, out var overtime)
-                    ? RoundVnd(overtime)
-                    : 0m;
-                var attendanceDeduction = attendanceDeductionMap.TryGetValue(staff.StaffId, out var attendance)
-                    ? RoundVnd(attendance)
-                    : 0m;
-                var advanceDeduction = salaryAdvanceMap.TryGetValue(staff.StaffId, out var advance)
-                    ? RoundVnd(advance)
-                    : 0m;
-                var plannedLoanDeduction = loanDeductionMap.TryGetValue(staff.StaffId, out var loan)
-                    ? RoundVnd(loan)
-                    : 0m;
-                var commissionAmount = commissionAmountMap.TryGetValue(staff.StaffId, out var commission)
-                    ? RoundVnd(commission)
-                    : 0m;
-                var bonusAmount = bonusAmountMap.TryGetValue(staff.StaffId, out var bonus)
-                    ? RoundVnd(bonus)
-                    : 0m;
-                var penaltyAmount = penaltyAmountMap.TryGetValue(staff.StaffId, out var penalty)
-                    ? RoundVnd(penalty)
-                    : 0m;
-                var otherDeduction = otherDeductionMap.TryGetValue(staff.StaffId, out var otherDeductionAmount)
-                    ? RoundVnd(otherDeductionAmount)
-                    : 0m;
-                var dependentCount = dependentCountMap.TryGetValue(staff.StaffId, out var deps)
-                    ? Math.Max(0, deps)
-                    : 0;
-
-                const string insuranceZone = "I";
-
-                var grossPay = RoundVnd(effectiveBaseSalary + overtimeAmount + allowanceAmount + commissionAmount + bonusAmount);
-                var statutory = CalculateVietnamStatutoryAmounts(effectiveBaseSalary, grossPay, dependentCount, policy, insuranceZone);
-                var insuranceEmployeeAmount = statutory.EmployeeInsuranceTotal;
-                var insuranceCompanyAmount = statutory.EmployerInsuranceTotal;
-                var pitAmount = statutory.PitAmount;
-
-                var nonLoanDeductions = RoundVnd(
-                    attendanceDeduction +
-                    penaltyAmount +
-                    advanceDeduction +
-                    insuranceEmployeeAmount +
-                    pitAmount +
-                    otherDeduction);
-
-                var remainingForLoan = RoundVnd(Math.Max(0m, grossPay - nonLoanDeductions));
-                var appliedLoanDeduction = RoundVnd(Math.Min(plannedLoanDeduction, remainingForLoan));
-                var totalDeduction = RoundVnd(nonLoanDeductions + appliedLoanDeduction);
-                var netPay = RoundVnd(Math.Max(0m, grossPay - totalDeduction));
-
-                PayrollItem item;
-                if (existingItemByStaffId.TryGetValue(staff.StaffId, out var existingItem))
-                {
-                    if (!command.OverwriteExisting)
-                    {
-                        skippedExisting++;
-                        continue;
-                    }
-
-                    item = existingItem;
-                    item.BaseSalary = effectiveBaseSalary;
-                    item.AttendanceDeduction = attendanceDeduction;
-                    item.OvertimeAmount = overtimeAmount;
-                    item.AllowanceAmount = allowanceAmount;
-                    item.CommissionAmount = commissionAmount;
-                    item.BonusAmount = bonusAmount;
-                    item.PenaltyAmount = penaltyAmount;
-                    item.AdvanceDeduction = advanceDeduction;
-                    item.LoanDeduction = appliedLoanDeduction;
-                    item.InsuranceEmployeeAmount = insuranceEmployeeAmount;
-                    item.InsuranceCompanyAmount = insuranceCompanyAmount;
-                    item.PitAmount = pitAmount;
-                    item.OtherDeduction = otherDeduction;
-                    item.NetPay = netPay;
-                    item.Status = PayrollItemStatusDraft;
-                    item.UpdatedAt = now;
-                    updated++;
-                }
-                else
-                {
-                    item = new PayrollItem
-                    {
-                        PayrollRunId = runResolution.Run.Id,
-                        StaffId = staff.StaffId,
-                        BaseSalary = effectiveBaseSalary,
-                        AttendanceDeduction = attendanceDeduction,
-                        OvertimeAmount = overtimeAmount,
-                        AllowanceAmount = allowanceAmount,
-                        CommissionAmount = commissionAmount,
-                        BonusAmount = bonusAmount,
-                        PenaltyAmount = penaltyAmount,
-                        AdvanceDeduction = advanceDeduction,
-                        LoanDeduction = appliedLoanDeduction,
-                        InsuranceEmployeeAmount = insuranceEmployeeAmount,
-                        InsuranceCompanyAmount = insuranceCompanyAmount,
-                        PitAmount = pitAmount,
-                        OtherDeduction = otherDeduction,
-                        NetPay = netPay,
-                        Status = PayrollItemStatusDraft,
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    };
-                    _db.PayrollItems.Add(item);
-                    existingItemByStaffId[staff.StaffId] = item;
-                    inserted++;
-                }
-
-                grossTotal += grossPay;
-                netTotal += netPay;
-                affectedItems.Add(item);
+                await tx.RollbackAsync(cancellationToken);
+                throw;
             }
-
-            runResolution.Run.CalculatedBy = command.UserId;
-            runResolution.Run.CalculatedAt = now;
-            runResolution.Run.UpdatedAt = now;
-
-            await _db.SaveChangesAsync(cancellationToken);
-
-            var payslipsIssued = 0;
-            if (command.IssuePayslips)
-            {
-                payslipsIssued = await IssuePayslipsAsync(
-                    runResolution.Run.RunNo,
-                    now,
-                    command.UserId,
-                    affectedItems,
-                    cancellationToken);
-            }
-
-            await tx.CommitAsync(cancellationToken);
-
-            return new PayrollBatchCalculationResult
-            {
-                PayrollPeriodId = period.Id,
-                PayrollRunId = runResolution.Run.Id,
-                RunNo = runResolution.Run.RunNo,
-                CreatedRun = runResolution.CreatedNew,
-                PeriodStartDate = periodStartDate.ToString("yyyy-MM-dd"),
-                PeriodEndDate = periodEndDate.ToString("yyyy-MM-dd"),
-                ProcessedStaffCount = staffRows.Count,
-                CalculatedStaffCount = inserted + updated,
-                Inserted = inserted,
-                Updated = updated,
-                SkippedNoBaseSalary = skippedNoBaseSalary,
-                SkippedExisting = skippedExisting,
-                IssuePayslips = command.IssuePayslips,
-                PayslipsIssued = payslipsIssued,
-                GrossTotal = RoundVnd(grossTotal),
-                NetTotal = RoundVnd(netTotal),
-                Message = "Batch payroll calculation completed."
-            };
-        }
-        catch
-        {
-            await tx.RollbackAsync(cancellationToken);
-            throw;
-        }
+        });
     }
 
     private async Task<PayrollPeriod> ResolvePayrollPeriodAsync(PayrollBatchCalculationCommand command, CancellationToken cancellationToken)
@@ -462,9 +452,10 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                 throw new InvalidOperationException("Selected payroll run does not belong to the selected payroll period.");
             }
 
-            if (!string.Equals(NormalizeKey(provided.Status), PayrollRunStatusDraft, StringComparison.Ordinal))
+            var runStatus = NormalizeKey(provided.Status);
+            if (runStatus is not PayrollRunStatusDraft and not PayrollRunStatusCalculated)
             {
-                throw new InvalidOperationException("Batch calculation can only update a DRAFT payroll run.");
+                throw new InvalidOperationException("Batch calculation can only update a DRAFT/CALCULATED payroll run.");
             }
 
             return new PayrollRunResolution(provided, false);
@@ -713,134 +704,6 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         return result;
     }
 
-    private async Task<Dictionary<long, decimal>> LoadCommissionAmountMapAsync(
-        IReadOnlyCollection<long> staffIds,
-        DateOnly periodStartDate,
-        DateOnly periodEndDate,
-        CancellationToken cancellationToken)
-    {
-        var result = new Dictionary<long, decimal>();
-        if (staffIds.Count == 0) return result;
-
-        var periodStart = periodStartDate.ToDateTime(TimeOnly.MinValue);
-        var periodEndExclusive = periodEndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-
-        var rows = await _db.CommissionTransactions
-            .AsNoTracking()
-            .Where(x =>
-                staffIds.Contains(x.StaffId) &&
-                x.CreatedAt.HasValue &&
-                x.CreatedAt.Value >= periodStart &&
-                x.CreatedAt.Value < periodEndExclusive)
-            .ToListAsync(cancellationToken);
-
-        foreach (var row in rows)
-        {
-            var normalizedStatus = NormalizeKey(row.Status);
-            if (!string.IsNullOrWhiteSpace(normalizedStatus) && !AcceptedCommissionStatuses.Contains(normalizedStatus))
-            {
-                continue;
-            }
-
-            var amount = Math.Max(0m, row.CommissionAmount);
-            if (amount <= 0m)
-            {
-                continue;
-            }
-
-            var normalizedLogType = NormalizeKey(row.LogType);
-            if (normalizedLogType.Contains("REVERSE", StringComparison.Ordinal) || normalizedLogType.Contains("REFUND", StringComparison.Ordinal))
-            {
-                amount = -amount;
-            }
-
-            if (!result.TryAdd(row.StaffId, amount))
-            {
-                result[row.StaffId] += amount;
-            }
-        }
-
-        foreach (var key in result.Keys.ToList())
-        {
-            result[key] = Math.Max(0m, result[key]);
-        }
-
-        return result;
-    }
-
-    private Task<Dictionary<long, decimal>> LoadBonusAmountMapAsync(
-        IReadOnlyCollection<long> staffIds,
-        DateOnly periodStartDate,
-        DateOnly periodEndDate,
-        CancellationToken cancellationToken)
-    {
-        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, BonusAdjustmentTypes, cancellationToken);
-    }
-
-    private Task<Dictionary<long, decimal>> LoadPenaltyAmountMapAsync(
-        IReadOnlyCollection<long> staffIds,
-        DateOnly periodStartDate,
-        DateOnly periodEndDate,
-        CancellationToken cancellationToken)
-    {
-        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, PenaltyAdjustmentTypes, cancellationToken);
-    }
-
-    private Task<Dictionary<long, decimal>> LoadOtherDeductionAmountMapAsync(
-        IReadOnlyCollection<long> staffIds,
-        DateOnly periodStartDate,
-        DateOnly periodEndDate,
-        CancellationToken cancellationToken)
-    {
-        return LoadAdjustmentAmountMapAsync(staffIds, periodStartDate, periodEndDate, OtherDeductionTypes, cancellationToken);
-    }
-
-    private async Task<Dictionary<long, decimal>> LoadAdjustmentAmountMapAsync(
-        IReadOnlyCollection<long> staffIds,
-        DateOnly periodStartDate,
-        DateOnly periodEndDate,
-        IReadOnlySet<string> acceptedTypes,
-        CancellationToken cancellationToken)
-    {
-        var result = new Dictionary<long, decimal>();
-        if (staffIds.Count == 0 || acceptedTypes.Count == 0) return result;
-
-        var rows = await _db.AttendanceAdjustments
-            .AsNoTracking()
-            .Where(x =>
-                staffIds.Contains(x.StaffId) &&
-                x.WorkDate >= periodStartDate &&
-                x.WorkDate <= periodEndDate)
-            .ToListAsync(cancellationToken);
-
-        foreach (var row in rows)
-        {
-            if (!IsAdjustmentStatusAccepted(row.Status))
-            {
-                continue;
-            }
-
-            var normalizedType = NormalizeKey(row.AdjustmentType);
-            if (!acceptedTypes.Contains(normalizedType))
-            {
-                continue;
-            }
-
-            var amount = Math.Abs(row.AmountImpact);
-            if (amount <= 0m)
-            {
-                continue;
-            }
-
-            if (!result.TryAdd(row.StaffId, amount))
-            {
-                result[row.StaffId] += amount;
-            }
-        }
-
-        return result;
-    }
-
     private async Task<Dictionary<long, decimal>> LoadSalaryAdvanceDeductionMapAsync(
         IReadOnlyCollection<long> staffIds,
         long payrollPeriodId,
@@ -948,6 +811,68 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         return result;
     }
 
+    private async Task<CommissionAggregationSnapshot> LoadCommissionAggregationAsync(
+        IReadOnlyCollection<long> staffIds,
+        DateOnly periodStartDate,
+        DateOnly periodEndDate,
+        CancellationToken cancellationToken)
+    {
+        var amountByStaffId = new Dictionary<long, decimal>();
+        var transactionIdsByStaffId = new Dictionary<long, List<long>>();
+        if (staffIds.Count == 0)
+        {
+            return new CommissionAggregationSnapshot(amountByStaffId, transactionIdsByStaffId);
+        }
+
+        var periodStart = periodStartDate.ToDateTime(TimeOnly.MinValue);
+        var periodEndExclusive = periodEndDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        var rows = await _db.CommissionTransactions
+            .AsNoTracking()
+            .Where(x => staffIds.Contains(x.StaffId) && x.CommissionAmount > 0m)
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in rows)
+        {
+            var status = NormalizeStatus(row.Status, CommissionStatusPending);
+            if (status != CommissionStatusPending && status != CommissionStatusApproved)
+            {
+                continue;
+            }
+
+            var effectiveAt = row.ApprovedAt ?? row.CreatedAt ?? row.UpdatedAt;
+            if (!effectiveAt.HasValue)
+            {
+                continue;
+            }
+
+            if (effectiveAt.Value < periodStart || effectiveAt.Value >= periodEndExclusive)
+            {
+                continue;
+            }
+
+            var amount = Math.Max(0m, row.CommissionAmount);
+            if (amount <= 0m)
+            {
+                continue;
+            }
+
+            if (!amountByStaffId.TryAdd(row.StaffId, amount))
+            {
+                amountByStaffId[row.StaffId] += amount;
+            }
+
+            if (!transactionIdsByStaffId.TryGetValue(row.StaffId, out var ids))
+            {
+                ids = [];
+                transactionIdsByStaffId[row.StaffId] = ids;
+            }
+            ids.Add(row.Id);
+        }
+
+        return new CommissionAggregationSnapshot(amountByStaffId, transactionIdsByStaffId);
+    }
+
     private async Task<int> IssuePayslipsAsync(
         int runNo,
         DateTime now,
@@ -995,6 +920,48 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         return created;
     }
 
+    private async Task<int> MarkCommissionTransactionsProcessedAsync(
+        IReadOnlyCollection<long> commissionTransactionIds,
+        long userId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var ids = commissionTransactionIds
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var rows = await _db.CommissionTransactions
+            .Where(x => ids.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        var changed = 0;
+        foreach (var row in rows)
+        {
+            var status = NormalizeStatus(row.Status, CommissionStatusPending);
+            if (status != CommissionStatusPending && status != CommissionStatusApproved)
+            {
+                continue;
+            }
+
+            row.Status = CommissionStatusProcessed;
+            row.UpdatedAt = now;
+            row.UpdatedBy = userId;
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return changed;
+    }
+
     private async Task<DateOnly?> ResolveStaffHireDateAsync(long staffId, CancellationToken cancellationToken)
     {
         var staff = await _db.Staffs
@@ -1025,7 +992,8 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
     private static decimal ResolveBaseSalary(
         long staffId,
         IReadOnlyDictionary<long, decimal> profileBaseSalaryMap,
-        IReadOnlyDictionary<long, ContractCompensationSnapshot> contractCompensationMap)
+        IReadOnlyDictionary<long, ContractCompensationSnapshot> contractCompensationMap,
+        IReadOnlyDictionary<long, decimal> staffTierBaseSalaryMap)
     {
         if (profileBaseSalaryMap.TryGetValue(staffId, out var profileBaseSalary) && profileBaseSalary > 0m)
         {
@@ -1035,6 +1003,11 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         if (contractCompensationMap.TryGetValue(staffId, out var compensation) && compensation.BaseSalary > 0m)
         {
             return compensation.BaseSalary;
+        }
+
+        if (staffTierBaseSalaryMap.TryGetValue(staffId, out var tierBaseSalary) && tierBaseSalary > 0m)
+        {
+            return tierBaseSalary;
         }
 
         return 0m;
@@ -1188,6 +1161,9 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
     private sealed record PayrollRunResolution(PayrollRun Run, bool CreatedNew);
     private sealed record SalaryCoefficientThreshold(int YearsOfService, decimal CoefficientValue);
     private sealed record ContractCompensationSnapshot(decimal BaseSalary, decimal AllowanceAmount);
+    private sealed record CommissionAggregationSnapshot(
+        Dictionary<long, decimal> AmountByStaffId,
+        Dictionary<long, List<long>> TransactionIdsByStaffId);
     private sealed record PitBracket(decimal UpperLimit, decimal Rate);
     private sealed record VietnamPayrollPolicy(
         decimal EmployeeBhxhRate,
@@ -1244,5 +1220,7 @@ public sealed class PayrollBatchCalculationResult
     public int PayslipsIssued { get; set; }
     public decimal GrossTotal { get; set; }
     public decimal NetTotal { get; set; }
+    public decimal CommissionTotal { get; set; }
+    public int ProcessedCommissionTransactions { get; set; }
     public string Message { get; set; } = "";
 }

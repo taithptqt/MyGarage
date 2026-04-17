@@ -29,7 +29,14 @@ public sealed class CustomerAutomationJobsBackgroundService : BackgroundService
         var startupDelay = TimeSpan.FromSeconds(Math.Max(0, _optionsMonitor.CurrentValue.StartupDelaySeconds));
         if (startupDelay > TimeSpan.Zero)
         {
-            await Task.Delay(startupDelay, stoppingToken);
+            try
+            {
+                await Task.Delay(startupDelay, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
         }
 
         while (!stoppingToken.IsCancellationRequested)
@@ -45,7 +52,14 @@ public sealed class CustomerAutomationJobsBackgroundService : BackgroundService
                     _disabledLogged = true;
                 }
 
-                await Task.Delay(loopDelay, stoppingToken);
+                try
+                {
+                    await Task.Delay(loopDelay, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 continue;
             }
 
@@ -93,7 +107,14 @@ public sealed class CustomerAutomationJobsBackgroundService : BackgroundService
                 _logger.LogError(ex, "Customer automation jobs cycle failed.");
             }
 
-            await Task.Delay(loopDelay, stoppingToken);
+            try
+            {
+                await Task.Delay(loopDelay, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 

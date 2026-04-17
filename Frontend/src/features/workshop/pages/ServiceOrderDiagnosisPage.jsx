@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Badge,
@@ -961,7 +961,7 @@ export default function ServiceOrderDiagnosisPage() {
       setRecommendations([]);
     } else {
       try {
-        const recs = await serviceOrderApi.getDiagnoseRecommendations(target.id);
+        const recs = await serviceOrderApi.getDiagnosisRecommendations(target.id);
         setRecommendations(Array.isArray(recs) ? recs : []);
       } catch {
         setRecommendations([]);
@@ -1313,7 +1313,7 @@ export default function ServiceOrderDiagnosisPage() {
       const currentDiag = allDiagnoses.find(d => d.id === activeDiagId);
       
       for (const id of deletedRecommendationIds) {
-        await serviceOrderApi.deleteDiagnoseRecommendation(id);
+        await serviceOrderApi.deleteDiagnosisRecommendation(id);
       }
 
       let savedDiagnosisId = activeDiagId;
@@ -1410,11 +1410,11 @@ export default function ServiceOrderDiagnosisPage() {
         );
 
         if (isTemporaryRecommendation(root)) {
-          const created = await serviceOrderApi.createDiagnoseRecommendation(payload);
+          const created = await serviceOrderApi.createDiagnosisRecommendation(payload);
           const createdId = toPositiveNumber(created?.id ?? created?.Id);
           if (createdId) recommendationIdMap.set(String(root.id), createdId);
         } else {
-          await serviceOrderApi.updateDiagnoseRecommendation(root.id, payload);
+          await serviceOrderApi.updateDiagnosisRecommendation(root.id, payload);
           const persistedId = toPositiveNumber(root.id);
           if (persistedId) recommendationIdMap.set(String(root.id), persistedId);
         }
@@ -1444,9 +1444,9 @@ export default function ServiceOrderDiagnosisPage() {
           parentId
         );
         if (isTemporaryRecommendation(child)) {
-          await serviceOrderApi.createDiagnoseRecommendation(payload);
+          await serviceOrderApi.createDiagnosisRecommendation(payload);
         } else {
-          await serviceOrderApi.updateDiagnoseRecommendation(child.id, payload);
+          await serviceOrderApi.updateDiagnosisRecommendation(child.id, payload);
         }
       }
 

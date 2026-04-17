@@ -82,6 +82,7 @@ builder.Services.AddSingleton<ITransferStore, TransferService>();
 
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<IVehicleHistoryService, VehicleHistoryService>();
 
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
@@ -90,8 +91,10 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
 builder.Services.AddScoped<IServiceOrderCustomerLifecycleNotifier, ServiceOrderCustomerLifecycleNotifier>();
+builder.Services.AddScoped<IMaintenanceReminderService, MaintenanceReminderService>();
 builder.Services.AddScoped<IServiceOrderService, ServiceOrderService>();
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
+builder.Services.AddScoped<IQuotationWorkflowService, QuotationWorkflowService>();
 
 builder.Services.AddScoped<IServiceOrderDetailRepository, ServiceOrderDetailRepository>();
 builder.Services.AddScoped<IServiceOrderDetailService, ServiceOrderDetailService>();
@@ -226,8 +229,8 @@ builder.Services.AddScoped<ICustomerVoucherService, CustomerVoucherService>();
 builder.Services.AddScoped<IDeliveryRepository, DeliveryRepository>();
 builder.Services.AddScoped<IDeliveryService, DeliveryService>();
 
-builder.Services.AddScoped<IDiagnoseRecommendationRepository, DiagnoseRecommendationRepository>();
-builder.Services.AddScoped<IDiagnoseRecommendationService, DiagnoseRecommendationService>();
+builder.Services.AddScoped<IDiagnosisRecommendationRepository, DiagnosisRecommendationRepository>();
+builder.Services.AddScoped<IDiagnosisRecommendationService, DiagnosisRecommendationService>();
 
 builder.Services.AddScoped<IDiagnosisRepository, DiagnosisRepository>();
 builder.Services.AddScoped<IDiagnosisService, DiagnosisService>();

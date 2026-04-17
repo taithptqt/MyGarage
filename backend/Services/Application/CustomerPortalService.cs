@@ -22,7 +22,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
     {
         nameof(ServiceOrderLifecycleStatus.CLOSED),
         nameof(ServiceOrderLifecycleStatus.CANCELED),
-        "CANCELLED",
+        "CANCELED",
         "DELIVERED"
     };
 
@@ -39,9 +39,9 @@ public sealed class CustomerPortalService : ICustomerPortalService
     private static readonly HashSet<string> TerminalWorkSlotStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         nameof(WorkSlotStatus.COMPLETED),
-        nameof(WorkSlotStatus.CANCELLED),
+        nameof(WorkSlotStatus.CANCELED),
         "CANCELED",
-        "CANCELLED"
+        "CANCELED"
     };
 
     private static readonly HashSet<string> DashboardOwnedAssignmentStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -93,9 +93,6 @@ public sealed class CustomerPortalService : ICustomerPortalService
                 .Where(d => orderIds.Contains(d.ServiceOrderId))
                 .Where(d =>
                     d.Status == nameof(DiagnosisStatus.PENDING) || d.Status == nameof(DiagnosisStatus.ASSIGNED))
-                .Where(d =>
-                    d.CancellationStatus == null ||
-                    string.Equals(d.CancellationStatus, "NONE", StringComparison.OrdinalIgnoreCase))
                 .Select(d => d.ServiceOrderId)
                 .Distinct()
                 .ToListAsync(cancellationToken)).ToHashSet();
@@ -577,8 +574,6 @@ public sealed class CustomerPortalService : ICustomerPortalService
                 .Where(d => orderIds.Contains(d.ServiceOrderId))
                 .Where(d =>
                     d.Status == nameof(DiagnosisStatus.PENDING) || d.Status == nameof(DiagnosisStatus.ASSIGNED))
-                .Where(d =>
-                    d.CancellationStatus == null || d.CancellationStatus == "NONE")
                 .Select(d => d.ServiceOrderId)
                 .Distinct()
                 .ToListAsync(cancellationToken)).ToHashSet();
@@ -959,3 +954,5 @@ public sealed class CustomerPortalService : ICustomerPortalService
         }
     }
 }
+
+

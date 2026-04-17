@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using MyGarage.Models;
+using AutoMapper;
+using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
-using MyGarage.Interfaces;
-using MyGarage.Models;
 
 namespace MyGarage.Controllers
 {
@@ -31,24 +30,14 @@ namespace MyGarage.Controllers
         public async Task<ActionResult<IEnumerable<StaffResponseDto>>> GetAll([FromQuery] long? branchId = null, [FromQuery] long? teamId = null)
         {
             var items = await _staffService.GetAllAsync();
-
-            var accountantBranchId = this.IsCurrentAccountingStaff() ? this.GetCurrentBranchId() : null;
-            if (this.IsCurrentAccountingStaff() && !accountantBranchId.HasValue)
+            if (branchId.HasValue)
             {
-                return Forbid();
+                items = items.Where(s => s.BranchId == branchId.Value).ToList();
             }
-
-            var effectiveBranchId = accountantBranchId ?? branchId;
-            if (effectiveBranchId.HasValue)
-            {
-                items = items.Where(s => s.BranchId == effectiveBranchId.Value).ToList();
-            }
-
             if (teamId.HasValue)
             {
                 items = items.Where(s => s.TeamId == teamId.Value).ToList();
             }
-
             var dtos = _mapper.Map<IEnumerable<StaffResponseDto>>(items);
             return Ok(dtos);
         }
@@ -61,18 +50,6 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-
-            var accountantBranchId = this.IsCurrentAccountingStaff() ? this.GetCurrentBranchId() : null;
-            if (this.IsCurrentAccountingStaff() && !accountantBranchId.HasValue)
-            {
-                return Forbid();
-            }
-
-            if (accountantBranchId.HasValue && item.BranchId != accountantBranchId.Value)
-            {
-                return NotFound();
-            }
-
             var dto = _mapper.Map<StaffResponseDto>(item);
             return Ok(dto);
         }
@@ -97,12 +74,11 @@ namespace MyGarage.Controllers
 
             _mapper.Map(itemDto, existingItem);
             var updatedItem = await _staffService.UpdateAsync(id, existingItem);
-
+            
             if (updatedItem == null)
             {
                 return NotFound();
             }
-
             var responseDto = _mapper.Map<StaffResponseDto>(updatedItem);
             return Ok(responseDto);
         }
@@ -115,7 +91,6 @@ namespace MyGarage.Controllers
             {
                 return NotFound();
             }
-
             return NoContent();
         }
 
@@ -124,18 +99,18 @@ namespace MyGarage.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "Tap anh khong hop le." });
+                return BadRequest(new { message = "Tệp ảnh không hợp lệ." });
             }
 
             if (string.IsNullOrWhiteSpace(file.ContentType) || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Chi chap nhan tap anh." });
+                return BadRequest(new { message = "Chỉ chấp nhận tệp ảnh." });
             }
 
             var staff = await _staffService.GetByIdAsync(id);
             if (staff == null)
             {
-                return NotFound(new { message = "Khong tim thay nhan vien." });
+                return NotFound(new { message = "Không tìm thấy nhân viên." });
             }
 
             var extension = Path.GetExtension(file.FileName);
@@ -160,3 +135,11 @@ namespace MyGarage.Controllers
         }
     }
 }
+
+
+
+
+
+
+
+

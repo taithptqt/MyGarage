@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPayosOrder, getPayments } from "@features/payment/api/payosApi";
 import { getRetailOrderById } from "@features/retail/api/retailApi";
@@ -151,7 +151,7 @@ export default function PayosCheckoutPage() {
         });
 
         if (orderAmount <= 0) {
-          setError("Khong lay duoc tong tien don hang. Vui long quay lai danh sach don de thanh toan lai.");
+          setError("KhÃ´ng láº¥y Ä‘Æ°á»£c tá»•ng tiá»n Ä‘Æ¡n hÃ ng. Vui lÃ²ng quay láº¡i danh sÃ¡ch Ä‘Æ¡n Ä‘á»ƒ thanh toÃ¡n láº¡i.");
           return;
         }
 
@@ -160,7 +160,7 @@ export default function PayosCheckoutPage() {
       } catch {
         if (!ignore) {
           setRetailSummary(null);
-          setError("Khong lay duoc thong tin don retail. Vui long thu lai tu trang don hang.");
+          setError("KhÃ´ng láº¥y Ä‘Æ°á»£c thÃ´ng tin Ä‘Æ¡n retail. Vui lÃ²ng thá»­ láº¡i tá»« trang Ä‘Æ¡n hÃ ng.");
         }
       } finally {
         if (!ignore) {
@@ -207,25 +207,25 @@ export default function PayosCheckoutPage() {
     setError("");
 
     if (!isAuthenticated) {
-      setError("Ban can dang nhap truoc khi thanh toan.");
+      setError("Báº¡n cáº§n Ä‘Äƒng nháº­p trÆ°á»›c khi thanh toÃ¡n.");
       return;
     }
 
     if (isRetailCheckout && retailAmountLoading) {
-      setError("Dang dong bo tong tien don retail, vui long cho trong giay lat.");
+      setError("Äang Ä‘á»“ng bá»™ tá»•ng tiá»n Ä‘Æ¡n retail, vui lÃ²ng chá» trong giÃ¢y lÃ¡t.");
       return;
     }
 
     if (isRetailCheckout && !retailAmountReady) {
-      setError("Chua xac nhan duoc tong tien don retail. Vui long thu lai tu trang don hang.");
+      setError("ChÆ°a xÃ¡c nháº­n Ä‘Æ°á»£c tá»•ng tiá»n Ä‘Æ¡n retail. Vui lÃ²ng thá»­ láº¡i tá»« trang Ä‘Æ¡n hÃ ng.");
       return;
     }
 
     if (validAmount < 1000) {
       setError(
         isRetailCheckout
-          ? "Khong xac dinh duoc so tien don retail. Vui long thanh toan lai tu trang don hang."
-          : "So tien toi thieu la 1,000d."
+          ? "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c sá»‘ tiá»n Ä‘Æ¡n retail. Vui lÃ²ng thanh toÃ¡n láº¡i tá»« trang Ä‘Æ¡n hÃ ng."
+          : "Sá»‘ tiá»n tá»‘i thiá»ƒu lÃ  1,000Ä‘."
       );
       return;
     }
@@ -254,7 +254,7 @@ export default function PayosCheckoutPage() {
         cancelUrl: buildFrontendUrl("/payment/cancel"),
         items: [
           {
-            name: isRetailCheckout ? "Don phu tung MyGarage" : "Dich vu MyGarage",
+            name: isRetailCheckout ? "Đơn phụ tùng MyGarage" : "Dịch vụ MyGarage",
             quantity: 1,
             price: validAmount,
           },
@@ -263,7 +263,7 @@ export default function PayosCheckoutPage() {
 
       const result = await createPayosOrder(payload);
       if (!result.ok) {
-        throw new Error(result.data?.message || "Khong tao duoc link thanh toan.");
+        throw new Error(result.data?.message || "KhÃ´ng táº¡o Ä‘Æ°á»£c link thanh toÃ¡n.");
       }
 
       const order = result.data;
@@ -271,7 +271,7 @@ export default function PayosCheckoutPage() {
       await loadHistory();
 
       if (!order?.checkoutUrl) {
-        throw new Error("Khong nhan duoc checkoutUrl tu PayOS.");
+        throw new Error("KhÃ´ng nháº­n Ä‘Æ°á»£c checkoutUrl tá»« PayOS.");
       }
 
       localStorage.setItem("payos_last_payment_search", retrySearch);
@@ -293,7 +293,7 @@ export default function PayosCheckoutPage() {
 
       window.location.href = order.checkoutUrl;
     } catch (paymentError) {
-      setError(paymentError?.message || "Thanh toan that bai.");
+      setError(paymentError?.message || "Thanh toÃ¡n tháº¥t báº¡i.");
     } finally {
       setLoading(false);
     }
@@ -327,7 +327,7 @@ export default function PayosCheckoutPage() {
         </h3>
         <p style={{ marginTop: 0, color: "#4a5568", lineHeight: 1.7 }}>
           {isRetailCheckout
-            ? `Ban dang thanh toan cho don retail #${retailOrderId}. So tien duoc khoa theo tong tien don.`
+        ? `Báº¡n Ä‘ang thanh toÃ¡n cho Ä‘Æ¡n retail #${retailOrderId}. Sá»‘ tiá»n Ä‘Æ°á»£c khÃ³a theo tá»•ng tiá»n Ä‘Æ¡n.`
             : "Ban co the tao link PayOS thu cong cho giao dich customer."}
         </p>
 
@@ -374,7 +374,7 @@ export default function PayosCheckoutPage() {
         </div>
 
         <div style={{ marginTop: 14, color: "#4a5568", fontSize: 14 }}>
-          Tong thanh toan: <strong style={{ color: "#422afb" }}>{formatVnd(validAmount)}</strong>
+            Tá»•ng thanh toÃ¡n: <strong style={{ color: "#422afb" }}>{formatVnd(validAmount)}</strong>
         </div>
 
         {isRetailCheckout && retailSummary ? (
@@ -400,7 +400,7 @@ export default function PayosCheckoutPage() {
                 <strong>{formatVnd(retailSummary.taxAmount)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px dashed #cbd5e1", paddingTop: 6 }}>
-                <span>Tong thanh toan</span>
+              <span>Tá»•ng thanh toÃ¡n</span>
                 <strong style={{ color: "#1d4ed8" }}>{formatVnd(retailSummary.finalAmount)}</strong>
               </div>
             </div>
@@ -416,7 +416,7 @@ export default function PayosCheckoutPage() {
             disabled={loading || retailAmountLoading}
             style={{ marginTop: 0, width: "auto", minWidth: 220 }}
           >
-            {loading ? "Dang tao link..." : "Thanh toan qua PayOS"}
+              {loading ? "Äang táº¡o link..." : "Thanh toÃ¡n qua PayOS"}
           </button>
           {isRetailCheckout ? (
             <Link
@@ -445,12 +445,12 @@ export default function PayosCheckoutPage() {
             disabled={historyLoading}
             style={{ border: "1px solid #d7def0", background: "#fff", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}
           >
-            {historyLoading ? "Dang tai..." : "Tai lai"}
+                    {historyLoading ? "Äang táº£i..." : "Táº£i láº¡i"}
           </button>
         </div>
 
         {history.length === 0 ? (
-          <p style={{ marginTop: 12, color: "#718096" }}>Chua co giao dich nao.</p>
+          <p style={{ marginTop: 12, color: "#718096" }}>Chưa có giao dịch nào.</p>
         ) : (
           <div style={{ marginTop: 12, overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -458,7 +458,7 @@ export default function PayosCheckoutPage() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #edf2f7" }}>
                   <th style={{ padding: "10px 8px" }}>Ma GD</th>
                   <th style={{ padding: "10px 8px" }}>So tien</th>
-                  <th style={{ padding: "10px 8px" }}>Trang thai</th>
+                      <th style={{ padding: "10px 8px" }}>Tráº¡ng thÃ¡i</th>
                   <th style={{ padding: "10px 8px" }}>Loai</th>
                   <th style={{ padding: "10px 8px" }}>Thoi gian</th>
                 </tr>
@@ -510,3 +510,4 @@ export default function PayosCheckoutPage() {
     </div>
   );
 }
+

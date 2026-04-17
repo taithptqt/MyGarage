@@ -49,7 +49,12 @@ namespace MyGarage.Services
             emailMessage.From.Add(new MailboxAddress(senderName, senderEmail));
             emailMessage.To.Add(new MailboxAddress("", toEmail));
             emailMessage.Subject = subject;
-            emailMessage.Body = new TextPart(MimeKit.Text.TextFormat.Html) { Text = body };
+            emailMessage.Body = new TextPart(MimeKit.Text.TextFormat.Html)
+            {
+                Text = body,
+                ContentTransferEncoding = ContentEncoding.QuotedPrintable
+            };
+            emailMessage.Body.ContentType.Charset = "utf-8";
 
             using var client = new SmtpClient();
             try

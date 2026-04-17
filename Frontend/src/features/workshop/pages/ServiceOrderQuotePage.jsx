@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllStandardServices } from "@features/admin/api/serviceApi";
@@ -6,7 +6,6 @@ import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/ve
 import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
-import { getApiBaseUrl } from "@app/apiClient";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import {
   extractLatestDiagnosisId,
@@ -19,7 +18,85 @@ import {
   resolveCurrentStaffId,
   toPositiveNumber,
 } from "./quotationFlowUtils";
-import "./Workshop.css";
+import "./ServiceOrderQuote.css";
+import {
+  User,
+  Car,
+  Info,
+  FileText,
+  Send,
+  Plus,
+  Check,
+  X,
+  Trash2,
+  Clock,
+  DollarSign,
+  AlertTriangle,
+  ChevronRight,
+  ChevronDown,
+  Download,
+  Save,
+  ShieldCheck,
+  Mail,
+  Eye,
+  Upload,
+  RefreshCw,
+  Image as ImageIcon,
+  AlertCircle,
+  Phone,
+  Activity,
+  Wallet,
+  CreditCard
+} from "lucide-react";
+
+const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
+
+// Sub-components for better organization
+function QuoteStepper({ status }) {
+  const steps = [
+    { id: "DRAFT", label: "Bản nháp", icon: <FileText size={18} /> },
+    { id: "PENDING_INSURANCE", label: "Chờ BH duyệt", icon: <ShieldCheck size={18} /> },
+    { id: "INSURANCE_APPROVED", label: "BH đã duyệt", icon: <Check size={18} /> },
+    { id: "PENDING_CUSTOMER", label: "Đợi khách chốt", icon: <User size={18} /> },
+    { id: "CUSTOMER_APPROVED", label: "Hoàn tất", icon: <Check size={18} /> },
+  ];
+
+  const currentIdx = steps.findIndex(s => s.id === status);
+
+  return (
+    <div className="quote-stepper">
+      {steps.map((step, idx) => {
+        let state = "pending";
+        if (idx < currentIdx) state = "completed";
+        else if (idx === currentIdx) state = "active";
+        if (status === "CUSTOMER_APPROVED") state = "completed";
+
+        return (
+          <div key={step.id} className={`step-item ${state}`}>
+            <div className="step-icon">{state === "completed" ? <Check size={18} /> : step.icon}</div>
+            <div className="step-label">{step.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuoteInfoCard({ icon, label, value, subValue }) {
+  return (
+    <div className="info-card-premium">
+      <div className="info-card-icon">{icon}</div>
+      <div className="info-card-content">
+        <span>{label}</span>
+        <strong>{value}</strong>
+        {subValue && <small className="info-card-sub">{subValue}</small>}
+      </div>
+    </div>
+  );
+}
+
 
 function extractServiceId(service) {
   return toPositiveNumber(readField(service, "id", "Id"));
@@ -75,6 +152,18 @@ function isValidHttpUrl(value) {
   } catch {
     return false;
   }
+}
+
+function normalizeBooleanLike(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function pickPreferredActiveQuotationId(quotationRows) {
+  const rows = Array.isArray(quotationRows) ? quotationRows : [];
+  if (rows.length === 0) return null;
+  // Rows are already sorted by VersionNo desc, so pick latest version directly.
+  return Number(readField(rows[0], "id", "Id")) || null;
 }
 
 function toCsvCell(value) {
@@ -200,19 +289,22 @@ export default function ServiceOrderQuotePage() {
 
   const [cloneNote, setCloneNote] = useState("");
   const [sendEmailNote, setSendEmailNote] = useState("");
-  const [insuranceEvidenceUrl, setInsuranceEvidenceUrl] = useState("");
+  const [insuranceEvidenceUrls, setInsuranceEvidenceUrls] = useState([]);
   const [insuranceApprovalNote, setInsuranceApprovalNote] = useState("");
   const [insuranceEvidenceUploading, setInsuranceEvidenceUploading] = useState(false);
   const [insuranceEvidenceUploadMessage, setInsuranceEvidenceUploadMessage] = useState("");
   const [removeIdsForClone, setRemoveIdsForClone] = useState([]);
+  const [activeActionTab, setActiveActionTab] = useState("insurance"); // 'insurance', 'customer', 'clone'
   const [splitBillingDraft, setSplitBillingDraft] = useState({});
   const [cancelReason, setCancelReason] = useState("Khách vội");
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showMandatoryCloneWarning, setShowMandatoryCloneWarning] = useState(false);
   const [mailSentNotice, setMailSentNotice] = useState("");
   const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
+  const [hoveredGroupKey, setHoveredGroupKey] = useState(null);
 
   const autoCreateTriedRef = useRef(false);
+  const tabSelectionLockedRef = useRef(false);
 
   const customerById = useMemo(() => {
     const map = new Map();
@@ -290,6 +382,97 @@ export default function ServiceOrderQuotePage() {
     return map;
   }, [recommendations]);
 
+  const supplementaryMetaByQuotationDetailId = useMemo(() => {
+    const bySodQuotationDetailId = new Map();
+    const byQuotationDetailNodeId = new Map();
+
+    (Array.isArray(serviceOrderDetails) ? serviceOrderDetails : []).forEach((detail) => {
+      const quotationDetailId = toPositiveNumber(readField(detail, "quotationDetailId", "QuotationDetailId"));
+      if (!quotationDetailId) return;
+
+      const serviceSourceRaw = String(readField(detail, "serviceSource", "ServiceSource") || "").trim().toUpperCase();
+      const isSupplementary =
+        normalizeBooleanLike(readField(detail, "isSupplementary", "IsSupplementary")) ||
+        serviceSourceRaw === "SUPPLEMENTARY_TECHNICIAN" ||
+        serviceSourceRaw === "SUPPLEMENTARY_CUSTOMER";
+
+      const supplementaryReasonCode = String(readField(detail, "supplementaryReasonCode", "SupplementaryReasonCode") || "")
+        .trim()
+        .toUpperCase();
+
+      bySodQuotationDetailId.set(quotationDetailId, {
+        isSupplementary,
+        serviceSource: serviceSourceRaw || (isSupplementary ? "SUPPLEMENTARY_CUSTOMER" : "INITIAL"),
+        supplementaryReasonCode: supplementaryReasonCode || null,
+      });
+    });
+
+    (Array.isArray(quotations) ? quotations : []).forEach((quotationRow) => {
+      const versionNo = Number(readField(quotationRow, "versionNo", "VersionNo") || 0);
+      const details = Array.isArray(quotationRow?.details) ? quotationRow.details : [];
+      details.forEach((detail) => {
+        const detailId = toPositiveNumber(readField(detail, "id", "Id"));
+        if (!detailId) return;
+        byQuotationDetailNodeId.set(detailId, {
+          detailId,
+          versionNo,
+          sourceQuotationDetailId: toPositiveNumber(readField(detail, "sourceQuotationDetailId", "SourceQuotationDetailId")),
+          diagnosisRecommendationId: toPositiveNumber(readField(detail, "diagnosisRecommendationId", "DiagnosisRecommendationId")),
+        });
+      });
+    });
+
+    const resolveFromLineage = (startDetailId) => {
+      if (!startDetailId) return null;
+
+      const visited = new Set();
+      let cursorId = startDetailId;
+      let hasDiagnosisInLineage = false;
+      let rootNode = null;
+
+      while (cursorId && !visited.has(cursorId)) {
+        visited.add(cursorId);
+
+        const sodMeta = bySodQuotationDetailId.get(cursorId);
+        if (sodMeta) return sodMeta;
+
+        const node = byQuotationDetailNodeId.get(cursorId);
+        if (!node) break;
+
+        if (node.diagnosisRecommendationId) hasDiagnosisInLineage = true;
+        rootNode = node;
+        cursorId = node.sourceQuotationDetailId || null;
+      }
+
+      if (!rootNode) return null;
+
+      const isSupplementary = Number(rootNode.versionNo || 0) > 1;
+      const supplementaryReasonCode = isSupplementary
+        ? hasDiagnosisInLineage
+          ? "TECH_FINDING"
+          : "CUSTOMER_REQUEST"
+        : null;
+
+      return {
+        isSupplementary,
+        serviceSource: isSupplementary
+          ? supplementaryReasonCode === "TECH_FINDING"
+            ? "SUPPLEMENTARY_TECHNICIAN"
+            : "SUPPLEMENTARY_CUSTOMER"
+          : "INITIAL",
+        supplementaryReasonCode,
+      };
+    };
+
+    byQuotationDetailNodeId.forEach((_, detailId) => {
+      if (bySodQuotationDetailId.has(detailId)) return;
+      const resolved = resolveFromLineage(detailId);
+      if (resolved) bySodQuotationDetailId.set(detailId, resolved);
+    });
+
+    return bySodQuotationDetailId;
+  }, [quotations, serviceOrderDetails]);
+
   const quotationDetailRows = useMemo(() => {
     const source = Array.isArray(activeQuotation?.details) ? activeQuotation.details : [];
     if (source.length === 0) return [];
@@ -314,6 +497,7 @@ export default function ServiceOrderQuotePage() {
         itemName: String(readField(row, "itemName", "ItemName") || "").trim(),
         parentRecommendationId,
         explicitParentName,
+        urgency: readField(recommendation, "urgency", "Urgency"),
       };
     });
 
@@ -327,6 +511,15 @@ export default function ServiceOrderQuotePage() {
     let nearestServiceGroupKey = null;
     let nearestServiceName = "";
     const groupedRows = baseRows.map((entry) => {
+      const normalizedUrgency = String(entry.urgency || "").toUpperCase();
+      const priorityLabel = normalizedUrgency === "URGENT"
+        ? "Cấp bách"
+        : normalizedUrgency === "HIGH"
+          ? "Quan trọng"
+          : normalizedUrgency === "NORMAL"
+            ? "Bình thường"
+            : ""; // Empty if no urgency defined
+
       if (entry.itemType === "SERVICE") {
         const serviceGroupKey = entry.recommendationId || `service-${entry.originalIndex}`;
         nearestServiceGroupKey = serviceGroupKey;
@@ -338,7 +531,8 @@ export default function ServiceOrderQuotePage() {
           parentName: "",
           isDependentPart: false,
           isMainService: true,
-          classificationLabel: "Dịch vụ chính",
+          classificationLabel: priorityLabel || "Dịch vụ chính",
+          priorityLabel: priorityLabel || "Bình thường",
           classificationRank: 0,
         };
       }
@@ -358,7 +552,7 @@ export default function ServiceOrderQuotePage() {
         parentName: resolvedParentName,
         isDependentPart: Boolean(resolvedParentName),
         isMainService: false,
-        classificationLabel: resolvedParentName ? "Phụ tùng phụ thuộc" : "Phụ tùng",
+        priorityLabel: priorityLabel, // Only show if explicit urgency exists for parts
         classificationRank: resolvedParentName ? 1 : 2,
       };
     });
@@ -467,7 +661,10 @@ export default function ServiceOrderQuotePage() {
   }, [activeQuotationId, activeQuotation]);
 
   useEffect(() => {
-    setInsuranceEvidenceUrl(String(readField(activeQuotation, "insuranceApprovalEvidenceUrl", "InsuranceApprovalEvidenceUrl") || ""));
+    const rawUrlString = String(readField(activeQuotation, "insuranceApprovalEvidenceUrl", "InsuranceApprovalEvidenceUrl") || "").trim();
+    // Split by comma or semicolon to support existing data that might be multiple
+    const initialUrls = rawUrlString ? rawUrlString.split(/[;|,]/).map(u => u.trim()).filter(Boolean) : [];
+    setInsuranceEvidenceUrls(initialUrls);
     setInsuranceApprovalNote("");
     setInsuranceEvidenceUploadMessage("");
   }, [activeQuotationId, activeQuotation]);
@@ -520,8 +717,9 @@ export default function ServiceOrderQuotePage() {
       setVehicleBrands(Array.isArray(brandRes) ? brandRes : []);
       setVehicleModels(Array.isArray(modelRes) ? modelRes : []);
 
-      if (sortedQuoteList.length > 0) {
-        setActiveQuotationId(Number(readField(sortedQuoteList[0], "id", "Id")));
+      const preferredActiveId = pickPreferredActiveQuotationId(sortedQuoteList);
+      if (preferredActiveId) {
+        setActiveQuotationId(preferredActiveId);
       } else {
         setActiveQuotationId(null);
       }
@@ -556,10 +754,11 @@ export default function ServiceOrderQuotePage() {
 
       setQuotations(sortedQuoteList);
       if (sortedQuoteList.length > 0) {
+        const preferredActiveId = pickPreferredActiveQuotationId(sortedQuoteList);
         setActiveQuotationId((prev) => {
           const prevId = Number(prev);
           const stillExists = sortedQuoteList.some((row) => Number(readField(row, "id", "Id")) === prevId);
-          return stillExists ? prevId : Number(readField(sortedQuoteList[0], "id", "Id"));
+          return stillExists ? prevId : preferredActiveId;
         });
       } else {
         setActiveQuotationId(null);
@@ -573,20 +772,38 @@ export default function ServiceOrderQuotePage() {
     } catch {
       // Silent refresh should not interrupt user actions.
     }
-  }, [numericOrderId, activeQuotationId, quotations]);
+  }, [activeQuotationId, quotations]);
 
   useEffect(() => {
     if (loading || saving) return undefined;
     const timerId = setInterval(() => {
       void refreshQuotationStatusSilently();
-    }, 15000);
+    }, 30000);
 
     return () => clearInterval(timerId);
   }, [loading, saving, refreshQuotationStatusSilently]);
 
   useEffect(() => {
     autoCreateTriedRef.current = false;
+    tabSelectionLockedRef.current = false;
   }, [numericOrderId]);
+
+  useEffect(() => {
+    if (tabSelectionLockedRef.current) return;
+    if (!activeQuotationId || quotations.length === 0) return;
+
+    const active = quotations.find((q) => Number(readField(q, "id", "Id")) === Number(activeQuotationId));
+    if (!active) return;
+
+    const status = normalizeStatus(readField(active, "status", "Status"));
+    if (status === "INSURANCE_APPROVED" || status === "PENDING_CUSTOMER" || status === "CUSTOMER_APPROVED") {
+      setActiveActionTab("customer");
+      tabSelectionLockedRef.current = true;
+    } else if (status === "DRAFT" || status === "PENDING_INSURANCE") {
+      setActiveActionTab("insurance");
+      tabSelectionLockedRef.current = true;
+    }
+  }, [activeQuotationId, quotations]);
 
   const buildQuotationItemsForDraft = useCallback(async () => {
     const recommendationParents = (Array.isArray(recommendations) ? recommendations : []).filter((item) => {
@@ -890,13 +1107,13 @@ export default function ServiceOrderQuotePage() {
       const note = String(insuranceApprovalNote || "").trim();
       await serviceOrderApi.submitQuotation(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gui bao gia sang buoc cho bao hiem duyet",
+        note: note || "Gửi báo giá sang bước chờ bảo hiểm duyệt",
       });
-      setActionMessage("Da chuyen bao gia sang trang thai cho bao hiem duyet.");
+      setActionMessage("Đã chuyển báo giá sang trạng thái chờ bảo hiểm duyệt.");
       setMailSentNotice("");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Khong the gui bao gia cho bao hiem.");
+      setError(err?.message || "Không thể gửi báo giá cho bảo hiểm.");
     } finally {
       setSaving(false);
     }
@@ -906,9 +1123,9 @@ export default function ServiceOrderQuotePage() {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
     if (!quoteId || !staffId) return;
 
-    const evidenceUrl = String(insuranceEvidenceUrl || "").trim();
-    if (!evidenceUrl) {
-      setError("Vui long nhap link bang chung phe duyet bao hiem.");
+    const evidenceUrlsSent = insuranceEvidenceUrls.filter(u => isValidHttpUrl(u));
+    if (evidenceUrlsSent.length === 0) {
+      setError("Vui lòng tải lên hoặc nhập link bằng chứng phê duyệt bảo hiểm.");
       setActionMessage("");
       return;
     }
@@ -921,17 +1138,17 @@ export default function ServiceOrderQuotePage() {
       const note = String(insuranceApprovalNote || "").trim();
       await serviceOrderApi.confirmQuotationInsuranceApproval(quoteId, {
         actorStaffId: staffId,
-        insuranceApprovalEvidenceUrl: evidenceUrl,
-        note: note || "Bao hiem da xac nhan duyet",
+        insuranceApprovalEvidenceUrl: evidenceUrlsSent.join(", "),
+        note: note || "Bảo hiểm đã xác nhận duyệt",
       });
-      setActionMessage("Da xac nhan bao hiem duyet va khoa du lieu boi thuong.");
+      setActionMessage("Đã xác nhận bảo hiểm duyệt và khóa dữ liệu bồi thường.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Khong the xac nhan bao hiem duyet.");
+      setError(err?.message || "Không thể xác nhận bảo hiểm duyệt.");
     } finally {
       setSaving(false);
     }
-  }, [activeQuotation, staffId, insuranceEvidenceUrl, insuranceApprovalNote, loadData]);
+  }, [activeQuotation, staffId, insuranceEvidenceUrls, insuranceApprovalNote, loadData]);
 
   const handleSendQuotationToCustomer = useCallback(async () => {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
@@ -945,13 +1162,13 @@ export default function ServiceOrderQuotePage() {
       const note = String(sendEmailNote || "").trim();
       await serviceOrderApi.sendQuotationToCustomer(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gui bao gia cho khach sau khi bao hiem da duyet",
+        note: note || "Gửi báo giá cho khách sau khi bảo hiểm đã duyệt",
       });
-      setActionMessage("Da gui bao gia cho khach hang.");
-      setMailSentNotice("Gui email bao gia thanh cong cho khach hang.");
+      setActionMessage("Đã gửi báo giá cho khách hàng.");
+      setMailSentNotice("Gửi email báo giá thành công cho khách hàng.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Khong the gui bao gia cho khach hang.");
+      setError(err?.message || "Không thể gửi báo giá cho khách hàng.");
     } finally {
       setSaving(false);
     }
@@ -971,51 +1188,85 @@ export default function ServiceOrderQuotePage() {
       const response = await serviceOrderApi.uploadQuotationInsuranceEvidence(quoteId, file);
       const uploadedUrl = String(response?.insuranceApprovalEvidenceUrl || response?.url || response?.Url || "").trim();
       if (!uploadedUrl) {
-        throw new Error("Khong nhan duoc URL anh sau khi upload.");
+        throw new Error("Không nhận được URL ảnh sau khi upload.");
       }
 
-      setInsuranceEvidenceUrl(uploadedUrl);
-      setInsuranceEvidenceUploadMessage("Da tai anh len thanh cong. He thong da dien URL bang chung.");
+      setInsuranceEvidenceUrls(prev => [...prev, uploadedUrl]);
+      setInsuranceEvidenceUploadMessage("Đã tải ảnh lên thành công.");
     } catch (err) {
-      setError(err?.message || "Khong the tai anh bang chung.");
+      setError(err?.message || "Không thể tải ảnh bằng chứng.");
       setInsuranceEvidenceUploadMessage("");
     } finally {
       setInsuranceEvidenceUploading(false);
     }
   }, [activeQuotation, staffId]);
 
-  const handleExportQuotationExcel = useCallback(() => {
+  const handleExportQuotationExcel = useCallback(async () => {
+    if (loading) return;
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
     if (!quoteId) return;
-    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
-    if (!token) {
-      setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-      return;
-    }
-    const exportUrl = `${getApiBaseUrl()}/api/quotations/${quoteId}/export/excel`;
-    fetch(exportUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error("Không thể xuất file Excel từ server.");
+    setError("");
+    setActionMessage("Đang chuẩn bị file Excel...");
+
+    try {
+      const { blob, fileName } = await serviceOrderApi.exportQuotationExcel(quoteId);
+
+      let savedToDevice = false;
+      if (typeof window.showSaveFilePicker === "function") {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: "Excel Workbook",
+                accept: {
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+                },
+              },
+            ],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          savedToDevice = true;
+        } catch (saveErr) {
+          if (saveErr?.name === "AbortError") {
+            setActionMessage("Đã hủy chọn nơi lưu file.");
+            return;
+          } else {
+            throw saveErr;
+          }
         }
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const quotationCode = String(readField(activeQuotation, "code", "Code") || `quotation-${Date.now()}`).replace(/[^\w\-]/g, "_");
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
-        anchor.download = `${quotationCode}.xlsx`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-        URL.revokeObjectURL(objectUrl);
-        setActionMessage("Đã xuất Excel theo mẫu backend.");
-      })
-      .catch((err) => {
-        setError(err?.message || "Không thể xuất Excel.");
-      });
-  }, [activeQuotation]);
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = fileName;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+
+      if (savedToDevice) {
+        setActionMessage("Đã lưu file Excel vào thiết bị và tải file trên trình duyệt.");
+      } else {
+        setActionMessage("Đã tải file Excel trên trình duyệt.");
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        setActionMessage("Đã hủy chọn nơi lưu file.");
+        return;
+      }
+
+      setActionMessage("");
+      setError(err?.message || "Không thể xuất Excel.");
+    }
+  }, [activeQuotation, loading]);
 
   const handleToggleCloneRemove = useCallback((detailId) => {
     setRemoveIdsForClone((prev) => {
@@ -1197,31 +1448,110 @@ export default function ServiceOrderQuotePage() {
   }, [numericOrderId, staffId, cancelReason, loadData]);
 
   const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
-  const canEditSplitBilling = ["DRAFT", "WAITING_APPROVAL", "APPROVED", "QUOTING", "PENDING_INSURANCE"].includes(quotationStatus);
+  const splitBillingLockedStatuses = new Set([
+    "SUPERSEDED",
+    "CANCELED",
+    "INSURANCE_APPROVED",
+    "PENDING_CUSTOMER",
+    "CUSTOMER_APPROVED",
+  ]);
+  const canEditSplitBilling = Boolean(activeQuotation) && !splitBillingLockedStatuses.has(quotationStatus);
   const canSubmit = ["DRAFT"].includes(quotationStatus);
   const canConfirmInsuranceApproved = ["PENDING_INSURANCE"].includes(quotationStatus);
   const canSendToCustomer = ["INSURANCE_APPROVED", "PENDING_CUSTOMER"].includes(quotationStatus);
   const canCustomerDecision = ["PENDING_CUSTOMER"].includes(quotationStatus);
   const canClone = !["CUSTOMER_APPROVED", "CANCELED", "CANCELLED"].includes(quotationStatus);
-  const evidenceUrlValue = String(insuranceEvidenceUrl || "").trim();
-  const evidenceUrlValid = isValidHttpUrl(evidenceUrlValue);
-  const evidenceUrlError = canConfirmInsuranceApproved && evidenceUrlValue.length > 0 && !evidenceUrlValid;
+  const evidenceUrlsValue = insuranceEvidenceUrls.join(", ");
+  const allUrlsValid = insuranceEvidenceUrls.every(u => isValidHttpUrl(u));
+  const evidenceUrlError = canConfirmInsuranceApproved && insuranceEvidenceUrls.length > 0 && !allUrlsValid;
   const hasCloneReason = String(cloneNote || "").trim().length > 0;
 
   const isSuperseded = quotationStatus === "SUPERSEDED";
   const customerDisplay = resolveCustomerDisplay(order, customerById);
   const plateDisplay = resolveVehiclePlateDisplay(order, vehicleById);
   const vehicleBrandModelDisplay = resolveVehicleBrandModelDisplay(order, vehicleById, vehicleBrandById, vehicleModelById);
+  const vatSummary = useMemo(() => {
+    const rows = Array.isArray(quotationDetailRows) ? quotationDetailRows : [];
+    if (rows.length === 0) {
+      const fallbackSubTotal = Math.max(0, Number(readField(activeQuotation, "subTotalAmount", "SubTotalAmount") || 0));
+      const fallbackTax = Math.max(0, Number(readField(activeQuotation, "taxAmount", "TaxAmount") || 0));
+      return {
+        baseBeforeVat: fallbackSubTotal,
+        totalVat: fallbackTax,
+        totalWithVat: Math.max(0, Number(readField(activeQuotation, "finalAmount", "FinalAmount") || fallbackSubTotal + fallbackTax)),
+        groups: [],
+      };
+    }
+
+    const groups = new Map();
+    let baseBeforeVat = 0;
+    let totalVat = 0;
+
+    rows.forEach((entry) => {
+      const row = entry?.row || {};
+      const status = normalizeStatus(readField(row, "status", "Status"));
+      if (status === "CANCELED" || status === "CANCELLED") return;
+
+      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+      const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
+      const discountValue = Math.max(0, Number(readField(row, "discountValue", "DiscountValue") || 0));
+      const taxRateRaw = Number(readField(row, "taxRate", "TaxRate") || 0);
+
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw > 0 ? taxRateRaw : 0;
+
+      const taxAmountRaw = Number(readField(row, "taxAmount", "TaxAmount"));
+      const taxAmount = Number.isFinite(taxAmountRaw)
+        ? Math.max(0, taxAmountRaw)
+        : Number(((taxableBase * taxRate) / 100).toFixed(2));
+
+      baseBeforeVat += taxableBase;
+      totalVat += taxAmount;
+
+      const groupKey = taxRate.toFixed(4);
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, { taxRate, taxableBase: 0, taxAmount: 0 });
+      }
+      const group = groups.get(groupKey);
+      group.taxableBase += taxableBase;
+      group.taxAmount += taxAmount;
+    });
+
+    const normalizedGroups = [...groups.values()]
+      .map((group) => ({
+        taxRate: Number(group.taxRate.toFixed(4)),
+        taxableBase: Number(group.taxableBase.toFixed(2)),
+        taxAmount: Number(group.taxAmount.toFixed(2)),
+      }))
+      .sort((a, b) => a.taxRate - b.taxRate);
+
+    const normalizedBase = Number(baseBeforeVat.toFixed(2));
+    const normalizedVat = Number(totalVat.toFixed(2));
+    return {
+      baseBeforeVat: normalizedBase,
+      totalVat: normalizedVat,
+      totalWithVat: Number((normalizedBase + normalizedVat).toFixed(2)),
+      groups: normalizedGroups,
+    };
+  }, [activeQuotation, quotationDetailRows]);
   const splitBillingSummary = useMemo(() => {
     if (!Array.isArray(quotationDetailRows) || quotationDetailRows.length === 0) {
+      const dAmt = Number(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount") || 0);
+      const ins = Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0);
+      const cust = Number(readField(activeQuotation, "totalCustomerAmount", "TotalCustomerAmount") || 0);
       return {
-        insurance: Number(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount") || 0),
-        customer: Number(readField(activeQuotation, "totalCustomerAmount", "TotalCustomerAmount") || 0),
+        insurance: ins,
+        customer: cust,
+        deductible: dAmt,
+        totalCustomerPayable: cust + dAmt
       };
     }
 
     let insurance = 0;
     let customer = 0;
+    const deductible = Number(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount") || 0);
 
     quotationDetailRows.forEach((entry) => {
       const row = entry?.row || {};
@@ -1239,20 +1569,224 @@ export default function ServiceOrderQuotePage() {
       customer += Math.max(0, finalAmount - safeInsurance);
     });
 
-    return { insurance, customer };
-  }, [activeQuotation, quotationDetailRows, splitBillingDraft]);
+    return {
+      insurance,
+      customer,
+      deductible,
+      totalCustomerPayable: customer + deductible
+    };
+  }, [activeQuotation, quotationDetailRows, splitBillingDraft, order]);
+  const vatHeadlineLabel = useMemo(() => {
+    if (!Array.isArray(vatSummary.groups) || vatSummary.groups.length === 0) return "Thuế VAT:";
+    if (vatSummary.groups.length === 1) {
+      return `Thuế VAT (${vatSummary.groups[0].taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%):`;
+    }
+    return "Thuế VAT (nhiều mức):";
+  }, [vatSummary.groups]);
+  const executionCostSummary = useMemo(() => {
+    const rows = Array.isArray(quotationDetailRows) ? quotationDetailRows : [];
+    let laborBeforeVat = 0;
+    let partsAndMaterialBeforeVat = 0;
+
+    rows.forEach((entry) => {
+      const row = entry?.row || {};
+      const status = normalizeStatus(readField(row, "status", "Status"));
+      if (status === "CANCELED" || status === "CANCELLED") return;
+
+      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+      const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
+      const discountValue = Math.max(0, Number(readField(row, "discountValue", "DiscountValue") || 0));
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const itemType = normalizeRecommendationItemType(readField(row, "itemType", "ItemType"));
+
+      if (itemType === "SERVICE") laborBeforeVat += taxableBase;
+      else partsAndMaterialBeforeVat += taxableBase;
+    });
+
+    return {
+      laborBeforeVat: Number(laborBeforeVat.toFixed(2)),
+      partsAndMaterialBeforeVat: Number(partsAndMaterialBeforeVat.toFixed(2)),
+    };
+  }, [quotationDetailRows]);
+  const vatGroupsForSummary = useMemo(() => {
+    if (Array.isArray(vatSummary.groups) && vatSummary.groups.length > 0) return vatSummary.groups;
+    return [
+      {
+        taxRate: 0,
+        taxableBase: vatSummary.baseBeforeVat,
+        taxAmount: vatSummary.totalVat,
+      },
+    ];
+  }, [vatSummary.baseBeforeVat, vatSummary.groups, vatSummary.totalVat]);
+
+  const detailRowsByServiceType = useMemo(() => {
+    const initialRows = [];
+    const supplementaryRows = [];
+
+    quotationDetailRows.forEach((entry) => {
+      const detailId = toPositiveNumber(readField(entry?.row, "id", "Id"));
+      const supplementaryMeta = detailId ? supplementaryMetaByQuotationDetailId.get(detailId) : null;
+      const rowServiceSource = String(readField(entry?.row, "serviceSource", "ServiceSource") || "").trim().toUpperCase();
+      const isSupplementary =
+        Boolean(supplementaryMeta?.isSupplementary) ||
+        rowServiceSource === "SUPPLEMENTARY_TECHNICIAN" ||
+        rowServiceSource === "SUPPLEMENTARY_CUSTOMER" ||
+        normalizeBooleanLike(readField(entry?.row, "isSupplementary", "IsSupplementary"));
+      if (isSupplementary) supplementaryRows.push(entry);
+      else initialRows.push(entry);
+    });
+
+    return { initialRows, supplementaryRows };
+  }, [quotationDetailRows, supplementaryMetaByQuotationDetailId]);
+
+  const buildDetailGroups = (rows) => {
+    const groups = [];
+    const groupByKey = new Map();
+
+    rows.forEach((entry, index) => {
+      const key = String(entry.groupKey ?? `group-${index}`);
+      let group = groupByKey.get(key);
+      if (!group) {
+        group = { key, rows: [], serviceRow: null, partRows: [] };
+        groupByKey.set(key, group);
+        groups.push(group);
+      }
+      group.rows.push(entry);
+      if (entry.isMainService && !group.serviceRow) {
+        group.serviceRow = entry;
+      } else {
+        group.partRows.push(entry);
+      }
+    });
+
+    groups.forEach((group) => {
+      if (!group.serviceRow && group.rows.length > 0) {
+        group.serviceRow = group.rows[0];
+        group.partRows = group.rows.slice(1);
+      }
+    });
+
+    return groups;
+  };
+
+  const renderDetailRows = (rows) => {
+    const groups = buildDetailGroups(rows);
+    return groups.flatMap((group, groupIndex) => {
+      const groupKey = String(group.key);
+      const inferredPartCount = group.partRows.length;
+      const partCount = partCountByGroup.get(groupKey) || inferredPartCount;
+      const canToggle = partCount > 0;
+      const isCollapsed = canToggle ? Boolean(collapsedPartGroups[groupKey]) : false;
+      const visibleRows = [group.serviceRow, ...(isCollapsed ? [] : group.partRows)].filter(Boolean);
+      const isOpenGroup = canToggle && !isCollapsed;
+
+      const groupRenderedRows = visibleRows.map((item, rowIndex) => {
+        const row = item.row;
+        const detailId = Number(readField(row, "id", "Id"));
+        const qty = Number(readField(row, "quantity", "Quantity") || 1);
+        const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+        const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || qty * unitPrice);
+        const insuranceDraft = Number(splitBillingDraft[detailId]);
+        const insuranceValue = Number.isFinite(insuranceDraft) ? insuranceDraft : finalAmount;
+        const customerValue = Math.max(0, finalAmount - insuranceValue);
+        const isGroupStart = rowIndex === 0;
+        const isGroupEnd = rowIndex === visibleRows.length - 1;
+        const serviceRowTooltip = item.isMainService
+          ? (canToggle ? (isCollapsed ? SERVICE_ROW_TOOLTIP_EXPAND : SERVICE_ROW_TOOLTIP_COLLAPSE) : SERVICE_ROW_TOOLTIP_STATIC)
+          : "";
+
+        return (
+          <tr
+            key={detailId}
+            className={[
+              "group-row",
+              item.isMainService ? "group-service-row clickable-service-row" : "group-part-row",
+              isGroupStart ? "group-start" : "group-middle",
+              isGroupEnd ? "group-end" : "",
+              isOpenGroup ? "group-open" : "group-closed",
+              hoveredGroupKey === groupKey ? "group-hover" : "",
+            ].join(" ")}
+            title={serviceRowTooltip}
+            onClick={
+              item.isMainService && canToggle
+                ? () => setCollapsedPartGroups((p) => ({ ...p, [groupKey]: !p[groupKey] }))
+                : undefined
+            }
+            onMouseEnter={() => setHoveredGroupKey(groupKey)}
+            onMouseLeave={() => setHoveredGroupKey((prev) => (prev === groupKey ? null : prev))}
+          >
+            <td className="col-name" style={{ textAlign: "left" }}>
+              {item.isMainService ? (
+                <div className="service-name-cell" style={{ fontWeight: 700 }}>
+                  {item.itemName}
+                </div>
+              ) : (
+                <div className="part-name-cell" style={{ paddingLeft: 20, color: "#475569" }}>
+                  <span style={{ opacity: 0.3, marginRight: 8 }}>└─</span> {item.itemName}
+                </div>
+              )}
+            </td>
+            <td className="col-priority">
+              <span className={`priority-badge priority-${item.urgency || "NORMAL"}`}>
+                {item.priorityLabel || "Bình thường"}
+              </span>
+            </td>
+            <td className="text-right col-qty">{qty}</td>
+            <td className="text-right col-money">{formatMoney(unitPrice)}</td>
+            <td className="text-right col-money" style={{ fontWeight: 700 }}>{formatMoney(finalAmount)}</td>
+            <td className="col-money">
+              <input
+                type="number"
+                className="split-input"
+                value={insuranceValue}
+                onChange={(e) => handleSplitInsuranceChange(detailId, finalAmount, e.target.value)}
+                disabled={!canEditSplitBilling}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </td>
+            <td className="text-right" style={{ fontWeight: 700, color: "var(--quota-navy)" }}>{formatMoney(customerValue)}</td>
+            <td className="col-clone-cell">
+              <input
+                type="checkbox"
+                checked={removeIdsForClone.includes(detailId)}
+                onChange={() => handleToggleCloneRemove(detailId)}
+                disabled={!canClone}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </td>
+          </tr>
+        );
+      });
+
+      if (groupIndex < groups.length - 1) {
+        groupRenderedRows.push(
+          <tr key={`spacer-${groupKey}`} className="group-spacer-row">
+            <td colSpan={8} />
+          </tr>,
+        );
+      }
+
+      return groupRenderedRows;
+    });
+  };
 
   return (
-    <div className="workshop-table-card reception-quote-page">
-      <div className="reception-quote-head">
+    <div className="reception-quote-page">
+      <header className="reception-quote-head">
         <div>
-          <h2 className="reception-quote-title">Báo giá thương mại</h2>
-          <p className="reception-quote-subtitle">
-            Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
-          </p>
+          <h2 className="reception-quote-title">Trung tâm Báo giá Thương mại</h2>
+          <div className="reception-quote-subtitle">
+            <Clock size={14} style={{ marginRight: 4 }} />
+            Mã lệnh: <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
+          </div>
         </div>
-        <button type="button" className="btn-back" onClick={() => navigate("/workshop/reception")}>Quay lại</button>
-      </div>
+        <button type="button" className="btn-back-premium" onClick={() => navigate("/workshop/reception")}>
+          <ChevronRight size={18} style={{ transform: "rotate(180deg)" }} />
+          Quay lại danh sách
+        </button>
+      </header>
 
       {loading ? (
         <div className="loading-state">
@@ -1261,413 +1795,434 @@ export default function ServiceOrderQuotePage() {
         </div>
       ) : (
         <div className="reception-quote-layout">
-          <section className="reception-quote-summary-card">
-            <article>
-              <span>Khách hàng</span>
-              <strong>{customerDisplay}</strong>
-            </article>
-            <article>
-              <span>Thông tin xe</span>
-              <strong>{plateDisplay}</strong>
-              <small style={{ display: "block", marginTop: 4, color: "#5f6f8a", fontWeight: 600 }}>
-                {vehicleBrandModelDisplay}
-              </small>
-            </article>
-            <article>
-              <span>Trạng thái lệnh</span>
-              <strong>{getStatusLabelVi(readField(order, "status", "Status"), readField(order, "status", "Status") || "-")}</strong>
-            </article>
-            <article>
-              <span>Số phiên bản báo giá</span>
-              <strong>{quotations.length}</strong>
-            </article>
-          </section>
+          <QuoteStepper status={quotationStatus} />
 
-          <section className="reception-quote-action-card">
-            <h3>Điều phối báo giá</h3>
-            <p className="reception-quote-note">Luồng này dành cho CVDV/Lễ tân. Chỉ khi khách duyệt mới ghi nhận vào SOD.</p>
-            {error ? <p className="reception-quote-error">{error}</p> : null}
-            {actionMessage ? <p className="reception-quote-note">{actionMessage}</p> : null}
-            {isSuperseded ? (
-              <p className="reception-quote-warning">Phiên bản đang chọn thuộc lịch sử và đã bị thay thế bởi phiên bản mới hơn.</p>
-            ) : null}
-          </section>
+          <div className="quote-info-grid">
+            {/* Row 1 */}
+            <QuoteInfoCard
+              icon={<User size={24} />}
+              label="Khách hàng"
+              value={customerDisplay}
+            />
+            <QuoteInfoCard
+              icon={<Car size={24} />}
+              label="Thông tin xe"
+              value={plateDisplay}
+              subValue={vehicleBrandModelDisplay}
+            />
+            <QuoteInfoCard
+              icon={<Activity size={24} />}
+              label="Trạng thái lệnh"
+              value={<span className="status-badge-inline">{getStatusLabelVi(order?.status, "")}</span>}
+            />
+            <QuoteInfoCard
+              icon={<FileText size={24} />}
+              label="Trạng thái báo giá"
+              value={<span className="status-badge-inline">{getStatusLabelVi(quotationStatus, "")}</span>}
+            />
 
-          <section className="reception-quote-action-card">
-            <h3>Danh sách phiên bản</h3>
-            {quotations.length === 0 ? (
-              <div className="reception-quote-action-row">
-                <button type="button" className="btn-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
-                  Tạo báo giá V1
-                </button>
-              </div>
-            ) : (
-              <div className="reception-quote-action-row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {quotations.map((row) => {
-                  const id = Number(readField(row, "id", "Id"));
-                  const versionNo = Number(readField(row, "versionNo", "VersionNo") || 0);
-                  const status = normalizeStatus(readField(row, "status", "Status"));
-                  const statusLabel = getStatusLabelVi(status, status || "-");
+            {/* Row 2 */}
+            <QuoteInfoCard
+              icon={<DollarSign size={24} />}
+              label="Tổng giá trị báo giá"
+              value={`${formatMoney(vatSummary.totalWithVat)} đ`}
+            />
+            <QuoteInfoCard
+              icon={<ShieldCheck size={24} />}
+              label="Bảo hiểm trả"
+              value={`${formatMoney(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount"))} đ`}
+            />
+            <QuoteInfoCard
+              icon={<Wallet size={24} />}
+              label="Miễn thường"
+              value={`${formatMoney(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount"))} đ`}
+            />
+            <QuoteInfoCard
+              icon={<CreditCard size={24} />}
+              label="Khách phải trả"
+              value={`${formatMoney(splitBillingSummary.totalCustomerPayable)} đ`}
+            />
+          </div>
 
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className={id === Number(activeQuotationId) ? "btn-primary" : "toolbar-action-btn toolbar-action-outline"}
-                      onClick={() => setActiveQuotationId(id)}
-                      title={`Trạng thái: ${statusLabel}`}
-                    >
-                      Báo giá V{versionNo} ({statusLabel})
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {activeQuotation ? (
-            <>
-              <section className="reception-quote-action-card">
-                <h3>Thao tác thương mại</h3>
-                <div className="reception-quote-action-row">
-                  <button type="button" className="btn-primary" onClick={handleExportQuotationExcel} disabled={saving || !activeQuotation}>
-                    Xuất Excel
+          <div className="quote-main-content">
+            <aside className="version-timeline-card">
+              <h3>Lịch sử phiên bản</h3>
+              <div className="version-list">
+                {quotations.length === 0 ? (
+                  <button type="button" className="btn-quota btn-quota-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
+                    <Plus size={18} /> Tạo báo giá V1
                   </button>
-                  <button type="button" className="btn-primary" onClick={handleSaveSplitBilling} disabled={saving || !staffId || !canEditSplitBilling}>
-                    Lưu tách bill
-                  </button>
-                  <button type="button" className="btn-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit || !staffId}>
-                    Chuyển chờ bảo hiểm
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={handleConfirmInsuranceApproval}
-                    disabled={saving || !canConfirmInsuranceApproved || !staffId || !evidenceUrlValid}
-                  >
-                    Xác nhận BH đã duyệt
-                  </button>
-                  <button type="button" className="btn-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer || !staffId}>
-                    Gửi báo giá cho khách
-                  </button>
-                  <button type="button" className="btn-primary" onClick={handleCloneQuotation} disabled={saving || !canClone || !staffId || !hasCloneReason}>
-                    Tạo bản mới
-                  </button>
-                  <button type="button" className="btn-success" onClick={() => handleCustomerDecision(true)} disabled={saving || !canCustomerDecision || !staffId}>
-                    Khách duyệt
-                  </button>
-                  <button type="button" className="btn-danger" onClick={() => handleCustomerDecision(false)} disabled={saving || !canCustomerDecision || !staffId}>
-                    Khách từ chối
-                  </button>
-                  <button type="button" className="btn-danger" onClick={() => setShowCancelModal(true)} disabled={saving || !staffId}>
-                    Hủy toàn bộ phiếu
-                  </button>
-                </div>
-                {mailSentNotice ? <p className="reception-quote-success">{mailSentNotice}</p> : null}
-
-                <div className="reception-quote-approval-note">
-                  <div className="reception-quote-approval-note-head">
-                    <span className="reception-quote-approval-note-title">Bằng chứng duyệt bảo hiểm (URL)</span>
-                    <small className="reception-quote-approval-note-hint">Bắt buộc trước khi gửi báo giá cho khách.</small>
-                  </div>
-                  <input
-                    type="url"
-                    className="reception-quote-approval-note-input"
-                    value={insuranceEvidenceUrl}
-                    onChange={(event) => setInsuranceEvidenceUrl(event.target.value)}
-                    placeholder="https://.../zalo-approval.jpg"
-                    disabled={saving || !staffId || !canConfirmInsuranceApproved}
-                  />
-                  {evidenceUrlError ? <small className="reception-quote-error">Link bằng chứng chưa hợp lệ (chỉ nhận http/https).</small> : null}
-                  <div style={{ marginTop: 8 }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={saving || insuranceEvidenceUploading || !staffId || !canConfirmInsuranceApproved}
-                      onChange={(event) => {
-                        const selectedFile = event.target.files?.[0];
-                        if (selectedFile) {
-                          void handleUploadInsuranceEvidence(selectedFile);
-                        }
-                        event.target.value = "";
-                      }}
-                    />
-                  </div>
-                  {insuranceEvidenceUploading ? <small className="reception-quote-note">Đang tải ảnh bằng chứng...</small> : null}
-                  {insuranceEvidenceUploadMessage ? <small className="reception-quote-success">{insuranceEvidenceUploadMessage}</small> : null}
-                </div>
-
-                <div className="reception-quote-approval-note">
-                  <div className="reception-quote-approval-note-head">
-                    <span className="reception-quote-approval-note-title">Ghi chú làm việc bảo hiểm</span>
-                    <small className="reception-quote-approval-note-hint">Lưu nội dung đàm phán/chốt bồi thường.</small>
-                  </div>
-                  <textarea
-                    className="reception-quote-approval-note-input"
-                    rows={2}
-                    value={insuranceApprovalNote}
-                    onChange={(event) => setInsuranceApprovalNote(event.target.value)}
-                    placeholder="Ví dụ: GĐV duyệt 30tr, phần hao mòn khách tự chi trả."
-                    disabled={saving || !staffId}
-                  />
-                </div>
-
-                <div className="reception-quote-approval-note">
-                  <div className="reception-quote-approval-note-head">
-                    <span className="reception-quote-approval-note-title">Ghi chú gửi email cho khách</span>
-                    <small className="reception-quote-approval-note-hint">Đoạn này sẽ xuất hiện trong email báo giá cho khách.</small>
-                  </div>
-                  <textarea
-                    className="reception-quote-approval-note-input"
-                    rows={2}
-                    value={sendEmailNote}
-                    onChange={(event) => setSendEmailNote(event.target.value)}
-                    placeholder="Ví dụ: Em đã áp dụng giảm 10% tiền công như đã trao đổi."
-                    disabled={saving}
-                  />
-                </div>
-
-                <div className="reception-quote-approval-note">
-                  <div className="reception-quote-approval-note-head">
-                    <span className="reception-quote-approval-note-title">Ghi chú clone phiên bản</span>
-                    <small className="reception-quote-approval-note-hint">Ghi rõ lý do thay đổi để theo dõi V1/V2/V3.</small>
-                  </div>
-                  <textarea
-                    className="reception-quote-approval-note-input"
-                    rows={2}
-                    value={cloneNote}
-                    onChange={(event) => setCloneNote(event.target.value)}
-                    placeholder="Ví dụ: Khách muốn bỏ hạng mục làm đẹp"
-                    disabled={saving}
-                  />
-                  {!hasCloneReason ? <small className="reception-quote-error">Vui lòng nhập lý do để bật chức năng clone.</small> : null}
-                </div>
-
-                <div className="reception-quote-summary-card" style={{ marginTop: 12 }}>
-                  <article>
-                    <span>Trạng thái báo giá</span>
-                    <strong>{getStatusLabelVi(quotationStatus, quotationStatus || "-")}</strong>
-                  </article>
-                  <article>
-                    <span>Duyệt kỹ thuật</span>
-                    <strong>{readField(activeQuotation, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus") || "-"}</strong>
-                  </article>
-                  <article>
-                    <span>Duyệt quản đốc</span>
-                    <strong>{readField(activeQuotation, "finalApprovalStatus", "FinalApprovalStatus") || "-"}</strong>
-                  </article>
-                  <article>
-                    <span>Khách quyết định</span>
-                    <strong>{readField(activeQuotation, "customerDecisionStatus", "CustomerDecisionStatus") || "-"}</strong>
-                  </article>
-                  <article>
-                    <span>Sẵn sàng tách bill</span>
-                    <strong>{readField(activeQuotation, "isReadyForSplitBilling", "IsReadyForSplitBilling") ? "Đã sẵn sàng" : "Chưa sẵn sàng"}</strong>
-                  </article>
-                  <article>
-                    <span>Thời điểm sẵn sàng</span>
-                    <strong>{formatDateTime(readField(activeQuotation, "splitBillingReadyAt", "SplitBillingReadyAt"))}</strong>
-                  </article>
-                  <article>
-                    <span>Cập nhật</span>
-                    <strong>{formatDateTime(readField(activeQuotation, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</strong>
-                  </article>
-                  <article>
-                    <span>Bảo hiểm đền</span>
-                    <strong>{formatMoney(splitBillingSummary.insurance)} đ</strong>
-                  </article>
-                  <article>
-                    <span>Khách tự trả</span>
-                    <strong>{formatMoney(splitBillingSummary.customer)} đ</strong>
-                  </article>
-                </div>
-                {(() => {
-                  const warnings = readField(activeQuotation, "warnings", "Warnings");
-                  return Array.isArray(warnings) && warnings.length > 0 ? (
-                    <div className="reception-quote-warning" style={{ marginTop: 10 }}>
-                      {warnings.join(" | ")}
-                    </div>
-                  ) : null;
-                })()}
-              </section>
-
-              <section className="reception-quote-table-card">
-                <div className="reception-quote-table-head">
-                  <h3>Chi tiết báo giá</h3>
-                  <strong>{formatMoney(readField(activeQuotation, "finalAmount", "FinalAmount"))} d</strong>
-                </div>
-
-                {quotationDetailRows.length > 0 ? (
-                  <div className="workshop-table-card">
-                    <table className="admin-table quoteflow-fixed-table">
-                      <colgroup>
-                        <col className="quoteflow-col-item" />
-                        <col className="quoteflow-col-type" />
-                        <col className="quoteflow-col-qty" />
-                        <col className="quoteflow-col-price" />
-                        <col className="quoteflow-col-total" />
-                        <col className="quoteflow-col-insurance" />
-                        <col className="quoteflow-col-customer" />
-                        <col className="quoteflow-col-clone" />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>Hạng mục</th>
-                          <th>Phân loại</th>
-                          <th>SL</th>
-                          <th>Đơn giá</th>
-                          <th>Tổng tiền</th>
-                          <th>Bảo hiểm đền</th>
-                          <th>Khách bù</th>
-                          <th className="quoteflow-col-clone">Loại khỏi bản mới</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {quotationDetailRows.map((item) => {
-                          const groupKey = String(item.groupKey);
-                          const hasDependentParts = (partCountByGroup.get(groupKey) || 0) > 0;
-                          const isPartCollapsed = hasDependentParts && Boolean(collapsedPartGroups[groupKey]);
-                          if (item.isDependentPart && isPartCollapsed) {
-                            return null;
-                          }
-                          const row = item.row;
-                          const detailId = Number(readField(row, "id", "Id"));
-                          const name = String(readField(row, "itemName", "ItemName") || "-");
-                          const qty = Number(readField(row, "quantity", "Quantity") || 1);
-                          const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
-                          const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || qty * unitPrice);
-                          const insuranceRaw = readField(
-                            row,
-                            "insuranceCoveredAmount",
-                            "InsuranceCoveredAmount",
-                            "insuranceRequestedAmount",
-                            "InsuranceRequestedAmount",
-                          );
-                          const originalInsuranceCovered =
-                            insuranceRaw === null || insuranceRaw === undefined || String(insuranceRaw).trim() === ""
-                              ? finalAmount
-                              : Number(insuranceRaw);
-                          const insuranceCoveredDraft = Number(splitBillingDraft[detailId]);
-                          const insuranceCovered = Number.isFinite(insuranceCoveredDraft)
-                            ? Math.min(Math.max(insuranceCoveredDraft, 0), Math.max(0, finalAmount))
-                            : originalInsuranceCovered;
-                          const customerCovered = Math.max(0, finalAmount - insuranceCovered);
-                          const isMandatory = Boolean(readField(row, "isMandatory", "IsMandatory"));
-
-                          return (
-                            <tr
-                              key={detailId}
-                              className={[
-                                "quoteflow-group-row",
-                                item.isMainService ? "quoteflow-row-service" : item.isDependentPart ? "quoteflow-row-part" : "",
-                                item.isGroupStart ? "quoteflow-group-start" : "",
-                                item.isGroupEnd ? "quoteflow-group-end" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            >
-                              <td>
-                                <div className={item.isDependentPart ? "quoteflow-item-name quoteflow-item-name-part" : "quoteflow-item-name"}>
-                                  {item.isDependentPart ? `└─ ${name}` : name}
-                                </div>
-                                {item.isMainService && hasDependentParts ? (
-                                  <button
-                                    type="button"
-                                    className="quoteflow-part-toggle"
-                                    onClick={() =>
-                                      setCollapsedPartGroups((prev) => ({
-                                        ...prev,
-                                        [groupKey]: !prev[groupKey],
-                                      }))
-                                    }
-                                  >
-                                    {isPartCollapsed ? `Hiện phụ tùng (${partCountByGroup.get(groupKey) || 0})` : "Thu gọn phụ tùng"}
-                                  </button>
-                                ) : null}
-                                {isMandatory ? <span className="quoteflow-mandatory-chip">Bắt buộc</span> : null}
-                              </td>
-                              <td>{item.classificationLabel}</td>
-                              <td>{qty}</td>
-                              <td>{formatMoney(unitPrice)}</td>
-                              <td>{formatMoney(finalAmount)}</td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={Math.max(0, finalAmount)}
-                                  value={String(insuranceCovered)}
-                                  onChange={(event) => handleSplitInsuranceChange(detailId, finalAmount, event.target.value)}
-                                  disabled={saving || !staffId || !canEditSplitBilling}
-                                  style={{ width: 140, padding: "6px 8px", borderRadius: 8, border: "1px solid #cfd8e6" }}
-                                />
-                              </td>
-                              <td>{formatMoney(customerCovered)}</td>
-                              <td className="quoteflow-col-clone-cell">
-                                <label className="quoteflow-clone-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={removeIdsForClone.includes(detailId)}
-                                    onChange={() => handleToggleCloneRemove(detailId)}
-                                    disabled={saving || !canClone}
-                                  />
-                                </label>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
                 ) : (
-                  <p className="reception-quote-note">Phiên bản này chưa có dòng chi tiết.</p>
+                  quotations.map((row) => {
+                    const id = Number(readField(row, "id", "Id"));
+                    const versionNo = Number(readField(row, "versionNo", "VersionNo") || 0);
+                    const status = normalizeStatus(readField(row, "status", "Status"));
+                    const isActive = id === Number(activeQuotationId);
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`version-btn ${isActive ? "active" : ""}`}
+                        onClick={() => setActiveQuotationId(id)}
+                      >
+                        <div className="version-btn-body">
+                          <span className="version-name">Phiên bản V{versionNo}</span>
+                          <div className="version-status-line">
+                            <span className="version-status-text">{getStatusLabelVi(status, status)}</span>
+                          </div>
+                          <span className="version-date">{formatDateTime(readField(row, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</span>
+                        </div>
+                      </button>
+                    );
+                  })
                 )}
-              </section>
-            </>
-          ) : null}
+              </div>
+            </aside>
+
+            <main>
+              {activeQuotation && (
+                <section className="action-console-premium">
+                  <div className="action-console-head">
+                    <h3 style={{ margin: 0, fontWeight: 800 }}>Bảng điều khiển nghiệp vụ</h3>
+                    <button
+                      type="button"
+                      className="btn-quota btn-quota-outline"
+                      style={{ color: "var(--quota-danger)", borderColor: "#fee2e2" }}
+                      onClick={() => setShowCancelModal(true)}
+                      disabled={saving}
+                    >
+                      <Trash2 size={16} /> Hủy toàn bộ phiếu
+                    </button>
+                  </div>
+                  {actionMessage ? (
+                    <span className="reception-quote-note">
+                      <Info size={14} />
+                      <span>{actionMessage}</span>
+                    </span>
+                  ) : null}
+                  {error ? (
+                    <div className="reception-quote-error-banner">
+                      <AlertCircle size={16} /> {error}
+                    </div>
+                  ) : null}
+
+                  <div className="action-group" style={{ marginBottom: 12 }}>
+                    <button type="button" className="btn-quota btn-quota-outline" onClick={handleExportQuotationExcel} disabled={loading || !activeQuotation}>
+                      <Download size={16} /> Xuất Excel
+                    </button>
+                    <button type="button" className="btn-quota btn-quota-outline" onClick={handleSaveSplitBilling} disabled={saving || !canEditSplitBilling}>
+                      <Save size={16} /> Lưu tách bill
+                    </button>
+                  </div>
+
+                  <div className="quote-action-tabs">
+                    <button
+                      className={`action-tab-header ${activeActionTab === 'insurance' ? 'active' : ''}`}
+                      onClick={() => {
+                        tabSelectionLockedRef.current = true;
+                        setActiveActionTab('insurance');
+                      }}
+                    >
+                      <ShieldCheck size={16} /> Nghiệp vụ Bảo hiểm
+                    </button>
+                    <button
+                      className={`action-tab-header ${activeActionTab === 'customer' ? 'active' : ''}`}
+                      onClick={() => {
+                        tabSelectionLockedRef.current = true;
+                        setActiveActionTab('customer');
+                      }}
+                    >
+                      <User size={16} /> Gửi khách hàng
+                    </button>
+                    <button
+                      className={`action-tab-header ${activeActionTab === 'clone' ? 'active' : ''}`}
+                      onClick={() => {
+                        tabSelectionLockedRef.current = true;
+                        setActiveActionTab('clone');
+                      }}
+                    >
+                      <Plus size={16} /> Quản lý phiên bản
+                    </button>
+                  </div>
+
+                  <div className="action-tab-content">
+                    {activeActionTab === 'insurance' && (
+                      <div className="tab-pane-fade-in">
+                        <div className="input-field-group" style={{ marginBottom: 16 }}>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Bằng chứng duyệt bảo hiểm (Ảnh/Chụp màn hình)</label>
+                          <div className="upload-container-professional">
+                            <input
+                              type="file"
+                              id="evidence-upload"
+                              hidden
+                              onChange={(e) => handleUploadInsuranceEvidence(e.target.files[0])}
+                              disabled={insuranceEvidenceUploading || !canConfirmInsuranceApproved}
+                            />
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                              <label htmlFor="evidence-upload" className={`btn-upload-compact ${(!canConfirmInsuranceApproved || insuranceEvidenceUploading) ? 'disabled' : ''}`}>
+                                {insuranceEvidenceUploading ? <RefreshCw size={16} className="reception-quote-spin" /> : <><Upload size={16} /> Tải thêm ảnh</>}
+                              </label>
+                              {insuranceEvidenceUrls.map((url, index) => (
+                                <div key={index} className="uploaded-photo-card" onClick={() => window.open(url, '_blank')}>
+                                  <div className="photo-card-icon"><ImageIcon size={18} /></div>
+                                  <div className="photo-card-info"><span className="photo-card-name">Nhấn để xem ảnh</span></div>
+                                  <button className="photo-card-remove" onClick={(e) => { e.stopPropagation(); setInsuranceEvidenceUrls(prev => prev.filter((_, i) => i !== index)); }} disabled={!canConfirmInsuranceApproved}><Trash2 size={16} /></button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="input-field-group">
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú làm việc với Bảo hiểm</label>
+                          <textarea
+                            className="reception-quote-approval-note-input"
+                            rows={3}
+                            value={insuranceApprovalNote}
+                            onChange={(e) => setInsuranceApprovalNote(e.target.value)}
+                            placeholder="Nhập ghi chú chi tiết về việc làm việc với bảo hiểm..."
+                          />
+                        </div>
+                        <div className="action-group-tabbed" style={{ marginTop: 16 }}>
+                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit}>
+                            <ShieldCheck size={16} /> Chuyển chờ bảo hiểm
+                          </button>
+                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleConfirmInsuranceApproval} disabled={saving || !canConfirmInsuranceApproved || !allUrlsValid}>
+                            <Check size={16} /> Xác nhận bảo hiểm duyệt
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeActionTab === 'customer' && (
+                      <div className="tab-pane-fade-in">
+                        <div className="input-field-group">
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú gửi cho khách hàng</label>
+                          <textarea
+                            className="reception-quote-approval-note-input"
+                            rows={3}
+                            value={sendEmailNote}
+                            onChange={(e) => setSendEmailNote(e.target.value)}
+                            placeholder="Thông điệp gửi kèm khi gửi email báo giá cho khách hàng..."
+                          />
+                          {mailSentNotice && <div className="reception-quote-success" style={{ marginTop: 8 }}><Check size={14} /> {mailSentNotice}</div>}
+                        </div>
+                        <div className="action-group-tabbed" style={{ marginTop: 16 }}>
+                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer}>
+                            <Mail size={16} /> Gửi báo giá cho khách
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeActionTab === 'clone' && (
+                      <div className="tab-pane-fade-in">
+                        <div className="input-field-group">
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Lý do tạo bản sao mới</label>
+                          <div style={{ position: "relative" }}>
+                            <textarea
+                              className={`reception-quote-approval-note-input ${!hasCloneReason ? "border-danger" : ""}`}
+                              rows={3}
+                              value={cloneNote}
+                              onChange={(e) => setCloneNote(e.target.value)}
+                              placeholder="Giải trình lý do tại sao cần nhân bản báo giá này (Bắt buộc)..."
+                            />
+                            {!hasCloneReason && (
+                              <small className="reception-quote-error" style={{ position: "absolute", bottom: -20, left: 0 }}>
+                                * Bắt buộc khi clone
+                              </small>
+                            )}
+                          </div>
+                        </div>
+                        <div className="action-group-tabbed" style={{ marginTop: 24 }}>
+                          <button type="button" className="btn-quota btn-quota-outline" onClick={handleCloneQuotation} disabled={saving || !canClone || !hasCloneReason}>
+                            <Plus size={16} /> Tạo bản mới (Sao chép)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </main>
+
+            {activeQuotation && (
+              <>
+                <section className="quote-table-container">
+                  <div className="action-console-head" style={{ marginBottom: 15 }}>
+                    <h3 style={{ margin: 0, fontWeight: 800 }}>Chi tiết hạng mục báo giá</h3>
+                  </div>
+
+                  <div className="premium-table-wrapper">
+                    <div className="quote-detail-section">
+                      <div className="quote-detail-section-title">Dịch vụ ban đầu</div>
+                      <table className="premium-table">
+                        <thead>
+                          <tr>
+                            <th className="col-name" style={{ textAlign: "left" }}>Hạng mục công việc / Vật tư</th>
+                            <th className="col-priority">Độ ưu tiên</th>
+                            <th className="text-right col-qty">SL</th>
+                            <th className="text-right col-money">Đơn giá</th>
+                            <th className="text-right col-money">Thành tiền</th>
+                            <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
+                            <th className="text-right col-money">Khách bù</th>
+                            <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailRowsByServiceType.initialRows.length > 0 ? (
+                            renderDetailRows(detailRowsByServiceType.initialRows)
+                          ) : (
+                            <tr>
+                              <td colSpan={8} className="quote-detail-empty">Không có dịch vụ ban đầu.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {detailRowsByServiceType.supplementaryRows.length > 0 ? (
+                      <div className="quote-detail-section quote-detail-section-supplementary">
+                        <div className="quote-detail-section-title">Dịch vụ phát sinh</div>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th className="col-name" style={{ textAlign: "left" }}>Hạng mục công việc / Vật tư</th>
+                              <th className="col-priority">Độ ưu tiên</th>
+                              <th className="text-right col-qty">SL</th>
+                              <th className="text-right col-money">Đơn giá</th>
+                              <th className="text-right col-money">Thành tiền</th>
+                              <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
+                              <th className="text-right col-money">Khách bù</th>
+                              <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {renderDetailRows(detailRowsByServiceType.supplementaryRows)}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="quote-summary-footer">
+                    <div className="summary-details">
+                      <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
+
+                      <div className="summary-subtitle">Giá trị trước thuế (Chưa VAT):</div>
+                      <div className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-labor" />
+                          Tổng chi phí Nhân công
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(executionCostSummary.laborBeforeVat)} đ</span>
+                      </div>
+                      <div className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-parts" />
+                          Tổng chi phí Phụ tùng / Vật tư
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(executionCostSummary.partsAndMaterialBeforeVat)} đ</span>
+                      </div>
+                      <div className="summary-line summary-line-strong">
+                        <span className="summary-line-label">TỔNG TIỀN HÀNG (CHƯA VAT)</span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(vatSummary.baseBeforeVat)} đ</span>
+                      </div>
+
+                      <div className="summary-subtitle">{vatHeadlineLabel}</div>
+                      {vatGroupsForSummary.map((group) => (
+                        <div key={`vat-breakdown-${group.taxRate}`} className="summary-line">
+                          <span className="summary-line-label">
+                            <span className="summary-marker marker-vat" />
+                            Thuế giá trị gia tăng ({group.taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%)
+                          </span>
+                          <span className="summary-line-dots" />
+                          <span className="summary-line-value">{formatMoney(group.taxAmount)} đ</span>
+                        </div>
+                      ))}
+                      <div className="summary-line summary-line-strong">
+                        <span className="summary-line-label">TỔNG CHI PHÍ DỊCH VỤ & PHỤ TÙNG</span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(vatSummary.totalWithVat)} đ</span>
+                      </div>
+
+                      <div className="summary-divider" />
+
+                      <div className="summary-subtitle">Phân bổ thanh toán (Billing Split):</div>
+                      <div className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-insurance" />
+                          (-) Bảo hiểm phê duyệt / Insurance Cover
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value text-insurance">-{formatMoney(splitBillingSummary.insurance)} đ</span>
+                      </div>
+                      <div className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-deductible" />
+                          (+) Phí Miễn thường / Chế tài / Deductible
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">+{formatMoney(splitBillingSummary.deductible)} đ</span>
+                      </div>
+
+                      <div className="summary-divider" />
+
+                      <div className="summary-line payable-row">
+                        <span className="summary-line-label">TỔNG CỘNG KHÁCH HÀNG THANH TOÁN (PAYABLE)</span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value final-payable">{formatMoney(splitBillingSummary.totalCustomerPayable)} đ</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      {showMandatoryCloneWarning ? (
-        <div className="quoteflow-modal-backdrop">
-          <div className="quoteflow-modal">
-            <h4>Cảnh báo hạng mục bắt buộc</h4>
-            <p>
-              Bạn đang loại bỏ hạng mục có cờ <strong>Bắt buộc (An toàn)</strong>. Hệ thống sẽ phát sinh yêu cầu ngoại lệ cho quản đốc duyệt.
-            </p>
-            <div className="reception-quote-action-row">
-              <button type="button" className="btn-danger" onClick={handleCloneQuotation} disabled={saving || !staffId}>
-                Tiếp tục clone
-              </button>
-              <button type="button" className="btn-primary" onClick={() => setShowMandatoryCloneWarning(false)} disabled={saving}>
-                Quay lại
-              </button>
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ maxWidth: 450 }}>
+            <div className="modal-header">
+              <h2 style={{ display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: 18 }}>
+                <AlertTriangle color="var(--quota-danger)" size={20} /> Xác nhận hủy báo giá
+              </h2>
             </div>
-          </div>
-        </div>
-      ) : null}
+            <div className="modal-body-content" style={{ padding: 20 }}>
+              <p style={{ margin: 0, color: "#475569" }}>Bạn có chắc chắn muốn hủy toàn bộ các hạng mục trong lệnh sửa chữa này không? Hành động này không thể hoàn tác.</p>
 
-      {showCancelModal ? (
-        <div className="quoteflow-modal-backdrop">
-          <div className="quoteflow-modal">
-            <h4>Hủy toàn bộ phiếu</h4>
-            <p>Chọn lý do hủy để phục vụ thống kê CSKH.</p>
-            <select value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} disabled={saving}>
-              <option value="Khách vội">Khách vội</option>
-              <option value="Chê đắt">Chê đắt</option>
-              <option value="Đổi ý">Đổi ý</option>
-              <option value="Có việc gấp">Có việc gấp</option>
-            </select>
-            <div className="reception-quote-action-row">
-              <button type="button" className="btn-danger" onClick={handleCancelAll} disabled={saving || !staffId}>
-                Xác nhận hủy
-              </button>
-              <button type="button" className="btn-primary" onClick={() => setShowCancelModal(false)} disabled={saving}>
-                Đóng
-              </button>
+              <div style={{ marginTop: 15 }}>
+                <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Lý do hủy hồ sơ</label>
+                <select
+                  className="reception-quote-approval-note-input"
+                  style={{ marginTop: 5, width: "100%", height: 40 }}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                >
+                  <option value="Khách vội">Khách vội</option>
+                  <option value="Chê đắt">Chê đắt</option>
+                  <option value="Đổi ý">Đổi ý</option>
+                  <option value="Có việc gấp">Có việc gấp</option>
+                  <option value="Khác">Lý do khác...</option>
+                </select>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+                <button type="button" className="btn-quota btn-quota-outline" onClick={() => setShowCancelModal(false)}>Hủy bỏ</button>
+                <button type="button" className="btn-quota btn-quota-primary" style={{ background: "var(--quota-danger)", color: "white" }} onClick={handleCancelAll}>Xác nhận hủy</button>
+              </div>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
@@ -145,7 +145,7 @@ function normalizeSearchText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
+    .replace(/Ä‘/g, "d");
 }
 
 function validateVietnamesePhone(phone) {
@@ -192,12 +192,12 @@ function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, c
 
       const missingCategoryNames = categoryIds
         .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
-        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
+        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `NhÃ³m ${categoryId}`);
 
       if (missingCategoryNames.length === 0) return null;
 
       return {
-        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
+        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chÆ°a xÃ¡c Ä‘á»‹nh"),
         missingCategoryNames,
       };
     })
@@ -212,7 +212,7 @@ function buildMissingSpecificServiceMessage(missingByVehicle) {
     return `${item.vehicleLabel}: ${categories}`;
   });
 
-  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
+  return `Vui lÃ²ng chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ cho tá»«ng loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n khung giá». Thiáº¿u trÃªn cÃ¡c xe: ${details.join("; ")}.`;
 }
 
 function normalizeService(service) {
@@ -246,7 +246,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `NhÃ³m ${service.categoryId}` });
     }
   });
 
@@ -289,7 +289,7 @@ function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelI
   if (brandName && modelName) return `${brandName} ${modelName}`;
   if (modelName) return modelName;
   if (brandName) return brandName;
-  return "Chưa rõ hãng - chưa rõ dòng xe";
+  return "ChÆ°a rÃµ hÃ£ng - chÆ°a rÃµ dÃ²ng xe";
 }
 
 function toVehicleTabLabel(vehicleLabel, fallback = "") {
@@ -305,7 +305,7 @@ function toVehicleTabLabel(vehicleLabel, fallback = "") {
 }
 
 function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}Ä‘`;
 }
 
 function parsePositiveId(value) {
@@ -535,7 +535,7 @@ export default function CreateServiceOrderPage() {
   }, [selectedBranchId, user?.BranchId, user?.branchId]);
 
   const getApiErrorMessage = useCallback((err) => {
-    const fallback = "Không thể tạo lệnh sửa chữa. Vui lòng kiểm tra dữ liệu và thử lại.";
+    const fallback = "KhÃ´ng thá»ƒ táº¡o lá»‡nh sá»­a chá»¯a. Vui lÃ²ng kiá»ƒm tra dá»¯ liá»‡u vÃ  thá»­ láº¡i.";
     const data = err?.response?.data;
     const serverErrors = data?.errors && typeof data.errors === "object" ? Object.values(data.errors).flat() : [];
     if (serverErrors.length > 0) return String(serverErrors[0] || fallback);
@@ -544,20 +544,20 @@ export default function CreateServiceOrderPage() {
     const text = String(raw);
     const lowerText = text.toLowerCase();
 
-    if (/duplicate|already exists|đã tồn tại|unique/i.test(text)) {
-      return "Dữ liệu bị trùng (biển số hoặc mã lệnh đã tồn tại). Vui lòng kiểm tra lại.";
+    if (/duplicate|already exists|Ä‘Ã£ tá»“n táº¡i|unique/i.test(text)) {
+      return "Dá»¯ liá»‡u bá»‹ trÃ¹ng (biá»ƒn sá»‘ hoáº·c mÃ£ lá»‡nh Ä‘Ã£ tá»“n táº¡i). Vui lÃ²ng kiá»ƒm tra láº¡i.";
     }
-    if (/foreign key|constraint|ràng buộc/i.test(text)) {
-      if (lowerText.includes("customerid")) return "Khách hàng đã chọn không còn hợp lệ. Vui lòng chọn lại khách hàng.";
-      if (lowerText.includes("vehicleid")) return "Xe đã chọn không còn hợp lệ. Vui lòng chọn lại xe.";
-      if (lowerText.includes("serviceadvisorid")) return "Cố vấn dịch vụ đã chọn không còn hợp lệ. Vui lòng chọn lại.";
+    if (/foreign key|constraint|rÃ ng buá»™c/i.test(text)) {
+      if (lowerText.includes("customerid")) return "KhÃ¡ch hÃ ng Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡. Vui lÃ²ng chá»n láº¡i khÃ¡ch hÃ ng.";
+      if (lowerText.includes("vehicleid")) return "Xe Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡. Vui lÃ²ng chá»n láº¡i xe.";
+      if (lowerText.includes("serviceadvisorid")) return "Cá»‘ váº¥n dá»‹ch vá»¥ Ä‘Ã£ chá»n khÃ´ng cÃ²n há»£p lá»‡. Vui lÃ²ng chá»n láº¡i.";
       if (lowerText.includes("executebranchid") || lowerText.includes("branchid")) {
-        return "Chi nhánh thực hiện không hợp lệ. Vui lòng chọn lại chi nhánh làm việc.";
+        return "Chi nhÃ¡nh thá»±c hiá»‡n khÃ´ng há»£p lá»‡. Vui lÃ²ng chá»n láº¡i chi nhÃ¡nh lÃ m viá»‡c.";
       }
-      return `Dữ liệu liên kết chưa hợp lệ. ${text}`;
+      return `Dá»¯ liá»‡u liÃªn káº¿t chÆ°a há»£p lá»‡. ${text}`;
     }
     if (/timeout|network|failed to fetch/i.test(text)) {
-      return "Không kết nối được tới máy chủ. Vui lòng thử lại sau.";
+      return "KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c tá»›i mÃ¡y chá»§. Vui lÃ²ng thá»­ láº¡i sau.";
     }
 
     return text || fallback;
@@ -599,7 +599,7 @@ export default function CreateServiceOrderPage() {
       });
       setStaff(filteredStaff);
     } catch (err) {
-      setError(`Không thể tải dữ liệu ban đầu: ${err?.message || "Lỗi không xác định"}`);
+      setError(`KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u ban Ä‘áº§u: ${err?.message || "Lá»—i khÃ´ng xÃ¡c Ä‘á»‹nh"}`);
     } finally {
       setLoading(false);
     }
@@ -743,12 +743,12 @@ export default function CreateServiceOrderPage() {
     const guestPlate = formatLicensePlate(formData.guestVehiclePlate || "").trim();
     const newPlate = formatLicensePlate(formData.vehicleLicensePlate || "").trim();
 
-    map.set(VEHICLE_KEY_GUEST, guestPlate ? `${guestPlate} - Xe khách vãng lai` : "Xe khách vãng lai");
-    map.set(VEHICLE_KEY_NEW, newPlate ? `${newPlate} - Xe mới của khách` : "Xe mới của khách");
+    map.set(VEHICLE_KEY_GUEST, guestPlate ? `${guestPlate} - Xe khÃ¡ch vÃ£ng lai` : "Xe khÃ¡ch vÃ£ng lai");
+    map.set(VEHICLE_KEY_NEW, newPlate ? `${newPlate} - Xe má»›i cá»§a khÃ¡ch` : "Xe má»›i cá»§a khÃ¡ch");
 
     customerVehiclesFiltered.forEach((vehicle) => {
       const key = getVehicleKeyFromId(vehicle.id);
-      const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+      const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
       const descriptor = describeSavedVehicle(vehicle);
       map.set(key, descriptor ? `${plate} - ${descriptor}` : plate);
     });
@@ -1129,7 +1129,7 @@ export default function CreateServiceOrderPage() {
       const serviceGroupsByCategory = Array.from(
         selectedServices.reduce((map, service) => {
           const resolvedCategoryId = Number(service?.categoryId || 0);
-          const categoryName = categoryNameById.get(resolvedCategoryId) || `Nhóm ${resolvedCategoryId || "Khác"}`;
+          const categoryName = categoryNameById.get(resolvedCategoryId) || `NhÃ³m ${resolvedCategoryId || "KhÃ¡c"}`;
           const serviceName = String(service?.name || "").trim();
           if (!serviceName) return map;
           if (!map.has(categoryName)) map.set(categoryName, []);
@@ -1150,12 +1150,12 @@ export default function CreateServiceOrderPage() {
       });
       const { bookingFlow, isLongDurationFlow, isServiceDrivenFlexibleFlow, isInsurancePackageFlexibleFlow } = flowState;
       const totalPrice = selectedServices.reduce((sum, service) => sum + Number(service?.price || 0), 0);
-      const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `Nhóm ${id}`);
+      const categoryNames = categoryIds.map((id) => categoryNameById.get(id) || `NhÃ³m ${id}`);
       const { finishText, finishIso } = calculateEstimatedFinish(calculationStartTime, executionMinutes);
       const resolvedEndIso = finishIso || "";
       const resolvedEndLabel = resolvedEndIso
         ? formatTimeWithDateInBrackets(resolvedEndIso)
-        : (finishText || "Chưa chọn");
+        : (finishText || "ChÆ°a chá»n");
 
       return {
         vehicleKey,
@@ -1166,7 +1166,7 @@ export default function CreateServiceOrderPage() {
         serviceGroupsByCategory,
         categoryIds,
         categoryNames,
-        startTimeLabel: calculationStartTime ? formatTimeWithDateInBrackets(calculationStartTime) : "Chưa chọn",
+        startTimeLabel: calculationStartTime ? formatTimeWithDateInBrackets(calculationStartTime) : "ChÆ°a chá»n",
         endTimeLabel: resolvedEndLabel,
         endTimeIso: resolvedEndIso,
         completionWarningTimeLabel: formatCompletionWarningTime(resolvedEndIso),
@@ -1198,7 +1198,7 @@ export default function CreateServiceOrderPage() {
   );
   const checkInSelectionGuardMessage = useMemo(() => {
     if (selectedVehicleKeys.length === 0) {
-      return "Vui lòng chọn xe trước khi chọn giờ check-in.";
+      return "Vui lÃ²ng chá»n xe trÆ°á»›c khi chá»n giá» check-in.";
     }
 
     for (const vehicleKey of selectedVehicleKeys) {
@@ -1208,13 +1208,13 @@ export default function CreateServiceOrderPage() {
       const serviceCount = toNumberList(plan.serviceIds).length;
       const unresolvedPackageIds = findUnresolvedPackageIds(toNumberList(plan.serviceIds), serviceById);
       if (unresolvedPackageIds.length > 0) {
-        return `Vui lòng chọn lại gói dịch vụ cho ${vehicleLabel} (mã không hợp lệ: #${unresolvedPackageIds.join(", #")}) trước khi chọn giờ check-in.`;
+        return `Vui lÃ²ng chá»n láº¡i gÃ³i dá»‹ch vá»¥ cho ${vehicleLabel} (mÃ£ khÃ´ng há»£p lá»‡: #${unresolvedPackageIds.join(", #")}) trÆ°á»›c khi chá»n giá» check-in.`;
       }
       if (categoryCount === 0) {
-        return `Vui lòng chọn loại dịch vụ cho ${vehicleLabel} trước khi chọn giờ check-in.`;
+        return `Vui lÃ²ng chá»n loáº¡i dá»‹ch vá»¥ cho ${vehicleLabel} trÆ°á»›c khi chá»n giá» check-in.`;
       }
       if (serviceCount === 0) {
-        return `Vui lòng chọn dịch vụ cụ thể cho ${vehicleLabel} trước khi chọn giờ check-in.`;
+        return `Vui lÃ²ng chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ cho ${vehicleLabel} trÆ°á»›c khi chá»n giá» check-in.`;
       }
     }
 
@@ -1463,7 +1463,7 @@ export default function CreateServiceOrderPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setNearestSlotError(err?.message || "Không thể gợi ý khung giờ gần nhất.");
+          setNearestSlotError(err?.message || "KhÃ´ng thá»ƒ gá»£i Ã½ khung giá» gáº§n nháº¥t.");
         }
       } finally {
         if (!cancelled) {
@@ -1505,15 +1505,15 @@ export default function CreateServiceOrderPage() {
       const checkInWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
 
       if (false && isInsuranceOrderEnabled && !parsePositiveId(data.insuranceCompanyId)) {
-        errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm trước khi lưu lệnh.";
+        errors.insuranceCompanyId = "Vui lÃ²ng chá»n cÃ´ng ty báº£o hiá»ƒm trÆ°á»›c khi lÆ°u lá»‡nh.";
       }
 
       if (false && isInsuranceOrderEnabled && !String(data.insuranceDeductibleOption || "").trim()) {
-        errors.insuranceDeductibleOption = "Vui lòng chọn mức miễn thường hoặc tư vấn.";
+        errors.insuranceDeductibleOption = "Vui lÃ²ng chá»n má»©c miá»…n thÆ°á»ng hoáº·c tÆ° váº¥n.";
       }
 
       if (false && isInsuranceOrderEnabled && !String(data.insuranceClaimMode || "").trim()) {
-        errors.insuranceClaimMode = "Vui lòng chọn hình thức xử lý bảo hiểm.";
+        errors.insuranceClaimMode = "Vui lÃ²ng chá»n hÃ¬nh thá»©c xá»­ lÃ½ báº£o hiá»ƒm.";
       }
 
       if (isInsuranceOrderEnabled) {
@@ -1540,13 +1540,13 @@ export default function CreateServiceOrderPage() {
         }
       }
 
-      if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
-      if (!data.orderCategory) errors.orderCategory = "Vui lòng chọn phân loại lệnh sửa chữa.";
+      if (!data.serviceAdvisorId) errors.serviceAdvisorId = "Vui lÃ²ng chá»n cá»‘ váº¥n dá»‹ch vá»¥.";
+      if (!data.orderCategory) errors.orderCategory = "Vui lÃ²ng chá»n phÃ¢n loáº¡i lá»‡nh sá»­a chá»¯a.";
 
       if (!checkIn || Number.isNaN(checkIn.getTime())) {
-        errors.checkInTime = "Vui lòng nhập thời điểm xe vào xưởng hợp lệ.";
+        errors.checkInTime = "Vui lÃ²ng nháº­p thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng há»£p lá»‡.";
       } else if (checkIn < checkInWindowStart || checkIn > checkInWindowEnd) {
-        errors.checkInTime = "Thời điểm xe vào xưởng chỉ được trong khoảng ±30 phút so với hiện tại.";
+        errors.checkInTime = "Thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng chá»‰ Ä‘Æ°á»£c trong khoáº£ng Â±30 phÃºt so vá»›i hiá»‡n táº¡i.";
       } else if (isBranchClosedBySchedule(branchOperatingHours, effectiveBranchId, checkIn)) {
         errors.checkInTime = getBranchClosedMessage(checkIn);
       }
@@ -1554,57 +1554,57 @@ export default function CreateServiceOrderPage() {
       if (data.estimatedHandover && checkIn) {
         const estimated = new Date(data.estimatedHandover);
         if (!Number.isNaN(estimated.getTime()) && estimated <= checkIn) {
-          errors.estimatedHandover = "Dự kiến hoàn thành phải sau thời điểm xe vào xưởng.";
+          errors.estimatedHandover = "Dá»± kiáº¿n hoÃ n thÃ nh pháº£i sau thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng.";
         }
       }
 
       if (data.promisedHandoverTime && checkIn) {
         const promised = new Date(data.promisedHandoverTime);
         if (!Number.isNaN(promised.getTime()) && promised <= checkIn) {
-          errors.promisedHandoverTime = "Ngày giờ cam kết trả xe phải sau thời điểm xe vào xưởng.";
+          errors.promisedHandoverTime = "NgÃ y giá» cam káº¿t tráº£ xe pháº£i sau thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng.";
         }
       }
 
       if (Number(data.requiredDepositAmount || 0) < 0) {
-        errors.requiredDepositAmount = "Số tiền cọc không được nhỏ hơn 0.";
+        errors.requiredDepositAmount = "Sá»‘ tiá»n cá»c khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n 0.";
       }
 
       if (data.isQuickOrder) {
-        if (!String(data.guestName || "").trim()) errors.guestName = "Vui lòng nhập họ tên khách vãng lai.";
+        if (!String(data.guestName || "").trim()) errors.guestName = "Vui lÃ²ng nháº­p há» tÃªn khÃ¡ch vÃ£ng lai.";
         if (!String(data.guestPhone || "").trim()) {
-          errors.guestPhone = "Vui lòng nhập số điện thoại khách vãng lai.";
+          errors.guestPhone = "Vui lÃ²ng nháº­p sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch vÃ£ng lai.";
         } else if (!validateVietnamesePhone(data.guestPhone)) {
-          errors.guestPhone = "Số điện thoại không đúng định dạng Việt Nam.";
+          errors.guestPhone = "Sá»‘ Ä‘iá»‡n thoáº¡i khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.";
         }
-        if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lòng nhập biển số xe.";
-        else if (!isValidVietnameseLicensePlate(data.guestVehiclePlate)) errors.guestVehiclePlate = "Biển số xe không đúng định dạng Việt Nam.";
-        if (!guestSelectedBrandId) errors.guestBrandId = "Vui lòng chọn hãng xe.";
-        if (!data.guestVehicleModelId) errors.guestVehicleModelId = "Vui lòng chọn dòng xe.";
-        if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lòng chọn năm sản xuất.";
-        if (String(data.guestVehicleVin || "").trim() && !isValidVin(data.guestVehicleVin)) errors.guestVehicleVin = "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
+        if (!String(data.guestVehiclePlate || "").trim()) errors.guestVehiclePlate = "Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe.";
+        else if (!isValidVietnameseLicensePlate(data.guestVehiclePlate)) errors.guestVehiclePlate = "Biá»ƒn sá»‘ xe khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.";
+        if (!guestSelectedBrandId) errors.guestBrandId = "Vui lÃ²ng chá»n hÃ£ng xe.";
+        if (!data.guestVehicleModelId) errors.guestVehicleModelId = "Vui lÃ²ng chá»n dÃ²ng xe.";
+        if (!data.guestVehicleYear) errors.guestVehicleYear = "Vui lÃ²ng chá»n nÄƒm sáº£n xuáº¥t.";
+        if (String(data.guestVehicleVin || "").trim() && !isValidVin(data.guestVehicleVin)) errors.guestVehicleVin = "Sá»‘ VIN khÃ´ng há»£p lá»‡ (17 kÃ½ tá»±, khÃ´ng chá»©a I, O, Q).";
       } else {
-        if (!data.customerId) errors.customerId = "Vui lòng chọn khách hàng.";
+        if (!data.customerId) errors.customerId = "Vui lÃ²ng chá»n khÃ¡ch hÃ ng.";
 
         if (!data.isNewVehicle) {
           if (toNumberList(data.selectedVehicleIds).length === 0) {
-            errors.selectedVehicleIds = "Vui lòng chọn ít nhất 1 xe của khách.";
+            errors.selectedVehicleIds = "Vui lÃ²ng chá»n Ã­t nháº¥t 1 xe cá»§a khÃ¡ch.";
           }
         } else {
-          if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lòng nhập biển số xe mới.";
-          else if (!isValidVietnameseLicensePlate(data.vehicleLicensePlate)) errors.vehicleLicensePlate = "Biển số xe mới không đúng định dạng Việt Nam.";
-          if (!selectedBrandId) errors.brandId = "Vui lòng chọn hãng xe.";
-          if (!data.vehicleModelId) errors.vehicleModelId = "Vui lòng chọn dòng xe.";
-          if (!data.vehicleYear) errors.vehicleYear = "Vui lòng chọn năm sản xuất.";
-          if (String(data.vehicleVin || "").trim() && !isValidVin(data.vehicleVin)) errors.vehicleVin = "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
+          if (!String(data.vehicleLicensePlate || "").trim()) errors.vehicleLicensePlate = "Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe má»›i.";
+          else if (!isValidVietnameseLicensePlate(data.vehicleLicensePlate)) errors.vehicleLicensePlate = "Biá»ƒn sá»‘ xe má»›i khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.";
+          if (!selectedBrandId) errors.brandId = "Vui lÃ²ng chá»n hÃ£ng xe.";
+          if (!data.vehicleModelId) errors.vehicleModelId = "Vui lÃ²ng chá»n dÃ²ng xe.";
+          if (!data.vehicleYear) errors.vehicleYear = "Vui lÃ²ng chá»n nÄƒm sáº£n xuáº¥t.";
+          if (String(data.vehicleVin || "").trim() && !isValidVin(data.vehicleVin)) errors.vehicleVin = "Sá»‘ VIN khÃ´ng há»£p lá»‡ (17 kÃ½ tá»±, khÃ´ng chá»©a I, O, Q).";
         }
       }
 
       if (!effectiveBranchId) {
-        errors.executeBranchId = "Vui lòng chọn chi nhánh làm việc trước khi tạo lệnh.";
+        errors.executeBranchId = "Vui lÃ²ng chá»n chi nhÃ¡nh lÃ m viá»‡c trÆ°á»›c khi táº¡o lá»‡nh.";
       }
 
       if (selectedVehicleKeys.length === 0) {
-        errors.selectedVehicleIds = "Vui lòng chọn xe trước khi chọn dịch vụ.";
+        errors.selectedVehicleIds = "Vui lÃ²ng chá»n xe trÆ°á»›c khi chá»n dá»‹ch vá»¥.";
       } else {
         const invalidPlans = selectedVehicleKeys.filter((vehicleKey) => {
           const plan = plansByVehicleKey.get(vehicleKey) || EMPTY_PLAN;
@@ -1615,8 +1615,8 @@ export default function CreateServiceOrderPage() {
         if (invalidPlans.length > 0) {
           errors.serviceIds =
             selectedVehicleKeys.length === 1
-              ? "Vui lòng chọn loại dịch vụ và ít nhất một dịch vụ."
-              : "Mỗi xe cần có loại dịch vụ và ít nhất một dịch vụ trước khi tạo lệnh.";
+              ? "Vui lÃ²ng chá»n loáº¡i dá»‹ch vá»¥ vÃ  Ã­t nháº¥t má»™t dá»‹ch vá»¥."
+              : "Má»—i xe cáº§n cÃ³ loáº¡i dá»‹ch vá»¥ vÃ  Ã­t nháº¥t má»™t dá»‹ch vá»¥ trÆ°á»›c khi táº¡o lá»‡nh.";
         } else {
           const missingSpecificByVehicle = getMissingSpecificServiceByVehicle(
             selectedVehicleKeys.map((vehicleKey) => {
@@ -1848,7 +1848,7 @@ export default function CreateServiceOrderPage() {
         ...prev,
         [assetType]: {
           uploading: false,
-          successMessage: uploadedUrls.length > 0 ? "Đã tải ảnh bảo hiểm." : "",
+          successMessage: uploadedUrls.length > 0 ? "ÄÃ£ táº£i áº£nh báº£o hiá»ƒm." : "",
         },
       }));
       setError("");
@@ -1860,7 +1860,7 @@ export default function CreateServiceOrderPage() {
           successMessage: "",
         },
       }));
-      setError(uploadError?.response?.data?.message || uploadError?.message || "Không thể tải ảnh bảo hiểm lên máy chủ.");
+      setError(uploadError?.response?.data?.message || uploadError?.message || "KhÃ´ng thá»ƒ táº£i áº£nh báº£o hiá»ƒm lÃªn mÃ¡y chá»§.");
     }
   }, [effectiveActiveInsuranceVehicleKey]);
 
@@ -1959,7 +1959,7 @@ export default function CreateServiceOrderPage() {
     const normalizedStartTime = toLocalDateTimeValue(slotStart);
     if (!normalizedStartTime) return;
     setSelectedSuggestedSlotStart(normalizedStartTime);
-    // Chọn khung giờ mới thì trả "Dự kiến hoàn thành" về chờ để tự tính theo khung giờ.
+    // Chá»n khung giá» má»›i thÃ¬ tráº£ "Dá»± kiáº¿n hoÃ n thÃ nh" vá» chá» Ä‘á»ƒ tá»± tÃ­nh theo khung giá».
     setFormData((prev) => ({ ...prev, estimatedHandover: "" }));
   }, [checkInSelectionGuardMessage]);
 
@@ -2198,7 +2198,7 @@ export default function CreateServiceOrderPage() {
       }
 
       if ((sharedPlan.categoryIds || []).includes(id)) {
-        setError('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
+        setError('Loáº¡i dá»‹ch vá»¥ dÃ¹ng chung chá»‰ cÃ³ thá»ƒ há»§y á»Ÿ tab "DÃ¹ng chung táº¥t cáº£ xe".');
         return;
       }
 
@@ -2468,7 +2468,7 @@ export default function CreateServiceOrderPage() {
     return (
       <div className="loading-state">
         <div className="spinner" />
-        <p>Đang tải dữ liệu...</p>
+        <p>Äang táº£i dá»¯ liá»‡u...</p>
       </div>
     );
   }
@@ -2477,13 +2477,13 @@ export default function CreateServiceOrderPage() {
     <div className="create-order-page reception-create-appointment-page service-order-create-page">
       <div className="page-header-actions reception-create-header">
         <div className="reception-create-header-copy">
-          <h2 className="page-title">Tiếp nhận xe và tạo Service Order mới</h2>
+          <h2 className="page-title">Tiáº¿p nháº­n xe vÃ  táº¡o Service Order má»›i</h2>
           <p className="reception-create-header-note">
-            Hỗ trợ tiếp nhận xe đơn hoặc nhóm xe, cho phép cấu hình dịch vụ dùng chung hoặc tùy chỉnh riêng theo từng xe.
+            Há»— trá»£ tiáº¿p nháº­n xe Ä‘Æ¡n hoáº·c nhÃ³m xe, cho phÃ©p cáº¥u hÃ¬nh dá»‹ch vá»¥ dÃ¹ng chung hoáº·c tÃ¹y chá»‰nh riÃªng theo tá»«ng xe.
           </p>
           <button className="btn-back reception-create-back-btn" onClick={() => navigate(-1)}>
-            <span className="btn-back-icon" aria-hidden="true">←</span>
-              <span>Quay lại</span>
+            <span className="btn-back-icon" aria-hidden="true">â†</span>
+              <span>Quay láº¡i</span>
           </button>
         </div>
       </div>
@@ -2494,7 +2494,7 @@ export default function CreateServiceOrderPage() {
       ) : null}
       {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
         <div className="validation-summary" role="alert">
-          <strong>Vui lòng xử lý các lỗi sau:</strong>
+          <strong>Vui lÃ²ng xá»­ lÃ½ cÃ¡c lá»—i sau:</strong>
           <ul>
             {Object.values(fieldErrors).map((message, index) => (
               <li key={`${message}-${index}`}>{message}</li>
@@ -2508,7 +2508,7 @@ export default function CreateServiceOrderPage() {
           <div className="reception-appt-left-column">
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 1</span>
+                <span className="reception-step-badge">BÆ¯á»šC 1</span>
                 <label className="reception-appt-quick-toggle" htmlFor="service-order-quick-toggle">
                   <input
                     id="service-order-quick-toggle"
@@ -2516,20 +2516,20 @@ export default function CreateServiceOrderPage() {
                     checked={formData.isQuickOrder}
                     onChange={toggleQuickOrder}
                   />
-                  <span>Tiếp nhận nhanh khách vãng lai</span>
+                  <span>Tiáº¿p nháº­n nhanh khÃ¡ch vÃ£ng lai</span>
                 </label>
               </div>
-              <h4 className="reception-appt-section-title">{formData.isQuickOrder ? "Khách vãng lai" : "Khách hàng và xe"}</h4>
+              <h4 className="reception-appt-section-title">{formData.isQuickOrder ? "KhÃ¡ch vÃ£ng lai" : "KhÃ¡ch hÃ ng vÃ  xe"}</h4>
 
               {!formData.isQuickOrder ? (
                 <>
                   <div className="form-group">
-                    <label>Tìm khách hàng *</label>
+                    <label>TÃ¬m khÃ¡ch hÃ ng *</label>
                     <div className="search-input-wrapper">
                       <input
                         type="text"
                         className={showError("customerId") ? "input-invalid" : ""}
-                        placeholder="Nhập tên hoặc số điện thoại..."
+                        placeholder="Nháº­p tÃªn hoáº·c sá»‘ Ä‘iá»‡n thoáº¡i..."
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         required={!formData.customerId}
@@ -2551,17 +2551,17 @@ export default function CreateServiceOrderPage() {
                     <div className="reception-customer-selected-card">
                       <div className="reception-customer-selected-main">
                         <small>KHÁCH ĐÃ CHỌN</small>
-                        <strong>{formData.guestName || "Chưa có tên"}</strong>
-                        <span>{formData.guestPhone || "Chưa có số điện thoại"}</span>
+                        <strong>{formData.guestName || "ChÆ°a cÃ³ tÃªn"}</strong>
+                        <span>{formData.guestPhone || "ChÆ°a cÃ³ sá»‘ Ä‘iá»‡n thoáº¡i"}</span>
                       </div>
                     </div>
                   ) : null}
 
                   {!formData.isNewVehicle ? (
                     <div className="form-group">
-                      <label>Xe của khách (có thể chọn nhiều xe) *</label>
+                      <label>Xe cá»§a khÃ¡ch (cÃ³ thá»ƒ chá»n nhiá»u xe) *</label>
                       {!formData.customerId ? (
-                        <div className="reception-muted-note">Hãy chọn khách hàng trước.</div>
+                        <div className="reception-muted-note">HÃ£y chá»n khÃ¡ch hÃ ng trÆ°á»›c.</div>
                       ) : (
                         <>
                           <div className="reception-vehicle-popup-toolbar">
@@ -2571,21 +2571,21 @@ export default function CreateServiceOrderPage() {
                               onClick={() => setIsSavedVehiclePopupOpen(true)}
                               disabled={customerVehiclesFiltered.length === 0}
                             >
-                              Chọn xe đã lưu
+                              Chá»n xe Ä‘Ã£ lÆ°u
                             </button>
                             <button type="button" className="reception-open-vehicle-popup-btn" onClick={switchToNewVehicleMode}>
-                              Thêm xe mới
+                              ThÃªm xe má»›i
                             </button>
                           </div>
 
                           {customerVehiclesFiltered.length === 0 ? (
-                            <div className="reception-muted-note">Khách hàng chưa có xe đã lưu.</div>
+                            <div className="reception-muted-note">KhÃ¡ch hÃ ng chÆ°a cÃ³ xe Ä‘Ã£ lÆ°u.</div>
                           ) : (
                             <>
                               {selectedCustomerVehicles.length > 0 ? (
                                 <div className="reception-selected-vehicle-list">
                                 {selectedCustomerVehicles.map((vehicle) => {
-                                  const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+                                  const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
                                   return (
                                     <div
                                       key={`selected-vehicle-${vehicle.id}`}
@@ -2600,7 +2600,7 @@ export default function CreateServiceOrderPage() {
                                         className="reception-selected-vehicle-chip-remove"
                                         onClick={() => toggleVehicleSelection(vehicle.id)}
                                       >
-                                        Xóa
+                                        XÃ³a
                                       </button>
                                     </div>
                                   );
@@ -2614,31 +2614,31 @@ export default function CreateServiceOrderPage() {
                                     className="reception-vehicle-popup-card"
                                     role="dialog"
                                     aria-modal="true"
-                                    aria-label="Chọn xe đã lưu"
+                                    aria-label="Chá»n xe Ä‘Ã£ lÆ°u"
                                     onClick={(event) => event.stopPropagation()}
                                   >
                                     <div className="reception-vehicle-popup-head">
                                       <div className="reception-vehicle-popup-head-copy">
-                                        <h5>Chọn xe đã lưu</h5>
-                                        <p>Chỉ hiển thị các xe chưa chọn.</p>
+                                        <h5>Chá»n xe Ä‘Ã£ lÆ°u</h5>
+                                        <p>Chá»‰ hiá»ƒn thá»‹ cÃ¡c xe chÆ°a chá»n.</p>
                                       </div>
                                       <button
                                         type="button"
                                         className="reception-vehicle-popup-close-btn"
                                         onClick={() => setIsSavedVehiclePopupOpen(false)}
                                       >
-                                        Đóng
+                                        ÄÃ³ng
                                       </button>
                                     </div>
 
                                     <div className="reception-vehicle-popup-list">
                                       {selectableCustomerVehicles.length === 0 ? (
                                         <div className="reception-muted-note">
-                                          Bạn đã chọn hết xe đã lưu. Bỏ xe ở danh sách đã chọn để chọn lại.
+                                          Báº¡n Ä‘Ã£ chá»n háº¿t xe Ä‘Ã£ lÆ°u. Bá» xe á»Ÿ danh sÃ¡ch Ä‘Ã£ chá»n Ä‘á»ƒ chá»n láº¡i.
                                         </div>
                                       ) : (
                                         selectableCustomerVehicles.map((vehicle) => {
-                                          const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
+                                          const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
                                           return (
                                             <button
                                               key={`popup-vehicle-${vehicle.id}`}
@@ -2653,7 +2653,7 @@ export default function CreateServiceOrderPage() {
                                                 <strong>{plate}</strong>
                                                 <small>{describeSavedVehicle(vehicle)}</small>
                                               </span>
-                                                <span className="reception-vehicle-popup-item-action">Thêm xe</span>
+                                                <span className="reception-vehicle-popup-item-action">ThÃªm xe</span>
                                             </button>
                                           );
                                         })
@@ -2677,17 +2677,17 @@ export default function CreateServiceOrderPage() {
                           onClick={switchToSavedVehicleMode}
                           disabled={customerHasNoVehicles}
                         >
-                          Chọn xe đã lưu
+                          Chá»n xe Ä‘Ã£ lÆ°u
                         </button>
                         <button type="button" className="reception-open-vehicle-popup-btn is-active" onClick={switchToNewVehicleMode}>
-                          Thêm xe mới
+                          ThÃªm xe má»›i
                         </button>
                       </div>
                       {customerHasNoVehicles ? (
-                        <div className="reception-muted-note">Khách hàng này chưa có xe, cần nhập xe mới để tiếp nhận.</div>
+                        <div className="reception-muted-note">KhÃ¡ch hÃ ng nÃ y chÆ°a cÃ³ xe, cáº§n nháº­p xe má»›i Ä‘á»ƒ tiáº¿p nháº­n.</div>
                       ) : null}
                       <div className="form-group">
-                        <label>Biển số xe mới *</label>
+                        <label>Biá»ƒn sá»‘ xe má»›i *</label>
                         <input
                           type="text"
                           name="vehicleLicensePlate"
@@ -2703,7 +2703,7 @@ export default function CreateServiceOrderPage() {
                       </div>
                       <div className="reception-grid reception-grid-2">
                         <div className="form-group">
-                          <label>Hãng xe *</label>
+                          <label>HÃ£ng xe *</label>
                           <select
                             className={showError("brandId") ? "input-invalid" : ""}
                             value={selectedBrandId}
@@ -2712,7 +2712,7 @@ export default function CreateServiceOrderPage() {
                               handleFieldValueChange("vehicleModelId", "");
                             }}
                           >
-                            <option value="">-- Chọn hãng --</option>
+                            <option value="">-- Chá»n hÃ£ng --</option>
                             {brands.map((brand) => (
                               <option key={brand.id} value={brand.id}>
                                 {brand.name}
@@ -2722,7 +2722,7 @@ export default function CreateServiceOrderPage() {
                           {showError("brandId") ? <div className="field-error">{fieldErrors.brandId}</div> : null}
                         </div>
                         <div className="form-group">
-                          <label>Dòng xe *</label>
+                          <label>DÃ²ng xe *</label>
                           <select
                             name="vehicleModelId"
                             className={showError("vehicleModelId") ? "input-invalid" : ""}
@@ -2730,7 +2730,7 @@ export default function CreateServiceOrderPage() {
                             onChange={handleChange}
                             disabled={!selectedBrandId}
                           >
-                            <option value="">-- Chọn dòng xe --</option>
+                            <option value="">-- Chá»n dÃ²ng xe --</option>
                             {models
                               .filter((model) => Number(model.brandId) === Number(selectedBrandId))
                               .map((model) => (
@@ -2744,18 +2744,18 @@ export default function CreateServiceOrderPage() {
                       </div>
                       <div className="reception-grid reception-grid-3">
                         <div className="form-group">
-                          <label>Màu sắc (tùy chọn)</label>
+                          <label>MÃ u sáº¯c (tÃ¹y chá»n)</label>
                           <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
                         </div>
                         <div className="form-group">
-                          <label>Năm sản xuất *</label>
+                          <label>NÄƒm sáº£n xuáº¥t *</label>
                           <select
                             name="vehicleYear"
                             className={showError("vehicleYear") ? "input-invalid" : ""}
                             value={formData.vehicleYear}
                             onChange={handleChange}
                           >
-                            <option value="">-- Chọn năm --</option>
+                            <option value="">-- Chá»n nÄƒm --</option>
                             {years.map((year) => (
                               <option key={year} value={year}>
                                 {year}
@@ -2765,7 +2765,7 @@ export default function CreateServiceOrderPage() {
                           {showError("vehicleYear") ? <div className="field-error">{fieldErrors.vehicleYear}</div> : null}
                         </div>
                         <div className="form-group">
-                          <label>VIN (tùy chọn)</label>
+                          <label>VIN (tÃ¹y chá»n)</label>
                           <input
                             name="vehicleVin"
                             className={showError("vehicleVin") ? "input-invalid" : ""}
@@ -2785,10 +2785,10 @@ export default function CreateServiceOrderPage() {
                           className="reception-open-vehicle-popup-btn is-active"
                           onClick={confirmNewVehicleMode}
                         >
-                          Xác nhận
+                          XÃ¡c nháº­n
                         </button>
                         <button type="button" className="reception-open-vehicle-popup-btn" onClick={cancelNewVehicleMode}>
-                          Hủy
+                          Há»§y
                         </button>
                       </div>
                     </div>
@@ -2798,7 +2798,7 @@ export default function CreateServiceOrderPage() {
                 <>
                   <div className="reception-grid reception-grid-2">
                     <div className="form-group">
-                      <label>Họ tên khách *</label>
+                      <label>Há» tÃªn khÃ¡ch *</label>
                       <input
                         name="guestName"
                         className={showError("guestName") ? "input-invalid" : ""}
@@ -2808,7 +2808,7 @@ export default function CreateServiceOrderPage() {
                       {showError("guestName") ? <div className="field-error">{fieldErrors.guestName}</div> : null}
                     </div>
                     <div className="form-group">
-                      <label>Số điện thoại *</label>
+                      <label>Sá»‘ Ä‘iá»‡n thoáº¡i *</label>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -2817,14 +2817,14 @@ export default function CreateServiceOrderPage() {
                     value={formData.guestPhone}
                     onChange={handleChange}
                     pattern={VN_PHONE_PATTERN}
-                    title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                    title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
                   />
                       {showError("guestPhone") ? <div className="field-error">{fieldErrors.guestPhone}</div> : null}
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label>Biển số xe *</label>
+                    <label>Biá»ƒn sá»‘ xe *</label>
                     <input
                       name="guestVehiclePlate"
                       className={showError("guestVehiclePlate") ? "input-invalid" : ""}
@@ -2840,7 +2840,7 @@ export default function CreateServiceOrderPage() {
 
                   <div className="reception-grid reception-grid-2">
                     <div className="form-group">
-                      <label>Hãng xe *</label>
+                      <label>HÃ£ng xe *</label>
                       <select
                         className={showError("guestBrandId") ? "input-invalid" : ""}
                         value={guestSelectedBrandId}
@@ -2849,7 +2849,7 @@ export default function CreateServiceOrderPage() {
                           handleFieldValueChange("guestVehicleModelId", "");
                         }}
                       >
-                        <option value="">-- Chọn hãng --</option>
+                        <option value="">-- Chá»n hÃ£ng --</option>
                         {brands.map((brand) => (
                           <option key={brand.id} value={brand.id}>
                             {brand.name}
@@ -2859,7 +2859,7 @@ export default function CreateServiceOrderPage() {
                       {showError("guestBrandId") ? <div className="field-error">{fieldErrors.guestBrandId}</div> : null}
                     </div>
                     <div className="form-group">
-                      <label>Dòng xe *</label>
+                      <label>DÃ²ng xe *</label>
                       <select
                         name="guestVehicleModelId"
                         className={showError("guestVehicleModelId") ? "input-invalid" : ""}
@@ -2867,7 +2867,7 @@ export default function CreateServiceOrderPage() {
                         onChange={handleChange}
                         disabled={!guestSelectedBrandId}
                       >
-                        <option value="">-- Chọn dòng xe --</option>
+                        <option value="">-- Chá»n dÃ²ng xe --</option>
                         {models
                           .filter((model) => Number(model.brandId) === Number(guestSelectedBrandId))
                           .map((model) => (
@@ -2881,18 +2881,18 @@ export default function CreateServiceOrderPage() {
                   </div>
                     <div className="reception-grid reception-grid-3">
                       <div className="form-group">
-                        <label>Màu sắc (tùy chọn)</label>
+                        <label>MÃ u sáº¯c (tÃ¹y chá»n)</label>
                         <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
                       </div>
                       <div className="form-group">
-                        <label>Năm sản xuất *</label>
+                        <label>NÄƒm sáº£n xuáº¥t *</label>
                         <select
                           name="guestVehicleYear"
                           className={showError("guestVehicleYear") ? "input-invalid" : ""}
                           value={formData.guestVehicleYear}
                           onChange={handleChange}
                         >
-                          <option value="">-- Chọn năm --</option>
+                          <option value="">-- Chá»n nÄƒm --</option>
                           {years.map((year) => (
                             <option key={year} value={year}>
                               {year}
@@ -2902,7 +2902,7 @@ export default function CreateServiceOrderPage() {
                         {showError("guestVehicleYear") ? <div className="field-error">{fieldErrors.guestVehicleYear}</div> : null}
                       </div>
                       <div className="form-group">
-                        <label>VIN (tùy chọn)</label>
+                        <label>VIN (tÃ¹y chá»n)</label>
                         <input
                           name="guestVehicleVin"
                           className={showError("guestVehicleVin") ? "input-invalid" : ""}
@@ -2922,9 +2922,9 @@ export default function CreateServiceOrderPage() {
 
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 2</span>
+                <span className="reception-step-badge">BÆ¯á»šC 2</span>
               </div>
-              <h4 className="reception-appt-section-title reception-appt-section-title-service">Loại dịch vụ và dịch vụ cụ thể</h4>
+              <h4 className="reception-appt-section-title reception-appt-section-title-service">Loáº¡i dá»‹ch vá»¥ vÃ  dá»‹ch vá»¥ cá»¥ thá»ƒ</h4>
 
               {showServiceModeSwitch ? (
                 <div className="reception-scope-switch">
@@ -2933,16 +2933,16 @@ export default function CreateServiceOrderPage() {
                     className={effectiveServiceMode === SERVICE_MODE.SHARED ? "active" : ""}
                     onClick={() => handleServiceModeChange(SERVICE_MODE.SHARED)}
                   >
-                    Dùng chung tất cả xe
+                    DÃ¹ng chung táº¥t cáº£ xe
                   </button>
                   <button
                     type="button"
                     className={effectiveServiceMode === SERVICE_MODE.CUSTOM ? "active" : ""}
                     onClick={() => handleServiceModeChange(SERVICE_MODE.CUSTOM)}
                     disabled={!hasMultipleSelectedVehicles}
-                    title={!hasMultipleSelectedVehicles ? "Cần chọn từ 2 xe trở lên để tùy chỉnh riêng" : undefined}
+                    title={!hasMultipleSelectedVehicles ? "Cáº§n chá»n tá»« 2 xe trá»Ÿ lÃªn Ä‘á»ƒ tÃ¹y chá»‰nh riÃªng" : undefined}
                   >
-                    Tùy chỉnh theo từng xe
+                    TÃ¹y chá»‰nh theo tá»«ng xe
                   </button>
                 </div>
               ) : null}
@@ -2971,7 +2971,7 @@ export default function CreateServiceOrderPage() {
                       <button
                         type="button"
                         className="reception-selected-tab-remove"
-                        aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                        aria-label={`Bá» ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           const vehicleId = getVehicleIdFromKey(vehicleKey);
@@ -2988,14 +2988,14 @@ export default function CreateServiceOrderPage() {
               ) : null}
 
               <div className="reception-service-subsection reception-service-type-subsection">
-                <h5 className="reception-service-subtitle">Loại dịch vụ</h5>
+                <h5 className="reception-service-subtitle">Loáº¡i dá»‹ch vá»¥</h5>
                 <button
                   type="button"
                   className={`reception-section-collapse-btn reception-section-collapse-btn-corner ${
                     isServicePickerCollapsed ? "is-collapsed" : "is-expanded"
                   }`}
                   aria-expanded={!isServicePickerCollapsed}
-                  aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
+                  aria-label={isServicePickerCollapsed ? "Má»Ÿ pháº§n loáº¡i dá»‹ch vá»¥" : "Thu gá»n pháº§n loáº¡i dá»‹ch vá»¥"}
                   onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
                 >
                   <span className="reception-section-collapse-glyph" aria-hidden="true" />
@@ -3018,18 +3018,18 @@ export default function CreateServiceOrderPage() {
                   </div>
                 ) : (
                   <div className="reception-service-collapsed-card">
-                    <span className="reception-service-collapsed-label">Loại dịch vụ</span>
+                    <span className="reception-service-collapsed-label">Loáº¡i dá»‹ch vá»¥</span>
                     <span className="reception-service-collapsed-value">
                       {activePlan.categoryIds.length > 0
-                        ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
-                        : "Chưa chọn loại dịch vụ"}
+                        ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`).join(", ")
+                        : "ChÆ°a chá»n loáº¡i dá»‹ch vá»¥"}
                     </span>
                   </div>
                 )}
               </div>
 
               <div className="reception-service-subsection reception-service-detail-subsection">
-                <h5 className="reception-service-subtitle">Dịch vụ cụ thể</h5>
+                <h5 className="reception-service-subtitle">Dá»‹ch vá»¥ cá»¥ thá»ƒ</h5>
                 {activePlan.categoryIds.length > 0 ? (
                   <>
                     <div className="reception-selected-tabs reception-category-tabs-layout">
@@ -3043,12 +3043,12 @@ export default function CreateServiceOrderPage() {
                             className="reception-selected-tab-main"
                             onClick={() => setActiveCategoryId(String(categoryId))}
                           >
-                            {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
+                            {categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`}
                           </button>
                           <button
                             type="button"
                             className="reception-selected-tab-remove"
-                            aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
+                            aria-label={`Bá» ${categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleCategory(categoryId);
@@ -3061,10 +3061,10 @@ export default function CreateServiceOrderPage() {
                     </div>
 
                     <div className="form-group">
-                      <label>Tìm dịch vụ</label>
+                      <label>TÃ¬m dá»‹ch vá»¥</label>
                       <input
                         type="text"
-                        placeholder="Tìm theo tên dịch vụ..."
+                        placeholder="TÃ¬m theo tÃªn dá»‹ch vá»¥..."
                         value={serviceSearch}
                         onChange={(event) => setServiceSearch(event.target.value)}
                       />
@@ -3072,7 +3072,7 @@ export default function CreateServiceOrderPage() {
 
                     <div className="reception-service-list">
                       {filteredServices.length === 0 ? (
-                        <div className="reception-muted-note">Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.</div>
+                        <div className="reception-muted-note">KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥ phÃ¹ há»£p trong nhÃ³m Ä‘Ã£ chá»n.</div>
                       ) : (
                         filteredServices.map((service) => {
                           const selected = activePlan.serviceIds.includes(service.id);
@@ -3085,7 +3085,7 @@ export default function CreateServiceOrderPage() {
                             >
                               <div className="reception-service-card-main">
                                 <strong>{service.name}</strong>
-                                <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
+                                <small>{service.minutes > 0 ? `${service.minutes} phÃºt` : "ChÆ°a cÃ³ thá»i lÆ°á»£ng"}</small>
                               </div>
                               <span>{formatCurrency(service.price)}</span>
                             </button>
@@ -3095,7 +3095,7 @@ export default function CreateServiceOrderPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
+                  <div className="reception-muted-note">HÃ£y chá»n Ã­t nháº¥t má»™t loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ.</div>
                 )}
               </div>
 
@@ -3134,19 +3134,19 @@ export default function CreateServiceOrderPage() {
           <div className="reception-appt-right-column">
             <section className="reception-appt-section">
               <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 3</span>
+                <span className="reception-step-badge">BÆ¯á»šC 3</span>
               </div>
-              <h4 className="reception-appt-section-title">Thông tin nghiệp vụ Service Order</h4>
+              <h4 className="reception-appt-section-title">ThÃ´ng tin nghiá»‡p vá»¥ Service Order</h4>
 
               <div className="form-group">
-                <label>Cố vấn dịch vụ *</label>
+                <label>Cá»‘ váº¥n dá»‹ch vá»¥ *</label>
                 <select
                   name="serviceAdvisorId"
                   className={showError("serviceAdvisorId") ? "input-invalid" : ""}
                   value={formData.serviceAdvisorId}
                   onChange={handleChange}
                 >
-                  <option value="">-- Chọn cố vấn --</option>
+                  <option value="">-- Chá»n cá»‘ váº¥n --</option>
                   {staff.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.fullName}
@@ -3157,16 +3157,16 @@ export default function CreateServiceOrderPage() {
               </div>
 
               <div className="form-group">
-                <label>Xử lý phụ tùng cũ</label>
+                <label>Xá»­ lÃ½ phá»¥ tÃ¹ng cÅ©</label>
                 <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
-                  <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
-                  <option value="RETURN_ALL">Trả lại cho khách hàng</option>
-                  <option value="CUSTOM">Cho khách kiểm tra rồi quyết định</option>
+                  <option value="DISPOSE_ALL">Garage tá»± thanh lÃ½/há»§y</option>
+                  <option value="RETURN_ALL">Tráº£ láº¡i cho khÃ¡ch hÃ ng</option>
+                  <option value="CUSTOM">Cho khÃ¡ch kiá»ƒm tra rá»“i quyáº¿t Ä‘á»‹nh</option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label>Số tiền cọc (VND)</label>
+                <label>Sá»‘ tiá»n cá»c (VND)</label>
                 <input
                   type="number"
                   min="0"
@@ -3181,11 +3181,11 @@ export default function CreateServiceOrderPage() {
 
               <div className="timeline-grid timeline-grid-vertical">
                 <div className="form-group">
-                  <label>Thời điểm xe vào xưởng *</label>
+                  <label>Thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng *</label>
                   <DateTimePicker
                     value={formData.checkInTime}
                     onChange={(value) => handleFieldValueChange("checkInTime", value)}
-                    placeholder="Chọn ngày và giờ..."
+                    placeholder="Chá»n ngÃ y vÃ  giá»..."
                     minDate={checkInDayStart}
                     maxDate={checkInDayEnd}
                     availableTimeMap={checkInAvailableTimeMap}
@@ -3205,11 +3205,11 @@ export default function CreateServiceOrderPage() {
                         {slotSelectionGuide}
                       </p>
                       <div className="reception-muted-note" style={{ marginTop: 0 }}>
-                        Chọn 1 trong 5 khung giờ khả dụng:
+                        Chá»n 1 trong 5 khung giá» kháº£ dá»¥ng:
                       </div>
                       {!hasSameDaySuggestedSlots ? (
                         <div className="reception-muted-note" style={{ marginTop: 6 }}>
-                          Hôm nay không còn khung giờ phù hợp, đang hiển thị các khung giờ khả dụng tiếp theo.
+                          HÃ´m nay khÃ´ng cÃ²n khung giá» phÃ¹ há»£p, Ä‘ang hiá»ƒn thá»‹ cÃ¡c khung giá» kháº£ dá»¥ng tiáº¿p theo.
                         </div>
                       ) : null}
                       <div className="reception-slot-grid" aria-busy={nearestSlotLoading ? "true" : "false"}>
@@ -3240,7 +3240,7 @@ export default function CreateServiceOrderPage() {
                               <div className="reception-slot-meta">
                                 <span className={`reception-slot-state-dot ${hasCapacity ? "ok" : "full"}`} />
                                 <span className={`reception-slot-state-text ${hasCapacity ? "ok" : "full"}`}>
-                                  {hasCapacity ? `Còn ${Math.max(0, slotRemaining)} chỗ` : "Đã đầy"}
+                                  {hasCapacity ? `CÃ²n ${Math.max(0, slotRemaining)} chá»—` : "ÄÃ£ Ä‘áº§y"}
                                 </span>
                               </div>
                             </button>
@@ -3251,7 +3251,7 @@ export default function CreateServiceOrderPage() {
                   ) : null}
                 </div>
                 <div className="form-group">
-                  <label>Ngày giờ cam kết trả xe</label>
+                  <label>NgÃ y giá» cam káº¿t tráº£ xe</label>
                   <DateTimePicker
                     value={formData.promisedHandoverTime}
                     onChange={(value) => handleFieldValueChange("promisedHandoverTime", value)}
@@ -3259,7 +3259,7 @@ export default function CreateServiceOrderPage() {
                   {showError("promisedHandoverTime") ? <div className="field-error">{fieldErrors.promisedHandoverTime}</div> : null}
                 </div>
                 <div className="form-group">
-                  <label>Dự kiến hoàn thành</label>
+                  <label>Dá»± kiáº¿n hoÃ n thÃ nh</label>
                   <DateTimePicker
                     value={formData.estimatedHandover || suggestedFleetCompletionIso}
                     onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
@@ -3268,7 +3268,7 @@ export default function CreateServiceOrderPage() {
                 </div>
               </div>
               <div className="form-group" style={{ marginTop: 14 }}>
-                <label>Ghi chú theo từng xe</label>
+                <label>Ghi chÃº theo tá»«ng xe</label>
                 {selectedVehicleKeys.length > 0 ? (
                   <div className="reception-note-editor">
                     {selectedVehicleKeys.length > 1 ? (
@@ -3288,7 +3288,7 @@ export default function CreateServiceOrderPage() {
                             <button
                               type="button"
                               className="reception-selected-tab-remove"
-                              aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                              aria-label={`Bá» ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 const vehicleId = getVehicleIdFromKey(vehicleKey);
@@ -3310,13 +3310,13 @@ export default function CreateServiceOrderPage() {
                         className="reception-note-input"
                         rows={3}
                         value={activeNoteValue}
-                        placeholder="Nhập ghi chú cho xe này..."
+                        placeholder="Nháº­p ghi chÃº cho xe nÃ y..."
                         onChange={(event) => handleVehicleNoteChange(activeNoteKey, event.target.value)}
                       />
                     </div>
                   </div>
                 ) : (
-                  <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
+                  <div className="reception-muted-note">HÃ£y chá»n xe trÆ°á»›c khi nháº­p ghi chÃº.</div>
                 )}
               </div>
 
@@ -3329,26 +3329,26 @@ export default function CreateServiceOrderPage() {
                 </div>
                 <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
                 <div className="reception-summary-inline-row">
-                  <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
+                  <span>Thá»i gian dá»± kiáº¿n hoÃ n táº¥t toÃ n bá»™ xe</span>
                   <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFleetCompletionIso)}</strong>
                 </div>
                 {isInsuranceOrderEnabled ? (
                   <>
                     <div className="reception-summary-inline-row">
-                      <span>Bảo hiểm dự kiến trả</span>
+                      <span>Báº£o hiá»ƒm dá»± kiáº¿n tráº£</span>
                       <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
                     </div>
                     <div className="reception-summary-inline-row">
-                      <span>Khách dự kiến trả</span>
+                      <span>KhÃ¡ch dá»± kiáº¿n tráº£</span>
                       <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
                     </div>
                   </>
                 ) : null}
                 <div className="reception-summary-inline-row">
-                  <span>Số xe</span>
+                  <span>Sá»‘ xe</span>
                   <strong>
                     {selectedVehicleKeys.length}
-                    {selectedVehicleKeys.length > 1 ? " (lịch nhóm)" : " (lịch thường)"}
+                    {selectedVehicleKeys.length > 1 ? " (lá»‹ch nhÃ³m)" : " (lá»‹ch thÆ°á»ng)"}
                   </strong>
                 </div>
               </div>
@@ -3364,7 +3364,7 @@ export default function CreateServiceOrderPage() {
                       <div className="reception-plan-summary-head">
                         <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
                         <span className="reception-plan-summary-badge">
-                          {`${plan.categoryIds.length} loại - ${plan.serviceIds.length} dịch vụ`}
+                          {`${plan.categoryIds.length} loáº¡i - ${plan.serviceIds.length} dá»‹ch vá»¥`}
                         </span>
                       </div>
 
@@ -3389,48 +3389,48 @@ export default function CreateServiceOrderPage() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
+                          <p className="reception-plan-summary-text">ChÆ°a cÃ³ dá»‹ch vá»¥</p>
                         )}
                       </div>
 
                       {insuranceSummary ? (
                         <div className="reception-plan-summary-block">
-                          <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
+                          <p className="reception-plan-summary-block-label">Báº¢O HIá»‚M</p>
                           <div className="reception-plan-summary-time-row">
-                            <span>Công ty bảo hiểm:</span>
+                            <span>CÃ´ng ty báº£o hiá»ƒm:</span>
                             <strong>{insuranceSummary.companyName}</strong>
                           </div>
                           <div className="reception-plan-summary-time-row">
-                            <span>Mức miễn thường:</span>
+                            <span>Má»©c miá»…n thÆ°á»ng:</span>
                             <strong>{insuranceSummary.deductibleLabel}</strong>
                           </div>
                           <div className="reception-plan-summary-time-row">
-                            <span>Hình thức xử lý:</span>
+                            <span>HÃ¬nh thá»©c xá»­ lÃ½:</span>
                             <strong>{insuranceSummary.claimModeLabel}</strong>
                           </div>
                           <div className="reception-plan-summary-time-row">
-                            <span>Hồ sơ bảo hiểm:</span>
+                            <span>Há»“ sÆ¡ báº£o hiá»ƒm:</span>
                             <strong>{insuranceSummary.assetSummaryLabel}</strong>
                           </div>
                           <p className="reception-plan-summary-text">
-                            {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
+                            {`Ghi chÃº báº£o hiá»ƒm: ${insuranceSummary.intakeNote}`}
                           </p>
                         </div>
                       ) : null}
 
                       <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
+                        <p className="reception-plan-summary-block-label">KHUNG GIá»œ</p>
                         <div className="reception-plan-summary-time-row">
-                          <span>Giờ bắt đầu:</span>
+                          <span>Giá» báº¯t Ä‘áº§u:</span>
                           <strong>{plan.startTimeLabel}</strong>
                         </div>
                         <div className="reception-plan-summary-time-row">
-                          <span>Giờ kết thúc:</span>
+                          <span>Giá» káº¿t thÃºc:</span>
                           <strong>{plan.endTimeLabel}</strong>
                         </div>
                         <div className="reception-plan-summary-time-row">
-                          <span>Tổng thời lượng:</span>
-                          <strong>{`${plan.serviceMinutes} phút`}</strong>
+                          <span>Tá»•ng thá»i lÆ°á»£ng:</span>
+                          <strong>{`${plan.serviceMinutes} phÃºt`}</strong>
                         </div>
                       </div>
 
@@ -3454,10 +3454,10 @@ export default function CreateServiceOrderPage() {
 
         <div className="form-footer">
           <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>
-            Hủy và quay lại
+            Há»§y vÃ  quay láº¡i
           </button>
           <button type="submit" className="btn-primary-large" disabled={saving}>
-            {saving ? "Đang xử lý..." : hasMultipleSelectedVehicles ? "Tạo lệnh sửa chữa nhóm" : "Xác nhận tạo lệnh sửa chữa"}
+            {saving ? "Äang xá»­ lÃ½..." : hasMultipleSelectedVehicles ? "Táº¡o lá»‡nh sá»­a chá»¯a nhÃ³m" : "XÃ¡c nháº­n táº¡o lá»‡nh sá»­a chá»¯a"}
           </button>
         </div>
       </form>
@@ -3470,11 +3470,11 @@ export default function CreateServiceOrderPage() {
                 <path d="M9.2 16.3 4.9 12l1.4-1.4 2.9 2.9 8.5-8.5 1.4 1.4z" />
               </svg>
             </span>
-            <h3>Tạo lệnh thành công</h3>
+            <h3>Táº¡o lá»‡nh thÃ nh cÃ´ng</h3>
             <p>
               {successOrderSummary?.isGroup
-                ? `Đã tạo ${successOrderSummary.count} lệnh sửa chữa.`
-                : "Đã tạo lệnh sửa chữa thành công."}
+                ? `ÄÃ£ táº¡o ${successOrderSummary.count} lá»‡nh sá»­a chá»¯a.`
+                : "ÄÃ£ táº¡o lá»‡nh sá»­a chá»¯a thÃ nh cÃ´ng."}
             </p>
           </div>
         </div>

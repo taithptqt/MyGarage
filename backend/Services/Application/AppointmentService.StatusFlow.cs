@@ -30,27 +30,31 @@ namespace MyGarage.Services
             _appointmentStatusPolicy.EnsureCanCancel(appointment);
 
             var effectiveReason = _appointmentStatusPolicy.BuildCancelReason(appointment, reason, _clock.LocalNow);
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                await ReleaseBookingReservationArtifactsAsync(
-                    appointment.Id,
-                    appointment.BranchId,
-                    actorStaffId,
-                    _clock.LocalNow);
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    await ReleaseBookingReservationArtifactsAsync(
+                        appointment.Id,
+                        appointment.BranchId,
+                        actorStaffId,
+                        _clock.LocalNow);
 
-                appointment.Status = nameof(AppointmentStatus.CANCELED);
-                appointment.CancelReason = effectiveReason;
-                var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
+                    appointment.Status = nameof(AppointmentStatus.CANCELED);
+                    appointment.CancelReason = effectiveReason;
+                    var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
 
-                await transaction.CommitAsync();
-                return updated;
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await transaction.CommitAsync();
+                    return updated;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         public async Task<Appointment?> CheckInAsync(long id, DateTime? arrivedAt = null, long? actorUserId = null)
@@ -61,24 +65,28 @@ namespace MyGarage.Services
             _appointmentStatusPolicy.EnsureCanCheckIn(appointment);
 
             var arriveTime = arrivedAt ?? _clock.LocalNow;
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                await ApplyArrivalStatusAsync(appointment, arriveTime);
-                var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
-                if (updated != null)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
-                }
+                    await ApplyArrivalStatusAsync(appointment, arriveTime);
+                    var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
+                    if (updated != null)
+                    {
+                        await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
+                    }
 
-                await transaction.CommitAsync();
-                return updated;
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await transaction.CommitAsync();
+                    return updated;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         public async Task<Appointment?> ArriveAsync(long id, DateTime? arrivedAt = null, long? actorUserId = null)
@@ -89,24 +97,28 @@ namespace MyGarage.Services
             _appointmentStatusPolicy.EnsureCanArrive(appointment);
 
             var arriveTime = arrivedAt ?? _clock.LocalNow;
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                await ApplyArrivalStatusAsync(appointment, arriveTime);
-                var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
-                if (updated != null)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
-                }
+                    await ApplyArrivalStatusAsync(appointment, arriveTime);
+                    var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
+                    if (updated != null)
+                    {
+                        await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
+                    }
 
-                await transaction.CommitAsync();
-                return updated;
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await transaction.CommitAsync();
+                    return updated;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         private async Task ApplyArrivalStatusAsync(Appointment appointment, DateTime arriveTime)
@@ -165,7 +177,7 @@ namespace MyGarage.Services
             var activeSlots = await _context.WorkSlots
                 .Where(slot =>
                     slot.AppointmentId == appointment.Id &&
-                    slot.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    slot.Status != nameof(WorkSlotStatus.CANCELED) &&
                     slot.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     slot.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(slot => slot.SequenceOrder)

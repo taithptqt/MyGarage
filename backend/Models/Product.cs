@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -29,6 +29,14 @@ public partial class Product
 
     public bool? RequireEmptyReturn { get; set; }
 
+    public decimal? MinStockLevel { get; set; }
+
+    public decimal? ReorderPoint { get; set; }
+
+    public bool? IsConsumable { get; set; }
+
+    public decimal? ConsumableThresholdAmount { get; set; }
+
     public bool? IsActive { get; set; }
 
     public DateTime? CreatedAt { get; set; }
@@ -51,7 +59,7 @@ public partial class Product
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
-    public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendations { get; set; } = new List<DiagnoseRecommendation>();
+    public virtual ICollection<DiagnosisRecommendation> DiagnosisRecommendations { get; set; } = new List<DiagnosisRecommendation>();
 
     public virtual ICollection<Inventory> Inventories { get; set; } = new List<Inventory>();
 

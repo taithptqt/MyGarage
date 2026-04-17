@@ -1,4 +1,4 @@
-﻿// Mục đích: Kiểm tra điều kiện áp dụng voucher và xử lý giao dịch redeem/reverse.
+// Mục đích: Kiểm tra điều kiện áp dụng voucher và xử lý giao dịch redeem/reverse.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -26,6 +27,17 @@ namespace MyGarage.Services
             _context = context;
         }
 
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _context.Database.BeginTransactionAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
     }
 }
 

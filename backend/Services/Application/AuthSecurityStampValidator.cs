@@ -31,7 +31,7 @@ namespace MyGarage.Services
                 var currentStamp = await _context.Customers
                     .Where(x => x.Id == userId)
                     .Select(x => x.SecurityStamp)
-                    .SingleOrDefaultAsync(cancellationToken);
+                    .FirstOrDefaultAsync(cancellationToken);
 
                 return IsStampValid(currentStamp, stampClaim);
             }
@@ -41,7 +41,7 @@ namespace MyGarage.Services
                 var currentStamp = await _context.Staffs
                     .Where(x => x.Id == userId)
                     .Select(x => x.SecurityStamp)
-                    .SingleOrDefaultAsync(cancellationToken);
+                    .FirstOrDefaultAsync(cancellationToken);
 
                 return IsStampValid(currentStamp, stampClaim);
             }

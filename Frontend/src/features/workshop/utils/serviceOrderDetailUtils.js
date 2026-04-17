@@ -130,8 +130,8 @@ export function calculateOrderTotal(details = []) {
 
 /**
  * Auto-format Vietnamese license plates
- * e.g., 56A56789   -> 56A-567.89   (5-digit á»‡' NNN.NN)
- *       43A1234     -> 43A-1234     (4-digit  á»‡' NNNN)
+ * e.g., 56A56789   -> 56A-567.89   (5-digit -> NNN.NN)
+ *       43A1234    -> 43A-1234     (4-digit -> NNNN)
  *       30A156789   -> 30A1-567.89  (series + 5-digit)
  */
 export const formatLicensePlate = (val) => {

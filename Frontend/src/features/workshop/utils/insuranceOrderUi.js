@@ -1,4 +1,4 @@
-﻿export const INSURANCE_ORDER_CATEGORY = "INSURANCE_REPAIR";
+export const INSURANCE_ORDER_CATEGORY = "INSURANCE_REPAIR";
 
 const CUSTOMER_CHARGE_SERVICE_CODES = new Set([
   "BH-MT500",
@@ -105,6 +105,7 @@ export function summarizeInsuranceOrderDetails(details) {
     totalAmount: 0,
     insuranceRequestedAmount: 0,
     insuranceApprovedAmount: 0,
+    insuranceDeductibleAmount: 0,
     customerPayAmount: 0,
     garageAbsorbedAmount: 0,
     pendingInsuranceItemCount: 0,
@@ -138,6 +139,10 @@ export function summarizeInsuranceOrderDetails(details) {
     accumulator.insuranceApprovedAmount += insuranceApprovedAmount;
     accumulator.customerPayAmount += customerCoPayAmount;
     accumulator.garageAbsorbedAmount += garageAbsorbedAmount;
+
+    if (isInsuranceCustomerChargeService(detail) && normalizeServiceCode(detail).startsWith("BH-MT")) {
+      accumulator.insuranceDeductibleAmount += amount;
+    }
 
     if (insuranceCompanyId > 0) {
       companyIdSet.add(insuranceCompanyId);

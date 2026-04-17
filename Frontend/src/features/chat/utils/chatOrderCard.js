@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "@app/apiClient";
+﻿import { API_BASE_URL } from "@app/apiClient";
 
 const moneyFormatter = new Intl.NumberFormat("vi-VN");
 
@@ -64,10 +64,10 @@ function normalizeOrderCard(raw) {
       raw.orderCode ?? raw.OrderCode,
       orderType === "RETAIL" ? `RO-${orderId}` : `SO-${orderId}`
     ),
-    title: read(raw.title ?? raw.Title, "Don hang"),
-    subtitle: read(raw.subtitle ?? raw.Subtitle, "Thong tin don hang"),
+    title: read(raw.title ?? raw.Title, "Đơn hàng"),
+    subtitle: read(raw.subtitle ?? raw.Subtitle, "Thông tin đơn hàng"),
     status,
-    statusLabel: read(raw.statusLabel ?? raw.StatusLabel, status || "Dang xu ly"),
+    statusLabel: read(raw.statusLabel ?? raw.StatusLabel, status || "Đang xử lý"),
     totalAmount: toNumber(raw.totalAmount ?? raw.TotalAmount),
     itemCount: Number(raw.itemCount ?? raw.ItemCount ?? 0) || null,
     imageUrl: resolveOrderCardImageUrl(raw.imageUrl ?? raw.ImageUrl),
@@ -129,7 +129,8 @@ export function formatOrderAmount(value) {
 
 export function getOrderTypeLabel(orderType) {
   const normalized = normalizeOrderType(orderType);
-  if (normalized === "RETAIL") return "Don san pham";
-  if (normalized === "SERVICE") return "Don dich vu";
-  return "Don hang";
+  if (normalized === "RETAIL") return "Đơn sản phẩm";
+  if (normalized === "SERVICE") return "Đơn dịch vụ";
+  return "Đơn hàng";
 }
+

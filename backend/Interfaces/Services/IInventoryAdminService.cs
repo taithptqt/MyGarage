@@ -8,8 +8,11 @@ namespace MyGarage.Interfaces
     {
         Task<object> GetOverviewAsync();
         Task<IEnumerable<object>> GetBranchSummaryAsync();
-        Task<object> GetWarehouseStructureAsync();
+        Task<object> GetWarehouseStructureAsync(int? page = null, int? pageSize = null);
         Task<IReadOnlyList<object>> GetAlertsAsync();
+        Task<IReadOnlyList<object>> GetStockAlertsAsync(bool? resolved = false, int take = 200);
+        Task<IReadOnlyList<object>> RebuildStockAlertsAsync(long? actorUserId = null);
+        Task<bool> ResolveStockAlertAsync(long alertId, long purchaseOrderId, long? actorUserId = null);
         Task<object> GetTransactionsAsync(
             long? branchId,
             long? warehouseId,
@@ -25,7 +28,7 @@ namespace MyGarage.Interfaces
         Task<IReadOnlyList<object>> GetAuditsAsync(string? status);
         Task<bool> ApproveAuditAsync(long id, long? approverId);
         Task<bool> RejectAuditAsync(long id, long? approverId);
-        Task<object> GetReportsAsync();
+        Task<object> GetReportsAsync(int? page = null, int? pageSize = null);
         Task<IReadOnlyList<object>> GetInventoryAuditLogAsync(int take);
     }
 }

@@ -34,7 +34,7 @@ namespace MyGarage.Controllers
                 return Unauthorized();
             }
 
-            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var role = this.GetCurrentRole() ?? string.Empty;
             var isCustomer = string.Equals(role, "Customer", StringComparison.OrdinalIgnoreCase);
             var customerId = isCustomer ? actorUserId.Value : (dto.CustomerId ?? 0);
             if (customerId <= 0)
@@ -86,7 +86,7 @@ namespace MyGarage.Controllers
 
             if (result == null)
             {
-                return NotFound(new { message = "Da tao GroupSession nhung khong tai duoc thong tin chi tiet." });
+            return NotFound(new { message = "Đã tạo GroupSession nhưng không tải được thông tin chi tiết." });
             }
 
             return CreatedAtAction(nameof(GetByBranchDetail), new { branchId = dto.BranchId, id = result.Id }, result);
@@ -191,7 +191,7 @@ namespace MyGarage.Controllers
                 return true;
             }
 
-            var claimRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var claimRole = this.GetCurrentRole() ?? string.Empty;
             return string.Equals(claimRole, "Customer", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(claimRole, "CUSTOMER", StringComparison.OrdinalIgnoreCase);
         }

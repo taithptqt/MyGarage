@@ -29,33 +29,33 @@ const TAX_TYPE_LABELS = {
 };
 
 const TAX_STATUS_META = {
-  DRAFT: { label: "Nhap", colorScheme: "gray" },
-  READY: { label: "San sang nop", colorScheme: "orange" },
-  SUBMITTED: { label: "Da nop cho phan hoi", colorScheme: "blue" },
-  ACCEPTED: { label: "Da chap nhan", colorScheme: "green" },
-  REJECTED: { label: "Bi tu choi", colorScheme: "red" }
+  DRAFT: { label: "Nháp", colorScheme: "gray" },
+  READY: { label: "Sẵn sàng nộp", colorScheme: "orange" },
+  SUBMITTED: { label: "Đã nộp chờ phản hồi", colorScheme: "blue" },
+  ACCEPTED: { label: "Đã chấp nhận", colorScheme: "green" },
+  REJECTED: { label: "Bị từ chối", colorScheme: "red" }
 };
 
 const DOC_TYPE_LABELS = {
-  PAYMENT_PROOF: "Chung tu thanh toan",
-  INVOICE_FILE: "File hoa don",
-  REFUND_PROOF: "Chung tu hoan tien",
-  PAYROLL_APPROVAL: "Phe duyet luong",
-  TAX_RECEIPT: "Bien lai thue",
-  SUPPLIER_INVOICE: "Hoa don NCC",
-  LABOR_CONTRACT: "Hop dong lao dong",
-  OTHER: "Khac"
+  PAYMENT_PROOF: "Chứng từ thanh toán",
+  INVOICE_FILE: "File hóa đơn",
+  REFUND_PROOF: "Chứng từ hoàn tiền",
+  PAYROLL_APPROVAL: "Phê duyệt lương",
+  TAX_RECEIPT: "Biên lai thuế",
+  SUPPLIER_INVOICE: "Hóa đơn NCC",
+  LABOR_CONTRACT: "Hợp đồng lao động",
+  OTHER: "Khác"
 };
 
 const ENTITY_TYPE_LABELS = {
-  TAX_FILING: "Ho so thue",
-  INVOICE: "Hoa don",
-  PAYMENT: "Thanh toan",
-  PAYROLL_RUN: "Dot luong",
-  PAYROLL_ITEM: "Phieu luong",
-  SUPPLIER_INVOICE: "Hoa don NCC",
-  FINANCE_APPROVAL_REQUEST: "Yeu cau phe duyet tai chinh",
-  OTHER: "Khac"
+  TAX_FILING: "Hồ sơ thuế",
+  INVOICE: "Hóa đơn",
+  PAYMENT: "Thanh toán",
+  PAYROLL_RUN: "Đợt lương",
+  PAYROLL_ITEM: "Phiếu lương",
+  SUPPLIER_INVOICE: "Hóa đơn NCC",
+  FINANCE_APPROVAL_REQUEST: "Yêu cầu phê duyệt tài chính",
+  OTHER: "Khác"
 };
 
 function fieldOf(item, ...keys) {
@@ -84,7 +84,7 @@ function taxTypeLabel(value) {
 
 function taxStatusMeta(value) {
   const code = upper(value);
-  return TAX_STATUS_META[code] || { label: code || "Chua xac dinh", colorScheme: "gray" };
+  return TAX_STATUS_META[code] || { label: code || "Chưa xác định", colorScheme: "gray" };
 }
 
 function docTypeLabel(value) {
@@ -224,7 +224,7 @@ export default function TaxDocumentsPage() {
         setInvoices({ available: invoiceAvailable, items: invoiceItems || [] });
       } catch (err) {
         if (!mounted) return;
-        setError(err?.message || "Khong tai duoc du lieu thue/chung tu.");
+      setError(err?.message || "Không tải được dữ liệu thuế/chứng từ.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -335,7 +335,7 @@ export default function TaxDocumentsPage() {
     return (
       <Flex minH='260px' align='center' justify='center' direction='column' gap='10px'>
         <Spinner size='lg' color='brand.500' />
-        <Text color={textColorSecondary}>Dang tai du lieu thue/chung tu...</Text>
+        <Text color={textColorSecondary}>Đang tải dữ liệu thuế/chứng từ...</Text>
       </Flex>
     );
   }
@@ -353,22 +353,22 @@ export default function TaxDocumentsPage() {
         <MiniStatistics name='Can xu ly' value={String(summary.needActionCount)} />
         <MiniStatistics name='Cho phan hoi' value={String(summary.waitingResultCount)} />
         <MiniStatistics name='Du dieu kien quyet toan' value={String(summary.acceptedCount)} />
-        <MiniStatistics name='Tong thue hoa don' value={formatCurrency(summary.invoiceTaxTotal)} />
+          <MiniStatistics name='Tổng thuế hóa đơn' value={formatCurrency(summary.invoiceTaxTotal)} />
       </SimpleGrid>
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
           <Badge colorScheme={taxFilings.available ? "green" : "orange"}>
-            API TaxFiling: {taxFilings.available ? "OK" : "Chua co"}
+            API TaxFiling: {taxFilings.available ? "OK" : "Chưa có"}
           </Badge>
           <Badge colorScheme={legalDocuments.available ? "green" : "orange"}>
-            API LegalDocument: {legalDocuments.available ? "OK" : "Chua co"}
+            API LegalDocument: {legalDocuments.available ? "OK" : "Chưa có"}
           </Badge>
           <Badge colorScheme={attachments.available ? "green" : "orange"}>
-            API DocumentAttachment: {attachments.available ? "OK" : "Chua co"}
+            API DocumentAttachment: {attachments.available ? "OK" : "Chưa có"}
           </Badge>
           <Badge colorScheme={invoices.available ? "green" : "orange"}>
-            API Invoices: {invoices.available ? "OK" : "Chua co"}
+            API Invoices: {invoices.available ? "OK" : "Chưa có"}
           </Badge>
         </Flex>
       </Card>
@@ -378,17 +378,17 @@ export default function TaxDocumentsPage() {
           <Text color={textColor} fontWeight='700' mb='12px'>Canh bao nghiep vu</Text>
           <Flex direction='column' gap='8px'>
             <Text color={textColorSecondary}>- Ho so qua han nop: {summary.overdueSubmissionCount}</Text>
-            <Text color={textColorSecondary}>- Ho so thieu chung tu phap ly hoac tep dinh kem: {summary.missingDocumentsCount}</Text>
+            <Text color={textColorSecondary}>- Hồ sơ thiếu chứng từ pháp lý hoặc tệp đính kèm: {summary.missingDocumentsCount}</Text>
             <Text color={textColorSecondary}>- Ho so cho phan hoi co quan thue: {summary.waitingResultCount}</Text>
           </Flex>
         </Card>
         <Card p='20px'>
-          <Text color={textColor} fontWeight='700' mb='12px'>Doi soat du lieu</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Đối soát dữ liệu</Text>
           <Flex direction='column' gap='8px'>
             <Text color={textColorSecondary}>- Legal documents: {legalRows.length}</Text>
             <Text color={textColorSecondary}>- Attachments: {attachmentRows.length}</Text>
-            <Text color={textColorSecondary}>- Hoa don co phat sinh thue: {summary.invoiceTaxInvoiceCount}</Text>
-            <Text color={textColorSecondary}>- Tong thue tu hoa don: {formatCurrency(summary.invoiceTaxTotal)}</Text>
+            <Text color={textColorSecondary}>- Hóa đơn có phát sinh thuế: {summary.invoiceTaxInvoiceCount}</Text>
+                <Text color={textColorSecondary}>- Tổng thuế từ hóa đơn: {formatCurrency(summary.invoiceTaxTotal)}</Text>
             <Text color={textColorSecondary}>
               - Ho so thue co du phap ly va dinh kem: {Math.max(enrichedTaxRows.length - summary.missingDocumentsCount, 0)}
             </Text>
@@ -407,7 +407,7 @@ export default function TaxDocumentsPage() {
           <Table size='sm'>
             <Thead>
               <Tr>
-                <Th>Hoa don</Th>
+                <Th>Hóa đơn</Th>
                 <Th>Nguon</Th>
                 <Th>Ngay lap</Th>
                 <Th isNumeric>Thue</Th>
@@ -425,7 +425,7 @@ export default function TaxDocumentsPage() {
             </Tbody>
           </Table>
         ) : (
-          <Text color={textColorSecondary}>Chua co hoa don phat sinh thue.</Text>
+            <Text color={textColorSecondary}>Chưa có hóa đơn phát sinh thuế.</Text>
         )}
       </Card>
 
@@ -436,7 +436,7 @@ export default function TaxDocumentsPage() {
             <Input
               value={taxSearch}
               onChange={(e) => setTaxSearch(e.target.value)}
-              placeholder='Tim theo ky, trang thai, ghi chu'
+                  placeholder='Tìm theo kỳ, trạng thái, ghi chú'
               maxW='260px'
             />
             <Select value={taxTypeFilter} onChange={(e) => setTaxTypeFilter(e.target.value)} maxW='160px'>
@@ -447,8 +447,8 @@ export default function TaxDocumentsPage() {
               <option value='INSURANCE'>BHXH/BHYT/BHTN</option>
             </Select>
             <Select value={taxStatusFilter} onChange={(e) => setTaxStatusFilter(e.target.value)} maxW='170px'>
-              <option value='ALL'>Tat ca trang thai</option>
-              <option value='DRAFT'>Nhap</option>
+                    <option value='ALL'>Tất cả trạng thái</option>
+                    <option value='DRAFT'>Nháp</option>
               <option value='READY'>San sang nop</option>
               <option value='SUBMITTED'>Da nop</option>
               <option value='ACCEPTED'>Da chap nhan</option>
@@ -465,7 +465,7 @@ export default function TaxDocumentsPage() {
                 <Th>Loai thue</Th>
                 <Th>Ky khai</Th>
                 <Th>Khoang thoi gian</Th>
-                <Th>Trang thai</Th>
+                    <Th>Trạng thái</Th>
                 <Th>Ngay nop</Th>
                 <Th>Ho so phap ly</Th>
                 <Th>Dinh kem</Th>
@@ -489,12 +489,12 @@ export default function TaxDocumentsPage() {
                     <Td color={textColorSecondary}>{formatDateTime(item.submittedAt)}</Td>
                     <Td>
                       <Badge colorScheme={item.legalDocCount > 0 ? "green" : "orange"}>
-                        {item.legalDocCount > 0 ? `${item.legalDocCount} chung tu` : "Thieu"}
+                        {item.legalDocCount > 0 ? `${item.legalDocCount} chứng từ` : "Thiếu"}
                       </Badge>
                     </Td>
                     <Td>
                       <Badge colorScheme={item.attachmentCount > 0 ? "green" : "orange"}>
-                        {item.attachmentCount > 0 ? `${item.attachmentCount} tep` : "Thieu"}
+                        {item.attachmentCount > 0 ? `${item.attachmentCount} tệp` : "Thiếu"}
                       </Badge>
                     </Td>
                   </Tr>
@@ -503,7 +503,7 @@ export default function TaxDocumentsPage() {
             </Tbody>
           </Table>
         ) : (
-          <Text color={textColorSecondary}>Khong co ho so thue phu hop voi bo loc hien tai.</Text>
+                <Text color={textColorSecondary}>Không có hồ sơ thuế phù hợp với bộ lọc hiện tại.</Text>
         )}
       </Card>
 
@@ -514,7 +514,7 @@ export default function TaxDocumentsPage() {
             <Input
               value={docSearch}
               onChange={(e) => setDocSearch(e.target.value)}
-              placeholder='Tim theo so chung tu / tieu de / lien ket'
+                placeholder='Tìm theo số chứng từ / tiêu đề / liên kết'
               maxW='300px'
             />
           </Flex>
@@ -542,22 +542,22 @@ export default function TaxDocumentsPage() {
               </Tbody>
             </Table>
           ) : (
-            <Text color={textColorSecondary}>Khong co chung tu phap ly phu hop.</Text>
+                <Text color={textColorSecondary}>Không có chứng từ pháp lý phù hợp.</Text>
           )}
         </Card>
 
         <Card p='20px'>
           <Flex justify='space-between' align={{ base: "stretch", lg: "center" }} direction={{ base: "column", lg: "row" }} gap='10px' mb='12px'>
-            <Text color={textColor} fontWeight='700'>Tep dinh kem</Text>
+                <Text color={textColor} fontWeight='700'>Tệp đính kèm</Text>
             <Select value={attachmentEntityFilter} onChange={(e) => setAttachmentEntityFilter(e.target.value)} maxW='240px'>
               <option value='ALL'>Tat ca loai lien ket</option>
               <option value='TAX_FILING'>Ho so thue</option>
-              <option value='INVOICE'>Hoa don</option>
+                  <option value='INVOICE'>Hóa đơn</option>
               <option value='PAYMENT'>Thanh toan</option>
-              <option value='SUPPLIER_INVOICE'>Hoa don NCC</option>
+                  <option value='SUPPLIER_INVOICE'>Hóa đơn NCC</option>
               <option value='PAYROLL_RUN'>Dot luong</option>
               <option value='PAYROLL_ITEM'>Phieu luong</option>
-              <option value='FINANCE_APPROVAL_REQUEST'>Yeu cau phe duyet</option>
+                  <option value='FINANCE_APPROVAL_REQUEST'>Yêu cầu phê duyệt</option>
               <option value='OTHER'>Khac</option>
             </Select>
           </Flex>
@@ -585,7 +585,7 @@ export default function TaxDocumentsPage() {
               </Tbody>
             </Table>
           ) : (
-            <Text color={textColorSecondary}>Khong co tep dinh kem phu hop.</Text>
+                <Text color={textColorSecondary}>Không có tệp đính kèm phù hợp.</Text>
           )}
         </Card>
       </SimpleGrid>

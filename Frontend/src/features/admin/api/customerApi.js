@@ -75,6 +75,13 @@ export async function getAllVehicles() {
   return request({ url: "/api/vehicles", method: "GET" });
 }
 
+export async function getVehicleById(id) {
+  return request({
+    url: `/api/vehicles/${id}`,
+    method: "GET",
+  });
+}
+
 export async function createVehicle(payload) {
   return request({
     url: "/api/vehicles",

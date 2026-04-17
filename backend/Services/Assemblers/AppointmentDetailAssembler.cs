@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Common;
 using MyGarage.Data;
 using MyGarage.Constants;
 using MyGarage.DTOs.Responses;
@@ -123,7 +124,7 @@ namespace MyGarage.Services
                 .Where(slot =>
                     slot.AppointmentId.HasValue &&
                     appointmentIds.Contains(slot.AppointmentId.Value) &&
-                    slot.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    slot.Status != nameof(WorkSlotStatus.CANCELED) &&
                     slot.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     slot.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     slot.Notes != null &&
@@ -241,7 +242,7 @@ namespace MyGarage.Services
                         .Select(asset => asset.FileUrl)
                         .Where(url => !string.IsNullOrWhiteSpace(url))
                         .ToList(),
-                    CustomerNotes = a.CustomerNotes,
+                    CustomerNotes = CustomerNoteFormatter.ToDisplayText(a.CustomerNotes),
                     RequiresDispatchReview = requiresDispatchReview,
                     DispatchReviewNote = dispatchReviewNote,
                     RequiresPartsFollowUp = requiresPartsFollowUp,
@@ -779,4 +780,5 @@ namespace MyGarage.Services
         }
     }
 }
+
 

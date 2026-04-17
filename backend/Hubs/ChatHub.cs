@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +15,72 @@ namespace MyGarage.Hubs
     [Authorize]
     public class ChatHub : Hub
     {
+        private static readonly ConcurrentDictionary<string, byte> ActiveConnectionRegistry = new();
+        private static readonly ConcurrentDictionary<long, int> ActiveCustomerConnections = new();
         private readonly IGarageContext _context;
 
         public ChatHub(IGarageContext context)
         {
             _context = context;
+        }
+
+        public static bool IsCustomerOnline(long customerId)
+        {
+            return customerId > 0
+                && ActiveCustomerConnections.TryGetValue(customerId, out var count)
+                && count > 0;
+        }
+
+        public override async Task OnConnectedAsync()
+        {
+            var userId = ResolveCurrentUserId();
+            var role = ResolveCurrentRole();
+            var roleCode = ResolveCurrentRoleCode();
+
+            if (userId.HasValue)
+            {
+                var key = BuildConnectionKey(Context.ConnectionId, role, roleCode, userId.Value);
+                ActiveConnectionRegistry[key] = 0;
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId.Value}");
+
+                if (IsCustomerRole(role, roleCode))
+                {
+                    ActiveCustomerConnections.AddOrUpdate(userId.Value, 1, (_, current) => current + 1);
+                    await NotifyCustomerPresenceChangedAsync(userId.Value);
+                }
+            }
+
+            await base.OnConnectedAsync();
+        }
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            var userId = ResolveCurrentUserId();
+            var role = ResolveCurrentRole();
+            var roleCode = ResolveCurrentRoleCode();
+
+            if (userId.HasValue)
+            {
+                var key = BuildConnectionKey(Context.ConnectionId, role, roleCode, userId.Value);
+                ActiveConnectionRegistry.TryRemove(key, out _);
+
+                if (IsCustomerRole(role, roleCode))
+                {
+                    ActiveCustomerConnections.AddOrUpdate(
+                        userId.Value,
+                        0,
+                        (_, current) => current > 0 ? current - 1 : 0);
+
+                    if (ActiveCustomerConnections.TryGetValue(userId.Value, out var remaining) && remaining <= 0)
+                    {
+                        ActiveCustomerConnections.TryRemove(userId.Value, out _);
+                    }
+
+                    await NotifyCustomerPresenceChangedAsync(userId.Value);
+                }
+            }
+
+            await base.OnDisconnectedAsync(exception);
         }
 
         public async Task JoinConversationGroup(long conversationId)
@@ -65,6 +130,32 @@ namespace MyGarage.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, $"BranchInbox_{branchId}");
         }
 
+        public async Task JoinWorkshopBranchGroup(long branchId)
+        {
+            var userId = ResolveCurrentUserId();
+            if (!userId.HasValue)
+            {
+                throw new HubException("Unauthorized.");
+            }
+
+            var role = ResolveCurrentRole();
+            var roleCode = ResolveCurrentRoleCode();
+            if (IsCustomerRole(role, roleCode))
+            {
+                throw new HubException("Forbidden.");
+            }
+
+            var staff = await _context.Staffs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == userId.Value && s.IsDeleted != true);
+            if (staff is null || staff.BranchId != branchId)
+            {
+                throw new HubException("Forbidden.");
+            }
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"WorkshopBranch_{branchId}");
+        }
+
         public async Task JoinUserGroup(long userId)
         {
             var currentUserId = ResolveCurrentUserId();
@@ -94,14 +185,9 @@ namespace MyGarage.Hubs
 
         private async Task<bool> CanAccessConversationAsync(long userId, string role, string roleCode, long conversationId, long? conversationBranchId)
         {
-            if (string.Equals(role, "Customer", StringComparison.OrdinalIgnoreCase))
+            if (IsCustomerRole(role, roleCode))
             {
                 return await _context.Conversations.AsNoTracking().AnyAsync(c => c.Id == conversationId && c.CustomerId == userId);
-            }
-
-            if (!string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
             }
 
             var staff = await _context.Staffs
@@ -124,7 +210,7 @@ namespace MyGarage.Hubs
 
         private async Task<bool> CanAccessBranchInboxAsync(long userId, string role, string roleCode, long branchId)
         {
-            if (!string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase))
+            if (IsCustomerRole(role, roleCode))
             {
                 return false;
             }
@@ -152,17 +238,93 @@ namespace MyGarage.Hubs
                 }
 
                 var normalized = value.Trim().ToUpperInvariant();
-                var noSpace = normalized.Replace(" ", string.Empty);
+                var compact = CompactRoleValue(normalized);
 
                 if (normalized == "RECEPTIONIST"
                     || normalized.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
-                    || noSpace.Contains("LETAN", StringComparison.OrdinalIgnoreCase))
+                    || compact.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("LETAN", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("TIEPTAN", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static string CompactRoleValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var decomposed = value.Normalize(NormalizationForm.FormD);
+            var chars = new StringBuilder(decomposed.Length);
+            foreach (var ch in decomposed)
+            {
+                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (unicodeCategory == UnicodeCategory.NonSpacingMark)
+                {
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(ch))
+                {
+                    chars.Append(char.ToUpperInvariant(ch));
+                }
+            }
+
+            return chars.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private static bool IsCustomerRole(params string?[] values)
+        {
+            foreach (var value in values)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    continue;
+                }
+
+                var normalized = value.Trim().ToUpperInvariant();
+                var compact = normalized.Replace(" ", string.Empty);
+                if (normalized == "CUSTOMER" || compact == "KHACHHANG")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string BuildConnectionKey(string connectionId, string role, string roleCode, long userId)
+        {
+            var normalizedRole = string.IsNullOrWhiteSpace(role) ? "-" : role.Trim().ToUpperInvariant();
+            var normalizedRoleCode = string.IsNullOrWhiteSpace(roleCode) ? "-" : roleCode.Trim().ToUpperInvariant();
+            return $"{connectionId}:{normalizedRole}:{normalizedRoleCode}:{userId}";
+        }
+
+        private async Task NotifyCustomerPresenceChangedAsync(long customerId)
+        {
+            var refs = await _context.Conversations
+                .AsNoTracking()
+                .Where(c => c.CustomerId == customerId)
+                .Select(c => new { c.Id, c.BranchId })
+                .ToListAsync();
+
+            foreach (var item in refs)
+            {
+                await Clients.Group($"Conversation_{item.Id}")
+                    .SendAsync("ConversationUpdated", new { conversationId = item.Id });
+
+                if (item.BranchId.HasValue)
+                {
+                    await Clients.Group($"BranchInbox_{item.BranchId.Value}")
+                        .SendAsync("ConversationUpdated", new { conversationId = item.Id });
+                }
+            }
         }
     }
 }

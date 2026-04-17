@@ -13,6 +13,7 @@ namespace MyGarage.Interfaces
         Task<ServiceOrder?> GetServiceOrderAsync(long serviceOrderId);
         Task<bool> HasSignedCheckInAsync(long serviceOrderId);
         Task<IReadOnlyList<Diagnosis>> GetAllByServiceOrderAsync(long serviceOrderId);
+        Task<IReadOnlyList<Diagnosis>> GetLatestWorkflowDiagnosesByServiceOrderAsync(long serviceOrderId);
         Task<DiagnosisIntakeSuggestionDto> BuildIntakeSuggestionAsync(
             long serviceOrderId,
             string? dispatchTag,
@@ -29,7 +30,8 @@ namespace MyGarage.Interfaces
             IReadOnlyList<string> symptoms,
             string? dispatchTag = null,
             long? assignedTeamId = null,
-            long? assignedBayId = null);
+            long? assignedBayId = null,
+            string? assignmentNote = null);
         Task RecordIntakeSnapshotAsync(
             ServiceOrder serviceOrder,
             DiagnosisIntakeSuggestionDto intakeSuggestion,
@@ -67,8 +69,7 @@ namespace MyGarage.Interfaces
             IReadOnlyList<long>? supportingTeamIds,
             IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
-            bool managerOverride,
-            long? assignedByTeamLeaderId = null);
+            bool managerOverride);
         Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId);
         Task MarkSupportRequestedAsync(
             IEnumerable<Diagnosis> diagnoses,
@@ -90,7 +91,28 @@ namespace MyGarage.Interfaces
         Task<Diagnosis?> GetDiagnosisEntityAsync(long id);
         Task CompleteDiagnosisAsync(Diagnosis diagnosis);
         Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note);
-        Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note);
+        Task RejectTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? reason);
+        Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long approverId, string? note, bool bypassTeamLeader = false, string? bypassAuditNote = null);
+        Task RejectFinalAsync(IEnumerable<Diagnosis> diagnoses, long foremanId, string? note);
         Task<bool> AreAllDiagnosesCompletedAsync(long serviceOrderId);
+        long? ReadDiagnosisAssignmentId(Diagnosis diagnosis);
+        long? ReadAssignedTeamId(Diagnosis diagnosis);
+        long? ReadTechnicianId(Diagnosis diagnosis);
+        long? ReadAssistantTechnicianId(Diagnosis diagnosis);
+        long? ReadAssignedBayId(Diagnosis diagnosis);
+        DateTime? ReadCancellationRequestedAt(Diagnosis diagnosis);
+        DateTime? ReadCancellationDecisionAt(Diagnosis diagnosis);
+        string? ReadTeamLeaderApprovalStatus(Diagnosis diagnosis);
+        string? ReadFinalApprovalStatus(Diagnosis diagnosis);
+        int ReadTeamLeaderApprovalPendingMinutes(Diagnosis diagnosis, DateTime? now = null);
+        bool IsTeamLeaderApprovalWarning(Diagnosis diagnosis, long? executeBranchId = null, DateTime? now = null);
+        bool IsTeamLeaderApprovalEscalated(Diagnosis diagnosis, long? executeBranchId = null, DateTime? now = null);
+        string? ReadForemanRejectReason(Diagnosis diagnosis);
+        long? ReadApprovedByForemanId(Diagnosis diagnosis);
+        DateTime? ReadApprovedByForemanAt(Diagnosis diagnosis);
+        long? ReadApprovedByTeamLeaderId(Diagnosis diagnosis);
+        DateTime? ReadApprovedByTeamLeaderAt(Diagnosis diagnosis);
+        string? ReadTeamLeaderNote(Diagnosis diagnosis);
+        string? ReadForemanNote(Diagnosis diagnosis);
     }
 }

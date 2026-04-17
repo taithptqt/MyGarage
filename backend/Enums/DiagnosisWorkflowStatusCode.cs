@@ -1,0 +1,14 @@
+namespace MyGarage.Enums;
+
+public enum DiagnosisWorkflowStatusCode
+{
+    NEW,
+    IN_PROGRESS,
+    SUBMITTED,
+    TL_APPROVED,
+    TL_REJECTED_REDIAGNOSE,
+    ESCALATED_TO_FOREMAN,
+    FOREMAN_REJECTED_REDIAGNOSE,
+    FOREMAN_APPROVED_LOCKED,
+    CANCELED
+}

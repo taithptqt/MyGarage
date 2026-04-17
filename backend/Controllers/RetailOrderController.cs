@@ -6,7 +6,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyGarage.Common;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
@@ -21,18 +21,15 @@ namespace MyGarage.Controllers
     public class RetailOrderController : ControllerBase
     {
         private readonly IRetailOrderService _retailOrderService;
-        private readonly IVoucherRedemptionService _voucherRedemptionService;
         private readonly IMapper _mapper;
         private readonly IGarageContext _db;
 
         public RetailOrderController(
             IRetailOrderService retailOrderService,
-            IVoucherRedemptionService voucherRedemptionService,
             IMapper mapper,
             IGarageContext db)
         {
             _retailOrderService = retailOrderService;
-            _voucherRedemptionService = voucherRedemptionService;
             _mapper = mapper;
             _db = db;
         }
@@ -47,7 +44,6 @@ namespace MyGarage.Controllers
             return Math.Round(value, 2, MidpointRounding.AwayFromZero);
         }
 
-        [Authorize(Roles = "Staff")]
         [HttpGet]
         public async Task<ActionResult<IEnumerable<RetailOrderResponseDto>>> GetAll()
         {
@@ -77,7 +73,6 @@ namespace MyGarage.Controllers
             return Ok(dtos);
         }
 
-        [Authorize(Roles = "Staff")]
         [HttpGet("{id:long}")]
         public async Task<ActionResult<RetailOrderResponseDto>> GetById(long id)
         {
@@ -237,69 +232,7 @@ namespace MyGarage.Controllers
 
             var subTotalAmount = RoundCurrency(retailOrderItems.Sum(item => item.SubTotal));
             var taxAmountTotal = RoundCurrency(retailOrderItems.Sum(item => item.TaxAmount ?? 0m));
-            var finalAmountBeforeDiscount = RoundCurrency(retailOrderItems.Sum(item => item.FinalAmount));
-
-            var voucherRequested = request.VoucherId.HasValue || !string.IsNullOrWhiteSpace(request.VoucherCode);
-            VoucherValidationResultResponseDto? voucherValidationResult = null;
-            Voucher? validatedVoucher = null;
-            var voucherDiscountAmount = 0m;
-
-            if (voucherRequested)
-            {
-                var validationRequest = new VoucherRedemptionRequestDto
-                {
-                    VoucherId = request.VoucherId,
-                    VoucherCode = request.VoucherCode,
-                    CustomerId = customerId.Value,
-                    BranchId = request.BranchId,
-                    PaymentMethodId = request.PaymentMethodId,
-                    RetailOrderId = null,
-                    EligibleAmount = finalAmountBeforeDiscount,
-                    Channel = string.IsNullOrWhiteSpace(request.Channel)
-                        ? "RETAIL_CHECKOUT"
-                        : request.Channel!.Trim().ToUpperInvariant(),
-                    AppliedBy = customerId.Value
-                };
-
-                voucherValidationResult = await _voucherRedemptionService.CheckEligibilityAsync(validationRequest);
-                if (!voucherValidationResult.IsEligible)
-                {
-                    return BadRequest(voucherValidationResult);
-                }
-
-                voucherDiscountAmount = RoundCurrency(voucherValidationResult.DiscountPreview ?? 0m);
-                voucherDiscountAmount = Math.Min(voucherDiscountAmount, finalAmountBeforeDiscount);
-                if (voucherDiscountAmount <= 0m)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Voucher discount amount is invalid.",
-                        reasonCode = "VCH_DISCOUNT_INVALID"
-                    });
-                }
-
-                if (!voucherValidationResult.VoucherId.HasValue || voucherValidationResult.VoucherId.Value <= 0)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Voucher validation did not return a valid voucher id.",
-                        reasonCode = "VCH_NOT_FOUND"
-                    });
-                }
-
-                validatedVoucher = await _db.Vouchers.FirstOrDefaultAsync(v => v.Id == voucherValidationResult.VoucherId.Value);
-                if (validatedVoucher == null)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Validated voucher is no longer available.",
-                        reasonCode = "VCH_NOT_FOUND"
-                    });
-                }
-            }
-
-            var totalDiscountAmount = RoundCurrency(voucherDiscountAmount);
-            var finalAmountTotal = RoundCurrency(Math.Max(0m, finalAmountBeforeDiscount - totalDiscountAmount));
+            var finalAmountTotal = RoundCurrency(retailOrderItems.Sum(item => item.FinalAmount));
             var now = DateTime.UtcNow;
 
             var retailOrder = new RetailOrder
@@ -309,9 +242,8 @@ namespace MyGarage.Controllers
                 CustomerId = customerId.Value,
                 SubTotal = subTotalAmount,
                 TierDiscountAmount = 0m,
-                VoucherId = voucherValidationResult?.VoucherId,
-                VoucherDiscountAmount = voucherDiscountAmount > 0m ? voucherDiscountAmount : 0m,
-                TotalDiscountAmount = totalDiscountAmount,
+                VoucherDiscountAmount = 0m,
+                TotalDiscountAmount = 0m,
                 TaxAmount = taxAmountTotal,
                 FinalAmount = finalAmountTotal,
                 Status = nameof(RetailOrderStatus.DRAFT),
@@ -322,67 +254,38 @@ namespace MyGarage.Controllers
                 UpdatedAt = now
             };
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            _db.RetailOrders.Add(retailOrder);
-            await _db.SaveChangesAsync();
-
-            foreach (var item in retailOrderItems)
+            var strategy = _db.Database.CreateExecutionStrategy();
+            var result = await strategy.ExecuteAsync(async () =>
             {
-                item.RetailOrderId = retailOrder.Id;
-            }
-
-            _db.RetailOrderItems.AddRange(retailOrderItems);
-
-            if (validatedVoucher != null && voucherValidationResult != null && voucherDiscountAmount > 0m)
-            {
-                var redemptionTimestamp = VietnamTime.Now;
-                _db.VoucherRedemptions.Add(new VoucherRedemption
+                await using var transaction = await TryBeginTransactionAsync();
+                try
                 {
-                    VoucherId = validatedVoucher.Id,
-                    VoucherCode = validatedVoucher.Code,
-                    CustomerId = customerId.Value,
-                    BranchId = request.BranchId,
-                    RetailOrderId = retailOrder.Id,
-                    PaymentMethodId = request.PaymentMethodId,
-                    ValidationStatus = nameof(VoucherRedemptionValidationStatusCode.VALIDATED),
-                    RedemptionStatus = nameof(VoucherRedemptionStatusCode.REDEEMED),
-                    EligibleAmount = finalAmountBeforeDiscount,
-                    DiscountAmount = voucherDiscountAmount,
-                    BudgetImpact = voucherDiscountAmount,
-                    AppliedBy = customerId.Value,
-                    IdempotencyKey = $"retail-checkout-{retailOrder.Id}-{validatedVoucher.Id}",
-                    AppliedAt = redemptionTimestamp,
-                    RedeemedAt = redemptionTimestamp,
-                    CreatedAt = redemptionTimestamp
-                });
+                    _db.RetailOrders.Add(retailOrder);
+                    await _db.SaveChangesAsync();
 
-                validatedVoucher.UsedCount = (validatedVoucher.UsedCount ?? 0) + 1;
-                validatedVoucher.RedeemedCount += 1;
-                validatedVoucher.BudgetUsed += voucherDiscountAmount;
-                validatedVoucher.UpdatedAt = redemptionTimestamp;
-                validatedVoucher.UpdatedBy = customerId.Value;
+                    foreach (var item in retailOrderItems)
+                    {
+                        item.RetailOrderId = retailOrder.Id;
+                    }
 
-                var exhaustedByUsage = validatedVoucher.UsageLimit.HasValue
-                    && validatedVoucher.UsageLimit.Value > 0
-                    && validatedVoucher.UsedCount >= validatedVoucher.UsageLimit.Value;
-                var exhaustedByBudget = validatedVoucher.BudgetLimit.HasValue
-                    && validatedVoucher.BudgetUsed >= validatedVoucher.BudgetLimit.Value;
-                if (exhaustedByUsage || exhaustedByBudget)
-                {
-                    validatedVoucher.Status = nameof(VoucherStatusCode.EXHAUSTED);
-                    validatedVoucher.IsActive = false;
+                    _db.RetailOrderItems.AddRange(retailOrderItems);
+                    await _db.SaveChangesAsync();
+
+                    if (transaction != null) await transaction.CommitAsync();
+
+                    return retailOrder;
                 }
-            }
+                catch
+                {
+                    if (transaction != null) await transaction.RollbackAsync();
+                    throw;
+                }
+            });
 
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            var responseDto = _mapper.Map<RetailOrderResponseDto>(retailOrder);
-            return CreatedAtAction(nameof(GetById), new { id = retailOrder.Id }, responseDto);
+            var responseDto = _mapper.Map<RetailOrderResponseDto>(result);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, responseDto);
         }
 
-        [Authorize(Roles = "Staff")]
         [HttpPost]
         public async Task<ActionResult<RetailOrderResponseDto>> Create([FromBody] RetailOrderCreateDto itemDto)
         {
@@ -392,7 +295,6 @@ namespace MyGarage.Controllers
             });
         }
 
-        [Authorize(Roles = "Staff")]
         [HttpPut("{id:long}")]
         public async Task<ActionResult<RetailOrderResponseDto>> Update(long id, [FromBody] RetailOrderUpdateDto itemDto)
         {
@@ -402,7 +304,6 @@ namespace MyGarage.Controllers
             });
         }
 
-        [Authorize(Roles = "Staff")]
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
@@ -412,6 +313,21 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
             return NoContent();
+        }
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _db.Database.BeginTransactionAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                if (ex.Message.Contains("SqlServerRetryingExecutionStrategy"))
+                {
+                    return null;
+                }
+                throw;
+            }
         }
     }
 }

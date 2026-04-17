@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.Interfaces;
@@ -6,7 +5,6 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers;
 
 [Route("api/inventory-management")]
-[Route("api/admin/inventories")]
 [ApiController]
 public class InventoryAdminController : ControllerBase
 {
@@ -39,12 +37,45 @@ public class InventoryAdminController : ControllerBase
         => Ok(await _inventoryAdminService.GetBranchSummaryAsync());
 
     [HttpGet("warehouse-structures")]
-    public async Task<IActionResult> GetWarehouseStructure()
-        => Ok(await _inventoryAdminService.GetWarehouseStructureAsync());
+    public async Task<IActionResult> GetWarehouseStructure(
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
+        => Ok(await _inventoryAdminService.GetWarehouseStructureAsync(page, pageSize));
 
     [HttpGet("alert-items")]
     public async Task<IActionResult> GetAlerts()
-        => Ok(await _inventoryAdminService.GetAlertsAsync());
+        => Ok(await _inventoryAdminService.GetStockAlertsAsync(false, 200));
+
+    [HttpGet("/api/stock-alerts")]
+    public async Task<IActionResult> GetStockAlerts(
+        [FromQuery] bool? resolved = false,
+        [FromQuery] int take = 200)
+        => Ok(await _inventoryAdminService.GetStockAlertsAsync(resolved, take));
+
+    [HttpPost("alert-items/rebuild")]
+    public async Task<IActionResult> RebuildAlerts()
+    {
+        var actorUserId = ResolveCurrentUserId();
+        var rows = await _inventoryAdminService.RebuildStockAlertsAsync(actorUserId);
+        return Ok(rows);
+    }
+
+    [HttpPatch("alert-items/{id:long}/resolve")]
+    public async Task<IActionResult> ResolveAlert(long id, [FromBody] ResolveStockAlertRequestDto? payload)
+    {
+        if (payload == null || payload.PurchaseOrderId <= 0)
+        {
+            return BadRequest(new { message = "PurchaseOrderId is required." });
+        }
+
+        var ok = await _inventoryAdminService.ResolveStockAlertAsync(id, payload.PurchaseOrderId, ResolveCurrentUserId());
+        if (!ok)
+        {
+            return NotFound(new { message = "Alert not found or cannot resolve with the provided purchase order." });
+        }
+
+        return Ok(new { message = "Stock alert resolved." });
+    }
 
     [HttpGet("stock-transactions")]
     public async Task<IActionResult> GetTransactions(
@@ -119,8 +150,10 @@ public class InventoryAdminController : ControllerBase
     }
 
     [HttpGet("analytics-reports")]
-    public async Task<IActionResult> GetReports()
-        => Ok(await _inventoryAdminService.GetReportsAsync());
+    public async Task<IActionResult> GetReports(
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
+        => Ok(await _inventoryAdminService.GetReportsAsync(page, pageSize));
 
     [HttpGet("audit-entries")]
     public async Task<IActionResult> GetInventoryAuditLog([FromQuery] int take = 300)
@@ -139,8 +172,7 @@ public class InventoryAdminController : ControllerBase
 
     private long? ResolveCurrentUserId()
     {
-        var claimValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return long.TryParse(claimValue, out var userId) ? userId : null;
+        return this.GetCurrentUserId();
     }
 
     private string SettingsPath
@@ -224,5 +256,10 @@ public class InventoryAdminController : ControllerBase
         public string MaterialReturnRule { get; init; } = "ALLOW_WITH_REASON";
         public string TransferRule { get; init; } = "REQUIRE_APPROVAL";
         public Dictionary<long, decimal> SafeStockByBranch { get; init; } = new();
+    }
+
+    public sealed record ResolveStockAlertRequestDto
+    {
+        public long PurchaseOrderId { get; init; }
     }
 }

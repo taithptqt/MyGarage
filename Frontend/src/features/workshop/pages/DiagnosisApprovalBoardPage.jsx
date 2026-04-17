@@ -194,7 +194,7 @@ export default function DiagnosisApprovalBoardPage({
 
       const latestDiagnosisId = extractLatestDiagnosisId(diagnosesRes);
       const recommendationRes = latestDiagnosisId
-        ? await serviceOrderApi.getDiagnoseRecommendations(latestDiagnosisId).catch(() => [])
+        ? await serviceOrderApi.getDiagnosisRecommendations(latestDiagnosisId).catch(() => [])
         : [];
       const safeRecommendations = Array.isArray(recommendationRes) ? recommendationRes : [];
 
@@ -325,7 +325,7 @@ export default function DiagnosisApprovalBoardPage({
     setActionMessage("");
 
     try {
-      await serviceOrderApi.updateDiagnoseRecommendation(recommendationId, {
+      await serviceOrderApi.updateDiagnosisRecommendation(recommendationId, {
         diagnoseId: toPositiveNumber(readField(item, "diagnoseId", "DiagnoseId")),
         parentRecommendationId: toPositiveNumber(readField(item, "parentRecommendationId", "ParentRecommendationId")) || null,
         itemType: readField(item, "itemType", "ItemType"),
@@ -356,7 +356,7 @@ export default function DiagnosisApprovalBoardPage({
     setActionMessage("");
 
     try {
-      await serviceOrderApi.deleteDiagnoseRecommendation(recommendationId);
+      await serviceOrderApi.deleteDiagnosisRecommendation(recommendationId);
       setActionMessage("Đã loại bỏ hạng mục đề xuất.");
       await loadData();
     } catch (err) {

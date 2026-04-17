@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MyGarage.DTOs.Responses
@@ -12,6 +12,7 @@ namespace MyGarage.DTOs.Responses
         public IReadOnlyList<long> DiagnosisIds { get; set; } = Array.Empty<long>();
         public string? QueueState { get; set; }
         public string? QueueColor { get; set; }
+        public string? WorkflowStatus { get; set; }
         public string? DispatchTag { get; set; }
         public long? TeamId { get; set; }
         public string? TeamName { get; set; }
@@ -26,10 +27,11 @@ namespace MyGarage.DTOs.Responses
         public string? AssistantTechnicianName { get; set; }
         public long? AssignedBayId { get; set; }
         public string? AssignedBayCode { get; set; }
-        public long? AssignedByTeamLeaderId { get; set; }
         public DateTime? RequestedAt { get; set; }
         public DateTime? AssignedAt { get; set; }
         public DateTime? StartedAt { get; set; }
+        public DateTime? TechnicianAcceptedAt { get; set; }
+        public DateTime? TechnicianCompletedAt { get; set; }
         public int PendingMinutes { get; set; }
         public int AssignedMinutes { get; set; }
         public bool IsSupportRequested { get; set; }
@@ -42,6 +44,10 @@ namespace MyGarage.DTOs.Responses
         public DateTime? ApprovedByForemanAt { get; set; }
         public DateTime? TechnicalApprovedAt { get; set; }
         public DateTime? ApprovedByTeamLeaderAt { get; set; }
-        public DateTime? FinalApprovedAt { get; set; }
+        public string? TeamLeaderNote { get; set; }
+        public string? ForemanNote { get; set; }
+        public string? TeamLeaderApprovalStatus { get; set; }
+        public string? ForemanApprovalStatus { get; set; }
     }
 }
+

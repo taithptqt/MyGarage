@@ -168,7 +168,7 @@ namespace MyGarage.Services
                     && s.StartTime < proposedEnd
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(s => s.StartTime)
@@ -201,7 +201,7 @@ namespace MyGarage.Services
                     && s.StartTime < timelineEnd
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .ToListAsync();
@@ -463,7 +463,7 @@ namespace MyGarage.Services
                 return false;
             }
 
-            return string.Equals(status, nameof(WorkSlotStatus.CANCELLED), StringComparison.OrdinalIgnoreCase)
+            return string.Equals(status, nameof(WorkSlotStatus.CANCELED), StringComparison.OrdinalIgnoreCase)
                    || string.Equals(status, nameof(WorkSlotStatus.COMPLETED), StringComparison.OrdinalIgnoreCase)
                    || string.Equals(status, nameof(WorkSlotStatus.NOSHOW), StringComparison.OrdinalIgnoreCase)
                    || string.Equals(status, "CANCELED", StringComparison.OrdinalIgnoreCase)
@@ -487,3 +487,4 @@ namespace MyGarage.Services
         }
     }
 }
+

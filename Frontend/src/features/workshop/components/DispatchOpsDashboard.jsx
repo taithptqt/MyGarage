@@ -44,8 +44,8 @@ const COLUMN_ORDER = ["WHITE", "YELLOW", "RED", "GREEN"];
 
 const COLOR_META = {
   NEEDS_APPROVAL: {
-    label: "Cần duyệt",
-    description: "Phiếu tổ trưởng đã duyệt hoặc phiếu cờ đỏ quá SLA",
+    label: "Cáº§n duyá»‡t",
+    description: "Phiáº¿u tá»• trÆ°á»Ÿng Ä‘Ã£ duyá»‡t hoáº·c phiáº¿u cá» Ä‘á» quÃ¡ SLA",
     tabBg: "#eff6ff",
     tabBorder: "#93c5fd",
     tabText: "#1d4ed8",
@@ -55,8 +55,8 @@ const COLOR_META = {
     cardBg: "#eff6ff",
   },
   ALL_ITEMS: {
-    label: "Tất cả",
-    description: "Tổng của 4 tab còn lại trong màn hình điều phối",
+    label: "Táº¥t cáº£",
+    description: "Tá»•ng cá»§a 4 tab cÃ²n láº¡i trong mÃ n hÃ¬nh Ä‘iá»u phá»‘i",
     tabBg: "#f0fdfa",
     tabBorder: "#5eead4",
     tabText: "#0f766e",
@@ -66,8 +66,8 @@ const COLOR_META = {
     cardBg: "#f0fdfa",
   },
   WHITE: {
-    label: "Mới tiếp nhận",
-    description: "Chờ tổ trưởng nhận xe và phân công",
+    label: "Má»›i tiáº¿p nháº­n",
+    description: "Chá» tá»• trÆ°á»Ÿng nháº­n xe vÃ  phÃ¢n cÃ´ng",
     tabBg: "#f8fafc",
     tabBorder: "#cbd5e1",
     tabText: "#334155",
@@ -77,8 +77,8 @@ const COLOR_META = {
     cardBg: "white",
   },
   YELLOW: {
-    label: "Đang chẩn đoán",
-    description: "Đã có tổ nhận và đang xử lý",
+    label: "Äang cháº©n Ä‘oÃ¡n",
+    description: "ÄÃ£ cÃ³ tá»• nháº­n vÃ  Ä‘ang xá»­ lÃ½",
     tabBg: "#fff8db",
     tabBorder: "#f6d365",
     tabText: "#8a6a00",
@@ -88,8 +88,8 @@ const COLOR_META = {
     cardBg: "#fffdf3",
   },
   RED: {
-    label: "Cần can thiệp",
-    description: "Có cảnh báo hỗ trợ, hủy lệnh hoặc quá SLA",
+    label: "Cáº§n can thiá»‡p",
+    description: "CÃ³ cáº£nh bÃ¡o há»— trá»£, há»§y lá»‡nh hoáº·c quÃ¡ SLA",
     tabBg: "#fff1f2",
     tabBorder: "#fca5a5",
     tabText: "#b91c1c",
@@ -99,8 +99,8 @@ const COLOR_META = {
     cardBg: "#fff7f7",
   },
   GREEN: {
-    label: "Đã chuẩn đoán",
-    description: "Đã có kết quả kỹ thuật để duyệt",
+    label: "ÄÃ£ chuáº©n Ä‘oÃ¡n",
+    description: "ÄÃ£ cÃ³ káº¿t quáº£ ká»¹ thuáº­t Ä‘á»ƒ duyá»‡t",
     tabBg: "#ecfdf3",
     tabBorder: "#86efac",
     tabText: "#166534",
@@ -151,10 +151,10 @@ const STATUS_CARD_THEME = {
 };
 
 const DISPATCH_TAG_OPTIONS = [
-  { value: "ENGINE_CHASSIS", label: "Máy - Gầm" },
-  { value: "ELECTRICAL_AC", label: "Điện - Máy lạnh" },
-  { value: "BODY_PAINT", label: "Đồng sơn - Chăm sóc xe" },
-  { value: "MAINTENANCE", label: "Bảo dưỡng nhanh" },
+  { value: "ENGINE_CHASSIS", label: "MÃ¡y - Gáº§m" },
+  { value: "ELECTRICAL_AC", label: "Äiá»‡n - MÃ¡y láº¡nh" },
+  { value: "BODY_PAINT", label: "Äá»“ng sÆ¡n - ChÄƒm sÃ³c xe" },
+  { value: "MAINTENANCE", label: "Báº£o dÆ°á»¡ng nhanh" },
 ];
 
 const DISPATCH_TAG_LABELS = DISPATCH_TAG_OPTIONS.reduce((acc, item) => {
@@ -162,7 +162,7 @@ const DISPATCH_TAG_LABELS = DISPATCH_TAG_OPTIONS.reduce((acc, item) => {
   return acc;
 }, {});
 
-const CANCEL_REASONS = ["Sai chuyên môn", "Quá tải khoang", "Thiếu thiết bị", "Khác"];
+const CANCEL_REASONS = ["Sai chuyÃªn mÃ´n", "QuÃ¡ táº£i khoang", "Thiáº¿u thiáº¿t bá»‹", "KhÃ¡c"];
 
 const TEAM_LEADER_ROLE_CODES = new Set(["TEAM_LEADER"]);
 const TECHNICIAN_ROLE_CODES = new Set(["TECH", "TECHNICIAN", "TEAM_LEADER", "FOREMAN"]);
@@ -194,7 +194,7 @@ function resolveDispatchTagLabel(tag, fallbackTag = "") {
   if (normalizedTag) return getDispatchTagLabel(normalizedTag);
 
   const normalizedFallback = normalizeCode(fallbackTag);
-  if (normalizedFallback) return `${getDispatchTagLabel(normalizedFallback)} (chuyên môn tổ)`;
+  if (normalizedFallback) return `${getDispatchTagLabel(normalizedFallback)} (chuyÃªn mÃ´n tá»•)`;
 
   return getDispatchTagLabel(tag);
 }
@@ -214,16 +214,16 @@ function formatDateTime(value) {
 
 function formatMinutes(value) {
   const minutes = Number(value || 0);
-  if (!Number.isFinite(minutes) || minutes <= 0) return "0 phút";
-  if (minutes < 60) return `${Math.floor(minutes)} phút`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 phÃºt";
+  if (minutes < 60) return `${Math.floor(minutes)} phÃºt`;
   const hours = Math.floor(minutes / 60);
   const remain = Math.floor(minutes % 60);
-  return remain > 0 ? `${hours} giờ ${remain} phút` : `${hours} giờ`;
+  return remain > 0 ? `${hours} giá» ${remain} phÃºt` : `${hours} giá»`;
 }
 
 function getDispatchTagLabel(tag) {
   const normalized = normalizeCode(tag);
-  if (!normalized) return "Chưa chọn chuyên môn";
+  if (!normalized) return "ChÆ°a chá»n chuyÃªn mÃ´n";
 
   const splitTags = normalized
     .split(/[;,|/]/)
@@ -384,7 +384,7 @@ function extractRequestedServiceNames(details) {
   details.forEach((detail) => {
     if (readValue(detail, "isDeleted", "IsDeleted") === true) return;
 
-    const recommendationId = toPositiveNumber(readValue(detail, "diagnoseRecommendationId", "DiagnoseRecommendationId"));
+    const recommendationId = toPositiveNumber(readValue(detail, "diagnosisRecommendationId", "DiagnosisRecommendationId"));
     if (recommendationId) return;
 
     const itemType = normalizeCode(readValue(detail, "itemType", "ItemType"));
@@ -473,10 +473,10 @@ const cancelAttentionPulse = keyframes`
 `;
 
 const QUEUE_STATE_META = {
-  NEW: { label: "Mới tiếp nhận", colorScheme: "gray" },
-  IN_PROGRESS: { label: "Đang chẩn đoán", colorScheme: "yellow" },
-  ALERT: { label: "Cần can thiệp", colorScheme: "red" },
-  DIAGNOSED: { label: "Đã chuẩn đoán", colorScheme: "green" },
+  NEW: { label: "Má»›i tiáº¿p nháº­n", colorScheme: "gray" },
+  IN_PROGRESS: { label: "Äang cháº©n Ä‘oÃ¡n", colorScheme: "yellow" },
+  ALERT: { label: "Cáº§n can thiá»‡p", colorScheme: "red" },
+  DIAGNOSED: { label: "ÄÃ£ chuáº©n Ä‘oÃ¡n", colorScheme: "green" },
 };
 
 function getQueueStateMeta(queueState, queueColor) {
@@ -492,7 +492,7 @@ function getQueueStateMeta(queueState, queueColor) {
   return QUEUE_STATE_META.NEW;
 }
 
-function resolveApiErrorMessage(error, fallback = "Đã có lỗi xảy ra") {
+function resolveApiErrorMessage(error, fallback = "ÄÃ£ cÃ³ lá»—i xáº£y ra") {
   const message = toText(readValue(error, "response")?.data?.message);
   if (message) return message;
   const raw = toText(error?.message);
@@ -521,7 +521,7 @@ function isTechnicianCandidate(staff, roleById) {
   const roleName = toText(readValue(staff, "roleName", "RoleName")).toLowerCase();
 
   if (TECHNICIAN_ROLE_CODES.has(roleCode)) return true;
-  return roleName.includes("kỹ thuật") || roleName.includes("ky thuat") || roleName.includes("tổ trưởng") || roleName.includes("to truong");
+  return roleName.includes("ká»¹ thuáº­t") || roleName.includes("ky thuat") || roleName.includes("tá»• trÆ°á»Ÿng") || roleName.includes("to truong");
 }
 
 function isTeamLeader(staff, roleById) {
@@ -658,7 +658,7 @@ function getVehicleDisplayParts(item) {
   const vin = toText(item?.vehicleVin);
   return {
     plate: toText(item?.vehicleLicensePlate) || "--",
-    descriptor: toText(item?.vehicleDescriptor) || "Chưa rõ dòng xe",
+    descriptor: toText(item?.vehicleDescriptor) || "ChÆ°a rÃµ dÃ²ng xe",
     manufactureYear: toText(item?.vehicleManufactureYear) || "--",
     color: toText(item?.vehicleColor) || "--",
     vin,
@@ -670,19 +670,19 @@ function extractAlertReasons(item) {
   if (!item) return reasons;
 
   if (item.isSupportRequested) {
-    reasons.push("Có yêu cầu hỗ trợ hội chẩn từ khoang");
+    reasons.push("CÃ³ yÃªu cáº§u há»— trá»£ há»™i cháº©n tá»« khoang");
   }
 
   if (item.isCancelPendingApproval) {
-    reasons.push("Đang chờ quản đốc duyệt hủy/phân lại");
+    reasons.push("Äang chá» quáº£n Ä‘á»‘c duyá»‡t há»§y/phÃ¢n láº¡i");
   }
 
   if (item.queueColor === "RED" && !item.technicianId && item.pendingMinutes >= 10) {
-    reasons.push("Xe chờ nhận quá 10 phút");
+    reasons.push("Xe chá» nháº­n quÃ¡ 10 phÃºt");
   }
 
   if (item.queueColor === "RED" && item.technicianId && item.assignedMinutes >= 45) {
-    reasons.push("Chuẩn đoán đang vượt SLA 45 phút");
+    reasons.push("Chuáº©n Ä‘oÃ¡n Ä‘ang vÆ°á»£t SLA 45 phÃºt");
   }
 
   return reasons;
@@ -868,18 +868,18 @@ function DispatchQueueCard({
               {item.serviceOrderCode}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              {item.customerName || "Khách hàng chưa rõ"}
+              {item.customerName || "KhÃ¡ch hÃ ng chÆ°a rÃµ"}
             </Text>
             <HStack mt={1} spacing={1.5} flexWrap="wrap">
               <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
-                Biển số: {vehicle.plate}
+                Biá»ƒn sá»‘: {vehicle.plate}
               </Badge>
               <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
-                Dòng xe: {vehicle.descriptor}
+                DÃ²ng xe: {vehicle.descriptor}
               </Badge>
             </HStack>
             <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
-              Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
+              NÄƒm SX: {vehicle.manufactureYear} | MÃ u: {vehicle.color}
             </Text>
             {vehicle.vin ? (
               <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
@@ -895,45 +895,45 @@ function DispatchQueueCard({
 
         <HStack spacing={2} flexWrap="wrap">
           <Badge colorScheme="purple" borderRadius="full" px={2.5}>
-            Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
+            ChuyÃªn mÃ´n: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
           </Badge>
           <Badge colorScheme="gray" borderRadius="full" px={2.5}>
-            Chờ nhận: {formatMinutes(item.pendingMinutes)}
+            Chá» nháº­n: {formatMinutes(item.pendingMinutes)}
           </Badge>
           <Badge colorScheme="orange" borderRadius="full" px={2.5}>
-            Đang xử lý: {formatMinutes(item.assignedMinutes)}
+            Äang xá»­ lÃ½: {formatMinutes(item.assignedMinutes)}
           </Badge>
         </HStack>
 
         <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
           <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
             <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
-              Nhân sự
+              NhÃ¢n sá»±
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Tổ chính: {item.primaryTeamName || item.teamName || "Chưa giao tổ"}
+              Tá»• chÃ­nh: {item.primaryTeamName || item.teamName || "ChÆ°a giao tá»•"}
             </Text>
             {Array.isArray(item.supportingTeamNames) && item.supportingTeamNames.length > 0 && (
               <Text fontSize="sm" color="gray.600" noOfLines={2}>
-                Tổ phối hợp: {item.supportingTeamNames.join(", ")}
+                Tá»• phá»‘i há»£p: {item.supportingTeamNames.join(", ")}
               </Text>
             )}
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Thợ chính: {item.technicianName || ""}
+              Thá»£ chÃ­nh: {item.technicianName || ""}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Thợ phụ: {item.assistantTechnicianName || ""}
+              Thá»£ phá»¥: {item.assistantTechnicianName || ""}
             </Text>
           </Box>
           <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
             <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
-              Tiến độ
+              Tiáº¿n Ä‘á»™
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Khoang: {item.assignedBayCode || "Chưa chỉ định"}
+              Khoang: {item.assignedBayCode || "ChÆ°a chá»‰ Ä‘á»‹nh"}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Yêu cầu lúc: {formatDateTime(item.requestedAt)}
+              YÃªu cáº§u lÃºc: {formatDateTime(item.requestedAt)}
             </Text>
           </Box>
         </Grid>
@@ -941,7 +941,7 @@ function DispatchQueueCard({
         {alerts.length > 0 && (
           <Box border="1px solid" borderColor="red.200" bg="red.50" borderRadius="md" p={2}>
             <Text fontSize="xs" color="red.700" textTransform="uppercase" fontWeight="700" mb={1}>
-              Cần can thiệp
+              Cáº§n can thiá»‡p
             </Text>
             <VStack align="start" spacing={1}>
               {alerts.slice(0, 2).map((reason) => (
@@ -968,7 +968,7 @@ function DispatchQueueCard({
                   onViewCancelRequest(item);
                 }}
               >
-                Xem yêu cầu hủy
+                Xem yÃªu cáº§u há»§y
               </Button>
             )}
             {canViewQuote && (
@@ -983,7 +983,7 @@ function DispatchQueueCard({
                   onViewQuote(item);
                 }}
               >
-                Xem chuẩn đoán
+                Xem chuáº©n Ä‘oÃ¡n
               </Button>
             )}
           </HStack>
@@ -1000,17 +1000,17 @@ function SuggestionPreview({ suggestion }) {
   return (
     <Box border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff" p={3}>
       <Text fontSize="sm" fontWeight="700" color="blue.700" mb={2}>
-        Gợi ý phân công tự động
+        Gá»£i Ã½ phÃ¢n cÃ´ng tá»± Ä‘á»™ng
       </Text>
       <Stack spacing={1} fontSize="sm" color="gray.700">
-        <Text>Thợ chính gợi ý: {suggestion.suggestedLeadTechnicianName || "--"}</Text>
-        <Text>Thợ phụ gợi ý: {suggestion.suggestedAssistantTechnicianName || "--"}</Text>
-        <Text>Khoang gợi ý: {suggestion.suggestedBayCode || "--"}</Text>
+        <Text>Thá»£ chÃ­nh gá»£i Ã½: {suggestion.suggestedLeadTechnicianName || "--"}</Text>
+        <Text>Thá»£ phá»¥ gá»£i Ã½: {suggestion.suggestedAssistantTechnicianName || "--"}</Text>
+        <Text>Khoang gá»£i Ã½: {suggestion.suggestedBayCode || "--"}</Text>
       </Stack>
       {loads.length > 0 && (
         <Box mt={3}>
           <Text fontSize="xs" color="gray.500" mb={1}>
-            Tải hiện tại theo tổ
+            Táº£i hiá»‡n táº¡i theo tá»•
           </Text>
           <VStack align="stretch" spacing={1}>
             {loads.slice(0, 5).map((row) => (
@@ -1215,12 +1215,12 @@ export default function DispatchOpsDashboard({
   }, [activeTeams, assignmentTeamBranchId]);
 
   const assignmentTeamOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chọn tổ --" }];
+    const options = [{ value: "", label: "-- Chá»n tá»• --" }];
     scopedTeamsForAssignment.forEach((team) => {
       const id = toPositiveNumber(readValue(team, "id", "Id"));
       const name = toText(readValue(team, "name", "Name"));
       if (!id) return;
-      options.push({ value: String(id), label: name || `Tổ #${id}` });
+      options.push({ value: String(id), label: name || `Tá»• #${id}` });
     });
     return options;
   }, [scopedTeamsForAssignment]);
@@ -1231,7 +1231,7 @@ export default function DispatchOpsDashboard({
       .map((team) => {
         const id = toPositiveNumber(readValue(team, "id", "Id"));
         const name = toText(readValue(team, "name", "Name"));
-        return { id, name: name || (id ? `Tổ #${id}` : "") };
+        return { id, name: name || (id ? `Tá»• #${id}` : "") };
       })
       .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
   }, [scopedTeamsForAssignment, leaderTeamId]);
@@ -1242,31 +1242,31 @@ export default function DispatchOpsDashboard({
       .map((team) => {
         const id = toPositiveNumber(readValue(team, "id", "Id"));
         const name = toText(readValue(team, "name", "Name"));
-        return { id, name: name || (id ? `Tổ #${id}` : "") };
+        return { id, name: name || (id ? `Tá»• #${id}` : "") };
       })
       .filter((team) => team.id && (!primaryTeamId || team.id !== primaryTeamId));
   }, [scopedTeamsForAssignment, managerTeamId]);
 
   const leaderPrimaryTechnicianOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chọn thợ chính --" }];
+    const options = [{ value: "", label: "-- Chá»n thá»£ chÃ­nh --" }];
     leaderTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [leaderTechnicianOptions]);
 
   const leaderAssistantTechnicianOptions = useMemo(() => {
     const selectedLeadId = toPositiveNumber(leaderLeadTechnicianId);
-    const options = [{ value: "", label: "-- Không chọn --" }];
+    const options = [{ value: "", label: "-- KhÃ´ng chá»n --" }];
     leaderTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
       if (selectedLeadId && id === selectedLeadId) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [leaderTechnicianOptions, leaderLeadTechnicianId]);
@@ -1277,49 +1277,49 @@ export default function DispatchOpsDashboard({
   );
 
   const supportResponseLeadOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chọn thợ chính tổ phụ --" }];
+    const options = [{ value: "", label: "-- Chá»n thá»£ chÃ­nh tá»• phá»¥ --" }];
     supportResponseTechnicians.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [supportResponseTechnicians]);
 
   const supportResponseAssistantOptions = useMemo(() => {
     const selectedLeadId = toPositiveNumber(leaderSupportResponseLeadTechnicianId);
-    const options = [{ value: "", label: "-- Không chọn --" }];
+    const options = [{ value: "", label: "-- KhÃ´ng chá»n --" }];
     supportResponseTechnicians.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
       if (selectedLeadId && id === selectedLeadId) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [supportResponseTechnicians, leaderSupportResponseLeadTechnicianId]);
 
   const managerPrimaryTechnicianOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chọn thợ chính --" }];
+    const options = [{ value: "", label: "-- Chá»n thá»£ chÃ­nh --" }];
     managerTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [managerTechnicianOptions]);
 
   const managerAssistantTechnicianOptions = useMemo(() => {
     const selectedLeadId = toPositiveNumber(managerLeadTechnicianId);
-    const options = [{ value: "", label: "-- Không chọn --" }];
+    const options = [{ value: "", label: "-- KhÃ´ng chá»n --" }];
     managerTechnicianOptions.forEach((staff) => {
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
       if (selectedLeadId && id === selectedLeadId) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
     return options;
   }, [managerTechnicianOptions, managerLeadTechnicianId]);
@@ -1327,7 +1327,7 @@ export default function DispatchOpsDashboard({
   const buildTechnicianOptionsForTeam = useCallback((teamId, includeEmpty = false) => {
     const options = [];
     if (includeEmpty) {
-      options.push({ value: "", label: "-- Không chọn --" });
+      options.push({ value: "", label: "-- KhÃ´ng chá»n --" });
     }
 
     const teamTechnicians = getTechniciansByTeam(teamId);
@@ -1335,7 +1335,7 @@ export default function DispatchOpsDashboard({
       const id = toPositiveNumber(readValue(staff, "id", "Id"));
       const name = toText(readValue(staff, "fullName", "FullName"));
       if (!id) return;
-      options.push({ value: String(id), label: name || `Nhân sự #${id}` });
+      options.push({ value: String(id), label: name || `NhÃ¢n sá»± #${id}` });
     });
 
     return options;
@@ -1399,7 +1399,7 @@ export default function DispatchOpsDashboard({
   }, [leaderSupportResponseLeadTechnicianId, leaderSupportResponseAssistantTechnicianId]);
 
   const baySelectionOptions = useMemo(() => {
-    const options = [{ value: "", label: "-- Chọn khoang (bắt buộc) --" }];
+    const options = [{ value: "", label: "-- Chá»n khoang (báº¯t buá»™c) --" }];
     availableBays.forEach((bay) => {
       const id = toPositiveNumber(readValue(bay, "id", "Id"));
       const code = toText(readValue(bay, "code", "Code")) || toText(readValue(bay, "name", "Name")) || `Khoang #${id}`;
@@ -1409,7 +1409,7 @@ export default function DispatchOpsDashboard({
       if (!id) return;
       options.push({
         value: String(id),
-        label: `${code} ${disabled ? "(Đang bận)" : "(Trống)"}`,
+        label: `${code} ${disabled ? "(Äang báº­n)" : "(Trá»‘ng)"}`,
         disabled,
       });
     });
@@ -1422,20 +1422,20 @@ export default function DispatchOpsDashboard({
   );
 
   const teamFilterOptions = useMemo(() => {
-    const options = [{ value: "", label: "Tất cả tổ" }];
+    const options = [{ value: "", label: "Táº¥t cáº£ tá»•" }];
     activeTeams.forEach((team) => {
       const id = toPositiveNumber(readValue(team, "id", "Id"));
       const name = toText(readValue(team, "name", "Name"));
       options.push({
         value: id ? String(id) : "",
-        label: name || `Tổ #${id}`,
+        label: name || `Tá»• #${id}`,
       });
     });
     return options;
   }, [activeTeams]);
 
   const dispatchTagFilterOptions = useMemo(
-    () => [{ value: "", label: "Tất cả chuyên môn" }, ...DISPATCH_TAG_OPTIONS.map((item) => ({ value: item.value, label: item.label }))],
+    () => [{ value: "", label: "Táº¥t cáº£ chuyÃªn mÃ´n" }, ...DISPATCH_TAG_OPTIONS.map((item) => ({ value: item.value, label: item.label }))],
     []
   );
 
@@ -1503,7 +1503,7 @@ export default function DispatchOpsDashboard({
 
       setBoardItems(normalized);
     } catch (err) {
-      setError(resolveApiErrorMessage(err, "Không thể tải bảng điều phối."));
+      setError(resolveApiErrorMessage(err, "KhÃ´ng thá»ƒ táº£i báº£ng Ä‘iá»u phá»‘i."));
     } finally {
       setLoading(false);
     }
@@ -1707,7 +1707,7 @@ export default function DispatchOpsDashboard({
     const selectedBayLabel = selectedBayCode || `Khoang #${selectedBayId}`;
     return [
       ...baySelectionOptions,
-      { value: selectedValue, label: `${selectedBayLabel} (Đang gán)`, disabled: true },
+      { value: selectedValue, label: `${selectedBayLabel} (Äang gÃ¡n)`, disabled: true },
     ];
   }, [leaderBayId, baySelectionOptions, selectedItem?.assignedBayCode]);
 
@@ -2048,13 +2048,13 @@ export default function DispatchOpsDashboard({
   const loadDispatchSuggestion = useCallback(
     async (targetMode) => {
       if (!selectedItem) {
-        toast({ title: "Chưa chọn lệnh", status: "warning", duration: 2500, isClosable: true });
+        toast({ title: "ChÆ°a chá»n lá»‡nh", status: "warning", duration: 2500, isClosable: true });
         return;
       }
 
       const teamId = targetMode === "team_leader" ? leaderTeamIdForAssignment : toPositiveNumber(managerTeamId);
       if (!teamId) {
-        toast({ title: "Vui lòng chọn tổ trước khi lấy gợi ý", status: "warning", duration: 2600, isClosable: true });
+        toast({ title: "Vui lÃ²ng chá»n tá»• trÆ°á»›c khi láº¥y gá»£i Ã½", status: "warning", duration: 2600, isClosable: true });
         return;
       }
 
@@ -2072,9 +2072,9 @@ export default function DispatchOpsDashboard({
           setManagerBayId(toPositiveNumber(response?.suggestedBayId) ? String(response.suggestedBayId) : "");
         }
 
-        toast({ title: "Đã áp dụng gợi ý phân công", status: "success", duration: 2200, isClosable: true });
+        toast({ title: "ÄÃ£ Ã¡p dá»¥ng gá»£i Ã½ phÃ¢n cÃ´ng", status: "success", duration: 2200, isClosable: true });
       } catch (err) {
-        toast({ title: "Không thể lấy gợi ý", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+        toast({ title: "KhÃ´ng thá»ƒ láº¥y gá»£i Ã½", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
       } finally {
         setSuggestionLoading(false);
       }
@@ -2133,7 +2133,7 @@ export default function DispatchOpsDashboard({
     const areAllTechniciansAccepted = hasAssignedTechnicians && Boolean(selectedItem?.startedAt);
     if (areAllTechniciansAccepted) {
       toast({
-        title: "Tất cả thợ đã nhận việc, không thể giao lại",
+        title: "Táº¥t cáº£ thá»£ Ä‘Ã£ nháº­n viá»‡c, khÃ´ng thá»ƒ giao láº¡i",
         status: "info",
         duration: 2600,
         isClosable: true,
@@ -2146,12 +2146,12 @@ export default function DispatchOpsDashboard({
     const teamId = toPositiveNumber(leaderTeamId) || currentStaffTeamId;
 
     if (!leadId || !teamId) {
-      toast({ title: "Vui lòng chọn tổ và thợ chính", status: "warning", duration: 2600, isClosable: true });
+      toast({ title: "Vui lÃ²ng chá»n tá»• vÃ  thá»£ chÃ­nh", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
     if (assistantId && assistantId === leadId) {
-      toast({ title: "Thợ phụ không được trùng thợ chính", status: "warning", duration: 2600, isClosable: true });
+      toast({ title: "Thá»£ phá»¥ khÃ´ng Ä‘Æ°á»£c trÃ¹ng thá»£ chÃ­nh", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
@@ -2163,11 +2163,11 @@ export default function DispatchOpsDashboard({
         assistantTechnicianId: assistantId || null,
       });
 
-      toast({ title: "Đã nhận xe và phân công ca chuẩn đoán", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "ÄÃ£ nháº­n xe vÃ  phÃ¢n cÃ´ng ca chuáº©n Ä‘oÃ¡n", status: "success", duration: 2500, isClosable: true });
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
-      toast({ title: "Không thể phân công", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      toast({ title: "KhÃ´ng thá»ƒ phÃ¢n cÃ´ng", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2184,7 +2184,7 @@ export default function DispatchOpsDashboard({
 
     if (supportingAssignments.length === 0) {
       toast({
-        title: "Vui lòng chọn ít nhất một tổ phụ cần hỗ trợ",
+        title: "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t tá»• phá»¥ cáº§n há»— trá»£",
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -2200,7 +2200,7 @@ export default function DispatchOpsDashboard({
         supportingAssignments,
       });
 
-      toast({ title: "Đã gửi yêu cầu hỗ trợ cho tổ phụ", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "ÄÃ£ gá»­i yÃªu cáº§u há»— trá»£ cho tá»• phá»¥", status: "success", duration: 2500, isClosable: true });
       setLeaderSupportNote("");
       setLeaderSupportTeamIds([]);
       setLeaderSupportRequestMap({});
@@ -2208,7 +2208,7 @@ export default function DispatchOpsDashboard({
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
-      toast({ title: "Không thể gửi hỗ trợ", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      toast({ title: "KhÃ´ng thá»ƒ gá»­i há»— trá»£", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2222,7 +2222,7 @@ export default function DispatchOpsDashboard({
     const payloadReason = note ? `${reason}: ${note}` : reason;
 
     if (!payloadReason) {
-      toast({ title: "Vui lòng nhập lý do hủy", status: "warning", duration: 2600, isClosable: true });
+      toast({ title: "Vui lÃ²ng nháº­p lÃ½ do há»§y", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
@@ -2233,12 +2233,12 @@ export default function DispatchOpsDashboard({
         reason: payloadReason,
       });
 
-      toast({ title: "Đã gửi yêu cầu hủy lệnh", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "ÄÃ£ gá»­i yÃªu cáº§u há»§y lá»‡nh", status: "success", duration: 2500, isClosable: true });
       setLeaderCancelNote("");
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
-      toast({ title: "Không thể gửi yêu cầu hủy", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      toast({ title: "KhÃ´ng thá»ƒ gá»­i yÃªu cáº§u há»§y", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2255,22 +2255,22 @@ export default function DispatchOpsDashboard({
     const bayId = toPositiveNumber(managerBayId);
 
     if (!teamId) {
-      toast({ title: "Vui lòng chọn tổ trước khi chọn thợ", status: "warning", duration: 2500, isClosable: true });
+      toast({ title: "Vui lÃ²ng chá»n tá»• trÆ°á»›c khi chá»n thá»£", status: "warning", duration: 2500, isClosable: true });
       return;
     }
 
     if (!leadId) {
-      toast({ title: "Vui lòng chọn thợ chính", status: "warning", duration: 2500, isClosable: true });
+      toast({ title: "Vui lÃ²ng chá»n thá»£ chÃ­nh", status: "warning", duration: 2500, isClosable: true });
       return;
     }
 
     if (supportingTeamIds.length > 0 && !teamId) {
-      toast({ title: "Vui lòng chọn tổ chính khi có tổ phối hợp", status: "warning", duration: 2600, isClosable: true });
+      toast({ title: "Vui lÃ²ng chá»n tá»• chÃ­nh khi cÃ³ tá»• phá»‘i há»£p", status: "warning", duration: 2600, isClosable: true });
       return;
     }
 
     if (assistantId && assistantId === leadId) {
-      toast({ title: "Thợ phụ không được trùng thợ chính", status: "warning", duration: 2500, isClosable: true });
+      toast({ title: "Thá»£ phá»¥ khÃ´ng Ä‘Æ°á»£c trÃ¹ng thá»£ chÃ­nh", status: "warning", duration: 2500, isClosable: true });
       return;
     }
 
@@ -2282,17 +2282,17 @@ export default function DispatchOpsDashboard({
     });
     if (invalidSupportingAssignment) {
       const invalidTeam = managerSupportingTeamOptions.find((team) => team.id === invalidSupportingAssignment.teamId);
-      const invalidTeamName = invalidTeam?.name || `Tổ #${invalidSupportingAssignment.teamId}`;
+      const invalidTeamName = invalidTeam?.name || `Tá»• #${invalidSupportingAssignment.teamId}`;
       if (!invalidSupportingAssignment.technicianId) {
         toast({
-          title: `Vui lòng chọn thợ chính cho ${invalidTeamName}`,
+          title: `Vui lÃ²ng chá»n thá»£ chÃ­nh cho ${invalidTeamName}`,
           status: "warning",
           duration: 3200,
           isClosable: true,
         });
       } else {
         toast({
-          title: `Thợ phụ của ${invalidTeamName} không được trùng thợ chính`,
+          title: `Thá»£ phá»¥ cá»§a ${invalidTeamName} khÃ´ng Ä‘Æ°á»£c trÃ¹ng thá»£ chÃ­nh`,
           status: "warning",
           duration: 3200,
           isClosable: true,
@@ -2314,11 +2314,11 @@ export default function DispatchOpsDashboard({
         reason: toText(managerOverrideReason) || null,
       });
 
-      toast({ title: "Đã override phân công thành công", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "ÄÃ£ override phÃ¢n cÃ´ng thÃ nh cÃ´ng", status: "success", duration: 2500, isClosable: true });
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
-      toast({ title: "Không thể override", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      toast({ title: "KhÃ´ng thá»ƒ override", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2336,7 +2336,7 @@ export default function DispatchOpsDashboard({
       });
 
       toast({
-        title: approve ? "Đã duyệt hủy lệnh" : "Đã từ chối hủy lệnh",
+        title: approve ? "ÄÃ£ duyá»‡t há»§y lá»‡nh" : "ÄÃ£ tá»« chá»‘i há»§y lá»‡nh",
         status: "success",
         duration: 2500,
         isClosable: true,
@@ -2346,7 +2346,7 @@ export default function DispatchOpsDashboard({
       await fetchData();
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
-      toast({ title: "Không thể xử lý yêu cầu hủy", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
+      toast({ title: "KhÃ´ng thá»ƒ xá»­ lÃ½ yÃªu cáº§u há»§y", description: resolveApiErrorMessage(err), status: "error", duration: 3500, isClosable: true });
     } finally {
       setSaving(false);
     }
@@ -2360,7 +2360,7 @@ export default function DispatchOpsDashboard({
 
     if (!incomingAssignment) {
       toast({
-        title: "Không tìm thấy yêu cầu hỗ trợ cho tổ của bạn",
+        title: "KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u há»— trá»£ cho tá»• cá»§a báº¡n",
         status: "info",
         duration: 2600,
         isClosable: true,
@@ -2373,7 +2373,7 @@ export default function DispatchOpsDashboard({
 
     if (!leadId) {
       toast({
-        title: "Vui lòng chọn thợ chính của tổ phụ",
+        title: "Vui lÃ²ng chá»n thá»£ chÃ­nh cá»§a tá»• phá»¥",
         status: "warning",
         duration: 2600,
         isClosable: true,
@@ -2383,7 +2383,7 @@ export default function DispatchOpsDashboard({
 
     if (assistantId && assistantId === leadId) {
       toast({
-        title: "Thợ phụ không được trùng thợ chính",
+        title: "Thá»£ phá»¥ khÃ´ng Ä‘Æ°á»£c trÃ¹ng thá»£ chÃ­nh",
         status: "warning",
         duration: 2600,
         isClosable: true,
@@ -2402,7 +2402,7 @@ export default function DispatchOpsDashboard({
       });
 
       toast({
-        title: "Đã xác nhận nhân sự hỗ trợ cho tổ phụ",
+        title: "ÄÃ£ xÃ¡c nháº­n nhÃ¢n sá»± há»— trá»£ cho tá»• phá»¥",
         status: "success",
         duration: 2500,
         isClosable: true,
@@ -2412,7 +2412,7 @@ export default function DispatchOpsDashboard({
       setSelectedServiceOrderId(selectedItem.serviceOrderId);
     } catch (err) {
       toast({
-        title: "Không thể xác nhận nhân sự hỗ trợ",
+        title: "KhÃ´ng thá»ƒ xÃ¡c nháº­n nhÃ¢n sá»± há»— trá»£",
         description: resolveApiErrorMessage(err),
         status: "error",
         duration: 3500,
@@ -2425,7 +2425,7 @@ export default function DispatchOpsDashboard({
 
   const handleOpenManagerCancelDecisionModal = () => {
     if (!canManagerCancelDecision) {
-      toast({ title: "Không có yêu cầu hủy chờ duyệt", status: "info", duration: 2200, isClosable: true });
+      toast({ title: "KhÃ´ng cÃ³ yÃªu cáº§u há»§y chá» duyá»‡t", status: "info", duration: 2200, isClosable: true });
       return;
     }
     setManagerCancelDecisionModalOpen(true);
@@ -2490,7 +2490,7 @@ export default function DispatchOpsDashboard({
   const cancelRequestReasonText =
     toText(cancelRequestDetail?.cancellationReason) ||
     toText(selectedItem?.cancelReason) ||
-    "Không có mô tả.";
+    "KhÃ´ng cÃ³ mÃ´ táº£.";
   const cancelRequestSenderText = (() => {
     const senderNameFromDetail = toText(cancelRequestDetail?.cancellationRequestedByName);
     if (senderNameFromDetail) return senderNameFromDetail;
@@ -2499,10 +2499,10 @@ export default function DispatchOpsDashboard({
     if (senderId) {
       const senderNameByStaffList = resolveStaffNameById(staffs, senderId);
       if (senderNameByStaffList) return senderNameByStaffList;
-      return `Nhân sự #${senderId}`;
+      return `NhÃ¢n sá»± #${senderId}`;
     }
 
-    return "Chưa xác định";
+    return "ChÆ°a xÃ¡c Ä‘á»‹nh";
   })();
 
   const actionButtonBaseProps = {
@@ -2576,20 +2576,20 @@ export default function DispatchOpsDashboard({
         <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={3}>
           <Box>
             <Heading size="lg" color="#1b2559">
-              {isTeamLeaderMode ? "Điều phối chuẩn đoán - Tổ trưởng" : "Điều phối chuẩn đoán - Quản đốc"}
+              {isTeamLeaderMode ? "Äiá»u phá»‘i chuáº©n Ä‘oÃ¡n - Tá»• trÆ°á»Ÿng" : "Äiá»u phá»‘i chuáº©n Ä‘oÃ¡n - Quáº£n Ä‘á»‘c"}
             </Heading>
             <Text color="gray.600" mt={1}>
               {isAssignmentPage
-                ? "Trang phân công chi tiết cho từng lệnh, tập trung thao tác điều phối và phê duyệt."
-                : "Theo dõi 4 giai đoạn từ tiếp nhận, phân công đến phê duyệt kỹ thuật và báo giá."}
+                ? "Trang phÃ¢n cÃ´ng chi tiáº¿t cho tá»«ng lá»‡nh, táº­p trung thao tÃ¡c Ä‘iá»u phá»‘i vÃ  phÃª duyá»‡t."
+                : "Theo dÃµi 4 giai Ä‘oáº¡n tá»« tiáº¿p nháº­n, phÃ¢n cÃ´ng Ä‘áº¿n phÃª duyá»‡t ká»¹ thuáº­t vÃ  bÃ¡o giÃ¡."}
             </Text>
             {isTeamLeaderMode && (
               <HStack mt={2} spacing={2} flexWrap="wrap">
                 <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={1}>
-                  Tổ phụ trách: {toText(readValue(currentTeam, "name", "Name")) || "Chưa xác định"}
+                  Tá»• phá»¥ trÃ¡ch: {toText(readValue(currentTeam, "name", "Name")) || "ChÆ°a xÃ¡c Ä‘á»‹nh"}
                 </Badge>
                 <Badge colorScheme="purple" variant="subtle" borderRadius="full" px={2.5} py={1}>
-                  Chuyên môn quản lý: {currentTeamSpecialtyLabel}
+                  ChuyÃªn mÃ´n quáº£n lÃ½: {currentTeamSpecialtyLabel}
                 </Badge>
               </HStack>
             )}
@@ -2603,7 +2603,7 @@ export default function DispatchOpsDashboard({
                 colorScheme="blue"
                 onClick={onBack}
               >
-                Quay lại
+                Quay láº¡i
               </Button>
             )}
             {canViewSelectedQuote && (
@@ -2611,7 +2611,7 @@ export default function DispatchOpsDashboard({
                 colorScheme="blue"
                 onClick={handleViewSelectedQuote}
               >
-                Xem chuẩn đoán
+                Xem chuáº©n Ä‘oÃ¡n
               </Button>
             )}
           </HStack>
@@ -2624,7 +2624,7 @@ export default function DispatchOpsDashboard({
             onClick={fetchData}
             isLoading={loading}
           >
-            ⟳ Làm mới
+            âŸ³ LÃ m má»›i
           </Button>
         </HStack>
 
@@ -2640,10 +2640,10 @@ export default function DispatchOpsDashboard({
             <HStack justify="space-between" align={{ base: "start", md: "center" }} flexWrap="wrap" spacing={2}>
               <Box>
                 <Text fontSize="sm" fontWeight="700" color="#1e3a8a">
-                  Trạng thái điều phối
+                  Tráº¡ng thÃ¡i Ä‘iá»u phá»‘i
                 </Text>
                 <Text fontSize="sm" color="gray.500">
-                  Nhấn vào một trạng thái để phân loại danh sách lệnh.
+                  Nháº¥n vÃ o má»™t tráº¡ng thÃ¡i Ä‘á»ƒ phÃ¢n loáº¡i danh sÃ¡ch lá»‡nh.
                 </Text>
               </Box>
               <Badge
@@ -2655,7 +2655,7 @@ export default function DispatchOpsDashboard({
                 fontSize="xs"
                 fontWeight="700"
               >
-                Đang xem: {COLOR_META[activeColorTab]?.label || "--"} ({totalStats[activeColorTab] || 0})
+                Äang xem: {COLOR_META[activeColorTab]?.label || "--"} ({totalStats[activeColorTab] || 0})
               </Badge>
             </HStack>
 
@@ -2759,7 +2759,7 @@ export default function DispatchOpsDashboard({
                 >
                   <HStack spacing={2} align="center" h="100%">
                     <Text as="span" fontSize="inherit" lineHeight="1">
-                      Danh sách điều phối
+                      Danh sÃ¡ch Ä‘iá»u phá»‘i
                     </Text>
                     <Badge
                       visibility="hidden"
@@ -2806,7 +2806,7 @@ export default function DispatchOpsDashboard({
                 >
                   <HStack spacing={2} align="center" h="100%">
                     <Text as="span" fontSize="inherit" lineHeight="1">
-                      Thông báo hỗ trợ
+                      ThÃ´ng bÃ¡o há»— trá»£
                     </Text>
                     <Badge
                       bg={teamLeaderBoardTab === "support_notifications" ? "white" : "orange.100"}
@@ -2834,7 +2834,7 @@ export default function DispatchOpsDashboard({
             <HStack spacing={3} align="center" flexWrap="wrap">
               <FilterDropdown
                 id="dispatch-team-filter"
-                label="Lọc theo tổ"
+                label="Lá»c theo tá»•"
                 value={teamFilter}
                 options={teamFilterOptions}
                 onChange={setTeamFilter}
@@ -2843,7 +2843,7 @@ export default function DispatchOpsDashboard({
               />
               <FilterDropdown
                 id="dispatch-tag-filter"
-                label="Lọc theo chuyên môn"
+                label="Lá»c theo chuyÃªn mÃ´n"
                 value={dispatchTagFilter}
                 options={dispatchTagFilterOptions}
                 onChange={setDispatchTagFilter}
@@ -2867,13 +2867,13 @@ export default function DispatchOpsDashboard({
                 {loading ? (
                   <VStack py={12} spacing={3}>
                     <Spinner color="blue.500" />
-                    <Text color="gray.500">Đang tải dữ liệu điều phối...</Text>
+                    <Text color="gray.500">Äang táº£i dá»¯ liá»‡u Ä‘iá»u phá»‘i...</Text>
                   </VStack>
                 ) : activeBoardListItems.length === 0 ? (
                   <Box py={12} textAlign="center" color="gray.400">
                     {isTeamLeaderMode && teamLeaderBoardTab === "support_notifications"
-                      ? "Không có yêu cầu hỗ trợ chờ tổ của bạn xử lý"
-                      : "Không có lệnh phù hợp bộ lọc"}
+                      ? "KhÃ´ng cÃ³ yÃªu cáº§u há»— trá»£ chá» tá»• cá»§a báº¡n xá»­ lÃ½"
+                      : "KhÃ´ng cÃ³ lá»‡nh phÃ¹ há»£p bá»™ lá»c"}
                   </Box>
                 ) : (
                   <VStack align="stretch" spacing={3} p={3} bg="#f8fafc">
@@ -2908,18 +2908,18 @@ export default function DispatchOpsDashboard({
             <Box bg="white" border="1px solid" borderColor="gray.100" borderRadius="2xl" p={4} boxShadow="0 14px 32px rgba(15,23,42,0.08)">
               {!selectedItem ? (
                 <Box border="1px dashed" borderColor="gray.200" borderRadius="xl" p={8} textAlign="center" color="gray.500">
-                  Không tìm thấy lệnh cần phân công trong danh sách hiện tại.
+                  KhÃ´ng tÃ¬m tháº¥y lá»‡nh cáº§n phÃ¢n cÃ´ng trong danh sÃ¡ch hiá»‡n táº¡i.
                 </Box>
               ) : (
                 <VStack align="stretch" spacing={4}>
                   <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="xl" bg="gray.50">
-                    <Text fontSize="xs" color="gray.500" mb={1}>LỆNH SỬA CHỮA</Text>
+                    <Text fontSize="xs" color="gray.500" mb={1}>Lá»†NH Sá»¬A CHá»®A</Text>
                     <Heading size="md" color="#1b2559">{selectedItem.serviceOrderCode}</Heading>
                     <HStack mt={2} spacing={2} flexWrap="wrap">
                       <Badge colorScheme={(selectedItem.queueColor === "RED" ? "red" : selectedItem.queueColor === "YELLOW" ? "yellow" : selectedItem.queueColor === "GREEN" ? "green" : "gray")} borderRadius="full">
                         {selectedItem.queueColor}
                       </Badge>
-                      <Badge colorScheme="purple" borderRadius="full">Chuyên môn: {selectedDispatchTagLabel}</Badge>
+                      <Badge colorScheme="purple" borderRadius="full">ChuyÃªn mÃ´n: {selectedDispatchTagLabel}</Badge>
                       <Badge colorScheme={getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).colorScheme} borderRadius="full">
                         {getQueueStateMeta(selectedItem.queueState, selectedItem.queueColor).label}
                       </Badge>
@@ -2932,36 +2932,36 @@ export default function DispatchOpsDashboard({
                     </Text>
                     <Stack spacing={2} fontSize="sm" color="gray.700">
                       <Text>
-                        <strong>Dịch vụ yêu cầu:</strong>{" "}
+                        <strong>Dá»‹ch vá»¥ yÃªu cáº§u:</strong>{" "}
                         {selectedRequestedServicesLoading
-                          ? "Đang tải..."
-                          : (selectedRequestedServices || selectedItem.customerRequestedServices || "Chưa ghi rõ")}
+                          ? "Äang táº£i..."
+                          : (selectedRequestedServices || selectedItem.customerRequestedServices || "ChÆ°a ghi rÃµ")}
                       </Text>
                       <Text>
-                        <strong>Mô tả khách hàng:</strong>{" "}
-                        {selectedItem.customerMainNotes || "Không có"}
+                        <strong>MÃ´ táº£ khÃ¡ch hÃ ng:</strong>{" "}
+                        {selectedItem.customerMainNotes || "KhÃ´ng cÃ³"}
                       </Text>
                     </Stack>
                   </Box>
 
                   <Box p={3} border="1px solid" borderColor="blue.100" borderRadius="xl" bg="#f8fbff">
-                    <Text fontSize="sm" color="gray.600">Yêu cầu lúc: {formatDateTime(selectedItem.requestedAt)}</Text>
-                    <Text fontSize="sm" color="gray.600">Nhận ca lúc: {formatDateTime(selectedItem.assignedAt)}</Text>
-                    <Text fontSize="sm" color="gray.600">Tổ chính: {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa giao tổ"}</Text>
+                    <Text fontSize="sm" color="gray.600">YÃªu cáº§u lÃºc: {formatDateTime(selectedItem.requestedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Nháº­n ca lÃºc: {formatDateTime(selectedItem.assignedAt)}</Text>
+                    <Text fontSize="sm" color="gray.600">Tá»• chÃ­nh: {selectedItem.primaryTeamName || selectedItem.teamName || "ChÆ°a giao tá»•"}</Text>
                     {Array.isArray(selectedItem.supportingTeamNames) && selectedItem.supportingTeamNames.length > 0 && (
-                      <Text fontSize="sm" color="gray.600">Tổ phối hợp: {selectedItem.supportingTeamNames.join(", ")}</Text>
+                      <Text fontSize="sm" color="gray.600">Tá»• phá»‘i há»£p: {selectedItem.supportingTeamNames.join(", ")}</Text>
                     )}
-                    <Text fontSize="sm" color="gray.600">Chờ nhận: {formatMinutes(selectedItem.pendingMinutes)}</Text>
-                    <Text fontSize="sm" color="gray.600">Đang xử lý: {formatMinutes(selectedItem.assignedMinutes)}</Text>
-                    <Text fontSize="sm" color="gray.600">Duyệt kỹ thuật: {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "Chưa duyệt"}</Text>
-                    <Text fontSize="sm" color="gray.600">Duyệt cuối: {selectedItem.finalApprovedAt ? formatDateTime(selectedItem.finalApprovedAt) : "Chưa duyệt"}</Text>
+                    <Text fontSize="sm" color="gray.600">Chá» nháº­n: {formatMinutes(selectedItem.pendingMinutes)}</Text>
+                    <Text fontSize="sm" color="gray.600">Äang xá»­ lÃ½: {formatMinutes(selectedItem.assignedMinutes)}</Text>
+                    <Text fontSize="sm" color="gray.600">Duyá»‡t ká»¹ thuáº­t: {selectedItem.technicalApprovedAt ? formatDateTime(selectedItem.technicalApprovedAt) : "ChÆ°a duyá»‡t"}</Text>
+                    <Text fontSize="sm" color="gray.600">Duyá»‡t cuá»‘i: {selectedItem.finalApprovedAt ? formatDateTime(selectedItem.finalApprovedAt) : "ChÆ°a duyá»‡t"}</Text>
                   </Box>
 
                   {extractAlertReasons(selectedItem).length > 0 && (
                     <Alert status="error" borderRadius="xl" flexDirection="column" alignItems="start" gap={1}>
                       <HStack>
                         <AlertIcon />
-                        <Text fontWeight="700">Cảnh báo cần xử lý</Text>
+                        <Text fontWeight="700">Cáº£nh bÃ¡o cáº§n xá»­ lÃ½</Text>
                       </HStack>
                       {extractAlertReasons(selectedItem).map((reason) => (
                         <Text key={`alert-${reason}`} fontSize="sm">- {reason}</Text>
@@ -2975,8 +2975,8 @@ export default function DispatchOpsDashboard({
                         <Alert status="info" borderRadius="xl" bg="blue.50" border="1px solid" borderColor="blue.100">
                           <AlertIcon color="blue.500" />
                           <Text fontSize="sm" color="blue.700">
-                            Lệnh này thuộc tổ chính{" "}
-                            <strong>{selectedItem.primaryTeamName || selectedItem.teamName || "--"}</strong>. Tổ của bạn chỉ xử lý phần xác nhận nhân sự hỗ trợ nếu có yêu cầu.
+                            Lá»‡nh nÃ y thuá»™c tá»• chÃ­nh{" "}
+                            <strong>{selectedItem.primaryTeamName || selectedItem.teamName || "--"}</strong>. Tá»• cá»§a báº¡n chá»‰ xá»­ lÃ½ pháº§n xÃ¡c nháº­n nhÃ¢n sá»± há»— trá»£ náº¿u cÃ³ yÃªu cáº§u.
                           </Text>
                         </Alert>
                       )}
@@ -2984,10 +2984,10 @@ export default function DispatchOpsDashboard({
                       {canCurrentTeamLeadPrimaryFlow && (
                         <>
                           <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và phân công cặp thợ</Text>
+                            <Text fontWeight="700" color="gray.700" mb={2}>1) Nháº­n xe vÃ  phÃ¢n cÃ´ng cáº·p thá»£</Text>
 
                             <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Tá»• thá»±c hiá»‡n</FormLabel>
                               <FilterDropdown
                                 id="leader-assignment-team"
                                 value={leaderTeamId}
@@ -3005,7 +3005,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                             <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Thá»£ chÃ­nh</FormLabel>
                               <FilterDropdown
                                 id="leader-main-tech"
                                 value={leaderLeadTechnicianId}
@@ -3024,7 +3024,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                             <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Thá»£ phá»¥</FormLabel>
                               <FilterDropdown
                                 id="leader-assistant-tech"
                                 value={leaderAssistantTechnicianId}
@@ -3044,7 +3044,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                             <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Khoang (chỉ xem)</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Khoang (chá»‰ xem)</FormLabel>
                               <FilterDropdown
                                 id="leader-bay-select"
                                 value={leaderBayId}
@@ -3054,16 +3054,16 @@ export default function DispatchOpsDashboard({
                                 disabled
                               />
                               <Text mt={1} fontSize="xs" color="gray.500">
-                                Tổ trưởng không có quyền sửa khoang. Chỉ quản đốc được đổi khoang ở bước override.
+                                Tá»• trÆ°á»Ÿng khÃ´ng cÃ³ quyá»n sá»­a khoang. Chá»‰ quáº£n Ä‘á»‘c Ä‘Æ°á»£c Ä‘á»•i khoang á»Ÿ bÆ°á»›c override.
                               </Text>
                             </FormControl>
 
                             <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
                               <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                                Lưu ý phân quyền
+                                LÆ°u Ã½ phÃ¢n quyá»n
                               </Text>
                               <Text mt={1} fontSize="sm" color="blue.700">
-                                Tổ trưởng tổ chính chỉ giao cặp thợ cho tổ chính. Nhu cầu tổ phụ sẽ được gửi riêng ở bước hỗ trợ bên dưới.
+                                Tá»• trÆ°á»Ÿng tá»• chÃ­nh chá»‰ giao cáº·p thá»£ cho tá»• chÃ­nh. Nhu cáº§u tá»• phá»¥ sáº½ Ä‘Æ°á»£c gá»­i riÃªng á»Ÿ bÆ°á»›c há»— trá»£ bÃªn dÆ°á»›i.
                               </Text>
                             </Box>
 
@@ -3080,7 +3080,7 @@ export default function DispatchOpsDashboard({
                                 isLoading={suggestionLoading}
                                 isDisabled={!canLeaderUseSuggestion}
                               >
-                                Gợi ý tự động
+                                Gá»£i Ã½ tá»± Ä‘á»™ng
                               </Button>
                               <Button
                                 variant="unstyled"
@@ -3094,12 +3094,12 @@ export default function DispatchOpsDashboard({
                                 isLoading={saving}
                                 isDisabled={!canLeaderAssign || !toPositiveNumber(leaderLeadTechnicianId)}
                               >
-                                Nhận xe và giao ca
+                                Nháº­n xe vÃ  giao ca
                               </Button>
                             </HStack>
                             {isLeaderAssignmentLocked && (
                               <Text mt={2} fontSize="sm" color="gray.600">
-                                Tất cả thợ đã nhận việc nên cụm phân công và 2 nút đã bị khóa.
+                                Táº¥t cáº£ thá»£ Ä‘Ã£ nháº­n viá»‡c nÃªn cá»¥m phÃ¢n cÃ´ng vÃ  2 nÃºt Ä‘Ã£ bá»‹ khÃ³a.
                               </Text>
                             )}
 
@@ -3109,7 +3109,7 @@ export default function DispatchOpsDashboard({
                           </Box>
 
                           <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>2) Yêu cầu hỗ trợ hội chẩn</Text>
+                            <Text fontWeight="700" color="gray.700" mb={2}>2) YÃªu cáº§u há»— trá»£ há»™i cháº©n</Text>
                             <HStack justify="space-between" align="center" mb={2}>
                               <Button
                                 size="sm"
@@ -3117,11 +3117,11 @@ export default function DispatchOpsDashboard({
                                 variant="outline"
                                 onClick={() => setIsLeaderSupportSectionExpanded((prev) => !prev)}
                               >
-                                {isLeaderSupportSectionExpanded ? "Thu gọn hỗ trợ tổ phụ" : "Cần tổ phụ hỗ trợ"}
+                                {isLeaderSupportSectionExpanded ? "Thu gá»n há»— trá»£ tá»• phá»¥" : "Cáº§n tá»• phá»¥ há»— trá»£"}
                               </Button>
                               {leaderSupportTeamIds.length > 0 && (
                                 <Badge colorScheme="orange" borderRadius="full" px={2.5}>
-                                  {leaderSupportTeamIds.length} tổ đã chọn
+                                  {leaderSupportTeamIds.length} tá»• Ä‘Ã£ chá»n
                                 </Badge>
                               )}
                             </HStack>
@@ -3135,16 +3135,16 @@ export default function DispatchOpsDashboard({
                                   options={leaderSupportingTeamOptions}
                                   requestMap={leaderSupportRequestMap}
                                   onRequestedCountChange={handleLeaderSupportRequestedCountChange}
-                                  emptyText="Không có tổ phụ phù hợp trong chi nhánh hiện tại."
-                                  helperText="Chọn tổ phụ và số lượng thợ cần hỗ trợ. Tổ trưởng tổ phụ sẽ tự chọn thợ của tổ mình."
+                                  emptyText="KhÃ´ng cÃ³ tá»• phá»¥ phÃ¹ há»£p trong chi nhÃ¡nh hiá»‡n táº¡i."
+                                  helperText="Chá»n tá»• phá»¥ vÃ  sá»‘ lÆ°á»£ng thá»£ cáº§n há»— trá»£. Tá»• trÆ°á»Ÿng tá»• phá»¥ sáº½ tá»± chá»n thá»£ cá»§a tá»• mÃ¬nh."
                                 />
                                 <FormControl mt={2}>
-                                  <FormLabel fontSize="sm" mb={1}>Mô tả vấn đề cần phối hợp</FormLabel>
+                                  <FormLabel fontSize="sm" mb={1}>MÃ´ táº£ váº¥n Ä‘á» cáº§n phá»‘i há»£p</FormLabel>
                                   <Textarea
                                     size="sm"
                                     value={leaderSupportNote}
                                     onChange={(event) => setLeaderSupportNote(event.target.value)}
-                                    placeholder="Ví dụ: cần phối hợp kiểm tra hệ thống điện khi chẩn đoán lỗi máy..."
+                                    placeholder="VÃ­ dá»¥: cáº§n phá»‘i há»£p kiá»ƒm tra há»‡ thá»‘ng Ä‘iá»‡n khi cháº©n Ä‘oÃ¡n lá»—i mÃ¡y..."
                                   />
                                 </FormControl>
                                 <Button
@@ -3163,12 +3163,12 @@ export default function DispatchOpsDashboard({
                                   _active={!canLeaderSupport || leaderSupportTeamIds.length === 0 ? {} : { bg: "orange.700" }}
                                   _disabled={{ opacity: 1, cursor: "not-allowed" }}
                                 >
-                                  Gửi yêu cầu đến tổ phụ
+                                  Gá»­i yÃªu cáº§u Ä‘áº¿n tá»• phá»¥
                                 </Button>
                               </>
                             ) : (
                               <Text fontSize="sm" color="gray.500">
-                                Nhấn "Cần tổ phụ hỗ trợ" để mở danh sách tổ phụ và tạo yêu cầu phối hợp.
+                                Nháº¥n "Cáº§n tá»• phá»¥ há»— trá»£" Ä‘á»ƒ má»Ÿ danh sÃ¡ch tá»• phá»¥ vÃ  táº¡o yÃªu cáº§u phá»‘i há»£p.
                               </Text>
                             )}
                           </Box>
@@ -3178,30 +3178,30 @@ export default function DispatchOpsDashboard({
                       {selectedIncomingSupportAssignment && (
                         <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="#fffdf5">
                           <Text fontWeight="700" color="orange.700" mb={2}>
-                            Xác nhận nhân sự hỗ trợ của tổ phụ
+                            XÃ¡c nháº­n nhÃ¢n sá»± há»— trá»£ cá»§a tá»• phá»¥
                           </Text>
 
                           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
                             <Box p={2.5} border="1px solid" borderColor="orange.100" borderRadius="lg" bg="white">
                               <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase">
-                                Tổ chính yêu cầu
+                                Tá»• chÃ­nh yÃªu cáº§u
                               </Text>
                               <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
-                                {selectedItem.primaryTeamName || selectedItem.teamName || "Chưa xác định"}
+                                {selectedItem.primaryTeamName || selectedItem.teamName || "ChÆ°a xÃ¡c Ä‘á»‹nh"}
                               </Text>
                               <Text mt={1} fontSize="sm" color="gray.600">
-                                Cần {selectedIncomingSupportAssignment.requestedTechnicianCount} thợ từ tổ của bạn
+                                Cáº§n {selectedIncomingSupportAssignment.requestedTechnicianCount} thá»£ tá»« tá»• cá»§a báº¡n
                               </Text>
                             </Box>
                             <Box p={2.5} border="1px solid" borderColor="gray.200" borderRadius="lg" bg="white">
                               <Text fontSize="xs" color="gray.600" fontWeight="700" textTransform="uppercase">
-                                Thời điểm yêu cầu
+                                Thá»i Ä‘iá»ƒm yÃªu cáº§u
                               </Text>
                               <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
                                 {formatDateTime(selectedItem.supportRequestedAt || selectedItem.requestedAt)}
                               </Text>
                               <Text mt={1} fontSize="xs" color="gray.500">
-                                Chuyên môn: {selectedDispatchTagLabel}
+                                ChuyÃªn mÃ´n: {selectedDispatchTagLabel}
                               </Text>
                             </Box>
                           </SimpleGrid>
@@ -3210,10 +3210,10 @@ export default function DispatchOpsDashboard({
                             <Alert mt={2.5} status="success" borderRadius="lg" bg="green.50" border="1px solid" borderColor="green.100">
                               <AlertIcon color="green.500" />
                               <Text fontSize="sm" color="green.700">
-                                Đã xác nhận thợ hỗ trợ:{" "}
-                                <strong>{selectedIncomingSupportAssignment.technicianName || "Đã chọn"}</strong>
+                                ÄÃ£ xÃ¡c nháº­n thá»£ há»— trá»£:{" "}
+                                <strong>{selectedIncomingSupportAssignment.technicianName || "ÄÃ£ chá»n"}</strong>
                                 {selectedIncomingSupportAssignment.assistantTechnicianName
-                                  ? `, phụ: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
+                                  ? `, phá»¥: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
                                   : ""}
                                 .
                               </Text>
@@ -3222,7 +3222,7 @@ export default function DispatchOpsDashboard({
 
                           <SimpleGrid mt={2.5} columns={{ base: 1, md: 2 }} spacing={2.5}>
                             <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Thợ chính tổ phụ</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Thá»£ chÃ­nh tá»• phá»¥</FormLabel>
                               <FilterDropdown
                                 id="leader-support-response-lead"
                                 value={leaderSupportResponseLeadTechnicianId}
@@ -3240,7 +3240,7 @@ export default function DispatchOpsDashboard({
                               />
                             </FormControl>
                             <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Thợ phụ tổ phụ</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Thá»£ phá»¥ tá»• phá»¥</FormLabel>
                               <FilterDropdown
                                 id="leader-support-response-assistant"
                                 value={leaderSupportResponseAssistantTechnicianId}
@@ -3261,12 +3261,12 @@ export default function DispatchOpsDashboard({
                           </SimpleGrid>
 
                           <FormControl mt={2.5}>
-                            <FormLabel fontSize="sm" mb={1}>Ghi chú phản hồi của tổ phụ</FormLabel>
+                            <FormLabel fontSize="sm" mb={1}>Ghi chÃº pháº£n há»“i cá»§a tá»• phá»¥</FormLabel>
                             <Textarea
                               size="sm"
                               value={leaderSupportResponseNote}
                               onChange={(event) => setLeaderSupportResponseNote(event.target.value)}
-                              placeholder="Ví dụ: tổ phụ tiếp nhận hỗ trợ tại khoang DN-001 trong 15 phút nữa..."
+                              placeholder="VÃ­ dá»¥: tá»• phá»¥ tiáº¿p nháº­n há»— trá»£ táº¡i khoang DN-001 trong 15 phÃºt ná»¯a..."
                               isDisabled={!canLeaderSelectSupportTeam}
                             />
                           </FormControl>
@@ -3279,7 +3279,7 @@ export default function DispatchOpsDashboard({
                             isLoading={saving}
                             isDisabled={!canLeaderSelectSupportTeam || !toPositiveNumber(leaderSupportResponseLeadTechnicianId)}
                           >
-                            {canLeaderSelectSupportTeam ? "Xác nhận thợ hỗ trợ của tổ phụ" : "Đã xác nhận nhân sự hỗ trợ"}
+                            {canLeaderSelectSupportTeam ? "XÃ¡c nháº­n thá»£ há»— trá»£ cá»§a tá»• phá»¥" : "ÄÃ£ xÃ¡c nháº­n nhÃ¢n sá»± há»— trá»£"}
                           </Button>
                         </Box>
                       )}
@@ -3287,9 +3287,9 @@ export default function DispatchOpsDashboard({
                       {canCurrentTeamLeadPrimaryFlow && (
                         <>
                           <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                            <Text fontWeight="700" color="gray.700" mb={2}>3) Gửi hủy lệnh (chờ duyệt quản đốc)</Text>
+                            <Text fontWeight="700" color="gray.700" mb={2}>3) Gá»­i há»§y lá»‡nh (chá» duyá»‡t quáº£n Ä‘á»‘c)</Text>
                             <FormControl>
-                              <FormLabel fontSize="sm" mb={1}>Lý do</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>LÃ½ do</FormLabel>
                               <FilterDropdown
                                 id="leader-cancel-reason"
                                 value={leaderCancelReason}
@@ -3299,12 +3299,12 @@ export default function DispatchOpsDashboard({
                               />
                             </FormControl>
                             <FormControl mt={2}>
-                              <FormLabel fontSize="sm" mb={1}>Ghi chú bổ sung</FormLabel>
+                              <FormLabel fontSize="sm" mb={1}>Ghi chÃº bá»• sung</FormLabel>
                               <Textarea
                                 size="sm"
                                 value={leaderCancelNote}
                                 onChange={(event) => setLeaderCancelNote(event.target.value)}
-                                placeholder="Thêm chi tiết phục vụ quyết định phân lại..."
+                                placeholder="ThÃªm chi tiáº¿t phá»¥c vá»¥ quyáº¿t Ä‘á»‹nh phÃ¢n láº¡i..."
                               />
                             </FormControl>
                             <Button
@@ -3316,7 +3316,7 @@ export default function DispatchOpsDashboard({
                               isLoading={saving}
                               isDisabled={!canLeaderCancel}
                             >
-                              Gửi yêu cầu hủy
+                              Gá»­i yÃªu cáº§u há»§y
                             </Button>
                           </Box>
                         </>
@@ -3328,10 +3328,10 @@ export default function DispatchOpsDashboard({
                       <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
 
                       <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nhận xe và override phân công</Text>
+                        <Text fontWeight="700" color="gray.700" mb={2}>1) Nháº­n xe vÃ  override phÃ¢n cÃ´ng</Text>
 
                         <FormControl>
-                          <FormLabel fontSize="sm" mb={1}>Tổ thực hiện</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Tá»• thá»±c hiá»‡n</FormLabel>
                               <FilterDropdown
                                 id="manager-assignment-team"
                                 value={managerTeamId}
@@ -3349,7 +3349,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ chính</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Thá»£ chÃ­nh</FormLabel>
                           <FilterDropdown
                             id="manager-main-tech"
                             value={managerLeadTechnicianId}
@@ -3368,7 +3368,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Thợ phụ</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Thá»£ phá»¥</FormLabel>
                           <FilterDropdown
                             id="manager-assistant-tech"
                             value={managerAssistantTechnicianId}
@@ -3388,7 +3388,7 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Khoang (bắt buộc)</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>Khoang (báº¯t buá»™c)</FormLabel>
                           <FilterDropdown
                             id="manager-bay-select"
                                 value={managerBayId}
@@ -3400,22 +3400,22 @@ export default function DispatchOpsDashboard({
                             </FormControl>
 
                         <FormControl mt={2}>
-                          <FormLabel fontSize="sm" mb={1}>Lý do override</FormLabel>
+                          <FormLabel fontSize="sm" mb={1}>LÃ½ do override</FormLabel>
                           <Input
                             size="sm"
                             borderRadius="xl"
                             value={managerOverrideReason}
                             onChange={(event) => setManagerOverrideReason(event.target.value)}
-                            placeholder="Ví dụ: xe chờ quá 10 phút, cần điều tải..."
+                            placeholder="VÃ­ dá»¥: xe chá» quÃ¡ 10 phÃºt, cáº§n Ä‘iá»u táº£i..."
                           />
                         </FormControl>
 
                         <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
                           <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                            Lưu ý phân quyền
+                            LÆ°u Ã½ phÃ¢n quyá»n
                           </Text>
                           <Text mt={1} fontSize="sm" color="blue.700">
-                            Quản đốc có quyền override tổ, cặp thợ, khoang và chỉ định tổ phối hợp để cân tải nhanh theo thực tế xưởng.
+                            Quáº£n Ä‘á»‘c cÃ³ quyá»n override tá»•, cáº·p thá»£, khoang vÃ  chá»‰ Ä‘á»‹nh tá»• phá»‘i há»£p Ä‘á»ƒ cÃ¢n táº£i nhanh theo thá»±c táº¿ xÆ°á»Ÿng.
                           </Text>
                         </Box>
 
@@ -3432,7 +3432,7 @@ export default function DispatchOpsDashboard({
                             isLoading={suggestionLoading}
                             isDisabled={!selectedItem || !toPositiveNumber(managerTeamId)}
                           >
-                            Gợi ý tự động
+                            Gá»£i Ã½ tá»± Ä‘á»™ng
                           </Button>
                           <Button
                             variant="unstyled"
@@ -3446,7 +3446,7 @@ export default function DispatchOpsDashboard({
                             isLoading={saving}
                             isDisabled={!canManagerOverride || !toPositiveNumber(managerTeamId) || !toPositiveNumber(managerLeadTechnicianId)}
                           >
-                            Giao lại ngay
+                            Giao láº¡i ngay
                           </Button>
                         </HStack>
 
@@ -3456,7 +3456,7 @@ export default function DispatchOpsDashboard({
                       </Box>
 
                       <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>2) Chỉ định tổ phối hợp (tuỳ chọn)</Text>
+                        <Text fontWeight="700" color="gray.700" mb={2}>2) Chá»‰ Ä‘á»‹nh tá»• phá»‘i há»£p (tuá»³ chá»n)</Text>
                         <HStack justify="space-between" align="center" mb={2}>
                           <Button
                             size="sm"
@@ -3465,11 +3465,11 @@ export default function DispatchOpsDashboard({
                             onClick={() => setIsManagerSupportSectionExpanded((prev) => !prev)}
                             isDisabled={!canManagerConfigureSupportingTeams}
                           >
-                            {isManagerSupportSectionExpanded ? "Thu gọn tổ phối hợp" : "Thêm tổ phối hợp"}
+                            {isManagerSupportSectionExpanded ? "Thu gá»n tá»• phá»‘i há»£p" : "ThÃªm tá»• phá»‘i há»£p"}
                           </Button>
                           {managerSupportingTeamIds.length > 0 && (
                             <Badge colorScheme="blue" borderRadius="full" px={2.5}>
-                              {managerSupportingTeamIds.length} tổ đã chọn
+                              {managerSupportingTeamIds.length} tá»• Ä‘Ã£ chá»n
                             </Badge>
                           )}
                         </HStack>
@@ -3482,35 +3482,35 @@ export default function DispatchOpsDashboard({
                             assignmentMap={managerSupportingAssignmentMap}
                             onAssignmentChange={handleManagerSupportingAssignmentChange}
                             technicianOptionsByTeam={managerSupportingTechnicianOptionsByTeam}
-                            emptyText="Chưa có tổ phối hợp phù hợp."
-                            helperText="Tổ chính là tổ được giao trách nhiệm chính thức."
+                            emptyText="ChÆ°a cÃ³ tá»• phá»‘i há»£p phÃ¹ há»£p."
+                            helperText="Tá»• chÃ­nh lÃ  tá»• Ä‘Æ°á»£c giao trÃ¡ch nhiá»‡m chÃ­nh thá»©c."
                           />
                         ) : (
                           <Text mt={1} fontSize="sm" color="gray.500">
                             {canManagerConfigureSupportingTeams
-                              ? 'Nhấn "Thêm tổ phối hợp" để chọn tổ phụ và chỉ định cặp thợ cho từng tổ.'
-                              : "Vui lòng chọn tổ thực hiện trước khi chỉ định tổ phối hợp."}
+                              ? 'Nháº¥n "ThÃªm tá»• phá»‘i há»£p" Ä‘á»ƒ chá»n tá»• phá»¥ vÃ  chá»‰ Ä‘á»‹nh cáº·p thá»£ cho tá»«ng tá»•.'
+                              : "Vui lÃ²ng chá»n tá»• thá»±c hiá»‡n trÆ°á»›c khi chá»‰ Ä‘á»‹nh tá»• phá»‘i há»£p."}
                           </Text>
                         )}
                       </Box>
 
                       <Box ref={cancelRequestSectionRef} border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                        <Text fontWeight="700" color="gray.700" mb={2}>3) Duyệt/Từ chối yêu cầu hủy</Text>
+                        <Text fontWeight="700" color="gray.700" mb={2}>3) Duyá»‡t/Tá»« chá»‘i yÃªu cáº§u há»§y</Text>
                         {selectedItem.isCancelPendingApproval ? (
                           <VStack align="stretch" spacing={3}>
                             <Box p={3} border="1px solid" borderColor="orange.200" borderRadius="lg" bg="orange.50">
                               <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase" mb={1}>
-                                Đang chờ quản đốc quyết định
+                                Äang chá» quáº£n Ä‘á»‘c quyáº¿t Ä‘á»‹nh
                               </Text>
                               <VStack align="start" spacing={1}>
                                 <Text fontSize="sm" color="gray.700">
-                                  <strong>Lý do:</strong> {cancelRequestReasonText}
+                                  <strong>LÃ½ do:</strong> {cancelRequestReasonText}
                                 </Text>
                                 <Text fontSize="sm" color="gray.700">
-                                  <strong>Người gửi:</strong> {cancelRequestDetailLoading ? "Đang tải..." : cancelRequestSenderText}
+                                  <strong>NgÆ°á»i gá»­i:</strong> {cancelRequestDetailLoading ? "Äang táº£i..." : cancelRequestSenderText}
                                 </Text>
                                 <Text fontSize="sm" color="gray.700">
-                                  <strong>Thời điểm gửi:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
+                                  <strong>Thá»i Ä‘iá»ƒm gá»­i:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
                                 </Text>
                               </VStack>
                             </Box>
@@ -3520,11 +3520,11 @@ export default function DispatchOpsDashboard({
                               variant="outline"
                               onClick={handleOpenManagerCancelDecisionModal}
                             >
-                              Xem chi tiết và duyệt/hủy
+                              Xem chi tiáº¿t vÃ  duyá»‡t/há»§y
                             </Button>
                           </VStack>
                         ) : (
-                          <Text mt={1} fontSize="sm" color="gray.500">Không có yêu cầu hủy chờ duyệt.</Text>
+                          <Text mt={1} fontSize="sm" color="gray.500">KhÃ´ng cÃ³ yÃªu cáº§u há»§y chá» duyá»‡t.</Text>
                         )}
                       </Box>
                       </SimpleGrid>
@@ -3541,26 +3541,26 @@ export default function DispatchOpsDashboard({
       <Modal isOpen={managerCancelDecisionModalOpen} onClose={handleCloseManagerCancelDecisionModal} isCentered size="lg">
         <ModalOverlay bg="blackAlpha.500" backdropFilter="blur(2px)" />
         <ModalContent borderRadius="2xl" border="1px solid" borderColor="blue.100">
-          <ModalHeader color="#1b2559" fontWeight="800">Duyệt yêu cầu hủy lệnh</ModalHeader>
+          <ModalHeader color="#1b2559" fontWeight="800">Duyá»‡t yÃªu cáº§u há»§y lá»‡nh</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <VStack align="stretch" spacing={4}>
               <Box border="1px solid" borderColor="gray.100" borderRadius="xl" p={3} bg="gray.50">
-                <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">Lệnh sửa chữa</Text>
+                <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">Lá»‡nh sá»­a chá»¯a</Text>
                 <Text mt={1} fontWeight="800" color="gray.800">{selectedItem?.serviceOrderCode || "--"}</Text>
                 <Text mt={1} fontSize="sm" color="gray.600">
-                  {selectedItem?.customerName || "Khách hàng chưa rõ"}
+                  {selectedItem?.customerName || "KhÃ¡ch hÃ ng chÆ°a rÃµ"}
                 </Text>
                 <HStack mt={1} spacing={1.5} flexWrap="wrap">
                   <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
-                    Biển số: {getVehicleDisplayParts(selectedItem).plate}
+                    Biá»ƒn sá»‘: {getVehicleDisplayParts(selectedItem).plate}
                   </Badge>
                   <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
-                    Dòng xe: {getVehicleDisplayParts(selectedItem).descriptor}
+                    DÃ²ng xe: {getVehicleDisplayParts(selectedItem).descriptor}
                   </Badge>
                 </HStack>
                 <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600">
-                  Năm SX: {getVehicleDisplayParts(selectedItem).manufactureYear} | Màu: {getVehicleDisplayParts(selectedItem).color}
+                  NÄƒm SX: {getVehicleDisplayParts(selectedItem).manufactureYear} | MÃ u: {getVehicleDisplayParts(selectedItem).color}
                 </Text>
                 {getVehicleDisplayParts(selectedItem).vin ? (
                   <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600">
@@ -3570,32 +3570,32 @@ export default function DispatchOpsDashboard({
               </Box>
 
               <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="orange.50">
-                <Text fontSize="xs" color="orange.700" textTransform="uppercase" fontWeight="700">Lý do hủy từ tổ trưởng</Text>
+                <Text fontSize="xs" color="orange.700" textTransform="uppercase" fontWeight="700">LÃ½ do há»§y tá»« tá»• trÆ°á»Ÿng</Text>
                 <VStack mt={1} align="start" spacing={1}>
                   <Text fontSize="sm" color="gray.700">{cancelRequestReasonText}</Text>
                   <Text fontSize="sm" color="gray.700">
-                    <strong>Người gửi:</strong> {cancelRequestDetailLoading ? "Đang tải..." : cancelRequestSenderText}
+                    <strong>NgÆ°á»i gá»­i:</strong> {cancelRequestDetailLoading ? "Äang táº£i..." : cancelRequestSenderText}
                   </Text>
                   <Text fontSize="sm" color="gray.700">
-                    <strong>Thời điểm gửi:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
+                    <strong>Thá»i Ä‘iá»ƒm gá»­i:</strong> {formatDateTime(cancelRequestDetail?.cancellationRequestedAt)}
                   </Text>
                 </VStack>
               </Box>
 
               <FormControl>
-                <FormLabel fontSize="sm" mb={1} fontWeight="700">Ghi chú quyết định của quản đốc</FormLabel>
+                <FormLabel fontSize="sm" mb={1} fontWeight="700">Ghi chÃº quyáº¿t Ä‘á»‹nh cá»§a quáº£n Ä‘á»‘c</FormLabel>
                 <Textarea
                   size="sm"
                   value={managerDecisionNote}
                   onChange={(event) => setManagerDecisionNote(event.target.value)}
-                  placeholder="Nêu rõ lý do đồng ý/từ chối để lưu lịch sử xử lý..."
+                  placeholder="NÃªu rÃµ lÃ½ do Ä‘á»“ng Ã½/tá»« chá»‘i Ä‘á»ƒ lÆ°u lá»‹ch sá»­ xá»­ lÃ½..."
                 />
               </FormControl>
             </VStack>
           </ModalBody>
           <ModalFooter gap={2}>
             <Button variant="ghost" onClick={handleCloseManagerCancelDecisionModal} isDisabled={saving}>
-              Đóng
+              ÄÃ³ng
             </Button>
             <Button
               colorScheme="red"
@@ -3604,7 +3604,7 @@ export default function DispatchOpsDashboard({
               isLoading={saving}
               isDisabled={!canManagerCancelDecision}
             >
-              Từ chối hủy
+              Tá»« chá»‘i há»§y
             </Button>
             <Button
               colorScheme="green"
@@ -3612,7 +3612,7 @@ export default function DispatchOpsDashboard({
               isLoading={saving}
               isDisabled={!canManagerCancelDecision}
             >
-              Đồng ý hủy
+              Äá»“ng Ã½ há»§y
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -3645,18 +3645,18 @@ function SupportNotificationCard({ item, onSelect, dispatchTagLabel = "" }) {
               {item.serviceOrderCode}
             </Text>
             <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              {item.customerName || "Khách hàng chưa rõ"}
+              {item.customerName || "KhÃ¡ch hÃ ng chÆ°a rÃµ"}
             </Text>
             <HStack mt={1} spacing={1.5} flexWrap="wrap">
               <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
-                Biển số: {vehicle.plate}
+                Biá»ƒn sá»‘: {vehicle.plate}
               </Badge>
               <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
-                Dòng xe: {vehicle.descriptor}
+                DÃ²ng xe: {vehicle.descriptor}
               </Badge>
             </HStack>
             <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
-              Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
+              NÄƒm SX: {vehicle.manufactureYear} | MÃ u: {vehicle.color}
             </Text>
             {vehicle.vin ? (
               <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
@@ -3665,41 +3665,41 @@ function SupportNotificationCard({ item, onSelect, dispatchTagLabel = "" }) {
             ) : null}
           </Box>
           <Badge colorScheme="orange" borderRadius="full" px={2.5}>
-            Chờ tổ phụ chọn thợ
+            Chá» tá»• phá»¥ chá»n thá»£
           </Badge>
         </HStack>
 
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
           <Box p={2.5} border="1px solid" borderColor="orange.100" borderRadius="lg" bg="orange.50">
             <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase">
-              Tổ yêu cầu hỗ trợ
+              Tá»• yÃªu cáº§u há»— trá»£
             </Text>
             <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
-              {item.primaryTeamName || item.teamName || "Chưa xác định"}
+              {item.primaryTeamName || item.teamName || "ChÆ°a xÃ¡c Ä‘á»‹nh"}
             </Text>
             <Text mt={1} fontSize="sm" color="gray.600">
-              Cần {requestedCount} thợ từ tổ của bạn
+              Cáº§n {requestedCount} thá»£ tá»« tá»• cá»§a báº¡n
             </Text>
           </Box>
           <Box p={2.5} border="1px solid" borderColor="gray.100" borderRadius="lg" bg="gray.50">
             <Text fontSize="xs" color="gray.600" fontWeight="700" textTransform="uppercase">
-              Thời điểm yêu cầu
+              Thá»i Ä‘iá»ƒm yÃªu cáº§u
             </Text>
             <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700">
               {formatDateTime(item.supportRequestedAt || item.requestedAt)}
             </Text>
             <Text mt={1} fontSize="xs" color="gray.500">
-              Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
+              ChuyÃªn mÃ´n: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
             </Text>
           </Box>
         </SimpleGrid>
 
         <Box p={2.5} border="1px dashed" borderColor="orange.200" borderRadius="lg" bg="#fffbeb">
           <Text fontSize="xs" color="orange.700" fontWeight="700" textTransform="uppercase" mb={1}>
-            Ghi chú từ tổ chính
+            Ghi chÃº tá»« tá»• chÃ­nh
           </Text>
           <Text fontSize="sm" color="gray.700">
-            {toText(item.supportRequestNote) || "Không có ghi chú bổ sung."}
+            {toText(item.supportRequestNote) || "KhÃ´ng cÃ³ ghi chÃº bá»• sung."}
           </Text>
         </Box>
 
@@ -3710,7 +3710,7 @@ function SupportNotificationCard({ item, onSelect, dispatchTagLabel = "" }) {
             borderRadius="full"
             onClick={() => onSelect(item.serviceOrderId)}
           >
-            Vào chọn thợ hỗ trợ
+            VÃ o chá»n thá»£ há»— trá»£
           </Button>
         </HStack>
       </VStack>
@@ -3743,7 +3743,7 @@ function SupportingTeamSelector({
   const selectedTeams = safeOptions.filter((team) => selectedSet.has(String(team.id)));
   const requestedCountOptions = Array.from({ length: 8 }, (_, index) => ({
     value: String(index + 1),
-    label: `${index + 1} thợ`,
+    label: `${index + 1} thá»£`,
   }));
 
   const handleToggle = (teamId) => {
@@ -3760,10 +3760,10 @@ function SupportingTeamSelector({
     <Box border="1px solid" borderColor="gray.200" borderRadius="xl" p={3} bg="white">
       <HStack justify="space-between" mb={2}>
         <Text fontSize="sm" color="gray.700" fontWeight="700">
-          {isRequestMode ? "Chọn tổ phụ cần hỗ trợ" : "Chọn tổ phối hợp"}
+          {isRequestMode ? "Chá»n tá»• phá»¥ cáº§n há»— trá»£" : "Chá»n tá»• phá»‘i há»£p"}
         </Text>
         <Badge colorScheme={selectedValues.length > 0 ? (isRequestMode ? "orange" : "blue") : "gray"} borderRadius="full">
-          {selectedValues.length} tổ
+          {selectedValues.length} tá»•
         </Badge>
       </HStack>
 
@@ -3807,7 +3807,7 @@ function SupportingTeamSelector({
                       fontWeight="700"
                       flexShrink={0}
                     >
-                      {isSelected ? "✓" : ""}
+                      {isSelected ? "âœ“" : ""}
                     </Box>
                     <Text
                       fontSize="sm"
@@ -3821,7 +3821,7 @@ function SupportingTeamSelector({
                   </HStack>
                   {isSelected && (
                     <Badge colorScheme="blue" borderRadius="full" px={2}>
-                      Đã chọn
+                      ÄÃ£ chá»n
                     </Badge>
                   )}
                 </HStack>
@@ -3861,12 +3861,12 @@ function SupportingTeamSelector({
                           {team.name}
                         </Text>
                         <Text mt={1} fontSize="xs" color="gray.500">
-                          Tổ trưởng tổ này sẽ tự chọn thợ sau khi nhận yêu cầu.
+                          Tá»• trÆ°á»Ÿng tá»• nÃ y sáº½ tá»± chá»n thá»£ sau khi nháº­n yÃªu cáº§u.
                         </Text>
                       </Box>
                       <FormControl maxW="160px" justifySelf={{ base: "stretch", md: "end" }}>
                         <FormLabel fontSize="xs" mb={1} color="gray.600">
-                          Số lượng thợ cần hỗ trợ
+                          Sá»‘ lÆ°á»£ng thá»£ cáº§n há»— trá»£
                         </FormLabel>
                         <FilterDropdown
                           id={`support-team-request-count-${team.id}`}
@@ -3885,7 +3885,7 @@ function SupportingTeamSelector({
               const assignment = safeAssignmentMap[teamId] || { technicianId: "", assistantTechnicianId: "" };
               const teamOptions = safeTechnicianOptionsByTeam[teamId] || {};
               const leadOptions = [
-                { value: "", label: "-- Chọn thợ chính --" },
+                { value: "", label: "-- Chá»n thá»£ chÃ­nh --" },
                 ...(Array.isArray(teamOptions.lead) ? teamOptions.lead : []),
               ];
               const selectedLeadId = toPositiveNumber(assignment.technicianId);
@@ -3897,7 +3897,7 @@ function SupportingTeamSelector({
                   if (!selectedLeadId) return true;
                   return optionId !== selectedLeadId;
                 })
-                : [{ value: "", label: "-- Không chọn --" }];
+                : [{ value: "", label: "-- KhÃ´ng chá»n --" }];
               const safeAssistantValue =
                 selectedLeadId && selectedAssistantId && selectedLeadId === selectedAssistantId
                   ? ""
@@ -3919,7 +3919,7 @@ function SupportingTeamSelector({
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
                     <FormControl>
                       <FormLabel fontSize="xs" mb={1} color="gray.600">
-                        Thợ chính
+                        Thá»£ chÃ­nh
                       </FormLabel>
                       <FilterDropdown
                         id={`support-team-lead-${team.id}`}
@@ -3939,7 +3939,7 @@ function SupportingTeamSelector({
                     </FormControl>
                     <FormControl>
                       <FormLabel fontSize="xs" mb={1} color="gray.600">
-                        Thợ phụ
+                        Thá»£ phá»¥
                       </FormLabel>
                       <FilterDropdown
                         id={`support-team-assistant-${team.id}`}

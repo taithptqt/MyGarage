@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
@@ -32,6 +32,54 @@ function getPriorityLabel(row) {
   return row?.isMandatory ? "Bắt buộc" : "Tùy chọn";
 }
 
+function normalizeBooleanLike(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function readField(source, ...keys) {
+  for (const key of keys) {
+    if (source && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+  return null;
+}
+
+function isSupplementaryRow(row) {
+  const serviceSource = String(readField(row, "serviceSource", "ServiceSource") || "").trim().toUpperCase();
+  const isSupplementaryRaw = readField(row, "isSupplementary", "IsSupplementary");
+  return (
+    normalizeBooleanLike(isSupplementaryRaw) ||
+    serviceSource === "SUPPLEMENTARY_TECHNICIAN" ||
+    serviceSource === "SUPPLEMENTARY_CUSTOMER"
+  );
+}
+
+function isExpiredPublicQuotationLinkMessage(rawMessage) {
+  const text = String(rawMessage || "").trim().toLowerCase();
+  if (!text) return false;
+  return (
+    text.includes("không còn hiệu lực") ||
+    text.includes("khong con hieu luc") ||
+    text.includes("hết hạn") ||
+    text.includes("het han") ||
+    text.includes("đã bị thu hồi") ||
+    text.includes("da bi thu hoi")
+  );
+}
+
+function formatCountdown(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const mm = Math.floor(safe / 60);
+  const ss = safe % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
+
 export default function PublicQuotationAccessPage() {
   const { token } = useParams();
   const [loading, setLoading] = useState(true);
@@ -42,8 +90,11 @@ export default function PublicQuotationAccessPage() {
   const [otpCode, setOtpCode] = useState("");
   const [sendingOtp, setSendingOtp] = useState(false);
   const [otpSentAt, setOtpSentAt] = useState(null);
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpRemainingSeconds, setOtpRemainingSeconds] = useState(0);
+  const [pendingDecision, setPendingDecision] = useState(null);
   const [quotation, setQuotation] = useState(null);
-  const [expandedGroups, setExpandedGroups] = useState({});
+  const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
 
   const loadQuotation = useCallback(async () => {
     if (!token) return;
@@ -67,26 +118,15 @@ export default function PublicQuotationAccessPage() {
     () => getStatusLabelVi(quotation?.status, quotation?.status || "-"),
     [quotation?.status],
   );
+  const isOtpStepVisible = pendingDecision !== null;
+  const isExpiredLink = useMemo(() => isExpiredPublicQuotationLinkMessage(error), [error]);
 
   const lineItems = useMemo(
     () => (Array.isArray(quotation?.details) ? quotation.details : []),
     [quotation?.details],
   );
 
-  const summary = useMemo(() => {
-    let services = 0;
-    let parts = 0;
-    let mandatoryCount = 0;
-    lineItems.forEach((item) => {
-      const type = normalizeItemType(item?.itemType);
-      if (type === "SERVICE") services += Number(item?.finalAmount || 0);
-      else if (type === "PART") parts += Number(item?.finalAmount || 0);
-      if (item?.isMandatory) mandatoryCount += 1;
-    });
-    return { services, parts, mandatoryCount };
-  }, [lineItems]);
-
-  const groupedRows = useMemo(() => {
+  const groupRowsByService = useCallback((rows) => {
     const groups = [];
     const byServiceName = new Map();
     let currentServiceGroupKey = "";
@@ -110,7 +150,7 @@ export default function PublicQuotationAccessPage() {
       return key;
     };
 
-    lineItems.forEach((row, index) => {
+    rows.forEach((row, index) => {
       const rowType = normalizeItemType(row?.itemType);
       const itemName = String(row?.itemName || "").trim() || `Hạng mục #${index + 1}`;
       if (rowType === "SERVICE") {
@@ -146,10 +186,99 @@ export default function PublicQuotationAccessPage() {
     });
 
     return groups.filter((group) => group.serviceRows.length > 0 || group.partRows.length > 0);
+  }, []);
+
+  const detailRowsByServiceType = useMemo(() => {
+    const initialRows = [];
+    const supplementaryRows = [];
+    lineItems.forEach((row) => {
+      if (isSupplementaryRow(row)) supplementaryRows.push(row);
+      else initialRows.push(row);
+    });
+    return { initialRows, supplementaryRows };
+  }, [lineItems]);
+
+  const groupedRowsByServiceType = useMemo(() => ({
+    initialGroups: groupRowsByService(detailRowsByServiceType.initialRows),
+    supplementaryGroups: groupRowsByService(detailRowsByServiceType.supplementaryRows),
+  }), [detailRowsByServiceType.initialRows, detailRowsByServiceType.supplementaryRows, groupRowsByService]);
+
+  const vatSummary = useMemo(() => {
+    const groups = new Map();
+    let baseBeforeVat = 0;
+    let totalVat = 0;
+
+    lineItems.forEach((row) => {
+      const quantity = Number(row?.quantity || 0);
+      const unitPrice = Number(row?.unitPriceAtTime || 0);
+      const subTotalRaw = Number(row?.subTotal);
+      const discountValue = Math.max(0, Number(row?.discountValue || 0));
+      const taxRateRaw = Number(row?.taxRate || 0);
+
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw > 0 ? taxRateRaw : 0;
+      const taxAmountRaw = Number(row?.taxAmount);
+      const taxAmount = Number.isFinite(taxAmountRaw)
+        ? Math.max(0, taxAmountRaw)
+        : Number(((taxableBase * taxRate) / 100).toFixed(2));
+
+      baseBeforeVat += taxableBase;
+      totalVat += taxAmount;
+
+      const key = taxRate.toFixed(4);
+      if (!groups.has(key)) groups.set(key, { taxRate, taxableBase: 0, taxAmount: 0 });
+      const target = groups.get(key);
+      target.taxableBase += taxableBase;
+      target.taxAmount += taxAmount;
+    });
+
+    const normalizedGroups = [...groups.values()]
+      .map((group) => ({
+        taxRate: Number(group.taxRate.toFixed(4)),
+        taxableBase: Number(group.taxableBase.toFixed(2)),
+        taxAmount: Number(group.taxAmount.toFixed(2)),
+      }))
+      .sort((a, b) => a.taxRate - b.taxRate);
+
+    const fallbackSubTotal = Math.max(0, Number(quotation?.subTotalAmount || 0));
+    const fallbackTax = Math.max(0, Number(quotation?.taxAmount || 0));
+    const resolvedBase = normalizedGroups.length > 0 ? Number(baseBeforeVat.toFixed(2)) : fallbackSubTotal;
+    const resolvedVat = normalizedGroups.length > 0 ? Number(totalVat.toFixed(2)) : fallbackTax;
+    const resolvedWithVat = Math.max(0, Number(quotation?.finalAmount || resolvedBase + resolvedVat));
+
+    return {
+      baseBeforeVat: resolvedBase,
+      totalVat: resolvedVat,
+      totalWithVat: resolvedWithVat,
+      groups: normalizedGroups,
+    };
+  }, [lineItems, quotation?.finalAmount, quotation?.subTotalAmount, quotation?.taxAmount]);
+
+  const executionCostSummary = useMemo(() => {
+    let laborBeforeVat = 0;
+    let partsAndMaterialBeforeVat = 0;
+
+    lineItems.forEach((row) => {
+      const quantity = Number(row?.quantity || 0);
+      const unitPrice = Number(row?.unitPriceAtTime || 0);
+      const subTotalRaw = Number(row?.subTotal);
+      const discountValue = Math.max(0, Number(row?.discountValue || 0));
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const rowType = normalizeItemType(row?.itemType);
+      if (rowType === "SERVICE") laborBeforeVat += taxableBase;
+      else partsAndMaterialBeforeVat += taxableBase;
+    });
+
+    return {
+      laborBeforeVat: Number(laborBeforeVat.toFixed(2)),
+      partsAndMaterialBeforeVat: Number(partsAndMaterialBeforeVat.toFixed(2)),
+    };
   }, [lineItems]);
 
   const paymentSummary = useMemo(() => {
-    const totalRepairCost = Number(quotation?.finalAmount || 0);
+    const totalRepairCost = Number(vatSummary.totalWithVat || 0);
     const insuranceCompensation = Number(quotation?.totalInsuranceAmount || 0);
     const baselineCustomerPayable = Math.max(totalRepairCost - insuranceCompensation, 0);
     const customerPayable = Number(
@@ -158,33 +287,106 @@ export default function PublicQuotationAccessPage() {
     const deductibleOrPenalty = customerPayable - baselineCustomerPayable;
 
     return {
+      totalLabor: executionCostSummary.laborBeforeVat,
+      totalParts: executionCostSummary.partsAndMaterialBeforeVat,
+      beforeVat: vatSummary.baseBeforeVat,
+      totalVat: vatSummary.totalVat,
+      vatGroups: Array.isArray(vatSummary.groups) ? vatSummary.groups : [],
       totalRepairCost,
       insuranceCompensation,
       deductibleOrPenalty,
       customerPayable,
     };
-  }, [quotation?.finalAmount, quotation?.totalCustomerAmount, quotation?.totalInsuranceAmount]);
+  }, [
+    executionCostSummary.laborBeforeVat,
+    executionCostSummary.partsAndMaterialBeforeVat,
+    quotation?.totalCustomerAmount,
+    quotation?.totalInsuranceAmount,
+    vatSummary.baseBeforeVat,
+    vatSummary.groups,
+    vatSummary.totalVat,
+    vatSummary.totalWithVat,
+  ]);
 
-  useEffect(() => {
-    setExpandedGroups((prev) => {
-      const next = { ...prev };
-      const activeKeys = new Set();
-      groupedRows.forEach((group) => {
-        activeKeys.add(group.key);
-        if (!(group.key in next)) next[group.key] = false;
-      });
-      Object.keys(next).forEach((key) => {
-        if (!activeKeys.has(key)) delete next[key];
-      });
-      return next;
-    });
-  }, [groupedRows]);
+  const renderGroupedTableSection = (sectionKey, title, groups, emptyMessage, sectionClassName = "") => (
+    <div className={`quote-detail-section ${sectionClassName}`.trim()}>
+      <div className="quote-detail-section-title">{title}</div>
+      <table className="premium-table">
+        <thead>
+          <tr>
+            <th style={{ width: "50%", textAlign: "left" }}>TÊN HẠNG MỤC / DESCRIPTION</th>
+            <th className="quote-portal-col-priority text-center" style={{ width: "15%" }}>ƯU TIÊN</th>
+            <th className="text-center" style={{ width: "5%" }}>SL</th>
+            <th className="text-right" style={{ width: "15%" }}>ĐƠN GIÁ</th>
+            <th className="text-right" style={{ width: "15%" }}>THÀNH TIỀN</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="quote-detail-empty">{emptyMessage}</td>
+            </tr>
+          ) : groups.map((group) => {
+            const collapseKey = `${sectionKey}-${group.key}`;
+            const canToggle = group.partRows.length > 0;
+            const isCollapsed = canToggle ? Boolean(collapsedPartGroups[collapseKey]) : false;
+            const visibleRows = [
+              ...group.serviceRows.map((row) => ({ row, isService: true })),
+              ...(isCollapsed ? [] : group.partRows.map((row) => ({ row, isService: false }))),
+            ];
+            return (
+              <Fragment key={`${title}-${group.key}`}>
+                {visibleRows.map(({ row, isService }, rowIndex) => {
+                  const isFirst = rowIndex === 0;
+                  const isLast = rowIndex === visibleRows.length - 1;
+                  const serviceRowTooltip = isService
+                    ? (canToggle ? (isCollapsed ? SERVICE_ROW_TOOLTIP_EXPAND : SERVICE_ROW_TOOLTIP_COLLAPSE) : SERVICE_ROW_TOOLTIP_STATIC)
+                    : "";
+                  const rowClass = [
+                    "group-row",
+                    "item-row",
+                    isService ? "group-service-row quote-portal-item-service-row" : "group-part-row",
+                    isFirst ? "group-start" : "group-middle",
+                    isLast ? "group-end" : "",
+                    canToggle && isFirst ? "clickable-service-row" : "",
+                  ].join(" ").trim();
 
-  async function submitDecision(approved) {
+                  return (
+                    <tr
+                      key={`${isService ? "svc" : "part"}-${title}-${row.id || rowIndex}`}
+                      className={rowClass}
+                      title={serviceRowTooltip}
+                      onClick={canToggle && isFirst ? () => setCollapsedPartGroups((prev) => ({ ...prev, [collapseKey]: !prev[collapseKey] })) : undefined}
+                    >
+                      <td className={isService ? "service-name-cell quote-portal-item-service" : "part-name-cell quote-portal-item-part"}>
+                        {!isService ? <span className="quote-portal-item-prefix">└─</span> : null}
+                        {row.itemName}
+                      </td>
+                      <td className="quote-portal-col-priority text-center">
+                        <span className={`priority-badge ${row.isMandatory ? "priority-URGENT" : "priority-NORMAL"}`}>
+                          {getPriorityLabel(row)}
+                        </span>
+                      </td>
+                      <td className="text-center">{formatQty(row.quantity)}</td>
+                      <td className="text-right">{formatMoney(row.unitPriceAtTime)}</td>
+                      <td className="text-right">{formatMoney(row.finalAmount)}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="group-spacer-row"><td colSpan="5"></td></tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  async function submitDecision(approved, otpOverride = null) {
     if (!token) return;
-    const normalizedOtp = String(otpCode || "").trim();
-    if (!normalizedOtp) {
-      setError("Vui lòng nhập mã OTP trước khi xác nhận.");
+    const normalizedOtp = String(otpOverride ?? otpCode ?? "").trim();
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      setError("Vui lòng nhập đúng mã OTP gồm 6 số trước khi xác nhận.");
       return;
     }
 
@@ -199,7 +401,11 @@ export default function PublicQuotationAccessPage() {
       };
       await serviceOrderApi.applyQuotationPublicDecision(token, payload);
       setMessage(approved ? "Bạn đã xác nhận duyệt báo giá thành công." : "Bạn đã từ chối báo giá.");
+      setPendingDecision(null);
       setOtpCode("");
+      setOtpSentAt(null);
+      setOtpExpiresAt(null);
+      setOtpRemainingSeconds(0);
       await loadQuotation();
     } catch (err) {
       setError(err?.message || "Không thể ghi nhận quyết định.");
@@ -208,29 +414,80 @@ export default function PublicQuotationAccessPage() {
     }
   }
 
-  async function sendOtp() {
+  async function startOtpFlow(approved) {
     if (!token) return;
+    if (approved && !quotation?.canApprove) return;
+    if (!approved && !quotation?.canReject) return;
+
+    setPendingDecision(approved);
+    setOtpCode("");
     setSendingOtp(true);
     setError("");
     setMessage("");
     try {
       const data = await serviceOrderApi.sendQuotationPublicDecisionOtp(token, {});
-      setOtpSentAt(new Date());
+      const sentAt = new Date();
+      const expiresRaw = readField(data, "otpExpiresAt", "OtpExpiresAt");
+      const parsedExpiresAt = expiresRaw ? new Date(expiresRaw) : null;
+      const resolvedExpiresAt = parsedExpiresAt && !Number.isNaN(parsedExpiresAt.getTime())
+        ? parsedExpiresAt
+        : new Date(sentAt.getTime() + 60 * 1000);
+
+      setOtpSentAt(sentAt);
+      setOtpExpiresAt(resolvedExpiresAt);
+      setOtpRemainingSeconds(Math.max(0, Math.ceil((resolvedExpiresAt.getTime() - Date.now()) / 1000)));
       const masked = data?.maskedEmail ? ` (${data.maskedEmail})` : "";
-      setMessage(`Mã OTP đã được gửi${masked}. Vui lòng kiểm tra email và nhập mã để xác nhận.`);
+      setMessage(`Mã OTP đã được gửi${masked}. Vui lòng nhập mã để ${approved ? "duyệt" : "từ chối"} báo giá.`);
+      setTimeout(() => {
+        const otpInput = document.querySelector(".quote-portal-otp-input");
+        if (otpInput) otpInput.focus();
+      }, 50);
     } catch (err) {
+      setPendingDecision(null);
       setError(err?.message || "Không thể gửi mã OTP.");
     } finally {
       setSendingOtp(false);
     }
   }
 
+  useEffect(() => {
+    if (!isOtpStepVisible || !otpExpiresAt) {
+      setOtpRemainingSeconds(0);
+      return undefined;
+    }
+
+    const updateRemaining = () => {
+      const next = Math.max(0, Math.ceil((otpExpiresAt.getTime() - Date.now()) / 1000));
+      setOtpRemainingSeconds(next);
+    };
+
+    updateRemaining();
+    const timerId = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timerId);
+  }, [isOtpStepVisible, otpExpiresAt]);
+
   if (loading) {
     return <div className="quote-portal-loading">Đang tải báo giá...</div>;
   }
 
   if (!quotation) {
-    return <div className="quote-portal-loading">{error || "Không tìm thấy báo giá."}</div>;
+    return (
+      <div className="quote-portal">
+        <div className="quote-portal-shell">
+          <section className="quote-portal-card quote-portal-empty-state">
+            <h2>Không thể truy cập báo giá</h2>
+            <p className="quote-portal-empty-hint">
+              {error || "Không tìm thấy báo giá công khai tương ứng với liên kết này."}
+            </p>
+            {isExpiredLink ? (
+              <p className="quote-portal-alert quote-portal-alert-expired">
+                Liên kết báo giá đã hết hạn hoặc không còn hiệu lực. Vui lòng liên hệ cố vấn dịch vụ để được cấp liên kết mới.
+              </p>
+            ) : null}
+          </section>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -253,152 +510,107 @@ export default function PublicQuotationAccessPage() {
         {error ? <p className="quote-portal-alert quote-portal-alert-error">{error}</p> : null}
         {message ? <p className="quote-portal-alert quote-portal-alert-success">{message}</p> : null}
 
-        <section className="quote-portal-summary">
-          <article>
-            <span>Tổng dự kiến</span>
-            <strong>{formatMoney(quotation.finalAmount)}</strong>
-          </article>
-          <article>
-            <span>Tiền công dịch vụ</span>
-            <strong>{formatMoney(summary.services)}</strong>
-          </article>
-          <article>
-            <span>Phụ tùng vật tư</span>
-            <strong>{formatMoney(summary.parts)}</strong>
-          </article>
-          <article>
-            <span>Hạng mục bắt buộc</span>
-            <strong>{summary.mandatoryCount}</strong>
-          </article>
-        </section>
-
         <section className="quote-portal-card">
-          <h2>Chi tiết chi phí</h2>
-          {groupedRows.map((group, groupIndex) => {
-            const groupSubtotal = [...group.serviceRows, ...group.partRows]
-              .reduce((sum, row) => sum + Number(row?.finalAmount || 0), 0);
-            const isExpanded = Boolean(expandedGroups[group.key]);
-            const headerTip = isExpanded ? "Bấm để thu gọn hạng mục" : "Bấm để xem chi tiết hạng mục";
-
-            return (
-              <article key={group.key} className={`quote-portal-group${isExpanded ? " is-expanded" : ""}`}>
-                <button
-                  type="button"
-                  className="quote-portal-group-header quote-portal-group-header-clickable"
-                  title={headerTip}
-                  onClick={() =>
-                    setExpandedGroups((prev) => ({
-                      ...prev,
-                      [group.key]: !prev[group.key],
-                    }))
-                  }
-                >
-                  <div className="quote-portal-group-title-wrap">
-                    <span className="quote-portal-group-index">{groupIndex + 1}</span>
-                    <h3>{group.title}</h3>
-                  </div>
-                  <div className="quote-portal-group-actions">
-                    <strong>{formatMoney(groupSubtotal)}</strong>
-                  </div>
-                </button>
-
-                {isExpanded ? (
-                  <div className="quote-portal-group-body">
-                    <div className="quote-portal-service-scope">
-                      <section className="quote-portal-subsection">
-                        <p className="quote-portal-subsection-title">Chi phí nhân công:</p>
-                        <div className="quote-portal-column-header quote-portal-column-header-service">
-                          <span>Hạng mục</span>
-                          <span>Ưu tiên</span>
-                          <span>SL</span>
-                          <span>Đơn giá</span>
-                          <span>Thành tiền</span>
-                        </div>
-                        {group.serviceRows.map((row, index) => (
-                          <div
-                            key={`labor-${row.id ?? index}`}
-                            className="quote-portal-line-item quote-portal-line-item-service"
-                            title={`Nhân công | SL: ${formatQty(row.quantity)} | Đơn giá: ${formatMoney(row.unitPriceAtTime)}`}
-                          >
-                            <div className="quote-portal-line-main quote-portal-col-item">
-                              <span className="quote-portal-line-icon" aria-hidden="true">•</span>
-                              <span className="quote-portal-item-name">{row.itemName}</span>
-                            </div>
-                            <div className="quote-portal-line-col quote-portal-col-priority quote-portal-col-priority-empty">-</div>
-                            <div className="quote-portal-line-col quote-portal-col-qty">{formatQty(row.quantity)}</div>
-                            <div className="quote-portal-line-col quote-portal-col-price">{formatMoney(row.unitPriceAtTime)}</div>
-                            <div className="quote-portal-line-col quote-portal-line-amount">{formatMoney(row.finalAmount)}</div>
-                          </div>
-                        ))}
-                      </section>
-
-                      <section className="quote-portal-subsection">
-                        <p className="quote-portal-subsection-title">{`Chi phí phụ tùng (${group.partRows.length} món):`}</p>
-                        <div className="quote-portal-column-header quote-portal-column-header-part">
-                          <span>Hạng mục</span>
-                          <span>Ưu tiên</span>
-                          <span>SL</span>
-                          <span>Đơn giá</span>
-                          <span>Thành tiền</span>
-                        </div>
-                        {group.partRows.length === 0 ? (
-                          <p className="quote-portal-empty-note">Không có phụ tùng trong hạng mục này.</p>
-                        ) : group.partRows.map((row, index) => (
-                          <div
-                            key={`part-${row.id ?? index}`}
-                            className="quote-portal-line-item quote-portal-line-item-part"
-                            title={`Phụ tùng | SL: ${formatQty(row.quantity)} | Đơn giá: ${formatMoney(row.unitPriceAtTime)}`}
-                          >
-                            <div className="quote-portal-line-main quote-portal-col-item">
-                              <span className="quote-portal-line-icon" aria-hidden="true">⚙️</span>
-                              <span className="quote-portal-item-name">{row.itemName}</span>
-                            </div>
-                            <div className="quote-portal-line-col quote-portal-col-priority">
-                              <span
-                                title={row.isMandatory ? "Mục bắt buộc phải thực hiện" : "Mục tùy chọn, có thể bỏ qua"}
-                                className={
-                                  row.isMandatory
-                                    ? "quote-portal-priority-badge quote-portal-priority-badge-mandatory"
-                                    : "quote-portal-priority-badge quote-portal-priority-badge-optional"
-                                }
-                              >
-                                {getPriorityLabel(row)}
-                              </span>
-                            </div>
-                            <div className="quote-portal-line-col quote-portal-col-qty">{formatQty(row.quantity)}</div>
-                            <div className="quote-portal-line-col quote-portal-col-price">{formatMoney(row.unitPriceAtTime)}</div>
-                            <div className="quote-portal-line-col quote-portal-line-amount">{formatMoney(row.finalAmount)}</div>
-                          </div>
-                        ))}
-                      </section>
-                    </div>
-                  </div>
-                ) : null}
-              </article>
-            );
-          })}
-        </section>
-
-        <section className="quote-portal-summary-block">
-          <h3>Tổng kết tính tiền</h3>
-          <div className="quote-portal-summary-line">
-            <span>Tổng chi phí sửa chữa</span>
-            <strong>{formatMoney(paymentSummary.totalRepairCost)}</strong>
-          </div>
-          <div className="quote-portal-summary-line">
-            <span>− Bảo hiểm đền bù</span>
-            <strong>{formatMoney(paymentSummary.insuranceCompensation)}</strong>
-          </div>
-          <div className="quote-portal-summary-line">
-            <span>+ Miễn thường</span>
-            <strong>{formatMoney(paymentSummary.deductibleOrPenalty)}</strong>
-          </div>
-          <div className="quote-portal-summary-divider" />
-          <div className="quote-portal-summary-line quote-portal-summary-line-total">
-            <span>TỔNG KHÁCH HÀNG THANH TOÁN</span>
-            <strong>{formatMoney(paymentSummary.customerPayable)}</strong>
+          <div className="premium-table-wrapper quote-detail-wrapper">
+            {renderGroupedTableSection(
+              "initial",
+              "Dịch vụ khách chọn ban đầu",
+              groupedRowsByServiceType.initialGroups,
+              "Không có dịch vụ ban đầu.",
+            )}
+            {renderGroupedTableSection(
+              "supplementary",
+              "Dịch vụ phát sinh (đã duyệt báo giá bổ sung)",
+              groupedRowsByServiceType.supplementaryGroups,
+              "Chưa có dịch vụ phát sinh.",
+              "quote-detail-section-supplementary",
+            )}
           </div>
         </section>
+
+        <div className="quote-summary-footer">
+          <div className="summary-details">
+            <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
+
+            <div className="summary-subtitle">Phân tách giá trị (Chưa VAT):</div>
+            <div className="summary-line">
+              <span className="summary-line-label">
+                <span className="summary-marker marker-labor" />
+                Tổng chi phí Nhân công
+              </span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value">{formatMoney(paymentSummary.totalLabor)}</span>
+            </div>
+            <div className="summary-line">
+              <span className="summary-line-label">
+                <span className="summary-marker marker-parts" />
+                Tổng chi phí Phụ tùng / Vật tư
+              </span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value">{formatMoney(paymentSummary.totalParts)}</span>
+            </div>
+            <div className="summary-line summary-line-strong">
+              <span className="summary-line-label">TỔNG TIỀN HÀNG (CHƯA VAT)</span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value">{formatMoney(paymentSummary.beforeVat)}</span>
+            </div>
+
+            <div className="summary-subtitle">Thuế Giá trị gia tăng (VAT):</div>
+            {paymentSummary.vatGroups.length > 0
+              ? paymentSummary.vatGroups.map((group) => (
+                <div key={`vat-${group.taxRate}`} className="summary-line">
+                  <span className="summary-line-label">
+                    <span className="summary-marker marker-vat" />
+                    Thuế VAT ({group.taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%)
+                  </span>
+                  <span className="summary-line-dots" />
+                  <span className="summary-line-value">{formatMoney(group.taxAmount)}</span>
+                </div>
+              ))
+              : (
+                <div className="summary-line">
+                  <span className="summary-line-label">
+                    <span className="summary-marker marker-vat" />
+                    Thuế VAT
+                  </span>
+                  <span className="summary-line-dots" />
+                  <span className="summary-line-value">{formatMoney(paymentSummary.totalVat)}</span>
+                </div>
+              )}
+            <div className="summary-line summary-line-strong">
+              <span className="summary-line-label">TỔNG CHI PHÍ SỬA CHỮA</span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value">{formatMoney(paymentSummary.totalRepairCost)}</span>
+            </div>
+
+            <div className="summary-divider" />
+            <div className="summary-subtitle">Phân bổ thanh toán:</div>
+            <div className="summary-line">
+              <span className="summary-line-label">
+                <span className="summary-marker marker-insurance" />
+                Bảo hiểm phê duyệt
+              </span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value text-insurance">-{formatMoney(paymentSummary.insuranceCompensation)}</span>
+            </div>
+            <div className="summary-line">
+              <span className="summary-line-label">
+                <span className="summary-marker marker-deductible" />
+                Phí Miễn thường / Chế tài
+              </span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value">+{formatMoney(paymentSummary.deductibleOrPenalty)}</span>
+            </div>
+
+            <div className="summary-divider" />
+
+            <div className="summary-line payable-row">
+              <span className="summary-line-label">TỔNG KHÁCH HÀNG THANH TOÁN</span>
+              <span className="summary-line-dots" />
+              <span className="summary-line-value final-payable">{formatMoney(paymentSummary.customerPayable)}</span>
+            </div>
+          </div>
+        </div>
 
         <section className="quote-portal-card">
           <h2>Ghi chú của bạn</h2>
@@ -414,44 +626,59 @@ export default function PublicQuotationAccessPage() {
         </section>
 
         <section className="quote-portal-action-area">
-          <div className="quote-portal-otp-wrap">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              className="quote-portal-otp-input"
-              value={otpCode}
-              onChange={(e) => setOtpCode((e.target.value || "").replace(/\D/g, "").slice(0, 6))}
-              placeholder="Nhập OTP 6 số"
-              disabled={saving}
-            />
-            <button
-              type="button"
-              className="quote-portal-btn quote-portal-btn-outline"
-              onClick={sendOtp}
-              disabled={saving || sendingOtp || !quotation.canApprove}
-            >
-              {sendingOtp ? "Đang gửi OTP..." : "Gửi mã OTP"}
-            </button>
-            {otpSentAt ? (
-              <span className="quote-portal-otp-hint">
-                OTP đã gửi lúc {otpSentAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            ) : null}
-          </div>
+          {isOtpStepVisible ? (
+            <div className="quote-portal-otp-wrap">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                className="quote-portal-otp-input"
+                value={otpCode}
+                onChange={(e) => {
+                  const nextOtp = (e.target.value || "").replace(/\D/g, "").slice(0, 6);
+                  setOtpCode(nextOtp);
+                  if (nextOtp.length === 6 && pendingDecision !== null && !saving && !sendingOtp && otpRemainingSeconds > 0) {
+                    void submitDecision(pendingDecision, nextOtp);
+                  }
+                }}
+                placeholder="Nhập OTP 6 số"
+                disabled={saving}
+              />
+              <button
+                type="button"
+                className="quote-portal-btn quote-portal-btn-outline"
+                onClick={() => {
+                  if (pendingDecision !== null) {
+                    void startOtpFlow(pendingDecision);
+                  }
+                }}
+                disabled={saving || sendingOtp || pendingDecision === null}
+              >
+                {sendingOtp ? "Đang gửi OTP..." : "Gửi lại OTP"}
+              </button>
+              {otpSentAt ? (
+                <span className="quote-portal-otp-hint">
+                  OTP đã gửi lúc {otpSentAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}.{" "}
+                  {otpRemainingSeconds > 0
+                    ? `Còn hiệu lực ${formatCountdown(otpRemainingSeconds)}. Nhập đủ 6 số để xác nhận tự động.`
+                    : "OTP đã hết hạn. Vui lòng bấm Gửi lại OTP."}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
             className="quote-portal-btn quote-portal-btn-approve"
-            onClick={() => submitDecision(true)}
-            disabled={saving || !quotation.canApprove || !String(otpCode || "").trim()}
+            onClick={() => startOtpFlow(true)}
+            disabled={saving || sendingOtp || !quotation.canApprove}
           >
             Đồng ý toàn bộ
           </button>
           <button
             type="button"
             className="quote-portal-btn quote-portal-btn-reject"
-            onClick={() => submitDecision(false)}
-            disabled={saving || !quotation.canReject || !String(otpCode || "").trim()}
+            onClick={() => startOtpFlow(false)}
+            disabled={saving || sendingOtp || !quotation.canReject}
           >
             Từ chối sửa chữa
           </button>
@@ -465,6 +692,27 @@ export default function PublicQuotationAccessPage() {
           </button>
         </section>
       </div>
+
+      {quotation?.canApprove && (
+        <div className="floating-bottom-bar">
+          <div className="floating-bar-content">
+            <div className="floating-bar-left">
+              <span className="floating-bar-label">Tổng thanh toán</span>
+              <span className="floating-bar-value">{formatMoney(paymentSummary.customerPayable)}</span>
+            </div>
+            <div className="floating-bar-right">
+              <button
+                type="button"
+                className="floating-bar-btn"
+                onClick={() => startOtpFlow(true)}
+                disabled={saving || sendingOtp || !quotation?.canApprove}
+              >
+                Đồng ý duyệt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// M?c d�ch: X? l� c�c buoc chuy?n tr?ng th�i ph� duy?t voucher nhu duy?t ho?c t? chdi.
+﻿// Mục đích: Xử lý các bước chuyển trạng thái phê duyệt voucher như duyệt hoặc từ chối.
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

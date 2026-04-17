@@ -1,4 +1,4 @@
-﻿export function readField(source, ...keys) {
+export function readField(source, ...keys) {
   for (const key of keys) {
     if (source && source[key] !== undefined && source[key] !== null) {
       return source[key];
@@ -17,9 +17,9 @@ export function normalizeStatus(value) {
 }
 
 export function formatDateTime(value) {
-  if (!value) return "-";
+  if (!value) return "";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
+  if (Number.isNaN(parsed.getTime())) return "";
   return parsed.toLocaleString("vi-VN");
 }
 

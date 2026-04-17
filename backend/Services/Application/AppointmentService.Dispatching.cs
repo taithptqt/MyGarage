@@ -19,7 +19,7 @@ namespace MyGarage.Services
                     && s.StartTime <= now.AddHours(6)
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > now)
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderBy(s => s.BayId)
@@ -137,3 +137,4 @@ namespace MyGarage.Services
         }
     }
 }
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using MyGarage.Constants;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -22,7 +22,7 @@ namespace MyGarage.Services
         {
             if (AppointmentStatusGroups.Closed.Contains(appointment.Status))
             {
-                throw new InvalidOperationException($"Khong the huy lich hen o trang thai: {appointment.Status}");
+                throw new InvalidOperationException($"Không thể hủy lịch hẹn ở trạng thái: {appointment.Status}");
             }
         }
 
@@ -39,7 +39,7 @@ namespace MyGarage.Services
         {
             if (AppointmentStatusGroups.Closed.Contains(appointment.Status))
             {
-                throw new InvalidOperationException($"Khong the tiep nhan lich o trang thai: {appointment.Status}");
+                throw new InvalidOperationException($"Không thể tiếp nhận lịch ở trạng thái: {appointment.Status}");
             }
         }
 
@@ -56,4 +56,5 @@ namespace MyGarage.Services
         }
     }
 }
+
 

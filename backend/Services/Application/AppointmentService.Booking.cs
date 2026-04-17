@@ -54,53 +54,57 @@ namespace MyGarage.Services
             if (fixedLeadViolations.Count > 0)
                 throw new InvalidOperationException("Các xe chưa đáp ứng điều kiện giờ cố định: " + string.Join("; ", fixedLeadViolations));
 
-            using var tx = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
-                var group = await _groupSessionService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
-
-                var createdAppointmentIds = new List<long>();
-                foreach (var item in dto.Items)
+                using var tx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    item.BranchId = dto.BranchId;
-                    item.CreatedBy = actorStaffId;
-                    item.CustomerId ??= targetCustomerId;
-                    var created = await BookCoreAsync(actorUserId, item, group.Id, tx);
-                    createdAppointmentIds.Add(created.Id);
+                    var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
+                    var group = await _groupSessionService.CreateAsync(targetCustomerId, dto.BranchId, dto.CustomerNote, actorStaffId);
+
+                    var createdAppointmentIds = new List<long>();
+                    foreach (var item in dto.Items)
+                    {
+                        item.BranchId = dto.BranchId;
+                        item.CreatedBy = actorStaffId;
+                        item.CustomerId ??= targetCustomerId;
+                        var created = await BookCoreAsync(actorUserId, item, group.Id, tx);
+                        createdAppointmentIds.Add(created.Id);
+                    }
+
+                    await _groupSessionService.SyncCountersAsync(group.Id, actorStaffId);
+                    await tx.CommitAsync();
+
+                    var response = await _groupSessionService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
+                    if (response != null)
+                    {
+                        var createdAppointments = await _context.Appointments
+                            .AsNoTracking()
+                            .Include(a => a.Branch)
+                            .Include(a => a.Customer)
+                            .Include(a => a.GroupSession)
+                            .Include(a => a.Vehicle)
+                                .ThenInclude(v => v!.Model)
+                                    .ThenInclude(m => m.Brand)
+                            .Where(a => createdAppointmentIds.Contains(a.Id))
+                            .OrderBy(a => a.StartTime)
+                            .ToListAsync();
+
+                        response.Appointments = (await _appointmentDetailAssembler.AssembleManyAsync(createdAppointments))
+                            .ToList();
+                        await TrySendBookingSuccessEmailAsync(createdAppointmentIds);
+                        return response;
+                    }
+
+                    throw new InvalidOperationException("Không thể tải thông tin nhóm lịch hẹn sau khi tạo.");
                 }
-
-                await _groupSessionService.SyncCountersAsync(group.Id, actorStaffId);
-                await tx.CommitAsync();
-
-                var response = await _groupSessionService.GetByCustomerAndIdAsync(targetCustomerId, group.Id);
-                if (response != null)
+                catch
                 {
-                    var createdAppointments = await _context.Appointments
-                        .AsNoTracking()
-                        .Include(a => a.Branch)
-                        .Include(a => a.Customer)
-                        .Include(a => a.GroupSession)
-                        .Include(a => a.Vehicle)
-                            .ThenInclude(v => v!.Model)
-                                .ThenInclude(m => m.Brand)
-                        .Where(a => createdAppointmentIds.Contains(a.Id))
-                        .OrderBy(a => a.StartTime)
-                        .ToListAsync();
-
-                    response.Appointments = (await _appointmentDetailAssembler.AssembleManyAsync(createdAppointments))
-                        .ToList();
-                    await TrySendBookingSuccessEmailAsync(createdAppointmentIds);
-                    return response;
+                    await tx.RollbackAsync();
+                    throw;
                 }
-
-                throw new InvalidOperationException("Không thể tải thông tin nhóm lịch hẹn sau khi tạo.");
-            }
-            catch
-            {
-                await tx.RollbackAsync();
-                throw;
-            }
+            });
         }
 
         private static string ResolveBookingItemLabel(BookAppointmentRequestDto dto)
@@ -113,7 +117,5 @@ namespace MyGarage.Services
                 return $"Xe VIN {dto.Vin.Trim()}";
             return "Xe chưa rõ biển số";
         }
-
     }
 }
-

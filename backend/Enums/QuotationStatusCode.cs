@@ -1,0 +1,17 @@
+namespace MyGarage.Enums;
+
+public enum QuotationStatusCode
+{
+    DRAFT,
+    PENDING_INSURANCE,
+    INSURANCE_APPROVED,
+    PENDING_CUSTOMER,
+    WAITING_APPROVAL,
+    SENT_TO_CUSTOMER,
+    APPROVED,
+    CUSTOMER_APPROVED,
+    CUSTOMER_REJECTED,
+    REJECTED,
+    CANCELED,
+    SUPERSEDED
+}

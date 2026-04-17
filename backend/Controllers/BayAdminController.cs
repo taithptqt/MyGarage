@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -176,7 +176,7 @@ public class BayAdminController : ControllerBase
         var bay = rows.FirstOrDefault(x => x.Id == id);
         if (bay == null)
         {
-            return NotFound(new { message = "Khoang khong ton tai." });
+            return NotFound(new { message = "Khoang không tồn tại." });
         }
 
         return Ok(MapBayListItem(bay));
@@ -418,8 +418,8 @@ public class BayAdminController : ControllerBase
                     BranchName = bay.BranchName,
                     Area = bay.Area,
                     Message = bay.OccupiedCount > bay.Capacity
-                        ? "Khoang vuot qua suc chua toi da."
-                        : "Khoang da day.",
+                        ? "Khoang vượt quá sức chứa tối đa."
+                        : "Khoang đã đầy.",
                     CreatedAt = now
                 });
             }
@@ -435,7 +435,7 @@ public class BayAdminController : ControllerBase
                     Name = bay.Name,
                     BranchName = bay.BranchName,
                     Area = bay.Area,
-                    Message = $"Khoang dang bi chiem lau ({Math.Round(bay.LongestActiveHours, 2)}h).",
+                    Message = $"Khoang đang bị chiếm lâu ({Math.Round(bay.LongestActiveHours, 2)}h).",
                     CreatedAt = now
                 });
             }
@@ -451,7 +451,7 @@ public class BayAdminController : ControllerBase
                     Name = bay.Name,
                     BranchName = bay.BranchName,
                     Area = bay.Area,
-                    Message = "Khoang dang bao tri nhung van co xe.",
+                    Message = "Khoang đang bảo trì nhưng vẫn có xe.",
                     CreatedAt = now
                 });
             }
@@ -467,7 +467,7 @@ public class BayAdminController : ControllerBase
                     Name = bay.Name,
                     BranchName = bay.BranchName,
                     Area = bay.Area,
-                    Message = "Khoang dang khoa nhung van co xe duoc gan.",
+                    Message = "Khoang đang khóa nhưng vẫn có xe được gán.",
                     CreatedAt = now
                 });
             }
@@ -483,7 +483,7 @@ public class BayAdminController : ControllerBase
                     Name = bay.Name,
                     BranchName = bay.BranchName,
                     Area = bay.Area,
-                    Message = "Khoang khong hoat dong trong thoi gian dai.",
+                    Message = "Khoang không hoạt động trong thời gian dài.",
                     CreatedAt = now
                 });
             }
@@ -508,7 +508,7 @@ public class BayAdminController : ControllerBase
         var settings = await ReadSettingsAsync();
         var rows = await BuildBayRowsAsync(includeHidden: true, settings: settings);
         var bay = rows.FirstOrDefault(x => x.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         return Ok(new
         {
@@ -536,7 +536,7 @@ public class BayAdminController : ControllerBase
         take = Math.Clamp(take, 20, 2000);
 
         var bayExists = await _context.Bays.AsNoTracking().AnyAsync(b => b.Id == id);
-        if (!bayExists) return NotFound(new { message = "Khoang khong ton tai." });
+        if (!bayExists) return NotFound(new { message = "Khoang không tồn tại." });
 
         var settings = await ReadSettingsAsync();
         var sessions = settings.Sessions
@@ -597,7 +597,7 @@ public class BayAdminController : ControllerBase
             vehicle = await LoadVehicleDescriptorAsync(vehicleId.Value);
             if (vehicle == null)
             {
-                return BadRequest(new { message = "Khong tim thay xe de goi y khoang." });
+                return BadRequest(new { message = "Không tìm thấy xe để gợi ý khoang." });
             }
             normalizedSegment = NormalizeSegment(vehicle.Segment);
         }
@@ -638,7 +638,7 @@ public class BayAdminController : ControllerBase
                     NormalizeForSearch(x.BayType).Contains(normalizedServiceStatus))
                 {
                     score += 20;
-                    reasons.Add("Phu hop trang thai sua chua");
+                        reasons.Add("Phù hợp trạng thái sửa chữa");
                 }
 
                 var freeSlots = x.Capacity - x.OccupiedCount;
@@ -649,7 +649,7 @@ public class BayAdminController : ControllerBase
                 {
                     var distance = EstimateCodeDistance(sourceBay.Code, x.Code);
                     score += Math.Max(0, 15 - distance);
-                    reasons.Add($"Gan khoang nguon (do lech ma: {distance})");
+                        reasons.Add($"Gần khoang nguồn (độ lệch mã: {distance})");
                 }
 
                 if (x.UtilizationRate < 40)
@@ -789,7 +789,7 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> UpdateBay(long id, [FromBody] BayUpsertRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         if (request.BranchId <= 0) return BadRequest(new { message = "BranchId is required." });
         if (string.IsNullOrWhiteSpace(request.Code)) return BadRequest(new { message = "Bay code is required." });
@@ -867,7 +867,7 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> HideBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         var userId = ResolveCurrentUserId();
         var now = VietnamTime.Now;
@@ -891,7 +891,7 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> LockBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         bay.IsActive = false;
         bay.LastStatusChangedAt = VietnamTime.Now;
@@ -907,7 +907,7 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> UnlockBay(long id)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         bay.IsActive = true;
         bay.LastStatusChangedAt = VietnamTime.Now;
@@ -924,12 +924,12 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> UpdateBayStatus(long id, [FromBody] UpdateBayStatusRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         var normalizedStatus = NormalizeOperationalStatus(request.Status);
         if (!IsKnownOperationalStatus(normalizedStatus))
         {
-            return BadRequest(new { message = "Trang thai khoang khong hop le." });
+            return BadRequest(new { message = "Trạng thái khoang không hợp lệ." });
         }
 
         var settings = await ReadSettingsAsync();
@@ -942,7 +942,7 @@ public class BayAdminController : ControllerBase
 
         if (normalizedStatus != StatusActive && activeVehicleCount > 0)
         {
-            return BadRequest(new { message = "Khoang van dang co xe, khong the chuyen sang trang thai khac ACTIVE." });
+                return BadRequest(new { message = "Khoang vẫn đang có xe, không thể chuyển sang trạng thái khác ACTIVE." });
         }
 
         bay.OperationalStatus = normalizedStatus;
@@ -969,10 +969,10 @@ public class BayAdminController : ControllerBase
         if (request.VehicleId <= 0) return BadRequest(new { message = "VehicleId is required." });
 
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         var vehicle = await LoadVehicleDescriptorAsync(request.VehicleId);
-        if (vehicle == null) return BadRequest(new { message = "Khong tim thay xe can gan." });
+        if (vehicle == null) return BadRequest(new { message = "Không tìm thấy xe cần gán." });
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveMetadata(settings, bay.Id);
@@ -999,13 +999,13 @@ public class BayAdminController : ControllerBase
 
         if (activeVehicleSet.Count >= metadata.Capacity)
         {
-            return BadRequest(new { message = "Khoang da day, khong the gan them xe." });
+            return BadRequest(new { message = "Khoang đã đầy, không thể gán thêm xe." });
         }
 
         var normalizedSegment = NormalizeSegment(vehicle.Segment);
         if (!IsSegmentCompatible(normalizedSegment, metadata.SupportedSegments))
         {
-            return BadRequest(new { message = "Khoang khong phu hop voi loai xe nay." });
+            return BadRequest(new { message = "Khoang không phù hợp với loại xe này." });
         }
 
         var activeBayId = await FindVehicleActiveBayAsync(request.VehicleId, settings, ignoreBayId: bay.Id);
@@ -1013,7 +1013,7 @@ public class BayAdminController : ControllerBase
         {
             return BadRequest(new
             {
-                message = $"Xe dang nam trong khoang #{activeBayId.Value}. Hay dieu phoi thay vi gan moi."
+            message = $"Xe đang nằm trong khoang #{activeBayId.Value}. Hãy điều phối thay vì gán mới."
             });
         }
 
@@ -1054,7 +1054,7 @@ public class BayAdminController : ControllerBase
     public async Task<IActionResult> RemoveVehicleFromBay(long id, [FromBody] RemoveVehicleRequest request)
     {
         var bay = await _context.Bays.FirstOrDefaultAsync(b => b.Id == id);
-        if (bay == null) return NotFound(new { message = "Khoang khong ton tai." });
+        if (bay == null) return NotFound(new { message = "Khoang không tồn tại." });
 
         var settings = await ReadSettingsAsync();
         var now = VietnamTime.Now;
@@ -1128,10 +1128,10 @@ public class BayAdminController : ControllerBase
 
         var fromBay = bays.FirstOrDefault(b => b.Id == request.FromBayId);
         var toBay = bays.FirstOrDefault(b => b.Id == request.ToBayId);
-        if (fromBay == null || toBay == null) return BadRequest(new { message = "Khoang nguon hoac dich khong ton tai." });
+        if (fromBay == null || toBay == null) return BadRequest(new { message = "Khoang nguồn hoặc đích không tồn tại." });
 
         var vehicle = await LoadVehicleDescriptorAsync(request.VehicleId);
-        if (vehicle == null) return BadRequest(new { message = "Khong tim thay xe can dieu phoi." });
+        if (vehicle == null) return BadRequest(new { message = "Không tìm thấy xe cần điều phối." });
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveMetadata(settings, toBay.Id);
@@ -1144,7 +1144,7 @@ public class BayAdminController : ControllerBase
 
         if (sourceSession == null && fromBay.CurrentOccupiedVehicleId != request.VehicleId)
         {
-            return BadRequest(new { message = "Xe hien khong nam trong khoang nguon." });
+            return BadRequest(new { message = "Xe hiện không nằm trong khoang nguồn." });
         }
 
         var targetStatus = NormalizeOperationalStatus(toBay.OperationalStatus);
@@ -1165,18 +1165,18 @@ public class BayAdminController : ControllerBase
 
         if (targetActiveVehicleSet.Count >= metadata.Capacity)
         {
-            return BadRequest(new { message = "Khoang dich da day." });
+            return BadRequest(new { message = "Khoang đích đã đầy." });
         }
 
         if (!IsSegmentCompatible(NormalizeSegment(vehicle.Segment), metadata.SupportedSegments))
         {
-            return BadRequest(new { message = "Khoang dich khong phu hop loai xe." });
+            return BadRequest(new { message = "Khoang đích không phù hợp loại xe." });
         }
 
         var activeElsewhere = await FindVehicleActiveBayAsync(request.VehicleId, settings, ignoreBayId: fromBay.Id);
         if (activeElsewhere.HasValue && activeElsewhere.Value != toBay.Id)
         {
-            return BadRequest(new { message = $"Xe dang bi gan o khoang #{activeElsewhere.Value}." });
+            return BadRequest(new { message = $"Xe đang bị gán ở khoang #{activeElsewhere.Value}." });
         }
 
         if (sourceSession != null)
@@ -1525,10 +1525,10 @@ public class BayAdminController : ControllerBase
 
     private static string ValidateBayForAssign(Bay bay, string normalizedStatus)
     {
-        if (bay.IsDeleted == true) return "Khoang da bi an.";
-        if (bay.IsActive == false) return "Khoang dang bi khoa.";
-        if (normalizedStatus == StatusUnderMaintenance) return "Khoang dang bao tri.";
-        if (normalizedStatus == StatusBroken) return "Khoang dang tam ngung.";
+        if (bay.IsDeleted == true) return "Khoang đã bị ẩn.";
+        if (bay.IsActive == false) return "Khoang đang bị khóa.";
+        if (normalizedStatus == StatusUnderMaintenance) return "Khoang đang bảo trì.";
+        if (normalizedStatus == StatusBroken) return "Khoang đang tạm ngưng.";
         return string.Empty;
     }
 
@@ -1667,8 +1667,7 @@ public class BayAdminController : ControllerBase
 
     private long? ResolveCurrentUserId()
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return long.TryParse(claim, out var userId) ? userId : null;
+        return this.GetCurrentUserId();
     }
 
     private async Task<int> GetNextSequenceOrderAsync(long branchId, long? excludeBayId = null)
@@ -1711,7 +1710,7 @@ public class BayAdminController : ControllerBase
 
     private static string NormalizeArea(string? area)
     {
-        if (string.IsNullOrWhiteSpace(area)) return "Chua phan khu";
+        if (string.IsNullOrWhiteSpace(area)) return "Chưa phân khu";
         return area.Trim();
     }
 
@@ -1850,7 +1849,7 @@ public class BayAdminController : ControllerBase
 
     public sealed class BayMetadata
     {
-        public string Area { get; set; } = "Chua phan khu";
+        public string Area { get; set; } = "Chưa phân khu";
         public int Capacity { get; set; } = 1;
         public List<string> SupportedSegments { get; set; } = [];
 
@@ -1957,3 +1956,4 @@ public class BayAdminController : ControllerBase
         public string? Segment { get; set; }
     }
 }
+

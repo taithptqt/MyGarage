@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -19,10 +19,13 @@ function formatDate(value) {
   }
 }
 
-function formatCurrency(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "—";
-  return `${amount.toLocaleString("vi-VN")} ₫`;
+function formatMoney(value) {
+  const amount = Number(value || 0);
+  return `${amount.toLocaleString("vi-VN")} đ`;
+}
+
+function formatQty(value) {
+  return Number(value || 0).toLocaleString("vi-VN");
 }
 
 function normalizeStatus(status) {
@@ -37,19 +40,107 @@ function statusClassName(status) {
   return "cp-chip--soft";
 }
 
-function payerLabel(payerType) {
-  const normalized = normalizeStatus(payerType);
-  if (normalized.includes("INSURANCE")) return "Bảo hiểm";
-  if (normalized.includes("MIX")) return "Hỗn hợp";
-  if (normalized.includes("CUSTOMER")) return "Khách hàng";
-  return payerType || "—";
-}
-
 function normalizeItemType(rawType) {
   const normalized = String(rawType || "").trim().toUpperCase();
   if (["LABOR", "SERVICE", "SERVICES", "WORK"].includes(normalized)) return "SERVICE";
   if (["PART", "PARTS", "PRODUCT", "MATERIAL", "INVENTORY"].includes(normalized)) return "PART";
   return "OTHER";
+}
+
+function extractBomParentServiceName(description) {
+  const text = String(description || "").trim();
+  if (!text) return "";
+  const marker = "Phụ tùng BOM cho dịch vụ:";
+  if (!text.startsWith(marker)) return "";
+  return text.slice(marker.length).trim();
+}
+
+function getPriorityLabel(row) {
+  return row?.isMandatory ? "Bắt buộc" : "Tùy chọn";
+}
+
+function normalizeBooleanLike(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function readField(source, ...keys) {
+  for (const key of keys) {
+    if (source && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+  return null;
+}
+
+function isSupplementaryRow(row) {
+  const serviceSource = String(readField(row, "serviceSource", "ServiceSource") || "").trim().toUpperCase();
+  const isSupplementaryRaw = readField(row, "isSupplementary", "IsSupplementary");
+  return (
+    normalizeBooleanLike(isSupplementaryRaw) ||
+    serviceSource === "SUPPLEMENTARY_TECHNICIAN" ||
+    serviceSource === "SUPPLEMENTARY_CUSTOMER"
+  );
+}
+
+function groupRowsByService(rows) {
+  const groups = [];
+  const byServiceName = new Map();
+  let currentServiceGroupKey = "";
+
+  const ensureServiceGroup = (serviceName) => {
+    const normalizedName = String(serviceName || "").trim();
+    if (!normalizedName) return "";
+    if (byServiceName.has(normalizedName)) return byServiceName.get(normalizedName);
+
+    const key = `svc-${groups.length + 1}`;
+    groups.push({
+      key,
+      title: normalizedName,
+      kind: "SERVICE",
+      serviceRows: [],
+      partRows: [],
+    });
+    byServiceName.set(normalizedName, key);
+    return key;
+  };
+
+  rows.forEach((row, index) => {
+    const rowType = normalizeItemType(row?.itemType);
+    const itemName = String(row?.itemName || "").trim() || `Hạng mục #${index + 1}`;
+    if (rowType === "SERVICE") {
+      const groupKey = ensureServiceGroup(itemName);
+      currentServiceGroupKey = groupKey || currentServiceGroupKey;
+      const target = groups.find((g) => g.key === groupKey);
+      if (target) target.serviceRows.push(row);
+      return;
+    }
+
+    const bomServiceName = extractBomParentServiceName(row?.description);
+    let targetKey = bomServiceName ? ensureServiceGroup(bomServiceName) : "";
+    if (!targetKey && currentServiceGroupKey) targetKey = currentServiceGroupKey;
+    if (!targetKey) {
+      const fallbackKey = "__parts__";
+      let fallback = groups.find((g) => g.key === fallbackKey);
+      if (!fallback) {
+        fallback = {
+          key: fallbackKey,
+          title: "Phụ tùng lẻ",
+          kind: "PARTS_ONLY",
+          serviceRows: [],
+          partRows: [],
+        };
+        groups.push(fallback);
+      }
+      fallback.partRows.push(row);
+      return;
+    }
+
+    const target = groups.find((g) => g.key === targetKey);
+    if (target) target.partRows.push(row);
+  });
+
+  return groups.filter((group) => group.serviceRows.length > 0 || group.partRows.length > 0);
 }
 
 function readNonEmpty(value, fallback = "—") {
@@ -66,6 +157,10 @@ function resolveCurrentUserId(user) {
   return null;
 }
 
+const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
+
 export default function QuotationDetailPage() {
   const { quotationId } = useParams();
   const { user } = useAuth();
@@ -77,7 +172,7 @@ export default function QuotationDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [collapsedPartsByGroup, setCollapsedPartsByGroup] = useState({});
+  const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
 
   useEffect(() => {
     if (!Number.isFinite(numericQuotationId) || numericQuotationId <= 0) {
@@ -107,68 +202,199 @@ export default function QuotationDetailPage() {
   }, [numericQuotationId]);
 
   const details = useMemo(() => (Array.isArray(quotation?.details) ? quotation.details : []), [quotation]);
-  const groupedDetails = useMemo(() => {
-    const groups = [];
-    let currentGroupKey = "";
-    let serviceCounter = 0;
 
-    details.forEach((detail, index) => {
-      const type = normalizeItemType(detail?.itemType);
-      if (type === "SERVICE") {
-        serviceCounter += 1;
-        currentGroupKey = `svc-${serviceCounter}`;
-        groups.push({
-          key: currentGroupKey,
-          title: readNonEmpty(detail?.itemName, `Dịch vụ #${serviceCounter}`),
-          serviceRows: [detail],
-          partRows: [],
-        });
-        return;
-      }
-
-      if (!currentGroupKey) {
-        currentGroupKey = "__parts__";
-        if (!groups.some((group) => group.key === currentGroupKey)) {
-          groups.push({
-            key: currentGroupKey,
-            title: "Phụ tùng lẻ",
-            serviceRows: [],
-            partRows: [],
-          });
-        }
-      }
-
-      const target = groups.find((group) => group.key === currentGroupKey);
-      if (target) target.partRows.push(detail);
-      else {
-        groups.push({
-          key: `misc-${index}`,
-          title: "Hạng mục khác",
-          serviceRows: [],
-          partRows: [detail],
-        });
-      }
+  const detailRowsByServiceType = useMemo(() => {
+    const initialRows = [];
+    const supplementaryRows = [];
+    details.forEach((row) => {
+      if (isSupplementaryRow(row)) supplementaryRows.push(row);
+      else initialRows.push(row);
     });
-
-    return groups;
+    return { initialRows, supplementaryRows };
   }, [details]);
 
-  useEffect(() => {
-    setCollapsedPartsByGroup((prev) => {
-      const next = { ...prev };
-      const activeKeys = new Set();
-      groupedDetails.forEach((group) => {
-        if (group.partRows.length > 0) {
-          activeKeys.add(group.key);
-          if (!(group.key in next)) next[group.key] = true;
-        }
-      });
-      Object.keys(next).forEach((key) => {
-        if (!activeKeys.has(key)) delete next[key];
-      });
-      return next;
+  const groupedRowsByServiceType = useMemo(() => ({
+    initialGroups: groupRowsByService(detailRowsByServiceType.initialRows),
+    supplementaryGroups: groupRowsByService(detailRowsByServiceType.supplementaryRows),
+  }), [detailRowsByServiceType.initialRows, detailRowsByServiceType.supplementaryRows]);
+
+  const vatSummary = useMemo(() => {
+    const groups = new Map();
+    let baseBeforeVat = 0;
+    let totalVat = 0;
+
+    details.forEach((row) => {
+      const quantity = Number(row?.quantity || 0);
+      const unitPrice = Number(row?.unitPriceAtTime || 0);
+      const subTotalRaw = Number(row?.subTotal);
+      const discountValue = Math.max(0, Number(row?.discountValue || 0));
+      const taxRateRaw = Number(row?.taxRate || 0);
+
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw > 0 ? taxRateRaw : 0;
+      const taxAmountRaw = Number(row?.taxAmount);
+      const taxAmount = Number.isFinite(taxAmountRaw)
+        ? Math.max(0, taxAmountRaw)
+        : Number(((taxableBase * taxRate) / 100).toFixed(2));
+
+      baseBeforeVat += taxableBase;
+      totalVat += taxAmount;
+
+      const key = taxRate.toFixed(4);
+      if (!groups.has(key)) groups.set(key, { taxRate, taxableBase: 0, taxAmount: 0 });
+      const target = groups.get(key);
+      target.taxableBase += taxableBase;
+      target.taxAmount += taxAmount;
     });
-  }, [groupedDetails]);
+
+    const normalizedGroups = [...groups.values()]
+      .map((group) => ({
+        taxRate: Number(group.taxRate.toFixed(4)),
+        taxableBase: Number(group.taxableBase.toFixed(2)),
+        taxAmount: Number(group.taxAmount.toFixed(2)),
+      }))
+      .sort((a, b) => a.taxRate - b.taxRate);
+
+    const fallbackSubTotal = Math.max(0, Number(quotation?.subTotalAmount || 0));
+    const fallbackTax = Math.max(0, Number(quotation?.taxAmount || 0));
+    const resolvedBase = normalizedGroups.length > 0 ? Number(baseBeforeVat.toFixed(2)) : fallbackSubTotal;
+    const resolvedVat = normalizedGroups.length > 0 ? Number(totalVat.toFixed(2)) : fallbackTax;
+    const resolvedWithVat = Math.max(0, Number(quotation?.finalAmount || resolvedBase + resolvedVat));
+
+    return {
+      baseBeforeVat: resolvedBase,
+      totalVat: resolvedVat,
+      totalWithVat: resolvedWithVat,
+      groups: normalizedGroups,
+    };
+  }, [details, quotation?.finalAmount, quotation?.subTotalAmount, quotation?.taxAmount]);
+
+  const executionCostSummary = useMemo(() => {
+    let laborBeforeVat = 0;
+    let partsAndMaterialBeforeVat = 0;
+
+    details.forEach((row) => {
+      const quantity = Number(row?.quantity || 0);
+      const unitPrice = Number(row?.unitPriceAtTime || 0);
+      const subTotalRaw = Number(row?.subTotal);
+      const discountValue = Math.max(0, Number(row?.discountValue || 0));
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const taxableBase = Math.max(0, subTotal - discountValue);
+      const rowType = normalizeItemType(row?.itemType);
+      if (rowType === "SERVICE") laborBeforeVat += taxableBase;
+      else partsAndMaterialBeforeVat += taxableBase;
+    });
+
+    return {
+      laborBeforeVat: Number(laborBeforeVat.toFixed(2)),
+      partsAndMaterialBeforeVat: Number(partsAndMaterialBeforeVat.toFixed(2)),
+    };
+  }, [details]);
+
+  const paymentSummary = useMemo(() => {
+    const totalRepairCost = Number(vatSummary.totalWithVat || 0);
+    const insuranceCompensation = Number(quotation?.totalInsuranceAmount || 0);
+    const baselineCustomerPayable = Math.max(totalRepairCost - insuranceCompensation, 0);
+    const customerPayable = Number(quotation?.totalCustomerAmount ?? baselineCustomerPayable);
+    const deductibleOrPenalty = customerPayable - baselineCustomerPayable;
+
+    return {
+      totalLabor: executionCostSummary.laborBeforeVat,
+      totalParts: executionCostSummary.partsAndMaterialBeforeVat,
+      beforeVat: vatSummary.baseBeforeVat,
+      totalVat: vatSummary.totalVat,
+      vatGroups: Array.isArray(vatSummary.groups) ? vatSummary.groups : [],
+      totalRepairCost,
+      insuranceCompensation,
+      deductibleOrPenalty,
+      customerPayable,
+    };
+  }, [
+    executionCostSummary.laborBeforeVat,
+    executionCostSummary.partsAndMaterialBeforeVat,
+    quotation?.totalCustomerAmount,
+    quotation?.totalInsuranceAmount,
+    vatSummary.baseBeforeVat,
+    vatSummary.groups,
+    vatSummary.totalVat,
+    vatSummary.totalWithVat,
+  ]);
+
+  const renderGroupedTableSection = (sectionKey, title, groups, emptyMessage, sectionClassName = "") => (
+    <div className={`quote-detail-section ${sectionClassName}`.trim()}>
+      <div className="quote-detail-section-title">{title}</div>
+      <table className="premium-table">
+        <thead>
+          <tr>
+            <th style={{ width: "50%", textAlign: "left" }}>TÊN HẠNG MỤC / DESCRIPTION</th>
+            <th className="quote-portal-col-priority text-center" style={{ width: "15%" }}>ƯU TIÊN</th>
+            <th className="text-center" style={{ width: "5%" }}>SL</th>
+            <th className="text-right" style={{ width: "15%" }}>ĐƠN GIÁ</th>
+            <th className="text-right" style={{ width: "15%" }}>THÀNH TIỀN</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="quote-detail-empty">{emptyMessage}</td>
+            </tr>
+          ) : groups.map((group) => {
+            const collapseKey = `${sectionKey}-${group.key}`;
+            const canToggle = group.partRows.length > 0;
+            const isCollapsed = canToggle ? Boolean(collapsedPartGroups[collapseKey]) : false;
+            const visibleRows = [
+              ...group.serviceRows.map((row) => ({ row, isService: true })),
+              ...(isCollapsed ? [] : group.partRows.map((row) => ({ row, isService: false }))),
+            ];
+            return (
+              <Fragment key={`${title}-${group.key}`}>
+                {visibleRows.map(({ row, isService }, rowIndex) => {
+                  const isFirst = rowIndex === 0;
+                  const isLast = rowIndex === visibleRows.length - 1;
+                  const serviceRowTooltip = isService
+                    ? (canToggle ? (isCollapsed ? SERVICE_ROW_TOOLTIP_EXPAND : SERVICE_ROW_TOOLTIP_COLLAPSE) : SERVICE_ROW_TOOLTIP_STATIC)
+                    : "";
+                  const rowClass = [
+                    "group-row",
+                    "item-row",
+                    isService ? "group-service-row quote-portal-item-service-row" : "group-part-row",
+                    isFirst ? "group-start" : "group-middle",
+                    isLast ? "group-end" : "",
+                    canToggle && isFirst ? "clickable-service-row" : "",
+                  ].join(" ").trim();
+
+                  return (
+                    <tr
+                      key={`${isService ? "svc" : "part"}-${title}-${row.id || rowIndex}`}
+                      className={rowClass}
+                      title={serviceRowTooltip}
+                      onClick={canToggle && isFirst ? () => setCollapsedPartGroups((prev) => ({ ...prev, [collapseKey]: !prev[collapseKey] })) : undefined}
+                    >
+                      <td className={isService ? "service-name-cell quote-portal-item-service" : "part-name-cell quote-portal-item-part"}>
+                        {!isService ? <span className="quote-portal-item-prefix">└─</span> : null}
+                        {row.itemName}
+                      </td>
+                      <td className="quote-portal-col-priority text-center">
+                        <span className={`priority-badge ${row.isMandatory ? "priority-URGENT" : "priority-NORMAL"}`}>
+                          {getPriorityLabel(row)}
+                        </span>
+                      </td>
+                      <td className="text-center">{formatQty(row.quantity)}</td>
+                      <td className="text-right">{formatMoney(row.unitPriceAtTime)}</td>
+                      <td className="text-right">{formatMoney(row.finalAmount)}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="group-spacer-row"><td colSpan="5"></td></tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   const quotationStatus = normalizeStatus(quotation?.status);
   const canCustomerDecide = ["APPROVED", "SENT_TO_CUSTOMER"].includes(quotationStatus);
 
@@ -256,95 +482,128 @@ export default function QuotationDetailPage() {
                 </div>
               </section>
 
-              <section className="cp-card cp-card--secondary cp-quote-money-grid">
-                <div className="cp-quote-money-item"><span>Tạm tính</span><strong>{formatCurrency(quotation.subTotalAmount)}</strong></div>
-                <div className="cp-quote-money-item"><span>Giảm giá</span><strong>{formatCurrency(quotation.totalDiscount)}</strong></div>
-                <div className="cp-quote-money-item"><span>Thuế</span><strong>{formatCurrency(quotation.taxAmount)}</strong></div>
-                <div className="cp-quote-money-item cp-quote-money-item--total"><span>Tổng thanh toán</span><strong>{formatCurrency(quotation.finalAmount)}</strong></div>
-                <div className="cp-quote-money-item"><span>Bảo hiểm chi trả</span><strong>{formatCurrency(quotation.totalInsuranceAmount)}</strong></div>
-                <div className="cp-quote-money-item"><span>Khách hàng chi trả</span><strong>{formatCurrency(quotation.totalCustomerAmount)}</strong></div>
-              </section>
-
               <section className="cp-card cp-quote-detail-card">
-                <div className="cp-section-head">
-                  <div>
-                    <p className="cp-eyebrow">Chi tiết</p>
-                    <h2 className="cp-section-title">Hạng mục báo giá</h2>
-                  </div>
-                  <span className="cp-muted">{details.length} hạng mục</span>
+                <div className="premium-table-wrapper quote-detail-wrapper">
+                  {renderGroupedTableSection(
+                    "initial",
+                    "Dịch vụ khách chọn ban đầu",
+                    groupedRowsByServiceType.initialGroups,
+                    "Không có dịch vụ ban đầu.",
+                  )}
+                  {renderGroupedTableSection(
+                    "supplementary",
+                    "Dịch vụ phát sinh (đã duyệt báo giá bổ sung)",
+                    groupedRowsByServiceType.supplementaryGroups,
+                    "Chưa có dịch vụ phát sinh.",
+                    "quote-detail-section-supplementary",
+                  )}
                 </div>
-
-                {details.length === 0 ? (
-                  <p className="cp-muted">Báo giá này chưa có hạng mục chi tiết.</p>
-                ) : (
-                  <div className="cp-quote-group-list">
-                    {groupedDetails.map((group) => {
-                      const isCollapsed = Boolean(collapsedPartsByGroup[group.key]);
-                      const rows = [...group.serviceRows, ...(isCollapsed ? [] : group.partRows)];
-                      const groupTotal = [...group.serviceRows, ...group.partRows]
-                        .reduce((sum, row) => sum + Number(row?.finalAmount || 0), 0);
-
-                      return (
-                        <article key={group.key} className="cp-quote-group">
-                          <header className="cp-quote-group-head">
-                            <h3>{group.title}</h3>
-                            <div className="cp-quote-group-head-actions">
-                              {group.partRows.length > 0 ? (
-                                <button
-                                  type="button"
-                                  className="cp-quote-group-toggle"
-                                  onClick={() =>
-                                    setCollapsedPartsByGroup((prev) => ({
-                                      ...prev,
-                                      [group.key]: !prev[group.key],
-                                    }))
-                                  }
-                                >
-                                  {isCollapsed ? `Hiện phụ tùng (${group.partRows.length})` : "Thu gọn phụ tùng"}
-                                </button>
-                              ) : null}
-                              <strong>{formatCurrency(groupTotal)}</strong>
-                            </div>
-                          </header>
-                          <div className="cp-quote-table-wrap">
-                            <table className="cp-quote-table">
-                              <thead>
-                                <tr>
-                                  <th>Hạng mục</th>
-                                  <th>Số lượng</th>
-                                  <th>Đơn giá</th>
-                                  <th>Giảm giá</th>
-                                  <th>Thuế</th>
-                                  <th>Thành tiền</th>
-                                  <th>Người thanh toán</th>
-                                  <th>Duyệt</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {rows.map((detail) => (
-                                  <tr key={readNonEmpty(detail.id, `${detail.itemId}-${detail.itemName}`)}>
-                                    <td>
-                                      <div className="cp-quote-item-name">{readNonEmpty(detail.itemName)}</div>
-                                      <div className="cp-muted cp-quote-item-desc">{readNonEmpty(detail.description)}</div>
-                                    </td>
-                                    <td>{readNonEmpty(detail.quantity)}</td>
-                                    <td>{formatCurrency(detail.unitPriceAtTime)}</td>
-                                    <td>{formatCurrency(detail.discountValue)}</td>
-                                    <td>{formatCurrency(detail.taxAmount)}</td>
-                                    <td>{formatCurrency(detail.finalAmount)}</td>
-                                    <td><span className={`cp-chip ${statusClassName(detail.payerType)}`}>{payerLabel(detail.payerType)}</span></td>
-                                    <td><span className={`cp-chip ${statusClassName(detail.approvalStatus)}`}>{readNonEmpty(detail.approvalStatus)}</span></td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
               </section>
+
+              <div className="quote-summary-footer">
+                <div className="summary-details">
+                  <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
+
+                  <div className="summary-subtitle">Phân tách giá trị (Chưa VAT):</div>
+                  <div className="summary-line">
+                    <span className="summary-line-label">
+                      <span className="summary-marker marker-labor" />
+                      Tổng chi phí Nhân công
+                    </span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value">{formatMoney(paymentSummary.totalLabor)}</span>
+                  </div>
+                  <div className="summary-line">
+                    <span className="summary-line-label">
+                      <span className="summary-marker marker-parts" />
+                      Tổng chi phí Phụ tùng / Vật tư
+                    </span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value">{formatMoney(paymentSummary.totalParts)}</span>
+                  </div>
+                  <div className="summary-line summary-line-strong">
+                    <span className="summary-line-label">TỔNG TIỀN HÀNG (CHƯA THUẾ)</span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value">{formatMoney(paymentSummary.beforeVat)}</span>
+                  </div>
+
+                  <div className="summary-subtitle">Thuế Giá trị gia tăng (VAT):</div>
+                  {paymentSummary.vatGroups.length > 0
+                    ? paymentSummary.vatGroups.map((group) => (
+                      <div key={`vat-${group.taxRate}`} className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-vat" />
+                          Thuế VAT ({group.taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%)
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(group.taxAmount)}</span>
+                      </div>
+                    ))
+                    : (
+                      <div className="summary-line">
+                        <span className="summary-line-label">
+                          <span className="summary-marker marker-vat" />
+                          Thuế VAT
+                        </span>
+                        <span className="summary-line-dots" />
+                        <span className="summary-line-value">{formatMoney(paymentSummary.totalVat)}</span>
+                      </div>
+                    )}
+                  <div className="summary-line summary-line-strong">
+                    <span className="summary-line-label">TỔNG CHI PHÍ SỬA CHỮA (BAO GỒM THUẾ)</span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value">{formatMoney(paymentSummary.totalRepairCost)}</span>
+                  </div>
+
+                  <div className="summary-divider" />
+                  <div className="summary-subtitle">Phân bổ thanh toán:</div>
+                  <div className="summary-line">
+                    <span className="summary-line-label">
+                      <span className="summary-marker marker-insurance" />
+                      Bảo hiểm phê duyệt
+                    </span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value text-insurance">-{formatMoney(paymentSummary.insuranceCompensation)}</span>
+                  </div>
+                  <div className="summary-line">
+                    <span className="summary-line-label">
+                      <span className="summary-marker marker-deductible" />
+                      Phí Miễn thường / Chế tài
+                    </span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value">+{formatMoney(paymentSummary.deductibleOrPenalty)}</span>
+                  </div>
+
+                  <div className="summary-divider" />
+
+                  <div className="summary-line payable-row">
+                    <span className="summary-line-label">TỔNG KHÁCH HÀNG THANH TOÁN</span>
+                    <span className="summary-line-dots" />
+                    <span className="summary-line-value final-payable">{formatMoney(paymentSummary.customerPayable)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {canCustomerDecide && (
+                <div className="floating-bottom-bar">
+                  <div className="floating-bar-content">
+                    <div className="floating-bar-left">
+                      <span className="floating-bar-label">Tổng thanh toán</span>
+                      <span className="floating-bar-value">{formatMoney(paymentSummary.customerPayable)}</span>
+                    </div>
+                    <div className="floating-bar-right">
+                      <button
+                        type="button"
+                        className="floating-bar-btn"
+                        onClick={() => handleCustomerDecision(true)}
+                        disabled={saving}
+                      >
+                        Đồng ý duyệt
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : null}
         </div>

@@ -15,6 +15,8 @@ namespace MyGarage.DTOs.Responses
         public DateTime? ActualEndTime { get; set; }
         public string? Status { get; set; }
         public bool? IsRework { get; set; }
+        public bool RequiresInsuranceProof { get; set; }
+        public string? ProofImageUrl { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }

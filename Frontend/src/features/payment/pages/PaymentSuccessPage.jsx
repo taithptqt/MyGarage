@@ -20,19 +20,19 @@ function normalizeOrderStatus(order) {
 function getMessageByStatus(status, isRetail) {
   if (status === "COMPLETED") {
     return isRetail
-      ? "Thanh toan don phu tung da duoc xac nhan thanh cong."
-      : "Thanh toan da duoc xac nhan thanh cong.";
+      ? "Thanh toán đơn phụ tùng đã được xác nhận thành công."
+      : "Thanh toán đã được xác nhận thành công.";
   }
 
   if (status === "CANCELED" || status === "FAILED") {
-    return "Giao dich chua thanh cong. Ban co the thu lai.";
+    return "Giao dịch chưa thành công. Bạn có thể thử lại.";
   }
 
   if (status === "UNKNOWN") {
-    return "Khong the doi soat giao dich luc nay.";
+    return "Không thể đối soát giao dịch lúc này.";
   }
 
-  return "Giao dich dang cho xac nhan. He thong se tu dong cap nhat.";
+  return "Giao dịch đang chờ xác nhận. Hệ thống sẽ tự động cập nhật.";
 }
 
 function getStatusStyle(status) {
@@ -59,7 +59,7 @@ export default function PaymentSuccessPage() {
   const retrySearch = useMemo(() => localStorage.getItem("payos_last_payment_search") || "", []);
 
   const [status, setStatus] = useState("PENDING");
-  const [message, setMessage] = useState("Dang xac nhan giao dich voi PayOS...");
+  const [message, setMessage] = useState("Đang xác nhận giao dịch với PayOS...");
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -91,7 +91,7 @@ export default function PaymentSuccessPage() {
       setMessage(
         orderBasedStatus
           ? getMessageByStatus(current, isRetailCheckout)
-          : "Khong tim thay ma giao dich de doi soat."
+          : "Không tìm thấy mã giao dịch để đối soát."
       );
       setLoading(false);
       return current;
@@ -106,7 +106,7 @@ export default function PaymentSuccessPage() {
         setMessage(
           orderBasedStatus
             ? getMessageByStatus(fallbackStatus, isRetailCheckout)
-            : (result.data?.message || "Khong lay duoc trang thai thanh toan.")
+            : (result.data?.message || "Không lấy được trạng thái thanh toán.")
         );
         setLoading(false);
         return fallbackStatus;
@@ -190,7 +190,7 @@ export default function PaymentSuccessPage() {
   return (
     <div>
       <h1 style={{ fontSize: 26, fontWeight: 700, color: "#111827", marginBottom: 14 }}>
-        Ket qua thanh toan
+        Kết quả thanh toán
       </h1>
 
       <div className="booking-card" style={{ maxWidth: 760 }}>
@@ -216,7 +216,7 @@ export default function PaymentSuccessPage() {
 
         {redirecting ? (
           <p style={{ marginTop: 10, marginBottom: 0, color: "#1d4ed8", fontWeight: 600 }}>
-            Dang chuyen den danh sach don phu tung...
+            Đang chuyển đến danh sách đơn phụ tùng...
           </p>
         ) : null}
 
@@ -227,7 +227,7 @@ export default function PaymentSuccessPage() {
             disabled={loading || redirecting}
             style={{ marginTop: 0, width: "auto" }}
           >
-            Kiem tra lai
+            Kiểm tra lại
           </button>
 
           <Link
@@ -235,7 +235,7 @@ export default function PaymentSuccessPage() {
             className="btn-book"
             style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0, width: "auto" }}
           >
-            {isRetailCheckout ? "Xem don phu tung" : "Tao giao dich moi"}
+            {isRetailCheckout ? "Xem đơn phụ tùng" : "Tạo giao dịch mới"}
           </Link>
 
           {isRetailCheckout ? (
@@ -244,7 +244,7 @@ export default function PaymentSuccessPage() {
               className="btn-popup-secondary"
               style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
             >
-              Quay lai Part Shop
+              Quay lại Part Shop
             </Link>
           ) : null}
         </div>

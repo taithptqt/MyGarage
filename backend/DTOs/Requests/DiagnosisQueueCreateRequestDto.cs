@@ -11,5 +11,6 @@ namespace MyGarage.DTOs.Requests
         public bool? CustomerConsentAccepted { get; set; }
         public string? CustomerConsentChannel { get; set; }
         public string? CustomerConsentNote { get; set; }
+        public string? AssignmentNote { get; set; }
     }
 }

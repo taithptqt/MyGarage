@@ -41,7 +41,10 @@ namespace MyGarage.DTOs.Requests
         public string? InsuranceQuoteState { get; set; }
         public List<string> InsuranceCardImageUrls { get; set; } = new();
         public List<string> InsuranceDamageImageUrls { get; set; } = new();
+
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
+
         public long? ReplaceAppointmentId { get; set; }
         public List<ReceptionAppointmentVehiclePlanItemDto> VehiclePlans { get; set; } = new();
     }
@@ -58,7 +61,10 @@ namespace MyGarage.DTOs.Requests
         public int? TotalMinutes { get; set; }
         public string? RequestedServiceIds { get; set; }
         public string? RequestedPackageIds { get; set; }
+
+        [Display(Name = "Ghi chú")]
         public string? CustomerNotes { get; set; }
+
         public string? SlotHoldToken { get; set; }
         [RegularExpression(ValidationPatterns.VietnamLicensePlate, ErrorMessage = ValidationMessages.VietnamLicensePlate)]
         public string? LicensePlate { get; set; }

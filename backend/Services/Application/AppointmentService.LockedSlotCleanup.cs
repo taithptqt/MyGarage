@@ -27,7 +27,7 @@ namespace MyGarage.Services
             var expiredById = expiredSlots.ToDictionary(s => s.Id, s => s);
             foreach (var slot in expiredSlots)
             {
-                slot.Status = nameof(WorkSlotStatus.CANCELLED);
+                slot.Status = nameof(WorkSlotStatus.CANCELED);
                 slot.ActualReleaseTime ??= releasedAt;
                 if (slot.EndTime < releasedAt)
                 {
@@ -65,7 +65,7 @@ namespace MyGarage.Services
             var utcNow = _clock.UtcNow;
             foreach (var reservation in reservations)
             {
-                reservation.Status = "CANCELLED";
+                reservation.Status = "CANCELED";
                 reservation.UpdateAt = utcNow;
                 reservation.UpdateBy = null;
             }
@@ -75,3 +75,4 @@ namespace MyGarage.Services
         }
     }
 }
+

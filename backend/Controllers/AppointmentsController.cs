@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -232,18 +233,18 @@ namespace MyGarage.Controllers
             var capability = await _appointmentService.GetEditCapabilityAsync(id);
             if (capability == null)
             {
-                return NotFound(new { message = "Không tìm th?y l?ch h?n." });
+                return NotFound(new { message = "Không tìm thấy lịch hẹn." });
             }
 
             if (capability.CanEdit)
             {
-                return BadRequest(new { message = "L?ch h?n hi?n chua b? khóa, không c?n g?i yêu c?u s?a." });
+                return BadRequest(new { message = "Lịch hẹn hiện chưa bị khóa, không cần gửi yêu cầu sửa." });
             }
 
             var reason = (dto?.Reason ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(reason))
             {
-                return BadRequest(new { message = "Vui lòng nh?p lý do yêu c?u s?a." });
+                return BadRequest(new { message = "Vui lòng nhập lý do yêu cầu sửa." });
             }
 
             var actorUserId = this.GetCurrentUserId() ?? dto?.RequestedByUserId;
@@ -279,7 +280,7 @@ namespace MyGarage.Controllers
 
             return Ok(new
             {
-                message = "Ðã ghi nh?n yêu c?u s?a l?ch h?n.",
+                message = "Đã ghi nhận yêu cầu sửa lịch hẹn.",
                 requestId = created.Id
             });
         }
@@ -291,7 +292,7 @@ namespace MyGarage.Controllers
             var decision = NormalizeToken(dto?.Decision);
             if (decision is not ("APPROVE" or "REJECT"))
             {
-                return BadRequest(new { message = "Decision ph?i là APPROVE ho?c REJECT." });
+                return BadRequest(new { message = "Decision phải là APPROVE hoặc REJECT." });
             }
 
             var actorUserId = this.GetCurrentUserId();
@@ -306,19 +307,19 @@ namespace MyGarage.Controllers
                 !string.Equals(requestLog.TableName, "APPOINTMENTS", StringComparison.OrdinalIgnoreCase) ||
                 requestLog.RecordId != id)
             {
-                return NotFound(new { message = "Không tìm th?y yêu c?u s?a c?n x? lý." });
+                return NotFound(new { message = "Không tìm thấy yêu cầu sửa cần xử lý." });
             }
 
             var payload = DeserializeEditRequestPayload(requestLog.NewValue);
             if (payload == null)
             {
-                return BadRequest(new { message = "D? li?u yêu c?u s?a không h?p l?." });
+                return BadRequest(new { message = "Dữ liệu yêu cầu sửa không hợp lệ." });
             }
 
             var currentStatus = NormalizeToken(payload.Status);
             if (!string.Equals(currentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(new { message = "Yêu c?u s?a này dã du?c x? lý tru?c dó." });
+                return BadRequest(new { message = "Yêu cầu sửa này đã được xử lý trước đó." });
             }
 
             var requestedSection = NormalizeSection(payload.Section, "APPOINTMENT");
@@ -331,7 +332,7 @@ namespace MyGarage.Controllers
             var note = string.IsNullOrWhiteSpace(dto?.Note) ? null : dto!.Note!.Trim();
             if (decision == "REJECT" && string.IsNullOrWhiteSpace(note))
             {
-                return BadRequest(new { message = "Vui lòng nh?p lý do t? ch?i yêu c?u s?a." });
+                return BadRequest(new { message = "Vui lòng nhập lý do từ chối yêu cầu sửa." });
             }
 
             var now = VietnamTime.Now;
@@ -345,41 +346,45 @@ namespace MyGarage.Controllers
             payload.OverrideUntilUtc = decision == "APPROVE" ? now.AddHours(2) : null;
 
             var beforeDecision = requestLog.NewValue;
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync<IActionResult>(async () =>
             {
-                requestLog.NewValue = JsonSerializer.Serialize(payload);
-                await _auditLogService.UpdateAsync(requestLog.Id, requestLog);
-
-                await _auditLogService.AddAsync(new AuditLog
+                await using var transaction = await TryBeginTransactionAsync();
+                try
                 {
-                    UserId = actorUserId.Value,
-                    UserType = "STAFF",
-                    BranchId = requestLog.BranchId,
-                    Action = "DECIDE_EDIT_REQUEST",
-                    TableName = requestLog.TableName,
-                    RecordId = requestLog.RecordId,
-                    OldValue = beforeDecision,
-                    NewValue = requestLog.NewValue,
-                    Timestamp = now
-                });
+                    requestLog.NewValue = JsonSerializer.Serialize(payload);
+                    await _auditLogService.UpdateAsync(requestLog.Id, requestLog);
 
-                await transaction.CommitAsync();
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await _auditLogService.AddAsync(new AuditLog
+                    {
+                        UserId = actorUserId.Value,
+                        UserType = "STAFF",
+                        BranchId = requestLog.BranchId,
+                        Action = "DECIDE_EDIT_REQUEST",
+                        TableName = requestLog.TableName,
+                        RecordId = requestLog.RecordId,
+                        OldValue = beforeDecision,
+                        NewValue = requestLog.NewValue,
+                        Timestamp = now
+                    });
 
-            return Ok(new
-            {
-                requestId = requestLog.Id,
-                decision = payload.Status,
-                overrideUntilUtc = payload.OverrideUntilUtc,
-                message = decision == "APPROVE"
-                    ? "Ðã duy?t yêu c?u s?a l?ch h?n."
-                    : "Ðã t? ch?i yêu c?u s?a l?ch h?n."
+                    if (transaction != null) await transaction.CommitAsync();
+
+                    return Ok(new
+                    {
+                        requestId = requestLog.Id,
+                        decision = payload.Status,
+                        overrideUntilUtc = payload.OverrideUntilUtc,
+                        message = decision == "APPROVE"
+                            ? "Đã duyệt yêu cầu sửa lịch hẹn."
+                            : "Đã từ chối yêu cầu sửa lịch hẹn."
+                    });
+                }
+                catch
+                {
+                    if (transaction != null) await transaction.RollbackAsync();
+                    throw;
+                }
             });
         }
 
@@ -481,7 +486,7 @@ namespace MyGarage.Controllers
         {
             if (!dto.CustomerId.HasValue)
             {
-                return BadRequest(new { message = "Vui lòng cung c?p CustomerId cho lu?ng guest." });
+                return BadRequest(new { message = "Vui lòng cung cấp CustomerId cho luồng guest." });
             }
 
             try
@@ -701,8 +706,8 @@ namespace MyGarage.Controllers
             return builder
                 .ToString()
                 .Normalize(NormalizationForm.FormC)
-                .Replace('d', 'd')
-                .Replace('Ð', 'D')
+                .Replace('đ', 'd')
+                .Replace('Đ', 'D')
                 .ToUpperInvariant()
                 .Replace('-', '_')
                 .Replace(' ', '_');
@@ -793,6 +798,17 @@ namespace MyGarage.Controllers
             public string? DecidedByRoleCode { get; set; }
             public string? DecidedByRoleName { get; set; }
             public DateTime? OverrideUntilUtc { get; set; }
+        }
+        private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _context.Database.BeginTransactionAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
     }
 }

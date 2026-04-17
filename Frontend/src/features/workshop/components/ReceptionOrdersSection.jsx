@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { createChatHubConnection } from "@features/chat/realtime/chatHubConnection";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
 import DateRangePickerModal, { getDateRangeButtonLabel } from "@features/admin/components/DateRangePickerModal";
@@ -86,19 +87,35 @@ function resolveGroupStatus(statuses) {
   return sorted[0];
 }
 
+function parseApiDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const hasTimezone = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+  const normalized = hasTimezone ? raw : `${raw}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toApiDateMillis(value) {
+  return parseApiDate(value)?.getTime() ?? 0;
+}
+
 function formatOrderDate(value) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
+  const parsed = parseApiDate(value);
+  if (!parsed) return "-";
   return parsed.toLocaleDateString("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
 function formatOrderTime(value) {
-  if (!value) return "--:--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "--:--";
+  const parsed = parseApiDate(value);
+  if (!parsed) return "--:--";
   return parsed.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -139,6 +156,14 @@ function hasOrderPartsFollowUp(order) {
   );
 }
 
+function hasOrderSupplementaryQuoteProposal(order) {
+  return Boolean(
+    order?.requiresSupplementaryQuote
+    || order?.RequiresSupplementaryQuote
+    || Number(order?.supplementaryPendingCount ?? order?.SupplementaryPendingCount ?? 0) > 0
+  );
+}
+
 function parseDispatchReviewOrderIds() {
   if (typeof window === "undefined") return new Set();
   try {
@@ -158,6 +183,12 @@ function parseDispatchReviewOrderIds() {
 function getOrderIssueLabel(order) {
   if (hasOrderPartsFollowUp(order)) {
     return "Thiếu phụ tùng, cần gọi khách";
+  }
+  if (hasOrderSupplementaryQuoteProposal(order)) {
+    const pendingCount = Number(order?.supplementaryPendingCount ?? order?.SupplementaryPendingCount ?? 0);
+    return pendingCount > 0
+      ? `Có ${pendingCount} đề xuất phải lập báo giá bổ sung`
+      : "Có đề xuất phải lập báo giá bổ sung";
   }
   if (hasOrderDispatchReview(order)) {
     return "Cần điều phối thủ công";
@@ -206,6 +237,8 @@ export default function ReceptionOrdersSection() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(10);
   const [actingGroup, setActingGroup] = useState(null);
+  const [supplementaryToast, setSupplementaryToast] = useState(null);
+  const supplementaryToastTimerRef = useRef(null);
 
   const contextBranchId = parseBranchId(selectedBranchId);
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
@@ -215,17 +248,31 @@ export default function ReceptionOrdersSection() {
     setLoading(true);
     setError("");
     try {
-      const [oRes, cRes, vRes, sRes, rRes, diagnosisRes] = await Promise.all([
+      const [oRes, cRes, vRes, sRes, rRes, diagnosisRes, supplementaryRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllCustomers(),
         getAllVehicles(),
         getAllStaff(),
         getAllRoles(),
         serviceOrderApi.getDiagnoses().catch(() => []),
+        serviceOrderApi.getPendingSupplementaryProposals(
+          effectiveBranchId ? { branchId: effectiveBranchId } : undefined
+        ).catch(() => []),
       ]);
 
       const diagnosisList = Array.isArray(diagnosisRes) ? diagnosisRes : [];
+      const supplementaryList = Array.isArray(supplementaryRes) ? supplementaryRes : [];
       const diagnosisByOrderId = new Map();
+      const supplementaryByOrderId = new Map(
+        supplementaryList
+          .map((item) => {
+            const soId = Number(item?.serviceOrderId ?? item?.ServiceOrderId ?? 0);
+            const pendingCount = Number(item?.pendingCount ?? item?.PendingCount ?? 0);
+            if (!Number.isFinite(soId) || soId <= 0) return null;
+            return [soId, Number.isFinite(pendingCount) ? Math.max(0, pendingCount) : 0];
+          })
+          .filter(Boolean),
+      );
       const persistedDispatchReviewOrderIds = parseDispatchReviewOrderIds();
       let shouldPersistDispatchReviewOrderIds = false;
       diagnosisList.forEach((item) => {
@@ -252,6 +299,7 @@ export default function ReceptionOrdersSection() {
 
         const diagnosisDispatchIssue =
           hasAutoDispatchWarning || (hasPendingUnassigned && orderStatus === "DIAGNOSING");
+        const supplementaryPendingCount = supplementaryByOrderId.get(orderId) || 0;
 
         return {
           ...order,
@@ -259,6 +307,8 @@ export default function ReceptionOrdersSection() {
           __persistedDispatchReviewIssue: persistedDispatchReviewOrderIds.has(orderId),
           requiresDispatchReview: diagnosisDispatchIssue || persistedDispatchReviewOrderIds.has(orderId),
           hasDiagnosisDispatchWarning: diagnosisDispatchIssue || persistedDispatchReviewOrderIds.has(orderId),
+          requiresSupplementaryQuote: supplementaryPendingCount > 0,
+          supplementaryPendingCount,
         };
       });
 
@@ -311,6 +361,50 @@ export default function ReceptionOrdersSection() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    let isDisposed = false;
+    const connection = createChatHubConnection();
+
+    const handleSupplementaryUpdated = (payload) => {
+      if (isDisposed) return;
+      const orderId = Number(payload?.serviceOrderId ?? payload?.ServiceOrderId ?? 0);
+      if (Number.isFinite(orderId) && orderId > 0) {
+        const orderCode = String(payload?.serviceOrderCode ?? payload?.ServiceOrderCode ?? "").trim();
+        const message = orderCode
+          ? `Có đề xuất phát sinh mới cho lệnh ${orderCode}. Vui lòng lập báo giá bổ sung.`
+          : "Có đề xuất phát sinh mới. Vui lòng lập báo giá bổ sung.";
+        setSupplementaryToast({ orderId, orderCode, message });
+        if (supplementaryToastTimerRef.current) clearTimeout(supplementaryToastTimerRef.current);
+        supplementaryToastTimerRef.current = setTimeout(() => {
+          setSupplementaryToast(null);
+          supplementaryToastTimerRef.current = null;
+        }, 8000);
+        fetchData();
+      }
+    };
+
+    connection.on("SupplementaryProposalUpdated", handleSupplementaryUpdated);
+
+    connection
+      .start()
+      .catch(() => {
+        // realtime is best-effort, polling/refresh still works.
+      });
+
+    return () => {
+      isDisposed = true;
+      connection.off("SupplementaryProposalUpdated", handleSupplementaryUpdated);
+      connection.stop().catch(() => {});
+    };
+  }, [fetchData]);
+
+  useEffect(() => () => {
+    if (supplementaryToastTimerRef.current) {
+      clearTimeout(supplementaryToastTimerRef.current);
+      supplementaryToastTimerRef.current = null;
+    }
+  }, []);
+
   const getOrderCustomerName = useCallback((order) => {
     if (order.customerName) return order.customerName;
     const customer = customers.find((c) => Number(c.id) === Number(order.customerId));
@@ -344,7 +438,7 @@ export default function ReceptionOrdersSection() {
 
     const list = (orders || []).filter((order) => {
       const byStatus = orderStatusFilter === "ALL" || normalizeStatus(order.status) === orderStatusFilter;
-      const createdAtTime = new Date(order.createdAt || 0).getTime();
+      const createdAtTime = toApiDateMillis(order.createdAt);
       const byDate =
         (!startDate || createdAtTime >= startDate.getTime()) &&
         (!endDate || createdAtTime <= endDate.getTime());
@@ -364,12 +458,12 @@ export default function ReceptionOrdersSection() {
     });
 
     return list.sort((a, b) => {
-      const createdA = new Date(a.createdAt || 0).getTime();
-      const createdB = new Date(b.createdAt || 0).getTime();
-      const checkInA = new Date(a.checkInTime || 0).getTime();
-      const checkInB = new Date(b.checkInTime || 0).getTime();
-      const scheduledA = new Date(a.estimatedHandover || 0).getTime();
-      const scheduledB = new Date(b.estimatedHandover || 0).getTime();
+      const createdA = toApiDateMillis(a.createdAt);
+      const createdB = toApiDateMillis(b.createdAt);
+      const checkInA = toApiDateMillis(a.checkInTime);
+      const checkInB = toApiDateMillis(b.checkInTime);
+      const scheduledA = toApiDateMillis(a.estimatedHandover);
+      const scheduledB = toApiDateMillis(b.estimatedHandover);
 
       if (orderSortBy === "CREATED_ASC") {
         if (createdA !== createdB) return createdA - createdB;
@@ -607,6 +701,44 @@ export default function ReceptionOrdersSection() {
         </div>
       )}
 
+      {supplementaryToast && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "12px 14px",
+            borderRadius: 10,
+            border: "1px solid #f2d37b",
+            background: "#fff9e8",
+            color: "#6b4d00",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>{supplementaryToast.message}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {Number.isFinite(Number(supplementaryToast.orderId)) && Number(supplementaryToast.orderId) > 0 ? (
+              <button
+                type="button"
+                className="toolbar-action-btn toolbar-action-outline"
+                onClick={() => navigate(`/workshop/reception/orders/${supplementaryToast.orderId}/quote?intent=supplementary`)}
+              >
+                Mở báo giá PS
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="toolbar-action-btn toolbar-action-ghost"
+              onClick={() => setSupplementaryToast(null)}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
       <OrdersTableContent
         navigate={navigate}
         onRefresh={fetchData}
@@ -723,6 +855,24 @@ function OrdersTableContent({
 
   const renderOrderActionButtons = useCallback((order) => (
     <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", width: "100%" }}>
+      {hasOrderSupplementaryQuoteProposal(order) ? (
+        <button
+          type="button"
+          className="btn-icon btn-action-pill btn-action-outline"
+          style={{
+            width: "auto",
+            minWidth: 90,
+            margin: 0,
+          }}
+          title={"Mở báo giá bổ sung"}
+          onClick={(event) => {
+            event.stopPropagation();
+            navigate(`/workshop/reception/orders/${order.id}/quote?intent=supplementary`);
+          }}
+        >
+          Báo giá PS
+        </button>
+      ) : null}
       {normalizeStatus(order.status) === "READY" ? (
         <button
           className="btn-success btn-sm"
@@ -1067,4 +1217,5 @@ function OrdersTableContent({
     </>
   );
 }
+
 

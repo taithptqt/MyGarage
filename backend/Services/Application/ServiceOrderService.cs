@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -102,7 +102,7 @@ namespace MyGarage.Services
                 IDbContextTransaction? attemptTransaction = null;
                 if (!hasExternalTransaction)
                 {
-                    attemptTransaction = await _context.Database.BeginTransactionAsync();
+                    attemptTransaction = await TryBeginTransactionAsync();
                 }
 
                 try
@@ -142,7 +142,7 @@ namespace MyGarage.Services
             }
 
             throw new InvalidOperationException(
-                "Khong the tao ma lenh sua chua duy nhat. Vui long thu lai.",
+                "Không thể tạo mã lệnh sửa chữa duy nhất. Vui lòng thử lại.",
                 lastDuplicateException);
             });
         }
@@ -209,7 +209,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync<ServiceOrderBatchCreateResult>(async () =>
             {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await TryBeginTransactionAsync();
             try
             {
                 var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
@@ -245,7 +245,7 @@ namespace MyGarage.Services
                     createdOrders.Add(createdOrder);
                 }
 
-                await transaction.CommitAsync();
+                if (transaction != null) await transaction.CommitAsync();
                 return new ServiceOrderBatchCreateResult
                 {
                     GroupSessionId = groupSessionId,
@@ -311,7 +311,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await TryBeginTransactionAsync();
             try
             {
                 var checkInTime = dto.CheckInTime ?? order.CheckInTime ?? VietnamTime.Now;
@@ -348,11 +348,6 @@ namespace MyGarage.Services
                 order.PromisedHandoverTime = promisedHandover;
                 var previousLifecycleStatus = order.Status;
                 order.Status = ResolveOrderStatus(dto.Status ?? order.Status);
-                if (dto.CustomerNotes != null)
-                {
-                    // Keep current note when field is omitted in partial workshop edit payload.
-                    order.CustomerNotes = NormalizeText(dto.CustomerNotes);
-                }
                 order.RequestedPackageIds = selection.RequestedPackageIds;
                 ApplyInsuranceSnapshot(
                     order,
@@ -370,9 +365,6 @@ namespace MyGarage.Services
                 var editableDetails = await _context.ServiceOrderDetails
                     .Where(d =>
                         d.ServiceOrderId == id &&
-                        d.QuotationDetailId == null &&
-                        !d.IsSupplementary &&
-                        (d.ServiceSource == null || d.ServiceSource == string.Empty || d.ServiceSource == nameof(ServiceOrderDetailSourceCode.INITIAL)) &&
                         (d.ItemType == "LABOR" || d.ItemType == "SERVICE"))
                     .OrderBy(d => d.Id)
                     .ToListAsync();
@@ -457,12 +449,12 @@ namespace MyGarage.Services
                     order.Id,
                     dto.InsuranceCardImageUrls,
                     dto.InsuranceDamageImageUrls);
-                await transaction.CommitAsync();
+                if (transaction != null) await transaction.CommitAsync();
                 return order;
             }
             catch
             {
-                await transaction.RollbackAsync();
+                if (transaction != null) await transaction.RollbackAsync();
                 throw;
             }
             });
@@ -620,7 +612,7 @@ namespace MyGarage.Services
         {
             if (branchId <= 0)
             {
-                throw new InvalidOperationException("Thieu thong tin chi nhanh thuc hien lenh.");
+                throw new InvalidOperationException("Thiếu thông tin chi nhánh thực hiện lệnh.");
             }
 
             var checkInVietnamTime = VietnamTime.ToVietnamTime(checkInTime);
@@ -1030,9 +1022,6 @@ namespace MyGarage.Services
             var finalAmount = subTotal + taxAmount;
 
             detail.ItemType = WorkshopDetailItemType;
-            detail.ServiceSource = nameof(ServiceOrderDetailSourceCode.INITIAL);
-            detail.IsSupplementary = false;
-            detail.SupplementaryReasonCode = null;
             detail.ItemName = service.Name;
             detail.Description = WorkshopDetailDescription;
             detail.Quantity = 1m;
@@ -1045,6 +1034,13 @@ namespace MyGarage.Services
             ApplyInsuranceBilling(detail, service, insuranceCompanyId, insuranceOrderContext);
             detail.Status = WorkshopDetailStatus;
             detail.StandardServiceId = service.Id;
+            detail.ServiceSource = nameof(ServiceOrderDetailServiceSourceCode.INITIAL);
+            detail.IsSupplementary = false;
+            detail.SupplementaryReasonCode = null;
+            detail.SourceQuotationId = null;
+            detail.SupplementaryRequestedByStaffId = null;
+            detail.SupplementaryRequestedAt = null;
+            detail.CustomerApprovedAt = null;
             detail.UpdatedAt = nowUtc;
             detail.UpdatedBy = actorStaffId;
         }
@@ -1614,6 +1610,17 @@ namespace MyGarage.Services
             if (entry.State != EntityState.Detached)
             {
                 entry.State = EntityState.Detached;
+            }
+        }
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _context.Database.BeginTransactionAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
             }
         }
     }

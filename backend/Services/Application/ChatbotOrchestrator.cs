@@ -793,7 +793,7 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
     {
         if (response is null)
         {
-            return "Hi?n t?i AI Gemini chua ph?n h?i. Vui lòng th? l?i sau ít phút.";
+            return "Hiện tại AI Gemini chưa phản hồi. Vui lòng thử lại sau ít phút.";
         }
 
         if (string.Equals(response.FailureCode, "PROVIDER_API_KEY_MISSING", StringComparison.OrdinalIgnoreCase))
@@ -1575,6 +1575,7 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
         return nameof(ChatbotIntentType.UNKNOWN);
     }
 }
+
 
 
 

@@ -30,11 +30,45 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetAll()
+        public async Task<ActionResult> GetAll(
+            [FromQuery] int? page = null,
+            [FromQuery] int? pageSize = null)
         {
-            var items = await _productService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<ProductResponseDto>>(items);
-            return Ok(dtos);
+            var hasPaging = page.HasValue || pageSize.HasValue;
+            if (hasPaging)
+            {
+                var normalizedPage = page.GetValueOrDefault(1);
+                if (normalizedPage < 1) normalizedPage = 1;
+
+                var normalizedPageSize = pageSize.GetValueOrDefault(20);
+                if (normalizedPageSize < 1) normalizedPageSize = 1;
+                if (normalizedPageSize > 200) normalizedPageSize = 200;
+
+                var query = _db.Products
+                    .AsNoTracking()
+                    .Where(x => x.IsDeleted != true)
+                    .OrderByDescending(x => x.Id);
+
+                var total = await query.CountAsync();
+                var items = await query
+                    .Skip((normalizedPage - 1) * normalizedPageSize)
+                    .Take(normalizedPageSize)
+                    .ToListAsync();
+
+                var pagedDtos = _mapper.Map<List<ProductResponseDto>>(items);
+                return Ok(new
+                {
+                    items = pagedDtos,
+                    total,
+                    page = normalizedPage,
+                    pageSize = normalizedPageSize,
+                    totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)normalizedPageSize)
+                });
+            }
+
+            var allItems = await _productService.GetAllAsync();
+            var allDtos = _mapper.Map<IEnumerable<ProductResponseDto>>(allItems);
+            return Ok(allDtos);
         }
 
         [HttpGet("{id:long}")]
@@ -87,6 +121,83 @@ namespace MyGarage.Controllers
                 cancellationToken);
 
             return Ok(availabilityEntries);
+        }
+
+        [HttpGet("low-stock")]
+        public async Task<ActionResult> GetLowStockProducts(
+            [FromQuery] long? branchId = null,
+            [FromQuery] int take = 200,
+            CancellationToken cancellationToken = default)
+        {
+            if (take <= 0) take = 50;
+            if (take > 1000) take = 1000;
+
+            if (branchId.HasValue)
+            {
+                var branchExists = await _db.Branches
+                    .AsNoTracking()
+                    .AnyAsync(branch => branch.Id == branchId.Value && branch.IsDeleted != true, cancellationToken);
+                if (!branchExists)
+                {
+                    return BadRequest(new { message = "Selected branch is invalid.", branchId });
+                }
+            }
+
+            var rows = await _db.Inventories
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Include(x => x.Warehouse)
+                    .ThenInclude(x => x.Branch)
+                .Where(x =>
+                    x.Product.IsDeleted != true &&
+                    x.Product.IsActive != false &&
+                    x.Warehouse.IsDeleted != true &&
+                    x.Warehouse.IsActive != false &&
+                    (!branchId.HasValue || x.Warehouse.BranchId == branchId.Value))
+                .ToListAsync(cancellationToken);
+
+            var data = rows
+                .Select(x =>
+                {
+                    var minStock = Math.Max(0m, x.MinStockLevel ?? x.Product.MinStockLevel ?? 0m);
+                    var reorderPoint = Math.Max(0m, x.Product.ReorderPoint ?? minStock);
+                    var quantity = x.Quantity;
+                    var status = quantity <= 0m
+                        ? "OutOfStock"
+                        : minStock > 0m && quantity <= minStock
+                            ? "BelowMinStock"
+                            : reorderPoint > 0m && quantity <= reorderPoint
+                                ? "BelowReorder"
+                                : string.Empty;
+
+                    return new
+                    {
+                        productId = x.ProductId,
+                        sku = x.Product.Sku,
+                        productName = x.Product.Name,
+                        warehouseId = x.WarehouseId,
+                        warehouseName = x.Warehouse.Name,
+                        branchId = x.Warehouse.BranchId,
+                        branchName = x.Warehouse.Branch.Name,
+                        quantity,
+                        minStock,
+                        reorderPoint,
+                        status,
+                        deficit = Math.Max(0m, minStock - quantity)
+                    };
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.status))
+                .OrderByDescending(x => x.status == "OutOfStock")
+                .ThenByDescending(x => x.deficit)
+                .ThenBy(x => x.productName)
+                .Take(take)
+                .ToList();
+
+            return Ok(new
+            {
+                total = data.Count,
+                items = data
+            });
         }
 
         [HttpGet("{id:long}/retail-stock-by-branches")]

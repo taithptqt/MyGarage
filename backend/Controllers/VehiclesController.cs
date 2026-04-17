@@ -4,6 +4,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -14,11 +15,16 @@ namespace MyGarage.Controllers
     public class VehiclesController : ControllerBase
     {
         private readonly IVehicleService _vehicleService;
+        private readonly IVehicleHistoryService _vehicleHistoryService;
         private readonly IMapper _mapper;
 
-        public VehiclesController(IVehicleService vehicleService, IMapper mapper)
+        public VehiclesController(
+            IVehicleService vehicleService,
+            IVehicleHistoryService vehicleHistoryService,
+            IMapper mapper)
         {
             _vehicleService = vehicleService;
+            _vehicleHistoryService = vehicleHistoryService;
             _mapper = mapper;
         }
 
@@ -41,6 +47,21 @@ namespace MyGarage.Controllers
 
             var dto = _mapper.Map<VehicleResponseDto>(vehicle);
             return Ok(dto);
+        }
+
+        [HttpGet("{id:long}/service-history")]
+        public async Task<ActionResult<VehicleServiceHistoryResponseDto>> GetServiceHistory(
+            long id,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var history = await _vehicleHistoryService.GetServiceHistoryAsync(id, page, pageSize);
+            if (history == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(history);
         }
 
         [HttpPost]

@@ -588,6 +588,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 .so-detail-panel {
@@ -597,6 +598,10 @@
   padding: 12px;
   display: grid;
   gap: 8px;
+}
+
+.so-detail-panel-note {
+  align-self: start;
 }
 
 .so-detail-panel-title {
@@ -2260,12 +2265,12 @@
 
 .reception-quote-approval-note {
   margin-top: 4px;
-  border: 1px solid #d9e4f7;
+  border: 1px solid #d5e0f2;
   border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f5f8ff 100%);
-  padding: 10px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f5f8ff 100%);
+  padding: 14px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .reception-quote-approval-note-head {
@@ -2274,15 +2279,16 @@
 }
 
 .reception-quote-approval-note-title {
-  color: #284a86;
-  font-size: 13px;
-  font-weight: 800;
+  color: #1f3567;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 700;
 }
 
 .reception-quote-approval-note-hint {
-  color: #6c84ab;
-  font-size: 12px;
-  line-height: 1.45;
+  color: #5f7092;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .reception-quote-approval-note-input {
@@ -2292,9 +2298,9 @@
   border-radius: 10px;
   background: #ffffff;
   color: #1f3567;
-  font-size: 14px;
-  line-height: 1.45;
-  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 12px 14px;
   outline: none;
   resize: vertical;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
@@ -2318,8 +2324,24 @@
 .reception-quote-note {
   margin: 0;
   color: #506991;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
+}
+
+.reception-quote-tip-box {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background: #f8fbff;
+  border: 1px dashed #c7d2e6;
+  border-radius: 12px;
+}
+
+.reception-quote-tip-text {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.7;
+  font-weight: 500;
 }
 
 .reception-quote-success {
@@ -6252,9 +6274,24 @@
   align-self: center;
 }
 
+.workshop-insurance-company-info {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #f0f7ff;
+  border-radius: 10px;
+  border-left: 4px solid #3b82f6;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+.workshop-insurance-company-info strong {
+  margin-left: 4px;
+  color: #173867;
+}
+
 .workshop-insurance-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -6749,7 +6786,8 @@
   color: #1b2559;
 }
 
-.quoteflow-part-toggle {
+.quoteflow-part-toggle,
+.quoteflow-part-toggle-hint {
   margin-top: 6px;
   border: 1px solid #9fbde6;
   background: linear-gradient(135deg, #edf4ff, #dbe9ff);
@@ -6770,10 +6808,123 @@
   transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.quoteflow-part-toggle:hover {
+.quoteflow-part-toggle:hover,
+.quoteflow-part-toggle-hint {
+  pointer-events: none;
+}
+
+.quoteflow-part-toggle:hover,
+.quoteflow-row-clickable:hover .quoteflow-part-toggle-hint {
   filter: brightness(1.01);
   box-shadow: 0 8px 14px rgba(49, 98, 167, 0.18);
   transform: translateY(-1px);
+}
+
+.admin-table.quoteflow-fixed-table {
+  border-collapse: separate !important;
+  border-spacing: 0 12px !important;
+  background: transparent !important;
+  width: 100% !important;
+}
+
+.admin-table.quoteflow-fixed-table THEAD TH {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #a3aed0;
+  letter-spacing: 0.5px;
+  padding: 12px 16px;
+  font-weight: 700;
+}
+
+.admin-table tr.quoteflow-group-row td {
+  border-top: 1.5px solid #8a94ad !important;
+  border-bottom: 1.5px solid #8a94ad !important;
+  background: #ffffff !important;
+  padding: 18px 20px !important;
+  transition: none !important;
+}
+
+.admin-table tr.quoteflow-group-row td:first-child {
+  border-left: 1.5px solid #8a94ad !important;
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+}
+
+.admin-table tr.quoteflow-group-row td:last-child {
+  border-right: 1.5px solid #8a94ad !important;
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.admin-table tr.quoteflow-group-row {
+  box-shadow: 0 2px 4px rgba(163, 174, 208, 0.05);
+  position: relative;
+}
+
+/* Row-level hover effect (Premium) */
+.admin-table tr.quoteflow-row-clickable:hover td {
+  background: #fdfdff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(163, 174, 208, 0.15);
+  cursor: pointer;
+}
+
+.admin-table tr.quoteflow-row-clickable:hover td:first-child {
+  box-shadow: -1px 10px 20px rgba(163, 174, 208, 0.15);
+}
+
+.admin-table tr.quoteflow-row-clickable:hover td:last-child {
+  box-shadow: 1px 10px 20px rgba(163, 174, 208, 0.15);
+}
+
+.quoteflow-click-hint {
+  font-size: 11px;
+  color: #4318ff;
+  font-weight: 600;
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.quoteflow-row-clickable:hover .quoteflow-click-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.quoteflow-badge-priority {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.quoteflow-badge-priority.mandatory {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.quoteflow-badge-priority.optional {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.quoteflow-item-name {
+  font-weight: 700;
+  color: #1b2559;
+  font-size: 14px;
+}
+
+.quoteflow-item-name-part {
+  color: #4e5d78;
+  font-weight: 500;
 }
 
 .admin-table tr.quoteflow-row-service td {
@@ -6828,6 +6979,8 @@
   font-weight: 500;
   color: #243b74;
 }
+
+/* Redundant legacy styles cleaned up */
 
 .quoteflow-item-parent-note {
   display: block;
@@ -6911,4 +7064,371 @@
   min-height: 40px;
   padding: 0 10px;
   margin-bottom: 12px;
+}
+
+/* === Quotation Dashboard Redesign === */
+.quote-dashboard-root { display: flex; gap: 20px; margin-top: 20px; align-items: flex-start; }
+.quote-main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.quote-sidebar { width: 300px; position: sticky; top: 20px; display: flex; flex-direction: column; gap: 20px; }
+.stat-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.stat-premium-card { background: #fff; border-radius: 16px; padding: 20px; border: 1px solid #e9edf7; box-shadow: 0 4px 12px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 4px; }
+.stat-premium-card span { font-size: 13px; font-weight: 700; color: #707eae; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-premium-card strong { font-size: 24px; font-weight: 800; color: #1b2559; }
+.stat-premium-card.total { border-left: 5px solid #4318ff; }
+.stat-premium-card.insurance { border-left: 5px solid #05cd99; }
+.stat-premium-card.customer { border-left: 5px solid #ffb547; }
+.stat-premium-card.deductible { border-left: 5px solid #f56b6b; }
+.quote-toolbar-group { display: flex; flex-wrap: wrap; gap: 10px; background: #fff; padding: 16px; border-radius: 16px; border: 1px solid #e9edf7; }
+.toolbar-section { display: flex; gap: 8px; padding-right: 16px; border-right: 1px solid #e9edf7; }
+.toolbar-section:last-child { border-right: none; padding-right: 0; }
+.version-timeline-container { background: #fff; border-radius: 16px; padding: 20px; border: 1px solid #e9edf7; }
+.version-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; margin-bottom: 8px; }
+.version-item:hover { background: #f4f7fe; }
+.version-item.active { background: #f4f7fe; border-color: #4318ff; }
+.version-dot { width: 10px; height: 10px; border-radius: 50%; background: #a3aed0; flex-shrink: 0; }
+.version-item.active .version-dot { background: #4318ff; box-shadow: 0 0 0 4px rgba(67, 24, 255, 0.1); }
+.version-info { display: flex; flex-direction: column; }
+.version-name { font-weight: 700; color: #1b2559; font-size: 15px; }
+.version-status { font-size: 12px; color: #707eae; }
+.quote-notes-tabs { background: #fff; border-radius: 16px; border: 1px solid #e9edf7; overflow: hidden; }
+.tabs-header { display: flex; background: #f4f7fe; padding: 4px; gap: 4px; }
+.tab-btn { flex: 1; padding: 10px; border: none; background: transparent; border-radius: 10px; font-size: 14px; font-weight: 700; color: #707eae; cursor: pointer; transition: all 0.2s; }
+.tab-btn.active { background: #fff; color: #4318ff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.tab-content { padding: 20px; }
+
+/* Excel Export Premium Button */
+.btn-excel-premium {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #107c41;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px rgba(16, 124, 65, 0.15);
+}
+
+.btn-excel-premium:hover {
+  background: #0d6233;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(16, 124, 65, 0.25);
+}
+
+.btn-excel-premium:disabled {
+  background: #a3aed0;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-excel-premium svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Evidence Management UI */
+.evidence-smart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.evidence-file-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f4f7fe;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e0;
+}
+
+.evidence-file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.evidence-file-icon {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4318ff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.evidence-url-text {
+  font-size: 13px;
+  color: #1b2559;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.evidence-url-text:hover {
+  text-decoration: underline;
+  color: #4318ff;
+}
+
+.evidence-upload-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fdfdfd;
+  border: 1.5px dashed #e0e5f2;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #4318ff;
+  width: fit-content;
+}
+
+.evidence-upload-action:hover {
+  border-color: #4318ff;
+  background: rgba(67, 24, 255, 0.05);
+}
+
+.evidence-upload-action svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.evidence-upload-action span {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.btn-remove-evidence {
+  background: transparent;
+  border: none;
+  color: #ee5d50;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.btn-remove-evidence:hover {
+  background: rgba(238, 93, 80, 0.1);
+}
+
+/* Redesigned Quotation Dashboard Styles */
+.quote-negotiation-dashboard {
+  margin-top: 24px;
+}
+
+.quote-notes-tabs {
+  background: #ffffff;
+  border: 1px solid #e9edf7;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 14px 17px 40px 4px rgba(112, 144, 176, 0.08);
+}
+
+.tabs-header {
+  display: flex;
+  background: #f4f7fe;
+  padding: 8px 12px;
+  gap: 8px;
+  border-bottom: 1px solid #e9edf7;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: #a3aed0;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #1b2559;
+}
+
+.tab-btn.active {
+  background: #ffffff;
+  color: #4318ff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.tab-content {
+  padding: 24px;
+}
+
+.version-item:hover {
+  background: #f7f9ff !important;
+  transform: translateX(4px);
+}
+
+.toolbar-action-btn {
+  transition: all 0.2s;
+}
+
+.toolbar-action-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.toolbar-action-btn:active {
+  transform: translateY(0);
+}
+
+/* --- PREMIUM QUOTATION DASHBOARD OVERRIDES --- */
+.admin-table.quoteflow-fixed-table {
+  border-collapse: separate !important;
+  border-spacing: 0 12px !important;
+  background: transparent !important;
+}
+
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td {
+  background: #ffffff !important;
+  border-top: 1.5px solid #8a94ad !important;
+  border-bottom: 1.5px solid #8a94ad !important;
+  border-left: none !important;
+  border-right: none !important;
+  padding: 18px 16px !important;
+  transition: none !important;
+}
+
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td:first-child {
+  border-left: 1.5px solid #8a94ad !important;
+  border-top-left-radius: 12px !important;
+  border-bottom-left-radius: 12px !important;
+}
+
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td:last-child {
+  border-right: 1.5px solid #8a94ad !important;
+  border-top-right-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
+}
+
+/* Service Row Accent - Distinct and professional */
+.admin-table.quoteflow-fixed-table tr.quoteflow-row-service td:first-child {
+  border-left: 4px solid #4318ff !important;
+}
+
+.admin-table tr.quoteflow-row-service td {
+  background: #fdfdff !important;
+}
+
+/* Hover Interactivity - Disabled as requested */
+.admin-table tr.quoteflow-row-clickable:hover td {
+  cursor: pointer !important;
+}
+
+.quoteflow-click-hint {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  color: #4318ff !important;
+}
+
+/* --- FINAL CONSOLIDATED QUOTATION DASHBOARD STYLES --- */
+/* No-Hover, High-Visibility Card Layout */
+
+.admin-table.quoteflow-fixed-table {
+  border-collapse: separate !important;
+  border-spacing: 0 12px !important;
+  background: transparent !important;
+}
+
+.admin-table.quoteflow-fixed-table thead th {
+  background: #cddff8 !important;
+  color: #1f3e68 !important;
+  border-top: 1px solid #9eb8dc !important;
+  border-bottom: 1px solid #9eb8dc !important;
+  padding: 12px 16px !important;
+  font-size: 11px !important;
+  letter-spacing: 0.45px !important;
+  text-transform: uppercase !important;
+}
+
+.admin-table.quoteflow-fixed-table thead th:first-child {
+  border-left: 1px solid #9eb8dc !important;
+  border-top-left-radius: 12px !important;
+}
+
+.admin-table.quoteflow-fixed-table thead th:last-child {
+  border-right: 1px solid #9eb8dc !important;
+  border-top-right-radius: 12px !important;
+}
+
+/* Service Row & Part Row: Shared Card Base */
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td {
+  background: #ffffff !important;
+  border-top: 1.5px solid #8a94ad !important;
+  border-bottom: 1.5px solid #8a94ad !important;
+  padding: 18px 16px !important;
+  transition: none !important;
+  box-shadow: none !important;
+}
+
+/* Row Start & End (Left/Right Borders + Radius) */
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td:first-child {
+  border-left: 1.5px solid #8a94ad !important;
+  border-top-left-radius: 12px !important;
+  border-bottom-left-radius: 12px !important;
+}
+
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row td:last-child {
+  border-right: 1.5px solid #8a94ad !important;
+  border-top-right-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
+}
+
+/* Service Row Specific Accent */
+.admin-table.quoteflow-fixed-table tr.quoteflow-row-service td:first-child {
+  border-left: 4px solid #4318ff !important;
+}
+
+/* ABSOLUTE HOVER KILLER: Ensure no visual changes on hover */
+.admin-table.quoteflow-fixed-table tr.quoteflow-group-row:hover td,
+.admin-table.quoteflow-fixed-table tr.quoteflow-row-clickable:hover td {
+  background: #ffffff !important; /* Keep fixed background */
+  border-color: #8a94ad !important; /* Keep fixed border color */
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Part-specific adjustments */
+.admin-table.quoteflow-fixed-table tr.quoteflow-row-part td {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  background: #fcfdfe !important; /* Subtle background for parts */
+}
+
+/* Hierarchy symbols for parts */
+.quoteflow-item-name-part {
+  font-size: 13px;
+  color: #486183;
+  font-weight: 600;
+  padding-left: 10px;
+}
+
+/* Hide all old hints and tooltips */
+.quoteflow-click-hint, 
+.quoteflow-part-toggle-hint {
+  display: none !important;
 }

@@ -177,7 +177,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
         }
 
         var normalizedAnalysis = NormalizeAnalysis(analysis);
-        var now = _clock.UtcNow;
+        var now = VietnamTime.Now;
         var userMessage = new ChatbotMessage
         {
             SessionId = session.Id,
@@ -187,6 +187,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             AttachmentUrl = attachmentUrl,
             CreatedAt = now
         };
+
         var assistantMessage = new ChatbotMessage
         {
             SessionId = session.Id,
@@ -196,55 +197,67 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             CreatedAt = now
         };
 
-        await using var tx = await TryBeginTransactionAsync(cancellationToken);
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        var result = await strategy.ExecuteAsync(async () =>
         {
-            _context.ChatbotMessages.Add(userMessage);
-            _context.ChatbotMessages.Add(assistantMessage);
-
-            _context.ChatbotActionLogs.Add(new ChatbotActionLog
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
+            try
             {
-                SessionId = session.Id,
-                ActionType = UploadActionType,
-                Status = nameof(ChatbotActionStatus.SUCCESS),
-                ActionPayload = JsonSerializer.Serialize(new
+                _context.ChatbotMessages.Add(userMessage);
+                _context.ChatbotMessages.Add(assistantMessage);
+
+                _context.ChatbotActionLogs.Add(new ChatbotActionLog
                 {
-                    attachment_url = attachmentUrl,
-                    suspected_category = normalizedAnalysis.SuspectedCategory,
-                    suggested_service_categories = normalizedAnalysis.SuggestedServiceCategories
-                }),
-                CreatedAt = now
-            });
+                    SessionId = session.Id,
+                    ActionType = UploadActionType,
+                    Status = nameof(ChatbotActionStatus.SUCCESS),
+                    ActionPayload = JsonSerializer.Serialize(new
+                    {
+                        attachment_url = attachmentUrl,
+                        suspected_category = normalizedAnalysis.SuspectedCategory,
+                        suggested_service_categories = normalizedAnalysis.SuggestedServiceCategories
+                    }),
+                    CreatedAt = now
+                });
 
-            session.LastActivityAt = now;
-            if (session.Status == nameof(ChatbotSessionStatus.IDLE))
-            {
-                session.Status = nameof(ChatbotSessionStatus.ACTIVE);
+                session.LastActivityAt = now;
+                if (session.Status == nameof(ChatbotSessionStatus.IDLE))
+                {
+                    session.Status = nameof(ChatbotSessionStatus.ACTIVE);
+                    session.CurrentIntent = "IMAGE_ANALYSIS";
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+                if (tx != null) await tx.CommitAsync();
+
+                return new ChatbotImageUploadResponseDto
+                {
+                    SessionId = session.Id,
+                    AttachmentUrl = attachmentUrl,
+                    UserMessageId = userMessage.Id,
+                    AssistantMessageId = assistantMessage.Id,
+                    Analysis = new ChatbotVisionAnalysisResponseDto
+                    {
+                        ImageSummary = normalizedAnalysis.ImageSummary,
+                        SuspectedCategory = normalizedAnalysis.SuspectedCategory,
+                        SuggestedServiceCategories = normalizedAnalysis.SuggestedServiceCategories,
+                        Disclaimer = PreliminaryDisclaimer
+                    }
+                };
             }
-
-            session.UpdatedAt = now;
-
-            await _context.SaveChangesAsync(cancellationToken);
-            if (tx is not null)
+            catch (Exception ex)
             {
-                await tx.CommitAsync(cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            if (tx is not null)
-            {
-                await tx.RollbackAsync(cancellationToken);
-            }
+                if (tx != null) await tx.RollbackAsync();
 
-            _logger.LogError(
-                ex,
-                "Chatbot image upload DB persistence failed. SessionId={SessionId}, CustomerId={CustomerId}",
-                session.Id,
-                customerId);
+                _logger.LogError(
+                    ex,
+                    "Chatbot image upload DB persistence failed. SessionId={SessionId}, CustomerId={CustomerId}",
+                    session.Id,
+                    customerId);
 
-            throw;
-        }
+                throw;
+            }
+        });
 
         _logger.LogInformation(
             "Chatbot image uploaded and analyzed. SessionId={SessionId}, CustomerId={CustomerId}, UserMessageId={UserMessageId}, AssistantMessageId={AssistantMessageId}",
@@ -253,14 +266,7 @@ public sealed class ChatbotImageUploadService : IChatbotImageUploadService
             userMessage.Id,
             assistantMessage.Id);
 
-        return new ChatbotImageUploadResponseDto
-        {
-            SessionId = session.Id,
-            AttachmentUrl = attachmentUrl,
-            UserMessageId = userMessage.Id,
-            AssistantMessageId = assistantMessage.Id,
-            Analysis = normalizedAnalysis
-        };
+        return result;
     }
 
     private async Task EnsureActiveCustomerAsync(long customerId, CancellationToken cancellationToken)

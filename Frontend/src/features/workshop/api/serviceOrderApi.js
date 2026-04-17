@@ -1,4 +1,4 @@
-import { request, requestSafe } from "@app/apiClient";
+import { getApiBaseUrl, request, requestSafe } from "@app/apiClient";
 
 /**
  * SERVICE ORDER API
@@ -54,6 +54,54 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/insurance-approval`, method: "POST", data }),
   sendQuotationToCustomer: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/send-to-customer`, method: "POST", data }),
+  exportQuotationExcel: async (quotationId) => {
+    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
+    if (!token) {
+      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
+
+    const exportUrl = `${getApiBaseUrl()}/api/quotations/${quotationId}/export/excel`;
+    const res = await fetch(exportUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      let message = "Không thể xuất file Excel từ server.";
+      try {
+        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+        if (contentType.includes("application/json")) {
+          const payload = await res.json();
+          message = payload?.message || payload?.title || message;
+        } else {
+          const text = await res.text();
+          if (text && text.trim()) {
+            message = text.slice(0, 200);
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(`Export lỗi (${res.status}): ${message}`);
+    }
+
+    const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+    if (contentType.includes("application/json")) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(payload?.message || "Server không trả về file xuất hợp lệ.");
+    }
+
+    const blob = await res.blob();
+    const contentDisposition = String(res.headers.get("content-disposition") || "");
+    const quotedNameMatch = contentDisposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const fileNameFromHeader = quotedNameMatch?.[1]
+      ? decodeURIComponent(quotedNameMatch[1].replace(/"/g, "").trim())
+      : "";
+
+    return {
+      blob,
+      fileName: fileNameFromHeader || `quotation-${quotationId}.xlsx`,
+    };
+  },
   publishQuotationCustomerLink: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/publish-customer-link`, method: "POST", data }),
   uploadQuotationInsuranceEvidence: (quotationId, file, note = "") => {
@@ -67,6 +115,8 @@ export const serviceOrderApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  deleteQuotationInsuranceEvidence: (quotationId) =>
+    request({ url: `/api/quotations/${quotationId}/insurance-evidence`, method: "DELETE" }),
   approveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
   cloneQuotation: (quotationId, data) =>
@@ -100,12 +150,12 @@ export const serviceOrderApi = {
   createCheckInRequest: (serviceOrderId) =>
     request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_IN" } }),
   acceptCheckInRequest: () =>
-    Promise.reject(new Error("CHECK-IN do le tan xu ly truc tiep, khong phan cong cho ky thuat vien.")),
+    Promise.reject(new Error("CHECK-IN do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên.")),
   getCheckOutRequests: () => request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "GET", params: { requestType: "CHECK_OUT" } }),
   createCheckOutRequest: (serviceOrderId) =>
     request({ url: "/api/vehicle-condition-logs/condition-jobs", method: "POST", data: { serviceOrderId, requestType: "CHECK_OUT" } }),
   acceptCheckOutRequest: () =>
-    Promise.reject(new Error("CHECK-OUT do le tan xu ly truc tiep, khong phan cong cho ky thuat vien.")),
+    Promise.reject(new Error("CHECK-OUT do lễ tân xử lý trực tiếp, không phân công cho kỹ thuật viên.")),
 
   // --- Diagnosis ---
   getDiagnoses: (orderId) => request({ url: "/api/diagnoses", method: "GET", params: orderId ? { serviceOrderId: orderId } : undefined }),
@@ -285,11 +335,26 @@ export const serviceOrderApi = {
       data,
     }),
 
-  // --- Diagnose Recommendations ---
-  getDiagnoseRecommendations: (diagnoseId) => request({ url: "/api/diagnose-recommendations", method: "GET", params: diagnoseId ? { diagnoseId } : undefined }),
-  createDiagnoseRecommendation: (data) => request({ url: "/api/diagnose-recommendations", method: "POST", data }),
-  updateDiagnoseRecommendation: (id, data) => request({ url: `/api/diagnose-recommendations/${id}`, method: "PUT", data }),
-  deleteDiagnoseRecommendation: (id) => request({ url: `/api/diagnose-recommendations/${id}`, method: "DELETE" }),
+  // --- Diagnosis Recommendations ---
+  getDiagnosisRecommendations: (diagnosisId) =>
+    request({ url: "/api/diagnosis-recommendations", method: "GET", params: diagnosisId ? { diagnosisId } : undefined }),
+  createDiagnosisRecommendation: (data) =>
+    request({ url: "/api/diagnosis-recommendations", method: "POST", data }),
+  updateDiagnosisRecommendation: (id, data) =>
+    request({ url: `/api/diagnosis-recommendations/${id}`, method: "PUT", data }),
+  deleteDiagnosisRecommendation: (id) =>
+    request({ url: `/api/diagnosis-recommendations/${id}`, method: "DELETE" }),
+  getPendingSupplementaryProposals: (params) =>
+    request({ url: "/api/diagnosis-recommendations/pending-supplementary", method: "GET", params }),
+  // Backward-compatible aliases
+  getDiagnoseRecommendations: (diagnoseId) =>
+    request({ url: "/api/diagnosis-recommendations", method: "GET", params: diagnoseId ? { diagnosisId: diagnoseId } : undefined }),
+  createDiagnoseRecommendation: (data) =>
+    request({ url: "/api/diagnosis-recommendations", method: "POST", data }),
+  updateDiagnoseRecommendation: (id, data) =>
+    request({ url: `/api/diagnosis-recommendations/${id}`, method: "PUT", data }),
+  deleteDiagnoseRecommendation: (id) =>
+    request({ url: `/api/diagnosis-recommendations/${id}`, method: "DELETE" }),
 
   // --- QC Inspections ---
   getQcInspections: (orderId) => request({ url: `/api/qc-inspections`, method: "GET", params: { serviceOrderId: orderId } }),

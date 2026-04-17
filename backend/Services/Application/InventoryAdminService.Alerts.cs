@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,7 +43,7 @@ namespace MyGarage.Services
                 .Select(t => new AlertViewModel(
                     "TX_NO_SOURCE",
                     "HIGH",
-                    "Giao d?ch kho #" + t.Id + " kh�ng c� ch?ng t? ngu?n.",
+                    "Giao dịch kho #" + t.Id + " không có chứng từ nguồn.",
                     "",
                     "",
                     t.Id,

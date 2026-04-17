@@ -43,78 +43,82 @@ namespace MyGarage.Services
                 };
             }
 
-            var voucher = await _context.Vouchers.FirstOrDefaultAsync(x => x.Id == validation.VoucherId);
-            if (voucher == null)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                return new VoucherRedeemResultResponseDto
+                var voucher = await _context.Vouchers.FirstOrDefaultAsync(x => x.Id == validation.VoucherId);
+                if (voucher == null)
                 {
-                    Success = false,
-                    ReasonCode = "VCH_NOT_FOUND",
-                    Message = "Voucher not found when redeeming."
-                };
-            }
-
-            var now = VietnamTime.Now;
-            var discount = validation.DiscountPreview.GetValueOrDefault(0m);
-            var eligibleAmount = validation.EligibleAmount.GetValueOrDefault(0m);
-
-            await using var tx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                var redemption = new VoucherRedemption
-                {
-                    VoucherId = voucher.Id,
-                    VoucherCode = voucher.Code,
-                    CustomerId = request.CustomerId,
-                    VehicleId = request.VehicleId,
-                    BranchId = request.BranchId,
-                    ServiceOrderId = request.ServiceOrderId,
-                    RetailOrderId = request.RetailOrderId,
-                    InvoiceId = request.InvoiceId,
-                    PaymentMethodId = request.PaymentMethodId,
-                    ValidationStatus = ValidationStatusValidated,
-                    RedemptionStatus = RedemptionStatusRedeemed,
-                    EligibleAmount = eligibleAmount,
-                    DiscountAmount = discount,
-                    BudgetImpact = discount,
-                    AppliedBy = request.AppliedBy,
-                    IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
-                    AppliedAt = now,
-                    RedeemedAt = now,
-                    CreatedAt = now
-                };
-
-                _context.VoucherRedemptions.Add(redemption);
-
-                voucher.UsedCount = (voucher.UsedCount ?? 0) + 1;
-                voucher.RedeemedCount += 1;
-                voucher.BudgetUsed += discount;
-                voucher.UpdatedAt = now;
-                voucher.UpdatedBy = request.AppliedBy;
-
-                var exhaustedByUsage = voucher.UsageLimit.HasValue && voucher.UsageLimit.Value > 0 && voucher.UsedCount >= voucher.UsageLimit.Value;
-                var exhaustedByBudget = voucher.BudgetLimit.HasValue && voucher.BudgetUsed >= voucher.BudgetLimit.Value;
-                if (exhaustedByUsage || exhaustedByBudget)
-                {
-                    voucher.Status = VoucherStatusExhausted;
-                    voucher.IsActive = false;
+                    return new VoucherRedeemResultResponseDto
+                    {
+                        Success = false,
+                        ReasonCode = "VCH_NOT_FOUND",
+                        Message = "Voucher not found when redeeming."
+                    };
                 }
 
-                await _context.SaveChangesAsync();
-                await tx.CommitAsync();
+                var now = VietnamTime.Now;
+                var discount = validation.DiscountPreview.GetValueOrDefault(0m);
+                var eligibleAmount = validation.EligibleAmount.GetValueOrDefault(0m);
 
-                return new VoucherRedeemResultResponseDto
+                await using var tx = await TryBeginTransactionAsync();
+                try
                 {
-                    Success = true,
-                    Message = "Voucher redeemed successfully.",
-                    Redemption = ToResponse(redemption)
-                };
-            }
-            catch
-            {
-                await tx.RollbackAsync();
-                throw;
-            }
+                    var redemption = new VoucherRedemption
+                    {
+                        VoucherId = voucher.Id,
+                        VoucherCode = voucher.Code,
+                        CustomerId = request.CustomerId,
+                        VehicleId = request.VehicleId,
+                        BranchId = request.BranchId,
+                        ServiceOrderId = request.ServiceOrderId,
+                        RetailOrderId = request.RetailOrderId,
+                        InvoiceId = request.InvoiceId,
+                        PaymentMethodId = request.PaymentMethodId,
+                        ValidationStatus = ValidationStatusValidated,
+                        RedemptionStatus = RedemptionStatusRedeemed,
+                        EligibleAmount = eligibleAmount,
+                        DiscountAmount = discount,
+                        BudgetImpact = discount,
+                        AppliedBy = request.AppliedBy,
+                        IdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim(),
+                        AppliedAt = now,
+                        RedeemedAt = now,
+                        CreatedAt = now
+                    };
+
+                    _context.VoucherRedemptions.Add(redemption);
+
+                    voucher.UsedCount = (voucher.UsedCount ?? 0) + 1;
+                    voucher.RedeemedCount += 1;
+                    voucher.BudgetUsed += discount;
+                    voucher.UpdatedAt = now;
+                    voucher.UpdatedBy = request.AppliedBy;
+
+                    var exhaustedByUsage = voucher.UsageLimit.HasValue && voucher.UsageLimit.Value > 0 && voucher.UsedCount >= voucher.UsageLimit.Value;
+                    var exhaustedByBudget = voucher.BudgetLimit.HasValue && voucher.BudgetUsed >= voucher.BudgetLimit.Value;
+                    if (exhaustedByUsage || exhaustedByBudget)
+                    {
+                        voucher.Status = VoucherStatusExhausted;
+                        voucher.IsActive = false;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    if (tx != null) await tx.CommitAsync();
+
+                    return new VoucherRedeemResultResponseDto
+                    {
+                        Success = true,
+                        Message = "Voucher redeemed successfully.",
+                        Redemption = ToResponse(redemption)
+                    };
+                }
+                catch
+                {
+                    if (tx != null) await tx.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
     }

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
@@ -22,6 +22,11 @@ export default function InsuranceBillingOverview({
         <span>{title}</span>
       </h3>
 
+      <div className="workshop-insurance-company-info">
+        <span>Công ty bảo hiểm: </span>
+        <strong>{companyText}</strong>
+      </div>
+
       <div className="workshop-insurance-summary-grid">
         <article className="workshop-insurance-summary-card">
           <span>Tổng giá trị</span>
@@ -36,16 +41,16 @@ export default function InsuranceBillingOverview({
           <strong>{formatCurrency(summary.insuranceApprovedAmount)}</strong>
         </article>
         <article className="workshop-insurance-summary-card">
-          <span>Khách cần trả</span>
-          <strong>{formatCurrency(summary.customerPayAmount)}</strong>
+          <span>Miễn thường</span>
+          <strong>{formatCurrency(summary.insuranceDeductibleAmount)}</strong>
         </article>
         <article className="workshop-insurance-summary-card">
           <span>Garage hỗ trợ</span>
           <strong>{formatCurrency(summary.garageAbsorbedAmount)}</strong>
         </article>
         <article className="workshop-insurance-summary-card">
-          <span>Công ty bảo hiểm</span>
-          <strong>{companyText}</strong>
+          <span>Khách cần trả</span>
+          <strong>{formatCurrency(summary.customerPayAmount)}</strong>
         </article>
       </div>
 

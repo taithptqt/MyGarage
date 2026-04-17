@@ -44,37 +44,32 @@ public class ChatbotService : IChatbotService
         await EnsureCustomerIsActiveAsync(customerId, cancellationToken);
         await _rateLimitHook.EnsureCanCreateSessionAsync(customerId, cancellationToken);
 
-        var now = DateTime.UtcNow;
-        var entity = new ChatbotSession
+        var now = VietnamTime.Now;
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            SessionToken = CreateSessionToken(),
-            CustomerId = customerId,
-            BranchId = branchId,
-            Status = nameof(ChatbotSessionStatus.ACTIVE),
-            // Session state is backend-owned. Customer-provided state would let clients
-            // skip workflow steps or seed internal tool context.
-            CurrentIntent = null,
-            IntentState = null,
-            LastActivityAt = now,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
+            var entity = new ChatbotSession
+            {
+                SessionToken = CreateSessionToken(),
+                CustomerId = customerId,
+                BranchId = branchId,
+                Status = nameof(ChatbotSessionStatus.ACTIVE),
+                CurrentIntent = null,
+                IntentState = null,
+                LastActivityAt = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
 
-        await using var tx = await TryBeginTransactionAsync(cancellationToken);
-        await _context.ChatbotSessions.AddAsync(entity, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
-        if (tx is not null)
-        {
-            await tx.CommitAsync(cancellationToken);
-        }
-
-        _logger.LogInformation(
-            "Chatbot session created. CustomerId={CustomerId}, SessionId={SessionId}, BranchId={BranchId}",
-            customerId,
-            entity.Id,
-            branchId);
-
-        return MapSession(entity, Array.Empty<ChatbotMessage>());
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
+            await _context.ChatbotSessions.AddAsync(entity, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            if (tx is not null)
+            {
+                await tx.CommitAsync(cancellationToken);
+            }
+            return MapSession(entity, Array.Empty<ChatbotMessage>());
+        });
     }
 
     public async Task<ChatbotSessionResponseDto?> GetSessionByIdAsync(long customerId, long sessionId, CancellationToken cancellationToken = default)
@@ -138,93 +133,98 @@ public class ChatbotService : IChatbotService
         await _rateLimitHook.EnsureCanSendMessageAsync(customerId, session.Id, cancellationToken);
 
         var now = DateTime.UtcNow;
-        var persisted = new List<ChatbotMessage>();
+        var strategy = _context.Database.CreateExecutionStrategy();
         var baseRole = request.Role.Trim().ToUpperInvariant();
 
-        await using var tx = await TryBeginTransactionAsync(cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(request.Content))
+        return await strategy.ExecuteAsync(async () =>
         {
-            var message = new ChatbotMessage
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
+            var innerPersisted = new List<ChatbotMessage>();
+
+            if (!string.IsNullOrWhiteSpace(request.Content))
             {
-                SessionId = session.Id,
-                Role = baseRole,
-                Content = request.Content.Trim(),
-                IntentName = NormalizeNullable(request.IntentName),
-                SentimentScore = request.SentimentScore,
-                CreatedAt = now
-            };
-            await _context.ChatbotMessages.AddAsync(message, cancellationToken);
-            persisted.Add(message);
-        }
+                var message = new ChatbotMessage
+                {
+                    SessionId = session.Id,
+                    Role = baseRole,
+                    Content = request.Content.Trim(),
+                    IntentName = NormalizeNullable(request.IntentName),
+                    SentimentScore = request.SentimentScore,
+                    CreatedAt = now
+                };
+                await _context.ChatbotMessages.AddAsync(message, cancellationToken);
+                innerPersisted.Add(message);
+            }
 
-        if (request.ToolCall is not null)
-        {
-            var toolCallMessage = new ChatbotMessage
+            if (request.ToolCall is not null)
             {
-                SessionId = session.Id,
-                Role = nameof(ChatbotMessageRole.TOOL_CALL),
-                ToolName = request.ToolCall.ToolName.Trim(),
-                ToolArgs = NormalizeNullable(request.ToolCall.ToolArgs),
-                CreatedAt = now
-            };
-            await _context.ChatbotMessages.AddAsync(toolCallMessage, cancellationToken);
-            persisted.Add(toolCallMessage);
-        }
+                var toolCallMessage = new ChatbotMessage
+                {
+                    SessionId = session.Id,
+                    Role = nameof(ChatbotMessageRole.TOOL_CALL),
+                    ToolName = request.ToolCall.ToolName.Trim(),
+                    ToolArgs = NormalizeNullable(request.ToolCall.ToolArgs),
+                    CreatedAt = now
+                };
+                await _context.ChatbotMessages.AddAsync(toolCallMessage, cancellationToken);
+                innerPersisted.Add(toolCallMessage);
+            }
 
-        if (request.ToolResult is not null)
-        {
-            var toolResultMessage = new ChatbotMessage
+            if (request.ToolResult is not null)
             {
-                SessionId = session.Id,
-                Role = nameof(ChatbotMessageRole.TOOL_RESULT),
-                ToolName = request.ToolResult.ToolName.Trim(),
-                ToolResult = NormalizeNullable(request.ToolResult.ToolResult),
-                CreatedAt = now
+                var toolResultMessage = new ChatbotMessage
+                {
+                    SessionId = session.Id,
+                    Role = nameof(ChatbotMessageRole.TOOL_RESULT),
+                    ToolName = request.ToolResult.ToolName.Trim(),
+                    ToolResult = NormalizeNullable(request.ToolResult.ToolResult),
+                    CreatedAt = now
+                };
+                await _context.ChatbotMessages.AddAsync(toolResultMessage, cancellationToken);
+                innerPersisted.Add(toolResultMessage);
+            }
+
+            session.LastActivityAt = now;
+            session.UpdatedAt = now;
+            if (request.SessionState is not null)
+            {
+                ApplySessionStateUpdate(session, request.SessionState, now);
+            }
+            else if (IsLockedForNewMessages(session.Status))
+            {
+                // If explicitly allowed to send into locked sessions, preserve status.
+            }
+            else if (session.Status == nameof(ChatbotSessionStatus.IDLE))
+            {
+                session.Status = nameof(ChatbotSessionStatus.ACTIVE);
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            if (tx is not null)
+            {
+                await tx.CommitAsync(cancellationToken);
+            }
+
+            var responseMessages = innerPersisted
+                .OrderBy(x => x.CreatedAt)
+                .ThenBy(x => x.Id)
+                .Select(MapMessage)
+                .ToList();
+
+            var history = await LoadHistoryAsync(session.Id, cancellationToken);
+
+            _logger.LogInformation(
+                "Chatbot messages persisted. CustomerId={CustomerId}, SessionId={SessionId}, Count={Count}",
+                customerId,
+                session.Id,
+                responseMessages.Count);
+
+            return new SaveChatbotMessageResponseDto
+            {
+                Session = MapSession(session, history),
+                PersistedMessages = responseMessages
             };
-            await _context.ChatbotMessages.AddAsync(toolResultMessage, cancellationToken);
-            persisted.Add(toolResultMessage);
-        }
-
-        session.LastActivityAt = now;
-        session.UpdatedAt = now;
-        if (request.SessionState is not null)
-        {
-            ApplySessionStateUpdate(session, request.SessionState, now);
-        }
-        else if (IsLockedForNewMessages(session.Status))
-        {
-            // If explicitly allowed to send into locked sessions, preserve status.
-        }
-        else if (session.Status == nameof(ChatbotSessionStatus.IDLE))
-        {
-            session.Status = nameof(ChatbotSessionStatus.ACTIVE);
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-        if (tx is not null)
-        {
-            await tx.CommitAsync(cancellationToken);
-        }
-
-        var responseMessages = persisted
-            .OrderBy(x => x.CreatedAt)
-            .ThenBy(x => x.Id)
-            .Select(MapMessage)
-            .ToList();
-
-        var history = await LoadHistoryAsync(session.Id, cancellationToken);
-        _logger.LogInformation(
-            "Chatbot messages persisted. CustomerId={CustomerId}, SessionId={SessionId}, Count={Count}",
-            customerId,
-            session.Id,
-            responseMessages.Count);
-
-        return new SaveChatbotMessageResponseDto
-        {
-            Session = MapSession(session, history),
-            PersistedMessages = responseMessages
-        };
+        });
     }
 
     public async Task<ChatbotSessionResponseDto> UpdateSessionStateAsync(

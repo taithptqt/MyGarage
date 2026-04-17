@@ -334,7 +334,7 @@ export function SearchBar(props) {
             </Box>
           ) : entries.length === 0 ? (
             <Text px="8px" py="10px" fontSize="sm" color={subtitleColor}>
-              Khong tim thay ket qua phu hop.
+                  Không tìm thấy kết quả phù hợp.
             </Text>
           ) : (
             entries.map((item) => (

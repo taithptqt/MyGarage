@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,6 +22,7 @@ namespace MyGarage.Controllers
         private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
         private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
         private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
+        private const string DiagnosisStatusCanceled = nameof(DiagnosisStatus.CANCELED);
         private const string ServiceOrderStatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
         private static readonly IReadOnlyDictionary<string, string[]> DispatchTagKeywords = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -108,11 +109,13 @@ namespace MyGarage.Controllers
 
         private readonly IDiagnosisService _diagnosisService;
         private readonly IMapper _mapper;
+        private readonly IQuotationWorkflowService _quotationWorkflowService;
 
-        public DiagnosisController(IDiagnosisService diagnosisService, IMapper mapper)
+        public DiagnosisController(IDiagnosisService diagnosisService, IMapper mapper, IQuotationWorkflowService quotationWorkflowService)
         {
             _diagnosisService = diagnosisService;
             _mapper = mapper;
+            _quotationWorkflowService = quotationWorkflowService;
         }
 
         [HttpGet]
@@ -122,7 +125,11 @@ namespace MyGarage.Controllers
             [FromQuery] long? teamId = null)
         {
             var items = await _diagnosisService.GetAllFilteredAsync(serviceOrderId, requestOnly, teamId);
-            var mappedDtos = _mapper.Map<IEnumerable<DiagnosisResponseDto>>(items);
+            var mappedDtos = _mapper.Map<IEnumerable<DiagnosisResponseDto>>(items).ToList();
+            for (var i = 0; i < mappedDtos.Count && i < items.Count; i++)
+            {
+                ApplyAssignmentStateToDto(items[i], mappedDtos[i]);
+            }
             var dtos = await EnrichDiagnosisDtosAsync(mappedDtos);
             return Ok(dtos);
         }
@@ -150,7 +157,7 @@ namespace MyGarage.Controllers
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var suggestion = await _diagnosisService.BuildDispatchSuggestionAsync(serviceOrderId, teamId);
@@ -167,7 +174,7 @@ namespace MyGarage.Controllers
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var suggestion = await _diagnosisService.BuildIntakeSuggestionAsync(
@@ -193,13 +200,13 @@ namespace MyGarage.Controllers
         {
             if (request == null)
             {
-                return BadRequest(new { message = "Du lieu T2 khong hop le." });
+            return BadRequest(new { message = "Dữ liệu T2 không hợp lệ." });
             }
 
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var snapshot = await _diagnosisService.CreateHandoverSnapshotAsync(serviceOrderId, request);
@@ -212,13 +219,13 @@ namespace MyGarage.Controllers
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var snapshot = await _diagnosisService.GetLatestHandoverSnapshotAsync(serviceOrderId);
             if (snapshot == null)
             {
-                return NotFound(new { message = "Chua co snapshot T2 sau chan doan." });
+                return NotFound(new { message = "Chưa có snapshot T2 sau chẩn đoán." });
             }
 
             return Ok(snapshot);
@@ -232,13 +239,13 @@ namespace MyGarage.Controllers
         {
             if (request == null)
             {
-                return BadRequest(new { message = "Thieu thong tin duyet/Tu choi cua khach." });
+            return BadRequest(new { message = "Thiếu thông tin duyệt/Từ chối của khách." });
             }
 
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             try
@@ -265,13 +272,14 @@ namespace MyGarage.Controllers
         [HttpGet("{id:long}")]
         public async Task<ActionResult<DiagnosisResponseDto>> GetById(long id)
         {
-            var item = await _diagnosisService.GetByIdAsync(id);
+            var item = await _diagnosisService.GetDiagnosisEntityAsync(id);
             if (item == null)
             {
                 return NotFound();
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(item);
+            ApplyAssignmentStateToDto(item, dto);
             dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
@@ -281,7 +289,7 @@ namespace MyGarage.Controllers
         {
             if (itemDto == null)
             {
-                return BadRequest(new { message = "Du lieu chan doan khong hop le." });
+            return BadRequest(new { message = "Dữ liệu chẩn đoán không hợp lệ." });
             }
 
             itemDto.Status = NormalizeStatus(itemDto.Status);
@@ -290,6 +298,7 @@ namespace MyGarage.Controllers
             var entity = _mapper.Map<Diagnosis>(itemDto);
             var createdItem = await _diagnosisService.AddAsync(entity);
             var responseDto = _mapper.Map<DiagnosisResponseDto>(createdItem);
+            ApplyAssignmentStateToDto(createdItem, responseDto);
             responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
         }
@@ -297,7 +306,7 @@ namespace MyGarage.Controllers
         [HttpPut("{id:long}")]
         public async Task<ActionResult<DiagnosisResponseDto>> Update(long id, [FromBody] DiagnosisUpdateDto itemDto)
         {
-            var existingItem = await _diagnosisService.GetByIdAsync(id);
+            var existingItem = await _diagnosisService.GetDiagnosisEntityAsync(id);
             if (existingItem == null)
             {
                 return NotFound();
@@ -317,6 +326,7 @@ namespace MyGarage.Controllers
             }
 
             var responseDto = _mapper.Map<DiagnosisResponseDto>(updatedItem);
+            ApplyAssignmentStateToDto(updatedItem, responseDto);
             responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(responseDto);
         }
@@ -327,22 +337,26 @@ namespace MyGarage.Controllers
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var hasSignedCheckIn = await _diagnosisService.HasSignedCheckInAsync(serviceOrderId);
             if (!hasSignedCheckIn)
             {
-                return BadRequest(new { message = "Chi duoc yeu cau chan doan sau khi khach da ky check-in." });
+            return BadRequest(new { message = "Chỉ được yêu cầu chẩn đoán sau khi khách đã ký check-in." });
             }
 
             var allDiagnosis = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
             if (allDiagnosis.Any(x => x.Status == DiagnosisStatusCompleted))
             {
-                return BadRequest(new { message = "Lenh nay da co ket qua chan doan hoan tat." });
+            return BadRequest(new { message = "Lệnh này đã có kết quả chẩn đoán hoàn tất." });
             }
 
-            var activeDiagnosis = allDiagnosis.Where(x => x.Status != DiagnosisStatusCompleted).ToList();
+            var activeDiagnosis = allDiagnosis
+                .Where(x =>
+                    !string.Equals(x.Status, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(x.Status, DiagnosisStatusCanceled, StringComparison.OrdinalIgnoreCase))
+                .ToList();
             if (activeDiagnosis.Count > 0)
             {
                 await _diagnosisService.ArchiveDiagnosesAsSupersededAsync(activeDiagnosis);
@@ -376,7 +390,7 @@ namespace MyGarage.Controllers
             {
                 return BadRequest(new
                 {
-                    message = "Goi chan doan 30p/60p can xac nhan dong y cua khach truoc khi tao yeu cau."
+                    message = "Gói chẩn đoán 30p/60p cần xác nhận đồng ý của khách trước khi tạo yêu cầu."
                 });
             }
 
@@ -384,7 +398,7 @@ namespace MyGarage.Controllers
             {
                 return Conflict(new
                 {
-                    message = "Khong the tu dong xac dinh to dung chuyen mon. Khong tao yeu cau chan doan.",
+                    message = "Không thể tự động xác định tổ đúng chuyên môn. Không tạo yêu cầu chẩn đoán.",
                     requiresDispatchReview = true,
                     dispatchTag = intakeSuggestion.DispatchTag,
                     conflictLevel = intakeSuggestion.ConflictLevel,
@@ -408,7 +422,8 @@ namespace MyGarage.Controllers
                 symptoms,
                 dispatchTag,
                 assignedTeamId: resolvedTeamId,
-                assignedBayId: finalAssignedBayId);
+                assignedBayId: finalAssignedBayId,
+                assignmentNote: request?.AssignmentNote);
 
             if (intakeSuggestion != null)
             {
@@ -441,24 +456,24 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.TechnicianId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin ky thuat vien bat dau chan doan." });
+                return BadRequest(new { message = "Thiếu thông tin kỹ thuật viên bắt đầu chẩn đoán." });
             }
 
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+            return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong." });
+            return BadRequest(new { message = "Không có lệnh chẩn đoán đang hoạt động." });
             }
 
             var isAssignedMember = activeDiagnosis.Any(x =>
-                x.TechnicianId == request.TechnicianId ||
-                (x.AssistantTechnicianId.HasValue && x.AssistantTechnicianId.Value == request.TechnicianId));
+                _diagnosisService.ReadTechnicianId(x) == request.TechnicianId ||
+                _diagnosisService.ReadAssistantTechnicianId(x).GetValueOrDefault() == request.TechnicianId);
             if (!isAssignedMember)
             {
                 return Forbid();
@@ -469,15 +484,16 @@ namespace MyGarage.Controllers
                 var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder.ExecuteBranchId);
                 if (!bayInBranch)
                 {
-                    return BadRequest(new { message = "Cau nang duoc chon khong thuoc chi nhanh dang xu ly." });
+            return BadRequest(new { message = "Cầu nâng được chọn không thuộc chi nhánh đang xử lý." });
                 }
 
                 var assignedTeamIds = activeDiagnosis
-                    .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                    .Select(x => x.AssignedTeamId!.Value)
+                    .Select(x => _diagnosisService.ReadAssignedTeamId(x))
+                    .Where(x => x.HasValue && x.Value > 0)
+                    .Select(x => x!.Value)
                     .Distinct()
                     .ToList();
-                var hasPreApprovedBayAssignment = activeDiagnosis.Any(x => x.AssignedBayId.HasValue && x.AssignedBayId.Value == request.BayId.Value);
+                var hasPreApprovedBayAssignment = activeDiagnosis.Any(x => _diagnosisService.ReadAssignedBayId(x).GetValueOrDefault() == request.BayId.Value);
 
                 if (!hasPreApprovedBayAssignment)
                 {
@@ -502,6 +518,7 @@ namespace MyGarage.Controllers
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
             var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            ApplyAssignmentStateToDto(response, responseDto);
             responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(responseDto);
         }
@@ -511,28 +528,86 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.TeamLeaderId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin to truong duyet ky thuat." });
+            return BadRequest(new { message = "Thiếu thông tin tổ trưởng duyệt kỹ thuật." });
             }
 
             var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
             if (teamLeader == null)
             {
-                return BadRequest(new { message = "To truong khong ton tai." });
+            return BadRequest(new { message = "Tổ trưởng không tồn tại." });
             }
 
-            var diagnoses = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
+            var diagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
             if (diagnoses.Count == 0)
             {
-                return BadRequest(new { message = "Khong co ket qua chan doan de duyet." });
+            return BadRequest(new { message = "Không có kết quả chẩn đoán để duyệt." });
             }
+            var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
+            var executeBranchId = serviceOrder?.ExecuteBranchId;
 
             if (diagnoses.Any(x => !string.Equals(x.Status, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase)))
             {
-                return BadRequest(new { message = "Chi duoc duyet ky thuat sau khi toan bo trieu chung da o trang thai COMPLETED." });
+            return BadRequest(new { message = "Chỉ được duyệt kỹ thuật sau khi toàn bộ triệu chứng đã ở trạng thái COMPLETED." });
+            }
+
+            var isEscalatedToForeman = diagnoses.Any(x => _diagnosisService.IsTeamLeaderApprovalEscalated(x, executeBranchId));
+            if (isEscalatedToForeman)
+            {
+            return BadRequest(new { message = "Phiếu đã quá SLA duyệt tổ trưởng và đã chuyển lên quản đốc xử lý." });
+            }
+
+            var finalAlreadyDecided = diagnoses.Any(x =>
+            {
+                var status = _diagnosisService.ReadFinalApprovalStatus(x);
+                return string.Equals(status, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(status, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+            });
+            if (finalAlreadyDecided)
+            {
+            return BadRequest(new { message = "Phiếu đã có quyết định duyệt cuối, không thể duyệt kỹ thuật lại." });
+            }
+
+            var technicalAlreadyApproved = diagnoses.All(x =>
+                string.Equals(
+                    _diagnosisService.ReadTeamLeaderApprovalStatus(x),
+                    nameof(ApprovalDecisionStatusCode.APPROVED),
+                    StringComparison.OrdinalIgnoreCase));
+            if (technicalAlreadyApproved)
+            {
+            return Ok(new { message = "Tổ trưởng đã duyệt kỹ thuật trước đó." });
             }
 
             await _diagnosisService.ApproveTechnicalAsync(diagnoses, request.TeamLeaderId, request.Note);
-            return Ok(new { message = "Da duyet bao cao ky thuat." });
+            return Ok(new { message = "Đã duyệt báo cáo kỹ thuật." });
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/technical-rejection")]
+        public async Task<IActionResult> RejectTechnical(long serviceOrderId, [FromBody] DiagnosisTechnicalApprovalRequestDto request)
+        {
+            if (request == null || request.TeamLeaderId <= 0)
+            {
+                return BadRequest(new { message = "Thiếu thông tin tổ trưởng từ chối." });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Note))
+            {
+                return BadRequest(new { message = "Bắt buộc nhập lý do từ chối để yêu cầu thợ làm lại." });
+            }
+
+            var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
+            if (teamLeader == null)
+            {
+                return BadRequest(new { message = "Tổ trưởng không tồn tại." });
+            }
+
+            var diagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
+            if (diagnoses.Count == 0)
+            {
+                return BadRequest(new { message = "Không có kết quả chẩn đoán để xử lý." });
+            }
+
+            await _diagnosisService.RejectTechnicalAsync(diagnoses, request.TeamLeaderId, request.Note);
+            return Ok(new { message = "Tổ trưởng đã từ chối và trả về cho thợ làm lại." });
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/final-approval")]
@@ -540,28 +615,112 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.TeamLeaderId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin to truong duyet bao gia." });
+            return BadRequest(new { message = "Thiếu thông tin tổ trưởng duyệt báo giá." });
             }
 
             var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
             if (teamLeader == null)
             {
-                return BadRequest(new { message = "To truong khong ton tai." });
+            return BadRequest(new { message = "Tổ trưởng không tồn tại." });
             }
 
-            var diagnoses = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
+            var diagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
             if (diagnoses.Count == 0)
             {
-                return BadRequest(new { message = "Khong co du lieu chan doan de duyet." });
+            return BadRequest(new { message = "Không có dữ liệu chẩn đoán để duyệt." });
             }
 
-            if (diagnoses.Any(x => !x.ApprovedByForemanId.HasValue))
+            if (diagnoses.Any(x => !_diagnosisService.ReadApprovedByForemanId(x).HasValue))
             {
-                return BadRequest(new { message = "Can to truong duyet bao cao ky thuat truoc khi duyet bao gia." });
+            return BadRequest(new { message = "Cần tổ trưởng duyệt báo cáo kỹ thuật trước khi duyệt báo giá." });
             }
 
             await _diagnosisService.ApproveFinalAsync(diagnoses, request.TeamLeaderId, request.Note);
-            return Ok(new { message = "Da duyet bao gia cuoi cung va tra ket qua ve le tan." });
+            var quotation = await _quotationWorkflowService.GenerateInitialQuotationFromDiagnosisAsync(
+                serviceOrderId,
+                request.TeamLeaderId,
+                request.Note,
+                diagnoses.Select(x => x.Id).Distinct().ToList());
+            return Ok(new
+            {
+                    message = "Đã duyệt chốt kỹ thuật và sinh báo giá V1.",
+                quotation
+            });
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/foreman-decision")]
+        public async Task<IActionResult> ForemanDecision(long serviceOrderId, [FromBody] DiagnosisForemanDecisionRequestDto request)
+        {
+            if (request == null || request.ForemanId <= 0)
+            {
+            return BadRequest(new { message = "Thiếu thông tin quản đốc duyệt." });
+            }
+
+            var foreman = await _diagnosisService.GetStaffByIdAsync(request.ForemanId);
+            if (foreman == null)
+            {
+            return BadRequest(new { message = "Quản đốc không tồn tại." });
+            }
+
+            var diagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
+            if (diagnoses.Count == 0)
+            {
+            return BadRequest(new { message = "Không có dữ liệu chẩn đoán để xử lý." });
+            }
+            if (diagnoses.Any(x => !string.Equals(x.Status, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase)))
+            {
+            return BadRequest(new { message = "Chỉ được duyệt/từ chối sau khi thợ đã gửi kết quả chẩn đoán hoàn tất." });
+            }
+
+            var teamLeaderApproved = diagnoses.All(x =>
+            string.Equals(
+                    _diagnosisService.ReadTeamLeaderApprovalStatus(x),
+                    nameof(ApprovalDecisionStatusCode.APPROVED),
+                    StringComparison.OrdinalIgnoreCase));
+
+            var finalAlreadyDecided = diagnoses.Any(x =>
+            {
+                var status = _diagnosisService.ReadFinalApprovalStatus(x);
+                return string.Equals(status, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(status, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+            });
+            if (finalAlreadyDecided)
+            {
+            return BadRequest(new { message = "Phiếu đã có quyết định duyệt cuối." });
+            }
+
+            if (request.Approve)
+            {
+                var bypassTeamLeader = !teamLeaderApproved;
+                var firstTechnicianId = diagnoses
+                    .Select(_diagnosisService.ReadTechnicianId)
+                    .Where(x => x.HasValue && x.Value > 0)
+                    .Select(x => x!.Value)
+                    .FirstOrDefault();
+                var technician = firstTechnicianId > 0
+                    ? await _diagnosisService.GetStaffByIdAsync(firstTechnicianId)
+                    : null;
+                var bypassAuditNote = bypassTeamLeader
+                    ? $"Quản đốc {foreman.FullName} duyệt vượt cấp từ thợ {technician?.FullName ?? "N/A"}"
+                    : null;
+
+                await _diagnosisService.ApproveFinalAsync(diagnoses, request.ForemanId, request.Note, bypassTeamLeader, bypassAuditNote);
+                var quotation = await _quotationWorkflowService.GenerateInitialQuotationFromDiagnosisAsync(
+                    serviceOrderId,
+                    request.ForemanId,
+                    request.Note,
+                    diagnoses.Select(x => x.Id).Distinct().ToList());
+                return Ok(new
+                {
+                    message = bypassTeamLeader
+                        ? "Quản đốc đã duyệt vượt cấp và chuyển báo giá."
+                        : "Quản đốc đã duyệt và chuyển báo giá.",
+                    quotation
+                });
+            }
+
+            await _diagnosisService.RejectFinalAsync(diagnoses, request.ForemanId, request.Note);
+            return Ok(new { message = "Quản đốc từ chối, yêu cầu chẩn đoán lại." });
         }
 
         [HttpDelete("service-orders/{serviceOrderId:long}/diagnosis-queues")]
@@ -575,24 +734,24 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.RequestedByStaffId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin nguoi yeu cau ho tro." });
+                return BadRequest(new { message = "Thi\u1EBFu th\u00F4ng tin ng\u01B0\u1EDDi y\u00EAu c\u1EA7u h\u1ED7 tr\u1EE3." });
             }
 
             var requester = await _diagnosisService.GetStaffByIdAsync(request.RequestedByStaffId);
             if (requester == null)
             {
-                return BadRequest(new { message = "Nguoi yeu cau ho tro khong ton tai." });
+                return BadRequest(new { message = "Ng\u01B0\u1EDDi y\u00EAu c\u1EA7u h\u1ED7 tr\u1EE3 kh\u00F4ng t\u1ED3n t\u1EA1i." });
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de yeu cau ho tro." });
+                return BadRequest(new { message = "Kh\u00F4ng c\u00F3 l\u1EC7nh chu\u1EA9n \u0111o\u00E1n \u0111ang ho\u1EA1t \u0111\u1ED9ng \u0111\u1EC3 y\u00EAu c\u1EA7u h\u1ED7 tr\u1EE3." });
             }
 
             long? primaryTeamId = activeDiagnosis
-                .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                .Select(x => x.AssignedTeamId)
+                .Select(x => _diagnosisService.ReadAssignedTeamId(x))
+                .Where(x => x.HasValue && x.Value > 0)
                 .FirstOrDefault();
             if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
             {
@@ -606,7 +765,7 @@ namespace MyGarage.Controllers
 
             if (normalizedSupportingAssignments.Count > 0 && !primaryTeamId.HasValue)
             {
-                return BadRequest(new { message = "Chi cho phep yeu cau to phoi hop sau khi da co to chinh." });
+                return BadRequest(new { message = "Ch\u1EC9 cho ph\u00E9p y\u00EAu c\u1EA7u t\u1ED5 ph\u1ED1i h\u1EE3p sau khi \u0111\u00E3 c\u00F3 t\u1ED5 ch\u00EDnh." });
             }
 
             if (normalizedSupportingAssignments.Count > 0)
@@ -614,40 +773,30 @@ namespace MyGarage.Controllers
                 var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
                 if (serviceOrder == null)
                 {
-                    return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                    return NotFound(new { message = "Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa." });
                 }
-
-                var dispatchTag = activeDiagnosis
-                    .Select(x => x.DispatchTag)
-                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
                 foreach (var supportingAssignment in normalizedSupportingAssignments)
                 {
                     if (supportingAssignment.RequestedTechnicianCount.GetValueOrDefault() <= 0)
                     {
-                        return BadRequest(new { message = "Moi to phoi hop phai co so luong tho yeu cau lon hon 0." });
+                        return BadRequest(new { message = "M\u1ED7i t\u1ED5 ph\u1ED1i h\u1EE3p ph\u1EA3i c\u00F3 s\u1ED1 l\u01B0\u1EE3ng th\u1EE3 y\u00EAu c\u1EA7u l\u1EDBn h\u01A1n 0." });
                     }
 
                     if (supportingAssignment.TechnicianId > 0 || supportingAssignment.AssistantTechnicianId.HasValue)
                     {
-                        return BadRequest(new { message = "To truong to chinh khong duoc chon tho cho to phoi hop." });
+                        return BadRequest(new { message = "T\u1ED5 tr\u01B0\u1EDFng t\u1ED5 ch\u00EDnh kh\u00F4ng \u0111\u01B0\u1EE3c ch\u1ECDn th\u1EE3 cho t\u1ED5 ph\u1ED1i h\u1EE3p." });
                     }
 
                     var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingAssignment.TeamId);
                     if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
                     {
-                        return BadRequest(new { message = $"To phoi hop #{supportingAssignment.TeamId} khong ton tai." });
+                        return BadRequest(new { message = $"T\u1ED5 ph\u1ED1i h\u1EE3p #{supportingAssignment.TeamId} kh\u00F4ng t\u1ED3n t\u1EA1i." });
                     }
 
                     if (supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
                     {
-                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
-                    }
-
-                    var isCompatible = await _diagnosisService.IsDispatchTagCompatibleAsync(dispatchTag, supportingAssignment.TeamId);
-                    if (!isCompatible)
-                    {
-                        return Conflict(new { message = "Co to phoi hop khong dung chuyen mon cua lenh chan doan." });
+                        return BadRequest(new { message = "T\u1ED5 ph\u1ED1i h\u1EE3p ph\u1EA3i thu\u1ED9c c\u00F9ng chi nh\u00E1nh v\u1EDBi l\u1EC7nh s\u1EEDa ch\u1EEFa." });
                     }
                 }
             }
@@ -659,7 +808,7 @@ namespace MyGarage.Controllers
                 normalizedSupportingAssignments);
             return Ok(new
             {
-                message = "Da ghi nhan yeu cau ho tro ky thuat.",
+                message = "\u0110\u00E3 ghi nh\u1EADn y\u00EAu c\u1EA7u h\u1ED7 tr\u1EE3 k\u1EF9 thu\u1EADt.",
                 serviceOrderId,
                 requestedBy = request.RequestedByStaffId
             });
@@ -670,31 +819,31 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.RequestedByStaffId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin nguoi yeu cau huy." });
+                return BadRequest(new { message = "Thiếu thông tin người yêu cầu hủy." });
             }
 
             var reason = (request.Reason ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(reason))
             {
-                return BadRequest(new { message = "Bat buoc nhap ly do huy (Sai chuyen mon, Qua tai cau, Thieu thiet bi...)." });
+                return BadRequest(new { message = "Bắt buộc nhập lý do hủy (Sai chuyên môn, Quá tải cầu, Thiếu thiết bị...)." });
             }
 
             var requester = await _diagnosisService.GetStaffByIdAsync(request.RequestedByStaffId);
             if (requester == null)
             {
-                return BadRequest(new { message = "Nguoi yeu cau huy khong ton tai." });
+                return BadRequest(new { message = "Người yêu cầu hủy không tồn tại." });
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de huy." });
+                return BadRequest(new { message = "Không có lệnh chẩn đoán đang hoạt động để hủy." });
             }
 
             try
             {
                 await _diagnosisService.RequestCancellationAsync(activeDiagnosis, request.RequestedByStaffId, reason);
-                return Ok(new { message = "Da gui lenh huy sang trang thai cho duyet cua quan doc." });
+                return Ok(new { message = "Đã gửi lệnh hủy sang trạng thái chờ duyệt của quản đốc." });
             }
             catch (InvalidOperationException ex)
             {
@@ -707,29 +856,29 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.ManagerId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin quan doc phe duyet." });
+                return BadRequest(new { message = "Thiếu thông tin quản đốc phê duyệt." });
             }
 
             var manager = await _diagnosisService.GetStaffByIdAsync(request.ManagerId);
             if (manager == null)
             {
-                return BadRequest(new { message = "Quan doc khong ton tai." });
+                return BadRequest(new { message = "Quản đốc không tồn tại." });
             }
 
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var allDiagnosis = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
             var pendingCancellation = allDiagnosis
-                .Where(x => x.CancellationRequestedAt.HasValue && !x.CancellationDecisionAt.HasValue)
+                .Where(x => _diagnosisService.ReadCancellationRequestedAt(x).HasValue && !_diagnosisService.ReadCancellationDecisionAt(x).HasValue)
                 .ToList();
 
             if (pendingCancellation.Count == 0)
             {
-                return BadRequest(new { message = "Khong co yeu cau huy nao dang cho duyet." });
+                return BadRequest(new { message = "Không có yêu cầu hủy nào đang chờ duyệt." });
             }
 
             await _diagnosisService.ApplyCancellationDecisionAsync(serviceOrder, pendingCancellation, request.Approve, request.ManagerId, request.Note);
@@ -737,8 +886,8 @@ namespace MyGarage.Controllers
             return Ok(new
             {
                 message = request.Approve
-                    ? "Quan doc da dong y huy, lenh duoc dua ve hang cho phan cong lai."
-                    : "Quan doc tu choi huy lenh, to tiep tuc xu ly xe.",
+                    ? "Quản đốc đã đồng ý hủy, lệnh được đưa về hàng chờ phân công lại."
+                    : "Quản đốc từ chối hủy lệnh, tổ tiếp tục xử lý xe.",
                 approved = request.Approve
             });
         }
@@ -748,36 +897,36 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.ManagerId <= 0 || request.TechnicianId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin override cua quan doc." });
+                return BadRequest(new { message = "Thiếu thông tin override của quản đốc." });
             }
 
             if (request.AssistantTechnicianId.HasValue && request.AssistantTechnicianId.Value == request.TechnicianId)
             {
-                return BadRequest(new { message = "Tho phu khong duoc trung voi tho chinh." });
+                return BadRequest(new { message = "Thợ phụ không được trùng với thợ chính." });
             }
 
             var manager = await _diagnosisService.GetStaffByIdAsync(request.ManagerId);
             if (manager == null)
             {
-                return BadRequest(new { message = "Quan doc khong ton tai." });
+                return BadRequest(new { message = "Quản đốc không tồn tại." });
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Khong co lenh chan doan de override." });
+                return BadRequest(new { message = "Không có lệnh chẩn đoán để override." });
             }
 
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
             var technicianExists = await _diagnosisService.TechnicianExistsAsync(request.TechnicianId);
             if (!technicianExists)
             {
-                return BadRequest(new { message = "Ky thuat vien khong ton tai." });
+                return BadRequest(new { message = "Kỹ thuật viên không tồn tại." });
             }
 
             var resolvedTeamId = request.TeamId ?? await _diagnosisService.ResolveTeamIdForTechnicianAsync(request.TechnicianId);
@@ -786,7 +935,7 @@ namespace MyGarage.Controllers
                 var inTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.TechnicianId, request.TeamId.Value);
                 if (!inTeam)
                 {
-                    return BadRequest(new { message = "Ky thuat vien khong thuoc to duoc chi dinh." });
+                    return BadRequest(new { message = "Kỹ thuật viên không thuộc tổ được chỉ định." });
                 }
             }
 
@@ -795,7 +944,7 @@ namespace MyGarage.Controllers
                 var assistantExists = await _diagnosisService.TechnicianExistsAsync(request.AssistantTechnicianId.Value);
                 if (!assistantExists)
                 {
-                    return BadRequest(new { message = "Tho phu khong ton tai." });
+                    return BadRequest(new { message = "Thợ phụ không tồn tại." });
                 }
 
                 if (resolvedTeamId.HasValue)
@@ -803,7 +952,7 @@ namespace MyGarage.Controllers
                     var assistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.AssistantTechnicianId.Value, resolvedTeamId.Value);
                     if (!assistantInTeam)
                     {
-                        return BadRequest(new { message = "Tho phu khong thuoc to duoc giao." });
+                        return BadRequest(new { message = "Thợ phụ không thuộc tổ được giao." });
                     }
                 }
             }
@@ -819,7 +968,7 @@ namespace MyGarage.Controllers
 
             if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
             {
-                return BadRequest(new { message = "Khi co to phoi hop, bat buoc chi dinh to chinh." });
+                return BadRequest(new { message = "Khi có tổ phối hợp, bắt buộc chỉ định tổ chính." });
             }
             if (normalizedSupportingTeamIds.Count > 0)
             {
@@ -827,36 +976,36 @@ namespace MyGarage.Controllers
                 {
                     if (supportingAssignment.TechnicianId <= 0)
                     {
-                        return BadRequest(new { message = "Moi to phoi hop phai chi dinh tho chinh." });
+                        return BadRequest(new { message = "Mỗi tổ phối hợp phải chỉ định thợ chính." });
                     }
 
                     if (supportingAssignment.AssistantTechnicianId.HasValue && supportingAssignment.AssistantTechnicianId.Value == supportingAssignment.TechnicianId)
                     {
-                        return BadRequest(new { message = "Tho phu cua to phoi hop khong duoc trung tho chinh." });
+                        return BadRequest(new { message = "Thợ phụ của tổ phối hợp không được trùng thợ chính." });
                     }
 
                     var supportingTeamId = supportingAssignment.TeamId;
                     var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
                     if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
                     {
-                        return BadRequest(new { message = $"To phoi hop #{supportingTeamId} khong ton tai." });
+                        return BadRequest(new { message = $"Tổ phối hợp #{supportingTeamId} không tồn tại." });
                     }
 
                     if (supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
                     {
-                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                        return BadRequest(new { message = "Tổ phối hợp phải thuộc cùng chi nhánh với lệnh sửa chữa." });
                     }
 
                     var supportingLeadExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.TechnicianId);
                     if (!supportingLeadExists)
                     {
-                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong ton tai." });
+                        return BadRequest(new { message = $"Thợ chính của tổ phối hợp #{supportingTeamId} không tồn tại." });
                     }
 
                     var supportingLeadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.TechnicianId, supportingTeamId);
                     if (!supportingLeadInTeam)
                     {
-                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                        return BadRequest(new { message = $"Thợ chính của tổ phối hợp #{supportingTeamId} không thuộc tổ được chọn." });
                     }
 
                     if (supportingAssignment.AssistantTechnicianId.HasValue)
@@ -864,13 +1013,13 @@ namespace MyGarage.Controllers
                         var supportingAssistantExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.AssistantTechnicianId.Value);
                         if (!supportingAssistantExists)
                         {
-                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong ton tai." });
+                            return BadRequest(new { message = $"Thợ phụ của tổ phối hợp #{supportingTeamId} không tồn tại." });
                         }
 
                         var supportingAssistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.AssistantTechnicianId.Value, supportingTeamId);
                         if (!supportingAssistantInTeam)
                         {
-                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                            return BadRequest(new { message = $"Thợ phụ của tổ phối hợp #{supportingTeamId} không thuộc tổ được chọn." });
                         }
                     }
                 }
@@ -881,7 +1030,7 @@ namespace MyGarage.Controllers
                 var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder.ExecuteBranchId);
                 if (!bayInBranch)
                 {
-                    return BadRequest(new { message = "Cau nang khong thuoc chi nhanh xu ly." });
+                    return BadRequest(new { message = "Cầu nâng không thuộc chi nhánh xử lý." });
                 }
             }
 
@@ -893,14 +1042,14 @@ namespace MyGarage.Controllers
                 supportingTeamIds: normalizedSupportingTeamIds,
                 supportingAssignments: normalizedSupportingAssignments,
                 bayId: request.BayId,
-                managerOverride: true,
-                assignedByTeamLeaderId: null);
+                managerOverride: true);
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
 
             var dto = _mapper.Map<DiagnosisResponseDto>(response);
+            ApplyAssignmentStateToDto(response, dto);
             dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
@@ -912,36 +1061,36 @@ namespace MyGarage.Controllers
         {
             if (request == null || request.TeamLeaderId <= 0 || request.TeamId <= 0 || request.TechnicianId <= 0)
             {
-                return BadRequest(new { message = "Thieu thong tin chon tho ho tro cua to phoi hop." });
+                return BadRequest(new { message = "Thiếu thông tin chọn thợ hỗ trợ của tổ phối hợp." });
             }
 
             if (request.AssistantTechnicianId.HasValue && request.AssistantTechnicianId.Value == request.TechnicianId)
             {
-                return BadRequest(new { message = "Tho phu khong duoc trung voi tho chinh." });
+                return BadRequest(new { message = "Thợ phụ không được trùng với thợ chính." });
             }
 
             var teamLeader = await _diagnosisService.GetStaffByIdAsync(request.TeamLeaderId);
             if (teamLeader == null)
             {
-                return BadRequest(new { message = "To truong khong ton tai." });
+                return BadRequest(new { message = "Tổ trưởng không tồn tại." });
             }
 
             var teamLeaderTeamId = teamLeader.TeamId;
             if (!teamLeaderTeamId.HasValue || teamLeaderTeamId.Value != request.TeamId)
             {
-                return BadRequest(new { message = "To truong chi duoc chon nhan su cho to cua minh." });
+                return BadRequest(new { message = "Tổ trưởng chỉ được chọn nhân sự cho tổ của mình." });
             }
 
             var leadExists = await _diagnosisService.TechnicianExistsAsync(request.TechnicianId);
             if (!leadExists)
             {
-                return BadRequest(new { message = "Tho chinh khong ton tai." });
+                return BadRequest(new { message = "Thợ chính không tồn tại." });
             }
 
             var leadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.TechnicianId, request.TeamId);
             if (!leadInTeam)
             {
-                return BadRequest(new { message = "Tho chinh khong thuoc to duoc yeu cau." });
+                return BadRequest(new { message = "Thợ chính không thuộc tổ được yêu cầu." });
             }
 
             if (request.AssistantTechnicianId.HasValue)
@@ -949,20 +1098,20 @@ namespace MyGarage.Controllers
                 var assistantExists = await _diagnosisService.TechnicianExistsAsync(request.AssistantTechnicianId.Value);
                 if (!assistantExists)
                 {
-                    return BadRequest(new { message = "Tho phu khong ton tai." });
+                    return BadRequest(new { message = "Thợ phụ không tồn tại." });
                 }
 
                 var assistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.AssistantTechnicianId.Value, request.TeamId);
                 if (!assistantInTeam)
                 {
-                    return BadRequest(new { message = "Tho phu khong thuoc to duoc yeu cau." });
+                    return BadRequest(new { message = "Thợ phụ không thuộc tổ được yêu cầu." });
                 }
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Khong co lenh chan doan dang hoat dong de cap nhat nhan su ho tro." });
+                return BadRequest(new { message = "Không có lệnh chẩn đoán đang hoạt động để cập nhật nhân sự hỗ trợ." });
             }
 
             try
@@ -984,6 +1133,7 @@ namespace MyGarage.Controllers
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
             var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            ApplyAssignmentStateToDto(response, responseDto);
             responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(responseDto);
         }
@@ -994,18 +1144,10 @@ namespace MyGarage.Controllers
             var status = NormalizeStatus(dto?.Status);
             if (status != DiagnosisStatusCompleted)
             {
-                return BadRequest(new { message = "Chi ho tro chuyen trang thai sang COMPLETED." });
+                return BadRequest(new { message = "Chỉ hỗ trợ chuyển trạng thái sang COMPLETED." });
             }
 
-            var payload = new DiagnosisUpdateDto
-            {
-                Status = DiagnosisStatusCompleted,
-                Symptom = dto?.Symptom,
-                RootCause = dto?.RootCause,
-                Severity = dto?.Severity,
-            };
-
-            return await CompleteAsync(id, payload);
+            return await CompleteAsync(id, dto);
         }
 
         [HttpDelete("{id:long}")]
@@ -1246,7 +1388,7 @@ namespace MyGarage.Controllers
             }
 
             var normalized = raw.Trim().ToLowerInvariant();
-            normalized = normalized.Replace('đ', 'd');
+            normalized = normalized.Replace('\u0111', 'd');
 
             var decomposed = normalized.Normalize(NormalizationForm.FormD);
             var builder = new StringBuilder(decomposed.Length);
@@ -1341,41 +1483,110 @@ namespace MyGarage.Controllers
                 }
             }
 
+            if (dto.ApprovedByForemanId.HasValue && dto.ApprovedByForemanId.Value > 0)
+            {
+                if (!staffCache.TryGetValue(dto.ApprovedByForemanId.Value, out var technicalApprover))
+                {
+                    technicalApprover = await _diagnosisService.GetStaffByIdAsync(dto.ApprovedByForemanId.Value);
+                    staffCache[dto.ApprovedByForemanId.Value] = technicalApprover;
+                }
+
+                if (technicalApprover != null && string.IsNullOrWhiteSpace(dto.ApprovedByForemanName))
+                {
+                    dto.ApprovedByForemanName = technicalApprover.FullName;
+                }
+            }
+
+            long? finalApproverId = dto.ApprovedByTeamLeaderId;
+            if ((!finalApproverId.HasValue || finalApproverId.Value <= 0) &&
+                dto.ApprovedByTeamLeaderAt.HasValue &&
+                dto.UpdatedBy.HasValue &&
+                dto.UpdatedBy.Value > 0)
+            {
+                finalApproverId = dto.UpdatedBy.Value;
+                dto.ApprovedByTeamLeaderId = finalApproverId;
+            }
+
+            if (finalApproverId.HasValue && finalApproverId.Value > 0)
+            {
+                if (!staffCache.TryGetValue(finalApproverId.Value, out var finalApprover))
+                {
+                    finalApprover = await _diagnosisService.GetStaffByIdAsync(finalApproverId.Value);
+                    staffCache[finalApproverId.Value] = finalApprover;
+                }
+
+                if (finalApprover != null && string.IsNullOrWhiteSpace(dto.ApprovedByTeamLeaderName))
+                {
+                    dto.ApprovedByTeamLeaderName = finalApprover.FullName;
+                }
+            }
+
             return dto;
+        }
+
+        private void ApplyAssignmentStateToDto(Diagnosis source, DiagnosisResponseDto target)
+        {
+            target.DiagnosisAssignmentId = _diagnosisService.ReadDiagnosisAssignmentId(source);
+            target.AssignedTeamId = _diagnosisService.ReadAssignedTeamId(source);
+            target.TechnicianId = _diagnosisService.ReadTechnicianId(source);
+            target.AssistantTechnicianId = _diagnosisService.ReadAssistantTechnicianId(source);
+            target.AssignedBayId = _diagnosisService.ReadAssignedBayId(source);
+            var teamLeaderStatus = _diagnosisService.ReadTeamLeaderApprovalStatus(source);
+            var executeBranchId = source.ServiceOrder?.ExecuteBranchId;
+            var isEscalated = _diagnosisService.IsTeamLeaderApprovalEscalated(source, executeBranchId);
+            var isWarning = _diagnosisService.IsTeamLeaderApprovalWarning(source, executeBranchId);
+            target.TeamLeaderApprovalPendingMinutes = _diagnosisService.ReadTeamLeaderApprovalPendingMinutes(source);
+            target.IsTeamLeaderApprovalWarning = isWarning;
+            target.IsTeamLeaderApprovalEscalated = isEscalated;
+            target.TeamLeaderApprovalStatus = isEscalated &&
+                                              string.Equals(teamLeaderStatus, nameof(ApprovalDecisionStatusCode.PENDING), StringComparison.OrdinalIgnoreCase)
+                ? nameof(ApprovalDecisionStatusCode.ESCALATED)
+                : teamLeaderStatus;
+            target.IsEscalated = target.IsEscalated || isEscalated;
+            target.FinalApprovalStatus = _diagnosisService.ReadFinalApprovalStatus(source);
+            target.ForemanRejectReason = _diagnosisService.ReadForemanRejectReason(source);
+            target.ApprovedByForemanId = _diagnosisService.ReadApprovedByForemanId(source);
+            target.ApprovedByForemanAt = _diagnosisService.ReadApprovedByForemanAt(source);
+            target.ApprovedByTeamLeaderId = _diagnosisService.ReadApprovedByTeamLeaderId(source);
+            target.ApprovedByTeamLeaderAt = _diagnosisService.ReadApprovedByTeamLeaderAt(source);
+            target.TeamLeaderNote = _diagnosisService.ReadTeamLeaderNote(source);
+            target.ForemanNote = _diagnosisService.ReadForemanNote(source);
+            target.CancellationRequestedAt = _diagnosisService.ReadCancellationRequestedAt(source);
+            target.CancellationDecisionAt = _diagnosisService.ReadCancellationDecisionAt(source);
         }
 
         private async Task<ActionResult<DiagnosisResponseDto>> AssignRequestAsync(long serviceOrderId, DiagnosisAcceptRequestDto request)
         {
             if (request == null || request.TechnicianId <= 0)
             {
-                return BadRequest(new { message = "Thieu ky thuat vien nhan yeu cau." });
+                return BadRequest(new { message = "Thiếu kỹ thuật viên nhận yêu cầu." });
             }
 
             if (request.AssistantTechnicianId.HasValue && request.AssistantTechnicianId.Value == request.TechnicianId)
             {
-                return BadRequest(new { message = "Tho phu khong duoc trung voi tho chinh." });
+                return BadRequest(new { message = "Thợ phụ không được trùng với thợ chính." });
             }
 
             var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
             if (activeDiagnosis.Count == 0)
             {
-                return BadRequest(new { message = "Yeu cau chan doan chua duoc tao." });
+                return BadRequest(new { message = "Yêu cầu chẩn đoán chưa được tạo." });
             }
 
             if (activeDiagnosis.Any(x => x.Status == DiagnosisStatusCompleted))
             {
-                return BadRequest(new { message = "Chan doan da hoan tat, khong the nhan lai." });
+                return BadRequest(new { message = "Chẩn đoán đã hoàn tất, không thể nhận lại." });
             }
 
-            if (!request.IsManagerOverride && activeDiagnosis.Any(x => x.Status == DiagnosisStatusAssigned && x.TechnicianId != request.TechnicianId))
+            if (!request.IsManagerOverride && activeDiagnosis.Any(x => x.Status == DiagnosisStatusAssigned && _diagnosisService.ReadTechnicianId(x) != request.TechnicianId))
             {
-                return Conflict(new { message = "Yeu cau da duoc ky thuat vien khac nhan." });
+                return Conflict(new { message = "Yêu cầu đã được kỹ thuật viên khác nhận." });
             }
 
             var technicianExists = await _diagnosisService.TechnicianExistsAsync(request.TechnicianId);
             if (!technicianExists)
             {
-                return BadRequest(new { message = "Ky thuat vien khong ton tai." });
+                return BadRequest(new { message = "Kỹ thuật viên không tồn tại." });
             }
 
             var resolvedTeamId = request.TeamId ?? await _diagnosisService.ResolveTeamIdForTechnicianAsync(request.TechnicianId);
@@ -1385,7 +1596,7 @@ namespace MyGarage.Controllers
                 var inTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.TechnicianId, request.TeamId.Value);
                 if (!inTeam)
                 {
-                    return BadRequest(new { message = "Ky thuat vien khong thuoc to duoc chon." });
+                    return BadRequest(new { message = "Kỹ thuật viên không thuộc tổ được chọn." });
                 }
             }
 
@@ -1394,7 +1605,7 @@ namespace MyGarage.Controllers
                 var assistantExists = await _diagnosisService.TechnicianExistsAsync(request.AssistantTechnicianId.Value);
                 if (!assistantExists)
                 {
-                    return BadRequest(new { message = "Tho phu khong ton tai." });
+                    return BadRequest(new { message = "Thợ phụ không tồn tại." });
                 }
 
                 if (resolvedTeamId.HasValue)
@@ -1402,7 +1613,7 @@ namespace MyGarage.Controllers
                     var assistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(request.AssistantTechnicianId.Value, resolvedTeamId.Value);
                     if (!assistantInTeam)
                     {
-                        return BadRequest(new { message = "Tho phu khong thuoc to duoc giao." });
+                        return BadRequest(new { message = "Thợ phụ không thuộc tổ được giao." });
                     }
                 }
             }
@@ -1418,7 +1629,7 @@ namespace MyGarage.Controllers
 
             if (normalizedSupportingTeamIds.Count > 0 && !resolvedTeamId.HasValue)
             {
-                return BadRequest(new { message = "Khi co to phoi hop, bat buoc chon to chinh." });
+                return BadRequest(new { message = "Khi có tổ phối hợp, bắt buộc chọn tổ chính." });
             }
             var requiresServiceOrderContext = request.BayId.HasValue || normalizedSupportingTeamIds.Count > 0;
             ServiceOrder? serviceOrder = null;
@@ -1427,7 +1638,7 @@ namespace MyGarage.Controllers
                 serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
                 if (serviceOrder == null)
                 {
-                    return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                    return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
                 }
             }
 
@@ -1437,36 +1648,36 @@ namespace MyGarage.Controllers
                 {
                     if (supportingAssignment.TechnicianId <= 0)
                     {
-                        return BadRequest(new { message = "Moi to phoi hop phai chi dinh tho chinh." });
+                        return BadRequest(new { message = "Mỗi tổ phối hợp phải chỉ định thợ chính." });
                     }
 
                     if (supportingAssignment.AssistantTechnicianId.HasValue && supportingAssignment.AssistantTechnicianId.Value == supportingAssignment.TechnicianId)
                     {
-                        return BadRequest(new { message = "Tho phu cua to phoi hop khong duoc trung tho chinh." });
+                        return BadRequest(new { message = "Thợ phụ của tổ phối hợp không được trùng thợ chính." });
                     }
 
                     var supportingTeamId = supportingAssignment.TeamId;
                     var supportingTeam = await _diagnosisService.GetTeamByIdAsync(supportingTeamId);
                     if (supportingTeam == null || (supportingTeam.IsDeleted.HasValue && supportingTeam.IsDeleted.Value))
                     {
-                        return BadRequest(new { message = $"To phoi hop #{supportingTeamId} khong ton tai." });
+                        return BadRequest(new { message = $"Tổ phối hợp #{supportingTeamId} không tồn tại." });
                     }
 
                     if (serviceOrder != null && supportingTeam.BranchId != serviceOrder.ExecuteBranchId)
                     {
-                        return BadRequest(new { message = "To phoi hop phai thuoc cung chi nhanh voi lenh sua chua." });
+                        return BadRequest(new { message = "Tổ phối hợp phải thuộc cùng chi nhánh với lệnh sửa chữa." });
                     }
 
                     var supportingLeadExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.TechnicianId);
                     if (!supportingLeadExists)
                     {
-                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong ton tai." });
+                        return BadRequest(new { message = $"Thợ chính của tổ phối hợp #{supportingTeamId} không tồn tại." });
                     }
 
                     var supportingLeadInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.TechnicianId, supportingTeamId);
                     if (!supportingLeadInTeam)
                     {
-                        return BadRequest(new { message = $"Tho chinh cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                        return BadRequest(new { message = $"Thợ chính của tổ phối hợp #{supportingTeamId} không thuộc tổ được chọn." });
                     }
 
                     if (supportingAssignment.AssistantTechnicianId.HasValue)
@@ -1474,13 +1685,13 @@ namespace MyGarage.Controllers
                         var supportingAssistantExists = await _diagnosisService.TechnicianExistsAsync(supportingAssignment.AssistantTechnicianId.Value);
                         if (!supportingAssistantExists)
                         {
-                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong ton tai." });
+                            return BadRequest(new { message = $"Thợ phụ của tổ phối hợp #{supportingTeamId} không tồn tại." });
                         }
 
                         var supportingAssistantInTeam = await _diagnosisService.IsTechnicianInTeamAsync(supportingAssignment.AssistantTechnicianId.Value, supportingTeamId);
                         if (!supportingAssistantInTeam)
                         {
-                            return BadRequest(new { message = $"Tho phu cua to phoi hop #{supportingTeamId} khong thuoc to duoc chon." });
+                            return BadRequest(new { message = $"Thợ phụ của tổ phối hợp #{supportingTeamId} không thuộc tổ được chọn." });
                         }
                     }
                 }
@@ -1491,7 +1702,7 @@ namespace MyGarage.Controllers
                 var bayInBranch = await _diagnosisService.IsBayInBranchAsync(request.BayId.Value, serviceOrder!.ExecuteBranchId);
                 if (!bayInBranch)
                 {
-                    return BadRequest(new { message = "Cau nang khong thuoc chi nhanh xu ly." });
+                    return BadRequest(new { message = "Cầu nâng không thuộc chi nhánh xử lý." });
                 }
             }
 
@@ -1513,7 +1724,7 @@ namespace MyGarage.Controllers
                     var isCompatible = await _diagnosisService.IsDispatchTagCompatibleAsync(dispatchTag, dispatchTeamId);
                     if (!isCompatible)
                     {
-                        return Conflict(new { message = "Co to duoc chon khong dung chuyen mon cua lenh chan doan." });
+                        return Conflict(new { message = "Có tổ được chọn không đúng chuyên môn của lệnh chẩn đoán." });
                     }
                 }
 
@@ -1541,13 +1752,13 @@ namespace MyGarage.Controllers
                 normalizedSupportingTeamIds,
                 normalizedSupportingAssignments,
                 request.BayId,
-                request.IsManagerOverride,
-                request.IsManagerOverride ? null : request.TeamLeaderId);
+                request.IsManagerOverride);
 
             var response = activeDiagnosis
                 .OrderByDescending(x => x.CreatedAt ?? x.UpdatedAt ?? DateTime.MinValue)
                 .First();
             var responseDto = _mapper.Map<DiagnosisResponseDto>(response);
+            ApplyAssignmentStateToDto(response, responseDto);
             responseDto = await EnrichDiagnosisDtoAsync(responseDto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(responseDto);
         }
@@ -1557,28 +1768,61 @@ namespace MyGarage.Controllers
             var serviceOrder = await _diagnosisService.GetServiceOrderAsync(serviceOrderId);
             if (serviceOrder == null)
             {
-                return NotFound(new { message = "Khong tim thay lenh sua chua." });
+                return NotFound(new { message = "Không tìm thấy lệnh sửa chữa." });
             }
 
-            var activeDiagnosis = await _diagnosisService.GetActiveDiagnosesAsync(serviceOrderId);
-            if (activeDiagnosis.Count == 0)
+            var workflowDiagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
+            if (workflowDiagnoses.Count == 0)
             {
-                return Ok(new { message = "Khong co yeu cau chan doan de thu hoi." });
+                return Ok(new { message = "Không có phiếu chẩn đoán để hủy." });
             }
 
-            await _diagnosisService.RecallDiagnosesAsync(serviceOrder, activeDiagnosis);
-            return Ok(new { message = "Da thu hoi yeu cau chan doan." });
+            static bool IsFinalDecisionMade(string? finalStatus) =>
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+
+            var cancellableDiagnoses = workflowDiagnoses
+                .Where(x =>
+                    !string.Equals(x.Status, DiagnosisStatusCanceled, StringComparison.OrdinalIgnoreCase) &&
+                    !IsFinalDecisionMade(_diagnosisService.ReadFinalApprovalStatus(x)))
+                .ToList();
+
+            if (cancellableDiagnoses.Count == 0)
+            {
+                return BadRequest(new { message = "Phiếu chẩn đoán đã được quản đốc quyết định, không thể hủy." });
+            }
+
+            await _diagnosisService.RecallDiagnosesAsync(serviceOrder, cancellableDiagnoses);
+            return Ok(new { message = "Đã hủy phiếu chẩn đoán." });
         }
 
-        private async Task<ActionResult<DiagnosisResponseDto>> CompleteAsync(long id, DiagnosisUpdateDto itemDto)
+        private async Task<ActionResult<DiagnosisResponseDto>> CompleteAsync(long id, DiagnosisStatusPatchDto? itemDto)
         {
             var existingItem = await _diagnosisService.GetDiagnosisEntityAsync(id);
             if (existingItem == null)
             {
-                return NotFound(new { message = "Khong tim thay phien chan doan." });
+                return NotFound(new { message = "Không tìm thấy phiên chẩn đoán." });
             }
 
-            _mapper.Map(itemDto, existingItem);
+            if (itemDto != null)
+            {
+                if (!string.IsNullOrWhiteSpace(itemDto.Symptom))
+                {
+                    existingItem.Symptom = itemDto.Symptom;
+                }
+
+                if (!string.IsNullOrWhiteSpace(itemDto.RootCause))
+                {
+                    existingItem.RootCause = itemDto.RootCause;
+                }
+
+                if (!string.IsNullOrWhiteSpace(itemDto.Severity))
+                {
+                    existingItem.Severity = itemDto.Severity;
+                }
+            }
+
+            existingItem.Status = DiagnosisStatusCompleted;
             await _diagnosisService.CompleteDiagnosisAsync(existingItem);
 
             var order = await _diagnosisService.GetServiceOrderAsync(existingItem.ServiceOrderId);
@@ -1588,8 +1832,12 @@ namespace MyGarage.Controllers
             }
 
             var dto = _mapper.Map<DiagnosisResponseDto>(existingItem);
+            ApplyAssignmentStateToDto(existingItem, dto);
             dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
     }
 }
+
+
+

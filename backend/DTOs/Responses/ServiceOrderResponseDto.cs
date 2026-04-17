@@ -8,6 +8,11 @@ namespace MyGarage.DTOs.Responses
         public string? Code { get; set; }
         public long CustomerId { get; set; }
         public long VehicleId { get; set; }
+        public string? VehicleLicensePlate { get; set; }
+        public long? VehicleBrandId { get; set; }
+        public string? VehicleBrandName { get; set; }
+        public long? VehicleModelId { get; set; }
+        public string? VehicleModelName { get; set; }
         public string? GuestName { get; set; }
         public string? GuestPhone { get; set; }
         public string? GuestVehicleInfo { get; set; }
@@ -43,7 +48,6 @@ namespace MyGarage.DTOs.Responses
         public string? Qcstatus { get; set; }
         public long? QcinspectorId { get; set; }
         public DateTime? QcverifiedAt { get; set; }
-        public DateTime? ValidUntil { get; set; }
         public DateTime? CustomerApprovedAt { get; set; }
         public string? OldPartsReturnOption { get; set; }
         public DateTime? CheckInTime { get; set; }

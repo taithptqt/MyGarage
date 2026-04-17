@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { insuranceCompanyApi } from "@features/workshop/api/insuranceCompanyApi";
@@ -67,17 +67,14 @@ const DEFAULT_FORM_DATA = {
   serviceIds: [],
 };
 
-const EDIT_WINDOW_PASSED_MESSAGE = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
-const REQUEST_EDIT_REASON_REQUIRED = "Vui lòng nhập lý do yêu cầu sửa trước khi gửi.";
-const REQUEST_EDIT_ERROR = "Không thể gửi yêu cầu sửa service order.";
-const REQUEST_EDIT_SUCCESS = "Đã gửi yêu cầu sửa service order đến cấp phê duyệt.";
-const REQUEST_DECISION_ERROR = "Không thể xử lý yêu cầu sửa service order.";
+const EDIT_WINDOW_PASSED_MESSAGE = "KhÃ´ng thá»ƒ sá»­a service order vÃ¬ Ä‘Ã£ qua má»‘c váº­n hÃ nh cho phÃ©p chá»‰nh sá»­a.";
+const REQUEST_EDIT_REASON_REQUIRED = "Vui lÃ²ng nháº­p lÃ½ do yÃªu cáº§u sá»­a trÆ°á»›c khi gá»­i.";
+const REQUEST_EDIT_ERROR = "KhÃ´ng thá»ƒ gá»­i yÃªu cáº§u sá»­a service order.";
+const REQUEST_EDIT_SUCCESS = "ÄÃ£ gá»­i yÃªu cáº§u sá»­a service order Ä‘áº¿n cáº¥p phÃª duyá»‡t.";
+const REQUEST_DECISION_ERROR = "KhÃ´ng thá»ƒ xá»­ lÃ½ yÃªu cáº§u sá»­a service order.";
 
 const SUPPLEMENTARY_SOURCE_TECHNICIAN = "SUPPLEMENTARY_TECHNICIAN";
 const SUPPLEMENTARY_SOURCE_CUSTOMER = "SUPPLEMENTARY_CUSTOMER";
-const SUPPLEMENTARY_REASON_TECH = "TECH_FINDING";
-const SUPPLEMENTARY_REASON_CUSTOMER = "CUSTOMER_REQUEST";
-const SUPPLEMENTARY_DEFAULT_STATUS = "APPROVED";
 
 function readField(obj, keys, fallback = null) {
   for (const key of keys) {
@@ -108,14 +105,14 @@ function normalizeSearchText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
+    .replace(/Ä‘/g, "d");
 }
 
 function normalizeRoleToken(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/gi, "d")
+    .replace(/Ä‘/gi, "d")
     .trim()
     .toUpperCase()
     .replace(/-/g, "_")
@@ -172,9 +169,9 @@ function normalizeServiceOrderEditRequestItem(raw) {
 
 function getRequestStatusLabel(status) {
   const normalized = String(status || "").trim().toUpperCase();
-  if (normalized === "APPROVED") return "Đã duyệt";
-  if (normalized === "REJECTED") return "Đã từ chối";
-  return "Chờ duyệt";
+  if (normalized === "APPROVED") return "ÄÃ£ duyá»‡t";
+  if (normalized === "REJECTED") return "ÄÃ£ tá»« chá»‘i";
+  return "Chá» duyá»‡t";
 }
 
 function getRequestStatusColor(status) {
@@ -200,6 +197,10 @@ function normalizeService(service) {
 }
 
 function normalizeServiceOrderDetail(detail) {
+  const diagnosisRecommendationId = Number(
+    readField(detail, ["diagnosisRecommendationId", "DiagnosisRecommendationId", "diagnosisRecommendationId", "DiagnosisRecommendationId"], 0)
+    || 0
+  );
   const source = String(readField(detail, ["serviceSource", "ServiceSource"], "INITIAL") || "INITIAL")
     .trim()
     .toUpperCase();
@@ -209,11 +210,13 @@ function normalizeServiceOrderDetail(detail) {
   const isSupplementary = Boolean(readField(detail, ["isSupplementary", "IsSupplementary"], false))
     || source === SUPPLEMENTARY_SOURCE_CUSTOMER
     || source === SUPPLEMENTARY_SOURCE_TECHNICIAN
+    || diagnosisRecommendationId > 0
     || Boolean(reason);
 
   return {
     id: Number(readField(detail, ["id", "Id"], 0)),
     itemType: String(readField(detail, ["itemType", "ItemType"], "") || "").trim().toUpperCase(),
+    diagnosisRecommendationId,
     quotationDetailId: readField(detail, ["quotationDetailId", "QuotationDetailId"], null),
     standardServiceId: Number(readField(detail, ["standardServiceId", "StandardServiceId"], 0)),
     itemId: Number(readField(detail, ["itemId", "ItemId"], 0)),
@@ -235,14 +238,13 @@ function isLaborOrServiceDetail(detail) {
 
 function isInitialEditableDetail(detail) {
   if (!isLaborOrServiceDetail(detail)) return false;
-  if (detail?.quotationDetailId) return false;
   return !detail?.isSupplementary;
 }
 
 function getSupplementarySourceLabel(source) {
-  if (source === SUPPLEMENTARY_SOURCE_TECHNICIAN) return "Phát sinh sau chẩn đoán";
-  if (source === SUPPLEMENTARY_SOURCE_CUSTOMER) return "Khách yêu cầu thêm";
-  return "Phát sinh";
+  if (source === SUPPLEMENTARY_SOURCE_TECHNICIAN) return "PhÃ¡t sinh sau cháº©n Ä‘oÃ¡n";
+  if (source === SUPPLEMENTARY_SOURCE_CUSTOMER) return "KhÃ¡ch yÃªu cáº§u thÃªm";
+  return "PhÃ¡t sinh";
 }
 
 function buildCategoryOptions(serviceCategories, normalizedServices) {
@@ -260,15 +262,15 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `NhÃ³m ${service.categoryId}` });
     }
   });
 
-  return Array.from(map.values()).sort((a, b) => String(a.name).localeCompare(String(b.name), "vi"));
+  return Array.from(map.values());
 }
 
 function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}Ä‘`;
 }
 
 function formatDateTimeValue(value) {
@@ -365,7 +367,7 @@ function parseCustomerNote(rawCustomerNotes) {
 }
 
 function getApiErrorMessage(err) {
-  const fallback = "Không thể cập nhật lệnh sửa chữa. Vui lòng kiểm tra dữ liệu và thử lại.";
+  const fallback = "KhÃ´ng thá»ƒ cáº­p nháº­t lá»‡nh sá»­a chá»¯a. Vui lÃ²ng kiá»ƒm tra dá»¯ liá»‡u vÃ  thá»­ láº¡i.";
   const data = err?.response?.data;
   const serverErrors = data?.errors && typeof data.errors === "object" ? Object.values(data.errors).flat() : [];
   if (serverErrors.length > 0) return String(serverErrors[0] || fallback);
@@ -423,11 +425,7 @@ export default function ServiceOrderEditPage() {
   const [branchOperatingHours, setBranchOperatingHours] = useState([]);
 
   const [serviceSearch, setServiceSearch] = useState("");
-  const [activeCategoryId, setActiveCategoryId] = useState("");
-  const [supplementaryReason, setSupplementaryReason] = useState(SUPPLEMENTARY_REASON_TECH);
-  const [supplementaryServiceId, setSupplementaryServiceId] = useState("");
-  const [supplementaryNote, setSupplementaryNote] = useState("");
-  const [addingSupplementary, setAddingSupplementary] = useState(false);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
   const [insuranceUploadState, setInsuranceUploadState] = useState({});
   const [customerNote, setCustomerNote] = useState("");
@@ -465,10 +463,6 @@ export default function ServiceOrderEditPage() {
     () => editRequests.some((item) => String(item?.status || "").toUpperCase() === "PENDING"),
     [editRequests]
   );
-  const actorStaffId = useMemo(
-    () => parsePositiveId(user?.staffId ?? user?.StaffId ?? user?.id ?? user?.Id),
-    [user?.Id, user?.StaffId, user?.id, user?.staffId]
-  );
   const initialServiceDetails = useMemo(
     () => (Array.isArray(serviceDetails) ? serviceDetails.filter((detail) => isInitialEditableDetail(detail)) : []),
     [serviceDetails]
@@ -491,7 +485,7 @@ export default function ServiceOrderEditPage() {
     categoryOptions.forEach((category) => {
       const id = Number(category?.id || 0);
       if (!Number.isFinite(id) || id <= 0) return;
-      map.set(id, String(category?.name || "").trim() || `Nhóm ${id}`);
+      map.set(id, String(category?.name || "").trim() || `NhÃ³m ${id}`);
     });
     return map;
   }, [categoryOptions]);
@@ -544,7 +538,7 @@ export default function ServiceOrderEditPage() {
     const vehicle = vehicleById.get(vehicleId) || null;
     const modelId = Number(
       readField(vehicle, ["modelId", "ModelId", "vehicleModelId", "VehicleModelId"], 0)
-        || readField(readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null), ["id", "Id"], 0)
+      || readField(readField(vehicle, ["model", "Model", "vehicleModel", "VehicleModel"], null), ["id", "Id"], 0)
     );
     return Number.isFinite(modelId) && modelId > 0 ? [modelId] : [];
   }, [order?.VehicleId, order?.vehicleId, vehicleById]);
@@ -559,7 +553,7 @@ export default function ServiceOrderEditPage() {
       Array.from(
         selectedServices.reduce((map, service) => {
           const categoryId = Number(service?.categoryId || 0);
-          const categoryName = categoryNameById.get(categoryId) || `Nhóm ${categoryId || "Khác"}`;
+          const categoryName = categoryNameById.get(categoryId) || `NhÃ³m ${categoryId || "KhÃ¡c"}`;
           const serviceName = String(service?.name || "").trim();
           if (!serviceName) return map;
           if (!map.has(categoryName)) map.set(categoryName, []);
@@ -600,7 +594,7 @@ export default function ServiceOrderEditPage() {
 
   const filteredServices = useMemo(() => {
     const term = normalizeSearchText(serviceSearch);
-    const activeCategory = parsePositiveId(activeCategoryId);
+    const selectedCategorySet = new Set(toNumberList(selectedCategoryIds));
     const compatibleServices = filterBookableItemsForVehicleModels(
       normalizedServices,
       currentVehicleModelIds,
@@ -609,10 +603,10 @@ export default function ServiceOrderEditPage() {
     );
 
     return compatibleServices
-      .filter((service) => (activeCategory > 0 ? Number(service.categoryId) === activeCategory : true))
+      .filter((service) => selectedCategorySet.size > 0 && selectedCategorySet.has(Number(service.categoryId)))
       .filter((service) => (term ? normalizeSearchText(service.name).includes(term) : true))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"));
-  }, [activeCategoryId, currentVehicleModelIds, modelInfoById, normalizedServices, serviceById, serviceSearch]);
+  }, [currentVehicleModelIds, modelInfoById, normalizedServices, selectedCategoryIds, serviceById, serviceSearch]);
 
   const compatibleCategoryIds = useMemo(
     () =>
@@ -629,6 +623,17 @@ export default function ServiceOrderEditPage() {
     () => categoryOptions.filter((category) => compatibleCategoryIds.has(Number(category.id))),
     [categoryOptions, compatibleCategoryIds]
   );
+
+  useEffect(() => {
+    const selectedSet = new Set(toNumberList(selectedCategoryIds));
+    const serviceDerivedCategories = toNumberList(formData.serviceIds)
+      .map((serviceId) => Number(serviceById.get(Number(serviceId))?.categoryId || 0))
+      .filter((categoryId) => categoryId > 0 && compatibleCategoryIds.has(categoryId));
+    const hasAnyServiceCategory = serviceDerivedCategories.length > 0;
+    const hasSelectedCategory = selectedSet.size > 0;
+    if (hasSelectedCategory || !hasAnyServiceCategory) return;
+    setSelectedCategoryIds(serviceDerivedCategories);
+  }, [compatibleCategoryIds, formData.serviceIds, selectedCategoryIds, serviceById]);
 
   const {
     totalMinutes,
@@ -664,8 +669,8 @@ export default function ServiceOrderEditPage() {
     const fullName = String(readField(customer, ["fullName", "FullName"], "") || "").trim();
     const phone = String(readField(customer, ["phone", "Phone"], "") || "").trim();
     return {
-      fullName: fullName || (customerId > 0 ? `Khách hàng #${customerId}` : "Chưa xác định"),
-      phone: phone || "Chưa có số điện thoại",
+      fullName: fullName || (customerId > 0 ? `KhÃ¡ch hÃ ng #${customerId}` : "ChÆ°a xÃ¡c Ä‘á»‹nh"),
+      phone: phone || "ChÆ°a cÃ³ sá»‘ Ä‘iá»‡n thoáº¡i",
     };
   }, [customerById, order?.CustomerId, order?.customerId]);
 
@@ -677,8 +682,8 @@ export default function ServiceOrderEditPage() {
     const color = String(readField(vehicle, ["color", "Color"], "") || "").trim();
     const descriptor = [modelName, color].filter(Boolean).join(" - ");
     return {
-      plate: plate ? formatLicensePlate(plate) : "Chưa có biển số",
-      descriptor: descriptor || "Chưa rõ dòng xe",
+      plate: plate ? formatLicensePlate(plate) : "ChÆ°a cÃ³ biá»ƒn sá»‘",
+      descriptor: descriptor || "ChÆ°a rÃµ dÃ²ng xe",
     };
   }, [order?.VehicleId, order?.vehicleId, vehicleById]);
 
@@ -740,13 +745,13 @@ export default function ServiceOrderEditPage() {
         serviceOrderApi.getDetails(orderId).catch(() => []),
         insuranceCompanyApi.getAll().catch(() => []),
         getAllCustomers(),
-        getAllVehicles(),
+        getAllVehicles().catch(() => []),
         getVehicleModels().catch(() => []),
         getAllBranchOperatingHours().catch(() => []),
       ]);
 
       if (!orderRes) {
-        throw new Error("Không tìm thấy lệnh sửa chữa.");
+        throw new Error("KhÃ´ng tÃ¬m tháº¥y lá»‡nh sá»­a chá»¯a.");
       }
 
       const staffList = Array.isArray(staffRes) ? staffRes : [];
@@ -813,7 +818,7 @@ export default function ServiceOrderEditPage() {
       setCustomerNote(parseCustomerNote(readField(orderRes, ["customerNotes", "CustomerNotes"])));
 
     } catch (err) {
-      setError(getApiErrorMessage(err) || "Không thể tải dữ liệu lệnh sửa chữa.");
+      setError(getApiErrorMessage(err) || "KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u lá»‡nh sá»­a chá»¯a.");
     } finally {
       setLoading(false);
       setLoadingEditRequests(false);
@@ -824,103 +829,16 @@ export default function ServiceOrderEditPage() {
     fetchData();
   }, [fetchData]);
 
-  const refreshServiceOrderDetails = useCallback(async () => {
-    const details = await serviceOrderApi.getDetails(orderId).catch(() => []);
-    const normalizedDetails = (Array.isArray(details) ? details : [])
-      .map((detail) => normalizeServiceOrderDetail(detail))
-      .filter((detail) => Number.isFinite(detail.id) && detail.id > 0);
-    setServiceDetails(normalizedDetails);
-  }, [orderId]);
-
-  const handleAddSupplementaryService = useCallback(async () => {
-    const serviceId = parsePositiveId(supplementaryServiceId);
-    if (!serviceId) {
-      setError("Vui lòng chọn dịch vụ phát sinh cần thêm.");
-      return;
-    }
-
-    const selectedService = serviceById.get(serviceId);
-    if (!selectedService) {
-      setError("Không tìm thấy dịch vụ phát sinh đã chọn.");
-      return;
-    }
-
-    const isDuplicate = supplementaryServiceDetails.some((detail) => Number(detail.standardServiceId || detail.itemId || 0) === serviceId);
-    if (isDuplicate) {
-      setError("Dịch vụ phát sinh này đã tồn tại trong SO.");
-      return;
-    }
-
-    const normalizedReason = String(supplementaryReason || SUPPLEMENTARY_REASON_TECH).trim().toUpperCase();
-    const serviceSource = normalizedReason === SUPPLEMENTARY_REASON_CUSTOMER
-      ? SUPPLEMENTARY_SOURCE_CUSTOMER
-      : SUPPLEMENTARY_SOURCE_TECHNICIAN;
-    const quantity = 1;
-    const unitPrice = Math.max(0, Number(selectedService.price || 0));
-    const subTotal = quantity * unitPrice;
-    const nowIso = new Date().toISOString();
-
-    setAddingSupplementary(true);
-    setError("");
-    try {
-      await serviceOrderApi.createDetail({
-        serviceOrderId: Number(orderId),
-        serviceSource,
-        isSupplementary: true,
-        supplementaryReasonCode: normalizedReason,
-        supplementaryRequestedByStaffId: actorStaffId > 0 ? actorStaffId : null,
-        supplementaryRequestedAt: nowIso,
-        customerApprovedAt: nowIso,
-        standardServiceId: serviceId,
-        itemType: "LABOR",
-        itemId: serviceId,
-        itemName: selectedService.name,
-        description: normalizedReason === SUPPLEMENTARY_REASON_CUSTOMER
-          ? "Dịch vụ khách yêu cầu bổ sung."
-          : "Dịch vụ phát sinh sau chẩn đoán.",
-        quantity,
-        unitPriceAtTime: unitPrice,
-        unit: "Lần",
-        subTotal,
-        taxRate: 0,
-        taxAmount: 0,
-        finalAmount: subTotal,
-        payerType: "CUSTOMER",
-        status: SUPPLEMENTARY_DEFAULT_STATUS,
-        note: String(supplementaryNote || "").trim() || null,
-        createdBy: actorStaffId > 0 ? actorStaffId : null,
-        updatedBy: actorStaffId > 0 ? actorStaffId : null,
-      });
-
-      await refreshServiceOrderDetails();
-      setSupplementaryServiceId("");
-      setSupplementaryNote("");
-    } catch (err) {
-      setError(getApiErrorMessage(err) || "Không thể thêm dịch vụ phát sinh.");
-    } finally {
-      setAddingSupplementary(false);
-    }
-  }, [
-    actorStaffId,
-    orderId,
-    refreshServiceOrderDetails,
-    serviceById,
-    supplementaryNote,
-    supplementaryReason,
-    supplementaryServiceDetails,
-    supplementaryServiceId,
-  ]);
-
   const validateForm = useCallback(() => {
     const errors = {};
-    if (!formData.checkInTime) errors.checkInTime = "Vui lòng chọn thời điểm xe vào xưởng.";
-    if (!formData.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
-    if (toNumberList(formData.serviceIds).length === 0) errors.serviceIds = "Vui lòng chọn ít nhất một dịch vụ.";
+    if (!formData.checkInTime) errors.checkInTime = "Vui lÃ²ng chá»n thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng.";
+    if (!formData.serviceAdvisorId) errors.serviceAdvisorId = "Vui lÃ²ng chá»n cá»‘ váº¥n dá»‹ch vá»¥.";
+    if (toNumberList(formData.serviceIds).length === 0) errors.serviceIds = "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t dá»‹ch vá»¥.";
 
     if (isInsuranceOrderEnabled) {
-      if (!formData.insuranceCompanyId) errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm.";
-      if (!formData.insuranceDeductibleOption) errors.insuranceDeductibleOption = "Vui lòng chọn tùy chọn mức miễn thường.";
-      if (!formData.insuranceClaimMode) errors.insuranceClaimMode = "Vui lòng chọn hình thức bồi thường.";
+      if (!formData.insuranceCompanyId) errors.insuranceCompanyId = "Vui lÃ²ng chá»n cÃ´ng ty báº£o hiá»ƒm.";
+      if (!formData.insuranceDeductibleOption) errors.insuranceDeductibleOption = "Vui lÃ²ng chá»n tÃ¹y chá»n má»©c miá»…n thÆ°á»ng.";
+      if (!formData.insuranceClaimMode) errors.insuranceClaimMode = "Vui lÃ²ng chá»n hÃ¬nh thá»©c bá»“i thÆ°á»ng.";
     }
 
     setFieldErrors(errors);
@@ -987,6 +905,31 @@ export default function ServiceOrderEditPage() {
     });
   }, []);
 
+  const handleCategoryToggle = useCallback((categoryId) => {
+    const numericCategoryId = Number(categoryId);
+    if (!Number.isFinite(numericCategoryId) || numericCategoryId <= 0) return;
+
+    setSelectedCategoryIds((prev) => {
+      const normalized = toNumberList(prev);
+      const has = normalized.includes(numericCategoryId);
+      const next = has
+        ? normalized.filter((item) => item !== numericCategoryId)
+        : [...normalized, numericCategoryId];
+
+      if (has) {
+        setFormData((prevForm) => {
+          const nextServiceIds = toNumberList(prevForm.serviceIds).filter((serviceId) => {
+            const mappedCategoryId = Number(serviceById.get(Number(serviceId))?.categoryId || 0);
+            return mappedCategoryId !== numericCategoryId;
+          });
+          return { ...prevForm, serviceIds: nextServiceIds };
+        });
+      }
+
+      return next;
+    });
+  }, [serviceById]);
+
   const handleChange = useCallback((event) => {
     const { name, value, type, checked } = event.target;
     handleFieldValueChange(name, type === "checkbox" ? checked : value);
@@ -995,12 +938,20 @@ export default function ServiceOrderEditPage() {
   const handleServiceToggle = useCallback((serviceId) => {
     const id = Number(serviceId);
     if (!id) return;
+    const serviceCategoryId = Number(serviceById.get(id)?.categoryId || 0);
     setFormData((prev) => {
       const current = toNumberList(prev.serviceIds);
       const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
       return { ...prev, serviceIds: next };
     });
-  }, []);
+    if (serviceCategoryId > 0) {
+      setSelectedCategoryIds((prev) => {
+        const normalized = toNumberList(prev);
+        if (normalized.includes(serviceCategoryId)) return normalized;
+        return [...normalized, serviceCategoryId];
+      });
+    }
+  }, [serviceById]);
 
   const handleSubmit = useCallback(
     async (event) => {
@@ -1087,7 +1038,7 @@ export default function ServiceOrderEditPage() {
 
     const note = String(decisionNotesByRequestId[safeRequestId] || "").trim();
     if (!approve && !note) {
-      setError("Vui lòng nhập lý do từ chối.");
+      setError("Vui lÃ²ng nháº­p lÃ½ do tá»« chá»‘i.");
       return;
     }
 
@@ -1110,7 +1061,7 @@ export default function ServiceOrderEditPage() {
           .map(normalizeServiceOrderEditRequestItem)
           .filter((item) => item.requestId > 0)
       );
-      setRequestEditNotice(String(response?.message || (approve ? "Đã duyệt yêu cầu sửa." : "Đã từ chối yêu cầu sửa.")));
+      setRequestEditNotice(String(response?.message || (approve ? "ÄÃ£ duyá»‡t yÃªu cáº§u sá»­a." : "ÄÃ£ tá»« chá»‘i yÃªu cáº§u sá»­a.")));
       setDecisionNotesByRequestId((prev) => ({
         ...prev,
         [safeRequestId]: "",
@@ -1126,7 +1077,7 @@ export default function ServiceOrderEditPage() {
     return (
       <div className="create-order-page reception-create-appointment-page">
         <div className="reception-appt-section">
-          <p className="reception-muted-note">Đang tải dữ liệu lệnh sửa chữa...</p>
+          <p className="reception-muted-note">Äang táº£i dá»¯ liá»‡u lá»‡nh sá»­a chá»¯a...</p>
         </div>
       </div>
     );
@@ -1136,12 +1087,12 @@ export default function ServiceOrderEditPage() {
     <div className="create-order-page reception-create-appointment-page">
       <div className="page-header-actions reception-create-header">
         <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-          Quay lại Dashboard
+          Quay láº¡i Dashboard
         </button>
         <div className="reception-create-header-copy">
-          <h2 className="page-title">{`Chỉnh sửa lệnh sửa chữa ${order?.code ? `#${order.code}` : ""}`}</h2>
+          <h2 className="page-title">{`Chá»‰nh sá»­a lá»‡nh sá»­a chá»¯a ${order?.code ? `#${order.code}` : ""}`}</h2>
           <p className="reception-create-header-note">
-            Cập nhật dịch vụ và thông tin tiếp nhận theo luồng mới. Hệ thống chỉ lưu khi toàn bộ dữ liệu hợp lệ.
+            Cáº­p nháº­t dá»‹ch vá»¥ vÃ  thÃ´ng tin tiáº¿p nháº­n theo luá»“ng má»›i. Há»‡ thá»‘ng chá»‰ lÆ°u khi toÃ n bá»™ dá»¯ liá»‡u há»£p lá»‡.
           </p>
         </div>
       </div>
@@ -1149,9 +1100,9 @@ export default function ServiceOrderEditPage() {
       <div className="reception-appt-topbar">
         <div className="reception-appt-topbar-copy">
           <p className="reception-appt-topbar-kicker">SERVICE ORDER</p>
-          <h3 className="reception-appt-topbar-title">Cập nhật thông tin tiếp nhận dịch vụ</h3>
+          <h3 className="reception-appt-topbar-title">Cáº­p nháº­t thÃ´ng tin tiáº¿p nháº­n dá»‹ch vá»¥</h3>
           <p className="reception-appt-topbar-note">
-            Luồng lưu theo cơ chế all-or-nothing: nếu có lỗi ở bất kỳ bước nào, hệ thống sẽ không ghi dữ liệu xuống cơ sở dữ liệu.
+            Luá»“ng lÆ°u theo cÆ¡ cháº¿ all-or-nothing: náº¿u cÃ³ lá»—i á»Ÿ báº¥t ká»³ bÆ°á»›c nÃ o, há»‡ thá»‘ng sáº½ khÃ´ng ghi dá»¯ liá»‡u xuá»‘ng cÆ¡ sá»Ÿ dá»¯ liá»‡u.
           </p>
         </div>
       </div>
@@ -1170,13 +1121,13 @@ export default function ServiceOrderEditPage() {
 
       {editCapability?.isOverrideActive ? (
         <div className="validation-summary" role="status">
-          {`Đang mở khóa tạm thời đến: ${overrideUntilText}`}
+          {`Äang má»Ÿ khÃ³a táº¡m thá»i Ä‘áº¿n: ${overrideUntilText}`}
         </div>
       ) : null}
 
       {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
         <div className="validation-summary" role="alert">
-          <strong>Vui lòng xử lý các lỗi sau:</strong>
+          <strong>Vui lÃ²ng xá»­ lÃ½ cÃ¡c lá»—i sau:</strong>
           <ul>
             {Object.values(fieldErrors).map((message, index) => (
               <li key={`${message}-${index}`}>{message}</li>
@@ -1194,17 +1145,17 @@ export default function ServiceOrderEditPage() {
       {isEditLocked ? (
         <section className="reception-appt-section" aria-live="polite">
           <div className="reception-appt-section-head">
-            <h4 className="reception-appt-section-title">Yêu cầu mở khóa chỉnh sửa</h4>
+            <h4 className="reception-appt-section-title">YÃªu cáº§u má»Ÿ khÃ³a chá»‰nh sá»­a</h4>
           </div>
           <div className="form-group">
-            <label htmlFor="service-order-edit-request-reason">Lý do yêu cầu sửa</label>
+            <label htmlFor="service-order-edit-request-reason">LÃ½ do yÃªu cáº§u sá»­a</label>
             <textarea
               id="service-order-edit-request-reason"
               rows={3}
               className="input-field"
               value={requestEditReason}
               onChange={(event) => setRequestEditReason(event.target.value)}
-              placeholder="Nhập lý do để quản lý phê duyệt mở khóa"
+              placeholder="Nháº­p lÃ½ do Ä‘á»ƒ quáº£n lÃ½ phÃª duyá»‡t má»Ÿ khÃ³a"
             />
           </div>
           <div className="form-footer" style={{ marginTop: 12 }}>
@@ -1214,7 +1165,7 @@ export default function ServiceOrderEditPage() {
               onClick={handleRequestEdit}
               disabled={requestingEdit || hasPendingRequest}
             >
-              {requestingEdit ? "Đang gửi yêu cầu..." : hasPendingRequest ? "Đang có yêu cầu chờ duyệt" : "Gửi yêu cầu sửa"}
+              {requestingEdit ? "Äang gá»­i yÃªu cáº§u..." : hasPendingRequest ? "Äang cÃ³ yÃªu cáº§u chá» duyá»‡t" : "Gá»­i yÃªu cáº§u sá»­a"}
             </button>
           </div>
         </section>
@@ -1222,12 +1173,12 @@ export default function ServiceOrderEditPage() {
 
       <section className="reception-appt-section" aria-live="polite">
         <div className="reception-appt-section-head">
-          <h4 className="reception-appt-section-title">Lịch sử yêu cầu mở khóa</h4>
+          <h4 className="reception-appt-section-title">Lá»‹ch sá»­ yÃªu cáº§u má»Ÿ khÃ³a</h4>
         </div>
         {loadingEditRequests ? (
-          <p className="reception-muted-note">Đang tải yêu cầu sửa...</p>
+          <p className="reception-muted-note">Äang táº£i yÃªu cáº§u sá»­a...</p>
         ) : editRequests.length === 0 ? (
-          <p className="reception-muted-note">Chưa có yêu cầu nào.</p>
+          <p className="reception-muted-note">ChÆ°a cÃ³ yÃªu cáº§u nÃ o.</p>
         ) : (
           <div className="reception-plan-preview-list">
             {editRequests.map((request) => {
@@ -1240,18 +1191,18 @@ export default function ServiceOrderEditPage() {
               return (
                 <article key={request.requestId} className="reception-plan-preview-item">
                   <div className="reception-plan-preview-head">
-                    <strong>{`Yêu cầu #${request.requestId}`}</strong>
+                    <strong>{`YÃªu cáº§u #${request.requestId}`}</strong>
                     <span style={{ color: getRequestStatusColor(status), fontWeight: 700 }}>
                       {getRequestStatusLabel(status)}
                     </span>
                   </div>
-                  <p>{`Phạm vi: ${request.section || "WORKSHOP"}`}</p>
-                  <p>{`Lý do: ${request.reason || "Không có lý do"}`}</p>
+                  <p>{`Pháº¡m vi: ${request.section || "WORKSHOP"}`}</p>
+                  <p>{`LÃ½ do: ${request.reason || "KhÃ´ng cÃ³ lÃ½ do"}`}</p>
                   <div className="reception-plan-preview-meta">
-                    <span>{`Gửi lúc: ${formatDateTimeValue(request.requestedAtUtc)}`}</span>
-                    <span>{`Xử lý lúc: ${formatDateTimeValue(request.decidedAtUtc)}`}</span>
+                    <span>{`Gá»­i lÃºc: ${formatDateTimeValue(request.requestedAtUtc)}`}</span>
+                    <span>{`Xá»­ lÃ½ lÃºc: ${formatDateTimeValue(request.decidedAtUtc)}`}</span>
                   </div>
-                  {request.decisionNote ? <p>{`Ghi chú xử lý: ${request.decisionNote}`}</p> : null}
+                  {request.decisionNote ? <p>{`Ghi chÃº xá»­ lÃ½: ${request.decisionNote}`}</p> : null}
 
                   {canApprove && isPending ? (
                     <div style={{ marginTop: 12 }}>
@@ -1260,7 +1211,7 @@ export default function ServiceOrderEditPage() {
                         className="input-field"
                         value={note}
                         onChange={(event) => handleDecisionNoteChange(request.requestId, event.target.value)}
-                        placeholder="Ghi chú phê duyệt/từ chối..."
+                        placeholder="Ghi chÃº phÃª duyá»‡t/tá»« chá»‘i..."
                       />
                       <div className="form-footer" style={{ marginTop: 10 }}>
                         <button
@@ -1269,7 +1220,7 @@ export default function ServiceOrderEditPage() {
                           onClick={() => handleDecideRequest(request, false)}
                           disabled={deciding}
                         >
-                          Từ chối
+                          Tá»« chá»‘i
                         </button>
                         <button
                           type="button"
@@ -1277,7 +1228,7 @@ export default function ServiceOrderEditPage() {
                           onClick={() => handleDecideRequest(request, true)}
                           disabled={deciding}
                         >
-                          {deciding ? "Đang xử lý..." : "Duyệt"}
+                          {deciding ? "Äang xá»­ lÃ½..." : "Duyá»‡t"}
                         </button>
                       </div>
                     </div>
@@ -1295,391 +1246,354 @@ export default function ServiceOrderEditPage() {
           style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}
         >
           <div className="reception-appt-layout">
-          <div className="reception-appt-left-column">
-            <section className="reception-appt-section">
-              <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 1</span>
-              </div>
-              <h4 className="reception-appt-section-title">Thông tin khách hàng và xe</h4>
-
-              <div className="reception-customer-selected-card">
-                <div className="reception-customer-selected-main">
-                  <small className="reception-customer-selected-tag">KHÁCH HÀNG</small>
-                  <strong>{customerDisplay.fullName}</strong>
-                  <span className="reception-customer-selected-contact">{customerDisplay.phone}</span>
+            <div className="reception-appt-left-column">
+              <section className="reception-appt-section">
+                <div className="reception-appt-step-head">
+                  <span className="reception-step-badge">BÆ¯á»šC 1</span>
                 </div>
-              </div>
+                <h4 className="reception-appt-section-title">ThÃ´ng tin khÃ¡ch hÃ ng vÃ  xe</h4>
 
-              <div className="reception-customer-selected-card" style={{ marginTop: 10 }}>
-                <div className="reception-customer-selected-main">
-                  <small className="reception-customer-selected-tag">XE TIẾP NHẬN</small>
-                  <strong>{vehicleDisplay.plate}</strong>
-                  <span className="reception-customer-selected-contact">{vehicleDisplay.descriptor}</span>
+                <div className="reception-customer-selected-card">
+                  <div className="reception-customer-selected-main">
+                    <small className="reception-customer-selected-tag">KHÃCH HÃ€NG</small>
+                    <strong>{customerDisplay.fullName}</strong>
+                    <span className="reception-customer-selected-contact">{customerDisplay.phone}</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="reception-plan-preview">
-                <h5 className="reception-plan-preview-title">Thông tin lệnh hiện tại</h5>
-                <div className="reception-plan-preview-list">
-                  <article className="reception-plan-preview-item">
-                    <div className="reception-plan-preview-head">
-                      <strong>Mã lệnh</strong>
-                      <span>{order?.code || "--"}</span>
+                <div className="reception-customer-selected-card" style={{ marginTop: 10 }}>
+                  <div className="reception-customer-selected-main">
+                    <small className="reception-customer-selected-tag">XE TIáº¾P NHáº¬N</small>
+                    <strong>{vehicleDisplay.plate}</strong>
+                    <span className="reception-customer-selected-contact">{vehicleDisplay.descriptor}</span>
+                  </div>
+                </div>
+
+                <div className="reception-plan-preview">
+                  <h5 className="reception-plan-preview-title">ThÃ´ng tin lá»‡nh hiá»‡n táº¡i</h5>
+                  <div className="reception-plan-preview-list">
+                    <article className="reception-plan-preview-item">
+                      <div className="reception-plan-preview-head">
+                        <strong>MÃ£ lá»‡nh</strong>
+                        <span>{order?.code || "--"}</span>
+                      </div>
+                      <p>{`Tráº¡ng thÃ¡i: ${String(order?.status || order?.Status || "--")}`}</p>
+                      <div className="reception-plan-preview-meta">
+                        <span>{`Check-in: ${formatDateTimeValue(formData.checkInTime)}`}</span>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </section>
+
+              <section className="reception-appt-section">
+                <div className="reception-appt-step-head">
+                  <span className="reception-step-badge">BÆ¯á»šC 2</span>
+                </div>
+                <h4 className="reception-appt-section-title">Dá»‹ch vá»¥ yÃªu cáº§u</h4>
+
+                <div className="reception-service-layout">
+                  <div className="reception-service-type-col">
+                    <h5 className="reception-service-col-title">Lá»c theo loáº¡i dá»‹ch vá»¥</h5>
+                    <div className="reception-category-grid">
+                      {visibleCategoryOptions.map((category) => (
+                        <button
+                          key={category.id}
+                          type="button"
+                          className={`reception-category-chip ${toNumberList(selectedCategoryIds).includes(Number(category.id)) ? "selected" : ""}`}
+                          onClick={() => handleCategoryToggle(category.id)}
+                        >
+                          {category.name}
+                        </button>
+                      ))}
                     </div>
-                    <p>{`Trạng thái: ${String(order?.status || order?.Status || "--")}`}</p>
-                    <div className="reception-plan-preview-meta">
-                      <span>{`Check-in: ${formatDateTimeValue(formData.checkInTime)}`}</span>
-                    </div>
-                  </article>
-                </div>
-              </div>
-            </section>
 
-            <section className="reception-appt-section">
-              <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 2</span>
-              </div>
-              <h4 className="reception-appt-section-title">Dịch vụ yêu cầu</h4>
-
-              <div className="reception-service-layout">
-                <div className="reception-service-type-col">
-                  <h5 className="reception-service-col-title">Lọc theo loại dịch vụ</h5>
-                  <div className="reception-category-grid">
-                    {visibleCategoryOptions.map((category) => (
-                      <button
-                        key={category.id}
-                        type="button"
-                        className={`reception-category-chip ${String(activeCategoryId) === String(category.id) ? "selected" : ""}`}
-                        onClick={() => setActiveCategoryId(String(category.id))}
-                      >
-                        {category.name}
-                      </button>
-                    ))}
                   </div>
 
-                </div>
+                  <div className="reception-service-detail-col">
+                    <div className="form-group reception-service-search">
+                      <label>TÃ¬m dá»‹ch vá»¥</label>
+                      <input
+                        type="text"
+                        placeholder="TÃ¬m theo tÃªn dá»‹ch vá»¥..."
+                        value={serviceSearch}
+                        onChange={(event) => setServiceSearch(event.target.value)}
+                      />
+                    </div>
 
-                <div className="reception-service-detail-col">
-                  <div className="form-group reception-service-search">
-                    <label>Tìm dịch vụ</label>
-                    <input
-                      type="text"
-                      placeholder="Tìm theo tên dịch vụ..."
-                      value={serviceSearch}
-                      onChange={(event) => setServiceSearch(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="reception-service-list">
-                    {filteredServices.length === 0 ? (
-                      <div className="reception-muted-note">Không tìm thấy dịch vụ phù hợp theo bộ lọc hiện tại.</div>
+                    {toNumberList(selectedCategoryIds).length > 0 ? (
+                      <div className="reception-service-list">
+                        {filteredServices.length === 0 ? (
+                          <div className="reception-muted-note">KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥ phÃ¹ há»£p theo bá»™ lá»c hiá»‡n táº¡i.</div>
+                        ) : (
+                          filteredServices.map((service) => {
+                            const selected = toNumberList(formData.serviceIds).includes(service.id);
+                            return (
+                              <button
+                                key={service.id}
+                                type="button"
+                                className={`reception-service-card ${selected ? "selected" : ""}`}
+                                onClick={() => handleServiceToggle(service.id)}
+                              >
+                                <div className="reception-service-card-main">
+                                  <strong>{service.name}</strong>
+                                  <small>{service.minutes > 0 ? `${service.minutes} phÃºt` : "ChÆ°a cÃ³ thá»i lÆ°á»£ng chuáº©n"}</small>
+                                </div>
+                                <span>{formatCurrency(service.price)}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
                     ) : (
-                      filteredServices.map((service) => {
-                        const selected = toNumberList(formData.serviceIds).includes(service.id);
-                        return (
-                          <button
-                            key={service.id}
-                            type="button"
-                            className={`reception-service-card ${selected ? "selected" : ""}`}
-                            onClick={() => handleServiceToggle(service.id)}
-                          >
-                            <div className="reception-service-card-main">
-                              <strong>{service.name}</strong>
-                              <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng chuẩn"}</small>
-                            </div>
-                            <span>{formatCurrency(service.price)}</span>
-                          </button>
-                        );
-                      })
+                      <div className="reception-muted-note">HÃ£y chá»n Ã­t nháº¥t má»™t loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ.</div>
+                    )}
+
+                  </div>
+                </div>
+
+                {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
+
+                <div className="reception-plan-preview" style={{ marginTop: 14 }}>
+                  <h5 className="reception-plan-preview-title">Dá»‹ch vá»¥ phÃ¡t sinh (bá»• sung sau SO gá»‘c)</h5>
+                  <div className="reception-plan-preview-list">
+                    {supplementaryServiceDetails.length === 0 ? (
+                      <article className="reception-plan-preview-item">
+                        <p>ChÆ°a cÃ³ dá»‹ch vá»¥ phÃ¡t sinh.</p>
+                      </article>
+                    ) : (
+                      supplementaryServiceDetails.map((detail) => (
+                        <article key={`supplementary-${detail.id}`} className="reception-plan-preview-item">
+                          <div className="reception-plan-preview-head">
+                            <strong>{detail.itemName || `Dá»‹ch vá»¥ #${detail.standardServiceId || detail.itemId || detail.id}`}</strong>
+                            <span>{formatCurrency(detail.unitPriceAtTime)}</span>
+                          </div>
+                          <p>{`Nguá»“n: ${getSupplementarySourceLabel(detail.serviceSource)}`}</p>
+                          <p>{`Tráº¡ng thÃ¡i: ${detail.status || "APPROVED"}`}</p>
+                          {detail.note ? <p>{`Ghi chÃº: ${detail.note}`}</p> : null}
+                        </article>
+                      ))
                     )}
                   </div>
 
-                </div>
-              </div>
-
-              {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
-
-              <div className="reception-plan-preview" style={{ marginTop: 14 }}>
-                <h5 className="reception-plan-preview-title">Dịch vụ phát sinh (bổ sung sau SO gốc)</h5>
-                <div className="reception-plan-preview-list">
-                  {supplementaryServiceDetails.length === 0 ? (
-                    <article className="reception-plan-preview-item">
-                      <p>Chưa có dịch vụ phát sinh.</p>
-                    </article>
-                  ) : (
-                    supplementaryServiceDetails.map((detail) => (
-                      <article key={`supplementary-${detail.id}`} className="reception-plan-preview-item">
-                        <div className="reception-plan-preview-head">
-                          <strong>{detail.itemName || `Dịch vụ #${detail.standardServiceId || detail.itemId || detail.id}`}</strong>
-                          <span>{formatCurrency(detail.unitPriceAtTime)}</span>
-                        </div>
-                        <p>{`Nguồn: ${getSupplementarySourceLabel(detail.serviceSource)}`}</p>
-                        <p>{`Trạng thái: ${detail.status || SUPPLEMENTARY_DEFAULT_STATUS}`}</p>
-                        {detail.note ? <p>{`Ghi chú: ${detail.note}`}</p> : null}
-                      </article>
-                    ))
-                  )}
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <p className="reception-muted-note" style={{ marginBottom: 8 }}>
-                    {`Dịch vụ gốc hiện tại: ${initialServiceDetails.length} hạng mục.`}
-                  </p>
-                  <p className="reception-muted-note" style={{ marginBottom: 8 }}>
-                    Dịch vụ gốc chỉnh sửa khi SO còn trong cửa sổ workshop. Dịch vụ phát sinh chỉ được thêm khi SO chưa bị khóa quote/parts/billing.
-                  </p>
-                  {isSupplementaryLocked ? (
-                    <div className="field-error">Không thể thêm dịch vụ phát sinh: SO đã bị khóa theo mốc vận hành.</div>
-                  ) : null}
-                </div>
-
-                <div className="timeline-grid timeline-grid-vertical" style={{ marginTop: 10 }}>
-                  <div className="form-group">
-                    <label>Nguồn phát sinh</label>
-                    <select
-                      value={supplementaryReason}
-                      onChange={(event) => setSupplementaryReason(event.target.value)}
-                      disabled={saving || isSupplementaryLocked || addingSupplementary}
-                    >
-                      <option value={SUPPLEMENTARY_REASON_TECH}>Phát sinh sau chẩn đoán</option>
-                      <option value={SUPPLEMENTARY_REASON_CUSTOMER}>Khách yêu cầu thêm</option>
-                    </select>
+                  <div style={{ marginTop: 12 }}>
+                    <p className="reception-muted-note" style={{ marginBottom: 8 }}>
+                      {`Dá»‹ch vá»¥ gá»‘c hiá»‡n táº¡i: ${initialServiceDetails.length} háº¡ng má»¥c.`}
+                    </p>
+                    <p className="reception-muted-note" style={{ marginBottom: 8 }}>
+                      Báº¯t buá»™c táº¡o bÃ¡o giÃ¡ bá»• sung (Quotation #2) cho má»i dá»‹ch vá»¥ phÃ¡t sinh.
+                    </p>
+                    {isSupplementaryLocked ? (
+                      <div className="field-error">SO Ä‘ang bá»‹ khÃ³a theo má»‘c váº­n hÃ nh, khÃ´ng thá»ƒ táº¡o bÃ¡o giÃ¡ bá»• sung.</div>
+                    ) : null}
                   </div>
-                  <div className="form-group">
-                    <label>Dịch vụ phát sinh</label>
-                    <select
-                      value={supplementaryServiceId}
-                      onChange={(event) => setSupplementaryServiceId(event.target.value)}
-                      disabled={saving || isSupplementaryLocked || addingSupplementary}
+                  <div className="form-footer" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary-outline"
+                      disabled={saving || isSupplementaryLocked}
+                      onClick={() => navigate(`/workshop/reception/orders/${orderId}/quote`)}
                     >
-                      <option value="">-- Chọn dịch vụ --</option>
-                      {normalizedServices.map((service) => (
-                        <option key={`supp-service-${service.id}`} value={service.id}>
-                          {`${service.name} - ${formatCurrency(service.price)}`}
+                      Má»Ÿ Quotation #2
+                    </button>
+                  </div>
+                </div>
+
+                <WorkshopInsurancePanel
+                  enabled={isInsuranceOrderEnabled}
+                  locked={hasInsuranceSignalServiceSelected}
+                  companies={insuranceCompanies}
+                  selectedCompanyId={formData.insuranceCompanyId}
+                  onToggle={handleInsuranceToggle}
+                  onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
+                  companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
+                  insuranceDeductibleOption={formData.insuranceDeductibleOption}
+                  insuranceClaimMode={formData.insuranceClaimMode}
+                  insuranceQuoteState={formData.insuranceQuoteState}
+                  onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
+                  onClaimModeChange={handleInsuranceClaimModeChange}
+                  deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
+                  claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
+                  draftBreakdown={insuranceDraftBreakdown}
+                  insuranceCardImageUrls={formData.insuranceCardImageUrls}
+                  insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
+                  uploadingState={insuranceUploadState}
+                  onUploadAsset={handleInsuranceAssetUpload}
+                  onRemoveAsset={handleInsuranceAssetRemove}
+                />
+              </section>
+            </div>
+            <div className="reception-appt-right-column">
+              <section className="reception-appt-section">
+                <div className="reception-appt-step-head">
+                  <span className="reception-step-badge">BÆ¯á»šC 3</span>
+                </div>
+                <h4 className="reception-appt-section-title">ThÃ´ng tin nghiá»‡p vá»¥</h4>
+
+                <div className="form-group">
+                  <label>Cá»‘ váº¥n dá»‹ch vá»¥ *</label>
+                  <select
+                    name="serviceAdvisorId"
+                    className={showError("serviceAdvisorId") ? "input-invalid" : ""}
+                    value={formData.serviceAdvisorId}
+                    onChange={handleChange}
+                  >
+                    <option value="">-- Chá»n cá»‘ váº¥n --</option>
+                    {staff.map((item) => {
+                      const staffId = Number(readField(item, ["id", "Id"], 0));
+                      const staffName = String(readField(item, ["fullName", "FullName"], "") || "").trim();
+                      return (
+                        <option key={staffId} value={staffId}>
+                          {staffName || `NhÃ¢n sá»± #${staffId}`}
                         </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Ghi chú phát sinh</label>
+                      );
+                    })}
+                  </select>
+                  {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
+                </div>
+
+                <div className="form-group">
+                  <label>Xá»­ lÃ½ phá»¥ tÃ¹ng cÅ©</label>
+                  <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
+                    <option value="DISPOSE_ALL">Garage tá»± thanh lÃ½/há»§y</option>
+                    <option value="RETURN_ALL">Tráº£ láº¡i cho khÃ¡ch hÃ ng</option>
+                    <option value="CUSTOM">Cho khÃ¡ch kiá»ƒm tra rá»“i quyáº¿t Ä‘á»‹nh</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Sá»‘ tiá»n cá»c (VNÄ)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10000"
+                    name="requiredDepositAmount"
+                    className={showError("requiredDepositAmount") ? "input-invalid" : ""}
+                    value={formData.requiredDepositAmount}
+                    onChange={handleChange}
+                  />
+                  {showError("requiredDepositAmount") ? <div className="field-error">{fieldErrors.requiredDepositAmount}</div> : null}
+                </div>
+
+                <div className="form-group">
+                  <label>Ghi chÃº</label>
+                  <div className="reception-note-editor">
                     <textarea
-                      rows={2}
-                      className="input-field"
-                      value={supplementaryNote}
-                      onChange={(event) => setSupplementaryNote(event.target.value)}
-                      placeholder="Nhập mô tả ngắn cho hạng mục phát sinh"
-                      disabled={saving || isSupplementaryLocked || addingSupplementary}
+                      rows={3}
+                      className="reception-note-input"
+                      value={customerNote}
+                      placeholder="Nháº­p ghi chÃº..."
+                      onChange={(event) => setCustomerNote(event.target.value)}
                     />
                   </div>
                 </div>
 
-                <div className="form-footer" style={{ marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn-secondary-outline"
-                    onClick={handleAddSupplementaryService}
-                    disabled={saving || isSupplementaryLocked || addingSupplementary}
-                  >
-                    {addingSupplementary ? "Đang thêm..." : "Thêm dịch vụ phát sinh"}
-                  </button>
-                </div>
-              </div>
+                <div className="timeline-grid timeline-grid-vertical">
+                  <div className="form-group">
+                    <label>Thá»i Ä‘iá»ƒm xe vÃ o xÆ°á»Ÿng *</label>
+                    <p className={`slot-flow-note ${bookingFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
+                      {slotSelectionGuide}
+                    </p>
+                    <DateTimePicker
+                      value={formData.checkInTime}
+                      onChange={(value) => handleFieldValueChange("checkInTime", value)}
+                      placeholder="Chá»n ngÃ y vÃ  giá»..."
+                      minDate={pickerMinDate}
+                      onOpenRequest={() => {
+                        if (checkInSelectionGuardMessage) {
+                          setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
+                          return false;
+                        }
+                        return true;
+                      }}
+                    />
+                    {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
+                  </div>
 
-              <WorkshopInsurancePanel
-                enabled={isInsuranceOrderEnabled}
-                locked={hasInsuranceSignalServiceSelected}
-                companies={insuranceCompanies}
-                selectedCompanyId={formData.insuranceCompanyId}
-                onToggle={handleInsuranceToggle}
-                onCompanyChange={(value) => handleFieldValueChange("insuranceCompanyId", value)}
-                companyError={showError("insuranceCompanyId") ? fieldErrors.insuranceCompanyId : ""}
-                insuranceDeductibleOption={formData.insuranceDeductibleOption}
-                insuranceClaimMode={formData.insuranceClaimMode}
-                insuranceQuoteState={formData.insuranceQuoteState}
-                onDeductibleOptionChange={handleInsuranceDeductibleOptionChange}
-                onClaimModeChange={handleInsuranceClaimModeChange}
-                deductibleError={showError("insuranceDeductibleOption") ? fieldErrors.insuranceDeductibleOption : ""}
-                claimModeError={showError("insuranceClaimMode") ? fieldErrors.insuranceClaimMode : ""}
-                draftBreakdown={insuranceDraftBreakdown}
-                insuranceCardImageUrls={formData.insuranceCardImageUrls}
-                insuranceDamageImageUrls={formData.insuranceDamageImageUrls}
-                uploadingState={insuranceUploadState}
-                onUploadAsset={handleInsuranceAssetUpload}
-                onRemoveAsset={handleInsuranceAssetRemove}
-              />
-            </section>
-          </div>
-          <div className="reception-appt-right-column">
-            <section className="reception-appt-section">
-              <div className="reception-appt-step-head">
-                <span className="reception-step-badge">BƯỚC 3</span>
-              </div>
-              <h4 className="reception-appt-section-title">Thông tin nghiệp vụ</h4>
+                  <div className="form-group">
+                    <label>Dá»± kiáº¿n hoÃ n thÃ nh</label>
+                    <DateTimePicker
+                      value={formData.estimatedHandover || suggestedFinish.finishIso}
+                      onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
+                      placeholder="Chá»n ngÃ y giá» dá»± kiáº¿n..."
+                      minDate={pickerMinDate}
+                    />
+                    {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
+                  </div>
 
-              <div className="form-group">
-                <label>Cố vấn dịch vụ *</label>
-                <select
-                  name="serviceAdvisorId"
-                  className={showError("serviceAdvisorId") ? "input-invalid" : ""}
-                  value={formData.serviceAdvisorId}
-                  onChange={handleChange}
-                >
-                  <option value="">-- Chọn cố vấn --</option>
-                  {staff.map((item) => {
-                    const staffId = Number(readField(item, ["id", "Id"], 0));
-                    const staffName = String(readField(item, ["fullName", "FullName"], "") || "").trim();
-                    return (
-                      <option key={staffId} value={staffId}>
-                        {staffName || `Nhân sự #${staffId}`}
-                      </option>
-                    );
-                  })}
-                </select>
-                {showError("serviceAdvisorId") ? <div className="field-error">{fieldErrors.serviceAdvisorId}</div> : null}
-              </div>
-
-              <div className="form-group">
-                <label>Xử lý phụ tùng cũ</label>
-                <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
-                  <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
-                  <option value="RETURN_ALL">Trả lại cho khách hàng</option>
-                  <option value="CUSTOM">Cho khách kiểm tra rồi quyết định</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Số tiền cọc (VNĐ)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="10000"
-                  name="requiredDepositAmount"
-                  className={showError("requiredDepositAmount") ? "input-invalid" : ""}
-                  value={formData.requiredDepositAmount}
-                  onChange={handleChange}
-                />
-                {showError("requiredDepositAmount") ? <div className="field-error">{fieldErrors.requiredDepositAmount}</div> : null}
-              </div>
-
-              <div className="form-group">
-                <label>Ghi chú</label>
-                <div className="reception-note-editor">
-                  <textarea
-                    rows={3}
-                    className="reception-note-input"
-                    value={customerNote}
-                    placeholder="Nhập ghi chú..."
-                    onChange={(event) => setCustomerNote(event.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="timeline-grid timeline-grid-vertical">
-                <div className="form-group">
-                  <label>Thời điểm xe vào xưởng *</label>
-                  <p className={`slot-flow-note ${bookingFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
-                    {slotSelectionGuide}
-                  </p>
-                  <DateTimePicker
-                    value={formData.checkInTime}
-                    onChange={(value) => handleFieldValueChange("checkInTime", value)}
-                    placeholder="Chọn ngày và giờ..."
-                    minDate={pickerMinDate}
-                    onOpenRequest={() => {
-                      if (checkInSelectionGuardMessage) {
-                        setFieldErrors((prev) => ({ ...prev, checkInTime: checkInSelectionGuardMessage }));
-                        return false;
-                      }
-                      return true;
-                    }}
-                  />
-                  {fieldErrors.checkInTime ? <div className="field-error">{fieldErrors.checkInTime}</div> : null}
+                  <div className="form-group">
+                    <label>NgÃ y giá» cam káº¿t tráº£ xe</label>
+                    <DateTimePicker
+                      value={formData.promisedHandoverTime}
+                      onChange={(value) => handleFieldValueChange("promisedHandoverTime", value)}
+                      placeholder="Chá»n ngÃ y giá» cam káº¿t..."
+                      minDate={pickerMinDate}
+                    />
+                    {showError("promisedHandoverTime") ? <div className="field-error">{fieldErrors.promisedHandoverTime}</div> : null}
+                  </div>
                 </div>
 
-                <div className="form-group">
-                   <label>Dự kiến hoàn thành</label>
-                  <DateTimePicker
-                    value={formData.estimatedHandover || suggestedFinish.finishIso}
-                    onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
-                    placeholder="Chọn ngày giờ dự kiến..."
-                    minDate={pickerMinDate}
-                  />
-                  {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
+                <div className="reception-summary-inline" role="status" aria-live="polite">
+                  <div className="reception-summary-inline-row">
+                    <span>Tá»•ng sá»‘ dá»‹ch vá»¥</span>
+                    <strong>{selectedServices.length}</strong>
+                  </div>
+                  <div className="reception-plan-summary-block">
+                    <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
+                    <p className="reception-plan-summary-text reception-plan-summary-text-bulleted">
+                      {serviceGroupsByCategory.length > 0
+                        ? serviceGroupsByCategory
+                          .map((group) => `- ${group.categoryName}\n  ${(group.serviceNames || []).map((name) => `+ ${name}`).join("\n  ")}`)
+                          .join("\n")
+                        : "ChÆ°a cÃ³ dá»‹ch vá»¥"}
+                    </p>
+                  </div>
+                  <div className="reception-summary-inline-row">
+                    <span>Tá»•ng thá»i lÆ°á»£ng</span>
+                    <strong>{`${totalMinutes} phÃºt`}</strong>
+                  </div>
+                  <div className="reception-summary-inline-row">
+                    <span>{SERVICE_PRICE_LABEL}</span>
+                    <strong>{formatCurrency(totalPrice)}</strong>
+                  </div>
+                  <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
+                  <div className="reception-summary-inline-row">
+                    <span>Thá»i gian dá»± kiáº¿n hoÃ n táº¥t toÃ n bá»™ xe</span>
+                    <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
+                  </div>
+                  {isInsuranceOrderEnabled ? (
+                    <>
+                      <div className="reception-summary-inline-row">
+                        <span>Báº£o hiá»ƒm dá»± kiáº¿n tráº£</span>
+                        <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
+                      </div>
+                      <div className="reception-summary-inline-row">
+                        <span>KhÃ¡ch dá»± kiáº¿n tráº£</span>
+                        <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
+                      </div>
+                    </>
+                  ) : null}
+                  <div className="reception-summary-inline-row">
+                    <span>Luá»“ng tiáº¿p nháº­n</span>
+                    <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoáº¡t" : "Khung giá» sá»­a chá»¯a"}</strong>
+                  </div>
+                  {completionWarningText ? (
+                    <p className="reception-plan-summary-warning reception-summary-inline-warning">
+                      {`* ${completionWarningText}`}
+                    </p>
+                  ) : null}
                 </div>
-
-                <div className="form-group">
-                  <label>Ngày giờ cam kết trả xe</label>
-                  <DateTimePicker
-                    value={formData.promisedHandoverTime}
-                    onChange={(value) => handleFieldValueChange("promisedHandoverTime", value)}
-                    placeholder="Chọn ngày giờ cam kết..."
-                    minDate={pickerMinDate}
-                  />
-                  {showError("promisedHandoverTime") ? <div className="field-error">{fieldErrors.promisedHandoverTime}</div> : null}
-                </div>
-              </div>
-
-              <div className="reception-summary-inline" role="status" aria-live="polite">
-                <div className="reception-summary-inline-row">
-                  <span>Tổng số dịch vụ</span>
-                  <strong>{selectedServices.length}</strong>
-                </div>
-                <div className="reception-plan-summary-block">
-                  <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
-                  <p className="reception-plan-summary-text reception-plan-summary-text-bulleted">
-                    {serviceGroupsByCategory.length > 0
-                      ? serviceGroupsByCategory
-                        .map((group) => `- ${group.categoryName}\n  ${(group.serviceNames || []).map((name) => `+ ${name}`).join("\n  ")}`)
-                        .join("\n")
-                      : "Chưa có dịch vụ"}
-                  </p>
-                </div>
-                <div className="reception-summary-inline-row">
-                  <span>Tổng thời lượng</span>
-                  <strong>{`${totalMinutes} phút`}</strong>
-                </div>
-                <div className="reception-summary-inline-row">
-                  <span>{SERVICE_PRICE_LABEL}</span>
-                  <strong>{formatCurrency(totalPrice)}</strong>
-                </div>
-                <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
-                <div className="reception-summary-inline-row">
-                  <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
-                  <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
-                </div>
-                {isInsuranceOrderEnabled ? (
-                  <>
-                    <div className="reception-summary-inline-row">
-                      <span>Bảo hiểm dự kiến trả</span>
-                      <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
-                    </div>
-                    <div className="reception-summary-inline-row">
-                      <span>Khách dự kiến trả</span>
-                      <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
-                    </div>
-                  </>
-                ) : null}
-                <div className="reception-summary-inline-row">
-                  <span>Luồng tiếp nhận</span>
-                  <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Khung giờ sửa chữa"}</strong>
-                </div>
-                {completionWarningText ? (
-                  <p className="reception-plan-summary-warning reception-summary-inline-warning">
-                    {`* ${completionWarningText}`}
-                  </p>
-                ) : null}
-              </div>
-            </section>
-          </div>
+              </section>
+            </div>
           </div>
         </fieldset>
 
         <div className="form-footer">
           <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>
-            Hủy và quay lại
+            Há»§y vÃ  quay láº¡i
           </button>
           <button type="submit" className="btn-primary-large" disabled={saving || isEditLocked}>
-            {saving ? "Đang cập nhật..." : "Lưu thay đổi"}
+            {saving ? "Äang cáº­p nháº­t..." : "LÆ°u thay Ä‘á»•i"}
           </button>
         </div>
       </form>

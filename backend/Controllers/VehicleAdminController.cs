@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
@@ -396,7 +396,7 @@ public class VehicleAdminController : ControllerBase
 
             if (!row.CurrentStaffId.HasValue && IsBusyStatus(row.CurrentStatus))
             {
-                alerts.Add(NewVehicleAlert("MEDIUM", "NO_STAFF_ASSIGNED", row, "Xe chua duoc phan cong nhan su.", now));
+                alerts.Add(NewVehicleAlert("MEDIUM", "NO_STAFF_ASSIGNED", row, "Xe chưa được phân công nhân sự.", now));
             }
 
             if (row.CurrentStatus == StatusWaitingParts && row.StatusDurationHours >= settings.AlertRules.WaitingPartsTooLongHours)
@@ -406,7 +406,7 @@ public class VehicleAdminController : ControllerBase
 
             if (row.CurrentStatus == StatusCompleted && row.StatusDurationHours >= settings.AlertRules.CompletedNotDeliveredHours)
             {
-                alerts.Add(NewVehicleAlert("HIGH", "COMPLETED_NOT_DELIVERED", row, "Xe da hoan tat nhung chua giao.", now));
+                alerts.Add(NewVehicleAlert("HIGH", "COMPLETED_NOT_DELIVERED", row, "Xe đã hoàn tất nhưng chưa giao.", now));
             }
 
             if (row.StatusDurationHours >= settings.AlertRules.StatusTooLongHours && IsBusyStatus(row.CurrentStatus))
@@ -421,7 +421,7 @@ public class VehicleAdminController : ControllerBase
 
             if (string.IsNullOrWhiteSpace(row.LicensePlate) || string.IsNullOrWhiteSpace(row.CustomerPhone) || row.ModelId <= 0)
             {
-                alerts.Add(NewVehicleAlert("LOW", "MISSING_DATA", row, "Xe dang thieu du lieu co ban.", now));
+                alerts.Add(NewVehicleAlert("LOW", "MISSING_DATA", row, "Xe đang thiếu dữ liệu cơ bản.", now));
             }
         }
 
@@ -588,7 +588,7 @@ public class VehicleAdminController : ControllerBase
         if (request.ModelId <= 0) return BadRequest(new { message = "ModelId is required." });
         if (!request.ManufactureYear.HasValue || request.ManufactureYear.Value <= 0)
         {
-            return BadRequest(new { message = "Vui lòng nhập năm sản xuất." });
+            return BadRequest(new { message = "Vui lòng nhập nĒm sản xuất." });
         }
 
         var modelExists = await _context.VehicleModels.AsNoTracking().AnyAsync(m => m.Id == request.ModelId && m.IsDeleted != true);
@@ -1655,8 +1655,7 @@ public class VehicleAdminController : ControllerBase
 
     private long? ResolveCurrentUserId()
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return long.TryParse(claim, out var userId) ? userId : null;
+        return this.GetCurrentUserId();
     }
 
     private string? ResolveCurrentUserDisplayName()
@@ -1680,7 +1679,7 @@ public class VehicleAdminController : ControllerBase
             "WAITING_DELIVERY" or "CHO_GIAO" => StatusWaitingDelivery,
             nameof(ServiceOrderDetailStatusCode.COMPLETED) or "DONE" or "HOAN_TAT" => StatusCompleted,
             nameof(RetailOrderStatus.DELIVERED) or "DA_GIAO" or "HANDOVER" => StatusDelivered,
-            nameof(AppointmentStatus.CANCELLED) or nameof(ServiceOrderDetailStatusCode.CANCELED) or "HUY" => StatusCanceled,
+            nameof(AppointmentStatus.CANCELED) or nameof(ServiceOrderDetailStatusCode.CANCELED) or "HUY" => StatusCanceled,
             _ => normalized
         };
     }
@@ -1755,7 +1754,7 @@ public class VehicleAdminController : ControllerBase
         public long ModelId { get; set; }
         public string? Color { get; set; }
         public int? Odo { get; set; }
-        [Range(1900, 2100, ErrorMessage = "NÃ„Æ’m sÃ¡ÂºÂ£n xuÃ¡ÂºÂ¥t khÃƒÂ´ng hÃ¡Â»Â£p lÃ¡Â»â€¡.")]
+        [Range(1900, 2100, ErrorMessage = "Năm sản xuất không hợp lệ.")]
         public int? ManufactureYear { get; set; }
         public long? CustomerId { get; set; }
         public long? BranchId { get; set; }
@@ -2129,3 +2128,7 @@ public class VehicleAdminController : ControllerBase
         public static AssignBayResult Fail(string message) => new() { Success = false, Message = message };
     }
 }
+
+
+
+

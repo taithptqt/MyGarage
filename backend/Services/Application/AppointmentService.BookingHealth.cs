@@ -24,7 +24,7 @@ namespace MyGarage.Services
                     && s.EndTime < atTime
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW))
                 .ToListAsync();
 
@@ -55,3 +55,4 @@ namespace MyGarage.Services
         }
     }
 }
+

@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +9,10 @@ namespace MyGarage.Controllers
     {
         internal static long? GetCurrentUserId(this ControllerBase controller)
         {
-            var claim = controller.User.FindFirst(ClaimTypes.NameIdentifier);
+            var claim = controller.User.FindFirst(ClaimTypes.NameIdentifier)
+                ?? controller.User.FindFirst("sub")
+                ?? controller.User.FindFirst("id")
+                ?? controller.User.FindFirst("uid");
             return claim != null && long.TryParse(claim.Value, out var id)
                 ? id
                 : null;
@@ -43,48 +48,58 @@ namespace MyGarage.Controllers
                 : null;
         }
 
-        internal static bool IsCurrentAccountingStaff(this ControllerBase controller)
+        internal static bool IsStaffInAnyRole(this ControllerBase controller, params string[] roleCodes)
         {
             var claimRole = controller.GetCurrentRole();
-            var roleCode = controller.GetCurrentRoleCode();
-            var roleNameUpper = (controller.GetCurrentRoleName() ?? string.Empty).Trim().ToUpperInvariant();
+            if (!string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
 
-            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase)
-                   && (
-                       string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
-                       || roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
-                       || roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase)
-                       || roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase)
-                   );
+            var currentRoleCode = controller.GetCurrentRoleCode();
+            if (string.IsNullOrWhiteSpace(currentRoleCode))
+            {
+                return false;
+            }
+
+            return roleCodes.Any(code =>
+                !string.IsNullOrWhiteSpace(code) &&
+                string.Equals(currentRoleCode, code.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        internal static bool IsCurrentAdminStaff(this ControllerBase controller)
+        internal static bool IsServiceAdvisorOrReceptionist(this ControllerBase controller)
         {
-            var claimRole = controller.GetCurrentRole();
-            var roleCode = controller.GetCurrentRoleCode();
-            var roleNameUpper = (controller.GetCurrentRoleName() ?? string.Empty).Trim().ToUpperInvariant();
+            if (!string.Equals(controller.GetCurrentRole(), "Staff", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
 
-            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase)
-                   && (
-                       string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase)
-                       || roleNameUpper.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
-                   );
-        }
+            var roleCode = (controller.GetCurrentRoleCode() ?? string.Empty).Trim().ToUpperInvariant();
+            var roleName = (controller.GetCurrentRoleName() ?? string.Empty).Trim().ToUpperInvariant();
 
-        internal static bool IsCurrentFinancePrivilegedStaff(this ControllerBase controller)
-        {
-            return controller.IsCurrentAccountingStaff() || controller.IsCurrentAdminStaff();
-        }
+            if (string.IsNullOrWhiteSpace(roleCode) && string.IsNullOrWhiteSpace(roleName))
+            {
+                return false;
+            }
 
-        internal static bool IsCurrentStaff(this ControllerBase controller)
-        {
-            var claimRole = controller.GetCurrentRole();
-            return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase);
-        }
+            var advisorRoleCodes = new[]
+            {
+                "SERVICE_ADVISOR",
+                "ADVISOR",
+                "CVDV",
+                "RECEPTIONIST",
+                "FRONT_DESK"
+            };
 
-        internal static bool RequiresFinanceBranchScope(this ControllerBase controller)
-        {
-            return controller.IsCurrentStaff() && !controller.IsCurrentAdminStaff();
+            if (advisorRoleCodes.Any(code => roleCode.Contains(code, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            return roleName.Contains("CO VAN", StringComparison.OrdinalIgnoreCase)
+                || roleName.Contains("DICH VU", StringComparison.OrdinalIgnoreCase)
+                || roleName.Contains("LE TAN", StringComparison.OrdinalIgnoreCase)
+                || roleName.Contains("TIEP TAN", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

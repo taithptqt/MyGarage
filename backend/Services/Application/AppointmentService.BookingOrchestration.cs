@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -313,7 +313,7 @@ namespace MyGarage.Services
         private static bool IsInventoryShortageException(InvalidOperationException exception)
         {
             var message = exception?.Message ?? string.Empty;
-            return message.Contains("Khong du ton kho", StringComparison.OrdinalIgnoreCase) ||
+            return message.Contains("Không đủ tồn kho", StringComparison.OrdinalIgnoreCase) ||
                    message.Contains("không đủ tồn kho", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -386,7 +386,7 @@ namespace MyGarage.Services
 
             if (remaining > InventoryQuantityTolerance)
             {
-                throw new InvalidOperationException($"Khong du ton kho de giu phu tung Product#{productId}.");
+                throw new InvalidOperationException($"Không đủ tồn kho de giu phu tung Product#{productId}.");
             }
         }
 
@@ -418,7 +418,7 @@ namespace MyGarage.Services
                         s.BayId.HasValue &&
                         s.StartTime < endAt &&
                         s.EndTime > startAt &&
-                        s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                        s.Status != nameof(WorkSlotStatus.CANCELED) &&
                         s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                         s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                         s.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
@@ -439,7 +439,7 @@ namespace MyGarage.Services
                 }
             }
 
-            throw new InvalidOperationException("Khong tim thay khoang trong lien tiep cho khung gio da chon.");
+            throw new InvalidOperationException("Không tìm thấy khoang trống liên tiếp cho khung giờ đã chọn.");
         }
 
         private static IEnumerable<Bay> OrderCandidateBays(
@@ -498,14 +498,14 @@ namespace MyGarage.Services
             var workSlots = await _context.WorkSlots
                 .Where(s =>
                     s.AppointmentId == appointmentId &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED))
                 .ToListAsync();
 
             foreach (var slot in workSlots)
             {
-                slot.Status = nameof(WorkSlotStatus.CANCELLED);
+                slot.Status = nameof(WorkSlotStatus.CANCELED);
                 slot.ActualReleaseTime ??= releasedAt;
                 if (slot.EndTime < releasedAt)
                 {
@@ -539,7 +539,7 @@ namespace MyGarage.Services
             var now = _clock.UtcNow;
             foreach (var reservation in reservations)
             {
-                reservation.Status = "CANCELLED";
+                reservation.Status = "CANCELED";
                 reservation.UpdateAt = now;
                 reservation.UpdateBy = actorStaffId;
             }
@@ -587,7 +587,7 @@ namespace MyGarage.Services
             var workSlots = await _context.WorkSlots
                 .Where(s =>
                     s.AppointmentId == appointment.Id &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     s.Status != nameof(WorkSlotStatus.OVERNIGHT_HOLD))
@@ -627,3 +627,5 @@ namespace MyGarage.Services
         }
     }
 }
+
+

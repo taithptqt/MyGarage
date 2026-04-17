@@ -13,7 +13,7 @@ using MyGarage.Interfaces;
 namespace MyGarage.Controllers
 {
     [ApiController]
-    [Authorize(Roles = "Staff")]
+    [Authorize]
     [Route("api/reception/chat")]
     public class ReceptionChatController : ControllerBase
     {
@@ -192,7 +192,7 @@ namespace MyGarage.Controllers
 
             if (files is null || files.Count == 0)
             {
-                return BadRequest(new { message = "Vui long chon it nhat 1 tep dinh kem." });
+            return BadRequest(new { message = "Vui lòng chọn ít nhất 1 tệp đính kèm." });
             }
 
             if (files.Count > MaxAttachmentsPerRequest)
@@ -219,17 +219,17 @@ namespace MyGarage.Controllers
                 var file = files[i];
                 if (file is null || file.Length == 0)
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} khong hop le." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} không hợp lệ." });
                 }
 
                 if (!TryResolveAttachmentMetadata(file, out var extension, out var normalizedContentType))
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} khong duoc ho tro. Chi ho tro {SupportedAttachmentHint}." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} không được hỗ trợ. Chỉ hỗ trợ {SupportedAttachmentHint}." });
                 }
 
                 if (file.Length > MaxAttachmentSizeBytes)
                 {
-                    return BadRequest(new { message = $"Tep thu {i + 1} vuot qua {MaxAttachmentSizeBytes / (1024 * 1024)}MB." });
+                return BadRequest(new { message = $"Tệp thứ {i + 1} vượt quá {MaxAttachmentSizeBytes / (1024 * 1024)}MB." });
                 }
 
                 var fileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";

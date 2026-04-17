@@ -305,43 +305,6 @@
   align-items: center;
 }
 
-.parts-shop-branch-control {
-  min-width: 220px;
-  display: grid;
-  gap: 6px;
-}
-
-.parts-shop-branch-control label {
-  color: rgba(29, 42, 38, 0.72);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.parts-shop-branch-control select {
-  width: 100%;
-  border: 1px solid rgba(29, 42, 38, 0.16);
-  border-radius: 14px;
-  padding: 11px 13px;
-  outline: none;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--parts-text);
-  font-size: 0.9rem;
-  line-height: 1.35;
-  font-family: "Barlow", "Segoe UI", sans-serif;
-  transition:
-    border-color var(--parts-motion-dur-fast) ease,
-    box-shadow var(--parts-motion-dur-fast) ease,
-    background-color var(--parts-motion-dur-fast) ease;
-}
-
-.parts-shop-branch-control select:focus {
-  border-color: rgba(197, 160, 89, 0.86);
-  box-shadow: 0 0 0 4px rgba(197, 160, 89, 0.14);
-  background: #ffffff;
-}
-
 .parts-shop-panel-head h3,
 .parts-shop-cart-head h3 {
   margin: 0;
@@ -1166,7 +1129,6 @@
   .parts-shop-panel-side {
     width: 100%;
     justify-content: space-between;
-    flex-wrap: wrap;
   }
 
   .parts-shop-results-meta {
@@ -1220,11 +1182,6 @@
   .parts-shop-panel-side {
     align-items: flex-start;
     gap: 14px;
-  }
-
-  .parts-shop-branch-control {
-    width: 100%;
-    min-width: 0;
   }
 
   .parts-shop-list {

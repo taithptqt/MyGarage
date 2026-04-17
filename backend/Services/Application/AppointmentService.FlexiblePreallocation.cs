@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -83,7 +83,7 @@ namespace MyGarage.Services
                           && slot.StartTime < endAt
                           && slot.EndTime > startAt
                           && slot.SlotType == nameof(WorkSlotType.REPAIR)
-                          && slot.Status != nameof(WorkSlotStatus.CANCELLED)
+                          && slot.Status != nameof(WorkSlotStatus.CANCELED)
                           && slot.Status != nameof(WorkSlotStatus.NOSHOW)
                           && slot.Status != nameof(WorkSlotStatus.COMPLETED)
                           && slot.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING)
@@ -121,7 +121,7 @@ namespace MyGarage.Services
             {
                 if (guard++ > 3650)
                 {
-                    throw new InvalidOperationException("Khong the lap lich khoang cho luong flex trong pham vi 10 nam.");
+                    throw new InvalidOperationException("Không thể lập lịch khoang cho luồng flex trong phạm vi 10 năm.");
                 }
 
                 var date = DateOnly.FromDateTime(cursor);
@@ -201,7 +201,7 @@ namespace MyGarage.Services
                 .ToList();
             if (candidateBays.Count == 0)
             {
-                throw new InvalidOperationException("Khong co khoang hoat dong de xep lich sua chua.");
+                throw new InvalidOperationException("Không có khoang hoạt động để xếp lịch sửa chữa.");
             }
 
             var scheduleStart = segments.Min(s => s.StartTime);
@@ -213,7 +213,7 @@ namespace MyGarage.Services
                     s.BayId.HasValue &&
                     s.StartTime < scheduleEnd &&
                     s.EndTime > scheduleStart &&
-                    s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    s.Status != nameof(WorkSlotStatus.CANCELED) &&
                     s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     s.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     s.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
@@ -261,7 +261,7 @@ namespace MyGarage.Services
 
                 if (!selectedBay.HasValue)
                 {
-                    throw new InvalidOperationException("Khong tim thay khoang trong de pre-allocate lich sua chua cho luong flex.");
+                    throw new InvalidOperationException("Không tìm thấy khoang trống để pre-allocate lịch sửa chữa cho luồng flex.");
                 }
 
                 if (activeBayId.HasValue && activeBayId.Value != selectedBay.Value)
@@ -269,13 +269,13 @@ namespace MyGarage.Services
                     movesUsed++;
                     if (maxAllowedMoves.HasValue && movesUsed > maxAllowedMoves.Value)
                     {
-                        throw new InvalidOperationException("Khong tim thay phuong an pre-allocate khoang sua chua voi toi da 1 lan chuyen khoang.");
+                        throw new InvalidOperationException("Không tìm thấy phương án pre-allocate khoang sửa chữa với tối đa 1 lần chuyển khoang.");
                     }
                 }
 
                 if (!IsSegmentAvailable(occupiedByBay, selectedBay.Value, segment))
                 {
-                    throw new InvalidOperationException("Khong tim thay khoang trong de pre-allocate lich sua chua cho luong flex.");
+                    throw new InvalidOperationException("Không tìm thấy khoang trống để pre-allocate lịch sửa chữa cho luồng flex.");
                 }
 
                 activeBayId = selectedBay.Value;
@@ -558,3 +558,5 @@ namespace MyGarage.Services
         }
     }
 }
+
+

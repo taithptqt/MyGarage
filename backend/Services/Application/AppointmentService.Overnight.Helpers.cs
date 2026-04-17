@@ -19,7 +19,7 @@ namespace MyGarage.Services
                     && s.StartTime <= closingTime
                     && s.SlotType != nameof(WorkSlotType.BUFFER)
                     && s.Status != nameof(WorkSlotStatus.COMPLETED)
-                    && s.Status != nameof(WorkSlotStatus.CANCELLED)
+                    && s.Status != nameof(WorkSlotStatus.CANCELED)
                     && s.Status != nameof(WorkSlotStatus.NOSHOW)
                     && s.Status != nameof(WorkSlotStatus.OVERNIGHT_HOLD)
                     && (s.ActualReleaseTime == null || s.ActualReleaseTime > closingTime))
@@ -95,3 +95,4 @@ namespace MyGarage.Services
         }
     }
 }
+

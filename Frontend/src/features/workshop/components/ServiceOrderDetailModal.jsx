@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "@features/admin/components/AdminModals";
 import { MdAssignment, MdCheckCircle, MdDirectionsCar, MdEdit, MdHistory, MdPerson } from "react-icons/md";
@@ -8,8 +8,9 @@ import { formatOrderDateTime, parseCustomerNotes } from "@features/workshop/util
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { vehicleConditionLogApi } from "@features/workshop/api/vehicleConditionLogApi";
 import { getVehicleBrands, getVehicleModels } from "@features/appointments/api/appointmentApi";
+import { servicesApi } from "@features/services/api/servicesApi";
 import FilterDropdown from "@shared/components/FilterDropdown";
-import { formatDetailPayerLabel, summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
+import { summarizeInsuranceOrderDetails } from "@features/workshop/utils/insuranceOrderUi";
 import "../pages/Workshop.css";
 
 const STATUS_LABELS = {
@@ -48,6 +49,9 @@ const DISPATCH_TAG_OPTIONS = [
 ];
 const AUTO_DISPATCH_WARNING_PREFIX = "[AUTO_DISPATCH_WARNING]:";
 const DIAGNOSIS_DISPATCH_REVIEW_STORAGE_KEY = "mygarage.diagnosisDispatchReviewOrders";
+const MOJIBAKE_MARKER_REGEX = /(?:\u00C3\u0192|\u00C3\u201A|\u00C3\u0090|\u00C3\u2020|\u00C3\u201E|\u00C3\u00A1\u00C2[\u00BA-\u00BF]|\u00C3\u00A2\u00E2\u201A\u00AC|\uFFFD)/;
+const MOJIBAKE_MARKER_GLOBAL_REGEX = /(?:\u00C3\u0192|\u00C3\u201A|\u00C3\u0090|\u00C3\u2020|\u00C3\u201E|\u00C3\u00A1\u00C2[\u00BA-\u00BF]|\u00C3\u00A2\u00E2\u201A\u00AC|\uFFFD)/g;
+const VIETNAMESE_MARK_REGEX = /[À-ỹĐđ]/g;
 
 function parseDispatchReviewOrderIds() {
   if (typeof window === "undefined") return new Set();
@@ -120,10 +124,27 @@ function formatMoney(amount) {
   return `${value.toLocaleString("vi-VN")}d`;
 }
 
+function parseApiDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const hasTimezone = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+  const normalized = hasTimezone ? raw : `${raw}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toApiDateMillis(value) {
+  return parseApiDate(value)?.getTime() ?? 0;
+}
+
 function formatDateTimeValue(value) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "--";
+  const parsed = parseApiDate(value);
+  if (!parsed) return "--";
   return parsed.toLocaleString("vi-VN", {
     year: "numeric",
     month: "2-digit",
@@ -152,18 +173,14 @@ function buildIntakePackageLabel(item) {
 }
 
 function buildAutoDiagnosisAssignmentNote({
-  dispatchTag,
   selectedServiceNames,
 }) {
-  const dispatchLabel =
-    DISPATCH_TAG_OPTIONS.find((item) => item.value === String(dispatchTag || "").trim().toUpperCase())?.label
-    || "Chuẩn đoán tổng quát";
   const services = Array.isArray(selectedServiceNames)
     ? selectedServiceNames.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
 
   const serviceText = services.length > 0 ? services.join(", ") : "chưa có tên dịch vụ cụ thể";
-  return `⚙️ [Hệ thống tự động] Điều phối ${dispatchLabel}. Dịch vụ khách chọn: ${serviceText}.`;
+  return `⚙️ [Lễ tân] Ghi chú gửi thợ: ${serviceText}.`;
 }
 
 function normalizeImageUrls(value) {
@@ -191,6 +208,100 @@ function normalizeImageUrls(value) {
     .split(/[,\n]/g)
     .map((item) => String(item || "").trim())
     .filter(Boolean);
+}
+
+function tryRepairMojibakeText(value) {
+  const raw = String(value || "");
+  if (!raw || !MOJIBAKE_MARKER_REGEX.test(raw) || typeof TextDecoder === "undefined") {
+    return raw;
+  }
+
+  const cp1252Map = new Map([
+    [0x20AC, 0x80], [0x201A, 0x82], [0x0192, 0x83], [0x201E, 0x84],
+    [0x2026, 0x85], [0x2020, 0x86], [0x2021, 0x87], [0x02C6, 0x88],
+    [0x2030, 0x89], [0x0160, 0x8A], [0x2039, 0x8B], [0x0152, 0x8C],
+    [0x017D, 0x8E], [0x2018, 0x91], [0x2019, 0x92], [0x201C, 0x93],
+    [0x201D, 0x94], [0x2022, 0x95], [0x2013, 0x96], [0x2014, 0x97],
+    [0x02DC, 0x98], [0x2122, 0x99], [0x0161, 0x9A], [0x203A, 0x9B],
+    [0x0153, 0x9C], [0x017E, 0x9E], [0x0178, 0x9F],
+  ]);
+  const toCp1252Bytes = (text) => Uint8Array.from(Array.from(text, (char) => {
+    const code = char.codePointAt(0) || 0;
+    if (code <= 0xff) return code;
+    if (cp1252Map.has(code)) return cp1252Map.get(code);
+    return 0x3f;
+  }));
+
+  const repairChunk = (chunk) => {
+    if (!chunk || !MOJIBAKE_MARKER_REGEX.test(chunk)) return chunk;
+    try {
+      const bytes = toCp1252Bytes(chunk);
+      const repairedChunk = new TextDecoder("utf-8").decode(bytes);
+      if (!repairedChunk || repairedChunk === chunk) return chunk;
+      const chunkReplacementCount = (chunk.match(/\uFFFD/g) || []).length;
+      const repairedChunkReplacementCount = (repairedChunk.match(/\uFFFD/g) || []).length;
+      if (repairedChunkReplacementCount > chunkReplacementCount) return chunk;
+      return repairedChunk;
+    } catch {
+      return chunk;
+    }
+  };
+
+  const tokenLevelRepaired = raw
+    .split(/(\s+)/)
+    .map((chunk) => repairChunk(chunk))
+    .join("");
+  if (tokenLevelRepaired !== raw) {
+    return tokenLevelRepaired;
+  }
+
+  try {
+    const bytes = toCp1252Bytes(raw);
+    const repaired = new TextDecoder("utf-8").decode(bytes).trim();
+    if (!repaired || repaired === raw) return raw;
+
+    const rawMarkerCount = (raw.match(MOJIBAKE_MARKER_GLOBAL_REGEX) || []).length;
+    const repairedMarkerCount = (repaired.match(MOJIBAKE_MARKER_GLOBAL_REGEX) || []).length;
+    const rawVietnameseCount = (raw.match(VIETNAMESE_MARK_REGEX) || []).length;
+    const repairedVietnameseCount = (repaired.match(VIETNAMESE_MARK_REGEX) || []).length;
+    const rawReplacementCount = (raw.match(/\uFFFD/g) || []).length;
+    const repairedReplacementCount = (repaired.match(/\uFFFD/g) || []).length;
+
+    if (repairedReplacementCount > rawReplacementCount) return raw;
+
+    if (
+      repairedMarkerCount < rawMarkerCount
+      || (repairedMarkerCount === rawMarkerCount && repairedVietnameseCount > rawVietnameseCount)
+    ) {
+      return repaired;
+    }
+  } catch {
+    // Keep original string if decode fails.
+  }
+
+  return raw;
+}
+
+function normalizeIntakeSuggestion(response) {
+  if (!response || typeof response !== "object") return response || null;
+
+  const normalizeReasonText = (value) => {
+    const repaired = tryRepairMojibakeText(value);
+    return String(repaired || "")
+      .replace(/\bLe tan chon goi\s*/i, "Lễ tân chọn gói ")
+      .replace(/\bBooking\s+tiep\s+theo\s+luc\s*/i, "Booking tiếp theo lúc ")
+      .replace(/\bBooking\s+ti(?:áº¿|ê|e)p\s+theo\s+l(?:u|ú|ú)c\s*/i, "Booking tiếp theo lúc ")
+      .replace(/T.?ng\s+th.?i\s+l.{0,6}ng\s+d.?ch\s+v.{0,3}\s+ch.?nh\s+.{0,6}m.?c\s+trung\s+b.?nh\.?/i, "Tăng thời lượng dịch vụ chính ở mức trung bình.");
+  };
+
+  const reasons = Array.isArray(response.reasons)
+    ? response.reasons.map((reason) => normalizeReasonText(reason))
+    : response.reasons;
+
+  return {
+    ...response,
+    reasons,
+  };
 }
 
 function getCollectionLength(value) {
@@ -238,6 +349,8 @@ export default function ServiceOrderDetailModal({
   const [insuranceCompanies, setInsuranceCompanies] = useState([]);
   const [vehicleModels, setVehicleModels] = useState([]);
   const [vehicleBrands, setVehicleBrands] = useState([]);
+  const [standardServiceNameById, setStandardServiceNameById] = useState(() => new Map());
+  const [quotationDetailNameById, setQuotationDetailNameById] = useState(() => new Map());
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [diagnoses, setDiagnoses] = useState([]);
   const [orderSnapshot, setOrderSnapshot] = useState(order || null);
@@ -245,15 +358,13 @@ export default function ServiceOrderDetailModal({
     String(order?.status || "").trim().toUpperCase()
   );
   const [hasSignedCheckIn, setHasSignedCheckIn] = useState(false);
-  const [selectedDispatchTag, setSelectedDispatchTag] = useState("ENGINE_CHASSIS");
-  const [dispatchTagDraft, setDispatchTagDraft] = useState("ENGINE_CHASSIS");
   const [showDispatchPopup, setShowDispatchPopup] = useState(false);
   const [submittingDiagnosisRequest, setSubmittingDiagnosisRequest] = useState(false);
   const [loadingIntakeSuggestion, setLoadingIntakeSuggestion] = useState(false);
   const [intakeSuggestion, setIntakeSuggestion] = useState(null);
   const [intakePackages, setIntakePackages] = useState([]);
   const [quotationCount, setQuotationCount] = useState(0);
-  const [bufferMinutesDraft, setBufferMinutesDraft] = useState(15);
+  const [bufferMinutesDraft] = useState(15);
   const [intakePackageDraft, setIntakePackageDraft] = useState("");
   const [bypassConflictGuard, setBypassConflictGuard] = useState(false);
   const [customerConsentAccepted, setCustomerConsentAccepted] = useState(false);
@@ -261,7 +372,38 @@ export default function ServiceOrderDetailModal({
   const [customerConsentNote, setCustomerConsentNote] = useState("");
   const [receptionDiagnosisNote, setReceptionDiagnosisNote] = useState("");
 
-  const customerChosenDetails = useMemo(() => {
+  const resolveDetailServiceName = useCallback((detail) => {
+    const itemType = String(detail?.itemType ?? detail?.ItemType ?? "").trim().toUpperCase();
+    const isGenericName = (value) => /^c[oô]ng\s+đ[ạa]i\s+t[uư]/i.test(String(value || "").trim());
+    const quotationDetailId = toPositiveNumber(detail?.quotationDetailId, detail?.QuotationDetailId);
+    if (quotationDetailId > 0 && quotationDetailNameById.has(quotationDetailId)) {
+      const quotationName = quotationDetailNameById.get(quotationDetailId) || "";
+      if (!isGenericName(quotationName)) {
+        return quotationName;
+      }
+    }
+
+    const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
+    if (standardServiceId > 0 && standardServiceNameById.has(standardServiceId)) {
+      return standardServiceNameById.get(standardServiceId) || "";
+    }
+
+    const serviceItemId = toPositiveNumber(detail?.itemId, detail?.ItemId);
+    if (
+      serviceItemId > 0 &&
+      (itemType === "SERVICE" || itemType === "LABOR" || itemType === "STANDARD_SERVICE") &&
+      standardServiceNameById.has(serviceItemId)
+    ) {
+      return standardServiceNameById.get(serviceItemId) || "";
+    }
+
+    const itemName = firstText(detail?.itemName, detail?.ItemName);
+    const description = firstText(detail?.description, detail?.Description);
+    const looksGeneric = isGenericName(itemName);
+    return looksGeneric ? (description || itemName) : (itemName || description);
+  }, [quotationDetailNameById, standardServiceNameById]);
+
+  const categorizedServiceDetails = useMemo(() => {
     const isLaborOrService = (detail) => {
       const itemType = String(detail?.itemType ?? detail?.ItemType ?? "").trim().toUpperCase();
       const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
@@ -269,43 +411,107 @@ export default function ServiceOrderDetailModal({
       return itemType === "LABOR" || itemType === "SERVICE" || itemType === "STANDARD_SERVICE" || standardServiceId > 0;
     };
 
-    const hasDiagnosisRecommendationLink = (detail) => {
-      const recommendationId = toPositiveNumber(
-        detail?.diagnosisRecommendationId,
-        detail?.DiagnosisRecommendationId,
-        detail?.diagnoseRecommendationId,
-        detail?.DiagnoseRecommendationId
-      );
-      return recommendationId > 0;
+    const isSupplementaryDetail = (detail) => {
+      const isSupplementary = Boolean(detail?.isSupplementary ?? detail?.IsSupplementary);
+      const source = String(detail?.serviceSource ?? detail?.ServiceSource ?? "").trim().toUpperCase();
+      return isSupplementary || source === "SUPPLEMENTARY_TECHNICIAN" || source === "SUPPLEMENTARY_CUSTOMER";
     };
 
-    const candidates = (orderDetails || []).filter(
-      (detail) => isLaborOrService(detail) && !hasDiagnosisRecommendationLink(detail)
-    );
+    const uniqueByGroup = (details) => {
+      const uniqueMap = new Map();
+      const isGenericName = (value) => /^c[oô]ng\s+đ[ạa]i\s+t[uư]/i.test(String(value || "").trim());
+      const scoreName = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return 0;
+        const nonGenericBonus = isGenericName(text) ? 0 : 1000;
+        return nonGenericBonus + text.length;
+      };
+      details.forEach((detail) => {
+        const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
+        const itemId = toPositiveNumber(detail?.itemId, detail?.ItemId);
+        const resolvedName = resolveDetailServiceName(detail);
+        const nameKey = String(resolvedName || "").trim().toLowerCase();
+        const key = standardServiceId
+          ? `std-${standardServiceId}`
+          : itemId
+            ? `item-${itemId}`
+            : `name-${nameKey}`;
+        const existing = uniqueMap.get(key);
+        if (!existing) {
+          uniqueMap.set(key, detail);
+          return;
+        }
 
-    const uniqueMap = new Map();
-    candidates.forEach((detail) => {
+        const existingName = resolveDetailServiceName(existing);
+        if (scoreName(resolvedName) > scoreName(existingName)) {
+          uniqueMap.set(key, detail);
+        }
+      });
+      return Array.from(uniqueMap.values());
+    };
+
+    const candidates = (orderDetails || []).filter((detail) => isLaborOrService(detail));
+    const initial = uniqueByGroup(candidates.filter((detail) => !isSupplementaryDetail(detail)));
+    const supplementary = candidates.filter((detail) => isSupplementaryDetail(detail));
+
+    return { initial, supplementary };
+  }, [orderDetails, resolveDetailServiceName]);
+
+  const customerChosenDetails = categorizedServiceDetails.initial;
+  const supplementaryServiceDetails = categorizedServiceDetails.supplementary;
+  const toDisplayServiceItems = useCallback((details) => {
+    const rows = new Map();
+    details.forEach((detail) => {
       const standardServiceId = toPositiveNumber(detail?.standardServiceId, detail?.StandardServiceId);
       const itemId = toPositiveNumber(detail?.itemId, detail?.ItemId);
-      const itemName = firstText(detail?.itemName, detail?.ItemName);
+      const name = resolveDetailServiceName(detail) || "Dịch vụ";
+      const nameKey = String(name || "").trim().toLowerCase();
       const key = standardServiceId
         ? `std-${standardServiceId}`
         : itemId
           ? `item-${itemId}`
-          : `name-${String(itemName || "").trim().toLowerCase()}`;
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, detail);
+          : `name-${nameKey}`;
+      const amount = Number(detail?.finalAmount ?? detail?.FinalAmount ?? detail?.unitPriceAtTime ?? detail?.UnitPriceAtTime ?? 0);
+      const existing = rows.get(key);
+      if (!existing) {
+        rows.set(key, { key, name, amount: Number.isFinite(amount) ? amount : 0 });
+        return;
+      }
+      existing.amount += Number.isFinite(amount) ? amount : 0;
+      if (String(name || "").trim().length > String(existing.name || "").trim().length) {
+        existing.name = name;
       }
     });
+    return Array.from(rows.values());
+  }, [resolveDetailServiceName]);
 
-    return Array.from(uniqueMap.values());
-  }, [orderDetails]);
+  const customerChosenDisplayItems = useMemo(
+    () => toDisplayServiceItems(customerChosenDetails),
+    [customerChosenDetails, toDisplayServiceItems]
+  );
+  const supplementaryDisplayItems = useMemo(() => {
+    // Supplementary services must be shown line-by-line to reflect all approved additions.
+    return (supplementaryServiceDetails || []).map((detail, index) => {
+      const amount = Number(detail?.finalAmount ?? detail?.FinalAmount ?? detail?.unitPriceAtTime ?? detail?.UnitPriceAtTime ?? 0);
+      const detailId = toPositiveNumber(detail?.id, detail?.Id);
+      const quotationDetailId = toPositiveNumber(detail?.quotationDetailId, detail?.QuotationDetailId);
+      return {
+        key: detailId > 0
+          ? `supp-detail-${detailId}`
+          : quotationDetailId > 0
+            ? `supp-qd-${quotationDetailId}-${index}`
+            : `supp-idx-${index}`,
+        name: resolveDetailServiceName(detail) || "Dịch vụ phát sinh",
+        amount: Number.isFinite(amount) ? amount : 0,
+      };
+    });
+  }, [supplementaryServiceDetails, resolveDetailServiceName]);
   const customerChosenServiceNames = useMemo(
     () =>
-      customerChosenDetails
-        .map((detail) => firstText(detail?.itemName, detail?.ItemName))
+      customerChosenDisplayItems
+        .map((item) => item.name)
         .filter(Boolean),
-    [customerChosenDetails]
+    [customerChosenDisplayItems]
   );
 
   useEffect(() => {
@@ -318,7 +524,7 @@ export default function ServiceOrderDetailModal({
       if (!order?.id) return;
       setLoadingDetails(true);
       try {
-        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes, modelRes, brandRes, quotationsRes] = await Promise.all([
+        const [orderRes, detailsRes, diagnosesRes, conditionLogsRes, insuranceRes, intakePackagesRes, modelRes, brandRes, quotationsRes, standardServicesRes] = await Promise.all([
           serviceOrderApi.getById(order.id),
           serviceOrderApi.getDetails(order.id),
           serviceOrderApi.getDiagnoses(order.id),
@@ -328,6 +534,7 @@ export default function ServiceOrderDetailModal({
           getVehicleModels().catch(() => []),
           getVehicleBrands().catch(() => []),
           serviceOrderApi.getQuotationsByServiceOrder(order.id).catch(() => []),
+          servicesApi.getStandardServices().catch(() => []),
         ]);
 
         setLiveOrderStatus(String(orderRes?.status || order?.status || "").trim().toUpperCase());
@@ -339,6 +546,34 @@ export default function ServiceOrderDetailModal({
         setVehicleModels(Array.isArray(modelRes) ? modelRes : []);
         setVehicleBrands(Array.isArray(brandRes) ? brandRes : []);
         setQuotationCount(getCollectionLength(quotationsRes));
+        const quotationDetailNameMap = new Map();
+        (Array.isArray(quotationsRes) ? quotationsRes : []).forEach((quotation) => {
+          const details = Array.isArray(quotation?.details ?? quotation?.Details)
+            ? (quotation?.details ?? quotation?.Details)
+            : [];
+          details.forEach((detail) => {
+            const detailId = toPositiveNumber(detail?.id, detail?.Id);
+            const detailName = firstText(
+              detail?.itemName,
+              detail?.ItemName,
+              detail?.description,
+              detail?.Description
+            );
+            if (detailId > 0 && detailName) {
+              quotationDetailNameMap.set(detailId, detailName);
+            }
+          });
+        });
+        setQuotationDetailNameById(quotationDetailNameMap);
+        const serviceNameMap = new Map();
+        (Array.isArray(standardServicesRes) ? standardServicesRes : []).forEach((service) => {
+          const id = toPositiveNumber(service?.id, service?.Id);
+          const name = firstText(service?.name, service?.Name);
+          if (id > 0 && name) {
+            serviceNameMap.set(id, name);
+          }
+        });
+        setStandardServiceNameById(serviceNameMap);
 
         const signedCheckInExists = Array.isArray(conditionLogsRes) && conditionLogsRes.some((log) => {
           const logType = String(log?.logType || log?.LogType || "").toUpperCase();
@@ -381,22 +616,11 @@ export default function ServiceOrderDetailModal({
   const latestDiagnosis = useMemo(() => {
     return [...diagnoses]
       .sort((a, b) => {
-        const timeA = new Date(a?.createdAt || a?.updatedAt || 0).getTime();
-        const timeB = new Date(b?.createdAt || b?.updatedAt || 0).getTime();
+        const timeA = toApiDateMillis(a?.createdAt || a?.updatedAt);
+        const timeB = toApiDateMillis(b?.createdAt || b?.updatedAt);
         return timeB - timeA;
       })[0] || null;
   }, [diagnoses]);
-
-  useEffect(() => {
-    const normalizedTag = String(latestDiagnosis?.dispatchTag || "").trim().toUpperCase();
-    if (normalizedTag && DISPATCH_TAG_OPTIONS.some((item) => item.value === normalizedTag)) {
-      setSelectedDispatchTag(normalizedTag);
-      setDispatchTagDraft(normalizedTag);
-      return;
-    }
-    setSelectedDispatchTag("ENGINE_CHASSIS");
-    setDispatchTagDraft("ENGINE_CHASSIS");
-  }, [order?.id, latestDiagnosis?.dispatchTag]);
 
   const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
   const finalApprovalStatus = String(
@@ -439,7 +663,7 @@ export default function ServiceOrderDetailModal({
     );
     if (Number.isFinite(teamId) && teamId > 0) return `tổ #${teamId}`;
 
-    return "tổ chưa xác định";
+    return "";
   }, [
     latestDiagnosis?.AssignedTeamId,
     latestDiagnosis?.AssignedTeamName,
@@ -479,10 +703,10 @@ export default function ServiceOrderDetailModal({
   ]);
   const diagnosisRecallTargetLabel = useMemo(() => {
     if (diagnosisAssignedLeaderLabel) {
-      if (diagnosisAssignedTeamLabel === "tổ chưa xác định") {
-    return `tổ của ${diagnosisAssignedLeaderLabel}`;
+      if (!diagnosisAssignedTeamLabel) {
+        return `tổ của ${diagnosisAssignedLeaderLabel}`;
       }
-  return `${diagnosisAssignedTeamLabel} (tổ trưởng: ${diagnosisAssignedLeaderLabel})`;
+      return `${diagnosisAssignedTeamLabel} (tổ trưởng: ${diagnosisAssignedLeaderLabel})`;
     }
     return diagnosisAssignedTeamLabel;
   }, [diagnosisAssignedLeaderLabel, diagnosisAssignedTeamLabel]);
@@ -585,12 +809,12 @@ export default function ServiceOrderDetailModal({
     resolvedModel?.Name,
     resolvedBrand?.name,
     resolvedBrand?.Name,
-    "Chua rõ dòng xe"
+      "Chưa rõ dòng xe"
   );
   const vehicleDisplayName = useMemo(() => {
     const brand = String(vehicleBrand || "").trim();
     const model = String(vehicleModel || "").trim();
-    if (!brand) return model || "Chua rõ dòng xe";
+  if (!brand) return model || "Chưa rõ dòng xe";
     if (!model) return brand;
     if (model.toLowerCase().includes(brand.toLowerCase())) return model;
     return `${brand} ${model}`.trim();
@@ -682,9 +906,6 @@ export default function ServiceOrderDetailModal({
     if (!showDispatchPopup || !order?.id) return;
 
     let isCancelled = false;
-    const normalizedTag = DISPATCH_TAG_OPTIONS.some((item) => item.value === dispatchTagDraft)
-      ? dispatchTagDraft
-      : "ENGINE_CHASSIS";
     const normalizedBuffer = Number(bufferMinutesDraft);
     const safeBuffer = Number.isFinite(normalizedBuffer) ? Math.max(0, Math.min(120, normalizedBuffer)) : 15;
 
@@ -692,13 +913,12 @@ export default function ServiceOrderDetailModal({
       setLoadingIntakeSuggestion(true);
       try {
         const response = await serviceOrderApi.getDiagnosisIntakeSuggestion(order.id, {
-          dispatchTag: normalizedTag,
           bufferMinutes: safeBuffer,
           intakePackageCode: intakePackageDraft || undefined,
         });
 
         if (isCancelled) return;
-        setIntakeSuggestion(response || null);
+        setIntakeSuggestion(normalizeIntakeSuggestion(response));
         if (!intakePackageDraft && response?.finalPackageCode) {
           setIntakePackageDraft(String(response.finalPackageCode).toUpperCase());
         }
@@ -718,7 +938,7 @@ export default function ServiceOrderDetailModal({
     return () => {
       isCancelled = true;
     };
-  }, [showDispatchPopup, order?.id, dispatchTagDraft, bufferMinutesDraft, intakePackageDraft]);
+  }, [showDispatchPopup, order?.id, bufferMinutesDraft, intakePackageDraft]);
 
   const isConflictBlocked = useMemo(() => {
     const conflictLevel = String(intakeSuggestion?.conflictLevel || "").toUpperCase();
@@ -742,8 +962,6 @@ export default function ServiceOrderDetailModal({
       return;
     }
 
-    setDispatchTagDraft(selectedDispatchTag || "ENGINE_CHASSIS");
-    setBufferMinutesDraft(15);
     setIntakePackageDraft("");
     setBypassConflictGuard(false);
     setCustomerConsentAccepted(false);
@@ -751,7 +969,6 @@ export default function ServiceOrderDetailModal({
     setCustomerConsentNote("");
     setReceptionDiagnosisNote(
       buildAutoDiagnosisAssignmentNote({
-        dispatchTag: selectedDispatchTag || "ENGINE_CHASSIS",
         selectedServiceNames: customerChosenServiceNames,
       })
     );
@@ -760,14 +977,14 @@ export default function ServiceOrderDetailModal({
   };
 
   const handleConfirmDiagnosisRequest = async () => {
-    const normalizedTag = DISPATCH_TAG_OPTIONS.some((item) => item.value === dispatchTagDraft)
-      ? dispatchTagDraft
-      : "ENGINE_CHASSIS";
+    const suggestionDispatchTag = String(intakeSuggestion?.dispatchTag || "").trim().toUpperCase();
+    const normalizedTag = DISPATCH_TAG_OPTIONS.some((item) => item.value === suggestionDispatchTag)
+      ? suggestionDispatchTag
+      : undefined;
     const normalizedBuffer = Number(bufferMinutesDraft);
     const safeBuffer = Number.isFinite(normalizedBuffer) ? Math.max(0, Math.min(120, normalizedBuffer)) : 15;
     const selectedPackageCode = String(intakePackageDraft || intakeSuggestion?.finalPackageCode || "").trim().toUpperCase();
     const autoAssignmentNote = buildAutoDiagnosisAssignmentNote({
-      dispatchTag: normalizedTag,
       selectedServiceNames: customerChosenServiceNames,
     });
     const finalReceptionNote = String(receptionDiagnosisNote || "").trim() || autoAssignmentNote;
@@ -800,7 +1017,6 @@ export default function ServiceOrderDetailModal({
         return;
       }
       clearOrderDispatchReviewMark(order?.id);
-      setSelectedDispatchTag(normalizedTag);
       setShowDispatchPopup(false);
       setIntakeSuggestion(null);
       await refreshAfterDiagnosisChange();
@@ -812,7 +1028,10 @@ export default function ServiceOrderDetailModal({
   };
 
   const handleRecallDiagnosis = async () => {
-    const confirmed = window.confirm(`Hủy phiếu chuẩn đoán đang xử lý bởi ${diagnosisRecallTargetLabel}?`);
+    const targetSuffix = diagnosisRecallTargetLabel
+      ? ` đang xử lý bởi ${diagnosisRecallTargetLabel}`
+      : "";
+    const confirmed = window.confirm(`Hủy phiếu chuẩn đoán${targetSuffix}?`);
     if (!confirmed) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
@@ -976,35 +1195,62 @@ export default function ServiceOrderDetailModal({
 
             <div className="so-detail-note-grid">
               <article className="so-detail-panel">
-                <p className="so-detail-panel-title">Dịch vụ cụ thể khách đã chọn</p>
+                <p className="so-detail-panel-title">Dịch vụ theo luồng thực thi</p>
                 {loadingDetails ? (
                   <p className="so-detail-empty">Đang tải dữ liệu dịch vụ...</p>
-                ) : customerChosenDetails.length > 0 ? (
-                  <div className="so-detail-service-list">
-                    {customerChosenDetails.map((detail) => (
-                      <div
-                        key={
-                          toPositiveNumber(detail?.id, detail?.Id, detail?.standardServiceId, detail?.StandardServiceId, detail?.itemId, detail?.ItemId)
-                          || `service-${firstText(detail?.itemName, detail?.ItemName)}`
-                        }
-                        className="so-detail-service-row"
-                      >
-                        <div className="so-detail-service-copy">
-                          <span>{firstText(detail?.itemName, detail?.ItemName, "Dịch vụ")}</span>
-                          <small>{formatDetailPayerLabel(detail)}</small>
-                        </div>
-                        <strong>{formatMoney(detail?.finalAmount ?? detail?.FinalAmount ?? detail?.unitPriceAtTime ?? detail?.UnitPriceAtTime ?? 0)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : parsedNotes.requestedServices ? (
-                  <p className="so-detail-body-text">{parsedNotes.requestedServices}</p>
                 ) : (
-                  <p className="so-detail-empty">Chưa có dịch vụ cụ thể nào được chọn.</p>
+                  <>
+                    <p
+                      className="so-detail-panel-title"
+                      style={{ marginTop: 2, marginBottom: 2, fontSize: 10, color: "#5f769f" }}
+                    >
+                      Dịch vụ khách chọn ban đầu
+                    </p>
+                    {customerChosenDisplayItems.length > 0 ? (
+                      <div className="so-detail-service-list">
+                        {customerChosenDisplayItems.map((item) => (
+                          <div
+                            key={item.key}
+                            className="so-detail-service-row"
+                          >
+                            <div className="so-detail-service-copy">
+                              <span>{item.name || "Dịch vụ"}</span>
+                            </div>
+                            <strong>{formatMoney(item.amount)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    ) : parsedNotes.requestedServices ? (
+                      <p className="so-detail-body-text">{parsedNotes.requestedServices}</p>
+                    ) : (
+                      <p className="so-detail-empty">Chưa có dịch vụ ban đầu.</p>
+                    )}
+
+                    <p
+                      className="so-detail-panel-title"
+                      style={{ marginTop: 8, marginBottom: 2, fontSize: 10, color: "#5f769f" }}
+                    >
+                      Dịch vụ phát sinh (đã duyệt báo giá bổ sung)
+                    </p>
+                    {supplementaryDisplayItems.length > 0 ? (
+                      <div className="so-detail-service-list">
+                        {supplementaryDisplayItems.map((item) => (
+                          <div key={item.key} className="so-detail-service-row">
+                            <div className="so-detail-service-copy">
+                              <span>{item.name || "Dịch vụ phát sinh"}</span>
+                            </div>
+                            <strong>{formatMoney(item.amount)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="so-detail-empty">Chưa có dịch vụ phát sinh.</p>
+                    )}
+                  </>
                 )}
               </article>
 
-              <article className="so-detail-panel">
+              <article className="so-detail-panel so-detail-panel-note">
                 <p className="so-detail-panel-title">Ghi chú</p>
                 <p className="so-detail-body-text so-detail-note-content">
                   {String(customerIssueText || "").toLowerCase().includes("không có")
@@ -1076,7 +1322,7 @@ export default function ServiceOrderDetailModal({
 
       {showDispatchPopup ? (
         <Modal
-          title="Chọn chuyên môn chuẩn đoán"
+          title="Chọn gói chuẩn đoán"
           onClose={() => {
             if (!submittingDiagnosisRequest) setShowDispatchPopup(false);
           }}
@@ -1084,39 +1330,10 @@ export default function ServiceOrderDetailModal({
         >
           <div className="so-dispatch-popup">
             <p className="so-dispatch-popup-note">
-              Chọn chuyên môn điều phối cho xe <strong>{vehiclePlate}</strong>. Hệ thống sẽ gửi yêu cầu tới nhóm phù hợp.
+              Chọn gói chuẩn đoán cho xe <strong>{vehiclePlate}</strong>. Chuyên môn, tổ thực hiện và khoang sửa chữa sẽ tự động gán theo luồng chuẩn đoán tự động.
             </p>
 
-            <div className="so-dispatch-popup-grid">
-              {DISPATCH_TAG_OPTIONS.map((option) => {
-                const isActive = option.value === dispatchTagDraft;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`so-dispatch-option-btn ${isActive ? "active" : ""}`}
-                    onClick={() => setDispatchTagDraft(option.value)}
-                    disabled={submittingDiagnosisRequest}
-                  >
-                    <span>{option.label}</span>
-                    <small>{option.description}</small>
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="so-dispatch-config-row">
-              <label className="so-dispatch-config-item">
-                <span>Buffer (phút)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={120}
-                  value={bufferMinutesDraft}
-                  onChange={(event) => setBufferMinutesDraft(event.target.value)}
-                  disabled={submittingDiagnosisRequest}
-                />
-              </label>
               <label className="so-dispatch-config-item">
                 <span>Gói chuẩn đoán</span>
                 <FilterDropdown
@@ -1125,10 +1342,9 @@ export default function ServiceOrderDetailModal({
                   options={intakePackageOptions}
                   onChange={(nextValue) => setIntakePackageDraft(String(nextValue || "").toUpperCase())}
                   minWidth={0}
-                  menuMinWidth={280}
+                  menuMinWidth={560}
                   disabled={submittingDiagnosisRequest}
                   ariaLabel="Chọn gói chuẩn đoán"
-                  optionNoWrap
                   fullWidth
                 />
               </label>
@@ -1140,7 +1356,7 @@ export default function ServiceOrderDetailModal({
                 rows={2}
                 value={receptionDiagnosisNote}
                 onChange={(event) => setReceptionDiagnosisNote(event.target.value)}
-                placeholder="Nhập ghi chú trực tiếp của lễ tân (nếu để trống sẽ dùng mẫu tự động theo dịch vụ khách chọn)."
+                placeholder="Nhập ghi chú của lễ tân để gửi cho thợ (nếu để trống sẽ dùng mẫu tự động theo dịch vụ khách chọn)."
                 disabled={submittingDiagnosisRequest}
               />
             </label>
@@ -1277,6 +1493,5 @@ export default function ServiceOrderDetailModal({
     </>
   );
 }
-
 
 

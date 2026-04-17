@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -66,7 +66,8 @@ namespace MyGarage.Services
                     Status = c.Status ?? nameof(ConversationStatus.OPEN),
                     LastMessage = c.LastMessage,
                     LastMessageAt = ToChatDisplayTime(c.LastMessageAt ?? c.UpdatedAt ?? c.CreatedAt),
-                    UnreadCount = await GetUnreadForCustomerAsync(c.Id, customerId, cancellationToken)
+                    UnreadCount = await GetUnreadForCustomerAsync(c.Id, customerId, cancellationToken),
+                    CustomerOnline = ChatHub.IsCustomerOnline(c.CustomerId)
                 });
             }
 
@@ -271,7 +272,8 @@ namespace MyGarage.Services
                 Status = x.Conversation.Status ?? nameof(ConversationStatus.OPEN),
                 LastMessage = x.Conversation.LastMessage,
                 LastMessageAt = ToChatDisplayTime(x.Conversation.LastMessageAt ?? x.Conversation.UpdatedAt ?? x.Conversation.CreatedAt),
-                UnreadCount = x.UnreadCount
+                UnreadCount = x.UnreadCount,
+                CustomerOnline = ChatHub.IsCustomerOnline(x.Conversation.CustomerId)
             }).ToList();
 
             return new PagedConversationsResponseDto
@@ -545,7 +547,7 @@ namespace MyGarage.Services
                     OrderType = "RETAIL",
                     OrderId = order.Id,
                     OrderCode = string.IsNullOrWhiteSpace(order.OrderCode) ? $"RO-{order.Id}" : order.OrderCode.Trim(),
-                    Title = SafeText(primaryItem?.Product?.Name, $"Don phu tung #{order.Id}"),
+                    Title = SafeText(primaryItem?.Product?.Name, $"Đơn phụ tùng #{order.Id}"),
                     Subtitle = $"{itemCount} san pham, Tong don: {FormatCurrencyVnd(order.FinalAmount)}",
                     Status = status,
                     StatusLabel = ResolveOrderStatusLabel("RETAIL", status),
@@ -640,7 +642,7 @@ namespace MyGarage.Services
                     OrderType = "SERVICE",
                     OrderId = order.Id,
                     OrderCode = string.IsNullOrWhiteSpace(order.Code) ? $"SO-{order.Id}" : order.Code.Trim(),
-                    Title = SafeText(primaryDetail.ItemName, $"Don dich vu #{order.Id}"),
+                    Title = SafeText(primaryDetail.ItemName, $"Đơn dịch vụ #{order.Id}"),
                     Subtitle = $"{itemCount} hang muc, Tong don: {FormatCurrencyVnd(totalAmount)}",
                     Status = status,
                     StatusLabel = ResolveOrderStatusLabel("SERVICE", status),
@@ -669,7 +671,7 @@ namespace MyGarage.Services
             }
 
             return normalized != "DRAFT"
-                && normalized != "CANCELLED"
+                && normalized != "CANCELED"
                 && normalized != "CANCELED";
         }
 
@@ -709,7 +711,7 @@ namespace MyGarage.Services
                     "PAID" => "Da thanh toan",
                     "COMPLETED" => "Da hoan thanh",
                     "DRAFT" => "Cho thanh toan",
-                    _ => string.IsNullOrWhiteSpace(normalizedStatus) ? "Dang xu ly" : normalizedStatus
+            _ => string.IsNullOrWhiteSpace(normalizedStatus) ? "Đang xử lý" : normalizedStatus
                 };
             }
 
@@ -720,8 +722,8 @@ namespace MyGarage.Services
                 "CLOSED" => "Da dong",
                 "WAITING_PAYMENT" => "Cho thanh toan",
                 "REPAIRING" => "Dang sua chua",
-                "WAITING_APPROVAL" => "Cho bao gia",
-                _ => string.IsNullOrWhiteSpace(normalizedStatus) ? "Dang xu ly" : normalizedStatus
+                "WAITING_APPROVAL" => "Chờ báo giá",
+            _ => string.IsNullOrWhiteSpace(normalizedStatus) ? "Đang xử lý" : normalizedStatus
             };
         }
 
@@ -1199,6 +1201,7 @@ namespace MyGarage.Services
                 LastMessage = c.LastMessage,
                 LastMessageAt = ToChatDisplayTime(c.LastMessageAt ?? c.UpdatedAt ?? c.CreatedAt),
                 UnreadCount = unreadCount,
+                CustomerOnline = ChatHub.IsCustomerOnline(c.CustomerId),
                 CustomerName = c.Customer?.FullName,
                 CustomerPhone = c.Customer?.Phone,
                 Messages = await GetMessagesAsync(c.Id, null, DefaultMessageTake, cancellationToken)
@@ -1220,7 +1223,7 @@ namespace MyGarage.Services
 
             var orderCode = SafeText(request.OrderCode, orderType == "RETAIL" ? $"RO-{request.OrderId}" : $"SO-{request.OrderId}");
             var title = SafeText(request.Title, orderCode);
-            var subtitle = SafeText(request.Subtitle, "Thong tin don hang");
+        var subtitle = SafeText(request.Subtitle, "Thông tin đơn hàng");
             var status = NormalizeToken(request.Status);
             var statusLabel = SafeText(request.StatusLabel, ResolveOrderStatusLabel(orderType, status));
             var normalizedDetailUrl = NormalizeDetailUrl(request.DetailUrl);
@@ -1266,7 +1269,7 @@ namespace MyGarage.Services
         private static string BuildOrderCardConversationPreview(ChatOrderCardDto orderCard)
         {
             var title = SafeText(orderCard.Title, orderCard.OrderCode);
-            return $"[Don hang] {title}";
+            return $"[Đơn hàng] {title}";
         }
 
         private static string? NormalizeDetailUrl(string? detailUrl)
@@ -1462,17 +1465,45 @@ namespace MyGarage.Services
                 }
 
                 var normalized = value.Trim().ToUpperInvariant();
-                var noSpace = normalized.Replace(" ", string.Empty);
+                var compact = CompactRoleValue(normalized);
 
                 if (normalized == "RECEPTIONIST"
                     || normalized.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
-                    || noSpace.Contains("LETAN", StringComparison.OrdinalIgnoreCase))
+                    || compact.Contains("RECEPTION", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("LETAN", StringComparison.OrdinalIgnoreCase)
+                    || compact.Contains("TIEPTAN", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static string CompactRoleValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var decomposed = value.Normalize(NormalizationForm.FormD);
+            var chars = new StringBuilder(decomposed.Length);
+            foreach (var ch in decomposed)
+            {
+                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (unicodeCategory == UnicodeCategory.NonSpacingMark)
+                {
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(ch))
+                {
+                    chars.Append(char.ToUpperInvariant(ch));
+                }
+            }
+
+            return chars.ToString().Normalize(NormalizationForm.FormC);
         }
 
         private static string NormalizeConversationStatus(string? status)
@@ -1722,8 +1753,8 @@ namespace MyGarage.Services
                     OrderType = orderType,
                     OrderId = parsed.OrderId,
                     OrderCode = SafeText(parsed.OrderCode, orderType == "RETAIL" ? $"RO-{parsed.OrderId}" : $"SO-{parsed.OrderId}"),
-                    Title = SafeText(parsed.Title, "Don hang"),
-                    Subtitle = SafeText(parsed.Subtitle, "Thong tin don hang"),
+                    Title = SafeText(parsed.Title, "Đơn hàng"),
+            Subtitle = SafeText(parsed.Subtitle, "Thông tin đơn hàng"),
                     Status = normalizedStatus,
                     StatusLabel = SafeText(parsed.StatusLabel, ResolveOrderStatusLabel(orderType, normalizedStatus)),
                     TotalAmount = parsed.TotalAmount,
@@ -1796,3 +1827,6 @@ namespace MyGarage.Services
         }
     }
 }
+
+
+

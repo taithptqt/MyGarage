@@ -29,25 +29,13 @@ namespace MyGarage.Services
         {
             if (request.EligibleAmount.HasValue)
             {
-                return decimal.Round(System.Math.Max(0m, request.EligibleAmount.Value), 2, System.MidpointRounding.AwayFromZero);
+                return request.EligibleAmount.Value;
             }
 
             if (request.InvoiceId.HasValue)
             {
                 var invoice = await _context.Invoices.FirstOrDefaultAsync(x => x.Id == request.InvoiceId.Value);
                 return invoice?.TotalAmount ?? 0m;
-            }
-
-            if (request.ServiceOrderId.HasValue)
-            {
-                var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == request.ServiceOrderId.Value);
-                return serviceOrder?.FinalAmount ?? 0m;
-            }
-
-            if (request.RetailOrderId.HasValue)
-            {
-                var retailOrder = await _context.RetailOrders.FirstOrDefaultAsync(x => x.Id == request.RetailOrderId.Value);
-                return retailOrder?.FinalAmount ?? 0m;
             }
 
             return 0m;

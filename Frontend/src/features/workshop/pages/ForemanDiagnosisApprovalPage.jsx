@@ -268,7 +268,7 @@ export default function ForemanDiagnosisApprovalPage() {
 
       const latestDiagnosisId = extractLatestDiagnosisId(diagnosesRes);
       const recommendationsRes = latestDiagnosisId
-        ? await serviceOrderApi.getDiagnoseRecommendations(latestDiagnosisId).catch(() => [])
+        ? await serviceOrderApi.getDiagnosisRecommendations(latestDiagnosisId).catch(() => [])
         : [];
 
       const safeRecommendations = Array.isArray(recommendationsRes) ? recommendationsRes : [];
@@ -481,7 +481,7 @@ export default function ForemanDiagnosisApprovalPage() {
       if (!id) return;
 
       if (removedIdSet.has(id)) {
-        deletePromises.push(serviceOrderApi.deleteDiagnoseRecommendation(id));
+        deletePromises.push(serviceOrderApi.deleteDiagnosisRecommendation(id));
         return;
       }
 
@@ -492,7 +492,7 @@ export default function ForemanDiagnosisApprovalPage() {
       if (draftQty === originalQty && draftUrgency === originalUrgency) return;
 
       updatePromises.push(
-        serviceOrderApi.updateDiagnoseRecommendation(id, {
+        serviceOrderApi.updateDiagnosisRecommendation(id, {
           diagnoseId: toPositiveNumber(readField(item, "diagnoseId", "DiagnoseId")),
           parentRecommendationId:
             toPositiveNumber(readField(item, "parentRecommendationId", "ParentRecommendationId")) || null,

@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+
+node scripts/check-mojibake.js
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "Commit blocked: encoding/mojibake check failed."
+  echo "Fix the files above, then commit again."
+  exit $status
+fi
+
+exit 0

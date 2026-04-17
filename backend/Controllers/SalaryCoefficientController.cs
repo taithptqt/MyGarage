@@ -118,8 +118,8 @@ namespace MyGarage.Controllers
 
         private bool IsAdminStaff()
         {
-            var roleCode = User.FindFirst("role_code")?.Value;
-            var roleName = User.FindFirst("role_name")?.Value;
+            var roleCode = this.GetCurrentRoleCode();
+            var roleName = this.GetCurrentRoleName();
 
             return string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase)
                    || (roleName?.Contains("admin", StringComparison.OrdinalIgnoreCase) ?? false);

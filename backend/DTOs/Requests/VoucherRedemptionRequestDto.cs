@@ -14,7 +14,6 @@ namespace MyGarage.DTOs.Requests
         public decimal? EligibleAmount { get; set; }
         public long? AppliedBy { get; set; }
         public string? IdempotencyKey { get; set; }
-        public string? Channel { get; set; }
     }
 }
 

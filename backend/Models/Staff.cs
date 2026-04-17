@@ -27,6 +27,8 @@ public partial class Staff
 
     public int? SkillLevel { get; set; }
 
+    public string? Specialty { get; set; }
+
     public string? CitizenId { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }
@@ -152,15 +154,27 @@ public partial class Staff
 
     public virtual ICollection<Delivery> DeliveryUpdatedByNavigations { get; set; } = new List<Delivery>();
 
-    public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendationCreatedByNavigations { get; set; } = new List<DiagnoseRecommendation>();
+    public virtual ICollection<DiagnosisRecommendation> DiagnosisRecommendationCreatedByNavigations { get; set; } = new List<DiagnosisRecommendation>();
 
-    public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendationUpdatedByNavigations { get; set; } = new List<DiagnoseRecommendation>();
-
-    public virtual ICollection<Diagnosis> DiagnosisApprovedByForemen { get; set; } = new List<Diagnosis>();
-
-    public virtual ICollection<Diagnosis> DiagnosisTechnicians { get; set; } = new List<Diagnosis>();
+    public virtual ICollection<DiagnosisRecommendation> DiagnosisRecommendationUpdatedByNavigations { get; set; } = new List<DiagnosisRecommendation>();
 
     public virtual ICollection<Diagnosis> DiagnosisUpdatedByNavigations { get; set; } = new List<Diagnosis>();
+
+    public virtual ICollection<Quotation> QuotationServiceAdvisors { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<Quotation> QuotationApprovedByNavigations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<Quotation> QuotationAppliedByNavigations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<Quotation> QuotationCreatedByNavigations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<Quotation> QuotationUpdatedByNavigations { get; set; } = new List<Quotation>();
+
+    public virtual ICollection<QuotationDetail> QuotationDetailApprovedByNavigations { get; set; } = new List<QuotationDetail>();
+
+    public virtual ICollection<QuotationDetail> QuotationDetailCreatedByNavigations { get; set; } = new List<QuotationDetail>();
+
+    public virtual ICollection<QuotationDetail> QuotationDetailUpdatedByNavigations { get; set; } = new List<QuotationDetail>();
 
     public virtual ICollection<DocumentAttachment> DocumentAttachments { get; set; } = new List<DocumentAttachment>();
 
@@ -311,6 +325,8 @@ public partial class Staff
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetailAbsorbedApprovedByNavigations { get; set; } = new List<ServiceOrderDetail>();
 
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetailCreatedByNavigations { get; set; } = new List<ServiceOrderDetail>();
+
+    public virtual ICollection<ServiceOrderDetail> ServiceOrderDetailSupplementaryRequestedByStaffNavigations { get; set; } = new List<ServiceOrderDetail>();
 
     public virtual ICollection<ServiceOrderDetail> ServiceOrderDetailTechnicians { get; set; } = new List<ServiceOrderDetail>();
 

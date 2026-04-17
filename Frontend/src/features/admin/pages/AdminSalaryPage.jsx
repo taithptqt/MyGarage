@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -18,10 +18,11 @@ import {
   Thead,
   Tr,
   useColorModeValue,
-  useToast
+  useToast,
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
+import TablePagination from "@shared/components/TablePagination";
 import { useBranch } from "../../../context/BranchContext";
 import { useAuth } from "../../../context/AuthContext";
 import { getAllStaff } from "../api/staffApi";
@@ -32,7 +33,7 @@ import {
   getInitialSalaryRequests,
   getSalaryProfiles,
   rejectInitialSalaryRequest,
-  updateSalaryProfile
+  updateSalaryProfile,
 } from "../api/salaryAdminApi";
 
 function pick(item, ...keys) {
@@ -61,7 +62,7 @@ function formatCurrency(value) {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
@@ -84,7 +85,7 @@ const EMPTY_PROFILE_FORM = {
   effectiveFrom: "",
   effectiveTo: "",
   status: "ACTIVE",
-  note: ""
+  note: "",
 };
 
 export default function AdminSalaryPage() {
@@ -110,6 +111,8 @@ export default function AdminSalaryPage() {
   const [requests, setRequests] = useState([]);
   const [staffs, setStaffs] = useState([]);
   const [requestStatusFilter, setRequestStatusFilter] = useState("PENDING");
+  const [profilePage, setProfilePage] = useState(1);
+  const [profilePageSize, setProfilePageSize] = useState(10);
 
   const [editingProfileId, setEditingProfileId] = useState(null);
   const [profileForm, setProfileForm] = useState(EMPTY_PROFILE_FORM);
@@ -139,26 +142,42 @@ export default function AdminSalaryPage() {
     return {
       profileCount: profiles.length,
       pendingRequests,
-      approvedRequests
+      approvedRequests,
     };
   }, [profiles, requests]);
+
+  const paginatedProfiles = useMemo(() => {
+    const start = (profilePage - 1) * profilePageSize;
+    return profiles.slice(start, start + profilePageSize);
+  }, [profiles, profilePage, profilePageSize]);
 
   async function loadData() {
     setLoading(true);
     setError("");
     try {
-      const [profileData, requestData, staffData] = await Promise.all([
+      const [profilesResult, requestsResult, staffsResult] = await Promise.allSettled([
         getSalaryProfiles(branchId),
-        getInitialSalaryRequests({
-          status: requestStatusFilter,
-          branchId
-        }),
-        getAllStaff()
+        getInitialSalaryRequests({ status: requestStatusFilter, branchId }),
+        getAllStaff(branchId),
       ]);
+
+      const profileData = profilesResult.status === "fulfilled" ? profilesResult.value : [];
+      const requestData = requestsResult.status === "fulfilled" ? requestsResult.value : [];
+      const staffData = staffsResult.status === "fulfilled" ? staffsResult.value : [];
 
       setProfiles(Array.isArray(profileData) ? profileData : []);
       setRequests(Array.isArray(requestData) ? requestData : []);
       setStaffs(Array.isArray(staffData) ? staffData : []);
+
+      const rejected = [profilesResult, requestsResult, staffsResult].find((result) => result.status === "rejected");
+      if (rejected?.status === "rejected") {
+        const statusCode = rejected.reason?.response?.status;
+        if (statusCode === 403) {
+          setError("Bạn không có quyền truy cập dữ liệu lương. Vui lòng dùng tài khoản ADMIN hoặc KẾ TOÁN.");
+        } else {
+          setError(rejected.reason?.message || "Không tải được dữ liệu lương.");
+        }
+      }
     } catch (err) {
       setError(err?.message || "Không tải được dữ liệu lương.");
     } finally {
@@ -169,6 +188,13 @@ export default function AdminSalaryPage() {
   useEffect(() => {
     loadData();
   }, [branchId, requestStatusFilter]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(profiles.length / profilePageSize));
+    if (profilePage > totalPages) {
+      setProfilePage(totalPages);
+    }
+  }, [profiles.length, profilePage, profilePageSize]);
 
   function resetProfileForm() {
     setEditingProfileId(null);
@@ -183,7 +209,7 @@ export default function AdminSalaryPage() {
       effectiveFrom: toDateInputValue(pick(profile, "effectiveFrom", "EffectiveFrom")),
       effectiveTo: toDateInputValue(pick(profile, "effectiveTo", "EffectiveTo")),
       status: String(pick(profile, "status", "Status") || "ACTIVE").toUpperCase(),
-      note: String(pick(profile, "note", "Note") || "")
+      note: String(pick(profile, "note", "Note") || ""),
     });
   }
 
@@ -220,7 +246,7 @@ export default function AdminSalaryPage() {
         effectiveFrom: profileForm.effectiveFrom,
         effectiveTo: profileForm.effectiveTo || null,
         status: profileForm.status || "ACTIVE",
-        note: profileForm.note || null
+        note: profileForm.note || null,
       };
 
       if (editingProfileId) {
@@ -242,20 +268,20 @@ export default function AdminSalaryPage() {
 
   async function handleDeleteProfile(profileId) {
     if (!isAdminStaff) {
-      setError("Bạn không có quyền xoá bảng lương.");
+      setError("Bạn không có quyền xóa bảng lương.");
       return;
     }
 
     setError("");
     try {
       await deleteSalaryProfile(profileId);
-      toast({ status: "success", title: "Đã xoá bảng lương nhân sự." });
+      toast({ status: "success", title: "Đã xóa bảng lương nhân sự." });
       if (editingProfileId === profileId) {
         resetProfileForm();
       }
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không xoá được bảng lương.");
+      setError(err?.message || "Không xóa được bảng lương.");
     }
   }
 
@@ -289,7 +315,7 @@ export default function AdminSalaryPage() {
     setError("");
     try {
       await rejectInitialSalaryRequest(requestId, {
-        rejectReason: rejectReason || "Không đủ thông tin để duyệt lương."
+        rejectReason: rejectReason || "Không đủ thông tin để duyệt lương.",
       });
       toast({ status: "success", title: `Đã từ chối yêu cầu #${requestId}.` });
       setRejectReasonByRequestId((prev) => {
@@ -307,8 +333,8 @@ export default function AdminSalaryPage() {
 
   if (loading) {
     return (
-      <Flex minH='260px' align='center' justify='center' direction='column' gap='10px'>
-        <Spinner size='lg' color='brand.500' />
+      <Flex minH="260px" align="center" justify="center" direction="column" gap="10px">
+        <Spinner size="lg" color="brand.500" />
         <Text color={textColorSecondary}>Đang tải dữ liệu lương...</Text>
       </Flex>
     );
@@ -317,35 +343,39 @@ export default function AdminSalaryPage() {
   return (
     <Box>
       {error ? (
-        <Card p='16px' mb='20px'>
-          <Text color='red.400' fontWeight='600'>{error}</Text>
+        <Card p="16px" mb="20px">
+          <Text color="red.400" fontWeight="600">
+            {error}
+          </Text>
         </Card>
       ) : null}
 
-      <SimpleGrid columns={{ base: 1, md: 3 }} gap='20px' mb='20px'>
-        <MiniStatistics name='Bảng lương nhân viên' value={String(summary.profileCount)} />
-        <MiniStatistics name='Yêu cầu chờ duyệt' value={String(summary.pendingRequests)} />
-        <MiniStatistics name='Yêu cầu đã duyệt' value={String(summary.approvedRequests)} />
+      <SimpleGrid columns={{ base: 1, md: 3 }} gap="20px" mb="20px">
+        <MiniStatistics name="Bảng lương nhân viên" value={String(summary.profileCount)} />
+        <MiniStatistics name="Yêu cầu chờ duyệt" value={String(summary.pendingRequests)} />
+        <MiniStatistics name="Yêu cầu đã duyệt" value={String(summary.approvedRequests)} />
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, xl: 3 }} gap='20px' mb='20px'>
-        <Card p='16px'>
-          <Text color={textColor} fontWeight='700' mb='10px'>
+      <SimpleGrid columns={{ base: 1, xl: 3 }} gap="20px" mb="20px">
+        <Card p="16px">
+          <Text color={textColor} fontWeight="700" mb="10px">
             {editingProfileId ? "Cập nhật bảng lương" : "Tạo bảng lương nhân viên"}
           </Text>
           {!isAdminStaff ? (
-            <Text color='orange.500' fontSize='xs' mb='10px'>
+            <Text color="orange.500" fontSize="xs" mb="10px">
               Tài khoản hiện tại chỉ có quyền xem. Chỉ admin mới được CRUD bảng lương và duyệt yêu cầu.
             </Text>
           ) : null}
-          <SimpleGrid columns={1} gap='10px'>
+
+          <SimpleGrid columns={1} gap="10px">
             <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Nhân sự</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Nhân sự</FormLabel>
               <Select
                 value={profileForm.staffId}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, staffId: e.target.value }))}
-                isDisabled={!isAdminStaff}>
-                <option value=''>Chọn nhân sự</option>
+                isDisabled={!isAdminStaff}
+              >
+                <option value="">Chọn nhân sự</option>
                 {scopedStaffs.map((staff) => {
                   const id = toId(pick(staff, "id", "Id"));
                   if (!id) return null;
@@ -358,71 +388,77 @@ export default function AdminSalaryPage() {
                 })}
               </Select>
             </FormControl>
+
             <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Lương cơ bản</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Lương cơ bản</FormLabel>
               <Input
-                type='number'
+                type="number"
                 value={profileForm.baseSalary}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, baseSalary: e.target.value }))}
-                placeholder='Ví dụ: 9000000'
+                placeholder="Ví dụ: 9000000"
                 isDisabled={!isAdminStaff}
               />
             </FormControl>
-            <SimpleGrid columns={2} gap='10px'>
+
+            <SimpleGrid columns={2} gap="10px">
               <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Hiệu lực từ</FormLabel>
+                <FormLabel fontSize="xs" mb="4px">Hiệu lực từ</FormLabel>
                 <Input
-                  type='date'
+                  type="date"
                   value={profileForm.effectiveFrom}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, effectiveFrom: e.target.value }))}
                   isDisabled={!isAdminStaff}
                 />
               </FormControl>
               <FormControl>
-                <FormLabel fontSize='xs' mb='4px'>Hiệu lực đến</FormLabel>
+                <FormLabel fontSize="xs" mb="4px">Hiệu lực đến</FormLabel>
                 <Input
-                  type='date'
+                  type="date"
                   value={profileForm.effectiveTo}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, effectiveTo: e.target.value }))}
                   isDisabled={!isAdminStaff}
                 />
               </FormControl>
             </SimpleGrid>
+
             <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Trạng thái</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Trạng thái</FormLabel>
               <Select
                 value={profileForm.status}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, status: e.target.value }))}
-                isDisabled={!isAdminStaff}>
-                <option value='ACTIVE'>ACTIVE</option>
-                <option value='INACTIVE'>INACTIVE</option>
+                isDisabled={!isAdminStaff}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
               </Select>
             </FormControl>
+
             <FormControl>
-              <FormLabel fontSize='xs' mb='4px'>Ghi chú</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Ghi chú</FormLabel>
               <Input
                 value={profileForm.note}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, note: e.target.value }))}
-                placeholder='Ghi chú bảng lương'
+                placeholder="Ghi chú bảng lương"
                 isDisabled={!isAdminStaff}
               />
             </FormControl>
-            <Flex gap='8px'>
-              <Button colorScheme='blue' onClick={handleSubmitProfile} isLoading={savingProfile} isDisabled={!isAdminStaff}>
+
+            <Flex gap="8px">
+              <Button colorScheme="blue" onClick={handleSubmitProfile} isLoading={savingProfile} isDisabled={!isAdminStaff}>
                 {editingProfileId ? "Cập nhật" : "Tạo mới"}
               </Button>
               {editingProfileId ? (
-                <Button variant='outline' onClick={resetProfileForm}>
-                  Huỷ sửa
+                <Button variant="outline" onClick={resetProfileForm}>
+                  Hủy sửa
                 </Button>
               ) : null}
             </Flex>
           </SimpleGrid>
         </Card>
 
-        <Card p='16px' gridColumn={{ base: "span 1", xl: "span 2" }}>
-          <Text color={textColor} fontWeight='700' mb='10px'>Bảng lương nhân viên</Text>
-          <Table size='sm'>
+        <Card p="16px" gridColumn={{ base: "span 1", xl: "span 2" }}>
+          <Text color={textColor} fontWeight="700" mb="10px">Bảng lương nhân viên</Text>
+          <Table size="sm">
             <Thead>
               <Tr>
                 <Th>ID</Th>
@@ -430,14 +466,15 @@ export default function AdminSalaryPage() {
                 <Th>Lương cơ bản</Th>
                 <Th>Hiệu lực</Th>
                 <Th>Trạng thái</Th>
-                <Th textAlign='right'>Thao tác</Th>
+                <Th textAlign="right">Thao tác</Th>
               </Tr>
             </Thead>
             <Tbody>
-              {profiles.map((profile, idx) => {
+              {paginatedProfiles.map((profile, idx) => {
                 const id = toId(pick(profile, "id", "Id"));
                 const staffId = toId(pick(profile, "staffId", "StaffId"));
-                const staffName = pick(profile, "staffName", "StaffName") || staffNameById.get(staffId) || `Staff #${staffId || "--"}`;
+                const staffName =
+                  pick(profile, "staffName", "StaffName") || staffNameById.get(staffId) || `Staff #${staffId || "--"}`;
                 const status = String(pick(profile, "status", "Status") || "").toUpperCase();
                 return (
                   <Tr key={id || `p-${idx}`}>
@@ -445,22 +482,22 @@ export default function AdminSalaryPage() {
                     <Td>{staffName}</Td>
                     <Td>{formatCurrency(pick(profile, "baseSalary", "BaseSalary"))}</Td>
                     <Td>
-                      <Text fontSize='xs' color={textColorSecondary}>
+                      <Text fontSize="xs" color={textColorSecondary}>
                         {toDateInputValue(pick(profile, "effectiveFrom", "EffectiveFrom")) || "--"}
-                        {" → "}
+                        {" -> "}
                         {toDateInputValue(pick(profile, "effectiveTo", "EffectiveTo")) || "Không giới hạn"}
                       </Text>
                     </Td>
                     <Td>
                       <Badge colorScheme={status === "ACTIVE" ? "green" : "gray"}>{status || "--"}</Badge>
                     </Td>
-                    <Td textAlign='right'>
-                      <Flex justify='flex-end' gap='8px'>
-                        <Button size='xs' variant='outline' onClick={() => startEditProfile(profile)} isDisabled={!isAdminStaff}>
+                    <Td textAlign="right">
+                      <Flex justify="flex-end" gap="8px">
+                        <Button size="xs" variant="outline" onClick={() => startEditProfile(profile)} isDisabled={!isAdminStaff}>
                           Sửa
                         </Button>
-                        <Button size='xs' colorScheme='red' variant='outline' onClick={() => handleDeleteProfile(id)} isDisabled={!isAdminStaff}>
-                          Xoá
+                        <Button size="xs" colorScheme="red" variant="outline" onClick={() => handleDeleteProfile(id)} isDisabled={!isAdminStaff}>
+                          Xóa
                         </Button>
                       </Flex>
                     </Td>
@@ -469,23 +506,33 @@ export default function AdminSalaryPage() {
               })}
             </Tbody>
           </Table>
+          <Box display="flex" justifyContent="center">
+            <TablePagination
+              totalItems={profiles.length}
+              currentPage={profilePage}
+              pageSize={profilePageSize}
+              onPageChange={setProfilePage}
+              onPageSizeChange={(size) => {
+                setProfilePageSize(size);
+                setProfilePage(1);
+              }}
+            />
+          </Box>
         </Card>
       </SimpleGrid>
 
-      <Card p='20px'>
-        <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='10px'>
-          <Text color={textColor} fontWeight='700'>Yêu cầu tạo lương từ kế toán</Text>
-          <Select
-            value={requestStatusFilter}
-            onChange={(e) => setRequestStatusFilter(e.target.value)}
-            maxW='200px'>
-            <option value='PENDING'>PENDING</option>
-            <option value='APPROVED'>APPROVED</option>
-            <option value='REJECTED'>REJECTED</option>
-            <option value='ALL'>ALL</option>
+      <Card p="20px">
+        <Flex justify="space-between" align="center" mb="10px" wrap="wrap" gap="10px">
+          <Text color={textColor} fontWeight="700">Yêu cầu tạo lương từ kế toán</Text>
+          <Select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} maxW="200px">
+            <option value="PENDING">PENDING</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="REJECTED">REJECTED</option>
+            <option value="ALL">ALL</option>
           </Select>
         </Flex>
-        <Table size='sm'>
+
+        <Table size="sm">
           <Thead>
             <Tr>
               <Th>Request</Th>
@@ -495,7 +542,7 @@ export default function AdminSalaryPage() {
               <Th>Người yêu cầu</Th>
               <Th>Trạng thái</Th>
               <Th>Lý do</Th>
-              <Th textAlign='right'>Thao tác</Th>
+              <Th textAlign="right">Thao tác</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -506,8 +553,10 @@ export default function AdminSalaryPage() {
               return (
                 <Tr key={id || `r-${idx}`}>
                   <Td>
-                    <Text fontWeight='600'>#{id || "--"}</Text>
-                    <Text fontSize='xs' color={textColorSecondary}>{formatDateTime(pick(item, "createdAt", "CreatedAt"))}</Text>
+                    <Text fontWeight="600">#{id || "--"}</Text>
+                    <Text fontSize="xs" color={textColorSecondary}>
+                      {formatDateTime(pick(item, "createdAt", "CreatedAt"))}
+                    </Text>
                   </Td>
                   <Td>{pick(item, "staffName", "StaffName") || `Staff #${pick(item, "staffId", "StaffId") || "--"}`}</Td>
                   <Td>{formatCurrency(pick(item, "proposedBaseSalary", "ProposedBaseSalary", "amount", "Amount"))}</Td>
@@ -519,39 +568,37 @@ export default function AdminSalaryPage() {
                     </Badge>
                   </Td>
                   <Td>
-                    <Text fontSize='xs' color={textColorSecondary}>
-                      {pick(item, "reason", "Reason") || "--"}
-                    </Text>
+                    <Text fontSize="xs" color={textColorSecondary}>{pick(item, "reason", "Reason") || "--"}</Text>
                   </Td>
-                  <Td textAlign='right'>
-                    <Flex direction='column' gap='6px' align='flex-end'>
+                  <Td textAlign="right">
+                    <Flex direction="column" gap="6px" align="flex-end">
                       <Input
-                        size='xs'
-                        maxW='220px'
-                        placeholder='Lý do từ chối (nếu có)'
+                        size="xs"
+                        maxW="220px"
+                        placeholder="Lý do từ chối (nếu có)"
                         value={rejectReasonByRequestId[id] || ""}
-                        onChange={(e) =>
-                          setRejectReasonByRequestId((prev) => ({ ...prev, [id]: e.target.value }))
-                        }
+                        onChange={(e) => setRejectReasonByRequestId((prev) => ({ ...prev, [id]: e.target.value }))}
                         isDisabled={!isPending || !isAdminStaff}
                       />
-                      <Flex gap='6px'>
+                      <Flex gap="6px">
                         <Button
-                          size='xs'
-                          colorScheme='green'
-                          variant='outline'
+                          size="xs"
+                          colorScheme="green"
+                          variant="outline"
                           isDisabled={!isPending || !isAdminStaff}
                           isLoading={processingRequestId === id}
-                          onClick={() => handleApproveRequest(id)}>
+                          onClick={() => handleApproveRequest(id)}
+                        >
                           Duyệt
                         </Button>
                         <Button
-                          size='xs'
-                          colorScheme='red'
-                          variant='outline'
+                          size="xs"
+                          colorScheme="red"
+                          variant="outline"
                           isDisabled={!isPending || !isAdminStaff}
                           isLoading={processingRequestId === id}
-                          onClick={() => handleRejectRequest(id)}>
+                          onClick={() => handleRejectRequest(id)}
+                        >
                           Từ chối
                         </Button>
                       </Flex>

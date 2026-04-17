@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +8,7 @@ using MyGarage.Data;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Services;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MyGarage.Controllers;
 
@@ -34,7 +35,6 @@ public class SalaryAdminController : ControllerBase
     public async Task<IActionResult> GetSalaryProfiles([FromQuery] long? branchId = null)
     {
         if (!CanViewSalaryModule()) return Forbid();
-        if (!TryResolveAccountingBranchScope(branchId, out var effectiveBranchId, out var denied)) return denied;
         if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
 
         var rows = await _crud.QueryAsync(
@@ -59,7 +59,7 @@ public class SalaryAdminController : ControllerBase
             WHERE (@branchId IS NULL OR p.branch_id = @branchId)
             ORDER BY p.created_at DESC, p.id DESC;
             """,
-            [new SqlParameter("@branchId", (object?)effectiveBranchId ?? DBNull.Value)]);
+            [new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)]);
 
         return Ok(rows);
     }
@@ -210,7 +210,6 @@ public class SalaryAdminController : ControllerBase
     public async Task<IActionResult> GetInitialSalaryRequests([FromQuery] string? status = null, [FromQuery] long? branchId = null)
     {
         if (!CanViewSalaryModule()) return Forbid();
-        if (!TryResolveAccountingBranchScope(branchId, out var effectiveBranchId, out var denied)) return denied;
         if (!await EnsureTableAsync("finance-approval-requests", "finance_approval_requests")) return NotFound();
 
         var normalizedStatus = string.IsNullOrWhiteSpace(status) || string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase)
@@ -253,7 +252,7 @@ public class SalaryAdminController : ControllerBase
             """,
             [
                 new SqlParameter("@status", (object?)normalizedStatus ?? DBNull.Value),
-                new SqlParameter("@branchId", (object?)effectiveBranchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
             ]);
 
         return Ok(rows);
@@ -343,32 +342,16 @@ public class SalaryAdminController : ControllerBase
                 new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
                 new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive)
             ])).FirstOrDefault();
-        var overlappingProfileId = ToNullableLong(overlapping?.GetValueOrDefault("id"));
-        var updatedExistingProfile = overlappingProfileId.HasValue && overlappingProfileId.Value > 0;
-
-        await using var tx = await _db.Database.BeginTransactionAsync();
-        try
+        if (overlapping is not null)
         {
-            if (updatedExistingProfile)
-            {
-                await _crud.ExecuteAsync(
-                    """
-                    UPDATE dbo.staff_salary_profiles
-                    SET
-                        base_salary = @baseSalary,
-                        note = @note,
-                        updated_by = @updatedBy,
-                        updated_at = SYSDATETIME()
-                    WHERE id = @profileId;
-                    """,
-                    [
-                        new SqlParameter("@profileId", overlappingProfileId!.Value),
-                        new SqlParameter("@baseSalary", baseSalary.Value),
-                        new SqlParameter("@note", (object?)note ?? DBNull.Value),
-                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
-                    ]);
-            }
-            else
+            return Conflict(new { message = "Staff already has an active salary profile for the selected effective date." });
+        }
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            try
             {
                 await _crud.ExecuteAsync(
                     """
@@ -406,43 +389,42 @@ public class SalaryAdminController : ControllerBase
                         new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
                         new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
                         new SqlParameter("@note", (object?)note ?? DBNull.Value),
-                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value)
+                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value),
+                        new SqlParameter("@activeStatus", nameof(AccountingStatus.ACTIVE))
                     ]);
+
+                await _crud.ExecuteAsync(
+                    """
+                    UPDATE dbo.finance_approval_requests
+                    SET
+                        status = @financeApprovalStatusApproved,
+                        approver_id = @approverId,
+                        reject_reason = NULL,
+                        updated_at = SYSDATETIME()
+                    WHERE id = @id;
+                    """,
+                    [
+                        new SqlParameter("@id", id),
+                        new SqlParameter("@financeApprovalStatusApproved", FinanceApprovalStatusApproved),
+                        new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value)
+                    ]);
+
+                if (tx != null) await tx.CommitAsync();
+            }
+            catch
+            {
+                if (tx != null) await tx.RollbackAsync();
+                throw;
             }
 
-            await _crud.ExecuteAsync(
-                """
-                UPDATE dbo.finance_approval_requests
-                SET
-                    status = @financeApprovalStatusApproved,
-                    approver_id = @approverId,
-                    reject_reason = NULL,
-                    updated_at = SYSDATETIME()
-                WHERE id = @id;
-                """,
-                [
-                    new SqlParameter("@id", id),
-                    new SqlParameter("@financeApprovalStatusApproved", FinanceApprovalStatusApproved),
-                    new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value)
-                ]);
-
-            await tx.CommitAsync();
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
-
-        return Ok(new
-        {
-            message = updatedExistingProfile
-                ? "Initial salary request approved and active salary profile updated."
-                : "Initial salary request approved and salary profile created.",
-            requestId = id,
-            staffId = staffId.Value,
-            baseSalary = baseSalary.Value,
-            effectiveFrom = effectiveFrom.Value.ToString("yyyy-MM-dd")
+            return Ok(new
+            {
+                message = "Initial salary request approved and salary profile created.",
+                requestId = id,
+                staffId = staffId.Value,
+                baseSalary = baseSalary.Value,
+                effectiveFrom = effectiveFrom.Value.ToString("yyyy-MM-dd")
+            });
         });
     }
 
@@ -564,38 +546,6 @@ public class SalaryAdminController : ControllerBase
         return IsAdminStaff() || IsAccountingStaff();
     }
 
-    private bool TryResolveAccountingBranchScope(long? requestedBranchId, out long? effectiveBranchId, out ActionResult deniedResult)
-    {
-        effectiveBranchId = requestedBranchId;
-        deniedResult = null!;
-
-        if (!(User.Identity?.IsAuthenticated ?? false))
-        {
-            deniedResult = Unauthorized();
-            return false;
-        }
-
-        if (this.IsCurrentAccountingStaff())
-        {
-            var userBranchId = this.GetCurrentBranchId();
-            if (!userBranchId.HasValue)
-            {
-                deniedResult = Forbid();
-                return false;
-            }
-
-            if (requestedBranchId.HasValue && requestedBranchId.Value != userBranchId.Value)
-            {
-                deniedResult = Forbid();
-                return false;
-            }
-
-            effectiveBranchId = userBranchId.Value;
-        }
-
-        return true;
-    }
-
     private long? ResolveCurrentUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -673,6 +623,18 @@ public class SalaryAdminController : ControllerBase
         public DateTime? EffectiveFrom { get; set; }
         public string? Note { get; set; }
         public string? RejectReason { get; set; }
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        try
+        {
+            return await _db.Database.BeginTransactionAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 }
 

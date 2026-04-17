@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -61,13 +61,17 @@ public class AccountingController : ControllerBase
     private const string PayrollRunStatusApproved = nameof(PayrollRunStatusCode.APPROVED);
     private const string PayrollRunStatusPaid = nameof(PayrollRunStatusCode.PAID);
     private const string PayrollRunStatusLocked = nameof(PayrollRunStatusCode.LOCKED);
-    private const string PayrollRunStatusCanceled = nameof(PayrollRunStatusCode.CANCELED);
     private const string PayrollItemStatusApproved = nameof(PayrollItemStatusCode.APPROVED);
     private const string PayrollItemStatusPaid = nameof(PayrollItemStatusCode.PAID);
     private const string PayrollPeriodStatusOpen = nameof(PayrollPeriodStatusCode.OPEN);
     private const string PayrollPeriodStatusApproved = nameof(PayrollPeriodStatusCode.APPROVED);
     private const string PayrollPeriodStatusPaid = nameof(PayrollPeriodStatusCode.PAID);
     private const string PayrollPeriodStatusLocked = nameof(PayrollPeriodStatusCode.LOCKED);
+    private const string CommissionStatusPending = nameof(CommissionTransactionStatusCode.PENDING);
+    private const string CommissionStatusApproved = nameof(CommissionTransactionStatusCode.APPROVED);
+    private const string CommissionStatusProcessed = nameof(CommissionTransactionStatusCode.PROCESSED);
+    private const string CommissionStatusPaid = nameof(CommissionTransactionStatusCode.PAID);
+    private const string CommissionStatusCanceled = nameof(CommissionTransactionStatusCode.CANCELED);
     private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
     private const string StaffStatusOnLeave = nameof(StaffStatusCode.ON_LEAVE);
     private const string StaffSalaryProfileStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
@@ -123,6 +127,12 @@ public class AccountingController : ControllerBase
         }
         try
         {
+            if (tableKey.Equals("supplier-invoices", StringComparison.OrdinalIgnoreCase))
+            {
+                var error = await ValidateSupplierInvoice3WayMatchingAsync(payload, access.BranchId);
+                if (!string.IsNullOrWhiteSpace(error)) return BadRequest(new { message = error });
+            }
+
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
             {
                 var error = await ValidateSupplierPaymentAsync(payload, access.BranchId);
@@ -145,6 +155,12 @@ public class AccountingController : ControllerBase
         }
         try
         {
+            if (tableKey.Equals("supplier-invoices", StringComparison.OrdinalIgnoreCase))
+            {
+                var error = await ValidateSupplierInvoice3WayMatchingAsync(payload, access.BranchId, id);
+                if (!string.IsNullOrWhiteSpace(error)) return BadRequest(new { message = error });
+            }
+
             if (tableKey.Equals("supplier-payments", StringComparison.OrdinalIgnoreCase))
             {
                 var error = await ValidateSupplierPaymentAsync(payload, access.BranchId, id);
@@ -167,6 +183,70 @@ public class AccountingController : ControllerBase
         }
         try { return await _crud.DeleteAsync(tableKey, id, access.BranchId) ? NoContent() : NotFound(); }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException) { return NotFound(new { message = ex.Message }); }
+    }
+
+    [HttpPost("supplier-invoices")]
+    public async Task<IActionResult> CreateSupplierInvoice([FromBody] JsonElement payload)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var error = await ValidateSupplierInvoice3WayMatchingAsync(payload, access.BranchId);
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        var created = await _crud.InsertAsync("supplier-invoices", payload, access.BranchId);
+        return created is null
+            ? BadRequest(new { message = "Failed to create supplier invoice." })
+            : Ok(created);
+    }
+
+    [HttpPut("supplier-invoices/{id:long}")]
+    public async Task<IActionResult> UpdateSupplierInvoice(long id, [FromBody] JsonElement payload)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var error = await ValidateSupplierInvoice3WayMatchingAsync(payload, access.BranchId, id);
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        var updated = await _crud.UpdateAsync("supplier-invoices", id, payload, access.BranchId);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpPost("supplier-invoice-details")]
+    public async Task<IActionResult> CreateSupplierInvoiceDetail([FromBody] JsonElement payload)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var error = await ValidateSupplierInvoiceDetail3WayMatchingAsync(payload, access.BranchId);
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        var created = await _crud.InsertAsync("supplier-invoice-details", payload, access.BranchId);
+        return created is null
+            ? BadRequest(new { message = "Failed to create supplier invoice detail." })
+            : Ok(created);
+    }
+
+    [HttpPut("supplier-invoice-details/{id:long}")]
+    public async Task<IActionResult> UpdateSupplierInvoiceDetail(long id, [FromBody] JsonElement payload)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+
+        var error = await ValidateSupplierInvoiceDetail3WayMatchingAsync(payload, access.BranchId, id);
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        var updated = await _crud.UpdateAsync("supplier-invoice-details", id, payload, access.BranchId);
+        return updated is null ? NotFound() : Ok(updated);
     }
 
     [HttpPost("journal-entries/{id:long}/post")]
@@ -226,14 +306,25 @@ public class AccountingController : ControllerBase
         var row = await _crud.GetByIdAsync("payroll-runs", id, access.BranchId);
         if (row is null) return NotFound();
         var payrollPeriodId = AsLong(row, "payrollPeriodId");
-        if (!AsString(row, "status").Equals(PayrollRunStatusDraft, StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Only DRAFT payroll run can be approved." });
+        var runStatus = AsString(row, "status").Trim().ToUpperInvariant();
+        if (runStatus is not PayrollRunStatusDraft and not PayrollRunStatusCalculated)
+            return BadRequest(new { message = "Only DRAFT/CALCULATED payroll run can be approved." });
 
         var lineCount = await _crud.ScalarAsync<int?>(
             "SELECT COUNT(*) FROM dbo.payroll_items WHERE payroll_run_id=@id;",
             [new SqlParameter("@id", id)]);
         if (!lineCount.HasValue || lineCount.Value <= 0)
             return BadRequest(new { message = "Cannot approve payroll run without payroll items." });
+
+        var reconciliation = await BuildPayrollRunCommissionReconciliationAsync(id, access.BranchId, HttpContext.RequestAborted);
+        if (!reconciliation.Summary.IsFullyMatched)
+        {
+            return BadRequest(new
+            {
+                message = "Cannot approve payroll run when commission reconciliation is not matched.",
+                commissionGap = reconciliation.Summary.TotalGap
+            });
+        }
 
         await _crud.ExecuteAsync(
             "UPDATE dbo.payroll_runs SET status=@status, approved_by=@u, approved_at=SYSDATETIME(), updated_at=SYSDATETIME() WHERE id=@id;",
@@ -291,27 +382,111 @@ public class AccountingController : ControllerBase
         return Ok(await _crud.GetByIdAsync("payroll-runs", id, access.BranchId));
     }
 
-    [HttpPost("payroll-runs/{id:long}/cancel")]
-    public async Task<IActionResult> CancelPayrollRun(long id, [FromBody] PayrollCancelRequest request)
+    [HttpPost("payroll-runs/{id:long}/reconcile-commissions")]
+    public async Task<IActionResult> ReconcilePayrollRunCommissions(long id)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
-        var row = await _crud.GetByIdAsync("payroll-runs", id, access.BranchId);
-        if (row is null) return NotFound();
 
-        var payrollPeriodId = AsLong(row, "payrollPeriodId");
-        var status = AsString(row, "status").ToUpperInvariant();
-        if (status is not (PayrollRunStatusDraft or PayrollRunStatusCalculated))
-            return BadRequest(new { message = "Only DRAFT/CALCULATED payroll run can be canceled." });
+        var run = await _db.PayrollRuns
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, HttpContext.RequestAborted);
+        if (run is null) return NotFound(new { message = $"Payroll run #{id} not found." });
+        if (access.BranchId.HasValue && run.BranchId.HasValue && run.BranchId.Value != access.BranchId.Value)
+            return NotFound(new { message = $"Payroll run #{id} not found." });
 
-        await _crud.ExecuteAsync(
-            "UPDATE dbo.payroll_runs SET status=@status, updated_at=SYSDATETIME() WHERE id=@id;",
-            [
-                new SqlParameter("@id", id),
-                new SqlParameter("@status", PayrollRunStatusCanceled)
-            ]);
-        if (payrollPeriodId.HasValue && payrollPeriodId.Value > 0)
-            await SyncPayrollPeriodStatusAsync(payrollPeriodId.Value);
-        return Ok(await _crud.GetByIdAsync("payroll-runs", id, access.BranchId));
+        var runStatus = (run.Status ?? string.Empty).Trim().ToUpperInvariant();
+        if (runStatus is not PayrollRunStatusDraft and not PayrollRunStatusCalculated)
+        {
+            return BadRequest(new
+            {
+                message = "Only DRAFT/CALCULATED payroll run can be reconciled.",
+                currentStatus = run.Status
+            });
+        }
+
+        var before = await BuildPayrollRunCommissionReconciliationAsync(id, access.BranchId, HttpContext.RequestAborted);
+
+        PayrollBatchCalculationResult calculateResult;
+        try
+        {
+            calculateResult = await _payrollBatchCalculationService.CalculatePayrollForAllAsync(
+                new PayrollBatchCalculationCommand
+                {
+                    UserId = access.UserId,
+                    BranchId = access.BranchId,
+                    PayrollRunId = id,
+                    OverwriteExisting = true,
+                    IncludeInactiveStaff = false,
+                    IssuePayslips = false
+                },
+                HttpContext.RequestAborted);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var after = await BuildPayrollRunCommissionReconciliationAsync(id, access.BranchId, HttpContext.RequestAborted);
+
+        return Ok(new
+        {
+            message = after.Summary.IsFullyMatched
+                ? "Commission reconciliation completed and matched."
+                : "Commission reconciliation completed but still has gap.",
+            payrollRunId = id,
+            runNo = run.RunNo,
+            beforeSummary = before.Summary,
+            afterSummary = after.Summary,
+            matched = after.Summary.IsFullyMatched,
+            calculateResult = new
+            {
+                calculateResult.ProcessedStaffCount,
+                calculateResult.CalculatedStaffCount,
+                calculateResult.Inserted,
+                calculateResult.Updated,
+                calculateResult.SkippedNoBaseSalary,
+                calculateResult.SkippedExisting,
+                calculateResult.CommissionTotal,
+                calculateResult.ProcessedCommissionTransactions
+            },
+            reconciliation = after
+        });
+    }
+
+    [HttpPost("payroll-runs/{id:long}/calculate")]
+    public async Task<IActionResult> CalculatePayrollRun(long id, [FromBody] PayrollRunCalculateRequest? request)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        request ??= new PayrollRunCalculateRequest();
+
+        try
+        {
+            var result = await _payrollBatchCalculationService.CalculatePayrollForAllAsync(
+                new PayrollBatchCalculationCommand
+                {
+                    UserId = access.UserId,
+                    BranchId = access.BranchId,
+                    PayrollRunId = id,
+                    OverwriteExisting = request.OverwriteExisting,
+                    IncludeInactiveStaff = request.IncludeInactiveStaff,
+                    IssuePayslips = request.IssuePayslips
+                },
+                HttpContext.RequestAborted);
+
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("payroll-runs/calculate-all")]
@@ -319,23 +494,13 @@ public class AccountingController : ControllerBase
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
         request ??= new PayrollBatchCalculateRequest();
-        var effectiveBranchId = access.BranchId ?? request.BranchId;
-        if (!effectiveBranchId.HasValue || effectiveBranchId.Value <= 0)
-        {
-            return BadRequest(new { message = "branchId is required for payroll batch calculation." });
-        }
-
-        if (access.BranchId.HasValue && request.BranchId.HasValue && request.BranchId.Value != access.BranchId.Value)
-        {
-            return Forbid();
-        }
         try
         {
             var result = await _payrollBatchCalculationService.CalculatePayrollForAllAsync(
                 new PayrollBatchCalculationCommand
                 {
                     UserId = access.UserId,
-                    BranchId = effectiveBranchId,
+                    BranchId = access.BranchId,
                     PayrollPeriodId = request.PayrollPeriodId,
                     PayrollRunId = request.PayrollRunId,
                     OverwriteExisting = request.OverwriteExisting,
@@ -465,46 +630,11 @@ public class AccountingController : ControllerBase
 
         try
         {
-            var existingPeriod = (await _crud.QueryAsync(
-                """
-                SELECT TOP 1
-                    id,
-                    period_code,
-                    start_date,
-                    end_date,
-                    payroll_date,
-                    status
-                FROM dbo.payroll_periods
-                WHERE UPPER(period_code)=UPPER(@periodCode)
-                ORDER BY id DESC;
-                """,
-                [new SqlParameter("@periodCode", periodCode)])).FirstOrDefault();
-
-            if (existingPeriod is not null)
-            {
-                var existingId = AsLong(existingPeriod, "id");
-                var existingStartDate = AsDateOnly(existingPeriod, "startDate");
-                var existingEndDate = AsDateOnly(existingPeriod, "endDate");
-                var existingPayrollDate = AsDateOnly(existingPeriod, "payrollDate");
-                var dateMismatch =
-                    (existingStartDate.HasValue && existingStartDate.Value != startDate) ||
-                    (existingEndDate.HasValue && existingEndDate.Value != endDate) ||
-                    (existingPayrollDate.HasValue && existingPayrollDate.Value != payrollDate);
-
-                if (dateMismatch)
-                {
-                    return Conflict(new
-                    {
-                        message = $"Payroll period code '{periodCode}' already exists with a different date range."
-                    });
-                }
-
-                if (existingId.HasValue)
-                {
-                    var reused = await _crud.GetByIdAsync("payroll-periods", existingId.Value, access.BranchId);
-                    return reused is null ? Ok(existingPeriod) : Ok(reused);
-                }
-            }
+            var duplicated = await _crud.ScalarAsync<int?>(
+                "SELECT COUNT(*) FROM dbo.payroll_periods WHERE UPPER(period_code)=UPPER(@periodCode);",
+                [new SqlParameter("@periodCode", periodCode)]);
+            if (duplicated.GetValueOrDefault() > 0)
+                return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
 
             var payload = JsonSerializer.SerializeToElement(new
             {
@@ -522,24 +652,6 @@ public class AccountingController : ControllerBase
         }
         catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
-            var existingPeriod = (await _crud.QueryAsync(
-                """
-                SELECT TOP 1 id, period_code, start_date, end_date, payroll_date, status
-                FROM dbo.payroll_periods
-                WHERE UPPER(period_code)=UPPER(@periodCode)
-                ORDER BY id DESC;
-                """,
-                [new SqlParameter("@periodCode", periodCode)])).FirstOrDefault();
-            if (existingPeriod is not null)
-            {
-                var existingId = AsLong(existingPeriod, "id");
-                if (existingId.HasValue)
-                {
-                    var reused = await _crud.GetByIdAsync("payroll-periods", existingId.Value, access.BranchId);
-                    return reused is null ? Ok(existingPeriod) : Ok(reused);
-                }
-            }
-
             return Conflict(new { message = $"Payroll period code '{periodCode}' already exists." });
         }
         catch (SqlException ex)
@@ -678,11 +790,160 @@ public class AccountingController : ControllerBase
             [new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)]));
     }
 
+    [HttpGet("payroll-runs/{id:long}/commission-reconciliation")]
+    public async Task<IActionResult> PayrollRunCommissionReconciliation(long id)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        try
+        {
+            var reconciliation = await BuildPayrollRunCommissionReconciliationAsync(id, access.BranchId, HttpContext.RequestAborted);
+            return Ok(reconciliation);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    private async Task<PayrollRunCommissionReconciliationResponse> BuildPayrollRunCommissionReconciliationAsync(
+        long payrollRunId,
+        long? accessBranchId,
+        CancellationToken cancellationToken)
+    {
+        var run = await _db.PayrollRuns
+            .AsNoTracking()
+            .Include(x => x.PayrollPeriod)
+            .FirstOrDefaultAsync(x => x.Id == payrollRunId, cancellationToken);
+        if (run is null) throw new KeyNotFoundException($"Payroll run #{payrollRunId} not found.");
+        if (accessBranchId.HasValue && run.BranchId.HasValue && run.BranchId.Value != accessBranchId.Value)
+            throw new KeyNotFoundException($"Payroll run #{payrollRunId} not found.");
+
+        var periodStart = run.PayrollPeriod.StartDate.ToDateTime(TimeOnly.MinValue);
+        var periodEnd = run.PayrollPeriod.EndDate;
+        var periodEndExclusive = periodEnd.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        var payrollItems = await _db.PayrollItems
+            .AsNoTracking()
+            .Where(x => x.PayrollRunId == payrollRunId)
+            .Select(x => new
+            {
+                x.StaffId,
+                x.CommissionAmount
+            })
+            .ToListAsync(cancellationToken);
+        var staffIds = payrollItems.Select(x => x.StaffId).Distinct().ToHashSet();
+
+        var transactions = await _db.CommissionTransactions
+            .AsNoTracking()
+            .Where(x => x.CommissionAmount > 0m)
+            .Where(x => !staffIds.Any() || staffIds.Contains(x.StaffId))
+            .ToListAsync(cancellationToken);
+
+        var details = new List<PayrollCommissionReconciliationDetail>();
+        foreach (var byStaff in payrollItems.GroupBy(x => x.StaffId))
+        {
+            var staffId = byStaff.Key;
+            var payrollCommissionAmount = Math.Round(byStaff.Sum(x => Math.Max(0m, x.CommissionAmount)), 0, MidpointRounding.AwayFromZero);
+
+            var staffTransactions = transactions
+                .Where(x => x.StaffId == staffId)
+                .Where(x =>
+                {
+                    var effectiveAt = x.ApprovedAt ?? x.CreatedAt ?? x.UpdatedAt;
+                    return effectiveAt.HasValue && effectiveAt.Value >= periodStart && effectiveAt.Value < periodEndExclusive;
+                })
+                .ToList();
+
+            decimal processedAmount = 0m;
+            decimal pendingAmount = 0m;
+            decimal paidAmount = 0m;
+            decimal canceledAmount = 0m;
+            var processedCount = 0;
+            var pendingCount = 0;
+            var paidCount = 0;
+            var canceledCount = 0;
+
+            foreach (var tx in staffTransactions)
+            {
+                var amount = Math.Max(0m, tx.CommissionAmount);
+                var status = (tx.Status ?? string.Empty).Trim().ToUpperInvariant();
+                switch (status)
+                {
+                    case CommissionStatusProcessed:
+                        processedAmount += amount;
+                        processedCount++;
+                        break;
+                    case CommissionStatusPending:
+                    case CommissionStatusApproved:
+                        pendingAmount += amount;
+                        pendingCount++;
+                        break;
+                    case CommissionStatusPaid:
+                        paidAmount += amount;
+                        paidCount++;
+                        break;
+                    case CommissionStatusCanceled:
+                        canceledAmount += amount;
+                        canceledCount++;
+                        break;
+                }
+            }
+
+            var gapAmount = Math.Round(payrollCommissionAmount - Math.Round(processedAmount, 0, MidpointRounding.AwayFromZero), 0, MidpointRounding.AwayFromZero);
+            details.Add(new PayrollCommissionReconciliationDetail
+            {
+                StaffId = staffId,
+                PayrollCommissionAmount = payrollCommissionAmount,
+                ProcessedAmount = Math.Round(processedAmount, 0, MidpointRounding.AwayFromZero),
+                PendingAmount = Math.Round(pendingAmount, 0, MidpointRounding.AwayFromZero),
+                PaidAmount = Math.Round(paidAmount, 0, MidpointRounding.AwayFromZero),
+                CanceledAmount = Math.Round(canceledAmount, 0, MidpointRounding.AwayFromZero),
+                ProcessedCount = processedCount,
+                PendingCount = pendingCount,
+                PaidCount = paidCount,
+                CanceledCount = canceledCount,
+                GapAmount = gapAmount,
+                IsMatched = gapAmount == 0m
+            });
+        }
+
+        var totalPayrollCommission = details.Sum(x => x.PayrollCommissionAmount);
+        var totalProcessed = details.Sum(x => x.ProcessedAmount);
+        var totalPending = details.Sum(x => x.PendingAmount);
+        var totalPaid = details.Sum(x => x.PaidAmount);
+        var totalCanceled = details.Sum(x => x.CanceledAmount);
+        var totalGap = details.Sum(x => x.GapAmount);
+
+        return new PayrollRunCommissionReconciliationResponse
+        {
+            PayrollRun = new PayrollRunCommissionReconciliationRunInfo
+            {
+                Id = run.Id,
+                RunNo = run.RunNo,
+                Status = run.Status,
+                BranchId = run.BranchId,
+                PayrollPeriodId = run.PayrollPeriodId,
+                PeriodCode = run.PayrollPeriod.PeriodCode,
+                PeriodStartDate = run.PayrollPeriod.StartDate.ToString("yyyy-MM-dd"),
+                PeriodEndDate = run.PayrollPeriod.EndDate.ToString("yyyy-MM-dd")
+            },
+            Summary = new PayrollRunCommissionReconciliationSummary
+            {
+                StaffCount = details.Count,
+                TotalPayrollCommission = totalPayrollCommission,
+                TotalProcessed = totalProcessed,
+                TotalPending = totalPending,
+                TotalPaid = totalPaid,
+                TotalCanceled = totalCanceled,
+                TotalGap = totalGap,
+                IsFullyMatched = totalGap == 0m
+            },
+            Details = details
+        };
+    }
+
     [HttpGet("staff-salary/{staffId:long}/base")]
-    public async Task<IActionResult> StaffBaseSalary(
-        long staffId,
-        [FromQuery] DateTime? asOfDate = null,
-        [FromQuery] bool includeTierFallback = true)
+    public async Task<IActionResult> StaffBaseSalary(long staffId, [FromQuery] DateTime? asOfDate = null)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
 
@@ -693,8 +954,7 @@ public class AccountingController : ControllerBase
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
         var asOf = DateOnly.FromDateTime((asOfDate ?? VietnamTime.Now).Date);
-        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf, includeTierFallback);
-        var hasBaseSalary = baseSalary.HasValue && baseSalary.Value > 0m;
+        var baseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, asOf);
 
         return Ok(new
         {
@@ -702,9 +962,7 @@ public class AccountingController : ControllerBase
             staffName = staff.FullName,
             branchId = staff.BranchId,
             asOfDate = asOf.ToString("yyyy-MM-dd"),
-            includeTierFallback,
-            hasBaseSalary,
-            baseSalary = hasBaseSalary ? baseSalary!.Value : 0m
+            baseSalary
         });
     }
 
@@ -774,6 +1032,11 @@ public class AccountingController : ControllerBase
         if (access.BranchId.HasValue && staff.BranchId != access.BranchId.Value) return NotFound();
 
         var effectiveFromDate = DateOnly.FromDateTime((request.EffectiveFrom ?? VietnamTime.Now).Date);
+        var existingBaseSalary = await ResolveStaffBaseSalaryAsync(staff.Id, access.BranchId, effectiveFromDate);
+        if (existingBaseSalary.HasValue && existingBaseSalary.Value > 0m)
+        {
+            return BadRequest(new { message = "Staff already has an active base salary profile for the selected effective date." });
+        }
 
         var pendingRequest = (await _crud.QueryAsync(
             $"""
@@ -809,7 +1072,7 @@ public class AccountingController : ControllerBase
         };
         var payloadJson = JsonSerializer.Serialize(payloadObject);
         var reason = string.IsNullOrWhiteSpace(request.Reason)
-            ? $"Y�u c?u t?o luong kh?i di?m cho nh�n s? {staff.FullName} (#{staff.Id})."
+            ? $"Yêu cầu tạo lương khởi điểm cho nhân sự {staff.FullName} (#{staff.Id})."
             : request.Reason.Trim();
 
         var createdId = await _crud.ScalarAsync<long?>(
@@ -867,7 +1130,7 @@ public class AccountingController : ControllerBase
             staffName = staff.FullName,
             baseSalary = requestedBaseSalary,
             effectiveFrom = effectiveFromDate.ToString("yyyy-MM-dd"),
-            message = "Da gui duyet thanh cong. Yeu cau da chuyen den Admin de phe duyet."
+            message = "Initial salary request has been sent to admin for approval."
         });
     }
 
@@ -877,71 +1140,13 @@ public class AccountingController : ControllerBase
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
         var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
         var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
-        var payload = await BuildAccountingDashboardV2PayloadAsync(from, to, access, historyLimit: 50);
-        var summary = payload.TryGetValue("summary", out var summaryRaw) && summaryRaw is IDictionary<string, object?> summaryDict
-            ? summaryDict
-            : new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        return Ok(new
-        {
-            fromDate = from,
-            toDate = to,
-            revenue = AsDecimal(summary, "revenue"),
-            netProfit = AsDecimal(summary, "netProfit"),
-            cashFlow = AsDecimal(summary, "cashFlow"),
-            collected = AsDecimal(summary, "collected"),
-            refund = AsDecimal(summary, "refund"),
-            reversal = AsDecimal(summary, "reversal"),
-            source = "accounting-dashboard-v2",
-            lockPeriodBadge = payload.GetValueOrDefault("lockPeriodBadge"),
-            agingBuckets = payload.GetValueOrDefault("agingBuckets")
-        });
-    }
-
-    [HttpGet("dashboard-v2")]
-    public async Task<IActionResult> DashboardV2([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null, [FromQuery] int historyLimit = 200)
-    {
-        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
-        var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
-        var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
-        var payload = await BuildAccountingDashboardV2PayloadAsync(from, to, access, historyLimit);
-        return Ok(payload);
-    }
-
-    [HttpGet("dashboard-v2/export")]
-    public async Task<IActionResult> ExportDashboardV2Csv([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null, [FromQuery] int historyLimit = 200)
-    {
-        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
-        var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
-        var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
-        var payload = await BuildAccountingDashboardV2PayloadAsync(from, to, access, historyLimit);
-
-        var csv = BuildDashboardV2Csv(payload);
-        var fileName = $"accounting-dashboard-v2-{VietnamTime.Now:yyyyMMdd-HHmmss}.csv";
-        return File(Encoding.UTF8.GetBytes(csv), "text/csv; charset=utf-8", fileName);
-    }
-
-    private async Task<Dictionary<string, object?>> BuildAccountingDashboardV2PayloadAsync(DateTime from, DateTime to, AccountingAccess access, int historyLimit)
-    {
-        var safeLimit = Math.Clamp(historyLimit, 20, 1000);
-        var now = VietnamTime.Now;
-        var today = now.Date;
-
         var revenue = (await _crud.QueryAsync(
-            """
-            SELECT
-                ISNULL(SUM(TotalRevenue),0) AS revenue,
-                ISNULL(SUM(NetProfit),0) AS net_profit,
-                ISNULL(SUM(NetCashFlow),0) AS cash_flow
-            FROM dbo.RevenueSnapshots
-            WHERE SnapshotDate BETWEEN @f AND @t
-              AND (@branchId IS NULL OR BranchId=@branchId);
-            """,
+            "SELECT ISNULL(SUM(TotalRevenue),0) AS revenue, ISNULL(SUM(NetProfit),0) AS net_profit, ISNULL(SUM(NetCashFlow),0) AS cash_flow FROM dbo.RevenueSnapshots WHERE SnapshotDate BETWEEN @f AND @t AND (@branchId IS NULL OR BranchId=@branchId);",
             [
                 new SqlParameter("@f", from.Date),
                 new SqlParameter("@t", to.Date),
                 new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)
             ])).FirstOrDefault();
-
         var payments = (await _crud.QueryAsync(
             """
             IF COL_LENGTH('dbo.Payments', 'Direction') IS NOT NULL
@@ -989,423 +1194,17 @@ public class AccountingController : ControllerBase
                 new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value),
                 new SqlParameter("@paymentCompletedStatus", PaymentCompletedStatus)
             ])).FirstOrDefault();
-
-        var arRows = await _crud.QueryAsync(
-            """
-            SELECT
-                i.Id,
-                CAST(CONCAT('INV-', i.Id) AS nvarchar(64)) AS InvoiceCode,
-                i.IssuedAt AS InvoiceDate,
-                CAST(NULL AS datetime2) AS DueDate,
-                i.PaymentStatus,
-                i.TotalAmount,
-                i.PaidAmount,
-                ISNULL(i.TotalAmount,0) - ISNULL(i.PaidAmount,0) AS OutstandingAmount,
-                i.CompanyName,
-                i.ReceiveEmail,
-                i.ServiceOrderId,
-                i.RetailOrderId,
-                i.CreatedAt,
-                i.UpdatedAt
-            FROM dbo.Invoices i
-            LEFT JOIN dbo.ServiceOrders so ON so.Id = i.ServiceOrderId
-            LEFT JOIN dbo.RetailOrders ro ON ro.Id = i.RetailOrderId
-            WHERE (
-                    @branchId IS NULL
-                    OR so.ExecuteBranchId = @branchId
-                    OR so.OriginBranchId = @branchId
-                    OR ro.BranchId = @branchId
-                  )
-            ORDER BY i.Id DESC;
-            """,
-            [new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)]);
-
-        var apRows = new List<Dictionary<string, object?>>();
-        if (_crud.TryGetConfig("accounts-payable", out var apCfg) && await _crud.TableExistsAsync(apCfg))
+        return Ok(new
         {
-            apRows = (await _crud.QueryAsync(
-                """
-                SELECT
-                    id,
-                    supplier_id,
-                    branch_id,
-                    supplier_invoice_no,
-                    due_date,
-                    original_amount,
-                    paid_amount,
-                    outstanding_amount,
-                    status,
-                    note,
-                    created_at,
-                    updated_at
-                FROM dbo.accounts_payable
-                WHERE (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
-                ORDER BY id DESC;
-                """,
-                [new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)])).ToList();
-        }
-
-        var paymentHistory = (await _crud.QueryAsync(
-            """
-            SELECT TOP (@limit)
-                p.Id,
-                p.InvoiceId,
-                p.ServiceOrderId,
-                p.RetailOrderId,
-                p.MethodId AS PaymentMethodId,
-                p.Amount,
-                p.Type,
-                p.Direction,
-                p.Status,
-                p.TransactionCode,
-                CAST(NULL AS nvarchar(100)) AS ReferenceCode,
-                p.CreatedAt,
-                p.UpdatedAt,
-                CAST(CONCAT('INV-', i.Id) AS nvarchar(64)) AS InvoiceCode,
-                CAST(NULL AS datetime2) AS DueDate
-            FROM dbo.Payments p
-            LEFT JOIN dbo.Invoices i ON i.Id = p.InvoiceId
-            LEFT JOIN dbo.ServiceOrders so ON so.Id = COALESCE(p.ServiceOrderId, i.ServiceOrderId)
-            LEFT JOIN dbo.RetailOrders ro ON ro.Id = COALESCE(p.RetailOrderId, i.RetailOrderId)
-            WHERE (
-                    @branchId IS NULL
-                    OR so.ExecuteBranchId = @branchId
-                    OR so.OriginBranchId = @branchId
-                    OR ro.BranchId = @branchId
-                  )
-            ORDER BY p.CreatedAt DESC, p.Id DESC;
-            """,
-            [
-                new SqlParameter("@limit", safeLimit),
-                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)
-            ])).ToList();
-
-        var refundTrail = paymentHistory
-            .Where(x =>
-            {
-                var type = AsString(x, "type").Trim().ToUpperInvariant();
-                return type is "REFUND" or "REVERSAL";
-            })
-            .Take(50)
-            .ToList();
-
-        var approvalTrail = new List<Dictionary<string, object?>>();
-        if (_crud.TryGetConfig("finance-approval-requests", out var approvalCfg) && await _crud.TableExistsAsync(approvalCfg))
-        {
-            approvalTrail = (await _crud.QueryAsync(
-                """
-                SELECT TOP (@limit)
-                    id,
-                    request_type,
-                    status,
-                    risk_level,
-                    amount,
-                    reason,
-                    reject_reason,
-                    requested_by,
-                    approver_id,
-                    request_payload,
-                    created_at,
-                    updated_at
-                FROM dbo.finance_approval_requests
-                WHERE (
-                        @branchId IS NULL
-                        OR TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.branchId')) = @branchId
-                        OR JSON_VALUE(request_payload, '$.branchId') IS NULL
-                      )
-                ORDER BY updated_at DESC, id DESC;
-                """,
-                [
-                    new SqlParameter("@limit", safeLimit),
-                    new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)
-                ])).ToList();
-        }
-
-        var lockPeriodBadge = await BuildLockPeriodBadgeAsync(access.BranchId);
-        var arOpenRows = BuildReceivableOpenRows(arRows, today);
-        var apOpenRows = BuildPayableOpenRows(apRows, today);
-
-        var agingBuckets = BuildAgingBuckets(arOpenRows);
-        var invoiceWatchlist = arOpenRows
-            .OrderByDescending(x => x.IsOverdue)
-            .ThenByDescending(x => x.DaysPastDue)
-            .ThenByDescending(x => x.OutstandingAmount)
-            .Take(10)
-            .Select(x => new Dictionary<string, object?>
-            {
-                ["invoiceId"] = x.InvoiceId,
-                ["invoiceCode"] = x.InvoiceCode,
-                ["dueDate"] = x.DueDate,
-                ["daysPastDue"] = x.DaysPastDue,
-                ["outstandingAmount"] = x.OutstandingAmount,
-                ["isOverdue"] = x.IsOverdue,
-                ["companyName"] = x.CompanyName
-            })
-            .ToList();
-
-        var apWatchlist = apOpenRows
-            .OrderByDescending(x => x.IsOverdue)
-            .ThenByDescending(x => x.DaysPastDue)
-            .ThenByDescending(x => x.OutstandingAmount)
-            .Take(10)
-            .Select(x => new Dictionary<string, object?>
-            {
-                ["id"] = x.Id,
-                ["dueDate"] = x.DueDate,
-                ["daysPastDue"] = x.DaysPastDue,
-                ["outstandingAmount"] = x.OutstandingAmount,
-                ["isOverdue"] = x.IsOverdue,
-                ["supplierInvoiceNo"] = x.SupplierInvoiceNo
-            })
-            .ToList();
-
-        var pendingApprovalCount = approvalTrail.Count(x => AsString(x, "status").Trim().ToUpperInvariant() == FinanceApprovalStatusPending);
-        var summary = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["revenue"] = AsDecimal(revenue, "revenue"),
-            ["netProfit"] = AsDecimal(revenue, "netProfit"),
-            ["cashFlow"] = AsDecimal(revenue, "cashFlow"),
-            ["collected"] = AsDecimal(payments, "collected"),
-            ["refund"] = AsDecimal(payments, "refund"),
-            ["reversal"] = AsDecimal(payments, "reversal"),
-            ["totalOutstandingAr"] = arOpenRows.Sum(x => x.OutstandingAmount),
-            ["totalOutstandingAp"] = apOpenRows.Sum(x => x.OutstandingAmount),
-            ["overdueArCount"] = arOpenRows.Count(x => x.IsOverdue),
-            ["overdueApAmount"] = apOpenRows.Where(x => x.IsOverdue).Sum(x => x.OutstandingAmount),
-            ["pendingApprovalCount"] = pendingApprovalCount
-        };
-
-        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["source"] = "accounting-dashboard-v2",
-            ["generatedAt"] = now,
-            ["fromDate"] = from,
-            ["toDate"] = to,
-            ["branchId"] = access.BranchId,
-            ["summary"] = summary,
-            ["agingBuckets"] = agingBuckets,
-            ["invoiceWatchlist"] = invoiceWatchlist,
-            ["apWatchlist"] = apWatchlist,
-            ["paymentHistory"] = paymentHistory,
-            ["refundTrail"] = refundTrail,
-            ["approvalTrail"] = approvalTrail,
-            ["lockPeriodBadge"] = lockPeriodBadge
-        };
-    }
-
-    private async Task<Dictionary<string, object?>> BuildLockPeriodBadgeAsync(long? branchId)
-    {
-        Dictionary<string, object?> accountingPeriod = new(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, object?> payrollPeriod = new(StringComparer.OrdinalIgnoreCase);
-
-        if (_crud.TryGetConfig("accounting-periods", out var accountingPeriodCfg) && await _crud.TableExistsAsync(accountingPeriodCfg))
-        {
-            accountingPeriod = (await _crud.QueryAsync(
-                """
-                SELECT TOP 1
-                    id, period_code, start_date, end_date, status, closed_at, note
-                FROM dbo.accounting_periods
-                WHERE (@branchId IS NULL OR branch_id=@branchId OR branch_id IS NULL)
-                ORDER BY end_date DESC, id DESC;
-                """,
-                [new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)])).FirstOrDefault()
-                ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        if (_crud.TryGetConfig("payroll-periods", out var payrollPeriodCfg) && await _crud.TableExistsAsync(payrollPeriodCfg))
-        {
-            payrollPeriod = (await _crud.QueryAsync(
-                """
-                SELECT TOP 1
-                    id, period_code, start_date, end_date, status, payroll_date
-                FROM dbo.payroll_periods
-                ORDER BY end_date DESC, id DESC;
-                """)).FirstOrDefault()
-                ?? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        var accountingStatus = AsString(accountingPeriod, "status").Trim().ToUpperInvariant();
-        var payrollStatus = AsString(payrollPeriod, "status").Trim().ToUpperInvariant();
-        var isLocked = accountingStatus.Contains("LOCK", StringComparison.OrdinalIgnoreCase)
-            || accountingStatus.Contains("CLOSE", StringComparison.OrdinalIgnoreCase)
-            || payrollStatus.Contains("LOCK", StringComparison.OrdinalIgnoreCase);
-
-        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["isLocked"] = isLocked,
-            ["accountingPeriod"] = accountingPeriod,
-            ["payrollPeriod"] = payrollPeriod,
-            ["badgeText"] = isLocked ? "LOCK PERIOD" : "OPEN PERIOD"
-        };
-    }
-
-    private static bool IsInvoiceClosedStatus(string status)
-    {
-        var normalized = (status ?? "").Trim().ToUpperInvariant();
-        return normalized is "PAID" or "CANCELLED" or "CANCELED" or "VOID" or "WRITTEN_OFF" or "CLOSED";
-    }
-
-    private static List<ReceivableOpenRow> BuildReceivableOpenRows(IEnumerable<Dictionary<string, object?>> rows, DateTime today)
-    {
-        var result = new List<ReceivableOpenRow>();
-        foreach (var row in rows)
-        {
-            var status = (row.TryGetValue("paymentStatus", out var statusRaw) ? Convert.ToString(statusRaw) : null) ?? "";
-            var outstanding = row.TryGetValue("outstandingAmount", out var outstandingRaw) && outstandingRaw is not null && outstandingRaw != DBNull.Value
-                ? Math.Max(0m, Convert.ToDecimal(outstandingRaw))
-                : 0m;
-            if (outstanding <= 0m || IsInvoiceClosedStatus(status)) continue;
-
-            DateTime? dueDate = null;
-            if (row.TryGetValue("dueDate", out var dueDateRaw) && dueDateRaw is not null && dueDateRaw != DBNull.Value)
-            {
-                if (dueDateRaw is DateTime dt) dueDate = dt.Date;
-                else if (DateTime.TryParse(Convert.ToString(dueDateRaw), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) dueDate = parsed.Date;
-            }
-
-            var daysPastDue = dueDate.HasValue ? (today.Date - dueDate.Value.Date).Days : 0;
-            var isOverdue = dueDate.HasValue && daysPastDue > 0;
-
-            result.Add(new ReceivableOpenRow(
-                InvoiceId: row.TryGetValue("id", out var idRaw) && idRaw is not null && idRaw != DBNull.Value ? Convert.ToInt64(idRaw) : 0L,
-                InvoiceCode: (row.TryGetValue("invoiceCode", out var invoiceCodeRaw) ? Convert.ToString(invoiceCodeRaw) : null) ?? "",
-                DueDate: dueDate,
-                OutstandingAmount: outstanding,
-                DaysPastDue: daysPastDue,
-                IsOverdue: isOverdue,
-                CompanyName: (row.TryGetValue("companyName", out var companyNameRaw) ? Convert.ToString(companyNameRaw) : null) ?? ""
-            ));
-        }
-
-        return result;
-    }
-
-    private static List<PayableOpenRow> BuildPayableOpenRows(IEnumerable<Dictionary<string, object?>> rows, DateTime today)
-    {
-        var result = new List<PayableOpenRow>();
-        foreach (var row in rows)
-        {
-            var outstanding = row.TryGetValue("outstandingAmount", out var outstandingRaw) && outstandingRaw is not null && outstandingRaw != DBNull.Value
-                ? Math.Max(0m, Convert.ToDecimal(outstandingRaw))
-                : 0m;
-            if (outstanding <= 0m) continue;
-
-            DateTime? dueDate = null;
-            if (row.TryGetValue("dueDate", out var dueDateRaw) && dueDateRaw is not null && dueDateRaw != DBNull.Value)
-            {
-                if (dueDateRaw is DateTime dt) dueDate = dt.Date;
-                else if (DateTime.TryParse(Convert.ToString(dueDateRaw), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) dueDate = parsed.Date;
-            }
-
-            var daysPastDue = dueDate.HasValue ? (today.Date - dueDate.Value.Date).Days : 0;
-            var isOverdue = dueDate.HasValue && daysPastDue > 0;
-
-            result.Add(new PayableOpenRow(
-                Id: row.TryGetValue("id", out var idRaw) && idRaw is not null && idRaw != DBNull.Value ? Convert.ToInt64(idRaw) : 0L,
-                SupplierInvoiceNo: (row.TryGetValue("supplierInvoiceNo", out var noRaw) ? Convert.ToString(noRaw) : null) ?? "",
-                DueDate: dueDate,
-                OutstandingAmount: outstanding,
-                DaysPastDue: daysPastDue,
-                IsOverdue: isOverdue
-            ));
-        }
-
-        return result;
-    }
-
-    private static List<Dictionary<string, object?>> BuildAgingBuckets(IEnumerable<ReceivableOpenRow> rows)
-    {
-        var buckets = new[]
-        {
-            new { Key = "CURRENT", Label = "Current / Not due", Min = int.MinValue, Max = 0 },
-            new { Key = "D1_30", Label = "1-30 days", Min = 1, Max = 30 },
-            new { Key = "D31_60", Label = "31-60 days", Min = 31, Max = 60 },
-            new { Key = "D61_90", Label = "61-90 days", Min = 61, Max = 90 },
-            new { Key = "D90_PLUS", Label = "90+ days", Min = 91, Max = int.MaxValue }
-        };
-
-        var results = new List<Dictionary<string, object?>>();
-        foreach (var bucket in buckets)
-        {
-            var selected = rows.Where(x => x.DaysPastDue >= bucket.Min && x.DaysPastDue <= bucket.Max).ToList();
-            results.Add(new Dictionary<string, object?>
-            {
-                ["bucket"] = bucket.Key,
-                ["label"] = bucket.Label,
-                ["count"] = selected.Count,
-                ["amount"] = selected.Sum(x => x.OutstandingAmount)
-            });
-        }
-
-        return results;
-    }
-
-    private static string BuildDashboardV2Csv(Dictionary<string, object?> payload)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("section,key,value");
-
-        if (payload.TryGetValue("summary", out var summaryRaw) && summaryRaw is IDictionary<string, object?> summary)
-        {
-            foreach (var kv in summary)
-            {
-                sb.AppendLine($"summary,{CsvEscape(kv.Key)},{CsvEscape(kv.Value)}");
-            }
-        }
-
-        if (payload.TryGetValue("agingBuckets", out var agingRaw) && agingRaw is IEnumerable<Dictionary<string, object?>> aging)
-        {
-            foreach (var row in aging)
-            {
-                sb.AppendLine($"aging,{CsvEscape(AsString(row, "bucket"))},{CsvEscape(row.GetValueOrDefault("amount"))}");
-            }
-        }
-
-        if (payload.TryGetValue("lockPeriodBadge", out var lockRaw) && lockRaw is IDictionary<string, object?> lockBadge)
-        {
-            lockBadge.TryGetValue("badgeText", out var badgeText);
-            lockBadge.TryGetValue("isLocked", out var isLocked);
-            sb.AppendLine($"lockPeriod,badgeText,{CsvEscape(badgeText)}");
-            sb.AppendLine($"lockPeriod,isLocked,{CsvEscape(isLocked)}");
-        }
-
-        if (payload.TryGetValue("paymentHistory", out var paymentRaw) && paymentRaw is IEnumerable<Dictionary<string, object?>> payments)
-        {
-            foreach (var row in payments.Take(50))
-            {
-                var key = $"payment#{AsString(row, "id")}";
-                var value = $"{AsString(row, "type")} | {AsString(row, "status")} | {AsDecimal(row, "amount")}";
-                sb.AppendLine($"paymentHistory,{CsvEscape(key)},{CsvEscape(value)}");
-            }
-        }
-
-        if (payload.TryGetValue("refundTrail", out var refundRaw) && refundRaw is IEnumerable<Dictionary<string, object?>> refunds)
-        {
-            foreach (var row in refunds.Take(50))
-            {
-                var key = $"refund#{AsString(row, "id")}";
-                var value = $"{AsString(row, "type")} | {AsString(row, "status")} | {AsDecimal(row, "amount")}";
-                sb.AppendLine($"refundTrail,{CsvEscape(key)},{CsvEscape(value)}");
-            }
-        }
-
-        if (payload.TryGetValue("approvalTrail", out var approvalRaw) && approvalRaw is IEnumerable<Dictionary<string, object?>> approvals)
-        {
-            foreach (var row in approvals.Take(50))
-            {
-                var key = $"approval#{AsString(row, "id")}";
-                var value = $"{AsString(row, "requestType")} | {AsString(row, "status")} | {AsDecimal(row, "amount")}";
-                sb.AppendLine($"approvalTrail,{CsvEscape(key)},{CsvEscape(value)}");
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    private static string CsvEscape(object? value)
-    {
-        var raw = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
-        return $"\"{raw.Replace("\"", "\"\"")}\"";
+            fromDate = from,
+            toDate = to,
+            revenue = AsDecimal(revenue, "revenue"),
+            netProfit = AsDecimal(revenue, "netProfit"),
+            cashFlow = AsDecimal(revenue, "cashFlow"),
+            collected = AsDecimal(payments, "collected"),
+            refund = AsDecimal(payments, "refund"),
+            reversal = AsDecimal(payments, "reversal")
+        });
     }
 
     private async Task SyncPayrollPeriodStatusAsync(long payrollPeriodId)
@@ -2095,6 +1894,268 @@ public class AccountingController : ControllerBase
         return Math.Max(0m, Math.Round(value, 0, MidpointRounding.AwayFromZero));
     }
 
+    private async Task<string?> ValidateSupplierInvoice3WayMatchingAsync(JsonElement payload, long? branchId, long? existingId = null)
+    {
+        long? supplierId = TryGetLong(payload, "supplierId", "supplier_id");
+        long? purchaseOrderId = TryGetLong(payload, "purchaseOrderId", "purchase_order_id");
+        decimal? totalAmount = TryGetDecimal(payload, "totalAmount", "total_amount");
+
+        if (existingId.HasValue)
+        {
+            var existing = await _crud.GetByIdAsync("supplier-invoices", existingId.Value, branchId);
+            supplierId ??= AsLong(existing, "supplierId");
+            purchaseOrderId ??= AsLong(existing, "purchaseOrderId");
+            totalAmount ??= AsDecimal(existing, "totalAmount");
+        }
+
+        if (!supplierId.HasValue || supplierId.Value <= 0)
+        {
+            return "supplierId is required.";
+        }
+
+        if (!purchaseOrderId.HasValue || purchaseOrderId.Value <= 0)
+        {
+            return "purchaseOrderId is required for 3-way matching.";
+        }
+
+        if (!totalAmount.HasValue || totalAmount.Value <= 0m)
+        {
+            return "totalAmount must be > 0 for 3-way matching.";
+        }
+
+        var purchaseOrderRow = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1
+                po.id,
+                po.supplier_id AS supplierId,
+                po.branch_id AS branchId
+            FROM dbo.purchase_orders po
+            WHERE po.id = @purchaseOrderId
+              AND (@branchId IS NULL OR po.branch_id = @branchId);
+            """,
+            [
+                new SqlParameter("@purchaseOrderId", purchaseOrderId.Value),
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
+            ])).FirstOrDefault();
+
+        if (purchaseOrderRow is null)
+        {
+            return $"purchase_order #{purchaseOrderId.Value} not found in current branch scope.";
+        }
+
+        var poSupplierId = AsLong(purchaseOrderRow, "supplierId");
+        if (!poSupplierId.HasValue || poSupplierId.Value != supplierId.Value)
+        {
+            return "supplierId does not match the supplier on purchase order.";
+        }
+
+        var totalsRow = (await _crud.QueryAsync(
+            """
+            ;WITH po_total AS (
+                SELECT
+                    CAST(SUM(
+                        COALESCE(
+                            poi.total_amount,
+                            poi.TotalAmount,
+                            (COALESCE(poi.ordered_quantity, poi.OrderedQuantity, poi.quantity, poi.Quantity, 0) *
+                             COALESCE(poi.unit_cost, poi.UnitCost, poi.unit_price, poi.UnitPrice, 0))
+                        )
+                    ) AS DECIMAL(18,2)) AS po_total
+                FROM dbo.purchase_order_items poi
+                WHERE poi.purchase_order_id = @purchaseOrderId
+            ),
+            grn_total AS (
+                SELECT
+                    CAST(SUM(
+                        COALESCE(
+                            grni.line_total,
+                            grni.LineTotal,
+                            (COALESCE(grni.received_quantity, grni.ReceivedQuantity, grni.quantity, grni.Quantity, 0) *
+                             COALESCE(grni.unit_cost, grni.UnitCost, 0))
+                        )
+                    ) AS DECIMAL(18,2)) AS grn_total
+                FROM dbo.goods_receipt_note_items grni
+                INNER JOIN dbo.goods_receipt_notes grn ON grn.id = grni.grn_id
+                WHERE grn.purchase_order_id = @purchaseOrderId
+            )
+            SELECT
+                COALESCE((SELECT po_total FROM po_total), 0) AS poTotal,
+                COALESCE((SELECT grn_total FROM grn_total), 0) AS grnTotal;
+            """,
+            [new SqlParameter("@purchaseOrderId", purchaseOrderId.Value)])).FirstOrDefault();
+
+        var poTotal = AsDecimal(totalsRow, "poTotal");
+        var grnTotal = AsDecimal(totalsRow, "grnTotal");
+
+        if (poTotal <= 0m)
+        {
+            return "purchase_order does not have valid line totals for matching.";
+        }
+
+        if (grnTotal <= 0m)
+        {
+            return "GRN is required before creating supplier invoice (3-way matching).";
+        }
+
+        if (totalAmount.Value > poTotal + 0.01m)
+        {
+            return $"Supplier invoice total ({totalAmount.Value:0.##}) exceeds PO total ({poTotal:0.##}).";
+        }
+
+        if (totalAmount.Value > grnTotal + 0.01m)
+        {
+            return $"Supplier invoice total ({totalAmount.Value:0.##}) exceeds received GRN total ({grnTotal:0.##}).";
+        }
+
+        // Optional deep validation when header API receives line details.
+        if (payload.ValueKind == JsonValueKind.Object &&
+            payload.TryGetProperty("details", out var detailItems) &&
+            detailItems.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var line in detailItems.EnumerateArray())
+            {
+                var lineError = await ValidateSupplierInvoiceDetail3WayMatchingAsync(line, branchId);
+                if (!string.IsNullOrWhiteSpace(lineError))
+                {
+                    return lineError;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ValidateSupplierInvoiceDetail3WayMatchingAsync(JsonElement payload, long? branchId, long? existingId = null)
+    {
+        long? supplierInvoiceId = TryGetLong(payload, "supplierInvoiceId", "supplier_invoice_id");
+        long? purchaseOrderItemId = TryGetLong(payload, "purchaseOrderItemId", "purchase_order_item_id");
+        decimal? quantity = TryGetDecimal(payload, "quantity");
+        decimal? unitCost = TryGetDecimal(payload, "unitCost", "unit_cost", "unitPrice", "unit_price");
+        decimal? lineTotal = TryGetDecimal(payload, "lineTotal", "line_total", "totalAmount", "total_amount");
+
+        if (existingId.HasValue)
+        {
+            var existing = await _crud.GetByIdAsync("supplier-invoice-details", existingId.Value, branchId);
+            supplierInvoiceId ??= AsLong(existing, "supplierInvoiceId");
+            purchaseOrderItemId ??= AsLong(existing, "purchaseOrderItemId");
+            quantity ??= AsDecimal(existing, "quantity");
+            unitCost ??= AsDecimal(existing, "unitCost");
+            lineTotal ??= AsDecimal(existing, "lineTotal");
+        }
+
+        if (!supplierInvoiceId.HasValue || supplierInvoiceId.Value <= 0)
+        {
+            return "supplierInvoiceId is required.";
+        }
+
+        if (!purchaseOrderItemId.HasValue || purchaseOrderItemId.Value <= 0)
+        {
+            return "purchaseOrderItemId is required for 3-way matching.";
+        }
+
+        if (!quantity.HasValue || quantity.Value <= 0m)
+        {
+            return "quantity must be > 0.";
+        }
+
+        if (!unitCost.HasValue || unitCost.Value < 0m)
+        {
+            return "unitCost must be >= 0.";
+        }
+
+        var referenceRow = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1
+                sid.id AS supplierInvoiceDetailId,
+                sid.supplier_invoice_id AS supplierInvoiceId,
+                si.purchase_order_id AS purchaseOrderId,
+                si.branch_id AS supplierInvoiceBranchId,
+                poi.id AS purchaseOrderItemId,
+                CAST(COALESCE(poi.ordered_quantity, poi.OrderedQuantity, poi.quantity, poi.Quantity, 0) AS DECIMAL(18,4)) AS orderedQuantity,
+                CAST(COALESCE(poi.unit_cost, poi.UnitCost, poi.unit_price, poi.UnitPrice, 0) AS DECIMAL(18,4)) AS poUnitCost
+            FROM dbo.supplier_invoices si
+            LEFT JOIN dbo.supplier_invoice_details sid ON sid.supplier_invoice_id = si.id
+            INNER JOIN dbo.purchase_order_items poi ON poi.id = @purchaseOrderItemId
+            WHERE si.id = @supplierInvoiceId
+              AND (@branchId IS NULL OR si.branch_id = @branchId);
+            """,
+            [
+                new SqlParameter("@supplierInvoiceId", supplierInvoiceId.Value),
+                new SqlParameter("@purchaseOrderItemId", purchaseOrderItemId.Value),
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
+            ])).FirstOrDefault();
+
+        if (referenceRow is null)
+        {
+            return "Supplier invoice or purchase order item not found in current branch scope.";
+        }
+
+        var purchaseOrderId = AsLong(referenceRow, "purchaseOrderId");
+        var orderedQuantity = AsDecimal(referenceRow, "orderedQuantity");
+        var poUnitCost = AsDecimal(referenceRow, "poUnitCost");
+
+        if (!purchaseOrderId.HasValue || purchaseOrderId.Value <= 0)
+        {
+            return "Supplier invoice is missing purchaseOrderId reference.";
+        }
+
+        var receivedQuantity = await _crud.ScalarAsync<decimal?>(
+            """
+            SELECT CAST(COALESCE(SUM(COALESCE(grni.received_quantity, grni.ReceivedQuantity, grni.quantity, grni.Quantity, 0)), 0) AS DECIMAL(18,4))
+            FROM dbo.goods_receipt_note_items grni
+            INNER JOIN dbo.goods_receipt_notes grn ON grn.id = grni.grn_id
+            WHERE grn.purchase_order_id = @purchaseOrderId
+              AND grni.purchase_order_item_id = @purchaseOrderItemId;
+            """,
+            [
+                new SqlParameter("@purchaseOrderId", purchaseOrderId.Value),
+                new SqlParameter("@purchaseOrderItemId", purchaseOrderItemId.Value)
+            ]) ?? 0m;
+
+        var alreadyInvoicedQty = await _crud.ScalarAsync<decimal?>(
+            """
+            SELECT CAST(COALESCE(SUM(COALESCE(sid.quantity, sid.Quantity, 0)), 0) AS DECIMAL(18,4))
+            FROM dbo.supplier_invoice_details sid
+            WHERE sid.supplier_invoice_id = @supplierInvoiceId
+              AND sid.purchase_order_item_id = @purchaseOrderItemId
+              AND (@existingId IS NULL OR sid.id <> @existingId);
+            """,
+            [
+                new SqlParameter("@supplierInvoiceId", supplierInvoiceId.Value),
+                new SqlParameter("@purchaseOrderItemId", purchaseOrderItemId.Value),
+                new SqlParameter("@existingId", (object?)existingId ?? DBNull.Value)
+            ]) ?? 0m;
+
+        var effectiveQtyAfterSave = alreadyInvoicedQty + quantity.Value;
+        if (orderedQuantity > 0m && effectiveQtyAfterSave > orderedQuantity + 0.0001m)
+        {
+            return $"Invoiced quantity ({effectiveQtyAfterSave:0.####}) exceeds PO ordered quantity ({orderedQuantity:0.####}) for purchaseOrderItemId={purchaseOrderItemId.Value}.";
+        }
+
+        if (receivedQuantity <= 0m)
+        {
+            return $"GRN quantity is missing for purchaseOrderItemId={purchaseOrderItemId.Value}.";
+        }
+
+        if (effectiveQtyAfterSave > receivedQuantity + 0.0001m)
+        {
+            return $"Invoiced quantity ({effectiveQtyAfterSave:0.####}) exceeds received GRN quantity ({receivedQuantity:0.####}) for purchaseOrderItemId={purchaseOrderItemId.Value}.";
+        }
+
+        if (poUnitCost > 0m && unitCost.Value > poUnitCost + 0.01m)
+        {
+            return $"unitCost ({unitCost.Value:0.####}) exceeds PO unit cost ({poUnitCost:0.####}) for purchaseOrderItemId={purchaseOrderItemId.Value}.";
+        }
+
+        var calculatedLineTotal = Math.Round(quantity.Value * unitCost.Value, 2, MidpointRounding.AwayFromZero);
+        if (lineTotal.HasValue && Math.Abs(lineTotal.Value - calculatedLineTotal) > 0.01m)
+        {
+            return $"lineTotal mismatch for purchaseOrderItemId={purchaseOrderItemId.Value}. Expected {calculatedLineTotal:0.##}.";
+        }
+
+        return null;
+    }
+
     private async Task<string?> ValidateSupplierPaymentAsync(JsonElement payload, long? branchId, long? existingId = null)
     {
         long? apId = TryGetLong(payload, "accountsPayableId", "accounts_payable_id");
@@ -2116,11 +2177,7 @@ public class AccountingController : ControllerBase
         return null;
     }
 
-    private async Task<decimal?> ResolveStaffBaseSalaryAsync(
-        long staffId,
-        long? branchId,
-        DateOnly asOfDate,
-        bool includeTierFallback = true)
+    private async Task<decimal?> ResolveStaffBaseSalaryAsync(long staffId, long? branchId, DateOnly asOfDate)
     {
         var asOf = asOfDate.ToDateTime(TimeOnly.MinValue);
 
@@ -2168,22 +2225,6 @@ public class AccountingController : ControllerBase
             if (baseSalary > 0m) return baseSalary;
         }
 
-        if (includeTierFallback)
-        {
-            // Keep this fallback consistent with PayrollBatchCalculationService.
-            var tierBaseSalary = await (
-                from staff in _db.Staffs.AsNoTracking()
-                join tier in _db.StaffTiers.AsNoTracking() on staff.StaffTierId equals tier.Id
-                where staff.Id == staffId
-                      && staff.IsDeleted != true
-                      && tier.IsDeleted != true
-                      && tier.BaseSalary.HasValue
-                      && tier.BaseSalary.Value > 0m
-                select (decimal?)tier.BaseSalary!.Value
-            ).FirstOrDefaultAsync();
-            if (tierBaseSalary.HasValue && tierBaseSalary.Value > 0m) return tierBaseSalary.Value;
-        }
-
         return null;
     }
 
@@ -2191,39 +2232,44 @@ public class AccountingController : ControllerBase
     {
         if (currentHireDate.HasValue) return currentHireDate.Value;
 
-        var staffsTableExists = await _crud.ScalarAsync<int?>("SELECT OBJECT_ID('dbo.Staffs', 'U');");
-        if (staffsTableExists.HasValue)
-        {
-            var columnRow = (await _crud.QueryAsync(
-                """
-                SELECT TOP 1 c.name AS column_name
-                FROM sys.columns c
-                WHERE c.object_id = OBJECT_ID('dbo.Staffs')
-                  AND c.name IN ('HireDate', 'hire_date', 'CreatedAt', 'created_at')
-                ORDER BY CASE c.name
-                    WHEN 'HireDate' THEN 1
-                    WHEN 'hire_date' THEN 2
-                    WHEN 'CreatedAt' THEN 3
-                    WHEN 'created_at' THEN 4
-                    ELSE 99
-                END;
-                """)).FirstOrDefault();
-
-            var columnName = AsString(columnRow, "columnName");
-            if (!string.IsNullOrWhiteSpace(columnName))
-            {
-                var staffSql = $"""
-                SELECT TOP 1 CAST([{columnName}] AS date) AS hire_date
+        var staffRow = (await _crud.QueryAsync(
+            """
+            IF OBJECT_ID('dbo.Staffs', 'U') IS NULL
+            BEGIN
+                SELECT CAST(NULL AS date) AS hire_date;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'HireDate') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(HireDate AS date) AS hire_date
                 FROM dbo.Staffs
                 WHERE Id=@staffId;
-                """;
-                var staffRow = (await _crud.QueryAsync(staffSql, [new SqlParameter("@staffId", staffId)])).FirstOrDefault();
-                var directHireDate = AsDateOnly(staffRow, "hireDate");
-                if (directHireDate.HasValue) return directHireDate.Value;
-            }
-        }
-
-        var hireDate = (DateOnly?)null;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'hire_date') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(hire_date AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'CreatedAt') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(CreatedAt AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE IF COL_LENGTH('dbo.Staffs', 'created_at') IS NOT NULL
+            BEGIN
+                SELECT TOP 1 CAST(created_at AS date) AS hire_date
+                FROM dbo.Staffs
+                WHERE Id=@staffId;
+            END
+            ELSE
+            BEGIN
+                SELECT CAST(NULL AS date) AS hire_date;
+            END
+            """,
+            [new SqlParameter("@staffId", staffId)])).FirstOrDefault();
+        var hireDate = AsDateOnly(staffRow, "hireDate");
+        if (hireDate.HasValue) return hireDate;
 
         if (_crud.TryGetConfig("staff-contracts", out var contractCfg) && await _crud.TableExistsAsync(contractCfg))
         {
@@ -2262,28 +2308,21 @@ public class AccountingController : ControllerBase
     {
         _ = staffId;
         var yearsOfService = CalculateCompletedYears(hireDate, asOfDate);
-        try
-        {
-            var configuredCoefficient = await _db.SalaryCoefficients
-                .AsNoTracking()
-                .Where(item =>
-                    item.IsDeleted != true &&
-                    item.IsActive != false &&
-                    item.YearsOfService.HasValue &&
-                    item.YearsOfService.Value <= yearsOfService)
-                .OrderByDescending(item => item.YearsOfService)
-                .Select(item => (decimal?)item.CoefficientValue)
-                .FirstOrDefaultAsync();
 
-            if (configuredCoefficient.HasValue && configuredCoefficient.Value > 0m)
-            {
-                return configuredCoefficient.Value;
-            }
-        }
-        catch (Exception)
+        var configuredCoefficient = await _db.SalaryCoefficients
+            .AsNoTracking()
+            .Where(item =>
+                item.IsDeleted != true &&
+                item.IsActive != false &&
+                item.YearsOfService.HasValue &&
+                item.YearsOfService.Value <= yearsOfService)
+            .OrderByDescending(item => item.YearsOfService)
+            .Select(item => (decimal?)item.CoefficientValue)
+            .FirstOrDefaultAsync();
+
+        if (configuredCoefficient.HasValue && configuredCoefficient.Value > 0m)
         {
-            // Never break payroll UI because of coefficient source issues.
-            return 1.0000m;
+            return configuredCoefficient.Value;
         }
 
         return 1.0000m;
@@ -2327,33 +2366,23 @@ public class AccountingController : ControllerBase
             return false;
         }
 
-        var claimRole = User.FindFirstValue(ClaimTypes.Role);
-        var roleCode = User.FindFirstValue("role_code");
-        var roleName = User.FindFirstValue("role_name");
-        var isAccountingStaff = IsAccountingStaff(claimRole, roleCode, roleName);
-        var isAdminStaff = IsAdminStaff(claimRole, roleCode, roleName);
-        if (!isAccountingStaff && !isAdminStaff)
+        var claimRole = this.GetCurrentRole();
+        var roleCode = this.GetCurrentRoleCode();
+        var roleName = this.GetCurrentRoleName();
+        if (!IsAccountingStaff(claimRole, roleCode, roleName) && !IsAdminStaff(claimRole, roleCode, roleName))
         {
             deniedResult = Forbid();
             return false;
         }
 
-        var userIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!long.TryParse(userIdRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId) || userId <= 0)
+        var userId = this.GetCurrentUserId();
+        if (!userId.HasValue || userId.Value <= 0)
         {
             deniedResult = Unauthorized(new { message = "Invalid user identity." });
             return false;
         }
 
-        var branchId = ResolveBranchIdFromClaims();
-        // ACCOUNTANT must always be scoped to exactly one branch.
-        if (isAccountingStaff && !branchId.HasValue)
-        {
-            deniedResult = Forbid();
-            return false;
-        }
-
-        access = new AccountingAccess(userId, branchId);
+        access = new AccountingAccess(userId.Value, ResolveBranchIdFromClaims());
         return true;
     }
 
@@ -2367,17 +2396,17 @@ public class AccountingController : ControllerBase
             return false;
         }
 
-        var claimRole = User.FindFirstValue(ClaimTypes.Role);
-        var roleCode = User.FindFirstValue("role_code");
-        var roleName = User.FindFirstValue("role_name");
+        var claimRole = this.GetCurrentRole();
+        var roleCode = this.GetCurrentRoleCode();
+        var roleName = this.GetCurrentRoleName();
         if (!IsAccountingStaff(claimRole, roleCode, roleName))
         {
             deniedResult = Forbid();
             return false;
         }
 
-        var userIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!long.TryParse(userIdRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId) || userId <= 0)
+        var userId = this.GetCurrentUserId();
+        if (!userId.HasValue || userId.Value <= 0)
         {
             deniedResult = Unauthorized(new { message = "Invalid user identity." });
             return false;
@@ -2390,20 +2419,55 @@ public class AccountingController : ControllerBase
             return false;
         }
 
-        access = new AccountingAccess(userId, branchId);
+        access = new AccountingAccess(userId.Value, branchId);
         return true;
     }
 
     private static bool IsAccountingStaff(string? claimRole, string? roleCode, string? roleName)
     {
-        var roleNameUpper = (roleName ?? "").Trim().ToUpperInvariant();
+        var normalizedRoleName = NormalizeRoleNameForMatch(roleName);
         return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
                (
                    string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("K? TO�N", StringComparison.OrdinalIgnoreCase)
+                   normalizedRoleName.Contains("ACCOUNTANT", StringComparison.Ordinal) ||
+                   normalizedRoleName.Contains("KE TOAN", StringComparison.Ordinal)
                );
+    }
+
+    private static string NormalizeRoleNameForMatch(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            return string.Empty;
+        }
+
+        var normalized = TryFixUtf8Mojibake(roleName.Trim());
+        var decomposed = normalized.Normalize(NormalizationForm.FormD);
+        var buffer = new StringBuilder(decomposed.Length);
+
+        foreach (var c in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                buffer.Append(c);
+            }
+        }
+
+        return buffer.ToString()
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd')
+            .ToUpperInvariant();
+    }
+
+    private static string TryFixUtf8Mojibake(string value)
+    {
+        if (value.IndexOfAny(['\u00C3', '\u00C2', '\u00D0', '\u00C4']) < 0)
+        {
+            return value;
+        }
+
+        var decoded = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
+        return decoded.Contains('\uFFFD') ? value : decoded;
     }
 
     private static bool IsAdminStaff(string? claimRole, string? roleCode, string? roleName)
@@ -2418,16 +2482,7 @@ public class AccountingController : ControllerBase
 
     private long? ResolveBranchIdFromClaims()
     {
-        var branchClaim =
-            User.FindFirstValue("branch_id") ??
-            User.FindFirstValue("branchId") ??
-            User.FindFirstValue("BranchId");
-        if (long.TryParse(branchClaim, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedBranch) && parsedBranch > 0)
-        {
-            return parsedBranch;
-        }
-
-        return null;
+        return this.GetCurrentBranchId();
     }
 
     private static long? TryGetLong(JsonElement payload, params string[] keys)
@@ -2475,8 +2530,6 @@ public class AccountingController : ControllerBase
     }
 
     private sealed record PayrollRunResolution(long RunId, long RunNo, bool CreatedNew);
-    private sealed record ReceivableOpenRow(long InvoiceId, string InvoiceCode, DateTime? DueDate, decimal OutstandingAmount, int DaysPastDue, bool IsOverdue, string CompanyName);
-    private sealed record PayableOpenRow(long Id, string SupplierInvoiceNo, DateTime? DueDate, decimal OutstandingAmount, int DaysPastDue, bool IsOverdue);
     private sealed record SalaryCoefficientThreshold(int YearsOfService, decimal CoefficientValue);
     private sealed record ContractCompensationSnapshot(decimal BaseSalary, decimal AllowanceAmount);
     private sealed record PitBracket(decimal UpperLimit, decimal Rate);
@@ -2505,18 +2558,69 @@ public class AccountingController : ControllerBase
         public string? Status { get; init; }
     }
 
+    private sealed class PayrollCommissionReconciliationDetail
+    {
+        public long StaffId { get; init; }
+        public decimal PayrollCommissionAmount { get; init; }
+        public decimal ProcessedAmount { get; init; }
+        public decimal PendingAmount { get; init; }
+        public decimal PaidAmount { get; init; }
+        public decimal CanceledAmount { get; init; }
+        public int ProcessedCount { get; init; }
+        public int PendingCount { get; init; }
+        public int PaidCount { get; init; }
+        public int CanceledCount { get; init; }
+        public decimal GapAmount { get; init; }
+        public bool IsMatched { get; init; }
+    }
+
+    private sealed class PayrollRunCommissionReconciliationRunInfo
+    {
+        public long Id { get; init; }
+        public int RunNo { get; init; }
+        public string Status { get; init; } = string.Empty;
+        public long? BranchId { get; init; }
+        public long PayrollPeriodId { get; init; }
+        public string PeriodCode { get; init; } = string.Empty;
+        public string PeriodStartDate { get; init; } = string.Empty;
+        public string PeriodEndDate { get; init; } = string.Empty;
+    }
+
+    private sealed class PayrollRunCommissionReconciliationSummary
+    {
+        public int StaffCount { get; init; }
+        public decimal TotalPayrollCommission { get; init; }
+        public decimal TotalProcessed { get; init; }
+        public decimal TotalPending { get; init; }
+        public decimal TotalPaid { get; init; }
+        public decimal TotalCanceled { get; init; }
+        public decimal TotalGap { get; init; }
+        public bool IsFullyMatched { get; init; }
+    }
+
+    private sealed class PayrollRunCommissionReconciliationResponse
+    {
+        public PayrollRunCommissionReconciliationRunInfo PayrollRun { get; init; } = new();
+        public PayrollRunCommissionReconciliationSummary Summary { get; init; } = new();
+        public List<PayrollCommissionReconciliationDetail> Details { get; init; } = [];
+    }
+
     private sealed record AccountingAccess(long UserId, long? BranchId);
     public sealed class PostJournalRequest { public long PostedBy { get; set; } }
     public sealed class FinanceDecisionRequest { public string? Decision { get; set; } public long ApproverId { get; set; } public string? RejectReason { get; set; } }
     public sealed class PayrollApproveRequest { public long ApprovedBy { get; set; } }
     public sealed class PayrollPaidRequest { public long PaidBy { get; set; } }
-    public sealed class PayrollCancelRequest { public long? CanceledBy { get; set; } public string? Reason { get; set; } }
     public sealed class SupplierPaymentVoidRequest { public long? ApprovalRequestId { get; set; } public long? ApprovedBy { get; set; } public string? Reason { get; set; } }
     public sealed class PayrollBatchCalculateRequest
     {
-        public long? BranchId { get; set; }
         public long? PayrollPeriodId { get; set; }
         public long? PayrollRunId { get; set; }
+        public bool OverwriteExisting { get; set; } = true;
+        public bool IncludeInactiveStaff { get; set; }
+        public bool IssuePayslips { get; set; }
+    }
+    public sealed class PayrollRunCalculateRequest
+    {
         public bool OverwriteExisting { get; set; } = true;
         public bool IncludeInactiveStaff { get; set; }
         public bool IssuePayslips { get; set; }
@@ -2545,5 +2649,6 @@ public class AccountingController : ControllerBase
         public string? Note { get; set; }
     }
 }
+
 
 

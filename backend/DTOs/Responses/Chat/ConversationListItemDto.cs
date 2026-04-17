@@ -14,5 +14,6 @@ namespace MyGarage.DTOs.Responses.Chat
         public string? LastMessage { get; set; }
         public DateTime? LastMessageAt { get; set; }
         public int UnreadCount { get; set; }
+        public bool CustomerOnline { get; set; }
     }
 }

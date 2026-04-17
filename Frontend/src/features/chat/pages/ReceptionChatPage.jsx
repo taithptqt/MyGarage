@@ -73,6 +73,36 @@ function getShortName(name) {
   return parts.map((part) => part[0]).join("").toUpperCase();
 }
 
+function readOnlineFlag(source) {
+  if (!source) return null;
+
+  const raw =
+    source.customerOnline ??
+    source.CustomerOnline ??
+    source.isCustomerOnline ??
+    source.IsCustomerOnline ??
+    source.isOnline ??
+    source.IsOnline ??
+    source.online ??
+    source.Online ??
+    source.customerPresenceOnline ??
+    source.CustomerPresenceOnline ??
+    source.presenceOnline ??
+    source.PresenceOnline ??
+    null;
+
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw > 0;
+  if (typeof raw === "string") {
+    const value = raw.trim().toLowerCase();
+    if (!value) return null;
+    if (["true", "1", "online", "active", "connected"].includes(value)) return true;
+    if (["false", "0", "offline", "inactive", "disconnected"].includes(value)) return false;
+  }
+
+  return null;
+}
+
 function getAttachmentItems(message) {
   const raw = message?.attachments ?? message?.Attachments;
   if (Array.isArray(raw) && raw.length > 0) {
@@ -155,9 +185,9 @@ function ChatOrderCard({ orderCard, onClick }) {
       type="button"
       className="chat-order-card"
       onClick={() => onClick(orderCard)}
-      title="Mo chi tiet don hang"
+      title="Mở chi tiết đơn hàng"
     >
-      <div className="chat-order-card-head">Ban dang hoi thong tin ve don hang sau:</div>
+      <div className="chat-order-card-head">Bạn đang hỏi thông tin về đơn hàng sau:</div>
       <div className="chat-order-card-body">
         <div className="chat-order-card-thumb">
           {thumbSrc ? (
@@ -182,13 +212,13 @@ function ChatOrderCard({ orderCard, onClick }) {
           <strong>{orderCard.title}</strong>
           <p>{orderCard.subtitle}</p>
           <div className="chat-order-card-line">
-            <span className="chat-order-card-status">{orderCard.statusLabel || "Dang xu ly"}</span>
+            <span className="chat-order-card-status">{orderCard.statusLabel || "Đang xử lý"}</span>
             {amountText ? <span className="chat-order-card-amount">{amountText}</span> : null}
           </div>
         </div>
       </div>
       <div className="chat-order-card-meta">
-        <span>Ma don: {orderCard.orderCode}</span>
+        <span>Mã đơn: {orderCard.orderCode}</span>
         {orderTime ? <span>{orderTime}</span> : null}
       </div>
     </button>
@@ -282,6 +312,14 @@ export default function ReceptionChatPage() {
     return selectedConversationDetail || fromList;
   }, [conversations, selectedConversationDetail, selectedConversationId]);
 
+  const selectedConversationOnlineState = useMemo(() => {
+    const detailState = readOnlineFlag(selectedConversationDetail);
+    if (detailState !== null) return detailState;
+    return readOnlineFlag(selectedConversation);
+  }, [selectedConversation, selectedConversationDetail]);
+
+  const isSelectedCustomerOnline = selectedConversationOnlineState === true;
+
   const loadConversations = useCallback(
     async (preferredConversationId = null, { silent = false } = {}) => {
       if (!silent) {
@@ -312,7 +350,7 @@ export default function ReceptionChatPage() {
         setSelectedConversationId(wantedId);
       } catch (err) {
         if (!silent) {
-          setError(err.message || "Khong tai duoc danh sach hoi thoai.");
+          setError(err.message || "Không tải được danh sách hội thoại.");
         }
       } finally {
         if (!silent) {
@@ -374,7 +412,7 @@ export default function ReceptionChatPage() {
       }
     } catch (err) {
       if (!silent) {
-        setError(err.message || "Khong tai duoc chi tiet hoi thoai.");
+        setError(err.message || "Không tải được chi tiết hội thoại.");
       }
     } finally {
       if (!silent) {
@@ -393,7 +431,7 @@ export default function ReceptionChatPage() {
       const items = getItems(data).map((item) => getOrderCardFromMessage({ orderCard: item })).filter(Boolean);
       setConversationOrders(items);
     } catch (err) {
-      setOrderPickerError(err.message || "Khong tai duoc danh sach don hang.");
+      setOrderPickerError(err.message || "Không tải được danh sách đơn hàng.");
       setConversationOrders([]);
     } finally {
       setLoadingOrders(false);
@@ -553,7 +591,7 @@ export default function ReceptionChatPage() {
       await loadConversationDetailAndMessages(selectedConversationId, { silent: true, markRead: false });
       await loadConversations(selectedConversationId, { silent: true });
     } catch (err) {
-      setError(err.message || "Gui tin nhan that bai.");
+      setError(err.message || "Gửi tin nhắn thất bại.");
     } finally {
       setSending(false);
     }
@@ -564,7 +602,7 @@ export default function ReceptionChatPage() {
 
     const payload = buildOrderCardMessagePayload(orderCard);
     if (!payload) {
-      setOrderPickerError("Khong tao duoc noi dung don hang.");
+      setOrderPickerError("Không tạo được nội dung đơn hàng.");
       return;
     }
 
@@ -577,7 +615,7 @@ export default function ReceptionChatPage() {
       await loadConversationDetailAndMessages(selectedConversationId, { silent: true, markRead: false });
       await loadConversations(selectedConversationId, { silent: true });
     } catch (err) {
-      setOrderPickerError(err.message || "Gui the don hang that bai.");
+      setOrderPickerError(err.message || "Gửi thẻ đơn hàng thất bại.");
     } finally {
       setSending(false);
     }
@@ -615,28 +653,28 @@ export default function ReceptionChatPage() {
     const onlyFiles = pickerType === "file";
     for (const file of picked) {
       if (!isSupportedAttachmentFile(file)) {
-        setError(`Tep ${file.name} khong duoc ho tro.`);
+        setError(`Tệp ${file.name} không được hỗ trợ.`);
         continue;
       }
 
       const fileIsImage = isImageFile(file);
       if (onlyImages && !fileIsImage) {
-        setError("Nut anh chi nhan tep anh.");
+        setError("Nút ảnh chỉ nhận tệp ảnh.");
         continue;
       }
 
       if (onlyFiles && fileIsImage) {
-        setError("Nut file chi nhan tai lieu.");
+        setError("Nút file chỉ nhận tài liệu.");
         continue;
       }
 
       if (file.size > CHAT_MAX_ATTACHMENT_SIZE_BYTES) {
-        setError(`Tep ${file.name} vuot qua ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
+        setError(`Tệp ${file.name} vượt quá ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
         continue;
       }
 
       if (next.length >= CHAT_MAX_ATTACHMENT_COUNT) {
-        setError(`Toi da ${CHAT_MAX_ATTACHMENT_COUNT} tep moi lan gui.`);
+        setError(`Tối đa ${CHAT_MAX_ATTACHMENT_COUNT} tệp mỗi lần gửi.`);
         break;
       }
 
@@ -669,8 +707,8 @@ export default function ReceptionChatPage() {
         <aside className="chat-sidebar">
           <div className="chat-panel-header">
             <div className="chat-panel-title-wrap">
-              <h2>Danh sach user</h2>
-              <small>{conversations.length} cuoc tro chuyen</small>
+              <h2>Danh sách user</h2>
+              <small>{conversations.length} cuộc trò chuyện</small>
             </div>
             <button
               type="button"
@@ -678,14 +716,14 @@ export default function ReceptionChatPage() {
               onClick={() => loadConversations(selectedConversationId)}
               disabled={loadingConversations}
             >
-              Tai lai
+              Tải lại
             </button>
           </div>
 
           <div className="chat-conversation-list">
-            {loadingConversations ? <p className="chat-empty">Dang tai hoi thoai...</p> : null}
+            {loadingConversations ? <p className="chat-empty">Đang tải hội thoại...</p> : null}
             {!loadingConversations && conversations.length === 0 ? (
-              <p className="chat-empty">Chua co user nao nhan tin.</p>
+              <p className="chat-empty">Chưa có user nào nhắn tin.</p>
             ) : null}
 
             {conversations.map((item) => {
@@ -705,7 +743,7 @@ export default function ReceptionChatPage() {
                       <span className="chat-user-avatar">{getShortName(customerName)}</span>
                       <div className="chat-user-info">
                         <span className="chat-user-name">{customerName}</span>
-                        <small>Khach hang</small>
+                        <small>Khách hàng</small>
                       </div>
                     </div>
                     <div className="chat-conversation-metrics">
@@ -713,7 +751,7 @@ export default function ReceptionChatPage() {
                       {unreadCount > 0 ? <span className="chat-badge">{unreadCount}</span> : null}
                     </div>
                   </div>
-                  <p>{item.lastMessage ?? item.LastMessage ?? "(Khong co noi dung)"}</p>
+                  <p>{item.lastMessage ?? item.LastMessage ?? "(Không có nội dung)"}</p>
                 </button>
               );
             })}
@@ -726,20 +764,24 @@ export default function ReceptionChatPage() {
               <h2>
                 {selectedConversation
                   ? getCustomerDisplayName(selectedConversation)
-                  : "Chon user de nhan tin"}
+                  : "Chọn user để nhắn tin"}
               </h2>
-              <small>Nhan tin truc tiep voi khach hang</small>
+              <small>Nhắn tin trực tiếp với khách hàng</small>
             </div>
-            {selectedConversation ? <span className="chat-live-chip">Dang online</span> : null}
+            {selectedConversation ? (
+              <span className={`chat-live-chip ${isSelectedCustomerOnline ? "online" : "offline"}`}>
+                {isSelectedCustomerOnline ? "Đang online" : "Không online"}
+              </span>
+            ) : null}
           </div>
 
           {error ? <p className="chat-error">{error}</p> : null}
 
           <div ref={messageListRef} className="chat-message-list">
-            {!selectedConversation ? <p className="chat-empty">Vui long chon hoi thoai de nhan tin.</p> : null}
-            {selectedConversation && loadingMessages ? <p className="chat-empty">Dang tai tin nhan...</p> : null}
+            {!selectedConversation ? <p className="chat-empty">Vui lòng chọn hội thoại để nhắn tin.</p> : null}
+            {selectedConversation && loadingMessages ? <p className="chat-empty">Đang tải tin nhắn...</p> : null}
             {selectedConversation && !loadingMessages && messages.length === 0 ? (
-              <p className="chat-empty">Chua co tin nhan.</p>
+              <p className="chat-empty">Chưa có tin nhắn.</p>
             ) : null}
 
             {messages.map((message, index) => {
@@ -837,7 +879,7 @@ export default function ReceptionChatPage() {
                       <FileText size={16} />
                       <div>
                         <strong>{item.file.name}</strong>
-                        <small>{formatAttachmentSize(item.file.size) || "tep"}</small>
+                        <small>{formatAttachmentSize(item.file.size) || "tệp"}</small>
                       </div>
                     </div>
                   )}
@@ -845,7 +887,7 @@ export default function ReceptionChatPage() {
                     type="button"
                     className="chat-preview-remove-btn"
                     onClick={() => removeSelectedFile(item.id)}
-                    aria-label="Xoa anh"
+                    aria-label="Xóa ảnh"
                   >
                     <X size={12} />
                   </button>
@@ -857,20 +899,20 @@ export default function ReceptionChatPage() {
           {orderPickerOpen ? (
             <div className="chat-order-picker">
               <div className="chat-order-picker-head">
-                <strong>Chon don hang de gui</strong>
+                <strong>Chọn đơn hàng để gửi</strong>
                 <button
                   type="button"
                   className="chat-attach-btn"
                   onClick={() => setOrderPickerOpen(false)}
-                  aria-label="Dong danh sach don hang"
+                  aria-label="Đóng danh sách đơn hàng"
                 >
                   <X size={12} />
                 </button>
               </div>
               {orderPickerError ? <p className="chat-error">{orderPickerError}</p> : null}
-              {loadingOrders ? <p className="chat-empty">Dang tai don hang...</p> : null}
+              {loadingOrders ? <p className="chat-empty">Đang tải đơn hàng...</p> : null}
               {!loadingOrders && conversationOrders.length === 0 ? (
-                <p className="chat-empty">Khong co don hang nao phu hop de gui.</p>
+                <p className="chat-empty">Không có đơn hàng nào phù hợp để gửi.</p>
               ) : null}
               {!loadingOrders && conversationOrders.length > 0 ? (
                 <div className="chat-order-picker-list">
@@ -920,7 +962,7 @@ export default function ReceptionChatPage() {
               className="chat-attach-btn image"
               onClick={() => imageInputRef.current?.click()}
               disabled={!selectedConversation || sending}
-              aria-label="Chon anh"
+              aria-label="Chọn ảnh"
             >
               <ImagePlus size={16} />
             </button>
@@ -929,7 +971,7 @@ export default function ReceptionChatPage() {
               className="chat-attach-btn file"
               onClick={() => fileInputRef.current?.click()}
               disabled={!selectedConversation || sending}
-              aria-label="Chon tep dinh kem"
+              aria-label="Chọn tệp đính kèm"
             >
               <Paperclip size={16} />
             </button>
@@ -938,13 +980,13 @@ export default function ReceptionChatPage() {
               className="chat-attach-btn order"
               onClick={toggleOrderPicker}
               disabled={!selectedConversation || sending}
-              aria-label="Gui the don hang"
+              aria-label="Gửi thẻ đơn hàng"
             >
               <ShoppingBag size={16} />
             </button>
             <input
               type="text"
-              placeholder="Nhap noi dung tin nhan..."
+              placeholder="Nhập nội dung tin nhắn..."
               value={composeText}
               onChange={(e) => setComposeText(e.target.value)}
               disabled={!selectedConversation || sending}
@@ -953,7 +995,7 @@ export default function ReceptionChatPage() {
               type="submit"
               className="chat-send-btn"
               disabled={!selectedConversation || sending || (!composeText.trim() && selectedFiles.length === 0)}
-              aria-label="Gui tin nhan"
+              aria-label="Gửi tin nhắn"
             >
               <SendHorizontal size={16} />
             </button>
@@ -970,22 +1012,22 @@ export default function ReceptionChatPage() {
                 type="button"
                 className="chat-attach-btn"
                 onClick={() => setOrderPreview(null)}
-                aria-label="Dong chi tiet don hang"
+                aria-label="Đóng chi tiết đơn hàng"
               >
                 <X size={12} />
               </button>
             </header>
             <p>{orderPreview.subtitle}</p>
             <div className="chat-order-modal-grid">
-              <span>Loai</span>
+              <span>Loại</span>
               <strong>{getOrderTypeLabel(orderPreview.orderType)}</strong>
-              <span>Ma don</span>
+              <span>Mã đơn</span>
               <strong>{orderPreview.orderCode}</strong>
-              <span>Trang thai</span>
+              <span>Trạng thái</span>
               <strong>{orderPreview.statusLabel}</strong>
-              <span>Tong tien</span>
+              <span>Tổng tiền</span>
               <strong>{formatOrderAmount(orderPreview.totalAmount) || "--"}</strong>
-              <span>Chi nhanh</span>
+              <span>Chi nhánh</span>
               <strong>{orderPreview.branchName || "--"}</strong>
             </div>
             {orderPreview.detailUrl ? (

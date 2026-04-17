@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 namespace MyGarage.DTOs.Responses
 {
     public class ServiceOrderDetailResponseDto
     {
         public long Id { get; set; }
         public long ServiceOrderId { get; set; }
-        public long? DiagnoseRecommendationId { get; set; }
+        public long? QuotationDetailId { get; set; }
         public long? StandardServiceId { get; set; }
         public long? TechnicianId { get; set; }
         public long? OriginalOrderDetailId { get; set; }
@@ -39,9 +39,17 @@ namespace MyGarage.DTOs.Responses
         public string? Status { get; set; }
         public string? Note { get; set; }
         public bool? IsReturnOldPart { get; set; }
+        public string? ServiceSource { get; set; }
+        public bool IsSupplementary { get; set; }
+        public string? SupplementaryReasonCode { get; set; }
+        public long? SourceQuotationId { get; set; }
+        public long? SupplementaryRequestedByStaffId { get; set; }
+        public DateTime? SupplementaryRequestedAt { get; set; }
+        public DateTime? CustomerApprovedAt { get; set; }
         public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
     }
 }
+

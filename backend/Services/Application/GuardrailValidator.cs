@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -90,7 +90,7 @@ public class GuardrailValidator : IGuardrailValidator
         "bao gia",
         "phu tung",
         "ton kho",
-        "don dich vu",
+        "đơn dịch vụ",
         "voucher",
         "khuyen mai",
         "chi nhanh",
@@ -280,3 +280,4 @@ public class GuardrailValidator : IGuardrailValidator
         return false;
     }
 }
+

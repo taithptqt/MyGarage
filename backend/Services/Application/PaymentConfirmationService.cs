@@ -54,19 +54,19 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         {
             if (previousStatus != nameof(PaymentStatusCode.COMPLETED))
             {
-                // Transition má»›i tá»« non-COMPLETED â†’ COMPLETED â†’ luÃ´n gá»­i
+                // Transition mới từ non-COMPLETED -> COMPLETED -> luôn gửi
                 _logger.LogInformation(
-                    "[PaymentConfirmationService] Transition {PreviousStatus} â†’ COMPLETED cho Payment #{PaymentId}. Gá»­i email.",
+                    "[PaymentConfirmationService] Transition {PreviousStatus} -> COMPLETED cho Payment #{PaymentId}. Gửi email.",
                     previousStatus, payment.Id);
                 await TrySendPaymentSuccessEmailAsync(payment);
             }
             else
             {
-                // previousStatus Ä‘Ã£ lÃ  COMPLETED (webhook cháº¡y trÆ°á»›c hoáº·c retry).
-                // Váº«n gá»­i email vÃ¬ webhook chá»‰ set status, khÃ´ng gá»­i email.
+                // previousStatus đã là COMPLETED (webhook chạy trước hoặc retry).
+                // Vẫn gửi email vì webhook chỉ set status, không gửi email.
                 _logger.LogInformation(
-                    "[PaymentConfirmationService] Payment #{PaymentId} Ä‘Ã£ COMPLETED (cÃ³ thá»ƒ do webhook). " +
-                    "Retry gá»­i email Ä‘á»ƒ Ä‘áº£m báº£o khÃ¡ch nháº­n Ä‘Æ°á»£c hoÃ¡ Ä‘Æ¡n.",
+                    "[PaymentConfirmationService] Payment #{PaymentId} đã COMPLETED (có thể do webhook). " +
+                    "Retry gửi email để đảm bảo khách nhận được hóa đơn.",
                     payment.Id);
                 await TrySendPaymentSuccessEmailAsync(payment);
             }
@@ -187,7 +187,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         try
         {
             _logger.LogInformation(
-                "[PaymentConfirmationService] Báº¯t Ä‘áº§u resolve email cho Payment #{PaymentId} " +
+                "[PaymentConfirmationService] Bắt đầu resolve email cho Payment #{PaymentId} " +
                 "(RetailOrderId={RetailOrderId}, ServiceOrderId={ServiceOrderId}, PayerType={PayerType}, PayerId={PayerId})",
                 payment.Id, payment.RetailOrderId, payment.ServiceOrderId, payment.PayerType, payment.PayerId);
 
@@ -195,15 +195,15 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             if (!recipient.HasValue || string.IsNullOrWhiteSpace(recipient.Value.Email))
             {
                 _logger.LogWarning(
-                    "[PaymentConfirmationService] âŒ KhÃ´ng tÃ¬m Ä‘Æ°á»£c email khÃ¡ch hÃ ng cho payment #{PaymentId} " +
+                    "[PaymentConfirmationService] Không tìm được email khách hàng cho payment #{PaymentId} " +
                     "(RetailOrderId={RetailOrderId}, ServiceOrderId={ServiceOrderId}, PayerType={PayerType}, PayerId={PayerId}). " +
-                    "Email bá»‹ bá» qua. HÃ£y kiá»ƒm tra: (1) Customer cÃ³ email khÃ´ng? (2) BuyerEmail trong Order? (3) Invoice.ReceiveEmail?",
+                    "Email bị bỏ qua. Hãy kiểm tra: (1) Customer có email không? (2) BuyerEmail trong Order? (3) Invoice.ReceiveEmail?",
                     payment.Id, payment.RetailOrderId, payment.ServiceOrderId, payment.PayerType, payment.PayerId);
                 return;
             }
 
             _logger.LogInformation(
-                "[PaymentConfirmationService] âœ… ÄÃ£ tÃ¬m Ä‘Æ°á»£c email: {Email} ({FullName}) cho Payment #{PaymentId}",
+                "[PaymentConfirmationService] Đã tìm được email: {Email} ({FullName}) cho Payment #{PaymentId}",
                 recipient.Value.Email, recipient.Value.FullName, payment.Id);
 
             var body = BuildPaymentSuccessEmailBody(
@@ -218,7 +218,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[PaymentConfirmationService] Gá»­i email tháº¥t báº¡i cho payment #{PaymentId}", payment.Id);
+            _logger.LogError(ex, "[PaymentConfirmationService] Gửi email thất bại cho payment #{PaymentId}", payment.Id);
         }
     }
 
@@ -244,22 +244,22 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
     private async Task<(string Email, string FullName)?> ResolveCustomerRecipientAsync(Payment payment)
     {
-        // BÆ°á»›c 1: TÃ¬m qua PayerType/PayerId trá»±c tiáº¿p trÃªn Payment
+        // Bước 1: Tìm qua PayerType/PayerId trực tiếp trên Payment
         if (string.Equals(payment.PayerType, "CUSTOMER", StringComparison.OrdinalIgnoreCase) && payment.PayerId.HasValue)
         {
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 1: TÃ¬m Customer theo PayerId={PayerId}", payment.PayerId.Value);
+            _logger.LogDebug("[ResolveEmail] Bước 1: Tìm Customer theo PayerId={PayerId}", payment.PayerId.Value);
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == payment.PayerId.Value);
             if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
             {
                 return (customer.Email!, customer.FullName ?? "Khách hàng");
             }
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 1: Customer #{PayerId} khÃ´ng cÃ³ email hoáº·c khÃ´ng tá»“n táº¡i", payment.PayerId.Value);
+            _logger.LogDebug("[ResolveEmail] Bước 1: Customer #{PayerId} không có email hoặc không tồn tại", payment.PayerId.Value);
         }
 
-        // BÆ°á»›c 2: TÃ¬m qua ServiceOrder â†’ Customer
+        // Bước 2: Tìm qua ServiceOrder -> Customer
         if (payment.ServiceOrderId.HasValue)
         {
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 2: TÃ¬m qua ServiceOrderId={ServiceOrderId}", payment.ServiceOrderId.Value);
+            _logger.LogDebug("[ResolveEmail] Bước 2: Tìm qua ServiceOrderId={ServiceOrderId}", payment.ServiceOrderId.Value);
             var serviceOrder = await _db.ServiceOrders
                 .Include(s => s.Customer)
                 .FirstOrDefaultAsync(s => s.Id == payment.ServiceOrderId.Value);
@@ -267,13 +267,13 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             {
                 return (serviceOrder.Customer.Email!, serviceOrder.Customer.FullName ?? "Khách hàng");
             }
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 2: ServiceOrder khÃ´ng cÃ³ Customer.Email");
+            _logger.LogDebug("[ResolveEmail] Bước 2: ServiceOrder không có Customer.Email");
         }
 
-        // BÆ°á»›c 3: TÃ¬m qua RetailOrder â†’ Customer hoáº·c Invoice.ReceiveEmail
+        // Bước 3: Tìm qua RetailOrder -> Customer hoặc Invoice.ReceiveEmail
         if (payment.RetailOrderId.HasValue)
         {
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 3: TÃ¬m qua RetailOrderId={RetailOrderId}", payment.RetailOrderId.Value);
+            _logger.LogDebug("[ResolveEmail] Bước 3: Tìm qua RetailOrderId={RetailOrderId}", payment.RetailOrderId.Value);
             var retailOrder = await _db.RetailOrders
                 .Include(r => r.Customer)
                 .Include(r => r.Invoices)
@@ -282,7 +282,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             {
                 return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Khách hàng");
             }
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 3: RetailOrder.Customer khÃ´ng cÃ³ email (CustomerId={CustomerId})",
+            _logger.LogDebug("[ResolveEmail] Bước 3: RetailOrder.Customer không có email (CustomerId={CustomerId})",
                 retailOrder?.CustomerId);
 
             var invoiceReceiveEmail = retailOrder?.Invoices
@@ -292,29 +292,29 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
             if (!string.IsNullOrWhiteSpace(invoiceReceiveEmail))
             {
-                _logger.LogDebug("[ResolveEmail] BÆ°á»›c 3b: âœ… TÃ¬m tháº¥y ReceiveEmail={Email} tá»« Invoice", invoiceReceiveEmail);
-                return (invoiceReceiveEmail!, retailOrder?.Customer?.FullName ?? "KhÃ¡ch hÃ ng");
+                _logger.LogDebug("[ResolveEmail] Bước 3b: Tìm thấy ReceiveEmail={Email} từ Invoice", invoiceReceiveEmail);
+                return (invoiceReceiveEmail!, retailOrder?.Customer?.FullName ?? "Khách hàng");
             }
         }
 
-        // BÆ°á»›c 4: TÃ¬m qua in-memory OrderStore (BuyerEmail tá»« PayOS order)
+        // Bước 4: Tìm qua in-memory OrderStore (BuyerEmail từ PayOS order)
         if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
         {
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 4: TÃ¬m qua OrderStore, TransactionCode={TransactionCode}", payment.TransactionCode);
+            _logger.LogDebug("[ResolveEmail] Bước 4: Tìm qua OrderStore, TransactionCode={TransactionCode}", payment.TransactionCode);
             var order = _orderStore.GetOrderByPaymentLinkId(payment.TransactionCode);
             if (order is not null && !string.IsNullOrWhiteSpace(order.BuyerEmail))
             {
-                _logger.LogDebug("[ResolveEmail] BÆ°á»›c 4: âœ… TÃ¬m tháº¥y BuyerEmail={Email} tá»« OrderStore", order.BuyerEmail);
-                return (order.BuyerEmail!, string.IsNullOrWhiteSpace(order.BuyerName) ? "KhÃ¡ch hÃ ng" : order.BuyerName);
+                _logger.LogDebug("[ResolveEmail] Bước 4: Tìm thấy BuyerEmail={Email} từ OrderStore", order.BuyerEmail);
+                return (order.BuyerEmail!, string.IsNullOrWhiteSpace(order.BuyerName) ? "Khách hàng" : order.BuyerName);
             }
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 4: OrderStore order khÃ´ng cÃ³ BuyerEmail (order {Found})",
+            _logger.LogDebug("[ResolveEmail] Bước 4: OrderStore order không có BuyerEmail (order {Found})",
                 order is not null ? "found" : "NOT found");
         }
 
-        // BÆ°á»›c 5: TÃ¬m qua Invoice trá»±c tiáº¿p
+        // Bước 5: Tìm qua Invoice trực tiếp
         if (payment.InvoiceId.HasValue)
         {
-            _logger.LogDebug("[ResolveEmail] BÆ°á»›c 5: TÃ¬m qua InvoiceId={InvoiceId}", payment.InvoiceId.Value);
+            _logger.LogDebug("[ResolveEmail] Bước 5: Tìm qua InvoiceId={InvoiceId}", payment.InvoiceId.Value);
             var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == payment.InvoiceId.Value);
             if (invoice is not null &&
                 string.Equals(invoice.PayerType, "CUSTOMER", StringComparison.OrdinalIgnoreCase) &&
@@ -345,14 +345,14 @@ public class PaymentConfirmationService : IPaymentConfirmationService
                 var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == retailOrderForFallback.CustomerId.Value);
                 if (customer is not null && !string.IsNullOrWhiteSpace(customer.Email))
                 {
-                    _logger.LogDebug("[ResolveEmail] BÆ°á»›c 6: âœ… Fallback tÃ¬m tháº¥y email={Email} tá»« CustomerId={CustomerId}",
+                    _logger.LogDebug("[ResolveEmail] Bước 6: Fallback tìm thấy email={Email} từ CustomerId={CustomerId}",
                         customer.Email, customer.Id);
-                    return (customer.Email!, customer.FullName ?? "KhÃ¡ch hÃ ng");
+                    return (customer.Email!, customer.FullName ?? "Khách hàng");
                 }
             }
         }
 
-        _logger.LogWarning("[ResolveEmail] âŒ KhÃ´ng tÃ¬m Ä‘Æ°á»£c email qua táº¥t cáº£ 6 bÆ°á»›c cho Payment #{PaymentId}", payment.Id);
+        _logger.LogWarning("[ResolveEmail] Không tìm được email qua tất cả 6 bước cho Payment #{PaymentId}", payment.Id);
         return null;
     }
 
@@ -370,7 +370,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
         if (retailOrder.Customer is not null && !string.IsNullOrWhiteSpace(retailOrder.Customer.Email))
         {
-            return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "KhÃ¡ch hÃ ng");
+            return (retailOrder.Customer.Email!, retailOrder.Customer.FullName ?? "Khách hàng");
         }
 
         var invoiceReceiveEmail = retailOrder.Invoices
@@ -380,7 +380,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
         if (!string.IsNullOrWhiteSpace(invoiceReceiveEmail))
         {
-            return (invoiceReceiveEmail!, retailOrder.Customer?.FullName ?? "KhÃ¡ch hÃ ng");
+            return (invoiceReceiveEmail!, retailOrder.Customer?.FullName ?? "Khách hàng");
         }
 
         return null;
@@ -404,21 +404,21 @@ public class PaymentConfirmationService : IPaymentConfirmationService
 
             if (retailOrder == null)
             {
-                _logger.LogWarning("[PaymentConfirmationService] KhÃ´ng tÃ¬m tháº¥y retail order #{RetailOrderId} Ä‘á»ƒ gá»­i email hÃ³a Ä‘Æ¡n.", retailOrderId);
+                _logger.LogWarning("[PaymentConfirmationService] Không tìm thấy retail order #{RetailOrderId} để gửi email hóa đơn.", retailOrderId);
                 return;
             }
 
             var recipient = await ResolveRetailOrderRecipientAsync(retailOrderId);
             if ((!recipient.HasValue || string.IsNullOrWhiteSpace(recipient.Value.Email)) && !string.IsNullOrWhiteSpace(fallbackEmail))
             {
-                recipient = (fallbackEmail!, string.IsNullOrWhiteSpace(fallbackFullName) ? "KhÃ¡ch hÃ ng" : fallbackFullName.Trim());
+                recipient = (fallbackEmail!, string.IsNullOrWhiteSpace(fallbackFullName) ? "Khách hàng" : fallbackFullName.Trim());
             }
 
             if (!recipient.HasValue || string.IsNullOrWhiteSpace(recipient.Value.Email))
             {
                 _logger.LogWarning(
-                    "[PaymentConfirmationService] KhÃ´ng tÃ¬m Ä‘Æ°á»£c email ngÆ°á»i nháº­n cho retail order #{RetailOrderId}. " +
-                    "Email hÃ³a Ä‘Æ¡n bá»‹ bá» qua.",
+                    "[PaymentConfirmationService] Không tìm được email người nhận cho retail order #{RetailOrderId}. " +
+                    "Email hóa đơn bị bỏ qua.",
                     retailOrderId);
                 return;
             }
@@ -435,7 +435,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         }
         catch (System.Exception ex)
         {
-            _logger.LogError(ex, "[PaymentConfirmationService] Gá»­i retail email tháº¥t báº¡i cho RetailOrderId #{RetailOrderId}", retailOrderId);
+            _logger.LogError(ex, "[PaymentConfirmationService] Gửi retail email thất bại cho RetailOrderId #{RetailOrderId}", retailOrderId);
         }
     }
 

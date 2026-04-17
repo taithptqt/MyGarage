@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
@@ -15,18 +18,54 @@ namespace MyGarage.Controllers
     {
         private readonly ISupplierService _supplierService;
         private readonly IMapper _mapper;
+        private readonly IGarageContext _db;
 
-        public SupplierController(ISupplierService supplierService, IMapper mapper)
+        public SupplierController(ISupplierService supplierService, IMapper mapper, IGarageContext db)
         {
             _supplierService = supplierService;
             _mapper = mapper;
+            _db = db;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<SupplierResponseDto>>> GetAll()
+        public async Task<ActionResult> GetAll(
+            [FromQuery] int? page = null,
+            [FromQuery] int? pageSize = null)
         {
-            var items = await _supplierService.GetAllAsync();
-            var dtos = _mapper.Map<IEnumerable<SupplierResponseDto>>(items);
+            var hasPaging = page.HasValue || pageSize.HasValue;
+            if (hasPaging)
+            {
+                var normalizedPage = page.GetValueOrDefault(1);
+                if (normalizedPage < 1) normalizedPage = 1;
+
+                var normalizedPageSize = pageSize.GetValueOrDefault(20);
+                if (normalizedPageSize < 1) normalizedPageSize = 1;
+                if (normalizedPageSize > 200) normalizedPageSize = 200;
+
+                var query = _db.Suppliers
+                    .AsNoTracking()
+                    .Where(x => x.IsDeleted != true)
+                    .OrderByDescending(x => x.Id);
+
+                var total = await query.CountAsync();
+                var items = await query
+                    .Skip((normalizedPage - 1) * normalizedPageSize)
+                    .Take(normalizedPageSize)
+                    .ToListAsync();
+
+                var pagedDtos = _mapper.Map<List<SupplierResponseDto>>(items);
+                return Ok(new
+                {
+                    items = pagedDtos,
+                    total,
+                    page = normalizedPage,
+                    pageSize = normalizedPageSize,
+                    totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)normalizedPageSize)
+                });
+            }
+
+            var allItems = await _supplierService.GetAllAsync();
+            var dtos = _mapper.Map<IEnumerable<SupplierResponseDto>>(allItems);
             return Ok(dtos);
         }
 

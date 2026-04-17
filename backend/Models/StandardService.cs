@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -53,7 +53,7 @@ public partial class StandardService
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
-    public virtual ICollection<DiagnoseRecommendation> DiagnoseRecommendations { get; set; } = new List<DiagnoseRecommendation>();
+    public virtual ICollection<DiagnosisRecommendation> DiagnosisRecommendations { get; set; } = new List<DiagnosisRecommendation>();
 
     public virtual ICollection<InvoiceDetail> InvoiceDetails { get; set; } = new List<InvoiceDetail>();
 

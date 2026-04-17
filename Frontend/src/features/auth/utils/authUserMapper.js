@@ -39,6 +39,7 @@ export function mapAuthUserPayload(data, tokenOverride = null) {
 
 export function ensureAuthorizedRole(userData) {
   if (!userData?.roleCode) {
-    throw new Error("Tai khoan cua ban chua duoc cap quyen truy cap he thong.");
+    throw new Error("Tài khoản của bạn chưa được cấp quyền truy cập hệ thống.");
   }
 }
+

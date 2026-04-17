@@ -2,6 +2,8 @@
 
 public enum ServiceOrderQcStatusCode
 {
-    PENDING
+    PENDING,
+    PASS,
+    FAIL
 }
 

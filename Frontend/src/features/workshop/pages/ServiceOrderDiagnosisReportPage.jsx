@@ -133,8 +133,8 @@ function hasDiagnosisRecommendationLink(detail) {
   const recommendationId = toPositiveNumber(
     detail?.diagnosisRecommendationId,
     detail?.DiagnosisRecommendationId,
-    detail?.diagnoseRecommendationId,
-    detail?.DiagnoseRecommendationId
+    detail?.diagnosisRecommendationId,
+    detail?.DiagnosisRecommendationId
   );
   return recommendationId > 0;
 }
@@ -206,7 +206,7 @@ export default function ServiceOrderDiagnosisReportPage() {
       const latestDiagnosisId = toPositiveNumber(latestDiagnosis?.id, latestDiagnosis?.Id);
 
       const recommendationsRes = latestDiagnosisId
-        ? await serviceOrderApi.getDiagnoseRecommendations(latestDiagnosisId).catch(() => [])
+        ? await serviceOrderApi.getDiagnosisRecommendations(latestDiagnosisId).catch(() => [])
         : [];
 
       setOrder(orderRes || null);
@@ -662,7 +662,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                             {isCollapsed ? `Hiện phụ tùng (${group.requiredParts.length})` : "Thu gọn phụ tùng"}
                           </button>
                         ) : null}
-                        <span>Số lượng: {group.quantity}</span>
+                        <span>Sá»‘ lÆ°á»£ng: {group.quantity}</span>
                       </div>
                     </header>
 
@@ -686,7 +686,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                                 rel="noreferrer"
                                 className="diagnosis-recommendation-image-tile"
                               >
-                                <img src={url} alt={`Ảnh dịch vụ ${index + 1}.${imageIndex + 1}`} loading="lazy" />
+                                <img src={url} alt={`áº¢nh dá»‹ch vá»¥ ${index + 1}.${imageIndex + 1}`} loading="lazy" />
                               </a>
                             ))}
                           </div>
@@ -710,7 +710,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                               <thead>
                                 <tr>
                                   <th>Phụ tùng</th>
-                                  <th>Số lượng</th>
+                                  <th>Sá»‘ lÆ°á»£ng</th>
                                   <th>Ghi chú</th>
                                 </tr>
                               </thead>

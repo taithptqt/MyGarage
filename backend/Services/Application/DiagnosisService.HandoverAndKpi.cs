@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -99,12 +99,12 @@ namespace MyGarage.Services
         {
             if (serviceOrder == null)
             {
-                throw new InvalidOperationException("Khong tim thay lenh sua chua de ghi snapshot check-in.");
+                throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa để ghi snapshot check-in.");
             }
 
             if (intakeSuggestion == null)
             {
-                throw new InvalidOperationException("Khong co goi y intake de ghi snapshot.");
+                throw new InvalidOperationException("Không có gợi ý intake để ghi snapshot.");
             }
 
             var newestDiagnosis = (diagnoses ?? Array.Empty<Diagnosis>())
@@ -134,16 +134,18 @@ namespace MyGarage.Services
                 BypassConflictGuard = bypassConflictGuard,
                 ConflictLevel = string.IsNullOrWhiteSpace(intakeSuggestion.ConflictLevel) ? "GREEN" : intakeSuggestion.ConflictLevel.Trim().ToUpperInvariant(),
                 ConflictMinutes = Math.Max(0, intakeSuggestion.ConflictMinutes),
-                AssignedTeamId = newestDiagnosis?.AssignedTeamId ?? intakeSuggestion.SuggestedTeamId,
-                LeadTechnicianId = newestDiagnosis?.TechnicianId > 0 ? newestDiagnosis.TechnicianId : intakeSuggestion.SuggestedLeadTechnicianId,
-                AssistantTechnicianId = newestDiagnosis?.AssistantTechnicianId ?? intakeSuggestion.SuggestedAssistantTechnicianId,
+                AssignedTeamId = newestDiagnosis != null ? GetAssignedTeamId(newestDiagnosis) ?? intakeSuggestion.SuggestedTeamId : intakeSuggestion.SuggestedTeamId,
+                LeadTechnicianId = newestDiagnosis != null && GetTechnicianId(newestDiagnosis).GetValueOrDefault() > 0
+                    ? GetTechnicianId(newestDiagnosis)
+                    : intakeSuggestion.SuggestedLeadTechnicianId,
+                AssistantTechnicianId = newestDiagnosis != null ? GetAssistantTechnicianId(newestDiagnosis) ?? intakeSuggestion.SuggestedAssistantTechnicianId : intakeSuggestion.SuggestedAssistantTechnicianId,
                 CreatedAt = VietnamTime.Now
             };
 
             var createdBy = serviceOrder.ReceptionistId ?? serviceOrder.ServiceAdvisorId;
-            if (autoAssign && newestDiagnosis != null && newestDiagnosis.TechnicianId > 0)
+            if (autoAssign && newestDiagnosis != null && GetTechnicianId(newestDiagnosis).GetValueOrDefault() > 0)
             {
-                createdBy = newestDiagnosis.TechnicianId;
+                createdBy = GetTechnicianId(newestDiagnosis);
             }
 
             await PersistSnapshotAsync(serviceOrder.Id, payload, createdBy);
@@ -154,7 +156,7 @@ namespace MyGarage.Services
             var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
             if (serviceOrder == null)
             {
-                throw new InvalidOperationException("Khong tim thay lenh sua chua.");
+                throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
             }
 
             var t1 = request.T1EstimatedHandoverOverride ?? await ResolveLatestT1Async(serviceOrderId, serviceOrder);
@@ -222,18 +224,18 @@ namespace MyGarage.Services
                 .FirstOrDefaultAsync(x => x.Id == snapshotId && x.ServiceOrderId == serviceOrderId);
             if (snapshot == null)
             {
-                throw new InvalidOperationException("Khong tim thay snapshot bao gia can xu ly.");
+                throw new InvalidOperationException("Không tìm thấy snapshot báo giá cần xử lý.");
             }
 
             if (!TryParseHandoverSnapshot(snapshot.SnapshotData, out var payload) || payload == null)
             {
-                throw new InvalidOperationException("Snapshot khong thuoc luong T2 sau chan doan.");
+                throw new InvalidOperationException("Snapshot không thuộc luồng T2 sau chẩn đoán.");
             }
 
             var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
             if (serviceOrder == null)
             {
-                throw new InvalidOperationException("Khong tim thay lenh sua chua.");
+                throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
             }
 
             var now = VietnamTime.Now;
@@ -625,3 +627,4 @@ namespace MyGarage.Services
         }
     }
 }
+

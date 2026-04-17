@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -19,14 +19,20 @@ namespace MyGarage.Services
         private const string DiagnosisStatusPending = nameof(DiagnosisStatus.PENDING);
         private const string DiagnosisStatusAssigned = nameof(DiagnosisStatus.ASSIGNED);
         private const string DiagnosisStatusCompleted = nameof(DiagnosisStatus.COMPLETED);
+        private const string DiagnosisStatusCanceled = nameof(DiagnosisStatus.CANCELED);
 
         private const string CancellationStatusNone = nameof(DiagnosisCancellationStatusCode.NONE);
+        private const string CancellationStatusRequested = nameof(DiagnosisCancellationStatusCode.REQUESTED);
+        private const string CancellationStatusApproved = nameof(DiagnosisCancellationStatusCode.APPROVED);
+        private const string CancellationStatusRejected = nameof(DiagnosisCancellationStatusCode.REJECTED);
 
         private const string ServiceOrderStatusDiagnosing = nameof(ServiceOrderLifecycleStatus.DIAGNOSING);
         private const string ServiceOrderStatusCheckedIn = nameof(ServiceOrderLifecycleStatus.CHECKED_IN);
         private const string StaffStatusActive = nameof(StaffStatusCode.ACTIVE);
 
         private const int UnclaimedEscalationMinutes = 10;
+        private const int TeamLeaderApprovalWarningMinutesDefault = 15;
+        private const int TeamLeaderApprovalEscalationMinutesDefault = 30;
         private const int GoldenCancelWindowMinutes = 10;
         private const int DiagnosisSlaMinutes = 45;
         private const int DiagnosisQueueDefaultMinutes = 30;
@@ -257,7 +263,7 @@ namespace MyGarage.Services
                 normalizedTeamIds.Insert(0, primaryTeamId.Value);
             }
 
-            // Không cần ghi metadata khi chỉ có duy nhất tổ chính và không có thông tin phối hợp.
+        // Không cần ghi metadata khi chỉ có duy nhất tổ chính và không có thông tin phối hợp.
             if (normalizedTeamIds.Count <= 1)
             {
                 return null;
@@ -359,7 +365,7 @@ namespace MyGarage.Services
             }
         }
 
-        private static DispatchCollaborationMeta? TryParseDispatchCollaborationNote(string? dispatchCollaborationMeta, string? legacyFinalApprovalNote = null)
+        private static DispatchCollaborationMeta? TryParseDispatchCollaborationNote(string? dispatchCollaborationMeta, string? legacyCollaborationNote = null)
         {
             var parsedNewMeta = TryParseDispatchCollaborationJson(dispatchCollaborationMeta);
             if (parsedNewMeta != null)
@@ -367,7 +373,7 @@ namespace MyGarage.Services
                 return parsedNewMeta;
             }
 
-            var legacyText = (legacyFinalApprovalNote ?? string.Empty).Trim();
+            var legacyText = (legacyCollaborationNote ?? string.Empty).Trim();
             if (!legacyText.StartsWith(DispatchCollaborationPrefix, StringComparison.Ordinal))
             {
                 return null;
@@ -421,7 +427,44 @@ namespace MyGarage.Services
                 return branchFrontOfficeId;
             }
 
-            throw new InvalidOperationException("Khong tim thay nhan su tiep nhan/CVDV de tao hang cho chan doan.");
+            throw new InvalidOperationException("Không tìm thấy nhân sự tiếp nhận/CVDV để tạo hàng chờ chẩn đoán.");
+        }
+
+        private int GetTeamLeaderApprovalWarningMinutes(long? executeBranchId = null)
+        {
+            if (executeBranchId.HasValue && executeBranchId.Value > 0)
+            {
+                var branchConfigured = _configuration.GetValue<int?>(
+                    $"DiagnosisApprovalSla:BranchOverrides:{executeBranchId.Value}:TeamLeaderWarningMinutes");
+                if (branchConfigured.HasValue && branchConfigured.Value > 0)
+                {
+                    return branchConfigured.Value;
+                }
+            }
+
+            var configured = _configuration.GetValue<int?>("DiagnosisApprovalSla:TeamLeaderWarningMinutes");
+            return configured.HasValue && configured.Value > 0
+                ? configured.Value
+                : TeamLeaderApprovalWarningMinutesDefault;
+        }
+
+        private int GetTeamLeaderApprovalEscalationMinutes(long? executeBranchId = null)
+        {
+            var warning = GetTeamLeaderApprovalWarningMinutes(executeBranchId);
+            if (executeBranchId.HasValue && executeBranchId.Value > 0)
+            {
+                var branchConfigured = _configuration.GetValue<int?>(
+                    $"DiagnosisApprovalSla:BranchOverrides:{executeBranchId.Value}:TeamLeaderEscalationMinutes");
+                if (branchConfigured.HasValue && branchConfigured.Value > 0)
+                {
+                    return branchConfigured.Value <= warning ? warning + 1 : branchConfigured.Value;
+                }
+            }
+
+            var configured = _configuration.GetValue<int?>("DiagnosisApprovalSla:TeamLeaderEscalationMinutes");
+            var fallback = TeamLeaderApprovalEscalationMinutesDefault;
+            var resolved = configured.HasValue && configured.Value > 0 ? configured.Value : fallback;
+            return resolved <= warning ? warning + 1 : resolved;
         }
 
         private async Task<long?> TryResolveFrontOfficeStaffIdAsync(long staffId)
@@ -461,10 +504,14 @@ namespace MyGarage.Services
             IReadOnlyList<string> symptoms,
             string? dispatchTag = null,
             long? assignedTeamId = null,
-            long? assignedBayId = null)
+            long? assignedBayId = null,
+            string? assignmentNote = null)
         {
             var now = VietnamTime.Now;
             var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
+            var normalizedAssignmentNote = string.IsNullOrWhiteSpace(assignmentNote)
+                ? null
+                : assignmentNote.Trim();
             var normalizedSymptoms = (symptoms ?? Array.Empty<string>())
                 .Select(symptom => (symptom ?? string.Empty).Trim())
                 .Where(IsMeaningfulQueueSymptom)
@@ -479,37 +526,67 @@ namespace MyGarage.Services
                 .Select(symptom => new Diagnosis
                 {
                     ServiceOrderId = serviceOrderId,
-                    TechnicianId = technicianId.HasValue && technicianId.Value > 0 ? technicianId : null,
-                    AssistantTechnicianId = null,
-                    AssignedBayId = assignedBayId.HasValue && assignedBayId.Value > 0 ? assignedBayId : null,
                     Symptom = string.IsNullOrWhiteSpace(symptom) ? null : symptom,
                     Status = DiagnosisStatusPending,
                     DispatchTag = normalizedDispatchTag,
-                    AssignedTeamId = assignedTeamId.HasValue && assignedTeamId.Value > 0 ? assignedTeamId : null,
-                    AssignedAt = (assignedTeamId.HasValue && assignedTeamId.Value > 0) || (assignedBayId.HasValue && assignedBayId.Value > 0) ? now : null,
-                    StartedAt = null,
-                    SupportRequestedAt = null,
-                    SupportRequestedBy = null,
-                    SupportRequestNote = null,
-                    CancellationStatus = CancellationStatusNone,
-                    CancellationReason = null,
-                    CancellationRequestedAt = null,
-                    CancellationRequestedBy = null,
-                    CancellationDecisionAt = null,
-                    CancellationDecisionBy = null,
-                    CancellationDecisionNote = null,
-                    AssignedByTeamLeaderId = null,
-                    ApprovedByForemanAt = null,
-                    ApprovedByTeamLeaderAt = null,
-                    FinalApprovedAt = null,
-                    FinalApprovalNote = null,
-                    DispatchCollaborationMeta = null,
+                    AssignmentNote = normalizedAssignmentNote,
                     CreatedAt = now,
                     UpdatedAt = now
                 })
                 .ToList();
 
+            void ApplyInitialAssignmentState(Diagnosis diagnosis)
+            {
+                SetTechnicianId(diagnosis, technicianId.HasValue && technicianId.Value > 0 ? technicianId : null);
+                SetAssistantTechnicianId(diagnosis, null);
+                SetAssignedBayId(diagnosis, assignedBayId.HasValue && assignedBayId.Value > 0 ? assignedBayId : null);
+                SetAssignedTeamId(diagnosis, assignedTeamId.HasValue && assignedTeamId.Value > 0 ? assignedTeamId : null);
+                SetAssignedAt(diagnosis, (assignedTeamId.HasValue && assignedTeamId.Value > 0) || (assignedBayId.HasValue && assignedBayId.Value > 0) ? now : null);
+                SetTechnicianAcceptedAt(diagnosis, null);
+                SetTechnicianCompletedAt(diagnosis, null);
+                SetSupportRequestedAt(diagnosis, null);
+                SetSupportRequestedBy(diagnosis, null);
+                SetSupportRequestNote(diagnosis, null);
+                SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetForemanRejectReason(diagnosis, null);
+                SetApprovedByForemanId(diagnosis, null);
+                SetApprovedByForemanAt(diagnosis, null);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetApprovedByTeamLeaderAt(diagnosis, null);
+                SetTeamLeaderNote(diagnosis, null);
+                SetForemanNote(diagnosis, null);
+                SetCancellationStatus(diagnosis, CancellationStatusNone);
+                SetCancellationReason(diagnosis, null);
+                SetCancellationRequestedAt(diagnosis, null);
+                SetCancellationRequestedBy(diagnosis, null);
+                SetCancellationDecisionAt(diagnosis, null);
+                SetCancellationDecisionBy(diagnosis, null);
+                SetCancellationDecisionNote(diagnosis, null);
+            }
+
+            foreach (var diagnosis in items)
+            {
+                ApplyInitialAssignmentState(diagnosis);
+            }
+
             _context.Diagnoses.AddRange(items);
+            await _context.SaveChangesAsync();
+
+            // Rebind assignment state after IDs are generated to avoid losing auto-assigned team/bay
+            // when building the first DiagnosisAssignment log.
+            foreach (var diagnosis in items)
+            {
+                ApplyInitialAssignmentState(diagnosis);
+            }
+
+            AppendDiagnosisAssignments(items.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventCreated,
+                    oldStatus: null,
+                    createdBy: diagnosis.UpdatedBy,
+                    note: "Created diagnosis ticket")));
             await _context.SaveChangesAsync();
             return items;
         }
@@ -532,20 +609,19 @@ namespace MyGarage.Services
             }
 
             if (normalized == "khong co" ||
-                normalized == "không có" ||
+                normalized == "khong co" ||
                 normalized == "khong co ghi chu" ||
-                normalized == "không có ghi chú" ||
+                normalized == "khong co ghi chu" ||
                 normalized == "khong co ghi chu gi" ||
-                normalized == "không có ghi chú gì" ||
+                normalized == "khong co ghi chu gi" ||
                 normalized == "khong co mo ta" ||
-                normalized == "không có mô tả")
+                normalized == "khong co mo ta")
             {
                 return false;
             }
 
-            if ((normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) ||
-                 normalized.StartsWith("[tiếp nhận]", StringComparison.Ordinal)) &&
-                (normalized.Contains("khong co", StringComparison.Ordinal) || normalized.Contains("không có", StringComparison.Ordinal)))
+            if (normalized.StartsWith("[tiep nhan]", StringComparison.Ordinal) &&
+                normalized.Contains("khong co", StringComparison.Ordinal))
             {
                 return false;
             }
@@ -563,12 +639,14 @@ namespace MyGarage.Services
 
         public async Task<IReadOnlyList<Diagnosis>> GetActiveDiagnosesAsync(long serviceOrderId)
         {
-            return await _context.Diagnoses
+            var rows = await _context.Diagnoses
                 .Where(x => x.ServiceOrderId == serviceOrderId)
                 .Where(x =>
                     x.Status == DiagnosisStatusPending ||
                     x.Status == DiagnosisStatusAssigned)
                 .ToListAsync();
+            await ApplyLatestLogOverlayAsync(rows);
+            return rows;
         }
 
         public async Task<bool> TechnicianExistsAsync(long technicianId)
@@ -774,7 +852,7 @@ namespace MyGarage.Services
                 .Where(x => x.ServiceOrderId == serviceOrderId)
                 .Where(x => x.SlotType == nameof(WorkSlotType.DIAGNOSE))
                 .Where(x =>
-                    x.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    x.Status != nameof(WorkSlotStatus.CANCELED) &&
                     x.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     x.Status != nameof(WorkSlotStatus.COMPLETED))
                 .OrderByDescending(x => x.ActualStartTime ?? x.StartTime)
@@ -790,7 +868,7 @@ namespace MyGarage.Services
                 .Where(x => x.BayId.HasValue && diagnoseBayIds.Contains(x.BayId.Value))
                 .Where(x => x.Id != (existingSlot != null ? existingSlot.Id : 0))
                 .Where(x =>
-                    x.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                    x.Status != nameof(WorkSlotStatus.CANCELED) &&
                     x.Status != nameof(WorkSlotStatus.NOSHOW) &&
                     x.Status != nameof(WorkSlotStatus.COMPLETED) &&
                     x.Status != nameof(WorkSlotStatus.DIAGNOSED_WAITING))
@@ -864,7 +942,7 @@ namespace MyGarage.Services
                 existingSlot.IsAdditional = false;
                 existingSlot.SequenceOrder = 1;
                 if (string.IsNullOrWhiteSpace(existingSlot.Status) ||
-                    string.Equals(existingSlot.Status, nameof(WorkSlotStatus.CANCELLED), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(existingSlot.Status, nameof(WorkSlotStatus.CANCELED), StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(existingSlot.Status, nameof(WorkSlotStatus.NOSHOW), StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(existingSlot.Status, nameof(WorkSlotStatus.COMPLETED), StringComparison.OrdinalIgnoreCase))
                 {
@@ -966,7 +1044,7 @@ namespace MyGarage.Services
 
             if (team == null)
             {
-                return (false, $"Khong tim thay to #{teamId.Value}.");
+                return (false, $"Không tìm thấy tổ #{teamId.Value}.");
             }
 
             var bay = await _context.Bays.AsNoTracking()
@@ -983,12 +1061,12 @@ namespace MyGarage.Services
 
             if (bay == null)
             {
-                return (false, $"Khong tim thay khoang #{bayId}.");
+                return (false, $"Không tìm thấy khoang #{bayId}.");
             }
 
             if (bay.BranchId != team.BranchId)
             {
-                return (false, "Khoang va to khong thuoc cung chi nhanh.");
+                return (false, "Khoang và tổ không thuộc cùng chi nhánh.");
             }
 
             var normalizedBayType = NormalizeToken(bay.BayType);
@@ -1018,7 +1096,7 @@ namespace MyGarage.Services
                 }
             }
 
-            return (false, $"To '{team.Name}' khong duoc phep vao khoang {normalizedBayType} neu chua co phe duyet dieu chuyen.");
+            return (false, $"Tổ '{team.Name}' không được phép vào khoang {normalizedBayType} nếu chưa có phê duyệt điều chuyển.");
         }
 
         private static bool DispatchTagMatchesTeam(string dispatchTag, string? specialtyTag, string? teamCode)
@@ -1068,9 +1146,13 @@ namespace MyGarage.Services
         {
             var dispatch = NormalizeDispatchTag(dispatchTag);
             var specialty = NormalizeDispatchTag(specialtyTag);
-            if (dispatch == null || specialty == null)
+            if (dispatch == null)
             {
                 return true;
+            }
+            if (specialty == null)
+            {
+                return false;
             }
 
             if (string.Equals(dispatch, specialty, StringComparison.OrdinalIgnoreCase))
@@ -1241,8 +1323,7 @@ namespace MyGarage.Services
             IReadOnlyList<long>? supportingTeamIds,
             IReadOnlyList<DiagnosisSupportingTeamAssignmentDto>? supportingAssignments,
             long? bayId,
-            bool managerOverride,
-            long? assignedByTeamLeaderId = null)
+            bool managerOverride)
         {
             var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -1250,6 +1331,7 @@ namespace MyGarage.Services
             {
                 return;
             }
+            var statusBeforeByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
 
             var resolvedPrimaryTeamId = teamId ?? await ResolveTeamIdForTechnicianAsync(technicianId);
             var normalizedSupportingAssignments = NormalizeSupportingAssignments(
@@ -1343,41 +1425,51 @@ namespace MyGarage.Services
                     resolvedAssistantTechnicianId = null;
                 }
 
-                diagnosis.TechnicianId = resolvedLeadTechnicianId;
-                diagnosis.AssistantTechnicianId = resolvedAssistantTechnicianId;
+                SetTechnicianId(diagnosis, resolvedLeadTechnicianId);
+                SetAssistantTechnicianId(diagnosis, resolvedAssistantTechnicianId);
                 diagnosis.Status = DiagnosisStatusAssigned;
-                diagnosis.AssignedTeamId = assignedTeamId;
-                diagnosis.AssignedBayId = bayId;
-                diagnosis.AssignedByTeamLeaderId = assignedByTeamLeaderId;
-                diagnosis.AssignedAt ??= now;
-                diagnosis.StartedAt = null;
+                SetAssignedTeamId(diagnosis, assignedTeamId);
+                // Keep existing bay assignment when the caller does not explicitly send a bay.
+                SetAssignedBayId(diagnosis, bayId.HasValue && bayId.Value > 0
+                    ? bayId
+                    : GetAssignedBayId(diagnosis));
+                SetAssignedAt(diagnosis, GetAssignedAt(diagnosis) ?? now);
+                SetTechnicianAcceptedAt(diagnosis, null);
+                SetTechnicianCompletedAt(diagnosis, null);
 
-                diagnosis.ApprovedByForemanId = null;
-                diagnosis.ApprovedByForemanAt = null;
-                diagnosis.ApprovedByTeamLeaderAt = null;
-                diagnosis.FinalApprovedAt = null;
-                diagnosis.FinalApprovalNote = null;
-                diagnosis.DispatchCollaborationMeta = collaborationMeta;
-
-                diagnosis.CancellationStatus = CancellationStatusNone;
-                diagnosis.CancellationReason = null;
-                diagnosis.CancellationRequestedAt = null;
-                diagnosis.CancellationRequestedBy = null;
-                diagnosis.CancellationDecisionAt = null;
-                diagnosis.CancellationDecisionBy = null;
-                diagnosis.CancellationDecisionNote = null;
+                SetApprovedByForemanId(diagnosis, null);
+                SetApprovedByForemanAt(diagnosis, null);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetApprovedByTeamLeaderAt(diagnosis, null);
+                SetTeamLeaderNote(diagnosis, null);
+                SetForemanNote(diagnosis, null);
+                
+                SetCancellationStatus(diagnosis, CancellationStatusNone);
+                SetCancellationReason(diagnosis, null);
+                SetCancellationRequestedAt(diagnosis, null);
+                SetCancellationRequestedBy(diagnosis, null);
+                SetCancellationDecisionAt(diagnosis, null);
+                SetCancellationDecisionBy(diagnosis, null);
+                SetCancellationDecisionNote(diagnosis, null);
 
                 if (managerOverride)
                 {
-                    diagnosis.SupportRequestedAt = null;
-                    diagnosis.SupportRequestedBy = null;
-                    diagnosis.SupportRequestNote = null;
+                    SetSupportRequestedAt(diagnosis, null);
+                    SetSupportRequestedBy(diagnosis, null);
+                    SetSupportRequestNote(diagnosis, null);
                 }
 
                 diagnosis.UpdatedAt = now;
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventAssigned,
+                    oldStatus: statusBeforeByDiagnosisId.TryGetValue(diagnosis.Id, out var previousStatus) ? previousStatus : null,
+                    createdBy: technicianId,
+                    note: managerOverride ? "Assigned by manager override" : "Assigned diagnosis")));
             await _context.SaveChangesAsync();
         }
 
@@ -1389,18 +1481,22 @@ namespace MyGarage.Services
             {
                 return;
             }
+            var statusBeforeByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
 
             foreach (var diagnosis in list)
             {
-                if (diagnosis.Status == DiagnosisStatusCompleted)
+                if (diagnosis.Status == DiagnosisStatusCompleted || diagnosis.Status == DiagnosisStatusCanceled)
                 {
                     continue;
                 }
 
                 diagnosis.Status = DiagnosisStatusAssigned;
-                diagnosis.StartedAt ??= now;
-                diagnosis.AssignedAt ??= now;
-                diagnosis.AssignedBayId = bayId ?? diagnosis.AssignedBayId;
+                if (GetTechnicianId(diagnosis) == technicianId)
+                {
+                    SetTechnicianAcceptedAt(diagnosis, GetTechnicianAcceptedAt(diagnosis) ?? now);
+                }
+                SetAssignedAt(diagnosis, GetAssignedAt(diagnosis) ?? now);
+                SetAssignedBayId(diagnosis, bayId ?? GetAssignedBayId(diagnosis));
                 diagnosis.UpdatedBy = technicianId;
                 diagnosis.UpdatedAt = now;
             }
@@ -1435,6 +1531,13 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventStarted,
+                    oldStatus: statusBeforeByDiagnosisId.TryGetValue(diagnosis.Id, out var previousStatus) ? previousStatus : null,
+                    createdBy: technicianId,
+                    note: "Lead technician accepted diagnosis")));
             await _context.SaveChangesAsync();
         }
 
@@ -1447,7 +1550,7 @@ namespace MyGarage.Services
 
             if (team == null)
             {
-                throw new InvalidOperationException("Khong tim thay to ky thuat duoc chon.");
+                throw new InvalidOperationException("Không tìm thấy tổ kỹ thuật được chọn.");
             }
 
             var serviceOrder = await _context.ServiceOrders.AsNoTracking()
@@ -1463,7 +1566,7 @@ namespace MyGarage.Services
 
             if (serviceOrder == null)
             {
-                throw new InvalidOperationException("Khong tim thay lenh sua chua.");
+                throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
             }
 
             var technicians = await _context.Staffs.AsNoTracking()
@@ -1478,18 +1581,31 @@ namespace MyGarage.Services
 
             if (technicianIds.Count > 0)
             {
-                var loadRows = await _context.Diagnoses.AsNoTracking()
-                    .Where(x => x.Status == DiagnosisStatusAssigned)
-                    .Where(x =>
-                        (x.TechnicianId.HasValue && technicianIds.Contains(x.TechnicianId.Value)) ||
-                        (x.AssistantTechnicianId.HasValue && technicianIds.Contains(x.AssistantTechnicianId.Value)))
-                    .Select(x => new
+                var assignmentRows = await (
+                    from assignment in _context.DiagnosisAssignments.AsNoTracking()
+                    join diagnosis in _context.Diagnoses.AsNoTracking() on assignment.DiagnosisId equals diagnosis.Id
+                    where assignment.Status == DiagnosisStatusAssigned
+                    where
+                        (assignment.TechnicianId.HasValue && technicianIds.Contains(assignment.TechnicianId.Value)) ||
+                        (assignment.AssistantTechnicianId.HasValue && technicianIds.Contains(assignment.AssistantTechnicianId.Value))
+                    select new
                     {
-                        x.ServiceOrderId,
-                        x.TechnicianId,
-                        x.AssistantTechnicianId
+                        assignment.DiagnosisId,
+                        diagnosis.ServiceOrderId,
+                        assignment.TechnicianId,
+                        assignment.AssistantTechnicianId,
+                        assignment.CreatedAt,
+                        assignment.Id
                     })
                     .ToListAsync();
+
+                var loadRows = assignmentRows
+                    .GroupBy(x => x.DiagnosisId)
+                    .Select(group => group
+                        .OrderByDescending(x => x.CreatedAt)
+                        .ThenByDescending(x => x.Id)
+                        .First())
+                    .ToList();
 
                 var loadBuckets = new Dictionary<long, HashSet<long>>();
                 foreach (var techId in technicianIds)
@@ -1691,18 +1807,18 @@ namespace MyGarage.Services
             }
 
             var latest = list
-                .OrderByDescending(x => x.UpdatedAt ?? x.AssignedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                .OrderByDescending(x => x.UpdatedAt ?? GetAssignedAt(x) ?? x.CreatedAt ?? DateTime.MinValue)
                 .FirstOrDefault();
             var existingMeta = latest == null
                 ? null
-                : TryParseDispatchCollaborationNote(latest.DispatchCollaborationMeta, latest.FinalApprovalNote);
+                    : TryParseDispatchCollaborationNote(null, GetForemanNote(latest));
 
             long? primaryTeamId = existingMeta?.PrimaryTeamId;
             if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
             {
                 primaryTeamId = list
-                    .Where(x => x.AssignedTeamId.HasValue && x.AssignedTeamId.Value > 0)
-                    .Select(x => x.AssignedTeamId)
+                    .Select(GetAssignedTeamId)
+                    .Where(x => x.HasValue && x.Value > 0)
                     .FirstOrDefault();
             }
             if (!primaryTeamId.HasValue || primaryTeamId.Value <= 0)
@@ -1762,15 +1878,15 @@ namespace MyGarage.Services
             if (primaryTeamId.HasValue && primaryTeamId.Value > 0)
             {
                 var primaryDiagnosis = list
-                    .Where(x => x.AssignedTeamId == primaryTeamId.Value)
-                    .OrderByDescending(x => x.AssignedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                    .Where(x => GetAssignedTeamId(x) == primaryTeamId.Value)
+                    .OrderByDescending(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                     .FirstOrDefault();
 
                 collaborationAssignments.Add(new DispatchCollaborationTeamAssignmentMeta
                 {
                     TeamId = primaryTeamId.Value,
-                    TechnicianId = primaryDiagnosis != null && primaryDiagnosis.TechnicianId > 0 ? primaryDiagnosis.TechnicianId : null,
-                    AssistantTechnicianId = primaryDiagnosis?.AssistantTechnicianId,
+                    TechnicianId = primaryDiagnosis != null && GetTechnicianId(primaryDiagnosis).GetValueOrDefault() > 0 ? GetTechnicianId(primaryDiagnosis) : null,
+                    AssistantTechnicianId = primaryDiagnosis != null ? GetAssistantTechnicianId(primaryDiagnosis) : null,
                     RequestedTechnicianCount = null
                 });
             }
@@ -1780,19 +1896,103 @@ namespace MyGarage.Services
 
             foreach (var diagnosis in list)
             {
-                if (diagnosis.Status == DiagnosisStatusCompleted)
+                if (diagnosis.Status == DiagnosisStatusCompleted || diagnosis.Status == DiagnosisStatusCanceled)
                 {
                     continue;
                 }
 
-                diagnosis.SupportRequestedAt = now;
-                diagnosis.SupportRequestedBy = requestedByStaffId;
-                diagnosis.SupportRequestNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-                diagnosis.DispatchCollaborationMeta = collaborationMeta;
+                SetSupportRequestedAt(diagnosis, now);
+                SetSupportRequestedBy(diagnosis, requestedByStaffId);
+                SetSupportRequestNote(diagnosis, string.IsNullOrWhiteSpace(note) ? null : note.Trim());
                 diagnosis.UpdatedAt = now;
             }
 
+            var clones = new List<Diagnosis>();
+            foreach (var assignment in requestedAssignments)
+            {
+                if (assignment.TeamId <= 0)
+                {
+                    continue;
+                }
+
+                var seed = list
+                    .Where(x => x.Status != DiagnosisStatusCompleted && x.Status != DiagnosisStatusCanceled)
+                    .OrderByDescending(x => x.UpdatedAt ?? GetAssignedAt(x) ?? x.CreatedAt ?? DateTime.MinValue)
+                    .FirstOrDefault();
+                if (seed == null)
+                {
+                    continue;
+                }
+
+                clones.Add(new Diagnosis
+                {
+                    ServiceOrderId = seed.ServiceOrderId,
+                    Symptom = seed.Symptom,
+                    RootCause = seed.RootCause,
+                    Severity = seed.Severity,
+                    Status = DiagnosisStatusPending,
+                    DispatchTag = seed.DispatchTag,
+                    DiagnosedAt = null,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    UpdatedBy = requestedByStaffId
+                });
+
+                var clone = clones[^1];
+                SetTechnicianId(clone, null);
+                SetAssistantTechnicianId(clone, null);
+                SetAssignedBayId(clone, GetAssignedBayId(seed));
+                SetAssignedTeamId(clone, assignment.TeamId);
+                SetAssignedAt(clone, null);
+                SetTechnicianAcceptedAt(clone, null);
+                SetTechnicianCompletedAt(clone, null);
+                SetSupportRequestedAt(clone, now);
+                SetSupportRequestedBy(clone, requestedByStaffId);
+                SetSupportRequestNote(clone, string.IsNullOrWhiteSpace(note) ? null : note.Trim());
+                SetTeamLeaderApprovalStatus(clone, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetFinalApprovalStatus(clone, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetForemanRejectReason(clone, null);
+                SetApprovedByForemanId(clone, null);
+                SetApprovedByForemanAt(clone, null);
+                SetApprovedByTeamLeaderId(clone, null);
+                SetApprovedByTeamLeaderAt(clone, null);
+                SetTeamLeaderNote(clone, null);
+                SetForemanNote(clone, null);
+                SetCancellationStatus(clone, CancellationStatusNone);
+                SetCancellationReason(clone, null);
+                SetCancellationRequestedAt(clone, null);
+                SetCancellationRequestedBy(clone, null);
+                SetCancellationDecisionAt(clone, null);
+                SetCancellationDecisionBy(clone, null);
+                SetCancellationDecisionNote(clone, null);
+            }
+
+            if (clones.Count > 0)
+            {
+                _context.Diagnoses.AddRange(clones);
+            }
+
             _context.Diagnoses.UpdateRange(list);
+            await _context.SaveChangesAsync();
+
+            var supportLogs = new List<DiagnosisAssignment>();
+            supportLogs.AddRange(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventSupportRequested,
+                    oldStatus: diagnosis.Status,
+                    createdBy: requestedByStaffId,
+                    note: GetSupportRequestNote(diagnosis))));
+
+            supportLogs.AddRange(clones.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventCreated,
+                    oldStatus: null,
+                    createdBy: requestedByStaffId,
+                    note: "Created supporting-team diagnosis clone")));
+
+            AppendDiagnosisAssignments(supportLogs);
             await _context.SaveChangesAsync();
         }
 
@@ -1811,25 +2011,25 @@ namespace MyGarage.Services
             }
 
             var latest = list
-                .OrderByDescending(x => x.UpdatedAt ?? x.AssignedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                .OrderByDescending(x => x.UpdatedAt ?? GetAssignedAt(x) ?? x.CreatedAt ?? DateTime.MinValue)
                 .FirstOrDefault();
             var collaborationMeta = latest == null
                 ? null
-                : TryParseDispatchCollaborationNote(latest.DispatchCollaborationMeta, latest.FinalApprovalNote);
+                    : TryParseDispatchCollaborationNote(null, GetForemanNote(latest));
             if (collaborationMeta == null)
             {
-                throw new InvalidOperationException("Khong tim thay thong tin phoi hop de cap nhat nhan su ho tro.");
+                throw new InvalidOperationException("Không tìm thấy thông tin phối hợp để cập nhật nhân sự hỗ trợ.");
             }
 
             var primaryTeamId = collaborationMeta.PrimaryTeamId;
             if (primaryTeamId.HasValue && primaryTeamId.Value == teamId)
             {
-                throw new InvalidOperationException("To chinh khong duoc dung luong chon nhan su ho tro to phu.");
+                throw new InvalidOperationException("Tổ chính không được dùng luồng chọn nhân sự hỗ trợ tổ phụ.");
             }
 
             if (!collaborationMeta.TeamIds.Contains(teamId))
             {
-                throw new InvalidOperationException("To duoc chon khong nam trong danh sach yeu cau phoi hop.");
+                throw new InvalidOperationException("Tổ được chọn không nằm trong danh sách yêu cầu phối hợp.");
             }
 
             var byTeam = (collaborationMeta.TeamAssignments ?? new List<DispatchCollaborationTeamAssignmentMeta>())
@@ -1873,28 +2073,34 @@ namespace MyGarage.Services
             var now = VietnamTime.Now;
             foreach (var diagnosis in list)
             {
-                if (diagnosis.Status == DiagnosisStatusCompleted)
+                if (diagnosis.Status == DiagnosisStatusCompleted || diagnosis.Status == DiagnosisStatusCanceled)
                 {
                     continue;
                 }
 
-                diagnosis.DispatchCollaborationMeta = nextCollaborationMeta;
                 diagnosis.UpdatedBy = teamLeaderId;
                 diagnosis.UpdatedAt = now;
 
                 if (!string.IsNullOrWhiteSpace(note))
                 {
-                    diagnosis.SupportRequestNote = note.Trim();
+                    SetSupportRequestNote(diagnosis, note.Trim());
                 }
 
                 if (!hasPendingSupportSelection)
                 {
-                    diagnosis.SupportRequestedAt = null;
-                    diagnosis.SupportRequestedBy = null;
+                    SetSupportRequestedAt(diagnosis, null);
+                    SetSupportRequestedBy(diagnosis, null);
                 }
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventSupportSelection,
+                    oldStatus: diagnosis.Status,
+                    createdBy: teamLeaderId,
+                    note: note)));
             await _context.SaveChangesAsync();
         }
 
@@ -1919,17 +2125,25 @@ namespace MyGarage.Services
 
             foreach (var diagnosis in list)
             {
-                diagnosis.CancellationStatus = CancellationStatusNone;
-                diagnosis.CancellationReason = reason;
-                diagnosis.CancellationRequestedAt = now;
-                diagnosis.CancellationRequestedBy = requestedByStaffId;
-                diagnosis.CancellationDecisionAt = null;
-                diagnosis.CancellationDecisionBy = null;
-                diagnosis.CancellationDecisionNote = null;
+                SetCancellationStatus(diagnosis, CancellationStatusRequested);
+                SetCancellationReason(diagnosis, reason);
+                SetCancellationRequestedAt(diagnosis, now);
+                SetCancellationRequestedBy(diagnosis, requestedByStaffId);
+                SetCancellationDecisionAt(diagnosis, null);
+                SetCancellationDecisionBy(diagnosis, null);
+                SetCancellationDecisionNote(diagnosis, null);
                 diagnosis.UpdatedAt = now;
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventCancellationRequested,
+                    oldStatus: diagnosis.Status,
+                    createdBy: requestedByStaffId,
+                    note: GetCancellationDecisionNote(diagnosis),
+                    cancelReason: reason)));
             await _context.SaveChangesAsync();
         }
 
@@ -1953,28 +2167,29 @@ namespace MyGarage.Services
                 {
                     var placeholderTechnicianId = await ResolvePlaceholderTechnicianIdAsync(serviceOrder, diagnosis.DispatchTag);
                     diagnosis.Status = DiagnosisStatusPending;
-                    diagnosis.TechnicianId = placeholderTechnicianId;
-                    diagnosis.AssistantTechnicianId = null;
-                    diagnosis.AssignedTeamId = null;
-                    diagnosis.AssignedBayId = null;
-                    diagnosis.AssignedAt = null;
-                    diagnosis.StartedAt = null;
-                    diagnosis.SupportRequestedAt = null;
-                    diagnosis.SupportRequestedBy = null;
-                    diagnosis.SupportRequestNote = null;
-                    diagnosis.ApprovedByForemanId = null;
-                    diagnosis.ApprovedByForemanAt = null;
-                    diagnosis.ApprovedByTeamLeaderAt = null;
-                    diagnosis.FinalApprovedAt = null;
-                    diagnosis.FinalApprovalNote = null;
-                    diagnosis.DispatchCollaborationMeta = null;
-                }
+                    SetTechnicianId(diagnosis, placeholderTechnicianId);
+                    SetAssistantTechnicianId(diagnosis, null);
+                    SetAssignedTeamId(diagnosis, null);
+                    SetAssignedBayId(diagnosis, null);
+                    SetAssignedAt(diagnosis, null);
+                    SetTechnicianAcceptedAt(diagnosis, null);
+                    SetTechnicianCompletedAt(diagnosis, null);
+                    SetSupportRequestedAt(diagnosis, null);
+                    SetSupportRequestedBy(diagnosis, null);
+                    SetSupportRequestNote(diagnosis, null);
+                    SetApprovedByForemanId(diagnosis, null);
+                    SetApprovedByForemanAt(diagnosis, null);
+                    SetApprovedByTeamLeaderId(diagnosis, null);
+                    SetApprovedByTeamLeaderAt(diagnosis, null);
+                    SetTeamLeaderNote(diagnosis, null);
+                    SetForemanNote(diagnosis, null);
+                                    }
 
-                diagnosis.CancellationStatus = CancellationStatusNone;
+                SetCancellationStatus(diagnosis, approve ? CancellationStatusApproved : CancellationStatusRejected);
 
-                diagnosis.CancellationDecisionBy = managerId;
-                diagnosis.CancellationDecisionAt = now;
-                diagnosis.CancellationDecisionNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+                SetCancellationDecisionBy(diagnosis, managerId);
+                SetCancellationDecisionAt(diagnosis, now);
+                SetCancellationDecisionNote(diagnosis, string.IsNullOrWhiteSpace(note) ? null : note.Trim());
                 diagnosis.UpdatedAt = now;
             }
 
@@ -1986,6 +2201,14 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    approve ? DiagnoseLogEventCancellationApproved : DiagnoseLogEventCancellationRejected,
+                    oldStatus: DiagnosisStatusAssigned,
+                    createdBy: managerId,
+                    note: GetCancellationDecisionNote(diagnosis),
+                    cancelReason: GetCancellationReason(diagnosis))));
             await _context.SaveChangesAsync();
         }
 
@@ -1998,24 +2221,40 @@ namespace MyGarage.Services
                 return;
             }
 
+            var oldStatusByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
+
             foreach (var diagnosis in list)
             {
-                diagnosis.ApprovedByForemanId = teamLeaderId;
-                diagnosis.ApprovedByForemanAt = now;
+                SetApprovedByForemanId(diagnosis, teamLeaderId);
+                SetApprovedByForemanAt(diagnosis, now);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.APPROVED));
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                diagnosis.IsEscalated = false;
+                diagnosis.SubmittedAt ??= now;
+                diagnosis.SlaDueAt ??= now.AddMinutes(20);
+                diagnosis.Status = DiagnosisStatusAssigned;
                 diagnosis.UpdatedBy = teamLeaderId;
                 diagnosis.UpdatedAt = now;
 
                 if (!string.IsNullOrWhiteSpace(note))
                 {
-                    diagnosis.SupportRequestNote = note.Trim();
+                    SetForemanNote(diagnosis, note.Trim());
                 }
             }
 
             _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventTechnicalApproved,
+                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
+                    createdBy: teamLeaderId,
+                    note: GetForemanNote(diagnosis))));
             await _context.SaveChangesAsync();
         }
 
-        public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note)
+        public async Task RejectTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? reason)
         {
             var now = VietnamTime.Now;
             var list = diagnoses?.ToList() ?? new List<Diagnosis>();
@@ -2024,12 +2263,67 @@ namespace MyGarage.Services
                 return;
             }
 
+            var oldStatusByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
+
             foreach (var diagnosis in list)
             {
-                diagnosis.ApprovedByTeamLeaderAt = now;
-                diagnosis.FinalApprovedAt = now;
-                diagnosis.FinalApprovalNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+                diagnosis.Status = DiagnosisStatusPending;
+                SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.REJECTED));
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetForemanRejectReason(diagnosis, string.IsNullOrWhiteSpace(reason) ? "TEAM_LEADER_REJECTED_REDIAGNOSE" : reason.Trim());
+                SetApprovedByForemanId(diagnosis, null);
+                SetApprovedByForemanAt(diagnosis, null);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetApprovedByTeamLeaderAt(diagnosis, null);
+                SetTechnicianCompletedAt(diagnosis, null);
                 diagnosis.UpdatedBy = teamLeaderId;
+                diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventTechnicalRejected,
+                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
+                    createdBy: teamLeaderId,
+                    note: GetForemanRejectReason(diagnosis))));
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long approverId, string? note, bool bypassTeamLeader = false, string? bypassAuditNote = null)
+        {
+            var now = VietnamTime.Now;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            var oldStatusByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
+
+            foreach (var diagnosis in list)
+            {
+                var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+                if (bypassTeamLeader &&
+                    !string.Equals(GetTeamLeaderApprovalStatus(diagnosis), nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase))
+                {
+                    SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.BYPASSED));
+                    var normalizedAudit = string.IsNullOrWhiteSpace(bypassAuditNote) ? null : bypassAuditNote.Trim();
+                    normalizedNote = string.IsNullOrWhiteSpace(normalizedAudit)
+                        ? normalizedNote
+                        : (string.IsNullOrWhiteSpace(normalizedNote) ? normalizedAudit : $"{normalizedAudit} | {normalizedNote}");
+                }
+
+                SetApprovedByTeamLeaderId(diagnosis, approverId);
+                SetApprovedByTeamLeaderAt(diagnosis, now);
+                SetTeamLeaderNote(diagnosis, normalizedNote);
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.APPROVED));
+                diagnosis.Status = DiagnosisStatusCompleted;
+                diagnosis.DiagnosedAt ??= now;
+                SetTechnicianCompletedAt(diagnosis, GetTechnicianCompletedAt(diagnosis) ?? now);
+                SetForemanRejectReason(diagnosis, null);
+                diagnosis.UpdatedBy = approverId;
                 diagnosis.UpdatedAt = now;
             }
 
@@ -2038,42 +2332,126 @@ namespace MyGarage.Services
             var order = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == serviceOrderId);
             if (order != null)
             {
-                order.Status = ServiceOrderStatusDiagnosing;
+                order.Status = nameof(ServiceOrderLifecycleStatus.QUOTING);
                 order.UpdatedAt = now;
                 _context.ServiceOrders.Update(order);
             }
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    bypassTeamLeader ? DiagnoseLogEventFinalApprovedBypass : DiagnoseLogEventFinalApproved,
+                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
+                    createdBy: approverId,
+                    note: bypassTeamLeader
+                        ? (string.IsNullOrWhiteSpace(bypassAuditNote) ? GetTeamLeaderNote(diagnosis) : bypassAuditNote)
+                        : GetTeamLeaderNote(diagnosis))));
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RejectFinalAsync(IEnumerable<Diagnosis> diagnoses, long foremanId, string? note)
+        {
+            var now = VietnamTime.Now;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            var oldStatusByDiagnosisId = list.ToDictionary(x => x.Id, x => x.Status);
+
+            foreach (var diagnosis in list)
+            {
+                diagnosis.Status = DiagnosisStatusAssigned;
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.REJECTED));
+                SetForemanRejectReason(diagnosis, string.IsNullOrWhiteSpace(note) ? "REJECTED_REDIAGNOSE" : note.Trim());
+                diagnosis.UpdatedBy = foremanId;
+                diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventFinalApproved,
+                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
+                    createdBy: foremanId,
+                    note: GetForemanRejectReason(diagnosis))));
             await _context.SaveChangesAsync();
         }
 
         public async Task RecallDiagnosesAsync(ServiceOrder serviceOrder, IReadOnlyList<Diagnosis> activeDiagnoses)
         {
-            var activeIds = activeDiagnoses.Select(x => x.Id).ToList();
-            await RemoveRecommendationsByDiagnosisIdsAsync(activeIds);
-            _context.Diagnoses.RemoveRange(activeDiagnoses);
+            var now = VietnamTime.Now;
+            var list = activeDiagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var diagnosis in list)
+            {
+                diagnosis.Status = DiagnosisStatusCanceled;
+                SetCancellationStatus(diagnosis, CancellationStatusApproved);
+                SetCancellationReason(diagnosis, GetCancellationReason(diagnosis) ?? "CUSTOMER_PICKUP_CANCEL");
+                SetCancellationDecisionAt(diagnosis, GetCancellationDecisionAt(diagnosis) ?? now);
+                SetCancellationDecisionBy(diagnosis, GetCancellationDecisionBy(diagnosis) ?? diagnosis.UpdatedBy);
+                diagnosis.UpdatedAt = now;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
 
             if (serviceOrder.Status == ServiceOrderStatusDiagnosing)
             {
                 serviceOrder.Status = ServiceOrderStatusCheckedIn;
             }
 
-            serviceOrder.UpdatedAt = VietnamTime.Now;
+            serviceOrder.UpdatedAt = now;
             _context.ServiceOrders.Update(serviceOrder);
+            AppendDiagnosisAssignments(list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventCanceled,
+                    oldStatus: DiagnosisStatusAssigned,
+                    createdBy: diagnosis.UpdatedBy,
+                    note: "Canceled because customer picked up vehicle",
+                    cancelReason: GetCancellationReason(diagnosis))));
             await _context.SaveChangesAsync();
         }
 
         public async Task<Diagnosis?> GetDiagnosisEntityAsync(long id)
         {
-            return await _context.Diagnoses.FirstOrDefaultAsync(x => x.Id == id);
+            var diagnosis = await _context.Diagnoses.FirstOrDefaultAsync(x => x.Id == id);
+            if (diagnosis != null)
+            {
+                await ApplyLatestLogOverlayAsync(new[] { diagnosis });
+            }
+            return diagnosis;
         }
 
         public async Task CompleteDiagnosisAsync(Diagnosis diagnosis)
         {
+            var assignmentState = EnsureAssignmentState(diagnosis);
+            if (assignmentState.RequiresInsuranceProof && string.IsNullOrWhiteSpace(assignmentState.ProofImageUrl))
+            {
+                throw new InvalidOperationException("Hạng mục bảo hiểm bắt buộc ảnh nghiệm thu trước khi hoàn thành.");
+            }
+
             var now = VietnamTime.Now;
             diagnosis.Status = DiagnosisStatusCompleted;
             diagnosis.DiagnosedAt = now;
-            diagnosis.CancellationStatus = CancellationStatusNone;
+            SetTechnicianCompletedAt(diagnosis, GetTechnicianCompletedAt(diagnosis) ?? now);
+            SetCancellationStatus(diagnosis, CancellationStatusNone);
             diagnosis.UpdatedAt = now;
             _context.Diagnoses.Update(diagnosis);
+            AppendDiagnosisAssignments(new[]
+            {
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventCompleted,
+                    oldStatus: DiagnosisStatusAssigned,
+                    createdBy: diagnosis.UpdatedBy,
+                    note: "Diagnosis completed")
+            });
             await _context.SaveChangesAsync();
 
             var allStatuses = await _context.Diagnoses
@@ -2088,7 +2466,7 @@ namespace MyGarage.Services
                     .Where(s =>
                         s.ServiceOrderId == diagnosis.ServiceOrderId &&
                         (s.SlotType == nameof(WorkSlotType.DIAGNOSE) || s.SequenceOrder <= 1) &&
-                        s.Status != nameof(WorkSlotStatus.CANCELLED) &&
+                        s.Status != nameof(WorkSlotStatus.CANCELED) &&
                         s.Status != nameof(WorkSlotStatus.NOSHOW) &&
                         s.Status != nameof(WorkSlotStatus.COMPLETED))
                     .ToListAsync();
@@ -2149,9 +2527,9 @@ namespace MyGarage.Services
                 .Replace(" ", "_");
         }
 
-        private static bool IsCancellationPending(Diagnosis diagnosis)
+        private bool IsCancellationPending(Diagnosis diagnosis)
         {
-            return diagnosis.CancellationRequestedAt.HasValue && !diagnosis.CancellationDecisionAt.HasValue;
+            return string.Equals(GetCancellationStatus(diagnosis), CancellationStatusRequested, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsPendingLikeStatus(string? status)
@@ -2159,9 +2537,9 @@ namespace MyGarage.Services
             return status == DiagnosisStatusPending;
         }
 
-        private static bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)
+        private bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)
         {
-            var assignedAt = diagnosis.AssignedAt ?? diagnosis.UpdatedAt ?? diagnosis.CreatedAt;
+            var assignedAt = GetAssignedAt(diagnosis) ?? diagnosis.UpdatedAt ?? diagnosis.CreatedAt;
             if (!assignedAt.HasValue)
             {
                 return false;
@@ -2172,3 +2550,13 @@ namespace MyGarage.Services
         }
     }
 }
+
+
+
+
+
+
+
+
+
+

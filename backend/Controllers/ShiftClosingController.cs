@@ -1,11 +1,15 @@
 using System.Collections.Generic;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyGarage.Models;
 using AutoMapper;
 using MyGarage.Interfaces;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
+using MyGarage.Common;
 
 namespace MyGarage.Controllers
 {
@@ -15,11 +19,13 @@ namespace MyGarage.Controllers
     {
         private readonly IShiftClosingService _shiftClosingService;
         private readonly IMapper _mapper;
+        private readonly IGarageContext _context;
 
-        public ShiftClosingController(IShiftClosingService shiftClosingService, IMapper mapper)
+        public ShiftClosingController(IShiftClosingService shiftClosingService, IMapper mapper, IGarageContext context)
         {
             _shiftClosingService = shiftClosingService;
             _mapper = mapper;
+            _context = context;
         }
 
         [HttpGet]
@@ -80,6 +86,119 @@ namespace MyGarage.Controllers
                 return NotFound();
             }
             return NoContent();
+        }
+
+        [HttpPost("{id:long}/reconcile")]
+        public async Task<IActionResult> ReconcileShift(long id, [FromBody] ShiftReconciliationRequestDto? request)
+        {
+            var shift = await _context.ShiftClosings
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (shift == null)
+            {
+                return NotFound(new { message = "Không tìm thấy ca thu ngân." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(shift.Status) &&
+                string.Equals(shift.Status, "CLOSED", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Ca đã đóng, không thể đối soát lại." });
+            }
+
+            var paymentRows = await (
+                from payment in _context.Payments.AsNoTracking()
+                join method in _context.PaymentMethods.AsNoTracking() on payment.MethodId equals method.Id
+                where payment.ShiftClosingId == id &&
+                      string.Equals(payment.Status ?? string.Empty, "COMPLETED", StringComparison.OrdinalIgnoreCase)
+                select new
+                {
+                    payment.Amount,
+                    MethodCode = (method.MethodCode ?? string.Empty).Trim().ToUpperInvariant(),
+                    MethodName = (method.MethodName ?? string.Empty).Trim().ToUpperInvariant()
+                }
+            ).ToListAsync();
+
+            decimal cashIn = 0m;
+            decimal transferIn = 0m;
+            decimal onlineIn = 0m;
+
+            foreach (var row in paymentRows)
+            {
+                if (row.MethodCode.Contains("CASH", StringComparison.OrdinalIgnoreCase) ||
+                    row.MethodName.Contains("TIEN MAT", StringComparison.OrdinalIgnoreCase))
+                {
+                    cashIn += row.Amount;
+                    continue;
+                }
+
+                if (row.MethodCode.Contains("BANK", StringComparison.OrdinalIgnoreCase) ||
+                    row.MethodCode.Contains("TRANSFER", StringComparison.OrdinalIgnoreCase) ||
+                    row.MethodName.Contains("CHUYEN KHOAN", StringComparison.OrdinalIgnoreCase))
+                {
+                    transferIn += row.Amount;
+                    continue;
+                }
+
+                onlineIn += row.Amount;
+            }
+
+            var openingBalance = shift.OpeningBalance;
+            var totalCashIn = cashIn;
+            var totalCashOut = request?.TotalCashOut ?? shift.TotalCashOut ?? 0m;
+            var expectedBalance = openingBalance + totalCashIn - totalCashOut;
+            var actualBalance = request?.ActualBalance ?? shift.ActualBalance ?? expectedBalance;
+            var discrepancy = actualBalance - expectedBalance;
+            var now = VietnamTime.Now;
+            var actorId = this.GetCurrentUserId();
+
+            shift.TotalCashIn = totalCashIn;
+            shift.TotalCashOut = totalCashOut;
+            shift.ExpectedBalance = expectedBalance;
+            shift.ActualBalance = actualBalance;
+            shift.Discrepancy = discrepancy;
+            shift.ClosedAt = now;
+            shift.Status = Math.Abs(discrepancy) <= 1000m ? "CLOSED" : "RECONCILED_WITH_VARIANCE";
+            shift.Note = BuildShiftNote(shift.Note, request?.Note, transferIn, onlineIn);
+            shift.ManagerId = request?.ManagerId ?? shift.ManagerId ?? actorId;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                shiftId = shift.Id,
+                shift.Status,
+                shift.OpeningBalance,
+                shift.TotalCashIn,
+                transferIn,
+                onlineIn,
+                shift.TotalCashOut,
+                shift.ExpectedBalance,
+                shift.ActualBalance,
+                shift.Discrepancy,
+                shift.ClosedAt
+            });
+        }
+
+        private static string BuildShiftNote(string? existing, string? note, decimal transferIn, decimal onlineIn)
+        {
+            var newSummary = $"Đối soát ca: chuyển khoản={transferIn:#,##0.##}; online={onlineIn:#,##0.##}";
+            var extraNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+            if (string.IsNullOrWhiteSpace(existing))
+            {
+                return string.IsNullOrWhiteSpace(extraNote) ? newSummary : $"{newSummary} | {extraNote}";
+            }
+
+            return string.IsNullOrWhiteSpace(extraNote)
+                ? $"{existing.Trim()} | {newSummary}"
+                : $"{existing.Trim()} | {newSummary} | {extraNote}";
+        }
+
+        public sealed class ShiftReconciliationRequestDto
+        {
+            public decimal? ActualBalance { get; set; }
+            public decimal? TotalCashOut { get; set; }
+            public long? ManagerId { get; set; }
+            public string? Note { get; set; }
         }
     }
 }
