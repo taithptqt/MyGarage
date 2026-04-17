@@ -1455,3 +1455,4 @@ D:\IT\OJT\repos\MyGarage\backend\artifacts\tmp_build\runtimes\win\lib\net6.0\Sys
 D:\IT\OJT\repos\MyGarage\backend\artifacts\tmp_build\runtimes\win\lib\net8.0\System.Security.Cryptography.Pkcs.dll
 D:\IT\OJT\repos\MyGarage\backend\artifacts\tmp_build\runtimes\win\lib\net6.0\System.Security.Cryptography.ProtectedData.dll
 D:\IT\OJT\repos\MyGarage\backend\artifacts\tmp_build\runtimes\win\lib\net6.0\System.Windows.Extensions.dll
+D:\IT\OJT\repos\MyGarage\backend\obj\Debug\net8.0\MyGarage.sourcelink.json

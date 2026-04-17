@@ -235,8 +235,8 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--quota-navy);
-  border-top: 1px solid var(--quota-border);
-  border-bottom: 1px solid var(--quota-border);
+  border-top: 0;
+  border-bottom: 0;
 }
 
 .premium-table td:first-child {
