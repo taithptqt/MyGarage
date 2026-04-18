@@ -84,6 +84,7 @@ function QuoteStepper({ status }) {
   );
 }
 
+
 function QuoteInfoCard({ icon, label, value, subValue }) {
   return (
     <div className="info-card-premium">

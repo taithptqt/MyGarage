@@ -6,6 +6,7 @@ namespace MyGarage.DTOs.Requests;
 public sealed class QuotationCreateRequestDto
 {
     public long? DiagnosisId { get; set; }
+    public long? DiagnosisAssignmentId { get; set; }
     public string? Title { get; set; }
     public string? QuotationType { get; set; }
     public DateTime? ValidUntil { get; set; }
@@ -19,7 +20,6 @@ public sealed class QuotationCreateRequestDto
 
 public sealed class QuotationCreateItemDto
 {
-    public long? DiagnosisRecommendationId { get; set; }
     public long? SourceQuotationDetailId { get; set; }
     public string ItemType { get; set; } = null!;
     public long? ItemId { get; set; }
@@ -42,4 +42,3 @@ public sealed class QuotationCreateItemDto
     public string? CancelReason { get; set; }
     public long? CanceledBy { get; set; }
 }
-

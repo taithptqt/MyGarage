@@ -46,6 +46,8 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<Branch> Branches { get; set; }
 
+    public virtual DbSet<BranchQuotationApprovalPolicy> BranchQuotationApprovalPolicies { get; set; }
+
     public virtual DbSet<BranchException> BranchExceptions { get; set; }
 
     public virtual DbSet<BranchOperatingHour> BranchOperatingHours { get; set; }
@@ -143,6 +145,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<Quotation> Quotations { get; set; }
 
     public virtual DbSet<QuotationDetail> QuotationDetails { get; set; }
+
+    public virtual DbSet<QuotationApprovalAction> QuotationApprovalActions { get; set; }
 
     public virtual DbSet<QuotationAccessLink> QuotationAccessLinks { get; set; }
 
@@ -662,6 +666,28 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.Manager).WithMany(p => p.BranchManagers).HasForeignKey(d => d.ManagerId);
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.BranchUpdatedByNavigations).HasForeignKey(d => d.UpdatedBy);
+        });
+
+        modelBuilder.Entity<BranchQuotationApprovalPolicy>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_BranchQuotationApprovalPolicies");
+
+            entity.HasIndex(e => e.BranchId, "UQ_BranchQuotationApprovalPolicies_BranchId").IsUnique();
+
+            entity.Property(e => e.MaxDiscountPercentWithoutManager)
+                .HasColumnType("decimal(5, 2)")
+                .HasDefaultValue(5m);
+            entity.Property(e => e.HighValueThreshold)
+                .HasColumnType("decimal(18, 2)")
+                .HasDefaultValue(50000000m);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.BranchQuotationApprovalPolicies)
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_BranchQuotationApprovalPolicies_Branches");
         });
 
         modelBuilder.Entity<BranchException>(entity =>
@@ -2155,6 +2181,7 @@ public partial class GarageContext : DbContext, IGarageContext
 
             entity.HasIndex(e => new { e.ServiceOrderId, e.Status, e.CreatedAt }, "IX_Quotations_ServiceOrderId_Status_CreatedAt");
             entity.HasIndex(e => e.DiagnosisId, "IX_Quotations_DiagnosisId");
+            entity.HasIndex(e => e.DiagnosisAssignmentId, "IX_Quotations_DiagnosisAssignmentId");
             entity.HasIndex(e => e.InsuranceChangeType, "IX_Quotations_InsuranceChangeType");
 
             entity.Property(e => e.Code)
@@ -2199,6 +2226,15 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.RejectReason).HasMaxLength(500);
             entity.Property(e => e.CustomerNotes).HasMaxLength(1000);
             entity.Property(e => e.InternalNotes).HasMaxLength(1000);
+            entity.Property(e => e.TechnicalApprovalStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+            entity.Property(e => e.RequiresFinancialApproval).HasDefaultValue(false);
+            entity.Property(e => e.FinancialApprovalStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("NOT_REQUIRED");
             entity.Property(e => e.IsAppliedToServiceOrder).HasDefaultValue(false);
             entity.Property(e => e.IsReadyForSplitBilling).HasDefaultValue(false);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
@@ -2212,6 +2248,10 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.Diagnosis).WithMany(p => p.Quotations)
                 .HasForeignKey(d => d.DiagnosisId)
                 .HasConstraintName("FK_Quotations_Diagnoses");
+
+            entity.HasOne(d => d.DiagnosisAssignment).WithMany(p => p.Quotations)
+                .HasForeignKey(d => d.DiagnosisAssignmentId)
+                .HasConstraintName("FK_Quotations_DiagnosisAssignments");
 
             entity.HasOne(d => d.ServiceAdvisor).WithMany(p => p.QuotationServiceAdvisors)
                 .HasForeignKey(d => d.ServiceAdvisorId)
@@ -2239,8 +2279,6 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasKey(e => e.Id).HasName("PK_QuotationDetails");
 
             entity.HasIndex(e => new { e.QuotationId, e.ApprovalStatus }, "IX_QuotationDetails_QuotationId_ApprovalStatus");
-
-            entity.HasIndex(e => new { e.ServiceOrderId, e.DiagnosisRecommendationId }, "IX_QuotationDetails_ServiceOrderId_DiagnosisRecommendationId");
 
             entity.HasIndex(e => e.SourceQuotationDetailId, "IX_QuotationDetails_SourceQuotationDetailId");
 
@@ -2287,10 +2325,6 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.ServiceOrderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_QuotationDetails_ServiceOrders");
-
-            entity.HasOne(d => d.DiagnosisRecommendation).WithMany()
-                .HasForeignKey(d => d.DiagnosisRecommendationId)
-                .HasConstraintName("FK_QuotationDetails_DiagnosisRecommendations");
 
             entity.HasOne<QuotationDetail>()
                 .WithMany()
@@ -2352,6 +2386,27 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.QuotationId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_QuotationAccessLinks_Quotations");
+        });
+
+        modelBuilder.Entity<QuotationApprovalAction>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_QuotationApprovalActions");
+
+            entity.HasIndex(e => new { e.QuotationId, e.ApprovalType, e.CreatedAt }, "IX_QuotationApprovalActions_QuotationId_ApprovalType_CreatedAt");
+
+            entity.Property(e => e.ApprovalType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Decision)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Note).HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.Quotation).WithMany(p => p.QuotationApprovalActions)
+                .HasForeignKey(d => d.QuotationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_QuotationApprovalActions_Quotations");
         });
 
         modelBuilder.Entity<RetailOrder>(entity =>
@@ -3783,5 +3838,3 @@ public partial class GarageContext : DbContext, IGarageContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
-
-

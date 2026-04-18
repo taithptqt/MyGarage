@@ -12,6 +12,7 @@ public partial class Quotation
     public long ServiceOrderId { get; set; }
 
     public long? DiagnosisId { get; set; }
+    public long? DiagnosisAssignmentId { get; set; }
 
     public string? Title { get; set; }
 
@@ -52,13 +53,15 @@ public partial class Quotation
 
     public DateTime? TechnicalApprovedAt { get; set; }
 
-    public string? TeamLeaderApprovalStatus { get; set; }
+    public string? TechnicalApprovalStatus { get; set; }
 
-    public long? FinalApprovedBy { get; set; }
+    public bool RequiresFinancialApproval { get; set; }
 
-    public DateTime? FinalApprovedAt { get; set; }
+    public long? FinancialApprovedBy { get; set; }
 
-    public string? FinalApprovalStatus { get; set; }
+    public DateTime? FinancialApprovedAt { get; set; }
+
+    public string? FinancialApprovalStatus { get; set; }
 
     public long? CustomerDecisionBy { get; set; }
 
@@ -93,6 +96,7 @@ public partial class Quotation
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
 
     public virtual Diagnosis? Diagnosis { get; set; }
+    public virtual DiagnosisAssignment? DiagnosisAssignment { get; set; }
 
     public virtual Staff? ServiceAdvisor { get; set; }
 
@@ -111,4 +115,6 @@ public partial class Quotation
     public virtual ICollection<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; } = new List<MandatoryOverrideRequest>();
 
     public virtual ICollection<QuotationAccessLink> QuotationAccessLinks { get; set; } = new List<QuotationAccessLink>();
+
+    public virtual ICollection<QuotationApprovalAction> QuotationApprovalActions { get; set; } = new List<QuotationApprovalAction>();
 }

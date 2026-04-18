@@ -10,6 +10,7 @@ public sealed class QuotationResponseDto
     public string Code { get; set; } = null!;
     public long ServiceOrderId { get; set; }
     public long? DiagnosisId { get; set; }
+    public long? DiagnosisAssignmentId { get; set; }
     public long? SourceSnapshotId { get; set; }
     public string? Title { get; set; }
     public string QuotationType { get; set; } = null!;
@@ -20,10 +21,11 @@ public sealed class QuotationResponseDto
     public string? InsuranceApprovalEvidenceUrl { get; set; }
     public long? TechnicalApprovedBy { get; set; }
     public DateTime? TechnicalApprovedAt { get; set; }
-    public string? TeamLeaderApprovalStatus { get; set; }
-    public long? FinalApprovedBy { get; set; }
-    public DateTime? FinalApprovedAt { get; set; }
-    public string? FinalApprovalStatus { get; set; }
+    public string? TechnicalApprovalStatus { get; set; }
+    public bool RequiresFinancialApproval { get; set; }
+    public long? FinancialApprovedBy { get; set; }
+    public DateTime? FinancialApprovedAt { get; set; }
+    public string? FinancialApprovalStatus { get; set; }
     public long? CustomerDecisionBy { get; set; }
     public DateTime? CustomerDecisionAt { get; set; }
     public string? CustomerDecisionStatus { get; set; }
@@ -46,7 +48,6 @@ public sealed class QuotationResponseDto
 public sealed class QuotationDetailResponseDto
 {
     public long Id { get; set; }
-    public long? DiagnosisRecommendationId { get; set; }
     public long? SourceQuotationDetailId { get; set; }
     public long? SourceQuotationId { get; set; }
     public string ServiceSource { get; set; } = "INITIAL";
@@ -78,4 +79,3 @@ public sealed class QuotationDetailResponseDto
     public int? EstimatedMinutes { get; set; }
     public bool IsReturnOldPart { get; set; }
 }
-

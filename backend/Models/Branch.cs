@@ -65,6 +65,8 @@ public partial class Branch
 
     public virtual ICollection<BranchOperatingHour> BranchOperatingHours { get; set; } = new List<BranchOperatingHour>();
 
+    public virtual ICollection<BranchQuotationApprovalPolicy> BranchQuotationApprovalPolicies { get; set; } = new List<BranchQuotationApprovalPolicy>();
+
     public virtual ICollection<CommissionRule> CommissionRules { get; set; } = new List<CommissionRule>();
 
     public virtual Staff? CreatedByNavigation { get; set; }

@@ -211,7 +211,7 @@
 }
 
 .premium-table {
-  width: calc(100% - 24px);
+  width: calc(100% - 48px); /* Increased side margins for 'shorter' rows */
   margin: 0 auto;
   border-collapse: separate;
   border-spacing: 0;
@@ -235,65 +235,75 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--quota-navy);
-  border-top: 0;
-  border-bottom: 0;
+  border-top: 1px solid var(--quota-border);
+  border-bottom: 1px solid var(--quota-border);
+  transition: all 0.15s ease;
 }
 
 .premium-table td:first-child {
   border-left: 1px solid var(--quota-border);
-  border-radius: 12px 0 0 12px;
+  border-radius: 0;
 }
 
 .premium-table td:last-child {
   border-right: 1px solid var(--quota-border);
-  border-radius: 0 12px 12px 0;
-}
-
-.premium-table .group-row td:first-child,
-.premium-table .group-row td:last-child {
   border-radius: 0;
 }
 
-.premium-table .group-row.group-start td:first-child {
-  border-top-left-radius: 12px;
-}
-
-.premium-table .group-row.group-start td:last-child {
-  border-top-right-radius: 12px;
-}
-
-.premium-table .group-row.group-end td:first-child {
-  border-bottom-left-radius: 12px;
-}
-
-.premium-table .group-row.group-end td:last-child {
-  border-bottom-right-radius: 12px;
-}
-
 .group-row td {
-  border: 0;
   background: #fff;
-}
-
-.premium-table .group-service-row {
-  background: #f8fbff;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  border-left: 0 !important;
+  border-right: 0 !important;
 }
 
 .premium-table .group-service-row td {
-  background: transparent;
+  background: #f0f7ff;
 }
 
 .premium-table .group-service-row.clickable-service-row td {
   cursor: pointer;
 }
 
-.premium-table .group-service-row.clickable-service-row:hover td {
-  background: transparent;
+/* Group hover effect: Highlighting the perimeter of the entire group */
+.item-group-body:hover .item-row:not(.group-service-row) td {
+  background: #fcfdfe; /* Very subtle background for the group */
 }
 
-.premium-table .group-service-row.clickable-service-row:hover {
-  background: #f1f6ff;
+/* Service row still gets its distinct background on hover for emphasis */
+.item-group-body:hover .group-service-row td {
+  background: #f0f7ff;
 }
+
+.item-group-body:hover .item-row td:first-child {
+  border-left: 1px solid var(--quota-primary) !important;
+}
+
+.item-group-body:hover .item-row td:not(:first-child):not(:last-child) {
+  border-left: 0 !important;
+  border-right: 0 !important;
+}
+
+.item-group-body:hover .item-row td:last-child {
+  border-right: 1px solid var(--quota-primary) !important;
+}
+
+.item-group-body:hover .item-row.group-start td {
+  border-top-color: var(--quota-primary) !important;
+}
+
+.item-group-body:hover .item-row.group-end td {
+  border-bottom-color: var(--quota-primary) !important;
+}
+
+/* Specific rounding for groups to form a single box */
+.group-start td:first-child { border-radius: 12px 0 0 0 !important; }
+.group-start td:last-child { border-radius: 0 12px 0 0 !important; }
+.group-end td:first-child { border-radius: 0 0 0 12px !important; }
+.group-end td:last-child { border-radius: 0 0 12px 0 !important; }
+.group-start.group-end td:first-child { border-radius: 12px 0 0 12px !important; }
+.group-start.group-end td:last-child { border-radius: 0 12px 12px 0 !important; }
 
 .group-start td {
   border-top: 1px solid #d9e1f1;
@@ -312,24 +322,29 @@
 }
 
 .group-service-row td:first-child {
-  border-left: 1px solid #d9e1f1 !important;
+  border-left: 1px solid #d9e1f1;
 }
 
 .group-service-row td:last-child {
-  border-right: 1px solid #d9e1f1 !important;
+  border-right: 1px solid #d9e1f1;
 }
 
 .group-middle td {
-  border-top: 1px solid #edf2fa;
+  border-top: 1px solid var(--quota-border);
 }
 
-.premium-table .service-name-cell {
+.service-name-cell {
   display: flex;
   align-items: center;
   gap: 10px;
   font-weight: 800;
   color: var(--quota-primary);
   font-size: 15px;
+}
+
+.part-name-cell {
+  display: flex;
+  align-items: center;
 }
 
 .quote-portal-item-service {
@@ -348,7 +363,7 @@
   margin-right: 8px;
 }
 
-.premium-table .item-row:hover td {
+.premium-table .item-row:not(.group-service-row):hover td {
   background: #fcfdfe;
 }
 

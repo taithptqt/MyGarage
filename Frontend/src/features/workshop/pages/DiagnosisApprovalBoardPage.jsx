@@ -111,6 +111,7 @@ export default function DiagnosisApprovalBoardPage({
   const numericOrderId = Number(orderId);
   const isTeamLeaderMode = mode === "TEAM_LEADER";
   const isForemanMode = mode === "FOREMAN";
+  const isManagerMode = mode === "MANAGER";
   const fromHistoryContext = searchParams.get("from") === "history" || searchParams.has("from-history");
   const returnToPath = String(location.state?.returnToPath || "").trim();
   const historyBackPath = `${String(backPath || "").replace(/\/+$/, "")}/history`;
@@ -124,6 +125,7 @@ export default function DiagnosisApprovalBoardPage({
   const [order, setOrder] = useState(null);
   const [diagnoses, setDiagnoses] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
+  const [quotations, setQuotations] = useState([]);
 
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -183,9 +185,10 @@ export default function DiagnosisApprovalBoardPage({
     setActionMessage("");
 
     try {
-      const [orderRes, diagnosesRes, serviceRes, productRes, customerRes, vehicleRes] = await Promise.all([
+      const [orderRes, diagnosesRes, quotationsRes, serviceRes, productRes, customerRes, vehicleRes] = await Promise.all([
         serviceOrderApi.getById(numericOrderId),
         serviceOrderApi.getDiagnoses(numericOrderId),
+        serviceOrderApi.getQuotationsByServiceOrder(numericOrderId).catch(() => []),
         getAllStandardServices().catch(() => []),
         inventoryApi.getProducts().catch(() => []),
         getAllCustomers().catch(() => []),
@@ -201,6 +204,7 @@ export default function DiagnosisApprovalBoardPage({
       setOrder(orderRes || null);
       setDiagnoses(Array.isArray(diagnosesRes) ? diagnosesRes : []);
       setRecommendations(safeRecommendations);
+      setQuotations(Array.isArray(quotationsRes) ? quotationsRes : []);
       setServices(Array.isArray(serviceRes) ? serviceRes : []);
       setProducts(Array.isArray(productRes) ? productRes : []);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
@@ -228,6 +232,23 @@ export default function DiagnosisApprovalBoardPage({
 
     return sorted[0] || null;
   }, [diagnoses]);
+
+  const latestQuotation = useMemo(() => {
+    const list = Array.isArray(quotations) ? quotations : [];
+    if (list.length === 0) return null;
+
+    const sorted = [...list].sort((a, b) => {
+      const versionA = Number(readField(a, "versionNo", "VersionNo") || 0);
+      const versionB = Number(readField(b, "versionNo", "VersionNo") || 0);
+      if (versionB !== versionA) return versionB - versionA;
+
+      const timeA = new Date(readField(a, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      const timeB = new Date(readField(b, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return sorted[0] || null;
+  }, [quotations]);
 
   const activeRecommendations = useMemo(
     () => (Array.isArray(recommendations) ? recommendations : [])
@@ -296,6 +317,20 @@ export default function DiagnosisApprovalBoardPage({
     technicalStatus === "APPROVED" || finalStatus === "APPROVED" || finalStatus === "REJECTED" || isTeamLeaderEscalated;
   const isForemanDecisionLocked = finalStatus === "APPROVED" || finalStatus === "REJECTED";
   const isForemanAwaitingTeamLeaderApproval = false;
+  const quotationStatus = normalizeStatus(readField(latestQuotation, "status", "Status"));
+  const financialStatus =
+    normalizeStatus(
+      readField(
+        latestQuotation,
+        "financialApprovalStatus",
+        "FinancialApprovalStatus",
+        "branchManagerApprovalStatus",
+        "BranchManagerApprovalStatus",
+        "branchManagerApprovalState",
+        "BranchManagerApprovalState",
+      ),
+    ) || "PENDING";
+  const canManagerFinancialApprove = isManagerMode && quotationStatus === "PENDING_BRANCH_MANAGER";
 
   const slaSeverity = resolveSlaSeverity(readField(latestDiagnosis, "createdAt", "CreatedAt"));
   const slaClassName =
@@ -454,6 +489,29 @@ export default function DiagnosisApprovalBoardPage({
     }
   }, [numericOrderId, staffId, approveNote, rejectNote, loadData, isForemanAwaitingTeamLeaderApproval]);
 
+  const handleManagerFinancialApprove = useCallback(async () => {
+    const quotationId = toPositiveNumber(readField(latestQuotation, "id", "Id"));
+    if (!quotationId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      await serviceOrderApi.financialApproveQuotation(quotationId, {
+        actorStaffId: staffId,
+        note: approveNote || null,
+      });
+
+      setActionMessage("Đã duyệt tài chính báo giá thành công.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Không thể duyệt tài chính báo giá.");
+    } finally {
+      setSaving(false);
+    }
+  }, [latestQuotation, staffId, approveNote, loadData]);
+
   return (
     <div className="workshop-table-card approval-page-shell">
       <div className="reception-quote-head">
@@ -497,9 +555,15 @@ export default function DiagnosisApprovalBoardPage({
               <strong>{getStatusLabelVi(technicalStatus, technicalStatus)}</strong>
             </article>
             <article>
-              <span>Duyệt quản đốc</span>
-              <strong>{getStatusLabelVi(finalStatus, finalStatus)}</strong>
+              <span>{isManagerMode ? "Trạng thái báo giá" : "Duyệt quản đốc"}</span>
+              <strong>{getStatusLabelVi(isManagerMode ? quotationStatus : finalStatus, isManagerMode ? quotationStatus : finalStatus)}</strong>
             </article>
+            {isManagerMode ? (
+              <article>
+                <span>Duyệt tài chính</span>
+                <strong>{getStatusLabelVi(financialStatus, financialStatus)}</strong>
+              </article>
+            ) : null}
           </section>
 
           <section className="reception-quote-action-card">
@@ -581,7 +645,7 @@ export default function DiagnosisApprovalBoardPage({
                                 step="1"
                                 value={qty}
                                 onChange={(event) => setQuantityById((prev) => ({ ...prev, [id]: event.target.value }))}
-                                disabled={saving}
+                                disabled={saving || isManagerMode}
                                 className="approval-qty-input"
                               />
                             </td>
@@ -589,22 +653,28 @@ export default function DiagnosisApprovalBoardPage({
                             <td>{readField(item, "technicianNotes", "TechnicianNotes") || "-"}</td>
                             <td>
                               <div className="reception-quote-action-row">
-                                <button
-                                  type="button"
-                                  className="btn-primary"
-                                  onClick={() => handleSaveRecommendation(item)}
-                                  disabled={saving || !staffId}
-                                >
-                                  Lưu SL
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-danger"
-                                  onClick={() => handleSoftDeleteRecommendation(item)}
-                                  disabled={saving || !staffId}
-                                >
-                                  Loại bỏ
-                                </button>
+                                {!isManagerMode ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="btn-primary"
+                                      onClick={() => handleSaveRecommendation(item)}
+                                      disabled={saving || !staffId}
+                                    >
+                                      Lưu SL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-danger"
+                                      onClick={() => handleSoftDeleteRecommendation(item)}
+                                      disabled={saving || !staffId}
+                                    >
+                                      Loại bỏ
+                                    </button>
+                                  </>
+                                ) : (
+                                  "-"
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -626,7 +696,7 @@ export default function DiagnosisApprovalBoardPage({
                                       onChange={(event) =>
                                         setQuantityById((prev) => ({ ...prev, [childId]: event.target.value }))
                                       }
-                                      disabled={saving}
+                                      disabled={saving || isManagerMode}
                                       className="approval-qty-input"
                                     />
                                   </td>
@@ -634,22 +704,28 @@ export default function DiagnosisApprovalBoardPage({
                                   <td>{readField(child, "technicianNotes", "TechnicianNotes") || "-"}</td>
                                   <td>
                                     <div className="reception-quote-action-row">
-                                      <button
-                                        type="button"
-                                        className="btn-primary"
-                                        onClick={() => handleSaveRecommendation(child)}
-                                        disabled={saving || !staffId}
-                                      >
-                                        Lưu SL
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-danger"
-                                        onClick={() => handleSoftDeleteRecommendation(child)}
-                                        disabled={saving || !staffId}
-                                      >
-                                        Loại bỏ
-                                      </button>
+                                      {!isManagerMode ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="btn-primary"
+                                            onClick={() => handleSaveRecommendation(child)}
+                                            disabled={saving || !staffId}
+                                          >
+                                            Lưu SL
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="btn-danger"
+                                            onClick={() => handleSoftDeleteRecommendation(child)}
+                                            disabled={saving || !staffId}
+                                          >
+                                            Loại bỏ
+                                          </button>
+                                        </>
+                                      ) : (
+                                        "-"
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -666,7 +742,7 @@ export default function DiagnosisApprovalBoardPage({
           </section>
 
           <section className="reception-quote-action-card">
-            <h3>Xử lý duyệt kỹ thuật</h3>
+            <h3>{isManagerMode ? "Xử lý duyệt tài chính" : "Xử lý duyệt kỹ thuật"}</h3>
             <div className="reception-quote-approval-note">
               <div className="reception-quote-approval-note-head">
                 <span className="reception-quote-approval-note-title">Ghi chú nội bộ</span>
@@ -748,6 +824,17 @@ export default function DiagnosisApprovalBoardPage({
                     Từ chối & Khám lại
                   </button>
                 </>
+              ) : null}
+
+              {isManagerMode ? (
+                <button
+                  type="button"
+                  className="btn-success"
+                  onClick={handleManagerFinancialApprove}
+                  disabled={saving || !staffId || !canManagerFinancialApprove}
+                >
+                  Duyệt tài chính
+                </button>
               ) : null}
             </div>
           </section>

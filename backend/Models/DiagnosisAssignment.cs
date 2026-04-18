@@ -81,8 +81,8 @@ public partial class DiagnosisAssignment
     public virtual Diagnosis Diagnosis { get; set; } = null!;
 
     public virtual ICollection<DiagnosisRecommendation> DiagnosisRecommendations { get; set; } = new List<DiagnosisRecommendation>();
+    public virtual ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
 }
-
 
 
 

@@ -334,12 +334,13 @@ export default function QuotationDetailPage() {
             <th className="text-right" style={{ width: "15%" }}>THÀNH TIỀN</th>
           </tr>
         </thead>
-        <tbody>
-          {groups.length === 0 ? (
+        {groups.length === 0 ? (
+          <tbody>
             <tr>
               <td colSpan={5} className="quote-detail-empty">{emptyMessage}</td>
             </tr>
-          ) : groups.map((group) => {
+          </tbody>
+        ) : groups.map((group) => {
             const collapseKey = `${sectionKey}-${group.key}`;
             const canToggle = group.partRows.length > 0;
             const isCollapsed = canToggle ? Boolean(collapsedPartGroups[collapseKey]) : false;
@@ -348,7 +349,7 @@ export default function QuotationDetailPage() {
               ...(isCollapsed ? [] : group.partRows.map((row) => ({ row, isService: false }))),
             ];
             return (
-              <Fragment key={`${title}-${group.key}`}>
+              <tbody key={`${title}-${group.key}`} className="item-group-body">
                 {visibleRows.map(({ row, isService }, rowIndex) => {
                   const isFirst = rowIndex === 0;
                   const isLast = rowIndex === visibleRows.length - 1;
@@ -371,9 +372,11 @@ export default function QuotationDetailPage() {
                       title={serviceRowTooltip}
                       onClick={canToggle && isFirst ? () => setCollapsedPartGroups((prev) => ({ ...prev, [collapseKey]: !prev[collapseKey] })) : undefined}
                     >
-                      <td className={isService ? "service-name-cell quote-portal-item-service" : "part-name-cell quote-portal-item-part"}>
-                        {!isService ? <span className="quote-portal-item-prefix">└─</span> : null}
-                        {row.itemName}
+                      <td className={isService ? "quote-portal-item-service" : "quote-portal-item-part"}>
+                        <div className={isService ? "service-name-cell" : "part-name-cell"}>
+                          {!isService ? <span className="quote-portal-item-prefix">└─</span> : null}
+                          {row.itemName}
+                        </div>
                       </td>
                       <td className="quote-portal-col-priority text-center">
                         <span className={`priority-badge ${row.isMandatory ? "priority-URGENT" : "priority-NORMAL"}`}>
@@ -387,10 +390,9 @@ export default function QuotationDetailPage() {
                   );
                 })}
                 <tr className="group-spacer-row"><td colSpan="5"></td></tr>
-              </Fragment>
+              </tbody>
             );
           })}
-        </tbody>
       </table>
     </div>
   );

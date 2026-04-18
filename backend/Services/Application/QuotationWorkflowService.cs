@@ -39,6 +39,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private const string StatusRejected = nameof(QuotationStatusCode.REJECTED);
     private const string StatusSuperseded = nameof(QuotationStatusCode.SUPERSEDED);
     private const string StatusCanceled = nameof(QuotationStatusCode.CANCELED);
+    private const string LegacyStatusCancelled = "CANCELLED";
 
     private const string ApprovalPending = nameof(QuotationDetailApprovalStatusCode.PENDING);
     private const string ApprovalApproved = nameof(QuotationDetailApprovalStatusCode.APPROVED);
@@ -57,6 +58,18 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private const int OtpTtlSeconds = 60;
     private const int OtpMaxAttempts = 5;
     private const int OtpResendCooldownSeconds = 0;
+    private const decimal DefaultMaxDiscountPercentWithoutManager = 5m;
+    private const decimal DefaultHighValueThreshold = 50000000m;
+    private const string TechnicalApprovalPending = "PENDING";
+    private const string TechnicalApprovalApproved = "APPROVED";
+    private const string TechnicalApprovalRejected = "REJECTED";
+    private const string FinancialApprovalNotRequired = "NOT_REQUIRED";
+    private const string FinancialApprovalPending = "PENDING";
+    private const string FinancialApprovalApproved = "APPROVED";
+    private const string FinancialApprovalRejected = "REJECTED";
+    private const string ApprovalActionTypeTechnical = "TECHNICAL";
+    private const string ApprovalActionTypeFinancial = "FINANCIAL";
+    private const string StatusPendingBranchManager = "PENDING_BRANCH_MANAGER";
 
     public QuotationWorkflowService(
         IGarageContext context,
@@ -99,14 +112,60 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
 
-        if (request.DiagnosisId.HasValue && request.DiagnosisId.Value > 0)
+        long? resolvedDiagnosisId = request.DiagnosisId.HasValue && request.DiagnosisId.Value > 0
+            ? request.DiagnosisId.Value
+            : null;
+        long? resolvedDiagnosisAssignmentId = request.DiagnosisAssignmentId.HasValue && request.DiagnosisAssignmentId.Value > 0
+            ? request.DiagnosisAssignmentId.Value
+            : null;
+
+        if (resolvedDiagnosisAssignmentId.HasValue)
+        {
+            var assignmentInfo = await _context.DiagnosisAssignments.AsNoTracking()
+                .Where(x => x.Id == resolvedDiagnosisAssignmentId.Value)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.DiagnosisId,
+                    DiagnosisServiceOrderId = x.Diagnosis.ServiceOrderId
+                })
+                .FirstOrDefaultAsync();
+            if (assignmentInfo == null || assignmentInfo.DiagnosisServiceOrderId != serviceOrderId)
+            {
+                throw new InvalidOperationException("DiagnosisAssignmentId không thuộc lệnh sửa chữa hiện tại.");
+            }
+
+            if (resolvedDiagnosisId.HasValue && resolvedDiagnosisId.Value != assignmentInfo.DiagnosisId)
+            {
+                throw new InvalidOperationException("DiagnosisId không khớp với DiagnosisAssignmentId.");
+            }
+
+            resolvedDiagnosisId ??= assignmentInfo.DiagnosisId;
+        }
+
+        if (resolvedDiagnosisId.HasValue)
         {
             var diagnosisBelongsToServiceOrder = await _context.Diagnoses.AsNoTracking()
-                .AnyAsync(x => x.Id == request.DiagnosisId.Value && x.ServiceOrderId == serviceOrderId);
+                .AnyAsync(x => x.Id == resolvedDiagnosisId.Value && x.ServiceOrderId == serviceOrderId);
             if (!diagnosisBelongsToServiceOrder)
             {
-                throw new InvalidOperationException("DiagnosisId khÃ´ng thuá»™c lá»‡nh sá»­a chá»¯a hiá»‡n táº¡i.");
+                throw new InvalidOperationException("DiagnosisId không thuộc lệnh sửa chữa hiện tại.");
             }
+
+            if (!resolvedDiagnosisAssignmentId.HasValue)
+            {
+                resolvedDiagnosisAssignmentId = await _context.DiagnosisAssignments.AsNoTracking()
+                    .Where(x => x.DiagnosisId == resolvedDiagnosisId.Value)
+                    .OrderByDescending(x => x.CreatedAt)
+                    .ThenByDescending(x => x.Id)
+                    .Select(x => (long?)x.Id)
+                    .FirstOrDefaultAsync();
+            }
+        }
+
+        if (!resolvedDiagnosisAssignmentId.HasValue || resolvedDiagnosisAssignmentId.Value <= 0)
+        {
+            throw new InvalidOperationException("Báo giá phải gắn với một phiên bản chuẩn đoán hợp lệ (DiagnosisAssignmentId).");
         }
 
         var nextVersion = await _context.Quotations.AsNoTracking()
@@ -121,7 +180,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             Code = BuildQuotationCode(serviceOrderId, nextVersion, now),
             ServiceOrderId = serviceOrderId,
-            DiagnosisId = request.DiagnosisId,
+            DiagnosisId = resolvedDiagnosisId,
+            DiagnosisAssignmentId = resolvedDiagnosisAssignmentId,
             Title = BuildQuotationTitle(nextVersion),
             QuotationType = normalizedType,
             VersionNo = nextVersion,
@@ -134,8 +194,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 serviceOrder.ReceptionistId),
             CustomerNotes = NormalizeText(request.CustomerNotes, 1000),
             InternalNotes = NormalizeText(request.InternalNotes, 1000),
-            TeamLeaderApprovalStatus = ApprovalPending,
-            FinalApprovalStatus = ApprovalPending,
+            TechnicalApprovalStatus = TechnicalApprovalPending,
+            RequiresFinancialApproval = false,
+            FinancialApprovalStatus = FinancialApprovalNotRequired,
             CustomerDecisionStatus = ApprovalPending,
             CreatedBy = actorStaffId,
             UpdatedBy = actorStaffId,
@@ -219,10 +280,10 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .ToListAsync();
-        var latestAssignmentIds = latestAssignmentIdsByDiagnosis
+        var latestAssignmentByDiagnosisId = latestAssignmentIdsByDiagnosis
             .GroupBy(x => x.DiagnosisId)
-            .Select(x => x.First().Id)
-            .ToList();
+            .ToDictionary(x => x.Key, x => x.First().Id);
+        var latestAssignmentIds = latestAssignmentByDiagnosisId.Values.ToList();
 
         var recommendations = await _context.DiagnosisRecommendations.AsNoTracking()
             .Where(x =>
@@ -284,6 +345,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 var request = new QuotationCreateRequestDto
                 {
                     DiagnosisId = latestDiagnosis.Id,
+                    DiagnosisAssignmentId = latestAssignmentByDiagnosisId.TryGetValue(latestDiagnosis.Id, out var latestAssignmentId)
+                        ? latestAssignmentId
+                        : null,
                     Title = BuildQuotationTitle(nextSnapshotVersion),
                     QuotationType = nameof(QuotationTypeCode.INSURANCE),
                     ServiceAdvisorId = ResolveServiceAdvisorForQuotation(
@@ -301,7 +365,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                     snapshotDetails.Add(new TechnicalProposalSnapshotDetail
                     {
                         SnapshotId = snapshot.Id,
-                        DiagnosisRecommendationId = rec.Id,
                         ItemType = mapped.ItemType,
                         ItemId = mapped.ItemId,
                         ItemName = mapped.ItemName,
@@ -313,7 +376,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
                     request.Items.Add(new QuotationCreateItemDto
                     {
-                        DiagnosisRecommendationId = rec.Id,
                         ItemType = mapped.ItemType,
                         ItemId = mapped.ItemId,
                         ItemName = mapped.ItemName,
@@ -338,12 +400,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 var quotationEntity = await _context.Quotations.FirstAsync(x => x.Id == quotation.Id);
                 quotationEntity.SourceSnapshotId = snapshot.Id;
                 quotationEntity.Status = StatusPendingInsurance;
-                quotationEntity.TeamLeaderApprovalStatus = ApprovalApproved;
-                quotationEntity.TechnicalApprovedBy = actorStaffId;
-                quotationEntity.TechnicalApprovedAt = now;
-                quotationEntity.FinalApprovalStatus = ApprovalApproved;
-                quotationEntity.FinalApprovedBy = actorStaffId;
-                quotationEntity.FinalApprovedAt = now;
                 quotationEntity.CustomerDecisionStatus = ApprovalPending;
                 quotationEntity.UpdatedBy = actorStaffId;
                 quotationEntity.UpdatedAt = now;
@@ -481,6 +537,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var cloneRequest = new QuotationCreateRequestDto
         {
             DiagnosisId = source.DiagnosisId,
+            DiagnosisAssignmentId = source.DiagnosisAssignmentId,
             Title = source.Title,
             QuotationType = source.QuotationType,
             ServiceAdvisorId = source.ServiceAdvisorId,
@@ -514,7 +571,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             var repriced = RepriceQuotationDetail(detail, serviceById, productById);
             cloneRequest.Items.Add(new QuotationCreateItemDto
             {
-                DiagnosisRecommendationId = detail.DiagnosisRecommendationId,
                 SourceQuotationDetailId = detail.Id,
                 ItemType = detail.ItemType,
                 ItemId = detail.ItemId,
@@ -549,12 +605,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var cloned = await CreateQuotationAsync(source.ServiceOrderId, cloneRequest, request.ActorStaffId);
         var clonedEntity = await _context.Quotations.FirstAsync(x => x.Id == cloned.Id);
         clonedEntity.SourceSnapshotId = source.SourceSnapshotId;
-        clonedEntity.TeamLeaderApprovalStatus = source.TeamLeaderApprovalStatus;
-        clonedEntity.TechnicalApprovedBy = source.TechnicalApprovedBy;
-        clonedEntity.TechnicalApprovedAt = source.TechnicalApprovedAt;
-        clonedEntity.FinalApprovalStatus = source.FinalApprovalStatus;
-        clonedEntity.FinalApprovedBy = source.FinalApprovedBy;
-        clonedEntity.FinalApprovedAt = source.FinalApprovedAt;
         clonedEntity.CustomerDecisionStatus = ApprovalPending;
         clonedEntity.UpdatedBy = request.ActorStaffId;
         clonedEntity.UpdatedAt = VietnamTime.Now;
@@ -582,7 +632,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var warnings = new List<string>();
         if (removedInsuranceAmount > 0)
         {
-            warnings.Add("Tá»•ng bá»“i thÆ°á»ng Ä‘Ã£ thay Ä‘á»•i. Vui lÃ²ng cáº­p nháº­t vá»›i GiÃ¡m Ä‘á»‹nh viÃªn.");
+            warnings.Add("Tổng bồi thường đã thay đổi. Vui lòng cập nhật với Giám định viên.");
         }
 
         var latest = await GetQuotationAsync(clonedEntity.Id);
@@ -697,12 +747,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     {
         if (request == null || request.ActorStaffId <= 0)
         {
-            throw new InvalidOperationException("Thiáº¿u nhÃ¢n sá»± cáº­p nháº­t tÃ¡ch bill.");
+            throw new InvalidOperationException("Thiếu nhân sự cập nhật tách bill.");
         }
 
         if (request.Items == null || request.Items.Count == 0)
         {
-            throw new InvalidOperationException("Thiáº¿u dÃ²ng bÃ¡o giÃ¡ cáº§n cáº­p nháº­t tÃ¡ch bill.");
+            throw new InvalidOperationException("Thiếu dòng báo giá cần cập nhật tách bill.");
         }
 
         var quotation = await _context.Quotations
@@ -710,7 +760,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
-            throw new InvalidOperationException("KhÃ´ng tÃ¬m tháº¥y bÃ¡o giÃ¡.");
+            throw new InvalidOperationException("Không tìm thấy báo giá.");
         }
 
         if (string.Equals(quotation.Status, StatusSuperseded, StringComparison.OrdinalIgnoreCase) ||
@@ -880,12 +930,17 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 string.Equals(x.ApprovalStatus, ApprovalApproved, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        quotation.Status = approvedDetails.Count > 0 ? StatusPendingInsurance : StatusRejected;
+        var technicalApproved = approvedDetails.Count > 0;
+        quotation.Status = technicalApproved ? StatusPendingInsurance : StatusRejected;
         quotation.ApprovedBy = request.ApprovedBy;
         quotation.ApprovedAt = now;
-        quotation.FinalApprovedBy = request.ApprovedBy;
-        quotation.FinalApprovedAt = now;
-        quotation.FinalApprovalStatus = approvedDetails.Count > 0 ? ApprovalApproved : ApprovalRejected;
+        quotation.TechnicalApprovedBy = request.ApprovedBy;
+        quotation.TechnicalApprovedAt = now;
+        quotation.TechnicalApprovalStatus = technicalApproved ? TechnicalApprovalApproved : TechnicalApprovalRejected;
+        quotation.RequiresFinancialApproval = false;
+        quotation.FinancialApprovalStatus = FinancialApprovalNotRequired;
+        quotation.FinancialApprovedBy = null;
+        quotation.FinancialApprovedAt = null;
         quotation.RejectReason = approvedDetails.Count > 0 ? null : "ALL_ITEMS_REJECTED";
         if (!string.IsNullOrWhiteSpace(request.Note))
         {
@@ -898,6 +953,27 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         quotation.UpdatedBy = request.ApprovedBy;
         quotation.UpdatedAt = now;
         RecalculateQuotationTotals(quotation);
+
+        if (technicalApproved)
+        {
+            var financialApprovalRequired = await IsFinancialApprovalRequiredAsync(quotation);
+            if (financialApprovalRequired)
+            {
+                quotation.RequiresFinancialApproval = true;
+                quotation.FinancialApprovalStatus = FinancialApprovalPending;
+                quotation.Status = StatusPendingBranchManager;
+            }
+        }
+
+        _context.QuotationApprovalActions.Add(new QuotationApprovalAction
+        {
+            QuotationId = quotation.Id,
+            ApprovalType = ApprovalActionTypeTechnical,
+            Decision = technicalApproved ? TechnicalApprovalApproved : TechnicalApprovalRejected,
+            ActorStaffId = request.ApprovedBy,
+            Note = NormalizeText(request.Note, 1000),
+            CreatedAt = now
+        });
 
         await _context.SaveChangesAsync();
         return MapQuotationResponse(quotation);
@@ -938,6 +1014,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
+
+        EnsureCustomerDecisionAllowed(quotation, serviceOrder);
 
         var now = VietnamTime.Now;
         if (!string.IsNullOrWhiteSpace(request.Note))
@@ -1032,6 +1110,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var existingServiceOrderDetails = await _context.ServiceOrderDetails
             .Where(x => x.ServiceOrderId == serviceOrder.Id)
             .ToListAsync();
+        var isTechnicianSupplementary = await IsTechnicianSupplementaryQuotationAsync(quotation, serviceOrder.Id);
         var detailByQuotationDetailId = existingServiceOrderDetails
             .Where(x => x.QuotationDetailId.HasValue && x.QuotationDetailId.Value > 0)
             .GroupBy(x => x.QuotationDetailId!.Value)
@@ -1059,7 +1138,13 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 continue;
             }
 
-            var created = BuildServiceOrderDetailFromQuotation(approvedDetail, quotation, serviceOrder.Id, actorId, now);
+            var created = BuildServiceOrderDetailFromQuotation(
+                approvedDetail,
+                quotation,
+                serviceOrder.Id,
+                actorId,
+                now,
+                isTechnicianSupplementary);
             rowsToCreate.Add(created);
             detailByQuotationDetailId[approvedDetail.Id] = created;
         }
@@ -1348,6 +1433,204 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return MapQuotationResponse(quotation);
     }
 
+    public async Task<QuotationResponseDto> FinancialApproveQuotationAsync(long quotationId, QuotationFinancialApprovalRequestDto request)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Mã báo giá không hợp lệ.");
+        }
+
+        if (request == null || request.ApprovedBy <= 0)
+        {
+            throw new InvalidOperationException("Thiếu người duyệt tài chính.");
+        }
+
+        var quotation = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .FirstOrDefaultAsync(x => x.Id == quotationId);
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy báo giá.");
+        }
+
+        if (!quotation.RequiresFinancialApproval)
+        {
+            throw new InvalidOperationException("Báo giá không yêu cầu duyệt tài chính.");
+        }
+
+        if (!string.Equals(quotation.FinancialApprovalStatus, FinancialApprovalPending, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(quotation.Status, StatusPendingBranchManager, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Báo giá không ở trạng thái chờ quản lý chi nhánh duyệt.");
+        }
+
+        var serviceOrder = await _context.ServiceOrders
+            .AsNoTracking()
+            .Where(x => x.Id == quotation.ServiceOrderId)
+            .Select(x => new { x.ExecuteBranchId, BranchManagerId = x.ExecuteBranch.ManagerId })
+            .FirstOrDefaultAsync();
+        if (serviceOrder == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
+        }
+
+        if (serviceOrder.BranchManagerId.HasValue && serviceOrder.BranchManagerId.Value > 0 &&
+            serviceOrder.BranchManagerId.Value != request.ApprovedBy)
+        {
+            throw new InvalidOperationException("Chỉ quản lý chi nhánh được phân quyền mới được duyệt tài chính báo giá này.");
+        }
+
+        var now = VietnamTime.Now;
+        var decision = request.Approved ? FinancialApprovalApproved : FinancialApprovalRejected;
+        quotation.FinancialApprovedBy = request.ApprovedBy;
+        quotation.FinancialApprovedAt = now;
+        quotation.FinancialApprovalStatus = decision;
+        quotation.Status = request.Approved ? StatusPendingInsurance : StatusRejected;
+        if (request.Approved)
+        {
+            quotation.RejectReason = null;
+        }
+        if (!request.Approved)
+        {
+            quotation.RejectReason = "FINANCIAL_REJECTED";
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Note))
+        {
+            var note = request.Note.Trim();
+            quotation.InternalNotes = string.IsNullOrWhiteSpace(quotation.InternalNotes)
+                ? note
+                : $"{quotation.InternalNotes.Trim()} | {note}";
+        }
+
+        quotation.UpdatedBy = request.ApprovedBy;
+        quotation.UpdatedAt = now;
+
+        _context.QuotationApprovalActions.Add(new QuotationApprovalAction
+        {
+            QuotationId = quotation.Id,
+            ApprovalType = ApprovalActionTypeFinancial,
+            Decision = decision,
+            ActorStaffId = request.ApprovedBy,
+            Note = NormalizeText(request.Note, 1000),
+            CreatedAt = now
+        });
+
+        await _context.SaveChangesAsync();
+        return MapQuotationResponse(quotation);
+    }
+
+    public async Task<BranchQuotationApprovalPolicyResponseDto> GetBranchQuotationApprovalPolicyAsync(long branchId)
+    {
+        if (branchId <= 0)
+        {
+            throw new InvalidOperationException("Mã chi nhánh không hợp lệ.");
+        }
+
+        var row = await _context.BranchQuotationApprovalPolicies.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BranchId == branchId);
+
+        if (row == null)
+        {
+            return new BranchQuotationApprovalPolicyResponseDto
+            {
+                BranchId = branchId,
+                MaxDiscountPercentWithoutManager = DefaultMaxDiscountPercentWithoutManager,
+                HighValueThreshold = DefaultHighValueThreshold,
+                IsActive = true
+            };
+        }
+
+        return new BranchQuotationApprovalPolicyResponseDto
+        {
+            BranchId = row.BranchId,
+            MaxDiscountPercentWithoutManager = row.MaxDiscountPercentWithoutManager,
+            HighValueThreshold = row.HighValueThreshold,
+            IsActive = row.IsActive,
+            UpdatedAt = row.UpdatedAt,
+            UpdatedBy = row.UpdatedBy
+        };
+    }
+
+    public async Task<BranchQuotationApprovalPolicyResponseDto> UpsertBranchQuotationApprovalPolicyAsync(long branchId, BranchQuotationApprovalPolicyUpsertRequestDto request)
+    {
+        if (branchId <= 0)
+        {
+            throw new InvalidOperationException("Mã chi nhánh không hợp lệ.");
+        }
+
+        if (request == null || request.ActorStaffId <= 0)
+        {
+            throw new InvalidOperationException("Thiếu người cập nhật cấu hình duyệt báo giá.");
+        }
+
+        var branch = await _context.Branches.AsNoTracking()
+            .Where(x => x.Id == branchId)
+            .Select(x => new { x.Id, x.ManagerId })
+            .FirstOrDefaultAsync();
+        if (branch == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy chi nhánh.");
+        }
+
+        if (branch.ManagerId.HasValue && branch.ManagerId.Value > 0 && branch.ManagerId.Value != request.ActorStaffId)
+        {
+            throw new InvalidOperationException("Chỉ quản lý chi nhánh được phân quyền mới được cập nhật cấu hình duyệt.");
+        }
+
+        var maxDiscount = request.MaxDiscountPercentWithoutManager ?? DefaultMaxDiscountPercentWithoutManager;
+        var highValueThreshold = request.HighValueThreshold ?? DefaultHighValueThreshold;
+        if (maxDiscount < 0m || maxDiscount > 100m)
+        {
+            throw new InvalidOperationException("Ngưỡng chiết khấu phải nằm trong khoảng từ 0 đến 100.");
+        }
+
+        if (highValueThreshold < 0m)
+        {
+            throw new InvalidOperationException("Ngưỡng giá trị báo giá phải lớn hơn hoặc bằng 0.");
+        }
+
+        var now = VietnamTime.Now;
+        var entity = await _context.BranchQuotationApprovalPolicies
+            .FirstOrDefaultAsync(x => x.BranchId == branchId);
+
+        if (entity == null)
+        {
+            entity = new BranchQuotationApprovalPolicy
+            {
+                BranchId = branchId,
+                MaxDiscountPercentWithoutManager = maxDiscount,
+                HighValueThreshold = highValueThreshold,
+                IsActive = request.IsActive,
+                CreatedBy = request.ActorStaffId,
+                CreatedAt = now,
+                UpdatedBy = request.ActorStaffId,
+                UpdatedAt = now
+            };
+            _context.BranchQuotationApprovalPolicies.Add(entity);
+        }
+        else
+        {
+            entity.MaxDiscountPercentWithoutManager = maxDiscount;
+            entity.HighValueThreshold = highValueThreshold;
+            entity.IsActive = request.IsActive;
+            entity.UpdatedBy = request.ActorStaffId;
+            entity.UpdatedAt = now;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return new BranchQuotationApprovalPolicyResponseDto
+        {
+            BranchId = entity.BranchId,
+            MaxDiscountPercentWithoutManager = entity.MaxDiscountPercentWithoutManager,
+            HighValueThreshold = entity.HighValueThreshold,
+            IsActive = entity.IsActive,
+            UpdatedAt = entity.UpdatedAt,
+            UpdatedBy = entity.UpdatedBy
+        };
+    }
+
     public async Task<QuotationResponseDto> SendQuotationToCustomerAsync(long quotationId, long actorStaffId, string? note = null, string? idempotencyKey = null)
     {
         var _ = await PublishQuotationCustomerLinkAsync(quotationId, new QuotationCustomerLinkPublishRequestDto
@@ -1604,6 +1887,13 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             throw new InvalidOperationException("Không tìm thấy báo giá.");
         }
 
+        if (quotation.ServiceOrder == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy lệnh sửa chữa.");
+        }
+
+        EnsureCustomerDecisionAllowed(quotation, quotation.ServiceOrder);
+
         if (!string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Báo giá hiện không ở trạng thái chờ khách xác nhận.");
@@ -1691,6 +1981,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             throw new InvalidOperationException("Kh\u00F4ng t\u00ECm th\u1EA5y l\u1EC7nh s\u1EEDa ch\u1EEFa.");
         }
+
+        EnsureCustomerDecisionAllowed(quotation, serviceOrder);
 
         await ValidateOtpForDecisionAsync(accessLink, request.OtpCode);
 
@@ -2301,6 +2593,25 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         }
     }
 
+    private static bool IsCanceledState(string? status)
+    {
+        var normalized = (status ?? string.Empty).Trim().ToUpperInvariant();
+        return normalized == StatusCanceled || normalized == LegacyStatusCancelled;
+    }
+
+    private static void EnsureCustomerDecisionAllowed(Quotation quotation, ServiceOrder serviceOrder)
+    {
+        if (IsCanceledState(quotation.Status))
+        {
+            throw new InvalidOperationException("Báo giá đã hủy, không thể duyệt từ liên kết.");
+        }
+
+        if (IsCanceledState(serviceOrder.Status))
+        {
+            throw new InvalidOperationException("Lệnh sửa chữa đã hủy, không thể duyệt báo giá từ liên kết.");
+        }
+    }
+
     private async Task<QuotationAccessLink> ResolveActiveAccessLinkAsync(string token)
     {
         var normalizedToken = (token ?? string.Empty).Trim();
@@ -2406,7 +2717,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return new QuotationDetail
         {
             ServiceOrderId = serviceOrderId,
-            DiagnosisRecommendationId = dto.DiagnosisRecommendationId,
             SourceQuotationDetailId = dto.SourceQuotationDetailId,
             ItemType = (dto.ItemType ?? string.Empty).Trim().ToUpperInvariant(),
             ItemId = dto.ItemId,
@@ -2506,6 +2816,46 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return quotation.QuotationDetails.Any(IsInsuranceResponsibleDetail);
     }
 
+    private async Task<bool> IsFinancialApprovalRequiredAsync(Quotation quotation)
+    {
+        if (quotation == null || quotation.ServiceOrderId <= 0)
+        {
+            return false;
+        }
+
+        var branchId = await _context.ServiceOrders.AsNoTracking()
+            .Where(x => x.Id == quotation.ServiceOrderId)
+            .Select(x => (long?)x.ExecuteBranchId)
+            .FirstOrDefaultAsync();
+        if (!branchId.HasValue || branchId.Value <= 0)
+        {
+            return false;
+        }
+
+        var policy = await _context.BranchQuotationApprovalPolicies.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BranchId == branchId.Value && x.IsActive);
+        var maxDiscountPercentWithoutManager = policy?.MaxDiscountPercentWithoutManager ?? DefaultMaxDiscountPercentWithoutManager;
+        var highValueThreshold = policy?.HighValueThreshold ?? DefaultHighValueThreshold;
+
+        var subtotal = Math.Max(0m, quotation.SubTotalAmount);
+        var totalDiscount = Math.Max(0m, quotation.TotalDiscount);
+        var discountPercent = subtotal <= 0m
+            ? 0m
+            : Math.Round((totalDiscount / subtotal) * 100m, 2, MidpointRounding.AwayFromZero);
+
+        if (discountPercent > maxDiscountPercentWithoutManager)
+        {
+            return true;
+        }
+
+        if (highValueThreshold > 0m && quotation.FinalAmount >= highValueThreshold)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool IsInsuranceResponsibleDetail(QuotationDetail detail)
     {
         if (detail == null || string.Equals(detail.Status, DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
@@ -2585,7 +2935,43 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         };
     }
 
-    private static ServiceOrderDetail BuildServiceOrderDetailFromQuotation(QuotationDetail detail, Quotation quotation, long serviceOrderId, long actorStaffId, DateTime now)
+    private async Task<bool> IsTechnicianSupplementaryQuotationAsync(Quotation quotation, long serviceOrderId)
+    {
+        if (quotation.VersionNo <= 1)
+        {
+            return false;
+        }
+
+        var initialQuotation = await _context.Quotations.AsNoTracking()
+            .Where(x => x.ServiceOrderId == serviceOrderId)
+            .OrderBy(x => x.VersionNo)
+            .ThenBy(x => x.CreatedAt ?? DateTime.MinValue)
+            .ThenBy(x => x.Id)
+            .Select(x => new
+            {
+                x.Id,
+                x.DiagnosisAssignmentId
+            })
+            .FirstOrDefaultAsync();
+
+        if (initialQuotation == null ||
+            initialQuotation.Id == quotation.Id ||
+            !initialQuotation.DiagnosisAssignmentId.HasValue ||
+            !quotation.DiagnosisAssignmentId.HasValue)
+        {
+            return false;
+        }
+
+        return initialQuotation.DiagnosisAssignmentId.Value != quotation.DiagnosisAssignmentId.Value;
+    }
+
+    private static ServiceOrderDetail BuildServiceOrderDetailFromQuotation(
+        QuotationDetail detail,
+        Quotation quotation,
+        long serviceOrderId,
+        long actorStaffId,
+        DateTime now,
+        bool isTechnicianSupplementary)
     {
         var normalizedItemType = NormalizeServiceOrderDetailItemType(detail.ItemType);
         var normalizedPayerType = NormalizeServiceOrderDetailPayerType(
@@ -2593,16 +2979,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             detail.InsuranceCoveredAmount,
             detail.CustomerCoveredAmount);
         var isSupplementary = quotation.VersionNo > 1;
-        var supplementaryReason = isSupplementary
-            ? detail.DiagnosisRecommendationId.HasValue
-                ? nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING)
-                : nameof(ServiceOrderDetailSupplementaryReasonCode.CUSTOMER_REQUEST)
-            : null;
-        var serviceSource = isSupplementary
-            ? string.Equals(supplementaryReason, nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING), StringComparison.OrdinalIgnoreCase)
-                ? nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_TECHNICIAN)
-                : nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_CUSTOMER)
-            : nameof(ServiceOrderDetailServiceSourceCode.INITIAL);
+        var supplementaryReason = ResolveSupplementaryReasonCode(isSupplementary, isTechnicianSupplementary);
+        var serviceSource = ResolveServiceSourceCode(isSupplementary, supplementaryReason);
         var itemId = detail.ItemId;
         var standardServiceId = normalizedItemType == "LABOR" && itemId.HasValue && itemId.Value > 0
             ? itemId
@@ -2891,10 +3269,17 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .Select(x => new
             {
                 x.Id,
-                x.VersionNo
+                x.VersionNo,
+                x.DiagnosisAssignmentId
             })
             .ToListAsync();
         var versionByQuotationId = quotationRows.ToDictionary(x => x.Id, x => x.VersionNo);
+        var diagnosisAssignmentIdByQuotationId = quotationRows.ToDictionary(x => x.Id, x => x.DiagnosisAssignmentId);
+        var initialDiagnosisAssignmentId = quotationRows
+            .OrderBy(x => x.VersionNo)
+            .ThenBy(x => x.Id)
+            .Select(x => x.DiagnosisAssignmentId)
+            .FirstOrDefault();
 
         var quotationDetailRows = await _context.QuotationDetails.AsNoTracking()
             .Where(x => x.ServiceOrderId == serviceOrderId)
@@ -2902,8 +3287,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             {
                 x.Id,
                 x.QuotationId,
-                x.SourceQuotationDetailId,
-                x.DiagnosisRecommendationId
+                x.SourceQuotationDetailId
             })
             .ToListAsync();
         var quotationDetailById = quotationDetailRows.ToDictionary(x => x.Id, x => x);
@@ -2912,7 +3296,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             var visited = new HashSet<long>();
             var cursorId = quotationDetailId;
-            var hasDiagnosisRecommendation = false;
             long? rootQuotationId = null;
             var rootVersionNo = 1;
 
@@ -2926,11 +3309,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 if (!quotationDetailById.TryGetValue(cursorId, out var detailNode))
                 {
                     break;
-                }
-
-                if (detailNode.DiagnosisRecommendationId.HasValue && detailNode.DiagnosisRecommendationId.Value > 0)
-                {
-                    hasDiagnosisRecommendation = true;
                 }
 
                 rootQuotationId = detailNode.QuotationId;
@@ -2948,17 +3326,14 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             }
 
             var isSupplementary = rootVersionNo > 1;
-            var supplementaryReasonCode = isSupplementary
-                ? hasDiagnosisRecommendation
-                    ? nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING)
-                    : nameof(ServiceOrderDetailSupplementaryReasonCode.CUSTOMER_REQUEST)
-                : null;
-
-            var serviceSource = isSupplementary
-                ? string.Equals(supplementaryReasonCode, nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING), StringComparison.OrdinalIgnoreCase)
-                    ? nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_TECHNICIAN)
-                    : nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_CUSTOMER)
-                : nameof(ServiceOrderDetailServiceSourceCode.INITIAL);
+            var isTechnicianSupplementary = isSupplementary &&
+                rootQuotationId.HasValue &&
+                diagnosisAssignmentIdByQuotationId.TryGetValue(rootQuotationId.Value, out var rootDiagnosisAssignmentId) &&
+                rootDiagnosisAssignmentId.HasValue &&
+                initialDiagnosisAssignmentId.HasValue &&
+                rootDiagnosisAssignmentId.Value != initialDiagnosisAssignmentId.Value;
+            var supplementaryReasonCode = ResolveSupplementaryReasonCode(isSupplementary, isTechnicianSupplementary);
+            var serviceSource = ResolveServiceSourceCode(isSupplementary, supplementaryReasonCode);
 
             return new QuotationDetailSupplementaryMeta
             {
@@ -2993,6 +3368,33 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         };
     }
 
+    private static string? ResolveSupplementaryReasonCode(bool isSupplementary, bool isTechnicianSupplementary)
+    {
+        if (!isSupplementary)
+        {
+            return null;
+        }
+
+        return isTechnicianSupplementary
+            ? nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING)
+            : nameof(ServiceOrderDetailSupplementaryReasonCode.CUSTOMER_REQUEST);
+    }
+
+    private static string ResolveServiceSourceCode(bool isSupplementary, string? supplementaryReasonCode)
+    {
+        if (!isSupplementary)
+        {
+            return nameof(ServiceOrderDetailServiceSourceCode.INITIAL);
+        }
+
+        return string.Equals(
+            supplementaryReasonCode,
+            nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING),
+            StringComparison.OrdinalIgnoreCase)
+            ? nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_TECHNICIAN)
+            : nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_CUSTOMER);
+    }
+
     private static string? NormalizeSupplementaryReasonForResponse(string? code)
     {
         var normalized = (code ?? string.Empty).Trim().ToUpperInvariant();
@@ -3016,16 +3418,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         }
 
         var isSupplementary = quotation.VersionNo > 1;
-        var supplementaryReasonCode = isSupplementary
-            ? detail.DiagnosisRecommendationId.HasValue
-                ? nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING)
-                : nameof(ServiceOrderDetailSupplementaryReasonCode.CUSTOMER_REQUEST)
-            : null;
-        var serviceSource = isSupplementary
-            ? string.Equals(supplementaryReasonCode, nameof(ServiceOrderDetailSupplementaryReasonCode.TECH_FINDING), StringComparison.OrdinalIgnoreCase)
-                ? nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_TECHNICIAN)
-                : nameof(ServiceOrderDetailServiceSourceCode.SUPPLEMENTARY_CUSTOMER)
-            : nameof(ServiceOrderDetailServiceSourceCode.INITIAL);
+        var supplementaryReasonCode = ResolveSupplementaryReasonCode(isSupplementary, false);
+        var serviceSource = ResolveServiceSourceCode(isSupplementary, supplementaryReasonCode);
 
         return new QuotationDetailSupplementaryMeta
         {
@@ -3047,6 +3441,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             Code = quotation.Code,
             ServiceOrderId = quotation.ServiceOrderId,
             DiagnosisId = quotation.DiagnosisId,
+            DiagnosisAssignmentId = quotation.DiagnosisAssignmentId,
             SourceSnapshotId = quotation.SourceSnapshotId,
             Title = quotation.Title,
             QuotationType = quotation.QuotationType,
@@ -3056,10 +3451,11 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             InsuranceApprovalEvidenceUrl = quotation.InsuranceApprovalEvidenceUrl,
             TechnicalApprovedBy = quotation.TechnicalApprovedBy,
             TechnicalApprovedAt = quotation.TechnicalApprovedAt,
-            TeamLeaderApprovalStatus = quotation.TeamLeaderApprovalStatus,
-            FinalApprovedBy = quotation.FinalApprovedBy,
-            FinalApprovedAt = quotation.FinalApprovedAt,
-            FinalApprovalStatus = quotation.FinalApprovalStatus,
+            TechnicalApprovalStatus = quotation.TechnicalApprovalStatus,
+            RequiresFinancialApproval = quotation.RequiresFinancialApproval,
+            FinancialApprovedBy = quotation.FinancialApprovedBy,
+            FinancialApprovedAt = quotation.FinancialApprovedAt,
+            FinancialApprovalStatus = quotation.FinancialApprovalStatus,
             CustomerDecisionBy = quotation.CustomerDecisionBy,
             CustomerDecisionAt = quotation.CustomerDecisionAt,
             CustomerDecisionStatus = quotation.CustomerDecisionStatus,
@@ -3090,7 +3486,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                         IsSupplementary = supplementaryMeta.IsSupplementary,
                         SupplementaryReasonCode = supplementaryMeta.SupplementaryReasonCode,
                         Id = x.Id,
-                        DiagnosisRecommendationId = x.DiagnosisRecommendationId,
                         SourceQuotationDetailId = x.SourceQuotationDetailId,
                         ItemType = x.ItemType,
                         ItemId = x.ItemId,
@@ -3192,5 +3587,3 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             }
         }
     }
-
-

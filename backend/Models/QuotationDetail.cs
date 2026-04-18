@@ -11,8 +11,6 @@ public partial class QuotationDetail
 
     public long ServiceOrderId { get; set; }
 
-    public long? DiagnosisRecommendationId { get; set; }
-
     public long? SourceQuotationDetailId { get; set; }
 
     public string ItemType { get; set; } = null!;
@@ -81,8 +79,6 @@ public partial class QuotationDetail
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
 
-    public virtual DiagnosisRecommendation? DiagnosisRecommendation { get; set; }
-
     public virtual InsuranceCompany? InsuranceCompany { get; set; }
 
     public virtual Staff? ApprovedByNavigation { get; set; }
@@ -97,4 +93,3 @@ public partial class QuotationDetail
 
     public virtual ICollection<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; } = new List<MandatoryOverrideRequest>();
 }
-

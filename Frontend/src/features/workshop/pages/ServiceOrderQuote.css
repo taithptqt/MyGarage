@@ -553,7 +553,6 @@
   gap: 10px;
   margin-bottom: 20px;
   padding-bottom: 20px;
-  border-bottom: 1px dashed var(--quota-border);
   position: relative;
   z-index: 3;
   pointer-events: auto;
@@ -662,7 +661,7 @@
 }
 
 .premium-table {
-  width: calc(100% - 24px);
+  width: calc(100% - 48px); /* Increased margins for better centering and stability */
   margin: 0 auto;
   border-collapse: separate;
   border-spacing: 0;
@@ -745,91 +744,63 @@
   border-bottom-right-radius: 12px;
 }
 
+/* --- Khối Dịch vụ & Phụ tùng (Hộp) --- */
+.item-group-body {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+/* Reset mặc định cho các ô trong nhóm */
 .group-row td {
   border: 0;
   background: #fff;
+  transition: all 0.2s ease;
 }
 
 .group-service-row td {
-  background: #f8fbff;
+  background: #f0f7ff;
 }
 
-.group-service-row td:first-child {
-  border-left: 0 !important;
+/* Viền bao quanh cho toàn bộ khối (Trái và Phải) - Dùng màu #d9e1f1 như trang Public */
+.premium-table .item-group-body .group-row td:first-child {
+  border-left: 1px solid #d9e1f1 !important;
 }
 
-.group-service-row td:last-child {
-  border-right: 0 !important;
+.premium-table .item-group-body .group-row td:last-child {
+  border-right: 1px solid #d9e1f1 !important;
 }
 
-.group-part-row td:first-child {
-  border-left: 0 !important;
+/* Viền trên của dòng đầu tiên (Đỉnh hộp) */
+.premium-table .item-group-body .group-row.group-start td {
+  border-top: 1px solid #d9e1f1 !important;
 }
 
-.group-part-row td:last-child {
-  border-right: 0 !important;
+/* Viền ngăn cách giữa các dòng bên trong - màu nhạt hơn một chút hoặc giữ nguyên */
+.premium-table .item-group-body .group-row.group-middle td,
+.premium-table .item-group-body .group-row.group-end td {
+  border-top: 1px solid #f1f5f9 !important;
 }
 
-.group-start td {
-  border-top: 1px solid #d9e1f1;
+/* Viền dưới của dòng cuối cùng (Đáy hộp) */
+.premium-table .item-group-body .group-row.group-end td {
+  border-bottom: 1px solid #d9e1f1 !important;
 }
 
-.group-end td {
-  border-bottom: 1px solid #d9e1f1;
+/* Hiệu ứng HOVER cho toàn bộ khối (Đồng bộ với màu primary của trang Public) */
+.item-group-body:hover .group-row td:first-child {
+  border-left-color: var(--quota-primary) !important;
 }
 
-.group-row td:first-child {
-  border-left: 0 !important;
+.item-group-body:hover .group-row td:last-child {
+  border-right-color: var(--quota-primary) !important;
 }
 
-.group-row td:last-child {
-  border-right: 0 !important;
+.item-group-body:hover .group-row.group-start td {
+  border-top-color: var(--quota-primary) !important;
 }
 
-.group-middle td {
-  border-top: 1px solid #edf2fa;
-}
-
-.group-hover.group-start td {
-  border-top-color: var(--quota-primary);
-}
-
-.group-hover.group-end td {
-  border-bottom-color: var(--quota-primary);
-}
-
-.group-hover td:first-child {
-  border-left: 1px solid var(--quota-primary) !important;
-}
-
-.group-hover td:last-child {
-  border-right: 1px solid var(--quota-primary) !important;
-}
-
-.group-hover.group-service-row td:first-child {
-  border-left: 1px solid var(--quota-primary) !important;
-}
-
-.group-hover.group-service-row td:last-child {
-  border-right: 1px solid var(--quota-primary) !important;
-}
-
-.group-hover.group-part-row td:first-child {
-  border-left: 1px solid var(--quota-primary) !important;
-}
-
-.group-hover.group-part-row td:last-child {
-  border-right: 1px solid var(--quota-primary) !important;
-}
-
-.premium-table .group-row td {
-  box-shadow: none !important;
-  outline: none !important;
-}
-
-.group-hover td:not(:first-child):not(:last-child) {
-  border-left: 0 !important;
-  border-right: 0 !important;
+.item-group-body:hover .group-row.group-end td {
+  border-bottom-color: var(--quota-primary) !important;
 }
 
 .group-spacer-row td {
@@ -853,6 +824,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.part-branch-text {
+  display: inline-block;
+  opacity: 0.45;
+  margin-right: 8px;
+  letter-spacing: 0;
 }
 
 .quote-table-container {

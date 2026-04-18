@@ -1,6 +1,7 @@
 const STATUS_LABELS_VI = Object.freeze({
   ALL: "T\u1ea5t c\u1ea3",
   PENDING: "Ch\u1edd x\u00e1c nh\u1eadn",
+  NOT_REQUIRED: "Kh\u00f4ng y\u00eau c\u1ea7u",
   PARTS_PENDING: "Ch\u1edd x\u1eed l\u00fd ph\u1ee5 t\u00f9ng",
   LATE: "Tr\u1ec5 h\u1eb9n",
   QUEUED: "X\u1ebfp h\u00e0ng",
@@ -12,6 +13,7 @@ const STATUS_LABELS_VI = Object.freeze({
   DIAGNOSING: "\u0110ang chu\u1ea9n \u0111o\u00e1n",
   IN_PROGRESS: "\u0110ang x\u1eed l\u00fd",
   WAITING_APPROVAL: "Ch\u1edd b\u00e1o gi\u00e1",
+  PENDING_BRANCH_MANAGER: "Ch\u1edd qu\u1ea3n l\u00fd chi nh\u00e1nh duy\u1ec7t",
   READY: "S\u1eb5n s\u00e0ng b\u00e0n giao",
   COMPLETED: "Ho\u00e0n t\u1ea5t",
   CANCELED: "\u0110\u00e3 h\u1ee7y",

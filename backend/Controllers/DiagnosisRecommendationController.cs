@@ -119,6 +119,7 @@ namespace MyGarage.Controllers
                 {
                     x.Id,
                     x.DiagnosisId,
+                    x.DiagnosisAssignmentId,
                     ProposalAt = x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue
                 })
                 .ToListAsync();
@@ -127,34 +128,47 @@ namespace MyGarage.Controllers
                 return Ok(Array.Empty<PendingSupplementaryProposalResponseDto>());
             }
 
-            var recommendationIds = recommendations.Select(x => x.Id).Distinct().ToList();
+            var recommendationAssignmentIds = recommendations
+                .Where(x => x.DiagnosisAssignmentId.HasValue && x.DiagnosisAssignmentId.Value > 0)
+                .Select(x => x.DiagnosisAssignmentId!.Value)
+                .Distinct()
+                .ToList();
 
-            var latestSupplementaryQuotedAtByRecommendationId = await _context.QuotationDetails.AsNoTracking()
-                .Where(x => x.DiagnosisRecommendationId.HasValue && recommendationIds.Contains(x.DiagnosisRecommendationId.Value))
-                .Join(
-                    _context.Quotations.AsNoTracking().Where(q =>
-                        q.VersionNo > 1 &&
-                        q.Status != nameof(QuotationStatusCode.SUPERSEDED) &&
-                        q.Status != nameof(QuotationStatusCode.CANCELED)),
-                    detail => detail.QuotationId,
-                    quotation => quotation.Id,
-                    (detail, quotation) => new
-                    {
-                        RecommendationId = detail.DiagnosisRecommendationId!.Value,
-                        QuotedAt = quotation.CreatedAt ?? DateTime.MinValue
-                    })
-                .GroupBy(x => x.RecommendationId)
-                .Select(g => new
+            var supplementaryQuotations = await _context.Quotations.AsNoTracking()
+                .Where(q => candidateOrderIds.Contains(q.ServiceOrderId))
+                .Where(q =>
+                    q.VersionNo > 1 &&
+                    q.Status != nameof(QuotationStatusCode.SUPERSEDED) &&
+                    q.Status != nameof(QuotationStatusCode.CANCELED))
+                .Where(q =>
+                    (q.DiagnosisAssignmentId.HasValue && recommendationAssignmentIds.Contains(q.DiagnosisAssignmentId.Value)) ||
+                    (!q.DiagnosisAssignmentId.HasValue && latestDiagnosisIds.Contains(q.DiagnosisId ?? 0)))
+                .Select(q => new
                 {
-                    RecommendationId = g.Key,
-                    QuotedAt = g.Max(x => x.QuotedAt)
+                    q.DiagnosisAssignmentId,
+                    q.DiagnosisId,
+                    QuotedAt = q.CreatedAt ?? DateTime.MinValue
                 })
-                .ToDictionaryAsync(x => x.RecommendationId, x => x.QuotedAt);
+                .ToListAsync();
+
+            var latestSupplementaryQuotedAtByAssignmentId = supplementaryQuotations
+                .Where(x => x.DiagnosisAssignmentId.HasValue && x.DiagnosisAssignmentId.Value > 0)
+                .GroupBy(x => x.DiagnosisAssignmentId!.Value)
+                .ToDictionary(x => x.Key, x => x.Max(y => y.QuotedAt));
+
+            var latestSupplementaryQuotedAtByDiagnosisId = supplementaryQuotations
+                .Where(x => x.DiagnosisId.HasValue && x.DiagnosisId.Value > 0)
+                .GroupBy(x => x.DiagnosisId!.Value)
+                .ToDictionary(x => x.Key, x => x.Max(y => y.QuotedAt));
 
             var pendingGroups = recommendations
                 .Where(rec =>
                 {
-                    if (!latestSupplementaryQuotedAtByRecommendationId.TryGetValue(rec.Id, out var quotedAt))
+                    DateTime quotedAt;
+                    var hasQuotedAt = rec.DiagnosisAssignmentId.HasValue && rec.DiagnosisAssignmentId.Value > 0
+                        ? latestSupplementaryQuotedAtByAssignmentId.TryGetValue(rec.DiagnosisAssignmentId.Value, out quotedAt)
+                        : latestSupplementaryQuotedAtByDiagnosisId.TryGetValue(rec.DiagnosisId, out quotedAt);
+                    if (!hasQuotedAt)
                     {
                         return true;
                     }
@@ -668,4 +682,3 @@ namespace MyGarage.Controllers
         }
     }
 }
-

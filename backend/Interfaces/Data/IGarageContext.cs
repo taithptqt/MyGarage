@@ -22,6 +22,7 @@ namespace MyGarage.Interfaces
         DbSet<Bay> Bays { get; }
         DbSet<CapacityConfig> CapacityConfigs { get; }
         DbSet<Branch> Branches { get; }
+        DbSet<BranchQuotationApprovalPolicy> BranchQuotationApprovalPolicies { get; }
         DbSet<BranchException> BranchExceptions { get; }
         DbSet<BranchOperatingHour> BranchOperatingHours { get; }
         DbSet<Category> Categories { get; }
@@ -77,6 +78,7 @@ namespace MyGarage.Interfaces
         DbSet<QcChecklistItem> QcChecklistItems { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<QuotationDetail> QuotationDetails { get; }
+        DbSet<QuotationApprovalAction> QuotationApprovalActions { get; }
         DbSet<QuotationAccessLink> QuotationAccessLinks { get; }
         DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; }
         DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; }

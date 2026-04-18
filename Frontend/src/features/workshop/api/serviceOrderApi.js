@@ -99,8 +99,57 @@ export const serviceOrderApi = {
 
     return {
       blob,
-      fileName: fileNameFromHeader || `quotation-${quotationId}.xlsx`,
+      fileName: fileNameFromHeader || `BaoGia-${quotationId}.xlsx`,
     };
+  },
+  importQuotationExcel: async (quotationId, file, actorStaffId, note = "") => {
+    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
+    if (!token) {
+      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
+
+    if (!file) {
+      throw new Error("Vui lòng chọn file Excel để nhập.");
+    }
+
+    const importUrl = `${getApiBaseUrl()}/api/quotations/${quotationId}/import/excel`;
+    const formData = new FormData();
+    formData.append("file", file, file?.name || "quotation-import.xlsx");
+    if (Number(actorStaffId) > 0) {
+      formData.append("actorStaffId", String(actorStaffId));
+    }
+    if (note && String(note).trim()) {
+      formData.append("note", String(note).trim());
+    }
+
+    const res = await fetch(importUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let message = "Không thể nhập file Excel từ server.";
+      try {
+        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+        if (contentType.includes("application/json")) {
+          const payload = await res.json();
+          message = payload?.message || payload?.title || message;
+        } else {
+          const text = await res.text();
+          if (text && text.trim()) {
+            message = text.slice(0, 300);
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      throw new Error(`Nhập Excel lỗi (${res.status}): ${message}`);
+    }
+
+    const payload = await res.json().catch(() => null);
+    return payload;
   },
   publishQuotationCustomerLink: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/publish-customer-link`, method: "POST", data }),
@@ -119,6 +168,12 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/insurance-evidence`, method: "DELETE" }),
   approveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
+  financialApproveQuotation: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/financial-approval`, method: "POST", data }),
+  getBranchQuotationApprovalPolicy: (branchId) =>
+    request({ url: `/api/branches/${branchId}/quotation-approval-policy`, method: "GET" }),
+  upsertBranchQuotationApprovalPolicy: (branchId, data) =>
+    request({ url: `/api/branches/${branchId}/quotation-approval-policy`, method: "PUT", data }),
   cloneQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/clone`, method: "POST", data }),
   updateQuotationSplitBilling: (quotationId, data) =>
@@ -373,5 +428,3 @@ export const serviceOrderApi = {
   // --- Helpers ---
   generateCode: () => `SO-${new Date().getTime().toString().slice(-6)}`,
 };
-
-
