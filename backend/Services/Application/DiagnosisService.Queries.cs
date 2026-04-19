@@ -17,6 +17,7 @@ namespace MyGarage.Services
             Diagnosis latestDiagnosis,
             bool hasAssigned,
             bool isEscalated,
+            bool hasPendingTeamLeaderApproval,
             string? teamLeaderApprovalStatus,
             string? finalApprovalStatus)
         {
@@ -56,6 +57,11 @@ namespace MyGarage.Services
                 return nameof(DiagnosisWorkflowStatusCode.TL_APPROVED);
             }
 
+            if (hasPendingTeamLeaderApproval)
+            {
+                return nameof(DiagnosisWorkflowStatusCode.SUBMITTED);
+            }
+
             if (latestDiagnosis.SubmittedAt.HasValue)
             {
                 return nameof(DiagnosisWorkflowStatusCode.SUBMITTED);
@@ -64,6 +70,59 @@ namespace MyGarage.Services
             return hasAssigned
                 ? nameof(DiagnosisWorkflowStatusCode.IN_PROGRESS)
                 : nameof(DiagnosisWorkflowStatusCode.NEW);
+        }
+
+        private static string? ResolveDispatchBucket(
+            string? workflowStatus,
+            string? queueState,
+            string? queueColor,
+            string? viewMode)
+        {
+            static bool EqualsCode(string? source, string code) =>
+                string.Equals(source?.Trim(), code, StringComparison.OrdinalIgnoreCase);
+
+            var mode = (viewMode ?? string.Empty).Trim().ToUpperInvariant();
+
+            if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.CANCELED)) ||
+                EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.FOREMAN_APPROVED_LOCKED)))
+            {
+                return null;
+            }
+
+            if (EqualsCode(mode, "TEAM_LEADER"))
+            {
+                if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.SUBMITTED)))
+                {
+                    return "APPROVAL_BUCKET";
+                }
+            }
+            else if (EqualsCode(mode, "FOREMAN") || EqualsCode(mode, "MANAGER"))
+            {
+                if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.TL_APPROVED)) ||
+                    EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.ESCALATED_TO_FOREMAN)))
+                {
+                    return "APPROVAL_BUCKET";
+                }
+            }
+
+            if (EqualsCode(queueState, "ALERT") || EqualsCode(queueColor, "RED"))
+            {
+                return "RED";
+            }
+            if (EqualsCode(queueState, "IN_PROGRESS") || EqualsCode(queueColor, "YELLOW"))
+            {
+                return "YELLOW";
+            }
+            if (EqualsCode(queueState, "DIAGNOSED") || EqualsCode(queueColor, "GREEN"))
+            {
+                return "GREEN";
+            }
+            if (EqualsCode(queueState, "NEW") || EqualsCode(queueColor, "WHITE"))
+            {
+                return "WHITE";
+            }
+
+            return "WHITE";
         }
 
         public async Task<IReadOnlyList<Diagnosis>> GetAllFilteredAsync(long? serviceOrderId, bool requestOnly, long? teamId = null)
@@ -138,6 +197,30 @@ namespace MyGarage.Services
             return rows;
         }
 
+        public async Task<IReadOnlyDictionary<long, List<DiagnosisAssignment>>> GetAssignmentHistoryByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds)
+        {
+            var normalizedIds = (diagnosisIds ?? Array.Empty<long>())
+                .Where(x => x > 0)
+                .Distinct()
+                .ToList();
+
+            if (normalizedIds.Count == 0)
+            {
+                return new Dictionary<long, List<DiagnosisAssignment>>();
+            }
+
+            var rows = await _context.DiagnosisAssignments
+                .AsNoTracking()
+                .Where(x => normalizedIds.Contains(x.DiagnosisId))
+                .OrderByDescending(x => x.CreatedAt)
+                .ThenByDescending(x => x.Id)
+                .ToListAsync();
+
+            return rows
+                .GroupBy(x => x.DiagnosisId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
         public async Task<IReadOnlyList<Diagnosis>> GetLatestWorkflowDiagnosesByServiceOrderAsync(long serviceOrderId)
         {
             var rows = await _context.Diagnoses
@@ -174,7 +257,7 @@ namespace MyGarage.Services
             return candidates;
         }
 
-        public async Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted)
+        public async Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted, string? viewMode = null)
         {
             var query = _context.Diagnoses.AsNoTracking().AsQueryable();
 
@@ -332,13 +415,21 @@ namespace MyGarage.Services
                         .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .First();
 
+                    bool HasAssignmentContext(Diagnosis x) =>
+                        x.Status == DiagnosisStatusAssigned ||
+                        GetAssignedTeamId(x).HasValue ||
+                        GetTechnicianId(x).HasValue ||
+                        GetAssistantTechnicianId(x).HasValue ||
+                        GetAssignedAt(x).HasValue ||
+                        GetTechnicianAcceptedAt(x).HasValue;
+
                     var assignedDiagnosis = list
-                        .Where(x => x.Status == DiagnosisStatusAssigned)
+                        .Where(HasAssignmentContext)
                         .OrderByDescending(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .FirstOrDefault();
 
                     var pendingSince = list
-                        .Where(x => IsPendingLikeStatus(x.Status))
+                        .Where(x => IsPendingLikeStatus(x.Status) && !HasAssignmentContext(x))
                         .Select(x => x.CreatedAt ?? x.UpdatedAt)
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
@@ -346,18 +437,21 @@ namespace MyGarage.Services
                         .FirstOrDefault();
 
                     var assignedSince = list
-                        .Where(x => x.Status == DiagnosisStatusAssigned)
+                        .Where(HasAssignmentContext)
                         .Select(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt)
                         .Where(x => x.HasValue)
                         .Select(x => x!.Value)
                         .OrderBy(x => x)
                         .FirstOrDefault();
 
-                    var pendingMinutes = pendingSince == default ? 0 : (int)Math.Floor((now - pendingSince).TotalMinutes);
+                    var pendingReference = pendingSince == default
+                        ? (latest.CreatedAt ?? latest.UpdatedAt ?? DateTime.MinValue)
+                        : pendingSince;
+                    var pendingMinutes = pendingReference == default ? 0 : (int)Math.Floor((now - pendingReference).TotalMinutes);
                     var assignedMinutes = assignedSince == default ? 0 : (int)Math.Floor((now - assignedSince).TotalMinutes);
 
                     var allCompleted = list.Count > 0 && list.All(x => x.Status == DiagnosisStatusCompleted);
-                    var hasAssigned = list.Any(x => x.Status == DiagnosisStatusAssigned);
+                    var hasAssigned = list.Any(HasAssignmentContext);
                     var hasSupport = list.Any(x => GetSupportRequestedAt(x).HasValue);
                     var hasCancelPending = list.Any(IsCancellationPending);
                     var isPendingOverdue = pendingMinutes >= UnclaimedEscalationMinutes;
@@ -400,7 +494,7 @@ namespace MyGarage.Services
                     // In multi-team mode, prefer the diagnosis row of the primary team for stable display.
                     var preferredPrimaryTeamId = collaborationMeta?.PrimaryTeamId;
                     var handledDiagnosis = list
-                        .Where(x => x.Status == DiagnosisStatusAssigned || x.Status == DiagnosisStatusCompleted)
+                        .Where(x => HasAssignmentContext(x) || x.Status == DiagnosisStatusCompleted)
                         .OrderByDescending(x => preferredPrimaryTeamId.HasValue && GetAssignedTeamId(x) == preferredPrimaryTeamId.Value)
                         .ThenByDescending(x => GetAssignedAt(x) ?? x.DiagnosedAt ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
                         .FirstOrDefault();
@@ -513,7 +607,15 @@ namespace MyGarage.Services
 
                     var technicianId = handledDiagnosis != null ? GetTechnicianId(handledDiagnosis) ?? 0 : 0;
                     var assistantTechnicianId = handledDiagnosis != null ? GetAssistantTechnicianId(handledDiagnosis) : null;
-                    var assignedBayId = handledDiagnosis != null ? GetAssignedBayId(handledDiagnosis) : null;
+                    var baySourceDiagnosis = handledDiagnosis;
+                    if (baySourceDiagnosis == null || GetAssignedBayId(baySourceDiagnosis) is null)
+                    {
+                        baySourceDiagnosis = list
+                            .Where(x => GetAssignedBayId(x).HasValue && GetAssignedBayId(x)!.Value > 0)
+                            .OrderByDescending(x => GetAssignedAt(x) ?? x.UpdatedAt ?? x.CreatedAt ?? DateTime.MinValue)
+                            .FirstOrDefault();
+                    }
+                    var assignedBayId = baySourceDiagnosis != null ? GetAssignedBayId(baySourceDiagnosis) : null;
                     var technicianAcceptedAt = list
                         .Select(GetTechnicianAcceptedAt)
                         .Where(x => x.HasValue)
@@ -559,6 +661,34 @@ namespace MyGarage.Services
                         .Select(x => GetFinalApprovalStatus(x))
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
                     var isEscalated = list.Any(x => x.IsEscalated);
+                    static bool IsDecisionPending(string? value) =>
+                        string.IsNullOrWhiteSpace(value) ||
+                        string.Equals(value, nameof(ApprovalDecisionStatusCode.PENDING), StringComparison.OrdinalIgnoreCase);
+
+                    static bool IsDecisionFinalized(string? value) =>
+                        string.Equals(value, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(value, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+
+                    var hasPendingTeamLeaderApproval = list.Any(x =>
+                    {
+                        var assignmentStatus = GetAssignmentStatus(x);
+                        var assignmentEventType = GetAssignmentEventType(x);
+                        var submittedByAssignment =
+                            string.Equals(assignmentStatus, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(assignmentEventType, DiagnoseLogEventCompleted, StringComparison.OrdinalIgnoreCase);
+
+                        var submittedByDiagnosis = x.SubmittedAt.HasValue ||
+                            string.Equals(x.Status, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase);
+
+                        if (!submittedByAssignment && !submittedByDiagnosis)
+                        {
+                            return false;
+                        }
+
+                        var tlStatus = GetTeamLeaderApprovalStatus(x);
+                        var foremanStatus = GetFinalApprovalStatus(x);
+                        return IsDecisionPending(tlStatus) && !IsDecisionFinalized(foremanStatus);
+                    });
                     var teamLeaderNote = list
                         .Select(x => GetTeamLeaderNote(x))
                         .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
@@ -572,8 +702,14 @@ namespace MyGarage.Services
                         latest,
                         hasAssigned,
                         isEscalated,
+                        hasPendingTeamLeaderApproval,
                         teamLeaderApprovalStatus,
                         finalApprovalStatus);
+                    var dispatchBucket = ResolveDispatchBucket(workflowStatus, queueState, queueColor, viewMode);
+                    if (string.IsNullOrWhiteSpace(dispatchBucket))
+                    {
+                        return null;
+                    }
 
                     return new DiagnosisDispatchBoardItemDto
                     {
@@ -585,6 +721,7 @@ namespace MyGarage.Services
                         QueueState = queueState,
                         QueueColor = queueColor,
                         WorkflowStatus = workflowStatus,
+                        DispatchBucket = dispatchBucket,
                         DispatchTag = latest.DispatchTag,
                         TeamId = primaryTeamId,
                         TeamName = primaryTeamName,
@@ -622,6 +759,8 @@ namespace MyGarage.Services
                         ForemanApprovalStatus = finalApprovalStatus,
                     };
                 })
+                .Where(x => x != null)
+                .Select(x => x!)
                 .OrderByDescending(x => x.QueueColor == "RED")
                 .ThenByDescending(x => x.QueueColor == "YELLOW")
                 .ThenByDescending(x => x.PendingMinutes)
@@ -703,8 +842,3 @@ namespace MyGarage.Services
         }
     }
 }
-
-
-
-
-
