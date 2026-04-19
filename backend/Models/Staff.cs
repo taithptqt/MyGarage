@@ -176,6 +176,8 @@ public partial class Staff
 
     public virtual ICollection<QuotationDetail> QuotationDetailUpdatedByNavigations { get; set; } = new List<QuotationDetail>();
 
+    public virtual ICollection<QuotationDiscount> QuotationDiscounts { get; set; } = new List<QuotationDiscount>();
+
     public virtual ICollection<DocumentAttachment> DocumentAttachments { get; set; } = new List<DocumentAttachment>();
 
     public virtual ICollection<EmployeeDependent> EmployeeDependents { get; set; } = new List<EmployeeDependent>();

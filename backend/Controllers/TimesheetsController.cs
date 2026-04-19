@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,28 @@ namespace MyGarage.Controllers
             _timesheetService = timesheetService;
         }
 
+        [HttpGet("today")]
+        public async Task<ActionResult<IReadOnlyList<TimesheetEntryDto>>> GetToday([FromQuery] long staffId)
+        {
+            try
+            {
+                var data = await _timesheetService.GetTodayEntriesAsync(staffId);
+                return Ok(data);
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (BadRequestException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
         [HttpPost("check-in")]
         public async Task<ActionResult<TimesheetEntryDto>> CheckIn([FromBody] TimesheetCheckInRequestDto request)
         {
@@ -36,6 +59,10 @@ namespace MyGarage.Controllers
             catch (BadRequestException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
             }
         }
 
@@ -54,6 +81,10 @@ namespace MyGarage.Controllers
             catch (BadRequestException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
             }
         }
     }

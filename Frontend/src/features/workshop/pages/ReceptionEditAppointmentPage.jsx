@@ -26,9 +26,9 @@ const TEXT = {
   invalidId: "Mã lịch hẹn không hợp lệ.",
   loadError: "Không thể tải dữ liệu sửa lịch hẹn.",
   notFound: "Không tìm thấy lịch hẹn cần sửa.",
-  needBranch: "Vui lòng chọn đúng chi nhánh làm việc trước khi sửa lịch hẹn.",
+  needBranch: "Vui lòng chọn dòng chi nhánh làm việc trước khi sửa lịch hẹn.",
   updateError: "Không thể cập nhật lịch hẹn.",
-  notEditableStatus: "Không thể sửa lịch hẹn ở trạng thái hiện tại.",
+  notEditableStatus: "Không thể sửa lịch hẹn ? trạng thái hiện tại.",
   notEditableWindow: "Không thể sửa lịch hẹn vì xe đã đến xưởng.",
   loadingData: "Đang tải dữ liệu lịch hẹn...",
   pageTitle: "Chỉnh sửa lịch hẹn (Lễ tân)",
@@ -264,7 +264,7 @@ function buildEditInitialValues(appointment) {
         vehicleKey: `existing-${vehicleId}`,
         vehicleId,
         insuranceCompanyId: Number(appointment.insuranceCompanyId || 0) || "",
-        insuranceDeductibleAmount: appointment.insuranceDeductibleAmount ?? null,
+          insuranceDeductibleAmount: appointment.insuranceDeductibleAmount ?? null,
         insuranceDeductibleOption: appointment.insuranceDeductibleOption || "",
         insuranceClaimMode: appointment.insuranceClaimMode || "",
         insuranceQuoteState: appointment.insuranceQuoteState || "",
@@ -743,6 +743,7 @@ export default function ReceptionEditAppointmentPage() {
     </div>
   );
 }
+
 
 
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Map backend LinkAction to in-app navigation.
  *
  * Backend automation emits three kinds of LinkAction:
@@ -120,12 +120,14 @@ export function notificationTypeLabel(derivedType) {
     case "maintenance":
       return "Bảo dưỡng";
     case "survey":
-      return "Khảo sát";
+      return "Kh?o s�t";
     case "insurance":
       return "Bảo hiểm";
     case "service_status":
-      return "Trạng thái sửa chữa";
+      return "Trạng thái s?a ch?a";
     default:
-      return "Thông báo";
+      return "Th�ng b�o";
   }
 }
+
+

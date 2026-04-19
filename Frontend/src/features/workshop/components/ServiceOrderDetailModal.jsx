@@ -16,7 +16,7 @@ import "../pages/Workshop.css";
 const STATUS_LABELS = {
   NEW: "Mới tiếp nhận",
   RECEPTION: "Lễ tân tiếp nhận",
-  DIAGNOSING: "Đang chuẩn đoán",
+  DIAGNOSING: "Đang chẩn đoán",
   WAITING_APPROVAL: "Chờ duyệt",
   QUOTING: "Đang làm báo giá",
   SENT_TO_CUSTOMER: "Đã gửi khách hàng",
@@ -180,7 +180,7 @@ function buildAutoDiagnosisAssignmentNote({
     : [];
 
   const serviceText = services.length > 0 ? services.join(", ") : "chưa có tên dịch vụ cụ thể";
-  return `⚙️ [Lễ tân] Ghi chú gửi thợ: ${serviceText}.`;
+  return `👉 [Lễ tân] Ghi chú gửi thợ: ${serviceText}.`;
 }
 
 function normalizeImageUrls(value) {
@@ -290,8 +290,8 @@ function normalizeIntakeSuggestion(response) {
     return String(repaired || "")
       .replace(/\bLe tan chon goi\s*/i, "Lễ tân chọn gói ")
       .replace(/\bBooking\s+tiep\s+theo\s+luc\s*/i, "Booking tiếp theo lúc ")
-      .replace(/\bBooking\s+ti(?:áº¿|ê|e)p\s+theo\s+l(?:u|ú|ú)c\s*/i, "Booking tiếp theo lúc ")
-      .replace(/T.?ng\s+th.?i\s+l.{0,6}ng\s+d.?ch\s+v.{0,3}\s+ch.?nh\s+.{0,6}m.?c\s+trung\s+b.?nh\.?/i, "Tăng thời lượng dịch vụ chính ở mức trung bình.");
+      .replace(/\bBooking\s+ti(?:ế|ế|e)p\s+theo\s+l(?:u|ú|u)c\s*/i, "Booking tiếp theo lúc ")
+      .replace(/T.?ng\s+th.?i\s+l.{0,6}ng\s+d.?ch\s+v.?ch\s+ch.?nh\s+.{0,6}m.?c\s+trung\s+b.?nh\.?/i, "Tăng thời lượng dịch vụ chính ở mức trung bình.");
   };
 
   const reasons = Array.isArray(response.reasons)
@@ -624,9 +624,7 @@ export default function ServiceOrderDetailModal({
 
   const diagnosisStatus = String(latestDiagnosis?.status || "").toUpperCase();
   const finalApprovalStatus = String(
-    latestDiagnosis?.finalApprovalStatus
-    ?? latestDiagnosis?.FinalApprovalStatus
-    ?? ""
+    latestDiagnosis?.finalApprovalStatus ?? latestDiagnosis?.FinalApprovalStatus ?? ""
   ).trim().toUpperCase();
   const isFinalDecisionMade = finalApprovalStatus === "APPROVED" || finalApprovalStatus === "REJECTED";
   const isForemanApproved = finalApprovalStatus === "APPROVED"
@@ -655,11 +653,7 @@ export default function ServiceOrderDetailModal({
     if (explicitTeamName) return explicitTeamName;
 
     const teamId = Number(
-      latestDiagnosis?.assignedTeamId
-      ?? latestDiagnosis?.AssignedTeamId
-      ?? latestDiagnosis?.teamId
-      ?? latestDiagnosis?.TeamId
-      ?? 0
+      latestDiagnosis?.assignedTeamId ?? latestDiagnosis?.AssignedTeamId ?? latestDiagnosis?.teamId ?? latestDiagnosis?.TeamId ?? 0
     );
     if (Number.isFinite(teamId) && teamId > 0) return `tổ #${teamId}`;
 
@@ -682,11 +676,7 @@ export default function ServiceOrderDetailModal({
     if (explicitLeaderName) return explicitLeaderName;
 
     const leaderId = Number(
-      latestDiagnosis?.assignedTeamLeaderId
-      ?? latestDiagnosis?.AssignedTeamLeaderId
-      ?? latestDiagnosis?.technicianId
-      ?? latestDiagnosis?.TechnicianId
-      ?? 0
+      latestDiagnosis?.assignedTeamLeaderId ?? latestDiagnosis?.AssignedTeamLeaderId ?? latestDiagnosis?.technicianId ?? latestDiagnosis?.TechnicianId ?? 0
     );
     if (!Number.isFinite(leaderId) || leaderId <= 0) return "";
 
@@ -861,10 +851,7 @@ export default function ServiceOrderDetailModal({
   const insuranceCardImageUrls = useMemo(
     () =>
       normalizeImageUrls(
-        orderSnapshot?.insuranceCardImageUrls
-        ?? orderSnapshot?.InsuranceCardImageUrls
-        ?? order?.insuranceCardImageUrls
-        ?? order?.InsuranceCardImageUrls
+        orderSnapshot?.insuranceCardImageUrls ?? orderSnapshot?.InsuranceCardImageUrls ?? order?.insuranceCardImageUrls ?? order?.InsuranceCardImageUrls
       ),
     [order?.InsuranceCardImageUrls, order?.insuranceCardImageUrls, orderSnapshot?.InsuranceCardImageUrls, orderSnapshot?.insuranceCardImageUrls]
   );
@@ -872,10 +859,7 @@ export default function ServiceOrderDetailModal({
   const insuranceDamageImageUrls = useMemo(
     () =>
       normalizeImageUrls(
-        orderSnapshot?.insuranceDamageImageUrls
-        ?? orderSnapshot?.InsuranceDamageImageUrls
-        ?? order?.insuranceDamageImageUrls
-        ?? order?.InsuranceDamageImageUrls
+        orderSnapshot?.insuranceDamageImageUrls ?? orderSnapshot?.InsuranceDamageImageUrls ?? order?.insuranceDamageImageUrls ?? order?.InsuranceDamageImageUrls
       ),
     [order?.InsuranceDamageImageUrls, order?.insuranceDamageImageUrls, orderSnapshot?.InsuranceDamageImageUrls, orderSnapshot?.insuranceDamageImageUrls]
   );
@@ -957,7 +941,7 @@ export default function ServiceOrderDetailModal({
         // Ignore duplicated marker creation and continue redirecting.
       }
 
-      alert("Vui lòng hoàn tất Nhật ký xe và ký CHECK-IN trước khi gửi yêu cầu chuẩn đoán.");
+      alert("Vui lòng hoàn tất Nhật ký xe và ký CHECK-IN trước khi gửi yêu cầu chẩn đoán.");
       openVehicleLogPage();
       return;
     }
@@ -989,7 +973,7 @@ export default function ServiceOrderDetailModal({
     });
     const finalReceptionNote = String(receptionDiagnosisNote || "").trim() || autoAssignmentNote;
     if (requiresCustomerConsent && !customerConsentAccepted) {
-      alert("Cần xác nhận đồng ý của khách trước khi tạo yêu cầu gói chuẩn đoán này.");
+      alert("Cần xác nhận đồng ý của khách trước khi tạo yêu cầu gói chẩn đoán này.");
       return;
     }
 
@@ -1013,7 +997,7 @@ export default function ServiceOrderDetailModal({
         if (requiresDispatchReview) {
           markOrderNeedsDispatchReview(order?.id);
         }
-        alert(`Lỗi khi yêu cầu chuẩn đoán: ${message}`);
+        alert(`Lỗi khi yêu cầu chẩn đoán: ${message}`);
         return;
       }
       clearOrderDispatchReviewMark(order?.id);
@@ -1021,7 +1005,7 @@ export default function ServiceOrderDetailModal({
       setIntakeSuggestion(null);
       await refreshAfterDiagnosisChange();
     } catch (error) {
-      alert(`Lỗi khi yêu cầu chuẩn đoán: ${error?.message || "Không xác định"}`);
+      alert(`Lỗi khi yêu cầu chẩn đoán: ${error?.message || "Không xác định"}`);
     } finally {
       setSubmittingDiagnosisRequest(false);
     }
@@ -1031,13 +1015,13 @@ export default function ServiceOrderDetailModal({
     const targetSuffix = diagnosisRecallTargetLabel
       ? ` đang xử lý bởi ${diagnosisRecallTargetLabel}`
       : "";
-    const confirmed = window.confirm(`Hủy phiếu chuẩn đoán${targetSuffix}?`);
+    const confirmed = window.confirm(`Hủy phiếu chẩn đoán${targetSuffix}?`);
     if (!confirmed) return;
     try {
       await serviceOrderApi.recallDiagnosisRequest(order.id);
       await refreshAfterDiagnosisChange();
     } catch (error) {
-      alert(`Lỗi khi hủy chuẩn đoán: ${error?.message || "Không xác định"}`);
+      alert(`Lỗi khi hủy chẩn đoán: ${error?.message || "Không xác định"}`);
     }
   };
 
@@ -1275,7 +1259,7 @@ export default function ServiceOrderDetailModal({
                   className="so-detail-action-btn so-detail-action-primary"
                   onClick={handleOpenDiagnosisReport}
                 >
-                  Xem chuẩn đoán
+                  Xem chẩn đoán
                 </button>
               ) : canCancelDiagnosis ? (
                 <button
@@ -1283,7 +1267,7 @@ export default function ServiceOrderDetailModal({
                   className="so-detail-action-btn so-detail-action-warn"
                   onClick={handleRecallDiagnosis}
                 >
-                  Hủy chuẩn đoán
+                  Hủy chẩn đoán
                 </button>
               ) : (
                 <button
@@ -1292,7 +1276,7 @@ export default function ServiceOrderDetailModal({
                   onClick={handleRequestDiagnosis}
                   title={!hasSignedCheckIn ? "Cần vào Nhật ký xe để hoàn tất CHECK-IN trước." : ""}
                 >
-                  Chuẩn đoán
+                  Chẩn đoán
                 </button>
               )}
 
@@ -1322,7 +1306,7 @@ export default function ServiceOrderDetailModal({
 
       {showDispatchPopup ? (
         <Modal
-          title="Chọn gói chuẩn đoán"
+          title="Chọn gói chẩn đoán"
           onClose={() => {
             if (!submittingDiagnosisRequest) setShowDispatchPopup(false);
           }}
@@ -1330,12 +1314,12 @@ export default function ServiceOrderDetailModal({
         >
           <div className="so-dispatch-popup">
             <p className="so-dispatch-popup-note">
-              Chọn gói chuẩn đoán cho xe <strong>{vehiclePlate}</strong>. Chuyên môn, tổ thực hiện và khoang sửa chữa sẽ tự động gán theo luồng chuẩn đoán tự động.
+              Chọn gói chẩn đoán cho xe <strong>{vehiclePlate}</strong>. Chuyên môn, tổ thực hiện và khoang sửa chữa sẽ tự động gán theo luồng chẩn đoán tự động.
             </p>
 
             <div className="so-dispatch-config-row">
               <label className="so-dispatch-config-item">
-                <span>Gói chuẩn đoán</span>
+                <span>Gói chẩn đoán</span>
                 <FilterDropdown
                   id={`intake-package-${order?.id || "draft"}`}
                   value={intakePackageDraft}
@@ -1344,14 +1328,14 @@ export default function ServiceOrderDetailModal({
                   minWidth={0}
                   menuMinWidth={560}
                   disabled={submittingDiagnosisRequest}
-                  ariaLabel="Chọn gói chuẩn đoán"
+                  ariaLabel="Chọn gói chẩn đoán"
                   fullWidth
                 />
               </label>
             </div>
 
             <label className="so-dispatch-config-item so-dispatch-note-item">
-              <span>Ghi chú lễ tân cho chuẩn đoán</span>
+              <span>Ghi chú lễ tân cho chẩn đoán</span>
               <textarea
                 rows={2}
                 value={receptionDiagnosisNote}
@@ -1420,7 +1404,7 @@ export default function ServiceOrderDetailModal({
                     onChange={(event) => setCustomerConsentAccepted(Boolean(event.target.checked))}
                     disabled={submittingDiagnosisRequest}
                   />
-                  <span>Khách đã đồng ý thực hiện gói chuẩn đoán cộng thêm thời gian.</span>
+                  <span>Khách đã đồng ý thực hiện gói chẩn đoán cộng thêm thời gian.</span>
                 </label>
                 <div className="so-consent-grid">
                   <label className="so-dispatch-config-item">
@@ -1493,5 +1477,6 @@ export default function ServiceOrderDetailModal({
     </>
   );
 }
+
 
 

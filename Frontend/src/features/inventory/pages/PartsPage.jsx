@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useMemo } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
@@ -39,8 +39,8 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
         [name]: isCheckbox ? checked : (isNumeric ? Number(value) : value) 
       };
       
-      // Tự động tạo mã nếu đang nhập tên và mã chưa được nhập hoặc khớp với gợi ý cũ
-      if (name === "name" && (!prev.id)) { // Chỉ tự động khi tạo mới
+      // T? d?ng t?o m� n?u dang nh?p t�n v� m� chua du?c nh?p ho?c kh?p v?i g?i � cu
+      if (name === "name" && (!prev.id)) { // Ch? t? d?ng khi t?o m?i
         const oldSlug = generateSlug(prev.name);
         if (!prev.sku || prev.sku === oldSlug) {
           newForm.sku = generateSlug(value);
@@ -80,30 +80,30 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>Tên vật tư/phụ tùng *</label>
+        <label>T�n vật tư/phụ tùng *</label>
         <input name="name" value={form.name} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>Mã vật tư (SKU) *</label>
+        <label>M� vật tư (SKU) *</label>
         <input name="sku" value={form.sku} onChange={handleChange} required />
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>Đơn vị tính *</label>
+          <label>Đơn v? t�nh *</label>
           <input name="unit" value={form.unit} onChange={handleChange} required />
         </div>
         <div className="form-group">
-          <label>Giá vốn (VNĐ)</label>
+          <label>Gi? v?n (VN?)</label>
           <input name="costPrice" type="number" value={form.costPrice} onChange={handleChange} />
         </div>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>Giá bán lẻ (VNĐ) *</label>
+          <label>Gi? b?n l? (VN?) *</label>
           <input name="retailPrice" type="number" value={form.retailPrice} onChange={handleChange} required />
         </div>
         <div className="form-group">
-          <label>Giá dịch vụ (VNĐ)</label>
+          <label>Gi? dịch vụ (VN?)</label>
           <input name="servicePrice" type="number" value={form.servicePrice} onChange={handleChange} />
         </div>
       </div>
@@ -113,21 +113,21 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
           <input name="taxRate" type="number" value={form.taxRate} onChange={handleChange} />
         </div>
         <div className="form-group">
-          <label>Bảo hành (tháng)</label>
+          <label>B?o h?nh (th?ng)</label>
           <input name="warrantyMonths" type="number" value={form.warrantyMonths} onChange={handleChange} />
         </div>
       </div>
       <div className="form-group">
-        <label>Danh mục</label>
+        <label>Danh m?c</label>
         <select name="categoryId" value={form.categoryId || ""} onChange={handleChange} required>
-          <option value="">-- Chọn danh mục --</option>
+          <option value="">-- Chọn danh m?c --</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>{cat.categoryName}</option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <label>Ảnh sản phẩm</label>
+        <label>?nh s?n ph?m</label>
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
@@ -136,7 +136,7 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
         {previewUrl ? (
           <img
             src={previewUrl}
-            alt="Xem trước ảnh sản phẩm"
+            alt="Xem tru?c ?nh s?n ph?m"
             style={{ marginTop: 8, width: "100%", maxWidth: 220, borderRadius: 8, objectFit: "cover" }}
           />
         ) : null}
@@ -146,7 +146,7 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
         <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>?ang kinh doanh</label>
       </div>
       <div className="form-actions">
-        <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>H?y</button>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? "?ang luu?" : "Luu"}
         </button>
@@ -181,7 +181,7 @@ export default function PartsPage() {
       setCategories(catRes);
       setProductImages(Array.isArray(imagesRes) ? imagesRes : []);
     } catch (err) {
-      setError("Không thể tải danh mục phụ tùng.");
+      setError("Không th? t?i danh m?c phụ tùng.");
     } finally {
       setLoading(false);
     }
@@ -265,31 +265,31 @@ export default function PartsPage() {
       <header className="admin-header">
         <div>
           <h1>Quản lý phụ tùng & vật tư</h1>
-          <p className="header-sub">Danh mục các loại linh kiện, phụ kiện trong kho</p>
+          <p className="header-sub">Danh m?c c?c lo?i linh ki?n, ph? ki?n trong kho</p>
         </div>
-        <button className="btn-primary" onClick={() => setModal("create")}>+ Thêm vật tư</button>
+        <button className="btn-primary" onClick={() => setModal("create")}>+ Th�m vật tư</button>
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} kết quả</span>
+        <span className="result-count">{filtered.length} k?t qu?</span>
       </div>
 
       <div className="table-wrapper">
         {loading ? (
-            <div className="loading-state"><div className="spinner" /><p>Đang tải...</p></div>
+            <div className="loading-state"><div className="spinner" /><p>Đang t?i...</p></div>
         ) : (
           <table className="admin-table">
             <thead>
                 <tr>
                   <th>M?</th>
-                  <th>Tên vật tư</th>
+                  <th>T�n vật tư</th>
                   <th>?on v?</th>
-                  <th>Giá vốn</th>
+                  <th>Gi? v?n</th>
                   <th>Gi? l?</th>
-                  <th>Giá dịch vụ</th>
-                  <th>Bảo hành</th>
-                  <th className="th-center">Danh mục</th>
-                  <th className="th-center">Trạng thái</th>
+                  <th>Gi? dịch vụ</th>
+                  <th>B?o h�nh</th>
+                  <th className="th-center">Danh m?c</th>
+                  <th className="th-center">Tr?ng th?i</th>
                   <th>Thao tác</th>
                 </tr>
             </thead>
@@ -306,7 +306,7 @@ export default function PartsPage() {
                   <td className="td-center">{categories.find(c => c.id === p.categoryId)?.categoryName || "?"}</td>
                   <td className="td-center">
                     <span className={`badge ${p.isActive ? 'badge-active' : 'badge-inactive'}`}>
-                      {p.isActive ? "Kinh doanh" : "Ngừng"}
+                      {p.isActive ? "Kinh doanh" : "Ng?ng"}
                     </span>
                   </td>
                   <td>
@@ -323,14 +323,14 @@ export default function PartsPage() {
       </div>
 
       {modal === "create" && (
-        <Modal title="Thêm vật tư mới" onClose={closeModal}>
+        <Modal title="Th�m vật tư m?i" onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <PartForm initial={EMPTY_PART} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
 
       {modal === "edit" && selected && (
-        <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
+        <Modal title={`S?a � ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <PartForm
             initial={{
@@ -346,13 +346,15 @@ export default function PartsPage() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
-          <ConfirmDialog message={`Xóa vật tư "${selected.name}"?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
+        <Modal title="X?c nh?n x?a" onClose={closeModal}>
+          <ConfirmDialog message={`X�a vật tư "${selected.name}"?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>
   );
 }
+
+
 
 
 

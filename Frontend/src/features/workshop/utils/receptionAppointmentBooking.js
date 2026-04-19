@@ -1,4 +1,4 @@
-import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
+﻿import { saveReceptionBooking } from "@features/appointments/api/appointmentApi";
 import { BOOKING_FLOW } from "@features/appointments/constants/bookingConstants";
 import {
   buildFlexibleTriggerServiceIdSet,
@@ -19,7 +19,7 @@ const ERRORS = {
   missingGuestModel: "Vui lòng chọn dòng xe cho khách vãng lai.",
   invalidCustomer: "Khách hàng không hợp lệ.",
   missingNewVehicleModel: "Vui lòng chọn dòng xe mới.",
-  missingVehicle: "Vui lòng chọn xe của khách.",
+  missingVehicle: "Vui lòng chọn xe c?a khách.",
   vehicleNotFound: "Không tìm thấy xe đã chọn.",
   invalidPackage: "Vui lòng chọn lại gói dịch vụ trước khi đặt lịch.",
 };
@@ -417,3 +417,5 @@ export async function saveReceptionAppointment({
     updateMode: Boolean(response?.updateMode ?? response?.UpdateMode ?? Number(replaceAppointmentId) > 0),
   };
 }
+
+

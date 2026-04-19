@@ -8,7 +8,7 @@ class VoucherPageErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, message: error?.message || "Lđ-i render không xác định" };
+    return { hasError: true, message: error?.message || "Ld-i render không x�c d?nh" };
   }
 
   componentDidCatch(error) {
@@ -24,7 +24,7 @@ class VoucherPageErrorBoundary extends React.Component {
           <header className="admin-header">
             <div>
               <h1>Quản lý voucher</h1>
-              <p className="header-sub">Đã chặn lỗi runtime để tránh trắng màn hình.</p>
+              <p className="header-sub">Đã chọn l?i runtime d? tr�nh tr?ng m�n h�nh.</p>
             </div>
           </header>
           <div className="alert alert-error">
@@ -50,6 +50,7 @@ export default function SafeVoucherManagementPage({ section }) {
     </VoucherPageErrorBoundary>
   );
 }
+
 
 
 

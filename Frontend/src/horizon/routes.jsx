@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 
 import { Icon } from '@chakra-ui/react';
 import {
@@ -368,6 +368,7 @@ const routes = [
 ];
 
 export default routes;
+
 
 
 

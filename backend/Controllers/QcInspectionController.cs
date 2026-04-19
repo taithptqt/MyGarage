@@ -171,6 +171,22 @@ namespace MyGarage.Controllers
             return Ok(summary);
         }
 
+        [HttpPut("{id}/pass")]
+        public async Task<IActionResult> Pass(long id, [FromBody] QcPassRequestDto request)
+        {
+            var result = await _qcInspectionService.PassAsync(id, request);
+            if (!result) return NotFound();
+            return Ok(new { message = "QC Pass recorded and Service Order marked as READY." });
+        }
+
+        [HttpPut("{id}/fail")]
+        public async Task<IActionResult> Fail(long id, [FromBody] QcFailRequestDto request)
+        {
+            var result = await _qcInspectionService.FailAsync(id, request);
+            if (!result) return NotFound();
+            return Ok(new { message = "QC Fail recorded and Service Order reverted to REPAIRING." });
+        }
+
         private async Task<object> UpdateQcInspectionSummaryAsync(long inspectionId)
         {
             var inspection = await _db.QcInspections

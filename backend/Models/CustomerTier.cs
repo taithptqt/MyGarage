@@ -35,6 +35,8 @@ public partial class CustomerTier
 
     public virtual Staff? DeletedByNavigation { get; set; }
 
+    public virtual ICollection<QuotationDiscount> QuotationDiscounts { get; set; } = new List<QuotationDiscount>();
+
     public virtual ICollection<ServiceOrderDiscount> ServiceOrderDiscounts { get; set; } = new List<ServiceOrderDiscount>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }

@@ -80,6 +80,51 @@ public class QuotationController : ControllerBase
         return Ok(row);
     }
 
+    [Authorize]
+    [HttpGet("quotations/{quotationId:long}/discounts")]
+    public async Task<ActionResult<IReadOnlyList<QuotationDiscountResponseDto>>> GetQuotationDiscounts(long quotationId)
+    {
+        try
+        {
+            var rows = await _quotationWorkflowService.GetQuotationDiscountsAsync(quotationId);
+            return Ok(rows);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize]
+    [HttpPut("quotations/{quotationId:long}/discounts")]
+    public async Task<ActionResult<IReadOnlyList<QuotationDiscountResponseDto>>> UpsertQuotationDiscounts(
+        long quotationId,
+        [FromBody] QuotationDiscountUpsertRequestDto request)
+    {
+        try
+        {
+            if (!this.IsServiceAdvisorOrReceptionist())
+            {
+                return Forbid();
+            }
+
+            var normalizedRequest = request ?? new QuotationDiscountUpsertRequestDto();
+            var actorStaffId = ResolveActorStaffId(normalizedRequest.ActorStaffId);
+            if (!actorStaffId.HasValue)
+            {
+                return BadRequest(new { message = "Thiếu actorStaffId hợp lệ." });
+            }
+
+            normalizedRequest.ActorStaffId = actorStaffId.Value;
+            var rows = await _quotationWorkflowService.UpsertQuotationDiscountsAsync(quotationId, normalizedRequest);
+            return Ok(rows);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost("quotations/{quotationId:long}/approve")]
     public async Task<ActionResult<QuotationResponseDto>> Approve(long quotationId, [FromBody] QuotationApproveRequestDto request)
     {
@@ -239,6 +284,32 @@ public class QuotationController : ControllerBase
         {
             await _quotationWorkflowService.DecideMandatoryOverrideAsync(requestId, request);
             return Ok(new { message = "Mandatory override updated." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize]
+    [HttpPost("quotations/{quotationId:long}/internal-submit")]
+    public async Task<ActionResult<QuotationResponseDto>> SubmitInternalApproval(long quotationId, [FromBody] QuotationStatusUpdateRequestDto request)
+    {
+        try
+        {
+            if (!this.IsServiceAdvisorOrReceptionist())
+            {
+                return Forbid();
+            }
+
+            var actorStaffId = ResolveActorStaffId(request?.ActorStaffId);
+            if (!actorStaffId.HasValue)
+            {
+                return BadRequest(new { message = "Thiếu actorStaffId hợp lệ." });
+            }
+
+            var updated = await _quotationWorkflowService.SubmitQuotationForInternalApprovalAsync(quotationId, actorStaffId.Value, request?.Note);
+            return Ok(updated);
         }
         catch (InvalidOperationException ex)
         {

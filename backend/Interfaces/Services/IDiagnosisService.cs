@@ -85,16 +85,25 @@ namespace MyGarage.Interfaces
             string? note);
         Task RequestCancellationAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string reason);
         Task ApplyCancellationDecisionAsync(ServiceOrder serviceOrder, IEnumerable<Diagnosis> diagnoses, bool approve, long managerId, string? note);
-        Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted);
+        Task<IReadOnlyList<DiagnosisDispatchBoardItemDto>> GetDispatchBoardAsync(long? branchId, long? teamId, bool includeCompleted, string? viewMode = null);
         Task<DiagnosisDispatchSuggestionDto> BuildDispatchSuggestionAsync(long serviceOrderId, long teamId);
         Task RecallDiagnosesAsync(ServiceOrder serviceOrder, IReadOnlyList<Diagnosis> activeDiagnoses);
+        Task<IReadOnlyList<Diagnosis>> RequeueRecalledDiagnosesAsync(
+            IEnumerable<Diagnosis> recalledDiagnoses,
+            long? assignedTeamId,
+            long? assignedBayId,
+            string? dispatchTag = null,
+            string? assignmentNote = null,
+            long? actorStaffId = null);
         Task<Diagnosis?> GetDiagnosisEntityAsync(long id);
         Task CompleteDiagnosisAsync(Diagnosis diagnosis);
         Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note);
         Task RejectTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? reason);
         Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long approverId, string? note, bool bypassTeamLeader = false, string? bypassAuditNote = null);
         Task RejectFinalAsync(IEnumerable<Diagnosis> diagnoses, long foremanId, string? note);
+        Task<int> CloneRejectedDiagnosesVersionAsync(IEnumerable<Diagnosis> diagnoses, long actorId, string? note = null);
         Task<bool> AreAllDiagnosesCompletedAsync(long serviceOrderId);
+        Task<IReadOnlyDictionary<long, List<DiagnosisAssignment>>> GetAssignmentHistoryByDiagnosisIdsAsync(IEnumerable<long> diagnosisIds);
         long? ReadDiagnosisAssignmentId(Diagnosis diagnosis);
         long? ReadAssignedTeamId(Diagnosis diagnosis);
         long? ReadTechnicianId(Diagnosis diagnosis);

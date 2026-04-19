@@ -153,14 +153,14 @@ function normalizeSearchText(value) {
 }
 
 function buildBookingSuccessMessage() {
-  return "Đặt lịch thành công. Chúng tôi sẽ xác nhận sớm nhất.";
+  return "Đặt l?ch th�nh c�ng. Ch�ng t�i s? x�c nh?n s?m nh?t.";
 }
 
 function buildServiceHierarchyByCategory(vehicleServices, categoryNameById) {
   const grouped = new Map();
   (vehicleServices || []).forEach((service) => {
     const categoryId = Number(extractField(service, ["categoryId", "CategoryId"]));
-    const categoryName = categoryNameById.get(categoryId) || "Dịch vụ khác";
+    const categoryName = categoryNameById.get(categoryId) || "Dịch vụ kh�c";
     const serviceName = String(extractField(service, ["name", "Name"], "") || "").trim();
     if (!serviceName) return;
 
@@ -1282,7 +1282,7 @@ export default function BookingPage() {
     (summaryVehicleDetails || [])
       .filter((vehicle) => vehicle.bookingFlow === BOOKING_FLOW.FLEXIBLE && Number.isFinite(vehicle.completionMs))
       .forEach((vehicle) => {
-        const vehicleName = String(vehicle.label || "").trim() || "chưa xác định";
+        const vehicleName = String(vehicle.label || "").trim() || "chua x�c d?nh";
         const note = buildFlexibleCompletionWarningMessage({
           vehicleLabel: vehicleName,
           completionValue: vehicle.completionMs,
@@ -1296,11 +1296,11 @@ export default function BookingPage() {
   }, [summaryVehicleDetails]);
   const fleetCompletionLabel = useMemo(() => {
     if ((summaryVehicleDetails || []).some((item) => item.completionMs === null)) {
-      return "Chưa xác định";
+      return "Chua x�c d?nh";
     }
     const completionTimes = summaryVehicleDetails.map((item) => item.completionMs).filter((item) => Number.isFinite(item));
     if (completionTimes.length === 0) {
-      return "Chưa xác định";
+      return "Chua x�c d?nh";
     }
     const maxCompletion = new Date(Math.max(...completionTimes));
     return `${timeLabel(maxCompletion.toISOString())} (${maxCompletion.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })})`;
@@ -1454,7 +1454,7 @@ export default function BookingPage() {
   async function handleSelectSlot(slot) {
     if (!slot || selectingSlot) return;
     if (!selectedBranchId) {
-      showError("Vui lòng chọn chi nhánh trước khi chọn khung giờ.");
+      showError("Vui l�ng chọn chi nh�nh tru?c khi chọn khung gi?.");
       return;
     }
     setSelectingSlot(true);
@@ -1894,9 +1894,9 @@ export default function BookingPage() {
 
   function validateStep(stepNo) {
     if (stepNo === 1) {
-      if (!String(customerForm.fullName || "").trim()) return "Vui lòng nhập họ tên khách hàng.";
-      if (!String(customerForm.phone || "").trim()) return "Vui lòng nhập số điện thoại khách hàng.";
-      if (!isValidVietnamesePhone(customerForm.phone)) return "Số điện thoại khách hàng không đúng định dạng Việt Nam.";
+      if (!String(customerForm.fullName || "").trim()) return "Vui l�ng nh?p h? t�n khách hàng.";
+      if (!String(customerForm.phone || "").trim()) return "Vui l�ng nh?p s? di?n tho?i khách hàng.";
+      if (!isValidVietnamesePhone(customerForm.phone)) return "S? di?n tho?i khách hàng không d�ng d?nh d?ng Vi?t Nam.";
       if (multi.vehicles.length === 0) return "Vui lòng chọn ít nhất một xe.";
     }
     if (stepNo === 2) {
@@ -1919,7 +1919,7 @@ export default function BookingPage() {
 
         const serviceIds = uniqIds(getEffectiveServiceIds(vehicle));
         if (serviceIds.length === 0) {
-          return `Xe ${vehicle.displayLabel}: vui lòng chọn dịch vụ cụ thể cho các loại dịch vụ đã chọn.`;
+          return `Xe ${vehicle.displayLabel}: vui l�ng chọn dịch vụ c? th? cho c�c lo?i dịch vụ d� chọn.`;
         }
 
         const coveredCategoryIds = new Set(
@@ -1933,7 +1933,7 @@ export default function BookingPage() {
           const missingCategoryNames = missingCategoryIds
             .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`)
             .join(", ");
-          return `Xe ${vehicle.displayLabel}: các loại dịch vụ sau chưa có dịch vụ cụ thể: ${missingCategoryNames}.`;
+          return `Xe ${vehicle.displayLabel}: c�c lo?i dịch vụ sau chua c� dịch vụ c? th?: ${missingCategoryNames}.`;
         }
       }
 
@@ -1944,7 +1944,7 @@ export default function BookingPage() {
         }
       }
     }
-    if (stepNo === 4 && !selectedBranchId) return "Vui lòng chọn chi nhánh.";
+    if (stepNo === 4 && !selectedBranchId) return "Vui l�ng chọn chi nh�nh.";
     if (stepNo === 4) {
       for (const vehicle of multi.vehicles || []) {
         const unresolvedPackageIds = findUnresolvedPackageIds(getEffectiveServiceIds(vehicle), serviceById);
@@ -1965,7 +1965,7 @@ export default function BookingPage() {
           .filter((item) => !Boolean(multi.slotHoldTokens?.[item.key]))
           .map((item) => item.displayLabel);
         if (missingHeldVehicles.length > 0) {
-          return `Các xe chưa giữ chỗ thành công: ${missingHeldVehicles.join(", ")}. Vui lòng chọn lại khung giờ.`;
+          return `C�c xe chua gi? ch? th�nh c�ng: ${missingHeldVehicles.join(", ")}. Vui l�ng chọn l?i khung gi?.`;
         }
       }
       if (multi.slotMode === SLOT_MODE.INDIVIDUAL) {
@@ -1973,13 +1973,13 @@ export default function BookingPage() {
           .filter((item) => !Boolean(multi.selectedSlots[item.key]))
           .map((item) => item.displayLabel);
         if (missingSlotVehicles.length > 0) {
-          return `Các xe chưa chọn khung giờ: ${missingSlotVehicles.join(", ")}.`;
+          return `C�c xe chua chọn khung gi?: ${missingSlotVehicles.join(", ")}.`;
         }
         const missingHeldVehicles = (multi.vehicles || [])
           .filter((item) => !Boolean(multi.slotHoldTokens?.[item.key]))
           .map((item) => item.displayLabel);
         if (missingHeldVehicles.length > 0) {
-          return `Các xe chưa giữ chỗ thành công: ${missingHeldVehicles.join(", ")}. Vui lòng giữ chỗ lại cho các xe này.`;
+          return `C�c xe chua gi? ch? th�nh c�ng: ${missingHeldVehicles.join(", ")}. Vui l�ng gi? ch? l?i cho c�c xe n�y.`;
         }
       }
     }
@@ -2115,9 +2115,9 @@ export default function BookingPage() {
         const failedVehicles = await refreshSelectedSlotHolds();
         await loadSlots();
         if (Array.isArray(failedVehicles) && failedVehicles.length > 0) {
-          showError(`Giữ chỗ đã hết hạn và không thể giữ lại cho: ${failedVehicles.join(", ")}. Vui lòng chọn lại khung giờ cho các xe này.`);
+          showError(`Gi? ch? d� h?t h?n v� không th? gi? l?i cho: ${failedVehicles.join(", ")}. Vui l�ng chọn l?i khung gi? cho c�c xe n�y.`);
         } else {
-          showNotice("Thông tin giữ chỗ đã được đồng bộ lại. Vui lòng bấm xác nhận lại.");
+          showNotice("Thông tin gi? ch? d� du?c d?ng b? l?i. Vui l�ng b?m x�c nh?n l?i.");
         }
       } else {
         showError(message);
@@ -2159,7 +2159,7 @@ export default function BookingPage() {
           <div className="booking-main-panel">
             {currentStep === 1 ? (
               <div className="booking-card">
-                <header className="booking-card-head"><h2>Bước 1: Thông tin khách hàng & xe</h2></header>
+                <header className="booking-card-head"><h2>Bu?c 1: Thông tin khách hàng & xe</h2></header>
                 <div className="form-grid step4-form-grid">
                   <label>Họ và tên <span>*</span><input type="text" value={customerForm.fullName} onChange={(e) => setCustomerForm((prev) => ({ ...prev, fullName: e.target.value }))} /></label>
                   <label>Số điện thoại <span>*</span><input type="tel" inputMode="tel" pattern={VIETNAM_PHONE_PATTERN} title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx" value={customerForm.phone} onChange={(e) => setCustomerForm((prev) => ({ ...prev, phone: e.target.value }))} /></label>
@@ -2179,7 +2179,7 @@ export default function BookingPage() {
                         onChange={(e) => onSymptomChange(activeSymptomVehicle?.key || "", e.target.value)}
                       />
                       <p className="vehicle-batch-note">
-                        Chọn xe ở danh sách phía trên để nhập ghi chú cho từng xe.
+                        Chọn xe ? danh sách ph�a tr�n d? nh?p ghi ch� cho tổng xe.
                       </p>
                     </div>
                   ) : null}
@@ -2189,7 +2189,7 @@ export default function BookingPage() {
 
             {currentStep === 2 ? (
               <div className="booking-card">
-                <header className="booking-card-head"><h2>Bước 2: Phân loại dịch vụ</h2></header>
+                <header className="booking-card-head"><h2>Bu?c 2: Ph�n lo?i dịch vụ</h2></header>
                 {multi.vehicles.length > 1 ? <div className="booking-scope-switch"><button type="button" className={!step2VehicleKey ? "active" : ""} onClick={() => { setStep2VehicleKey(""); dispatch({ type: "SET_SERVICE_MODE", payload: SERVICE_MODE.SHARED }); }}>Dùng chung tất cả xe</button><button type="button" className={step2VehicleKey ? "active" : ""} onClick={() => { if (!step2VehicleKey && multi.vehicles[0]) setStep2VehicleKey(multi.vehicles[0].key); dispatch({ type: "SET_SERVICE_MODE", payload: SERVICE_MODE.SHARED }); }}>Tùy chỉnh theo từng xe</button></div> : null}
                 {multi.vehicles.length > 1 ? <div className="selected-category-tabs vehicle-tabs step2-vehicle-tabs">{multi.vehicles.map((vehicle) => <div key={`step2-${vehicle.key}`} className={`selected-category-tab ${step2Vehicle?.key === vehicle.key ? "active" : ""}`}><button type="button" className="selected-category-tab-main" onClick={() => setStep2VehicleKey(vehicle.key)}>{formatVehicleTabLabel(vehicle)}</button><button type="button" className="selected-category-tab-remove" onClick={(e) => { e.stopPropagation(); handleRemoveVehicle(vehicle.key); }}>x</button></div>)}</div> : null}
                 <div className="category-grid">{categories.filter((item) => step2CompatibleCategoryIds.includes(Number(extractField(item, ["id", "Id"])))).map((item) => { const id = Number(extractField(item, ["id", "Id"])); const selected = step2Vehicle ? getEffectiveCategoryIds(step2Vehicle).includes(id) : multi.sharedCategoryIds.includes(id); return <button key={id} type="button" className={`category-card ${selected ? "selected" : ""}`} onClick={() => { if (step2Vehicle) toggleVehicleCategory(step2Vehicle, id); else toggleSharedCategory(id); }}><span className="category-icon">{iconByIndex(id || 0)}</span><h3>{extractField(item, ["name", "Name"], "")}</h3></button>; })}</div>
@@ -2224,7 +2224,7 @@ export default function BookingPage() {
               </div>
             ) : null}
 
-            {currentStep === 4 ? <div className="booking-card"><header className="booking-card-head"><h2>Bước 4: Chọn chi nhánh</h2></header><div className="branch-list">{branches.map((branch) => { const id = extractField(branch, ["id", "Id"]); const selected = String(id) === String(selectedBranchId); return <button key={id} type="button" className={`branch-card ${selected ? "selected" : ""}`} onClick={() => { setSelectedBranchId(String(id)); dispatch({ type: "RESET_SLOTS" }); }}><h3>{extractField(branch, ["name", "Name"], "Chi nhánh")}</h3><p>{extractField(branch, ["address", "Address"], "")}</p></button>; })}</div></div> : null}
+            {currentStep === 4 ? <div className="booking-card"><header className="booking-card-head"><h2>Bu?c 4: Chọn chi nh�nh</h2></header><div className="branch-list">{branches.map((branch) => { const id = extractField(branch, ["id", "Id"]); const selected = String(id) === String(selectedBranchId); return <button key={id} type="button" className={`branch-card ${selected ? "selected" : ""}`} onClick={() => { setSelectedBranchId(String(id)); dispatch({ type: "RESET_SLOTS" }); }}><h3>{extractField(branch, ["name", "Name"], "Chi nh�nh")}</h3><p>{extractField(branch, ["address", "Address"], "")}</p></button>; })}</div></div> : null}
 
             {currentStep === 5 ? (
               <div className="booking-card">
@@ -2260,7 +2260,7 @@ export default function BookingPage() {
                   </div>
                 </div>
                 <div className="slot-section">
-                  {!selectedBranchId ? <div className="booking-empty">Vui lòng chọn chi nhánh trước khi chọn giờ.</div> : !effectiveSelectedDate ? <div className="booking-empty">Vui lòng chọn ngày cho xe đang thao tác trước khi chọn giờ.</div> : (
+                  {!selectedBranchId ? <div className="booking-empty">Vui l�ng chọn chi nh�nh tru?c khi chọn gi?.</div> : !effectiveSelectedDate ? <div className="booking-empty">Vui l�ng chọn ngày cho xe dang thao t�c tru?c khi chọn gi?.</div> : (
                     slotsLoading ? <div className="booking-empty">Đang tải khung giờ...</div> : (
                       <>
                         <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>{slotSelectionGuide}</p>
@@ -2314,13 +2314,13 @@ export default function BookingPage() {
                   </div>
                 ) : (
                   <>
-                    <h3>Xác nhận đặt lịch</h3>
+                    <h3>Xác nhận d?t l?ch</h3>
                     <dl>
                       <dt>Khách hàng</dt>
                       <dd>{customerForm.fullName}</dd>
                       <dt>SĐT</dt>
                       <dd>{customerForm.phone}</dd>
-                      <dt>Chi nhánh</dt>
+                      <dt>Chi nh�nh</dt>
                       <dd>{extractField(selectedBranch, ["name", "Name"], "Chưa chọn")}</dd>
                     </dl>
                     <div className="summary-vehicle-services">
@@ -2391,7 +2391,7 @@ export default function BookingPage() {
                       </div>
                     </div>
                     <button type="button" className="primary-submit" onClick={handleConfirm} disabled={submitting}>
-                      {submitting ? "Đang gửi lịch hẹn..." : "Xác nhận đặt lịch"}
+                      {submitting ? "Đang g?i l?ch h?n..." : "Xác nhận d?t l?ch"}
                     </button>
                   </>
                 )}
@@ -2486,6 +2486,7 @@ export default function BookingPage() {
     </div>
   );
 }
+
 
 
 

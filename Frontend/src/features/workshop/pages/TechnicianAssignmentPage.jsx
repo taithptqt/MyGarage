@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -15,17 +15,17 @@ function fmt(v) {
 
 const SPECIALTY_ICONS = {
   ENGINE:    "⚙️",  ELECTRICAL: "⚡", CHASSIS:   "🏗️",
-  PAINTING:  "🎨",  GENERAL:    "🔧", BODYWORK:  "🚙",
+  PAINTING:  "ðŸŽ¨",  GENERAL:    "ðŸ”§", BODYWORK:  "ðŸš™",
 };
 const SPECIALTY_VI = {
   ENGINE:    "Động cơ", ELECTRICAL: "Điện", CHASSIS:  "Gầm",
-  PAINTING:  "Sơn",     GENERAL:    "Tổng hợp", BODYWORK: "Thân vỏ",
+  PAINTING:  "Son",     GENERAL:    "Tổng h?p", BODYWORK: "Thân vỏ",
 };
 
 /* ─── sub-components ─── */
 function StaffSuggestionCard({ staff, selected, onToggle, splitRatio, onRatioChange, isFirst }) {
   const specialty = String(staff.specialty || staff.Specialty || "GENERAL").toUpperCase();
-  const icon = SPECIALTY_ICONS[specialty] || "🔧";
+  const icon = SPECIALTY_ICONS[specialty] || "ðŸ”§";
   const workload = Number(staff.currentWorkload ?? staff.CurrentWorkload ?? 0);
 
   return (
@@ -43,10 +43,10 @@ function StaffSuggestionCard({ staff, selected, onToggle, splitRatio, onRatioCha
         </span>
       </div>
       <div className="ta-staff-avatar">
-        {String(staff.fullName ?? staff.FullName ?? "?").split(" ").pop().substring(0, 2).toUpperCase()}
+          {String(staff.fullName ?? staff.FullName ?? "?").split(" ").pop().substring(0, 2).toUpperCase()}
       </div>
       <div className="ta-staff-info">
-        <span className="ta-staff-name">{staff.fullName ?? staff.FullName ?? "Thợ"}</span>
+          <span className="ta-staff-name">{staff.fullName ?? staff.FullName ?? "Thợ"}</span>
         <span className="ta-staff-specialty">
           {icon} {SPECIALTY_VI[specialty] || specialty}
         </span>
@@ -102,11 +102,11 @@ function ServiceItemRow({ item, assignments, availableStaff, onAssignChange }) {
       </div>
       <div className="ta-item-assign">
         {assigned.length === 0 ? (
-          <span className="ta-item-unassigned">⚠️ Chưa phân công</span>
+          <span className="ta-item-unassigned">Chưa phân công</span>
         ) : (
           assigned.map((a, i) => (
             <span key={i} className={`ta-item-assignee ${a.role === "PRIMARY" ? "ta-assignee-primary" : "ta-assignee-assist"}`}>
-              {a.role === "PRIMARY" ? "🎯" : "🤝"} {a.staffName}
+              {a.role === "PRIMARY" ? "ðŸŽ¯" : "ðŸ¤"} {a.staffName}
               {a.splitRatio ? ` (${a.splitRatio}%)` : ""}
             </span>
           ))
@@ -178,15 +178,15 @@ export default function TechnicianAssignmentPage() {
         if (!iid) return;
         if (!amap[iid]) amap[iid] = [];
         amap[iid].push({
-          staffId:    a.staffId    ?? a.StaffId,
-          staffName:  a.staffName  ?? a.StaffName ?? a.staffFullName ?? "Thợ",
-          role:       a.roleInTask ?? a.RoleInTask ?? "PRIMARY",
+          staffId: a.staffId ?? a.StaffId,
+          staffName: a.staffName ?? a.StaffName ?? a.staffFullName ?? "Thợ",
+          role: a.roleInTask ?? a.RoleInTask ?? "PRIMARY",
           splitRatio: a.splitRatio ?? a.SplitRatio ?? 100,
         });
       });
       setAssignments(amap);
     } catch (err) {
-      setError("Không thể tải dữ liệu. Kiểm tra kết nối máy chủ.");
+      setError("Không thể t?i dữ liệu. Kiểm tra kết nối máy chủ.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -277,10 +277,10 @@ export default function TechnicianAssignmentPage() {
         method: "POST",
         data: { assignments: payload },
       });
-      setSuccess(`✅ Đã phân công ${payload.length} tác vụ thành công!`);
+      setSuccess(`Đã phân công ${payload.length} tác vụ thành công!`);
       setTimeout(() => navigate(`/workshop/foreman/board`), 1500);
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Không thể lưu phân công.");
+      setError(err?.response?.data?.message || err?.message || "Không thể luu phân công.");
     } finally {
       setSaving(false);
     }
@@ -300,7 +300,7 @@ export default function TechnicianAssignmentPage() {
       {/* header */}
       <div className="ta-header">
         <div>
-          <h1 className="ta-title">⚙️ Phân công kỹ thuật viên</h1>
+          <h1 className="ta-title">Phân công kỹ thuật viên</h1>
           <p className="ta-subtitle">
             Lệnh: <strong>{order?.code || `SO-${orderId}`}</strong> ·{" "}
             Xe: <strong>{order?.vehicleLicensePlate || "--"}</strong> ·{" "}
@@ -314,7 +314,7 @@ export default function TechnicianAssignmentPage() {
             onClick={handleSubmit}
             disabled={saving}
           >
-            {saving ? "⏳ Đang lưu..." : `✅ Xác nhận phân công (${Object.values(assignments).filter(a => a.length > 0).length}/${items.length} hạng mục)`}
+            {saving ? "? Đang luu..." : `? Xác nhận phân công (${Object.values(assignments).filter(a => a.length > 0).length}/${items.length} hạng mục)`}
           </button>
         </div>
       </div>
@@ -324,7 +324,7 @@ export default function TechnicianAssignmentPage() {
 
       {unassignedCount > 0 && (
         <div className="ta-warn-banner">
-          ⚠️ Còn <strong>{unassignedCount}</strong> hạng mục chưa được phân công
+          Còn <strong>{unassignedCount}</strong> hạng mục chưa được phân công
         </div>
       )}
 
@@ -333,7 +333,7 @@ export default function TechnicianAssignmentPage() {
         <div className="ta-items-panel">
           <div className="ta-panel-head">
             <h2>📋 Hạng mục sửa chữa ({items.length})</h2>
-            <span className="ta-panel-hint">Chọn hạng mục để phân công thợ</span>
+            <span className="ta-panel-hint">Chọn hạng mục d? phân công thợ</span>
           </div>
           <div className="ta-items-list">
             {items.length === 0 && (
@@ -353,7 +353,7 @@ export default function TechnicianAssignmentPage() {
                 />
                 {activeItemId === item.id && (
                   <div className="ta-edit-hint">
-                    ← Chọn thợ từ danh sách bên phải, rồi nhấn "Xác nhận hạng mục"
+                    Chọn thợ từ danh sách bên phải, rồi nhấn "Xác nhận hạng mục"
                   </div>
                 )}
               </div>
@@ -364,7 +364,7 @@ export default function TechnicianAssignmentPage() {
         {/* RIGHT: staff panel */}
         <div className="ta-staff-panel">
           <div className="ta-panel-head">
-            <h2>👷 Danh sách thợ ({staff.length})</h2>
+            <h2>Danh sách thợ ({staff.length})</h2>
             {activeItemId ? (
               <div className="ta-staff-ctx">
                 Đang phân cho:{" "}
@@ -415,7 +415,7 @@ export default function TechnicianAssignmentPage() {
                   onClick={applyPicks}
                   disabled={pickedStaff.size === 0 || !ratioOk}
                 >
-                  ✅ Xác nhận hạng mục ({pickedStaff.size} thợ)
+                  ? Xác nhận hạng mục ({pickedStaff.size} thợ)
                 </button>
               </div>
             </>
@@ -423,8 +423,8 @@ export default function TechnicianAssignmentPage() {
 
           {!activeItemId && (
             <div className="ta-staff-placeholder">
-              <span>👆</span>
-              <p>Chọn một hạng mục để bắt đầu phân công thợ</p>
+              <span>ðŸ‘†</span>
+              <p>Chọn m?t hạng mục d? b?t d?u phân công thợ</p>
             </div>
           )}
         </div>
@@ -432,3 +432,5 @@ export default function TechnicianAssignmentPage() {
     </div>
   );
 }
+
+

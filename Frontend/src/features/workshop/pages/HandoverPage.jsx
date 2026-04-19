@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./Handover.css";
 
-/* ── helpers ── */
+/* -- helpers -- */
 function fmt(v) {
   if (!v) return "--";
   return new Date(v).toLocaleString("vi-VN", {
@@ -14,23 +14,23 @@ function fmt(v) {
 }
 function fmtCurrency(v) {
   if (!v && v !== 0) return "--";
-  return Number(v).toLocaleString("vi-VN") + " ₫";
+  return Number(v).toLocaleString("vi-VN") + " đ";
 }
 
 const STATUS_CHIPS = {
-  PASSED:  { label: "✅ QC Đạt",      bg: "#d1fae5", color: "#065f46" },
-  FAILED:  { label: "❌ QC Không đạt", bg: "#fee2e2", color: "#991b1b" },
-  PAID:    { label: "✅ Đã thanh toán", bg: "#d1fae5", color: "#065f46" },
-  PENDING: { label: "⏳ Chờ thanh toán", bg: "#fef9c3", color: "#713f12" },
-  PARTIAL: { label: "⚠️ Thanh toán 1 phần", bg: "#fffbeb", color: "#92400e" },
-  READY_FOR_PICKUP: { label: "🚗 Sẵn giao xe", bg: "#dbeafe", color: "#1e40af" },
+  PASSED:  { label: "QC đạt",      bg: "#d1fae5", color: "#065f46" },
+  FAILED:  { label: "QC không đạt", bg: "#fee2e2", color: "#991b1b" },
+  PAID:    { label: "Đã thanh toán", bg: "#d1fae5", color: "#065f46" },
+  PENDING: { label: "Chờ thanh toán", bg: "#fef9c3", color: "#713f12" },
+  PARTIAL: { label: "Thanh toán một phần", bg: "#fffbeb", color: "#92400e" },
+  READY_FOR_PICKUP: { label: "Sẵn sàng giao xe", bg: "#dbeafe", color: "#1e40af" },
 };
 
-/* ── sub-components ── */
+/* -- sub-components -- */
 function ReadinessItem({ icon, label, ok, detail }) {
   return (
     <div className={`ho-ready-item ${ok ? "ho-ready-ok" : "ho-ready-fail"}`}>
-      <span className="ho-ready-icon">{ok ? "✅" : "❌"}</span>
+      <span className="ho-ready-icon">{ok ? "✓" : "✕"}</span>
       <div className="ho-ready-info">
         <span className="ho-ready-label">{label}</span>
         {detail && <span className="ho-ready-detail">{detail}</span>}
@@ -56,7 +56,7 @@ function ChecklistRow({ id, label, checked, onChange, disabled }) {
   );
 }
 
-/* ── main ── */
+/* -- main -- */
 export default function HandoverPage() {
   const { orderId } = useParams();
   const { user }    = useAuth();
@@ -83,7 +83,7 @@ export default function HandoverPage() {
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
 
-  /* ── fetch ── */
+  /* -- fetch -- */
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -122,13 +122,13 @@ export default function HandoverPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ── validation ── */
+  /* -- validation -- */
   const allChecked = Object.values(checks).every(Boolean);
-  const qcOk      = readiness?.qcPassed     ?? readiness?.QcPassed     ?? false;
-  const payOk     = readiness?.paymentDone   ?? readiness?.PaymentDone   ?? false;
+  const qcOk      = readiness?.qcPassed ?? readiness?.QcPassed ?? false;
+  const payOk     = readiness?.paymentDone ?? readiness?.PaymentDone ?? false;
   const canHandover = qcOk && payOk && allChecked && receiverName.trim();
 
-  /* ── submit ── */
+  /* -- submit -- */
   const handleHandover = async () => {
     if (!window.confirm("Xác nhận bàn giao xe cho khách?")) return;
     setSaving(true);
@@ -148,7 +148,7 @@ export default function HandoverPage() {
         },
       });
       setConfirmed(true);
-      setSuccess("🎉 Bàn giao xe thành công! Cảm ơn khách hàng.");
+      setSuccess("Bàn giao xe thành công! Cảm ơn khách hàng.");
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Không thể hoàn tất bàn giao xe.");
     } finally {
@@ -156,7 +156,7 @@ export default function HandoverPage() {
     }
   };
 
-  /* ── status chip helper ── */
+  /* -- status chip helper -- */
   const makeChip = (key) => {
     const m = STATUS_CHIPS[key] || { label: key, bg: "#f1f5f9", color: "#64748b" };
     return (
@@ -174,11 +174,11 @@ export default function HandoverPage() {
 
   const soCode   = order?.code ?? order?.Code ?? `SO-${orderId}`;
   const plate    = order?.vehicleLicensePlate ?? order?.VehicleLicensePlate ?? "--";
-  const model    = order?.vehicleDescriptor  ?? order?.vehicleModelName ?? "";
+  const model    = order?.vehicleDescriptor ?? order?.vehicleModelName ?? "";
   const customer = order?.customerName ?? order?.CustomerName ?? "--";
   const invoice  = order?.invoiceNumber ?? order?.InvoiceNumber ?? null;
-  const totalAmt = order?.totalAmount  ?? order?.TotalAmount  ?? order?.grandTotal ?? 0;
-  const paidAmt  = order?.paidAmount   ?? order?.PaidAmount   ?? 0;
+  const totalAmt = order?.totalAmount ?? order?.TotalAmount ?? order?.grandTotal ?? 0;
+  const paidAmt  = order?.paidAmount ?? order?.PaidAmount ?? 0;
   const qcStatus = String(order?.qcStatus ?? order?.QcStatus ?? "").toUpperCase();
   const payStatus = String(order?.paymentStatus ?? order?.PaymentStatus ?? "PENDING").toUpperCase();
 
@@ -187,16 +187,16 @@ export default function HandoverPage() {
       {/* header */}
       <div className="ho-header">
         <div>
-          <h1 className="ho-title">🚗 Bàn giao xe cho khách</h1>
-          <p className="ho-subtitle">Lệnh: <strong>{soCode}</strong> · {plate} · {customer}</p>
+          <h1 className="ho-title">Bàn giao xe cho khách</h1>
+          <p className="ho-subtitle">Lệnh: <strong>{soCode}</strong> - {plate} - {customer}</p>
         </div>
-        <button className="ho-btn-back" onClick={() => navigate(-1)}>← Quay lại</button>
+        <button className="ho-btn-back" onClick={() => navigate(-1)}>Quay lại</button>
       </div>
 
-      {error   && <div className="ho-alert ho-alert-error">⚠️ {error}</div>}
+      {error   && <div className="ho-alert ho-alert-error">{error}</div>}
       {success && <div className="ho-alert ho-alert-success">{success}</div>}
 
-      {/* ── SUCCESS view ── */}
+      {/* -- SUCCESS view -- */}
       {confirmed ? (
         <div className="ho-success-card">
           <div className="ho-success-icon">🎉</div>
@@ -204,10 +204,10 @@ export default function HandoverPage() {
           <p>Xe <strong>{plate}</strong> đã được bàn giao cho <strong>{receiverName}</strong> lúc {fmt(new Date())}.</p>
           <div className="ho-success-actions">
             <button className="ho-btn-primary" onClick={() => navigate("/workshop/reception")}>
-              📋 Về danh sách lệnh
+              Về danh sách lệnh
             </button>
             <button className="ho-btn-secondary" onClick={() => navigate("/workshop/foreman/board")}>
-              🛡️ Về kanban xưởng
+              Về Kanban xưởng
             </button>
           </div>
         </div>
@@ -217,12 +217,12 @@ export default function HandoverPage() {
           <div className="ho-left">
             {/* order summary */}
             <div className="ho-card">
-              <div className="ho-card-head">📋 Thông tin lệnh sửa chữa</div>
+              <div className="ho-card-head">Thông tin lệnh sửa chữa</div>
               <div className="ho-info-grid">
                 <div className="ho-info-row"><span className="ho-lbl">Mã lệnh</span><span className="ho-val ho-code">{soCode}</span></div>
-                <div className="ho-info-row"><span className="ho-lbl">Biển số</span><span className="ho-val">🚘 {plate}</span></div>
+                <div className="ho-info-row"><span className="ho-lbl">Biển số</span><span className="ho-val">{plate}</span></div>
                 {model && <div className="ho-info-row"><span className="ho-lbl">Xe</span><span className="ho-val">{model}</span></div>}
-                <div className="ho-info-row"><span className="ho-lbl">Khách hàng</span><span className="ho-val">👤 {customer}</span></div>
+                <div className="ho-info-row"><span className="ho-lbl">Khách hàng</span><span className="ho-val">{customer}</span></div>
                 <div className="ho-info-row"><span className="ho-lbl">QC</span><span className="ho-val">{makeChip(qcStatus || "PENDING")}</span></div>
                 <div className="ho-info-row"><span className="ho-lbl">Thanh toán</span><span className="ho-val">{makeChip(payStatus)}</span></div>
                 {invoice && <div className="ho-info-row"><span className="ho-lbl">Hóa đơn</span><span className="ho-val ho-code">{invoice}</span></div>}
@@ -239,17 +239,17 @@ export default function HandoverPage() {
 
             {/* readiness */}
             <div className="ho-card">
-              <div className="ho-card-head">🔍 Điều kiện bàn giao</div>
+              <div className="ho-card-head">Điều kiện bàn giao</div>
               <div className="ho-ready-list">
                 <ReadinessItem label="QC kiểm tra đạt" ok={qcOk} detail={!qcOk ? "Cần hoàn thành kiểm tra QC" : "Xe đã qua kiểm tra"} />
-                <ReadinessItem label="Thanh toán hoàn tất" ok={payOk} detail={!payOk ? "Cần thanh toán đầy đủ trước khi giao" : "Đã thu đủ tiền"} />
+                <ReadinessItem label="Thanh toán hoàn tất" ok={payOk} detail={!payOk ? "Cần thanh toán đầy đủ trước khi giao" : "Thu đủ tiền"} />
                 <ReadinessItem label="Hóa đơn" ok={!!invoice} detail={invoice ? `Số HĐ: ${invoice}` : "Chưa xuất hóa đơn"} />
               </div>
             </div>
 
             {/* receiver info */}
             <div className="ho-card">
-              <div className="ho-card-head">👤 Thông tin người nhận</div>
+              <div className="ho-card-head">Thông tin người nhận</div>
               <div className="ho-form-grid">
                 <div className="ho-form-group">
                   <label>Tên người nhận <span className="ho-req">*</span></label>
@@ -288,32 +288,32 @@ export default function HandoverPage() {
           {/* RIGHT panel */}
           <div className="ho-right">
             <div className="ho-card">
-              <div className="ho-card-head">✅ Danh sách bàn giao</div>
+              <div className="ho-card-head">Danh sách bàn giao</div>
               <p className="ho-cl-hint">Xác nhận từng bước trước khi bàn giao xe:</p>
               <div className="ho-checklist">
-                <ChecklistRow id="keyReturned"       label="🔑 Đã trả chìa khóa xe + điều khiển từ xa" checked={checks.keyReturned}       onChange={v => setChecks(p => ({ ...p, keyReturned: v }))}       />
-                <ChecklistRow id="vehicleInspected"  label="🚗 Đã kiểm tra xe cùng khách hàng"         checked={checks.vehicleInspected}  onChange={v => setChecks(p => ({ ...p, vehicleInspected: v }))}  />
-                <ChecklistRow id="partsExplained"    label="🔧 Đã giải thích công việc đã thực hiện"   checked={checks.partsExplained}    onChange={v => setChecks(p => ({ ...p, partsExplained: v }))}    />
-                <ChecklistRow id="invoiceProvided"   label="🧾 Đã giao hóa đơn / phiếu sửa chữa"      checked={checks.invoiceProvided}   onChange={v => setChecks(p => ({ ...p, invoiceProvided: v }))}   />
-                <ChecklistRow id="warrantyExplained" label="🛡️ Đã giải thích điều khoản bảo hành"      checked={checks.warrantyExplained} onChange={v => setChecks(p => ({ ...p, warrantyExplained: v }))} />
-                <ChecklistRow id="nextServiceTold"   label="📅 Đã nhắc lịch bảo dưỡng tiếp theo"      checked={checks.nextServiceTold}   onChange={v => setChecks(p => ({ ...p, nextServiceTold: v }))}   />
+                <ChecklistRow id="keyReturned"       label="Đã trả chìa khóa xe + điều khiển từ xa" checked={checks.keyReturned}       onChange={v => setChecks(p => ({ ...p, keyReturned: v }))}       />
+                <ChecklistRow id="vehicleInspected"  label="Kiểm tra xe cùng khách hàng"           checked={checks.vehicleInspected}  onChange={v => setChecks(p => ({ ...p, vehicleInspected: v }))}  />
+                <ChecklistRow id="partsExplained"    label="Đã giải thích công việc đã thực hiện"  checked={checks.partsExplained}    onChange={v => setChecks(p => ({ ...p, partsExplained: v }))}    />
+                <ChecklistRow id="invoiceProvided"   label="Đã giao hóa đơn / phiếu sửa chữa"      checked={checks.invoiceProvided}   onChange={v => setChecks(p => ({ ...p, invoiceProvided: v }))}   />
+                <ChecklistRow id="warrantyExplained" label="Đã giải thích điều khoản bảo hành"     checked={checks.warrantyExplained} onChange={v => setChecks(p => ({ ...p, warrantyExplained: v }))} />
+                <ChecklistRow id="nextServiceTold"   label="Đã nhắc lịch bảo dưỡng tiếp theo"      checked={checks.nextServiceTold}   onChange={v => setChecks(p => ({ ...p, nextServiceTold: v }))}   />
               </div>
               {allChecked && (
-                <div className="ho-all-checked">✅ Đã hoàn tất tất cả bước bàn giao</div>
+                <div className="ho-all-checked">Đã hoàn tất tất cả bước bàn giao</div>
               )}
             </div>
 
             {/* validation summary */}
             <div className={`ho-validate-card ${canHandover ? "ho-validate-ok" : "ho-validate-block"}`}>
               <div className="ho-validate-title">
-                {canHandover ? "✅ Sẵn sàng bàn giao" : "⚠️ Chưa đủ điều kiện bàn giao"}
+                {canHandover ? "Sẵn sàng bàn giao" : "Chưa đủ điều kiện bàn giao"}
               </div>
               {!canHandover && (
                 <ul className="ho-validate-list">
-                  {!qcOk   && <li>❌ QC chưa đạt</li>}
-                  {!payOk  && <li>❌ Chưa thanh toán đầy đủ</li>}
-                  {!allChecked && <li>❌ Chưa hoàn thành danh sách bàn giao ({Object.values(checks).filter(Boolean).length}/{Object.keys(checks).length})</li>}
-                  {!receiverName.trim() && <li>❌ Chưa nhập tên người nhận</li>}
+                  {!qcOk   && <li>QC chưa đạt</li>}
+                  {!payOk  && <li>Chưa thanh toán đầy đủ</li>}
+                  {!allChecked && <li>Chưa hoàn thành danh sách bàn giao ({Object.values(checks).filter(Boolean).length}/{Object.keys(checks).length})</li>}
+                  {!receiverName.trim() && <li>Chưa nhập tên người nhận</li>}
                 </ul>
               )}
             </div>
@@ -323,7 +323,7 @@ export default function HandoverPage() {
               onClick={handleHandover}
               disabled={!canHandover || saving}
             >
-              {saving ? "⏳ Đang xử lý..." : "🚗 XÁC NHẬN GIAO XE"}
+              {saving ? "Đang xử lý..." : "XÁC NHẬN GIAO XE"}
             </button>
           </div>
         </div>
@@ -331,3 +331,5 @@ export default function HandoverPage() {
     </div>
   );
 }
+
+

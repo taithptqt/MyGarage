@@ -69,6 +69,9 @@ import ReceptionChatPage from "@features/chat/pages/ReceptionChatPage";
 import CustomerMessengerWidget from "@features/chat/components/CustomerMessengerWidget";
 import CustomerChatbotWidget from "@features/chatbot/components/CustomerChatbotWidget";
 import AccountingMain from "@horizon/AccountingMain";
+import ContactPage from "@features/contact/pages/ContactPage";
+import StorageServicesPage from "@features/storage/pages/StorageServicesPage";
+import NewsJournalPage from "@features/news/pages/NewsJournalPage";
 
 function CustomerRoute({ children }) {
   return <CustomerLayout>{children}</CustomerLayout>;
@@ -99,6 +102,9 @@ function App() {
         <Route path="/auth/forgot-password" element={<Navigate to="/forgot-password" replace />} />
         <Route path="/auth/reset-password" element={<Navigate to="/reset-password" replace />} />
         <Route path="/home" element={<HomePage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/storage" element={<StorageServicesPage />} />
+        <Route path="/news" element={<NewsJournalPage />} />
         
         {/* Customer Appointment Routes */}
         <Route 
@@ -312,19 +318,19 @@ function App() {
           {/* A19 – Handover */}
           <Route path="reception/orders/:orderId/handover" element={<ProtectedRoute allowedRoles={["RECEPTIONIST","FOREMAN","ADMIN"]}><HandoverPage /></ProtectedRoute>} />
           {/* B04 – Material Request Queue */}
-          <Route path="inventory/material-requests" element={<ProtectedRoute allowedRoles={["STOREKEEPER","FOREMAN","ADMIN"]}><MaterialRequestQueuePage /></ProtectedRoute>} />
+          <Route path="inventory/material-requests" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","FOREMAN","ADMIN"]}><MaterialRequestQueuePage /></ProtectedRoute>} />
           {/* B06 – Material Returns */}
-          <Route path="inventory/material-returns" element={<ProtectedRoute allowedRoles={["STOREKEEPER","FOREMAN","ADMIN"]}><MaterialReturnPage /></ProtectedRoute>} />
+          <Route path="inventory/material-returns" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","FOREMAN","ADMIN"]}><MaterialReturnPage /></ProtectedRoute>} />
           {/* B07 – Stock Alerts */}
-          <Route path="inventory/stock-alerts" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><StockAlertPage /></ProtectedRoute>} />
+          <Route path="inventory/stock-alerts" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","MANAGER","ADMIN"]}><StockAlertPage /></ProtectedRoute>} />
           {/* B08 – Purchase Orders */}
-          <Route path="inventory/purchase-orders" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
-          <Route path="inventory/purchase-orders/new" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
+          <Route path="inventory/purchase-orders" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
+          <Route path="inventory/purchase-orders/new" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","MANAGER","ADMIN"]}><PurchaseOrderPage /></ProtectedRoute>} />
           {/* B09 – Goods Receipt Notes (GRN) */}
-          <Route path="inventory/goods-receipts" element={<ProtectedRoute allowedRoles={["STOREKEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
-          <Route path="inventory/goods-receipt/new" element={<ProtectedRoute allowedRoles={["STOREKEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
+          <Route path="inventory/goods-receipts" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
+          <Route path="inventory/goods-receipt/new" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","ADMIN"]}><GoodsReceiptPage /></ProtectedRoute>} />
           {/* Stock History */}
-          <Route path="inventory/history" element={<ProtectedRoute allowedRoles={["STOREKEEPER","MANAGER","ADMIN"]}><StockHistoryPage /></ProtectedRoute>} />
+          <Route path="inventory/history" element={<ProtectedRoute allowedRoles={["STORE_KEEPER","MANAGER","ADMIN"]}><StockHistoryPage /></ProtectedRoute>} />
 
           {/* C03 – Timesheet (Technician) */}
           <Route path="technician/timesheet" element={<ProtectedRoute allowedRoles={["TECH","FOREMAN","TEAM_LEADER"]}><TimesheetPage /></ProtectedRoute>} />
@@ -336,7 +342,7 @@ function App() {
           <Route path="hr/commissions" element={<ProtectedRoute allowedRoles={["ADMIN","MANAGER","ACCOUNTANT"]}><CommissionBreakdownPage /></ProtectedRoute>} />
           
           {/* C07 - My Payslip */}
-          <Route path="payslip" element={<ProtectedRoute allowedRoles={["TECH","FOREMAN","TEAM_LEADER","RECEPTIONIST","MANAGER","STOREKEEPER","QUALITY_CONTROL"]}><MyPayslipPage /></ProtectedRoute>} />
+          <Route path="payslip" element={<ProtectedRoute allowedRoles={["TECH","FOREMAN","TEAM_LEADER","RECEPTIONIST","MANAGER","STORE_KEEPER","QUALITY_CONTROL"]}><MyPayslipPage /></ProtectedRoute>} />
 
         </Route>
 
@@ -350,7 +356,6 @@ function App() {
 }
 
 export default App;
-
 
 
 

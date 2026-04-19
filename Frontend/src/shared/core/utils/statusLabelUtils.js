@@ -12,7 +12,7 @@ const STATUS_LABELS_VI = Object.freeze({
   CHECKED_IN: "\u0110\u00e3 check-in",
   DIAGNOSING: "\u0110ang chu\u1ea9n \u0111o\u00e1n",
   IN_PROGRESS: "\u0110ang x\u1eed l\u00fd",
-  WAITING_APPROVAL: "Ch\u1edd b\u00e1o gi\u00e1",
+  WAITING_APPROVAL: "Ch\u1edd duy\u1ec7t n\u1ed9i b\u1ed9",
   PENDING_BRANCH_MANAGER: "Ch\u1edd qu\u1ea3n l\u00fd chi nh\u00e1nh duy\u1ec7t",
   READY: "S\u1eb5n s\u00e0ng b\u00e0n giao",
   COMPLETED: "Ho\u00e0n t\u1ea5t",

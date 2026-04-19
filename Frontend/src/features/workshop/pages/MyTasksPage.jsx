@@ -1,91 +1,136 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { request } from "@app/apiClient";
-import { executionApi } from "@features/workshop/api/executionApi";
+import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
+import { getAllVehicleBrands, getAllVehicleModels } from "@features/admin/api/vehicleCatalogApi";
+import { getAllVehicles } from "@features/admin/api/customerApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./MyTasks.css";
+import TechnicianTaskCard from "../components/TechnicianTaskCard";
+import "../components/TechnicianTaskCard.css";
 
-/* ──────── constants ──────── */
 const TASK_STATUS_META = {
-  PENDING:     { label: "Chờ thực hiện", color: "#6366f1", bg: "#eef2ff", icon: "⏳" },
-  IN_PROGRESS: { label: "Đang làm",      color: "#0ea5e9", bg: "#e0f2fe", icon: "🔧" },
-  INPROGRESS:  { label: "Đang làm",      color: "#0ea5e9", bg: "#e0f2fe", icon: "🔧" },
-  PAUSED:      { label: "Tạm dừng",      color: "#f59e0b", bg: "#fffbeb", icon: "⏸️" },
-  QC_PENDING:  { label: "Chờ QC",        color: "#8b5cf6", bg: "#f5f3ff", icon: "🔍" },
-  COMPLETED:   { label: "Hoàn thành",    color: "#10b981", bg: "#d1fae5", icon: "✅" },
-  CANCELLED:   { label: "Đã hủy",        color: "#94a3b8", bg: "#f1f5f9", icon: "❌" },
+  PENDING: { label: "Chờ thực hiện", color: "#2563eb", bg: "#eff6ff", icon: "⏳" },
+  IN_PROGRESS: { label: "Đang làm", color: "#ea580c", bg: "#fff7ed", icon: "🔧" },
+  INPROGRESS: { label: "Đang làm", color: "#ea580c", bg: "#fff7ed", icon: "🔧" },
+  PAUSED: { label: "Tạm dừng", color: "#ea580c", bg: "#fff7ed", icon: "⏸️" },
+  QC_PENDING: { label: "Hoàn thành", color: "#16a34a", bg: "#f0fdf4", icon: "✅" },
+  COMPLETED: { label: "Hoàn thành", color: "#16a34a", bg: "#f0fdf4", icon: "✅" },
+  CANCELLED: { label: "Đã hủy", color: "#64748b", bg: "#f8fafc", icon: "❌" },
 };
-const defaultTaskMeta = { label: "Không rõ", color: "#94a3b8", bg: "#f1f5f9", icon: "❓" };
+
+const defaultTaskMeta = { label: "Không rõ", color: "#64748b", bg: "#f8fafc", icon: "❓" };
+const TASK_GROUP_ORDER = ["NEW", "IN_PROGRESS", "COMPLETED"];
+const TASK_GROUP_META = {
+  NEW: { label: "CHỜ NHẬN", hint: "Việc mới", icon: "🆕" },
+  IN_PROGRESS: { label: "ĐANG XỬ LÝ", hint: "Đang làm", icon: "🔧" },
+  COMPLETED: { label: "ĐÃ HOÀN THÀNH", hint: "Đã xong", icon: "✅" },
+  CANCELLED: { label: "Đã hủy", hint: "Ngừng", icon: "❌" },
+};
 
 function getTaskMeta(status = "") {
   return TASK_STATUS_META[String(status).toUpperCase().replace(/-/g, "_")] || defaultTaskMeta;
 }
 
-const CHECKIN_STATUS_META = {
-  CHECKED_IN: { label: "Đang làm việc", color: "#10b981", bg: "#d1fae5", icon: "🟢" },
-  CHECKED_OUT: { label: "Đã kết ca",    color: "#94a3b8", bg: "#f1f5f9", icon: "⬛" },
-};
-
-/* ──────── helpers ──────── */
-function fmt(v, onlyTime = false) {
-  if (!v) return "--";
+function fmt(value, onlyTime = false) {
+  if (!value) return "--";
   const opts = onlyTime
     ? { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }
     : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" };
-  return new Date(v).toLocaleString("vi-VN", opts);
-}
-function fmtMins(mins) {
-  if (!mins || mins <= 0) return "--";
-  if (mins < 60) return `${mins} phút`;
-  return `${Math.floor(mins / 60)}g${mins % 60 > 0 ? ` ${mins % 60}p` : ""}`;
-}
-function calcDuration(start, end = new Date()) {
-  if (!start) return 0;
-  return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000);
+  return new Date(value).toLocaleString("vi-VN", opts);
 }
 
-/* ──────── sub-components ──────── */
-function TimesheetBar({ timesheet, onCheckIn, onCheckOut, saving }) {
-  const status = timesheet ? "CHECKED_IN" : "CHECKED_OUT";
-  const meta   = CHECKIN_STATUS_META[status];
-  const elapsed = timesheet
-    ? calcDuration(timesheet.checkInTime ?? timesheet.CheckInTime)
-    : 0;
+function fmtMinsWithZero(mins) {
+  const value = Number(mins || 0);
+  if (!Number.isFinite(value) || value < 0) return "--";
+  if (value < 60) return `${Math.floor(value)} phút`;
+  return `${Math.floor(value / 60)}g${value % 60 > 0 ? ` ${value % 60}p` : ""}`;
+}
 
-  return (
-    <div className="mt-timesheet-bar">
-      <div className="mt-timesheet-info">
-        <span className="mt-ts-icon">{meta.icon}</span>
-        <div>
-          <span className="mt-ts-status" style={{ color: meta.color }}>{meta.label}</span>
-          {timesheet && (
-            <span className="mt-ts-since">
-              Từ {fmt(timesheet.checkInTime ?? timesheet.CheckInTime, true)} · {fmtMins(elapsed)} đã làm
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="mt-ts-actions">
-        {!timesheet ? (
-          <button
-            className="mt-btn-checkin"
-            onClick={onCheckIn}
-            disabled={saving}
-          >
-            {saving ? "⏳" : "🟢"} Check-in vào ca
-          </button>
-        ) : (
-          <button
-            className="mt-btn-checkout"
-            onClick={onCheckOut}
-            disabled={saving}
-          >
-            {saving ? "⏳" : "⬛"} Kết ca
-          </button>
-        )}
-      </div>
-    </div>
-  );
+function safeMinutesBetween(start, end) {
+  if (!start || !end) return 0;
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) return 0;
+  return Math.round((endTime - startTime) / 60_000);
+}
+
+function toText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function readValue(source, ...keys) {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value !== null && value !== undefined) return value;
+  }
+  return null;
+}
+
+function toPositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeCode(value) {
+  return toText(value).toUpperCase();
+}
+
+function normalizeStatus(value) {
+  return normalizeCode(value).replace(/-/g, "_");
+}
+
+function getVietnamDateKey(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function isSameVietnamDate(value, todayKey) {
+  if (!todayKey) return false;
+  return getVietnamDateKey(value) === todayKey;
+}
+
+function getDiagnosisCompletedAt(task) {
+  return task.technicianCompletedAt || task.technicalApprovedAt || task.finalApprovedAt || null;
+}
+
+function getCancelledAt(task) {
+  return task.cancelledAt || task.canceledAt || task.cancelledOn || task.canceledOn || task.updatedAt || null;
+}
+
+function getTaskAcceptedAt(task) {
+  return task.taskType === "DIAGNOSIS" ? task.technicianAcceptedAt : task.startedAt;
+}
+
+function getTaskCompletedAt(task) {
+  return task.taskType === "DIAGNOSIS" ? getDiagnosisCompletedAt(task) : task.completedAt;
+}
+
+function getTaskStatusColor(task) {
+  const statusCode = normalizeStatus(task.status);
+  const acceptedAt = getTaskAcceptedAt(task);
+  const completedAt = getTaskCompletedAt(task);
+
+  if (statusCode === "CANCELLED") return "#64748b";
+  if (completedAt || ["COMPLETED", "QC_PENDING"].includes(statusCode)) return "#16a34a";
+  if (acceptedAt || ["IN_PROGRESS", "INPROGRESS", "PAUSED"].includes(statusCode)) return "#ea580c";
+  return "#2563eb";
+}
+
+function getTaskGroup(task) {
+  const statusCode = normalizeStatus(task.status);
+  if (statusCode === "CANCELLED") return "CANCELLED";
+  if (getTaskCompletedAt(task) || ["COMPLETED", "QC_PENDING"].includes(statusCode)) return "COMPLETED";
+  if (getTaskAcceptedAt(task) || ["IN_PROGRESS", "INPROGRESS", "PAUSED"].includes(statusCode)) return "IN_PROGRESS";
+  return "NEW";
 }
 
 function QuickStatCard({ icon, label, value, color }) {
@@ -98,185 +143,155 @@ function QuickStatCard({ icon, label, value, color }) {
   );
 }
 
-function TaskCard({ task, onStart, onPause, onComplete, onViewOrder }) {
-  const meta = getTaskMeta(task.status);
-  const s    = String(task.status ?? "").toUpperCase().replace(/-/g, "_");
-  const elapsed = s === "IN_PROGRESS" || s === "INPROGRESS"
-    ? calcDuration(task.startedAt)
-    : null;
-
-  return (
-    <article
-      className="mt-task-card"
-      style={{ borderLeftColor: meta.color }}
-    >
-      {/* card header */}
-      <div className="mt-task-head">
-        <div className="mt-task-title-row">
-          <span className="mt-task-icon">{meta.icon}</span>
-          <span className="mt-task-name">{task.name || task.taskName || "Hạng mục sửa chữa"}</span>
-        </div>
-        <span
-          className="mt-task-status-badge"
-          style={{ background: meta.bg, color: meta.color }}
-        >
-          {meta.label}
-        </span>
-      </div>
-
-      {/* order info */}
-      <div className="mt-task-order" onClick={() => onViewOrder(task)}>
-        <div className="mt-order-row">
-          <span className="mt-lbl">Lệnh SC:</span>
-          <span className="mt-val mt-code">{task.serviceOrderCode || `SO-${task.serviceOrderId}`}</span>
-        </div>
-        <div className="mt-order-row">
-          <span className="mt-lbl">Xe:</span>
-          <span className="mt-val">🚘 {task.vehicleLicensePlate || "--"}</span>
-        </div>
-        {task.vehicleDescriptor && (
-          <div className="mt-order-row">
-            <span className="mt-lbl">Mẫu xe:</span>
-            <span className="mt-val">{task.vehicleDescriptor}</span>
-          </div>
-        )}
-        {task.bayCode && (
-          <div className="mt-order-row">
-            <span className="mt-lbl">Khoang:</span>
-            <span className="mt-val">🏭 {task.bayCode}</span>
-          </div>
-        )}
-      </div>
-
-      {/* detail */}
-      {task.description && (
-        <p className="mt-task-desc">{task.description}</p>
-      )}
-
-      {/* timing */}
-      <div className="mt-task-timing">
-        {task.estimatedDuration ? (
-          <span title="Thời gian ước tính">
-            📋 Dự kiến: {fmtMins(task.estimatedDuration)}
-          </span>
-        ) : null}
-        {elapsed !== null ? (
-          <span className="mt-elapsed" title="Đã thực hiện được">
-            ⏱️ Đang làm: {fmtMins(elapsed)}
-          </span>
-        ) : null}
-        {task.completedAt && (
-          <span title="Hoàn thành lúc">✅ {fmt(task.completedAt)}</span>
-        )}
-      </div>
-
-      {/* role */}
-      {task.roleInTask && (
-        <div className="mt-task-role">
-          {task.roleInTask === "PRIMARY" ? "🎯 Thợ chính" : "🤝 Thợ phụ"}
-        </div>
-      )}
-
-      {/* actions */}
-      <div className="mt-task-actions" onClick={(e) => e.stopPropagation()}>
-        {(s === "PENDING") && (
-          <button className="mt-btn-start" onClick={() => onStart(task)}>
-            ▶️ Bắt đầu
-          </button>
-        )}
-        {(s === "IN_PROGRESS" || s === "INPROGRESS") && (
-          <>
-            <button className="mt-btn-pause" onClick={() => onPause(task)}>
-              ⏸️ Tạm dừng
-            </button>
-            <button className="mt-btn-done" onClick={() => onComplete(task)}>
-              ✅ Hoàn thành
-            </button>
-          </>
-        )}
-        {s === "PAUSED" && (
-          <button className="mt-btn-start" onClick={() => onStart(task)}>
-            ▶️ Tiếp tục
-          </button>
-        )}
-        <button className="mt-btn-view" onClick={() => onViewOrder(task)}>
-          📋 Xem lệnh
-        </button>
-      </div>
-    </article>
-  );
-}
-
-/* ──────── empty state ──────── */
-function EmptyState({ filter }) {
-  const msgs = {
-    ACTIVE: { icon: "🎉", title: "Không có tác vụ đang thực hiện", desc: "Bạn chưa có hạng mục nào đang chờ hoặc đang làm." },
-    ALL:    { icon: "📋", title: "Chưa có tác vụ nào", desc: "Quản đốc chưa phân công tác vụ cho bạn hôm nay." },
-    COMPLETED: { icon: "✅", title: "Chưa hoàn thành tác vụ nào", desc: "Hoàn thành nhiệm vụ đầu tiên để thấy tại đây." },
-  };
-  const m = msgs[filter] || msgs.ALL;
+function EmptyState() {
   return (
     <div className="mt-empty">
-      <span className="mt-empty-icon">{m.icon}</span>
-      <strong>{m.title}</strong>
-      <p>{m.desc}</p>
+      <span className="mt-empty-icon">📋</span>
+      <strong>Chưa có tác vụ nào</strong>
+      <p>Hiện tại không có tác vụ phân công nào dành cho bạn.</p>
     </div>
   );
 }
 
-/* ──────── main page ──────── */
 export default function MyTasksPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const techId = user?.id ?? user?.staffId ?? null;
 
-  const [tasks, setTasks]         = useState([]);
-  const [timesheet, setTimesheet] = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
-  const [success, setSuccess]     = useState("");
-  const [filter, setFilter]       = useState("ACTIVE");
+  const [repairTasks, setRepairTasks] = useState([]);
+  const [diagnosisTasks, setDiagnosisTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [actionTaskKey, setActionTaskKey] = useState("");
+  const [nowTick, setNowTick] = useState(() => new Date());
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  /* ── fetch ── */
   const fetchData = useCallback(async () => {
     if (!techId) return;
     setLoading(true);
     setError("");
+
     try {
-      const [assignRes, allOrdersRes] = await Promise.all([
+      const [assignRes, allOrdersRes, boardRes, vehiclesRes, vehicleModelsRes, vehicleBrandsRes] = await Promise.all([
         request({ url: "/api/service-staff-assignments", method: "GET", params: { staffId: techId } }),
         request({ url: "/api/service-orders", method: "GET" }),
+        serviceOrderApi.getDiagnosisDispatchBoard({ includeCompleted: true }),
+        getAllVehicles(),
+        getAllVehicleModels(),
+        getAllVehicleBrands(),
       ]);
-      const assigns = Array.isArray(assignRes) ? assignRes : (assignRes?.items || []);
-      const allOrders = Array.isArray(allOrdersRes) ? allOrdersRes : (allOrdersRes?.items || []);
 
-      /* Build task list from assignments */
-      const orderMap = new Map(allOrders.map(o => [o.id ?? o.Id, o]));
-      const enriched = assigns.map(a => {
-        const soId = a.serviceOrderId ?? a.ServiceOrderId;
-        const so   = orderMap.get(soId) || {};
+      const assignments = Array.isArray(assignRes) ? assignRes : (assignRes?.items || []);
+      const allOrders = Array.isArray(allOrdersRes) ? allOrdersRes : (allOrdersRes?.items || []);
+      const board = Array.isArray(boardRes) ? boardRes : (boardRes?.items || []);
+      const vehicles = Array.isArray(vehiclesRes) ? vehiclesRes : (vehiclesRes?.items || []);
+      const vehicleModels = Array.isArray(vehicleModelsRes) ? vehicleModelsRes : (vehicleModelsRes?.items || []);
+      const vehicleBrands = Array.isArray(vehicleBrandsRes) ? vehicleBrandsRes : (vehicleBrandsRes?.items || []);
+
+      const orderMap = new Map(allOrders.map((order) => [order.id ?? order.Id, order]));
+      const vehicleMap = new Map(vehicles.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const vehicleModelMap = new Map(vehicleModels.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+      const vehicleBrandMap = new Map(vehicleBrands.map((item) => [toPositiveNumber(readValue(item, "id", "Id")) || 0, item]));
+
+      const repairRows = assignments.map((assignment) => {
+        const serviceOrderId = assignment.serviceOrderId ?? assignment.ServiceOrderId;
+        const order = orderMap.get(serviceOrderId) || {};
+
         return {
-          assignmentId: a.id ?? a.Id,
-          serviceOrderId: soId,
-          serviceOrderCode: a.serviceOrderCode ?? a.ServiceOrderCode ?? so.code ?? so.Code ?? `SO-${soId}`,
-          vehicleLicensePlate: a.vehicleLicensePlate ?? a.VehicleLicensePlate ?? so.vehicleLicensePlate ?? so.VehicleLicensePlate ?? "--",
-          vehicleDescriptor:   a.vehicleDescriptor   ?? a.VehicleDescriptor   ?? so.vehicleDescriptor   ?? so.VehicleDescriptor   ?? "",
-          bayCode: a.bayCode ?? a.BayCode ?? so.bayCode ?? so.BayCode ?? "",
-          name:        a.taskName     ?? a.TaskName     ?? a.serviceItemName ?? a.ServiceItemName ?? "Hạng mục",
-          description: a.description  ?? a.Description  ?? "",
-          status:      a.status       ?? a.Status       ?? "PENDING",
-          roleInTask:  a.roleInTask   ?? a.RoleInTask   ?? "PRIMARY",
-          estimatedDuration: a.estimatedDuration ?? a.EstimatedDuration ?? null,
-          startedAt:    a.startedAt   ?? a.StartedAt   ?? null,
-          completedAt:  a.completedAt ?? a.CompletedAt ?? null,
-          assignedAt:   a.assignedAt  ?? a.AssignedAt  ?? null,
+          taskType: "REPAIR",
+          assignmentId: assignment.id ?? assignment.Id,
+          serviceOrderId,
+          serviceOrderCode: assignment.serviceOrderCode ?? assignment.ServiceOrderCode ?? order.code ?? order.Code ?? `SO-${serviceOrderId}`,
+          vehicleLicensePlate: assignment.vehicleLicensePlate ?? assignment.VehicleLicensePlate ?? order.vehicleLicensePlate ?? order.VehicleLicensePlate ?? "--",
+          vehicleDescriptor: assignment.vehicleDescriptor ?? assignment.VehicleDescriptor ?? order.vehicleDescriptor ?? order.VehicleDescriptor ?? "",
+          bayCode: assignment.bayCode ?? assignment.BayCode ?? order.bayCode ?? order.BayCode ?? "",
+          name: assignment.taskName ?? assignment.TaskName ?? assignment.serviceItemName ?? assignment.ServiceItemName ?? "Hạng mục",
+          status: assignment.status ?? assignment.Status ?? "PENDING",
+          roleInTask: assignment.roleInTask ?? assignment.RoleInTask ?? "PRIMARY",
+          isSupport: (assignment.roleInTask ?? assignment.RoleInTask ?? "PRIMARY") !== "PRIMARY",
+          estimatedDuration: assignment.estimatedDuration ?? assignment.EstimatedDuration ?? null,
+          startedAt: assignment.startedAt ?? assignment.StartedAt ?? null,
+          completedAt: assignment.completedAt ?? assignment.CompletedAt ?? null,
+          cancelledAt: assignment.cancelledAt ?? assignment.CancelledAt ?? assignment.canceledAt ?? assignment.CanceledAt ?? null,
+          updatedAt: assignment.updatedAt ?? assignment.UpdatedAt ?? null,
+          assignedAt: assignment.assignedAt ?? assignment.AssignedAt ?? null,
+          teamName: toText(readValue(order, "primaryTeamName", "PrimaryTeamName")) || "",
         };
       });
 
-      setTasks(enriched);
+      const diagnosisRows = board
+        .map((item) => {
+          const leadId = toPositiveNumber(readValue(item, "technicianId", "TechnicianId"));
+          const assistantId = toPositiveNumber(readValue(item, "assistantTechnicianId", "AssistantTechnicianId"));
+          const isLead = leadId === toPositiveNumber(techId);
+          const isAssistant = assistantId === toPositiveNumber(techId);
+          if (!isLead && !isAssistant) return null;
+
+          const serviceOrderId = toPositiveNumber(readValue(item, "serviceOrderId", "ServiceOrderId"));
+          const order = orderMap.get(serviceOrderId) || {};
+          const vehicleId =
+            toPositiveNumber(readValue(item, "vehicleId", "VehicleId")) ||
+            toPositiveNumber(readValue(order, "vehicleId", "VehicleId"));
+          const vehicle = vehicleId ? (vehicleMap.get(vehicleId) || null) : null;
+          const modelId =
+            toPositiveNumber(readValue(item, "vehicleModelId", "VehicleModelId")) ||
+            toPositiveNumber(readValue(order, "vehicleModelId", "VehicleModelId")) ||
+            toPositiveNumber(readValue(vehicle, "modelId", "ModelId"));
+          const model = modelId ? (vehicleModelMap.get(modelId) || null) : null;
+          const brandId =
+            toPositiveNumber(readValue(item, "vehicleBrandId", "VehicleBrandId")) ||
+            toPositiveNumber(readValue(order, "vehicleBrandId", "VehicleBrandId")) ||
+            toPositiveNumber(readValue(vehicle, "brandId", "BrandId")) ||
+            toPositiveNumber(readValue(model, "brandId", "BrandId"));
+          const brand = brandId ? (vehicleBrandMap.get(brandId) || null) : null;
+          const brandName =
+            toText(readValue(item, "vehicleBrandName", "VehicleBrandName")) ||
+            toText(readValue(order, "vehicleBrandName", "VehicleBrandName")) ||
+            toText(readValue(vehicle, "brandName", "BrandName")) ||
+            toText(readValue(brand, "name", "Name"));
+          const modelName =
+            toText(readValue(item, "vehicleModelName", "VehicleModelName")) ||
+            toText(readValue(order, "vehicleModelName", "VehicleModelName")) ||
+            toText(readValue(vehicle, "modelName", "ModelName")) ||
+            toText(readValue(model, "modelName", "ModelName", "name", "Name"));
+          const vehicleDescriptorFallback = brandName && modelName ? `${brandName} ${modelName}` : (modelName || brandName);
+
+          return {
+            taskType: "DIAGNOSIS",
+            serviceOrderId,
+            serviceOrderCode: toText(readValue(item, "serviceOrderCode", "ServiceOrderCode")) || toText(readValue(order, "code", "Code")) || `SO-${serviceOrderId}`,
+            vehicleLicensePlate:
+              toText(readValue(item, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+              toText(readValue(order, "vehicleLicensePlate", "VehicleLicensePlate")) ||
+              toText(readValue(vehicle, "licensePlate", "LicensePlate")) ||
+              "--",
+            vehicleDescriptor:
+              toText(readValue(item, "vehicleDescriptor", "VehicleDescriptor")) ||
+              toText(readValue(order, "vehicleDescriptor", "VehicleDescriptor")) ||
+              vehicleDescriptorFallback ||
+              "Chưa rõ dòng xe",
+            assignedBayId: toPositiveNumber(readValue(item, "assignedBayId", "AssignedBayId")),
+            assignedBayCode: toText(readValue(item, "assignedBayCode", "AssignedBayCode")),
+            status: normalizeStatus(readValue(item, "status", "Status") || "PENDING"),
+            assignedAt: readValue(item, "assignedAt", "AssignedAt"),
+            technicianAcceptedAt: readValue(item, "technicianAcceptedAt", "TechnicianAcceptedAt"),
+            technicianCompletedAt: readValue(item, "technicianCompletedAt", "TechnicianCompletedAt"),
+            technicalApprovedAt: readValue(item, "technicalApprovedAt", "TechnicalApprovedAt"),
+            finalApprovedAt: readValue(item, "finalApprovedAt", "FinalApprovedAt"),
+            cancelledAt: readValue(item, "cancelledAt", "CancelledAt", "canceledAt", "CanceledAt"),
+            updatedAt: readValue(item, "updatedAt", "UpdatedAt"),
+            teamName: toText(readValue(item, "primaryTeamName", "PrimaryTeamName", "teamName", "TeamName")),
+            roleInPair: isLead ? "Thợ chính" : "Thợ phụ",
+            isSupport: isAssistant,
+          };
+        })
+        .filter(Boolean);
+
+      setRepairTasks(repairRows);
+      setDiagnosisTasks(diagnosisRows);
       setLastRefresh(new Date());
     } catch (err) {
       setError("Không thể tải danh sách tác vụ. Kiểm tra kết nối.");
@@ -286,77 +301,30 @@ export default function MyTasksPage() {
     }
   }, [techId]);
 
-  const fetchTimesheet = useCallback(async () => {
-    if (!techId) return;
-    try {
-      const res = await request({ url: `/api/timesheets/active`, method: "GET", params: { staffId: techId } })
-        .catch(() => null);
-      if (res && (res.id || res.Id)) setTimesheet(res);
-      else setTimesheet(null);
-    } catch {
-      setTimesheet(null);
-    }
-  }, [techId]);
-
   useEffect(() => {
     fetchData();
-    fetchTimesheet();
-  }, [fetchData, fetchTimesheet]);
+  }, [fetchData]);
 
   useEffect(() => {
-    const id = setInterval(() => { fetchData(); fetchTimesheet(); }, 30_000);
-    return () => clearInterval(id);
-  }, [fetchData, fetchTimesheet]);
+    const timerId = setInterval(() => {
+      fetchData();
+    }, 30000);
+    return () => clearInterval(timerId);
+  }, [fetchData]);
 
-  /* ── timesheet actions ── */
-  const handleCheckIn = async () => {
-    setSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      const res = await executionApi.checkInTimesheet({
-        staffId: techId,
-        workDate: new Date().toISOString().slice(0, 10),
-        notes: "Check-in từ MyTasks",
-      });
-      setTimesheet(res);
-      setSuccess("✅ Đã check-in thành công!");
-    } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Check-in thất bại.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    const timerId = setInterval(() => setNowTick(new Date()), 1000);
+    return () => clearInterval(timerId);
+  }, []);
 
-  const handleCheckOut = async () => {
-    if (!timesheet) return;
-    if (!window.confirm("Xác nhận kết ca?")) return;
-    setSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      const tsId = timesheet.id ?? timesheet.Id;
-      await executionApi.checkOutTimesheet(tsId, {
-        checkOutTime: new Date().toISOString(),
-        notes: "Check-out từ MyTasks",
-      });
-      setTimesheet(null);
-      setSuccess("✅ Đã kết ca thành công!");
-    } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Check-out thất bại.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* ── task actions ── */
-  const showMsg = (msg) => {
-    setSuccess(msg);
+  const showMsg = (message) => {
+    setSuccess(message);
     setTimeout(() => setSuccess(""), 3000);
   };
 
-  const handleStart = async (task) => {
+  const handleStartRepair = async (task) => {
     setSaving(true);
+    setActionTaskKey(`${task.taskType}-${task.assignmentId || task.serviceOrderId}`);
     setError("");
     try {
       await request({
@@ -370,11 +338,13 @@ export default function MyTasksPage() {
       setError(err?.response?.data?.message || "Không thể cập nhật tác vụ.");
     } finally {
       setSaving(false);
+      setActionTaskKey("");
     }
   };
 
-  const handlePause = async (task) => {
+  const handlePauseRepair = async (task) => {
     setSaving(true);
+    setActionTaskKey(`${task.taskType}-${task.assignmentId || task.serviceOrderId}`);
     setError("");
     try {
       await request({
@@ -387,12 +357,14 @@ export default function MyTasksPage() {
       setError(err?.response?.data?.message || "Không thể tạm dừng tác vụ.");
     } finally {
       setSaving(false);
+      setActionTaskKey("");
     }
   };
 
-  const handleComplete = async (task) => {
+  const handleCompleteRepair = async (task) => {
     if (!window.confirm(`Xác nhận hoàn thành: "${task.name}"?`)) return;
     setSaving(true);
+    setActionTaskKey(`${task.taskType}-${task.assignmentId || task.serviceOrderId}`);
     setError("");
     try {
       await request({
@@ -406,115 +378,174 @@ export default function MyTasksPage() {
       setError(err?.response?.data?.message || "Không thể hoàn thành tác vụ.");
     } finally {
       setSaving(false);
+      setActionTaskKey("");
     }
   };
 
-  const handleViewOrder = (task) => {
+  const handleStartDiagnosis = async (task) => {
+    if (!task || !task.serviceOrderId) return;
+    if (!task.assignedBayId) {
+      setError("Chưa có khoang được phân công. Vui lòng liên hệ tổ trưởng để chỉ định khoang.");
+      return;
+    }
+
+    setSaving(true);
+    setActionTaskKey(`${task.taskType}-${task.assignmentId || task.serviceOrderId}`);
+    setError("");
+    try {
+      await serviceOrderApi.startDiagnosis(task.serviceOrderId, {
+        technicianId: toPositiveNumber(techId),
+        bayId: task.assignedBayId,
+      });
+      await fetchData();
+      showMsg("▶️ Đã nhận yêu cầu chẩn đoán.");
+    } catch (err) {
+      setError(err?.response?.data?.message || "Không thể nhận yêu cầu chẩn đoán.");
+    } finally {
+      setSaving(false);
+      setActionTaskKey("");
+    }
+  };
+
+  const handleOpenTask = (task) => {
     navigate(`/workshop/technician/orders/${task.serviceOrderId}/diagnosis`);
   };
 
-  /* ── filter & stats ── */
-  const filtered = useMemo(() => {
-    let list = tasks;
-    if (filter === "ACTIVE") {
-      list = list.filter(t => {
-        const s = String(t.status || "").toUpperCase().replace(/-/g, "_");
-        return ["PENDING", "IN_PROGRESS", "INPROGRESS", "PAUSED"].includes(s);
-      });
-    } else if (filter === "COMPLETED") {
-      list = list.filter(t => ["COMPLETED", "QC_PENDING"].includes(String(t.status || "").toUpperCase().replace(/-/g, "_")));
-    }
-    return list;
-  }, [tasks, filter]);
+  const allTasks = useMemo(() => {
+    const merged = [...diagnosisTasks, ...repairTasks];
+    return merged.sort((a, b) => {
+      const aCompleted = getTaskCompletedAt(a);
+      const bCompleted = getTaskCompletedAt(b);
+      const aAccepted = getTaskAcceptedAt(a);
+      const bAccepted = getTaskAcceptedAt(b);
+      const aCancelled = normalizeStatus(a.status) === "CANCELLED";
+      const bCancelled = normalizeStatus(b.status) === "CANCELLED";
+
+      const rank = (task, completed, accepted, cancelled) => {
+        if (cancelled) return 4;
+        if (completed) return 3;
+        if (accepted) return 2;
+        return 1;
+      };
+
+      const rankA = rank(a, aCompleted, aAccepted, aCancelled);
+      const rankB = rank(b, bCompleted, bAccepted, bCancelled);
+      if (rankA !== rankB) return rankA - rankB;
+
+      const aTime = new Date(aCompleted || a.assignedAt || 0).getTime();
+      const bTime = new Date(bCompleted || b.assignedAt || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [diagnosisTasks, repairTasks]);
+
+  const groupedTasks = useMemo(() => {
+    const groups = {
+      NEW: [],
+      IN_PROGRESS: [],
+      COMPLETED: [],
+      CANCELLED: [],
+    };
+    allTasks.forEach((task) => {
+      groups[getTaskGroup(task)].push(task);
+    });
+    return groups;
+  }, [allTasks]);
+
+  const todayKey = useMemo(() => getVietnamDateKey(new Date()), [lastRefresh]);
 
   const stats = useMemo(() => {
-    const active    = tasks.filter(t => ["PENDING","IN_PROGRESS","INPROGRESS","PAUSED"].includes(String(t.status||"").toUpperCase().replace(/-/g,"_")));
-    const doing     = active.filter(t => ["IN_PROGRESS","INPROGRESS"].includes(String(t.status||"").toUpperCase().replace(/-/g,"_")));
-    const completed = tasks.filter(t => ["COMPLETED","QC_PENDING"].includes(String(t.status||"").toUpperCase().replace(/-/g,"_")));
-    return { total: tasks.length, active: active.length, doing: doing.length, completed: completed.length };
-  }, [tasks]);
+    const counts = { total: 0, active: 0, doing: 0, completedToday: 0, cancelledToday: 0 };
+    allTasks.forEach((task) => {
+      counts.total += 1;
+      const statusCode = normalizeStatus(task.status);
+      const acceptedAt = getTaskAcceptedAt(task);
+      const completedAt = getTaskCompletedAt(task);
 
-  /* ── render ── */
+      if (completedAt || ["COMPLETED", "QC_PENDING"].includes(statusCode)) {
+        if (isSameVietnamDate(completedAt, todayKey)) counts.completedToday += 1;
+      } else if (statusCode === "CANCELLED") {
+        if (isSameVietnamDate(getCancelledAt(task), todayKey)) counts.cancelledToday += 1;
+      } else if (acceptedAt || ["IN_PROGRESS", "INPROGRESS", "PAUSED"].includes(statusCode)) {
+        counts.doing += 1;
+        counts.active += 1;
+      } else {
+        counts.active += 1;
+      }
+    });
+    return counts;
+  }, [allTasks, todayKey]);
+
   return (
     <div className="mt-page">
-      {/* ── header ── */}
       <div className="mt-header">
         <div className="mt-header-left">
           <h1 className="mt-title">🔧 Tác vụ của tôi</h1>
           <p className="mt-subtitle">
-            {user?.fullName || "Thợ kỹ thuật"} ·{" "}
-            Hôm nay {new Date().toLocaleDateString("vi-VN")} ·{" "}
-            <span>Cập nhật {lastRefresh.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
+            {user?.fullName || "Thợ kỹ thuật"} · Hôm nay {new Date().toLocaleDateString("vi-VN")} ·
+            <span> Cập nhật {lastRefresh.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
           </p>
         </div>
-        <button
-          className="mt-btn-refresh"
-          onClick={() => { fetchData(); fetchTimesheet(); }}
-          disabled={loading}
-        >
+        <button className="mt-btn-refresh" onClick={() => fetchData()} disabled={loading || saving}>
           {loading ? "⏳ Đang tải..." : "🔄 Làm mới"}
         </button>
       </div>
 
-      {/* ── alerts ── */}
-      {error   && <div className="mt-alert mt-alert-error">⚠️ {error}</div>}
-      {success && <div className="mt-alert mt-alert-success">{success}</div>}
+      {error ? <div className="mt-alert mt-alert-error">⚠️ {error}</div> : null}
+      {success ? <div className="mt-alert mt-alert-success">{success}</div> : null}
 
-      {/* ── timesheet bar ── */}
-      <TimesheetBar
-        timesheet={timesheet}
-        onCheckIn={handleCheckIn}
-        onCheckOut={handleCheckOut}
-        saving={saving}
-      />
-
-      {/* ── stats ── */}
       <div className="mt-stats">
-        <QuickStatCard icon="📋" label="Tổng tác vụ"    value={stats.total}     color="#6366f1" />
-        <QuickStatCard icon="⏳" label="Cần xử lý"      value={stats.active}    color="#0ea5e9" />
-        <QuickStatCard icon="🔧" label="Đang thực hiện" value={stats.doing}     color="#f59e0b" />
-        <QuickStatCard icon="✅" label="Hoàn thành"      value={stats.completed} color="#10b981" />
+        <QuickStatCard icon="📋" label="Tổng tác vụ" value={stats.total} color="#6366f1" />
+        <QuickStatCard icon="⏳" label="Cần xử lý" value={stats.active} color="#0ea5e9" />
+        <QuickStatCard icon="🔧" label="Đang thực hiện" value={stats.doing} color="#f59e0b" />
+        <QuickStatCard icon="✅" label="Hoàn thành hôm nay" value={stats.completedToday} color="#10b981" />
+        <QuickStatCard icon="❌" label="Đã hủy hôm nay" value={stats.cancelledToday} color="#64748b" />
       </div>
 
-      {/* ── filter tabs ── */}
-      <div className="mt-filter-tabs">
-        {[
-          { key: "ACTIVE",    label: `⏳ Cần xử lý (${stats.active})` },
-          { key: "ALL",       label: `📋 Tất cả (${stats.total})` },
-          { key: "COMPLETED", label: `✅ Đã hoàn thành (${stats.completed})` },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            className={`mt-tab ${filter === tab.key ? "mt-tab-active" : ""}`}
-            onClick={() => setFilter(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <div className="mt-rows-container">
+        {loading && allTasks.length === 0 ? (
+          <div className="mt-loading">
+            <div className="mt-spinner" />
+            <span>Đang tải danh sách tác vụ...</span>
+          </div>
+        ) : null}
 
-      {/* ── task list ── */}
-      {loading && tasks.length === 0 ? (
-        <div className="mt-loading">
-          <div className="mt-spinner" />
-          <span>Đang tải danh sách tác vụ...</span>
-        </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState filter={filter} />
-      ) : (
-        <div className="mt-task-list">
-          {filtered.map(task => (
-            <TaskCard
-              key={`${task.assignmentId}-${task.status}`}
-              task={task}
-              onStart={handleStart}
-              onPause={handlePause}
-              onComplete={handleComplete}
-              onViewOrder={handleViewOrder}
-            />
-          ))}
-        </div>
-      )}
+        {!loading && allTasks.length === 0 ? <EmptyState /> : null}
+
+        {TASK_GROUP_ORDER.map((groupKey) => {
+          const list = groupedTasks[groupKey] || [];
+          if (!list.length) return null;
+          const meta = TASK_GROUP_META[groupKey];
+          return (
+            <section key={groupKey} className="mt-task-group">
+              <div className="mt-group-header">
+                <div className="mt-group-title">{meta.icon} {meta.label}</div>
+                <div className="mt-group-hint">{meta.hint} {"\u00B7"} {list.length}</div>
+              </div>
+              <div className="mt-group-list">
+                {list.map((task) => (                  <TechnicianTaskCard
+                    key={`${task.taskType}-${task.assignmentId || task.serviceOrderId}-${task.status}-${task.assignedAt || ""}`}
+                    taskTitle={task.taskType === "DIAGNOSIS" ? "Yêu cầu chẩn đoán" : (task.name || "Hạng mục sửa chữa")}
+                    licensePlate={task.vehicleLicensePlate}
+                    carModel={task.vehicleDescriptor}
+                    bayCode={task.bayCode || task.assignedBayCode}
+                    serviceOrderId={task.serviceOrderCode}
+                    status={getTaskGroup(task)}
+                    taskTypeLabel={task.isSupport ? `Hỗ trợ ${task.taskType === "DIAGNOSIS" ? "chẩn đoán" : "sửa chữa"}` : (task.taskType === "DIAGNOSIS" ? "Chẩn đoán" : "Sửa chữa")}
+                    waitingMinutes={safeMinutesBetween(task.assignedAt, getTaskAcceptedAt(task) || getTaskCompletedAt(task) || getCancelledAt(task) || nowTick)}
+                    processingMinutes={safeMinutesBetween(getTaskAcceptedAt(task), getTaskCompletedAt(task) || nowTick)}
+                    startedAt={getTaskAcceptedAt(task)}
+                    completedAt={getTaskCompletedAt(task)}
+                    onStart={() => (task.taskType === "DIAGNOSIS" ? handleStartDiagnosis(task) : handleStartRepair(task))}
+                    onComplete={() => (task.taskType === "REPAIR" && handleCompleteRepair(task))}
+                    onOpen={() => handleOpenTask(task)}
+                    isActionLoading={actionTaskKey === `${task.taskType}-${task.assignmentId || task.serviceOrderId}`}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

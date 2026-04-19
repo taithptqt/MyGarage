@@ -9,78 +9,78 @@ import "./InventoryAdminPage.css";
 
 const SECTION_META = {
   warehouseStructure: {
-    title: "Quáº£n lÃ½ cáº¥u trÃºc kho",
-    subtitle: "Táº¡o/sá»­a/khÃ³a kho, cáº¥u hÃ¬nh loáº¡i kho, bin/location vÃ  kho máº·c Ä‘á»‹nh",
-    hint: "Báº¯t Ä‘áº§u báº±ng viá»‡c táº¡o kho theo tá»«ng chi nhÃ¡nh, sau Ä‘Ã³ gÃ¡n kho máº·c Ä‘á»‹nh cho tá»«ng loáº¡i hÃ ng."
+    title: "Quản lý c?u tr�c kho",
+    subtitle: "T?o/s?a/kh�a kho, c?u h�nh lo?i kho, bin/location v� kho m?c d?nh",
+    hint: "B?t d?u bảng vi?c t?o kho theo tổng chi nh?nh, sau d? g?n kho m?c d?nh cho tổng lo?i h?ng."
   },
   catalogProducts: {
-    title: "Quáº£n lÃ½ sáº£n pháº©m kho",
-    subtitle: "Táº¡o/sá»­a sáº£n pháº©m, quáº£n lÃ½ SKU, Ä‘Æ¡n vá»‹ tÃ­nh, hÃ¬nh áº£nh vÃ  tráº¡ng thÃ¡i kinh doanh",
-    hint: "Chuáº©n hÃ³a mÃ£ SKU vÃ  danh má»¥c trÆ°á»›c khi nháº­p kho Ä‘á»ƒ trÃ¡nh trÃ¹ng láº·p dá»¯ liá»‡u."
+    title: "Quản lý s?n ph?m kho",
+    subtitle: "T?o/s?a s?n ph?m, qu?n l? SKU, don v? t?nh, h?nh ?nh v? tr?ng th?i kinh doanh",
+    hint: "Chu?n h?a m? SKU v? danh m?c tru?c khi nh?p kho d? tr?nh tr?ng l?p dữ liệu."
   },
   catalogCategories: {
-    title: "Quáº£n lÃ½ danh má»¥c sáº£n pháº©m",
-    subtitle: "Táº¡o/sá»­a nhÃ³m hÃ ng Ä‘á»ƒ phÃ¢n loáº¡i váº­t tÆ° rÃµ rÃ ng vÃ  Ä‘á»“ng nháº¥t toÃ n há»‡ thá»‘ng",
-    hint: "NÃªn táº¡o cáº¥u trÃºc danh má»¥c ngáº¯n gá»n, dá»… hiá»ƒu Ä‘á»ƒ ngÆ°á»i má»›i tÃ¬m hÃ ng nhanh hÆ¡n."
+    title: "Quản lý danh m?c s?n ph?m",
+    subtitle: "T?o/s?a nh?m h?ng d? ph?n lo?i vật tư r? r?ng v? d?ng nh?t to?n hệ thống",
+    hint: "N�n t?o c?u tr�c danh m?c ng?n g?n, d? hi?u d? ngu?i m?i t�m h�ng nhanh hon."
   },
   catalogSuppliers: {
-    title: "Quáº£n lÃ½ nhÃ  cung cáº¥p",
-    subtitle: "LÆ°u thÃ´ng tin nhÃ  cung cáº¥p phá»¥c vá»¥ truy xuáº¥t nguá»“n hÃ ng vÃ  Ä‘á»‘i soÃ¡t mua vÃ o",
-    hint: "Chuáº©n tÃªn nhÃ  cung cáº¥p ngay tá»« Ä‘áº§u Ä‘á»ƒ trÃ¡nh trÃ¹ng vÃ  dá»… truy váº¥n lá»‹ch sá»­ giao dá»‹ch."
+    title: "Quản lý nh� cung c?p",
+    subtitle: "Luu th?ng tin nh? cung c?p ph?c v? truy xu?t ngu?n h?ng v? d?i so?t mua v?o",
+    hint: "Chu?n t?n nh? cung c?p ngay t? d?u d? tr?nh tr?ng v? d? truy v?n l?ch s? giao d?ch."
   },
   catalog: {
-    title: "Quáº£n lÃ½ sáº£n pháº©m kho",
-    subtitle: "Táº¡o/sá»­a sáº£n pháº©m, quáº£n lÃ½ SKU, Ä‘Æ¡n vá»‹ tÃ­nh, hÃ¬nh áº£nh vÃ  tráº¡ng thÃ¡i kinh doanh",
-    hint: "Chuáº©n hÃ³a mÃ£ SKU vÃ  danh má»¥c trÆ°á»›c khi nháº­p kho Ä‘á»ƒ trÃ¡nh trÃ¹ng láº·p dá»¯ liá»‡u."
+    title: "Quản lý s?n ph?m kho",
+    subtitle: "T?o/s?a s?n ph?m, qu?n l? SKU, don v? t?nh, h?nh ?nh v? tr?ng th?i kinh doanh",
+    hint: "Chu?n h?a m? SKU v? danh m?c tru?c khi nh?p kho d? tr?nh tr?ng l?p dữ liệu."
   },
   policy: {
-    title: "Cáº¥u hÃ¬nh chÃ­nh sÃ¡ch tá»“n kho",
-    subtitle: "Min/Max, ngÆ°á»¡ng cáº£nh bÃ¡o, Ã¢m kho, reserve, vÆ°á»£t Ä‘á»‹nh má»©c, hoÃ n tráº£, chuyá»ƒn kho",
-    hint: "Thiáº¿t láº­p chÃ­nh sÃ¡ch chung trÆ°á»›c, sau Ä‘Ã³ Ä‘iá»u chá»‰nh tá»“n an toÃ n riÃªng cho tá»«ng chi nhÃ¡nh."
+    title: "C?u h?nh chọnh s?ch t?n kho",
+    subtitle: "Min/Max, ngu?ng cầnh b?o, ?m kho, reserve, vu?t d?nh m?c, ho?n tr?, chuy?n kho",
+    hint: "Thi?t l?p chọnh s?ch chung tru?c, sau d? di?u chọnh t?n an to?n ri?ng cho tổng chi nh?nh."
   },
   monitoring: {
-    title: "GiÃ¡m sÃ¡t tá»“n kho toÃ n há»‡ thá»‘ng",
-    subtitle: "Theo chi nhÃ¡nh, kho, sáº£n pháº©m, hÃ ng sáº¯p háº¿t, tá»“n cháº­m, reserved, giÃ¡ trá»‹ tá»“n",
-    hint: "Theo dÃµi cÃ¡c chá»‰ sá»‘ tá»•ng quan hÃ ng ngÃ y Ä‘á»ƒ phÃ¡t hiá»‡n sá»›m thiáº¿u hÃ ng hoáº·c lá»‡ch tá»“n."
+    title: "Gi?m s?t t?n kho to?n hệ thống",
+    subtitle: "Theo chi nh?nh, kho, s?n ph?m, h?ng s?p h?t, t?n ch?m, reserved, gi? tr? t?n",
+    hint: "Theo d?i c?c ch? s? tổng quan h?ng ng?y d? ph?t hi?n s?m thi?u h?ng ho?c l?ch t?n."
   },
   audits: {
-    title: "Quáº£n lÃ½ vÃ  duyá»‡t kiá»ƒm kÃª",
-    subtitle: "Theo dÃµi ká»³ kiá»ƒm kÃª, chÃªnh lá»‡ch vÃ  duyá»‡t Ä‘iá»u chá»‰nh sau kiá»ƒm kÃª",
-    hint: "Æ¯u tiÃªn xá»­ lÃ½ cÃ¡c phiáº¿u cÃ³ chÃªnh lá»‡ch lá»›n trÆ°á»›c Ä‘á»ƒ giáº£m rá»§i ro sai lá»‡ch tá»“n kho."
+    title: "Quản lý v� duy?t ki?m k�",
+    subtitle: "Theo d�i k? ki?m k�, ch�nh l?ch v� duy?t di?u chọnh sau ki?m k�",
+    hint: "Uu ti?n x? l? c?c phi?u c? chọnh l?ch l?n tru?c d? gi?m r?i ro sai l?ch t?n kho."
   },
   transactions: {
-    title: "Lá»‹ch sá»­ nháº­p xuáº¥t vÃ  truy váº¿t",
-    subtitle: "Truy váº¿t Ä‘áº§y Ä‘á»§ theo chi nhÃ¡nh/kho/sáº£n pháº©m/loáº¡i giao dá»‹ch vÃ  chá»©ng tá»« nguá»“n",
-    hint: "DÃ¹ng bá»™ lá»c theo loáº¡i giao dá»‹ch Ä‘á»ƒ kiá»ƒm tra nhanh cÃ¡c luá»“ng nháº­p/xuáº¥t báº¥t thÆ°á»ng."
+    title: "L?ch s? nh?p xu?t v� truy v?t",
+    subtitle: "Truy v?t d?y d? theo chi nh?nh/kho/s?n ph?m/lo?i giao dịch vụ chọng t? ngu?n",
+    hint: "D?ng b? l?c theo lo?i giao d?ch d? ki?m tra nhanh c?c lu?ng nh?p/xu?t b?t thu?ng."
   },
   approvals: {
-    title: "PhÃª duyá»‡t ngoáº¡i lá»‡ kho",
-    subtitle: "Duyá»‡t cÃ¡c case xuáº¥t vÆ°á»£t, Ä‘iá»u chá»‰nh tá»“n, hoÃ n tráº£ báº¥t thÆ°á»ng, kho lá»—i",
-    hint: "Chá»‰ duyá»‡t ngoáº¡i lá»‡ khi cÃ³ Ä‘á»§ chá»©ng tá»« vÃ  ghi chÃº rÃµ nguyÃªn nhÃ¢n."
+    title: "Ph� duy?t ngo?i l? kho",
+    subtitle: "Duy?t c?c case xu?t vu?t, di?u chọnh t?n, ho?n tr? b?t thu?ng, kho l?i",
+    hint: "Ch? duy?t ngo?i l? khi c? d? chọng t? v? ghi ch? r? nguy?n nh?n."
   },
   alerts: {
-    title: "Cáº£nh bÃ¡o vÃ  xá»­ lÃ½ block",
-    subtitle: "Trung tÃ¢m cáº£nh bÃ¡o tá»“n tháº¥p, Ã¢m kho, chá»©ng tá»« treo, giao dá»‹ch báº¥t thÆ°á»ng",
-    hint: "Xá»­ lÃ½ cáº£nh bÃ¡o má»©c cao trÆ°á»›c Ä‘á»ƒ trÃ¡nh áº£nh hÆ°á»Ÿng Ä‘áº¿n hoÃ n táº¥t sá»­a chá»¯a vÃ  xuáº¥t hÃ ng."
+    title: "Cầnh b?o v? x? l? block",
+    subtitle: "Trung tìm cầnh b?o t?n th?p, ?m kho, chọng t? treo, giao d?ch b?t thu?ng",
+    hint: "X? l? cầnh b?o m?c cao tru?c d? tr?nh ?nh hu?ng d?n ho?n t?t s?a ch?a v? xu?t h?ng."
   },
   reports: {
-    title: "BÃ¡o cÃ¡o quáº£n trá»‹ kho",
-    subtitle: "BÃ¡o cÃ¡o tá»“n kho, giÃ¡ trá»‹, luÃ¢n chuyá»ƒn, top xuáº¥t/hoÃ n, chÃªnh lá»‡ch kiá»ƒm kÃª vÃ  audit log",
-    hint: "CÃ³ thá»ƒ dÃ¹ng bÃ¡o cÃ¡o nÃ y Ä‘á»ƒ Ä‘á»‘i soÃ¡t ná»™i bá»™ vÃ  chuáº©n bá»‹ há»“ sÆ¡ kiá»ƒm toÃ¡n."
+    title: "B?o c?o qu?n tr? kho",
+    subtitle: "B?o c?o t?n kho, gi? tr?, lu?n chuy?n, top xu?t/ho?n, chọnh l?ch ki?m k? v? audit log",
+    hint: "C? th? d?ng b?o c?o n?y d? d?i so?t n?i b? v? chu?n b? h? so ki?m to?n."
   }
 };
 
 const ITEM_TYPE_OPTIONS = [
-  { value: "SELLABLE", label: "BÃ¡n Ä‘Æ°á»£c" },
-  { value: "DEFECTIVE", label: "Lá»—i/Há»ng" },
-  { value: "CONSUMABLE", label: "TiÃªu hao" },
-  { value: "TRANSIT", label: "Trung chuyá»ƒn" }
+  { value: "SELLABLE", label: "B?n du?c" },
+  { value: "DEFECTIVE", label: "L?i/H?ng" },
+  { value: "CONSUMABLE", label: "Ti�u hao" },
+  { value: "TRANSIT", label: "Trung chuy?n" }
 ];
 
 const EMPTY_PRODUCT_FORM = {
   sku: "",
   name: "",
-  unit: "CÃ¡i",
+  unit: "Cái",
   categoryId: "",
   costPrice: "",
   retailPrice: "",
@@ -99,82 +99,82 @@ const EMPTY_CATEGORY_FORM = {
 };
 
 const RESERVE_RULE_OPTIONS = [
-  { value: "STRICT", label: "NghiÃªm ngáº·t (giá»¯ Ä‘Ãºng sá»‘ lÆ°á»£ng Ä‘á»ƒ reserve)" },
-  { value: "FLEXIBLE", label: "Linh hoáº¡t (cho phÃ©p Ä‘iá»u phá»‘i khi thiáº¿u)" }
+  { value: "STRICT", label: "Nghi�m ng?t (gi? d�ng s? lu?ng d? reserve)" },
+  { value: "FLEXIBLE", label: "Linh ho?t (cho ph�p di?u ph?i khi thi?u)" }
 ];
 
 const RETURN_RULE_OPTIONS = [
-  { value: "ALLOW_WITH_REASON", label: "Cho phÃ©p, báº¯t buá»™c ghi lÃ½ do" },
-  { value: "REQUIRE_APPROVAL", label: "Pháº£i duyá»‡t trÆ°á»›c khi hoÃ n" },
-  { value: "BLOCK_IF_MISSING_INFO", label: "Cháº·n náº¿u thiáº¿u thÃ´ng tin" }
+  { value: "ALLOW_WITH_REASON", label: "Cho ph�p, b?t bu?c ghi l� do" },
+  { value: "REQUIRE_APPROVAL", label: "Ph?i duy?t tru?c khi ho�n" },
+  { value: "BLOCK_IF_MISSING_INFO", label: "Chọn n?u thi?u thông tin" }
 ];
 
 const TRANSFER_RULE_OPTIONS = [
-  { value: "REQUIRE_APPROVAL", label: "Pháº£i duyá»‡t khi chuyá»ƒn kho" },
-  { value: "AUTO_APPROVE_INTERNAL", label: "Tá»± duyá»‡t trong ná»™i bá»™ chi nhÃ¡nh" },
-  { value: "BLOCK_NEGATIVE", label: "Cháº·n náº¿u gÃ¢y Ã¢m kho" }
+  { value: "REQUIRE_APPROVAL", label: "Ph?i duy?t khi chuy?n kho" },
+  { value: "AUTO_APPROVE_INTERNAL", label: "T? duy?t trong n?i b? chi nh?nh" },
+  { value: "BLOCK_NEGATIVE", label: "Chọn n?u g?y ?m kho" }
 ];
 
 const APPROVAL_STATUS_META = {
-  PENDING: { label: "Chá» duyá»‡t", className: "badge-suspended" },
-  APPROVED: { label: "ÄÃ£ duyá»‡t", className: "badge-active" },
-  REJECTED: { label: "Tá»« chá»‘i", className: "badge-deleted" }
+  PENDING: { label: "Ch? duy?t", className: "badge-suspended" },
+  APPROVED: { label: "Đã duy?t", className: "badge-active" },
+  REJECTED: { label: "T? ch?i", className: "badge-deleted" }
 };
 
 const AUDIT_STATUS_META = {
-  DRAFT: { label: "NhÃ¡p", className: "badge-inactive" },
-  PENDING: { label: "Chá» duyá»‡t", className: "badge-suspended" },
-  APPROVED: { label: "ÄÃ£ duyá»‡t", className: "badge-active" },
-  REJECTED: { label: "Tá»« chá»‘i", className: "badge-deleted" },
-  CLOSED: { label: "ÄÃ£ chá»‘t", className: "badge-active" }
+  DRAFT: { label: "Nháp", className: "badge-inactive" },
+  PENDING: { label: "Ch? duy?t", className: "badge-suspended" },
+  APPROVED: { label: "Đã duy?t", className: "badge-active" },
+  REJECTED: { label: "T? ch?i", className: "badge-deleted" },
+  CLOSED: { label: "Đã ch?t", className: "badge-active" }
 };
 
 const ALERT_SEVERITY_META = {
-  CRITICAL: { label: "NghiÃªm trá»ng", className: "badge-deleted" },
+  CRITICAL: { label: "Nghi�m tr?ng", className: "badge-deleted" },
   HIGH: { label: "Cao", className: "badge-suspended" },
-  MEDIUM: { label: "Trung bÃ¬nh", className: "badge-inactive" },
-  LOW: { label: "Tháº¥p", className: "badge-inactive" }
+  MEDIUM: { label: "Trung b�nh", className: "badge-inactive" },
+  LOW: { label: "Th?p", className: "badge-inactive" }
 };
 
 const SOURCE_LABELS = {
-  PurchaseOrder: "ÄÆ¡n mua hÃ ng",
-  RetailOrder: "ÄÆ¡n bÃ¡n láº»",
-  RetailReturn: "Tráº£ hÃ ng bÃ¡n láº»",
-  MaterialRequest: "Phiáº¿u yÃªu cáº§u váº­t tÆ°",
-  MaterialReturn: "Phiáº¿u hoÃ n váº­t tÆ°",
-  Unknown: "KhÃ´ng rÃµ nguá»“n"
+  PurchaseOrder: "Đơn mua h�ng",
+  RetailOrder: "?on b?n l?",
+  RetailReturn: "Tr? h?ng b?n l?",
+  MaterialRequest: "Phi?u yêu cầu vật tư",
+  MaterialReturn: "Phi?u ho�n vật tư",
+  Unknown: "Không r� ngu?n"
 };
 
 const TRANSACTION_TYPE_LABELS = {
-  PURCHASE_RECEIVE: "Nháº­p mua hÃ ng",
-  MATERIAL_RETURN: "HoÃ n tráº£ váº­t tÆ°",
-  SERVICE_ISSUE: "Xuáº¥t cho lá»‡nh sá»­a chá»¯a",
-  RETAIL_ISSUE: "Xuáº¥t bÃ¡n láº»",
-  TRANSFER: "Äiá»u chuyá»ƒn kho",
-  IN: "Nháº­p kho",
-  OUT: "Xuáº¥t kho",
-  RETURN: "HoÃ n tráº£"
+  PURCHASE_RECEIVE: "Nh?p mua h�ng",
+  MATERIAL_RETURN: "Ho�n tr? vật tư",
+  SERVICE_ISSUE: "Xu?t cho l?nh s?a ch?a",
+  RETAIL_ISSUE: "Xu?t b?n l?",
+  TRANSFER: "Điều chuy?n kho",
+  IN: "Nh?p kho",
+  OUT: "Xu?t kho",
+  RETURN: "Ho�n tr?"
 };
 
 const APPROVAL_TYPE_LABELS = {
-  OVER_ISSUE: "Xuáº¥t vÆ°á»£t Ä‘á»‹nh má»©c",
-  OVER_SERVICE_ORDER_QTY: "Xuáº¥t vÆ°á»£t sá»‘ lÆ°á»£ng lá»‡nh sá»­a chá»¯a",
-  AUDIT_ADJUSTMENT: "Äiá»u chá»‰nh tá»“n sau kiá»ƒm kÃª",
-  DEFECTIVE_RETURN: "Nháº­p láº¡i hÃ ng lá»—i",
-  DEFECTIVE_TRANSFER: "Chuyá»ƒn hÃ ng sang kho lá»—i",
-  DAMAGE_BY_STAFF: "Há»ng hÃ ng do nhÃ¢n viÃªn",
-  ABNORMAL_RETURN: "HoÃ n tráº£ báº¥t thÆ°á»ng",
-  UNBLOCK_CASE: "Má»Ÿ khÃ³a case bá»‹ block"
+  OVER_ISSUE: "Xu?t vu?t d?nh m?c",
+  OVER_SERVICE_ORDER_QTY: "Xu?t vu?t s? lu?ng l?nh s?a ch?a",
+  AUDIT_ADJUSTMENT: "Điều chọnh t?n sau ki?m k�",
+  DEFECTIVE_RETURN: "Nh?p l?i h�ng l?i",
+  DEFECTIVE_TRANSFER: "Chuy?n h�ng sang kho l?i",
+  DAMAGE_BY_STAFF: "H?ng h?ng do nh?n vi?n",
+  ABNORMAL_RETURN: "Ho�n tr? b?t thu?ng",
+  UNBLOCK_CASE: "M? kh�a case b? block"
 };
 
 const ALERT_TYPE_LABELS = {
-  LOW_STOCK: "Sáº¯p háº¿t hÃ ng",
-  NEGATIVE_STOCK: "Âm kho",
-  TX_NO_SOURCE: "Giao dá»‹ch thiáº¿u chá»©ng tá»«",
-  RETURN_PENDING: "Phiáº¿u hoÃ n tráº£ treo",
-  ISSUE_BLOCKED: "Phiáº¿u xuáº¥t bá»‹ treo",
-  AUDIT_GAP: "ChÃªnh lá»‡ch kiá»ƒm kÃª",
-  DEFECTIVE_MISMATCH: "Kho lá»—i chÆ°a Ä‘á»“ng bá»™"
+  LOW_STOCK: "S?p h?t h�ng",
+  NEGATIVE_STOCK: "?m kho",
+  TX_NO_SOURCE: "Giao d?ch thi?u chọng t?",
+  RETURN_PENDING: "Phi?u ho�n tr? treo",
+  ISSUE_BLOCKED: "Phi?u xu?t b? treo",
+  AUDIT_GAP: "Ch�nh l?ch ki?m k�",
+  DEFECTIVE_MISMATCH: "Kho l?i chua d?ng b?"
 };
 
 const ITEM_TYPE_LABEL_MAP = Object.fromEntries(ITEM_TYPE_OPTIONS.map((opt) => [opt.value, opt.label]));
@@ -203,15 +203,15 @@ function csvEscape(value) {
 
 function normalizeBranchStatus(status) {
   const normalized = normalizeKey(status);
-  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOáº T_Äá»˜NG"].includes(normalized)) return "Hoáº¡t Ä‘á»™ng";
-  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ÄÃ“NG"].includes(normalized)) return "Ngá»«ng hoáº¡t Ä‘á»™ng";
-  return status || "ChÆ°a cáº¥u hÃ¬nh";
+  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HO?T_ĐộNG"].includes(normalized)) return "Ho?t d?ng";
+  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐãNG"].includes(normalized)) return "Ng?ng ho?t d?ng";
+  return status || "Chua c?u h�nh";
 }
 
 function normalizeBranchStatusClass(status) {
   const normalized = normalizeKey(status);
-  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HOáº T_Äá»˜NG"].includes(normalized)) return "is-active";
-  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ÄÃ“NG"].includes(normalized)) return "is-inactive";
+  if (["ACTIVE", "ENABLED", "OPEN", "HOAT_DONG", "HO?T_ĐộNG"].includes(normalized)) return "is-active";
+  if (["INACTIVE", "DISABLED", "CLOSED", "DONG", "ĐãNG"].includes(normalized)) return "is-inactive";
   return "is-unknown";
 }
 
@@ -246,14 +246,14 @@ function resolveStatusMeta(status, mapping) {
   const normalized = normalizeKey(status);
   const meta = mapping[normalized];
   if (meta) return meta;
-  return { label: status || "ChÆ°a rÃµ", className: "badge-inactive" };
+  return { label: status || "Chua r�", className: "badge-inactive" };
 }
 
 function SectionHeader({ section }) {
   const meta = SECTION_META[section] || {
-    title: "Quáº£n trá»‹ kho",
-    subtitle: "Theo dÃµi vÃ  cáº¥u hÃ¬nh nghiá»‡p vá»¥ kho",
-    hint: "Chá»n menu bÃªn trÃ¡i Ä‘á»ƒ thao tÃ¡c."
+    title: "Qu?n tr? kho",
+    subtitle: "Theo d�i v� c?u h�nh nghi?p v? kho",
+    hint: "Chọn menu b?n tr?i d? thao t?c."
   };
   return (
     <header className="admin-header">
@@ -372,7 +372,7 @@ export default function InventoryAdminPage({ section }) {
   const isCatalogSuppliersSection = section === "catalogSuppliers";
   const isCatalogSection = isCatalogProductsSection || isCatalogCategoriesSection || isCatalogSuppliersSection;
 
-  const runAction = async (work, fallbackMessage = "KhÃ´ng thá»ƒ thá»±c hiá»‡n thao tÃ¡c.") => {
+  const runAction = async (work, fallbackMessage = "Kh?ng th? th?c hi?n thao t?c.") => {
     setError("");
     try {
       await work();
@@ -512,7 +512,7 @@ export default function InventoryAdminPage({ section }) {
         setReports({ ...(rep || {}), auditLogs: logs || [] });
       }
     } catch (err) {
-      setError(err?.message || "KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u quáº£n trá»‹ kho.");
+      setError(err?.message || "Không t?i du?c dữ liệu qu?n tr? kho.");
     } finally {
       setLoading(false);
     }
@@ -671,11 +671,11 @@ export default function InventoryAdminPage({ section }) {
     if (!file) return;
     const okTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!okTypes.includes(file.type)) {
-      setError("Chá»‰ cháº¥p nháº­n áº£nh JPEG, PNG hoáº·c WEBP.");
+      setError("Ch? ch?p nh?n ?nh JPEG, PNG ho?c WEBP.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("áº¢nh khÃ´ng Ä‘Æ°á»£c vÆ°á»£t quÃ¡ 5MB.");
+      setError("?nh kh?ng du?c vu?t qu? 5MB.");
       return;
     }
     setError("");
@@ -694,11 +694,11 @@ export default function InventoryAdminPage({ section }) {
     if (!file || !editingProduct?.id) return;
     const okTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!okTypes.includes(file.type)) {
-      setError("Chá»‰ cháº¥p nháº­n áº£nh JPEG, PNG hoáº·c WEBP.");
+      setError("Ch? ch?p nh?n ?nh JPEG, PNG ho?c WEBP.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("áº¢nh khÃ´ng Ä‘Æ°á»£c vÆ°á»£t quÃ¡ 5MB.");
+      setError("?nh kh?ng du?c vu?t qu? 5MB.");
       return;
     }
     setError("");
@@ -708,7 +708,7 @@ export default function InventoryAdminPage({ section }) {
       await refreshEditProductImages(editingProduct.id);
       await fetchData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng táº£i Ä‘Æ°á»£c áº£nh phá»¥ lÃªn.");
+      setError(err?.message || "Không t?i du?c ?nh ph? l�n.");
     } finally {
       setGalleryBusy(false);
     }
@@ -716,14 +716,14 @@ export default function InventoryAdminPage({ section }) {
 
   const onDeleteProductImageRow = async (imageRow) => {
     if (!editingProduct?.id || !imageRow?.id) return;
-    const ok = window.confirm("XÃ³a áº£nh nÃ y? áº¢nh trÃªn cloud váº«n cÃ³ thá»ƒ tá»“n táº¡i náº¿u báº¡n cáº§n dá»n tay trÃªn Azure.");
+    const ok = window.confirm("X�a ?nh n�y? ?nh tr�n cloud v?n c� th? t?n t?i n?u b?n cần d?n tay tr�n Azure.");
     if (!ok) return;
     try {
       await inventoryApi.deleteProductImage(imageRow.id);
       await refreshEditProductImages(editingProduct.id);
       await fetchData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng xÃ³a Ä‘Æ°á»£c áº£nh.");
+      setError(err?.message || "Không x�a du?c ?nh.");
     }
   };
   const updateCategoryForm = (name, value) => setCategoryForm((prev) => ({ ...prev, [name]: value }));
@@ -743,7 +743,7 @@ export default function InventoryAdminPage({ section }) {
     setProductForm({
       sku: product?.sku || "",
       name: product?.name || "",
-      unit: product?.unit || "CÃ¡i",
+      unit: product?.unit || "Cái",
       categoryId: product?.categoryId == null ? "" : String(product.categoryId),
       costPrice: product?.costPrice == null ? "" : String(product.costPrice),
       retailPrice: product?.retailPrice == null ? "" : String(product.retailPrice),
@@ -819,19 +819,19 @@ export default function InventoryAdminPage({ section }) {
 
   const buildCategoryPayloadFromForm = () => {
     const categoryName = categoryForm.categoryName.trim();
-    if (!categoryName) throw new Error("TÃªn danh má»¥c lÃ  báº¯t buá»™c.");
+    if (!categoryName) throw new Error("T�n danh m?c l� b?t bu?c.");
 
     let parentId = null;
     const rawParentId = String(categoryForm.parentId || "").trim();
     if (rawParentId) {
       const parsedParentId = Number(rawParentId);
       if (!Number.isFinite(parsedParentId) || !Number.isInteger(parsedParentId)) {
-        throw new Error("Danh má»¥c cha khÃ´ng há»£p lá»‡.");
+        throw new Error("Danh m?c cha không h?p l?.");
       }
       const exists = (categories || []).some((item) => Number(item.id) === parsedParentId);
-      if (!exists) throw new Error("Danh má»¥c cha khÃ´ng tá»“n táº¡i.");
+      if (!exists) throw new Error("Danh m?c cha không t?n t?i.");
       if (editingCategory?.id && Number(editingCategory.id) === parsedParentId) {
-        throw new Error("Danh má»¥c cha khÃ´ng thá»ƒ lÃ  chÃ­nh danh má»¥c hiá»‡n táº¡i.");
+        throw new Error("Danh m?c cha không th? l� ch�nh danh m?c hi?n t?i.");
       }
       parentId = parsedParentId;
     }
@@ -860,7 +860,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleUpdateCategory = async () => {
-    if (!editingCategory?.id) throw new Error("KhÃ´ng tÃ¬m tháº¥y danh má»¥c cáº§n cáº­p nháº­t.");
+    if (!editingCategory?.id) throw new Error("Không t�m th?y danh m?c cần c?p nh?t.");
 
     setSavingCategory(true);
     try {
@@ -891,14 +891,14 @@ export default function InventoryAdminPage({ section }) {
     const name = productForm.name.trim();
     const unit = productForm.unit.trim();
     if (!sku || !name || !unit) {
-      throw new Error("SKU, tÃªn sáº£n pháº©m vÃ  Ä‘Æ¡n vá»‹ tÃ­nh lÃ  báº¯t buá»™c.");
+      throw new Error("SKU, t�n s?n ph?m v� don v? t�nh l� b?t bu?c.");
     }
 
     const parseOptionalInt = (rawValue, label) => {
       const parsed = toNullableNumber(rawValue);
       if (parsed == null) return null;
       if (!Number.isInteger(parsed)) {
-        throw new Error(`${label} pháº£i lÃ  sá»‘ nguyÃªn.`);
+        throw new Error(`${label} ph?i l� s? nguy�n.`);
       }
       return parsed;
     };
@@ -911,7 +911,7 @@ export default function InventoryAdminPage({ section }) {
 
     const categoryId = productForm.categoryId ? Number(productForm.categoryId) : null;
     if (categoryId != null && !(categories || []).some((item) => Number(item.id) === categoryId)) {
-      throw new Error("Danh má»¥c khÃ´ng há»£p lá»‡.");
+      throw new Error("Danh m?c không h?p l?.");
     }
 
     return {
@@ -923,7 +923,7 @@ export default function InventoryAdminPage({ section }) {
       retailPrice: parseOptionalDecimal(productForm.retailPrice),
       servicePrice: parseOptionalDecimal(productForm.servicePrice),
       taxRate: parseOptionalDecimal(productForm.taxRate),
-      warrantyMonths: parseOptionalInt(productForm.warrantyMonths, "Báº£o hÃ nh"),
+      warrantyMonths: parseOptionalInt(productForm.warrantyMonths, "B?o h�nh"),
       isStrictCapacityControl: !!productForm.isStrictCapacityControl,
       requireEmptyReturn: false,
       isActive: !!productForm.isActive,
@@ -950,7 +950,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleUpdateProduct = async () => {
-    if (!editingProduct?.id) throw new Error("KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m cáº§n cáº­p nháº­t.");
+    if (!editingProduct?.id) throw new Error("Không t�m th?y s?n ph?m cần c?p nh?t.");
 
     setSavingProduct(true);
     try {
@@ -978,14 +978,14 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleDeleteProduct = async (product) => {
-    const ok = window.confirm(`XÃ³a sáº£n pháº©m "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`);
+    const ok = window.confirm(`X�a s?n ph?m "${product?.name || "-"}" (SKU: ${product?.sku || "-"})?`);
     if (!ok) return;
     await inventoryApi.deleteProduct(product.id);
     await fetchData();
   };
 
   const handleDeleteCategory = async (category) => {
-    const ok = window.confirm(`XÃ³a danh má»¥c "${category?.categoryName || "-"}"?`);
+    const ok = window.confirm(`X�a danh m?c "${category?.categoryName || "-"}"?`);
     if (!ok) return;
     await inventoryApi.deletePartCategory(category.id);
     await fetchData();
@@ -993,11 +993,11 @@ export default function InventoryAdminPage({ section }) {
 
   const handleEditSupplier = async (supplier) => {
     const currentName = supplier?.supplierName || supplier?.name || "";
-    const nextNameInput = window.prompt("TÃªn nhÃ  cung cáº¥p", currentName);
+    const nextNameInput = window.prompt("T�n nh� cung c?p", currentName);
     if (nextNameInput == null) return;
     const nextName = nextNameInput.trim();
     if (!nextName) {
-      setError("TÃªn nhÃ  cung cáº¥p khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng.");
+      setError("T�n nh� cung c?p không du?c d? tr?ng.");
       return;
     }
     await inventoryApi.updateSupplier(supplier.id, {
@@ -1009,7 +1009,7 @@ export default function InventoryAdminPage({ section }) {
 
   const handleDeleteSupplier = async (supplier) => {
     const supplierName = supplier?.supplierName || supplier?.name || "-";
-    const ok = window.confirm(`XÃ³a nhÃ  cung cáº¥p "${supplierName}"?`);
+    const ok = window.confirm(`X�a nh� cung c?p "${supplierName}"?`);
     if (!ok) return;
     await inventoryApi.deleteSupplier(supplier.id);
     await fetchData();
@@ -1038,7 +1038,7 @@ export default function InventoryAdminPage({ section }) {
       await inventoryApi.createProduct({
         sku,
         name,
-        unit: unit || "CÃ¡i",
+        unit: unit || "Cái",
         retailPrice: 0,
         costPrice: 0,
         servicePrice: 0,
@@ -1081,7 +1081,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleRejectAudit = async (id) => {
-    await inventoryApi.rejectAudit(id, { note: "Tá»« chá»‘i bá»Ÿi quáº£n trá»‹ viÃªn" });
+    await inventoryApi.rejectAudit(id, { note: "T? ch?i b?i qu?n tr? vi�n" });
     await fetchData();
   };
 
@@ -1091,7 +1091,7 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const handleRejectRequest = async (id) => {
-    await inventoryApi.rejectRequest(id, { note: "Tá»« chá»‘i bá»Ÿi quáº£n trá»‹ viÃªn" });
+    await inventoryApi.rejectRequest(id, { note: "T? ch?i b?i qu?n tr? vi�n" });
     await fetchData();
   };
 
@@ -1127,7 +1127,7 @@ export default function InventoryAdminPage({ section }) {
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Äang táº£i dá»¯ liá»‡u kho...</p>
+          <p>Đang t?i dữ liệu kho...</p>
         </div>
       ) : (
         <>
@@ -1135,36 +1135,36 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tá»•ng sá»‘ kho", value: warehouseStructure.warehouses.length },
-                  { label: "Sá»‘ bin", value: warehouseStructure.bins.length },
-                  { label: "Kho Ä‘ang hoáº¡t Ä‘á»™ng", value: warehouseStructure.warehouses.filter((w) => w.isActive).length }
+                  { label: "Tổng s? kho", value: warehouseStructure.warehouses.length },
+                  { label: "S? bin", value: warehouseStructure.bins.length },
+                  { label: "Kho dang ho?t d?ng", value: warehouseStructure.warehouses.filter((w) => w.isActive).length }
                 ]}
               />
               <ActionPanel
-                title="Táº¡o kho má»›i"
-                description="Nháº­p thÃ´ng tin cÆ¡ báº£n Ä‘á»ƒ thÃªm kho má»›i theo tá»«ng chi nhÃ¡nh."
+                title="T?o kho m?i"
+                description="Nh?p th?ng tin co b?n d? th?m kho m?i theo tổng chi nh?nh."
               >
                 <div className="table-toolbar inventory-form-grid">
                   <label className="compact-field">
-                    <span>MÃ£ kho</span>
+                    <span>M� kho</span>
                     <input
                       className="search-input"
-                      placeholder="VÃ­ dá»¥: MAIN-WH"
+                      placeholder="V� d?: MAIN-WH"
                       value={form.newWarehouseCode}
                       onChange={(e) => updateForm("newWarehouseCode", e.target.value)}
                     />
                   </label>
                   <label className="compact-field">
-                    <span>TÃªn kho</span>
+                    <span>T�n kho</span>
                     <input
                       className="search-input"
-                      placeholder="VÃ­ dá»¥: Kho phá»¥ tÃ¹ng chÃ­nh"
+                      placeholder="V� d?: Kho phụ tùng ch�nh"
                       value={form.newWarehouseName}
                       onChange={(e) => updateForm("newWarehouseName", e.target.value)}
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Loáº¡i kho</span>
+                    <span>Lo?i kho</span>
                     <select
                       className="search-input"
                       value={form.newWarehouseType}
@@ -1176,28 +1176,28 @@ export default function InventoryAdminPage({ section }) {
                     </select>
                   </label>
                   <label className="compact-field">
-                    <span>Chi nhÃ¡nh</span>
+                    <span>Chi nhánh</span>
                     <select
                       className="search-input"
                       value={form.newWarehouseBranchId}
                       onChange={(e) => updateForm("newWarehouseBranchId", e.target.value)}
                     >
-                      <option value="">Chá»n chi nhÃ¡nh</option>
+                      <option value="">Chọn chi nh?nh</option>
                       {(warehouseStructure.branches || []).map((b) => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
                     </select>
                   </label>
                   <button className="btn-primary" onClick={() => runAction(handleCreateWarehouse)}>
-                    + Táº¡o kho
+                    + T?o kho
                   </button>
                 </div>
               </ActionPanel>
 
               {settings ? (
                 <ActionPanel
-                  title="GÃ¡n kho máº·c Ä‘á»‹nh theo loáº¡i hÃ ng"
-                  description="Há»‡ thá»‘ng sáº½ tá»± Ä‘á»™ng Æ°u tiÃªn kho nÃ y khi phÃ¡t sinh nghiá»‡p vá»¥ tÆ°Æ¡ng á»©ng."
+                  title="G?n kho m?c d?nh theo lo?i h?ng"
+                  description="Hệ thống s? t? d?ng uu ti?n kho n?y khi ph?t sinh nghi?p v? tuong ?ng."
                 >
                   <div className="table-toolbar inventory-form-grid">
                     {ITEM_TYPE_OPTIONS.map((type) => (
@@ -1217,7 +1217,7 @@ export default function InventoryAdminPage({ section }) {
                             setSettings(next);
                           }}
                         >
-                          <option value={0}>-- ChÆ°a chá»n --</option>
+                          <option value={0}>-- Chua chọn --</option>
                           {warehouseStructure.warehouses.map((w) => (
                             <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
                           ))}
@@ -1225,7 +1225,7 @@ export default function InventoryAdminPage({ section }) {
                       </label>
                     ))}
                     <button className="btn-primary" onClick={() => runAction(() => saveSettings(settings))}>
-                      LÆ°u kho máº·c Ä‘á»‹nh
+                      Luu kho m?c d?nh
                     </button>
                   </div>
                 </ActionPanel>
@@ -1236,18 +1236,18 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>MÃ£ kho</th>
-                      <th>TÃªn kho</th>
-                      <th>Loáº¡i kho</th>
-                      <th>Chi nhÃ¡nh</th>
-                      <th>Tráº¡ng thÃ¡i</th>
-                      <th>Sá»‘ bin</th>
-                      <th>Thao tÃ¡c</th>
+                      <th>M� kho</th>
+                      <th>T�n kho</th>
+                      <th>Lo?i kho</th>
+                      <th>Chi nhánh</th>
+                      <th>Tr?ng th?i</th>
+                      <th>S? bin</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {warehouseStructure.warehouses.length === 0 ? (
-                      <NoDataRow colSpan={8} message="ChÆ°a cÃ³ kho nÃ o. HÃ£y táº¡o kho Ä‘áº§u tiÃªn Ä‘á»ƒ báº¯t Ä‘áº§u cáº¥u hÃ¬nh." />
+                      <NoDataRow colSpan={8} message="Chua c� kho n�o. H�y t?o kho d?u ti�n d? b?t d?u c?u h�nh." />
                     ) : (
                       pagedWarehouses.map((w) => (
                         <tr key={w.id}>
@@ -1260,13 +1260,13 @@ export default function InventoryAdminPage({ section }) {
                           <td>{w.branchName}</td>
                           <td>
                             <span className={`badge ${w.isActive ? "badge-active" : "badge-deleted"}`}>
-                              {w.isActive ? "Äang hoáº¡t Ä‘á»™ng" : "ÄÃ£ khÃ³a"}
+                              {w.isActive ? "Đang ho?t d?ng" : "Đã kh�a"}
                             </span>
                           </td>
                           <td>{warehouseStructure.bins.filter((b) => b.warehouseId === w.id).length}</td>
                           <td>
                             <button className="btn-icon" onClick={() => runAction(() => handleToggleWarehouse(w))}>
-                              {w.isActive ? "KhÃ³a kho" : "Báº­t kho"}
+                              {w.isActive ? "Kh�a kho" : "B?t kho"}
                             </button>
                           </td>
                         </tr>
@@ -1292,25 +1292,25 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tá»•ng sáº£n pháº©m", value: products.length },
-                  { label: "Danh má»¥c", value: categories.length },
-                  { label: "NhÃ  cung cáº¥p", value: suppliers.length }
+                  { label: "Tổng s?n ph?m", value: products.length },
+                  { label: "Danh m?c", value: categories.length },
+                  { label: "Nh� cung c?p", value: suppliers.length }
                 ]}
               />
 
               <ActionPanel
-                title="Quáº£n lÃ½ danh má»¥c sáº£n pháº©m"
-                description="ThÃªm má»›i sáº£n pháº©m báº±ng popup chi tiáº¿t theo Product model, Ä‘á»“ng thá»i há»— trá»£ import/export CSV."
+                title="Quản lý danh m?c s?n ph?m"
+                description="Th�m m?i s?n ph?m bảng popup chi ti?t theo Product model, d?ng th?i h? tr? import/export CSV."
               >
                 <div className="table-toolbar inventory-form-actions">
                   <button className="btn-primary" onClick={openCreateProductModal}>
-                    + ThÃªm sáº£n pháº©m
+                    + Th�m s?n ph?m
                   </button>
                 </div>
                 <div className="table-toolbar inventory-form-actions">
-                  <button className="btn-ghost" onClick={exportProductsCsv}>Xuáº¥t CSV danh má»¥c</button>
+                  <button className="btn-ghost" onClick={exportProductsCsv}>Xu?t CSV danh m?c</button>
                   <label className="btn-ghost file-label">
-                    Nháº­p CSV danh má»¥c
+                    Nh?p CSV danh m?c
                     <input
                       type="file"
                       accept=".csv"
@@ -1325,16 +1325,16 @@ export default function InventoryAdminPage({ section }) {
               </ActionPanel>
 
               {showCreateProductModal ? (
-                <Modal title={productModalMode === "edit" ? "Sá»­a sáº£n pháº©m" : "ThÃªm sáº£n pháº©m má»›i"} onClose={closeCreateProductModal}>
+                <Modal title={productModalMode === "edit" ? "S?a s?n ph?m" : "Th�m s?n ph?m m?i"} onClose={closeCreateProductModal}>
                   <div className="inventory-product-modal">
                     <p className="inventory-product-modal-desc">
-                      Äiá»n thÃ´ng tin sáº£n pháº©m. áº¢nh táº£i lÃªn Azure Blob (cáº¥u hÃ¬nh{" "}
-                      <code className="inventory-code-inline">AzureStorage</code>); há»‡ thá»‘ng chá»‰ lÆ°u URL trong{" "}
-                      <code className="inventory-code-inline">ProductImages</code>. Äá»‹nh dáº¡ng JPEG/PNG/WEBP, tá»‘i Ä‘a 5MB.
+                      �i?n thông tin s?n ph?m. ?nh t?i l�n Azure Blob (c?u h�nh{" "}
+                      <code className="inventory-code-inline">AzureStorage</code>); hệ thống ch? luu URL trong{" "}
+                      <code className="inventory-code-inline">ProductImages</code>. Độnh d?ng JPEG/PNG/WEBP, t?i da 5MB.
                     </p>
 
                     <div className="inventory-product-modal-section">
-                      <h4>ThÃ´ng tin chung</h4>
+                      <h4>Thông tin chung</h4>
                       <div className="inventory-product-modal-grid inventory-product-modal-grid--basic">
                         <label className="compact-field">
                           <span>SKU *</span>
@@ -1342,35 +1342,35 @@ export default function InventoryAdminPage({ section }) {
                             className="search-input"
                             value={productForm.sku}
                             onChange={(e) => updateProductForm("sku", e.target.value)}
-                            placeholder="VÃ­ dá»¥: SKU-0001"
+                            placeholder="V� d?: SKU-0001"
                           />
                         </label>
                         <label className="compact-field">
-                          <span>TÃªn sáº£n pháº©m *</span>
+                          <span>T�n s?n ph?m *</span>
                           <input
                             className="search-input"
                             value={productForm.name}
                             onChange={(e) => updateProductForm("name", e.target.value)}
-                            placeholder="VÃ­ dá»¥: Lá»c nhÆ¡t Honda"
+                            placeholder="V� d?: L?c nhot Honda"
                           />
                         </label>
                         <label className="compact-field">
-                          <span>ÄÆ¡n vá»‹ tÃ­nh *</span>
+                          <span>Đơn v? t�nh *</span>
                           <input
                             className="search-input"
                             value={productForm.unit}
                             onChange={(e) => updateProductForm("unit", e.target.value)}
-                            placeholder="CÃ¡i"
+                            placeholder="Cái"
                           />
                         </label>
                         <label className="compact-field">
-                          <span>Danh má»¥c</span>
+                          <span>Danh m?c</span>
                           <select
                             className="search-input"
                             value={productForm.categoryId}
                             onChange={(e) => updateProductForm("categoryId", e.target.value)}
                           >
-                            <option value="">-- ChÆ°a gÃ¡n --</option>
+                            <option value="">-- Chua g?n --</option>
                             {categories.map((category) => (
                               <option key={category.id} value={category.id}>
                                 {category.categoryName}
@@ -1382,10 +1382,10 @@ export default function InventoryAdminPage({ section }) {
                     </div>
 
                     <div className="inventory-product-modal-section">
-                      <h4>áº¢nh Part Shop (cloud)</h4>
+                      <h4>?nh Part Shop (cloud)</h4>
                       <p className="inventory-product-image-hint">
-                        áº¢nh Ä‘áº¡i diá»‡n dÃ¹ng cho catalog / giá» hÃ ng. Nháº¥n <strong>LÆ°u sáº£n pháº©m</strong> Ä‘á»ƒ gá»­i file lÃªn Azure vÃ  cáº­p nháº­t
-                        URL trong CSDL. Khi sá»­a, chá»n áº£nh má»›i rá»“i lÆ°u Ä‘á»ƒ thay áº£nh chÃ­nh (ghi Ä‘Ã¨ báº£n ghi Ä‘áº¡i diá»‡n).
+                        ?nh d?i di?n d�ng cho catalog / gi? h�ng. Nh?n <strong>Luu s?n ph?m</strong> d? g?i file l�n Azure v� c?p nh?t
+                        URL trong CSDL. Khi s?a, chọn ?nh m?i r?i luu d? thay ?nh ch�nh (ghi d� b?n ghi d?i di?n).
                       </p>
                       <div className="inventory-product-image-row">
                         {productMainImagePreview ||
@@ -1402,11 +1402,11 @@ export default function InventoryAdminPage({ section }) {
                             alt=""
                           />
                         ) : (
-                          <div className="inventory-product-image-placeholder">ChÆ°a cÃ³ áº£nh</div>
+                          <div className="inventory-product-image-placeholder">Chua c� ?nh</div>
                         )}
                         <div className="inventory-product-image-actions">
                           <label className="btn-ghost inventory-product-image-file">
-                            Chá»n áº£nh Ä‘áº¡i diá»‡n
+                            Chọn ?nh d?i di?n
                             <input
                               type="file"
                               accept="image/jpeg,image/png,image/webp"
@@ -1416,7 +1416,7 @@ export default function InventoryAdminPage({ section }) {
                           </label>
                           {productMainImageFile ? (
                             <button type="button" className="btn-ghost" onClick={clearMainImagePick}>
-                              Bá» chá»n file
+                              B? chọn file
                             </button>
                           ) : null}
                         </div>
@@ -1425,11 +1425,11 @@ export default function InventoryAdminPage({ section }) {
                       {productModalMode === "edit" && editingProduct?.id ? (
                         <div className="inventory-product-gallery-block">
                           <div className="inventory-product-gallery-toolbar">
-                            <span className="inventory-product-gallery-title">Gallery (trang chi tiáº¿t)</span>
+                            <span className="inventory-product-gallery-title">Gallery (trang chi ti?t)</span>
                             <label
                               className={`btn-ghost inventory-product-image-file ${galleryBusy ? "is-busy" : ""}`}
                             >
-                              {galleryBusy ? "Äang táº£i..." : "+ ThÃªm áº£nh phá»¥"}
+                              {galleryBusy ? "Đang t?i..." : "+ Th�m ?nh ph?"}
                               <input
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp"
@@ -1440,7 +1440,7 @@ export default function InventoryAdminPage({ section }) {
                             </label>
                           </div>
                           {editProductImages.length === 0 ? (
-                            <p className="inventory-product-gallery-empty">ChÆ°a cÃ³ áº£nh trong CSDL.</p>
+                            <p className="inventory-product-gallery-empty">Chua c� ?nh trong CSDL.</p>
                           ) : (
                             <ul className="inventory-product-gallery-list">
                               {editProductImages.map((img) => (
@@ -1448,9 +1448,9 @@ export default function InventoryAdminPage({ section }) {
                                   <img src={img.imageUrl} alt="" className="inventory-product-gallery-thumb" />
                                   <div className="inventory-product-gallery-meta">
                                     {img.isMain ? (
-                                      <span className="badge badge-active">Äáº¡i diá»‡n</span>
+                                      <span className="badge badge-active">Đội di?n</span>
                                     ) : (
-                                      <span className="badge">Phá»¥</span>
+                                      <span className="badge">Ph?</span>
                                     )}
                                     <button
                                       type="button"
@@ -1458,7 +1458,7 @@ export default function InventoryAdminPage({ section }) {
                                       onClick={() => onDeleteProductImageRow(img)}
                                       disabled={galleryBusy}
                                     >
-                                      XÃ³a
+                                      X�a
                                     </button>
                                   </div>
                                 </li>
@@ -1470,10 +1470,10 @@ export default function InventoryAdminPage({ section }) {
                     </div>
 
                     <div className="inventory-product-modal-section">
-                      <h4>GiÃ¡ vÃ  chÃ­nh sÃ¡ch</h4>
+                      <h4>Gi? v? chọnh s?ch</h4>
                       <div className="inventory-product-modal-grid inventory-product-modal-grid--price">
                         <label className="compact-field">
-                          <span>GiÃ¡ vÄ‘n</span>
+                          <span>Gi? vdn</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1483,7 +1483,7 @@ export default function InventoryAdminPage({ section }) {
                           />
                         </label>
                         <label className="compact-field">
-                          <span>GiÃ¡ bÃ¡n láº»</span>
+                          <span>Gi? b?n l?</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1493,7 +1493,7 @@ export default function InventoryAdminPage({ section }) {
                           />
                         </label>
                         <label className="compact-field">
-                          <span>GiÃ¡ dá»‹ch vá»¥</span>
+                          <span>Gi? dịch vụ</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1503,7 +1503,7 @@ export default function InventoryAdminPage({ section }) {
                           />
                         </label>
                         <label className="compact-field">
-                          <span>Thuáº¿ (%)</span>
+                          <span>Thu? (%)</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1513,7 +1513,7 @@ export default function InventoryAdminPage({ section }) {
                           />
                         </label>
                         <label className="compact-field">
-                          <span>Báº£o hÃ nh (thÃ¡ng)</span>
+                          <span>B?o h?nh (th?ng)</span>
                           <input
                             className="search-input"
                             type="number"
@@ -1532,7 +1532,7 @@ export default function InventoryAdminPage({ section }) {
                           checked={!!productForm.isStrictCapacityControl}
                           onChange={(e) => updateProductForm("isStrictCapacityControl", e.target.checked)}
                         />
-                        <span>Kiá»ƒm soÃ¡t sá»©c chá»©a nghiÃªm ngáº·t</span>
+                        <span>Ki?m so?t s?c ch?a nghi?m ng?t</span>
                       </label>
                       <label className="inventory-product-toggle">
                         <input
@@ -1540,13 +1540,13 @@ export default function InventoryAdminPage({ section }) {
                           checked={!!productForm.isActive}
                           onChange={(e) => updateProductForm("isActive", e.target.checked)}
                         />
-                        <span>Äang hoáº¡t Ä‘á»™ng</span>
+                        <span>Đang ho?t d?ng</span>
                       </label>
                     </div>
 
                     <div className="form-actions">
                       <button type="button" className="btn-ghost" onClick={closeCreateProductModal} disabled={savingProduct}>
-                        Há»§y
+                        H?y
                       </button>
                       <button
                         type="button"
@@ -1554,7 +1554,7 @@ export default function InventoryAdminPage({ section }) {
                         onClick={() => runAction(productModalMode === "edit" ? handleUpdateProduct : handleCreateProduct)}
                         disabled={savingProduct}
                       >
-                        {savingProduct ? "Äang lÆ°u..." : (productModalMode === "edit" ? "Cáº­p nháº­t sáº£n pháº©m" : "LÆ°u sáº£n pháº©m")}
+                        {savingProduct ? "Đang luu..." : (productModalMode === "edit" ? "C?p nh?t s?n ph?m" : "Luu s?n ph?m")}
                       </button>
                     </div>
                   </div>
@@ -1566,24 +1566,24 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>áº¢nh</th>
+                      <th>?nh</th>
                       <th>SKU</th>
-                      <th>TÃªn sáº£n pháº©m</th>
-                      <th>ÄÆ¡n vá»‹</th>
-                      <th>Danh má»¥c</th>
-                      <th>GiÃ¡ vÄ‘n</th>
-                      <th>GiÃ¡ bÃ¡n láº»</th>
-                      <th>GiÃ¡ dá»‹ch vá»¥</th>
-                      <th>Thuáº¿ (%)</th>
-                      <th>Báº£o hÃ nh (thÃ¡ng)</th>
-                      <th>K.S sá»©c chá»©a</th>
-                      <th>Tráº¡ng thÃ¡i</th>
-                      <th>Thao tÃ¡c</th>
+                      <th>T�n s?n ph?m</th>
+                      <th>Đơn v?</th>
+                      <th>Danh m?c</th>
+                      <th>Gi? vdn</th>
+                      <th>Gi? b?n l?</th>
+                      <th>Gi? dịch vụ</th>
+                      <th>Thu? (%)</th>
+                      <th>B?o h?nh (th?ng)</th>
+                      <th>K.S s?c ch?a</th>
+                      <th>Tr?ng th?i</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {products.length === 0 ? (
-                      <NoDataRow colSpan={14} message="ChÆ°a cÃ³ sáº£n pháº©m trong danh má»¥c kho." />
+                      <NoDataRow colSpan={14} message="Chua c� s?n ph?m trong danh m?c kho." />
                     ) : (
                       pagedProducts.map((p) => (
                         <tr key={p.id}>
@@ -1597,7 +1597,7 @@ export default function InventoryAdminPage({ section }) {
                                 loading="lazy"
                               />
                             ) : (
-                              <span className="inventory-product-table-thumb-fallback">â€”</span>
+                              <span className="inventory-product-table-thumb-fallback">�</span>
                             )}
                           </td>
                           <td>{p.sku}</td>
@@ -1609,26 +1609,26 @@ export default function InventoryAdminPage({ section }) {
                           <td>{toNumber(p.servicePrice, 0).toLocaleString()}</td>
                           <td>{toNumber(p.taxRate, 0)}</td>
                           <td>{toNumber(p.warrantyMonths, 0)}</td>
-                          <td>{p.isStrictCapacityControl ? "CÃ³" : "KhÃ´ng"}</td>
+                          <td>{p.isStrictCapacityControl ? "C�" : "Không"}</td>
                           <td>
                             <span className={`badge ${p.isActive ? "badge-active" : "badge-deleted"}`}>
-                              {p.isActive ? "Äang kinh doanh" : "Ngá»«ng kinh doanh"}
+                              {p.isActive ? "Đang kinh doanh" : "Ng?ng kinh doanh"}
                             </span>
                           </td>
                           <td>
                             <div className="row-actions">
                               <button className="btn-icon" onClick={() => openEditProductModal(p)}>
-                                Sá»­a
+                                S?a
                               </button>
                               <button className="btn-icon" onClick={() => runAction(() => handleDeleteProduct(p))}>
-                                XÃ³a
+                                X�a
                               </button>
                               {p.isActive ? (
                                 <button className="btn-icon" onClick={() => runAction(() => markDiscontinued(p))}>
-                                  Ngá»«ng KD
+                                  Ng?ng KD
                                 </button>
                               ) : (
-                                <span className="result-count">ÄÃ£ ngá»«ng</span>
+                                <span className="result-count">Đã ng?ng</span>
                               )}
                             </div>
                           </td>
@@ -1655,50 +1655,50 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tá»•ng danh má»¥c", value: categories.length },
-                  { label: "Sáº£n pháº©m Ä‘Ã£ phÃ¢n loáº¡i", value: products.filter((p) => !!p.categoryId).length },
-                  { label: "Sáº£n pháº©m chÆ°a gÃ¡n danh má»¥c", value: products.filter((p) => !p.categoryId).length }
+                  { label: "Tổng danh m?c", value: categories.length },
+                  { label: "S?n ph?m d? ph?n lo?i", value: products.filter((p) => !!p.categoryId).length },
+                  { label: "S?n ph?m chua g?n danh m?c", value: products.filter((p) => !p.categoryId).length }
                 ]}
               />
 
               <ActionPanel
-                title="Quáº£n lÃ½ danh má»¥c"
-                description="ThÃªm vÃ  chá»‰nh sá»­a danh má»¥c báº±ng popup Ä‘á»ƒ chuáº©n hÃ³a dá»¯ liá»‡u phÃ¢n loáº¡i váº­t tÆ°."
+                title="Quản lý danh m?c"
+                description="Th?m v? chọnh s?a danh m?c bảng popup d? chu?n h?a dữ liệu ph?n lo?i vật tư."
               >
                 <div className="table-toolbar inventory-form-actions">
                   <button className="btn-primary" onClick={openCreateCategoryModal}>
-                    + Táº¡o danh má»¥c
+                    + T?o danh m?c
                   </button>
                 </div>
               </ActionPanel>
 
               {showCategoryModal ? (
-                <Modal title={categoryModalMode === "edit" ? "Sá»­a danh má»¥c" : "ThÃªm danh má»¥c má»›i"} onClose={closeCategoryModal}>
+                <Modal title={categoryModalMode === "edit" ? "S?a danh m?c" : "Th�m danh m?c m?i"} onClose={closeCategoryModal}>
                   <div className="inventory-product-modal">
                     <p className="inventory-product-modal-desc">
-                      Quáº£n lÃ½ nhÃ³m danh má»¥c Ä‘á»ƒ chuáº©n hÃ³a phÃ¢n loáº¡i sáº£n pháº©m trong kho.
+                      Qu?n l? nh?m danh m?c d? chu?n h?a ph?n lo?i s?n ph?m trong kho.
                     </p>
 
                     <div className="inventory-product-modal-section">
-                      <h4>ThÃ´ng tin danh má»¥c</h4>
+                      <h4>Thông tin danh m?c</h4>
                       <div className="inventory-product-modal-grid inventory-product-modal-grid--basic">
                         <label className="compact-field">
-                          <span>TÃªn danh má»¥c *</span>
+                          <span>T�n danh m?c *</span>
                           <input
                             className="search-input"
                             value={categoryForm.categoryName}
                             onChange={(e) => updateCategoryForm("categoryName", e.target.value)}
-                            placeholder="VÃ­ dá»¥: Dáº§u nhÆ¡t"
+                            placeholder="V� d?: D?u nhot"
                           />
                         </label>
                         <label className="compact-field">
-                          <span>Danh má»¥c cha</span>
+                          <span>Danh m?c cha</span>
                           <select
                             className="search-input"
                             value={categoryForm.parentId}
                             onChange={(e) => updateCategoryForm("parentId", e.target.value)}
                           >
-                            <option value="">-- KhÃ´ng cÃ³ --</option>
+                            <option value="">-- Không c� --</option>
                             {categories
                               .filter((item) => !editingCategory || Number(item.id) !== Number(editingCategory.id))
                               .map((item) => (
@@ -1709,12 +1709,12 @@ export default function InventoryAdminPage({ section }) {
                           </select>
                         </label>
                         <label className="compact-field inventory-span-2">
-                          <span>MÃ´ táº£</span>
+                          <span>M� t?</span>
                           <input
                             className="search-input"
                             value={categoryForm.description}
                             onChange={(e) => updateCategoryForm("description", e.target.value)}
-                            placeholder="MÃ´ táº£ ngáº¯n vá» nhÃ³m danh má»¥c"
+                            placeholder="M� t? ng?n v? nh�m danh m?c"
                           />
                         </label>
                       </div>
@@ -1727,20 +1727,20 @@ export default function InventoryAdminPage({ section }) {
                           checked={!!categoryForm.isDepositRequired}
                           onChange={(e) => updateCategoryForm("isDepositRequired", e.target.checked)}
                         />
-                        <span>YÃªu cáº§u Ä‘áº·t cá»c</span>
+                        <span>Yêu cầu d?t c?c</span>
                       </label>
                     </div>
 
                     <div className="form-actions">
                       <button className="btn-ghost" onClick={closeCategoryModal} disabled={savingCategory}>
-                        Há»§y
+                        H?y
                       </button>
                       <button
                         className="btn-primary"
                         onClick={() => runAction(categoryModalMode === "edit" ? handleUpdateCategory : handleCreateCategory)}
                         disabled={savingCategory}
                       >
-                        {savingCategory ? "Äang lÆ°u..." : (categoryModalMode === "edit" ? "Cáº­p nháº­t danh má»¥c" : "LÆ°u danh má»¥c")}
+                        {savingCategory ? "Đang luu..." : (categoryModalMode === "edit" ? "C?p nh?t danh m?c" : "Luu danh m?c")}
                       </button>
                     </div>
                   </div>
@@ -1752,17 +1752,17 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>TÃªn danh má»¥c</th>
-                      <th>Danh má»¥c cha</th>
-                      <th>MÃ´ táº£</th>
-                      <th>Äáº·t cá»c</th>
-                      <th>Sá»‘ sáº£n pháº©m</th>
-                      <th>Thao tÃ¡c</th>
+                      <th>T�n danh m?c</th>
+                      <th>Danh m?c cha</th>
+                      <th>M� t?</th>
+                      <th>Đặt c?c</th>
+                      <th>S? s?n ph?m</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {categories.length === 0 ? (
-                      <NoDataRow colSpan={7} message="ChÆ°a cÃ³ danh má»¥c nÃ o trong kho." />
+                      <NoDataRow colSpan={7} message="Chua c� danh m?c n�o trong kho." />
                     ) : (
                       pagedCategories.map((category) => (
                         <tr key={category.id}>
@@ -1770,15 +1770,15 @@ export default function InventoryAdminPage({ section }) {
                           <td>{category.categoryName || "-"}</td>
                           <td>{category.parentId ? (categoryMap.get(category.parentId) || `#${category.parentId}`) : "-"}</td>
                           <td>{category.description || "-"}</td>
-                          <td>{category.isDepositRequired ? "CÃ³" : "KhÃ´ng"}</td>
+                          <td>{category.isDepositRequired ? "C�" : "Không"}</td>
                           <td>{toNumber(productCountByCategory.get(String(category.id)), 0)}</td>
                           <td>
                             <div className="row-actions">
                               <button className="btn-icon" onClick={() => openEditCategoryModal(category)}>
-                                Sá»­a
+                                S?a
                               </button>
                               <button className="btn-icon" onClick={() => runAction(() => handleDeleteCategory(category))}>
-                                XÃ³a
+                                X�a
                               </button>
                             </div>
                           </td>
@@ -1805,28 +1805,28 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tá»•ng nhÃ  cung cáº¥p", value: suppliers.length },
-                  { label: "Sáº£n pháº©m hiá»‡n cÃ³", value: products.length },
-                  { label: "Danh má»¥c hiá»‡n cÃ³", value: categories.length }
+                  { label: "Tổng nh� cung c?p", value: suppliers.length },
+                  { label: "S?n ph?m hi?n c�", value: products.length },
+                  { label: "Danh m?c hi?n c�", value: categories.length }
                 ]}
               />
 
               <ActionPanel
-                title="Táº¡o nhÃ  cung cáº¥p má»›i"
-                description="Quáº£n lÃ½ danh sÃ¡ch nhÃ  cung cáº¥p Ä‘á»ƒ phá»¥c vá»¥ truy xuáº¥t nguá»“n gá»‘c vÃ  mua hÃ ng."
+                title="T?o nh� cung c?p m?i"
+                description="Qu?n l? danh s?ch nh? cung c?p d? ph?c v? truy xu?t ngu?n g?c v? mua h?ng."
               >
                 <div className="table-toolbar inventory-form-grid inventory-form-grid--small">
                   <label className="compact-field">
-                    <span>TÃªn nhÃ  cung cáº¥p</span>
+                    <span>T�n nh� cung c?p</span>
                     <input
                       className="search-input"
-                      placeholder="VÃ­ dá»¥: NhÃ  cung cáº¥p A"
+                      placeholder="V� d?: Nh� cung c?p A"
                       value={form.supplierName}
                       onChange={(e) => updateForm("supplierName", e.target.value)}
                     />
                   </label>
                   <button className="btn-primary" onClick={() => runAction(handleCreateSupplier)}>
-                    + Táº¡o nhÃ  cung cáº¥p
+                    + T?o nh� cung c?p
                   </button>
                 </div>
               </ActionPanel>
@@ -1836,14 +1836,14 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>NhÃ  cung cáº¥p</th>
-                      <th>CÃ´ng ná»£ hiá»‡n táº¡i</th>
-                      <th>Thao tÃ¡c</th>
+                      <th>Nh� cung c?p</th>
+                      <th>C�ng n? hi?n t?i</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {suppliers.length === 0 ? (
-                      <NoDataRow colSpan={4} message="ChÆ°a cÃ³ nhÃ  cung cáº¥p nÃ o trong há»‡ thá»‘ng." />
+                      <NoDataRow colSpan={4} message="Chua c� nh� cung c?p n�o trong hệ thống." />
                     ) : (
                       pagedSuppliers.map((supplier) => (
                         <tr key={supplier.id}>
@@ -1853,10 +1853,10 @@ export default function InventoryAdminPage({ section }) {
                           <td>
                             <div className="row-actions">
                               <button className="btn-icon" onClick={() => runAction(() => handleEditSupplier(supplier))}>
-                                Sá»­a
+                                S?a
                               </button>
                               <button className="btn-icon" onClick={() => runAction(() => handleDeleteSupplier(supplier))}>
-                                XÃ³a
+                                X�a
                               </button>
                             </div>
                           </td>
@@ -1883,12 +1883,12 @@ export default function InventoryAdminPage({ section }) {
             <>
               <div className="policy-card">
                 <div className="policy-card-head">
-                  <h3>Thiáº¿t láº­p chÃ­nh sÃ¡ch chung</h3>
-                  <p>Ãp dá»¥ng cho toÃ n há»‡ thá»‘ng kho. Cáº¥u hÃ¬nh nÃ y áº£nh hÆ°á»Ÿng Ä‘áº¿n cáº£nh bÃ¡o vÃ  phÃª duyá»‡t.</p>
+                  <h3>Thi?t l?p chọnh s?ch chung</h3>
+                  <p>?p d?ng cho to?n hệ thống kho. C?u h?nh n?y ?nh hu?ng d?n cầnh b?o v? ph? duy?t.</p>
                 </div>
                 <div className="policy-grid">
                   <label className="compact-field policy-toggle">
-                    <span>Cho phÃ©p Ã¢m kho</span>
+                    <span>Cho ph?p ?m kho</span>
                     <input
                       type="checkbox"
                       checked={!!settings.policyRules?.allowNegativeStock}
@@ -1896,7 +1896,7 @@ export default function InventoryAdminPage({ section }) {
                     />
                   </label>
                   <label className="compact-field">
-                    <span>NgÆ°á»¡ng cáº£nh bÃ¡o tá»“n tháº¥p (%)</span>
+                    <span>Ngu?ng cầnh b?o t?n th?p (%)</span>
                     <input
                       className="search-input"
                       type="number"
@@ -1907,7 +1907,7 @@ export default function InventoryAdminPage({ section }) {
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Quy táº¯c giá»¯ hÃ ng (Reserve)</span>
+                    <span>Quy t?c gi? h�ng (Reserve)</span>
                     <select
                       className="search-input"
                       value={settings.policyRules?.reserveRule || "STRICT"}
@@ -1919,7 +1919,7 @@ export default function InventoryAdminPage({ section }) {
                     </select>
                   </label>
                   <label className="compact-field policy-toggle">
-                    <span>Cho phÃ©p xuáº¥t vÆ°á»£t Ä‘á»‹nh má»©c</span>
+                    <span>Cho ph�p xu?t vu?t d?nh m?c</span>
                     <input
                       type="checkbox"
                       checked={!!settings.policyRules?.allowOverIssue}
@@ -1927,7 +1927,7 @@ export default function InventoryAdminPage({ section }) {
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Quy táº¯c hoÃ n tráº£ váº­t tÆ°</span>
+                    <span>Quy t?c ho�n tr? vật tư</span>
                     <select
                       className="search-input"
                       value={settings.policyRules?.materialReturnRule || "ALLOW_WITH_REASON"}
@@ -1939,7 +1939,7 @@ export default function InventoryAdminPage({ section }) {
                     </select>
                   </label>
                   <label className="compact-field">
-                    <span>Quy táº¯c chuyá»ƒn kho</span>
+                    <span>Quy t?c chuy?n kho</span>
                     <select
                       className="search-input"
                       value={settings.policyRules?.transferRule || "REQUIRE_APPROVAL"}
@@ -1954,33 +1954,33 @@ export default function InventoryAdminPage({ section }) {
               </div>
 
               <div className="policy-overview">
-                <div className="policy-overview-item"><span>Tá»•ng chi nhÃ¡nh</span><strong>{policyOverview.branchCount}</strong></div>
-                <div className="policy-overview-item"><span>Chi nhÃ¡nh hoáº¡t Ä‘á»™ng</span><strong>{policyOverview.activeBranchCount}</strong></div>
-                <div className="policy-overview-item"><span>Tá»“n hiá»‡n táº¡i</span><strong>{policyOverview.totalCurrent.toLocaleString()}</strong></div>
-                <div className="policy-overview-item"><span>ÄÃ£ giá»¯ chá»—</span><strong>{policyOverview.totalReserved.toLocaleString()}</strong></div>
-                <div className="policy-overview-item"><span>Tá»•ng tá»“n an toÃ n</span><strong>{policyOverview.totalSafeStock.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>Tổng chi nh?nh</span><strong>{policyOverview.branchCount}</strong></div>
+                <div className="policy-overview-item"><span>Chi nh?nh ho?t d?ng</span><strong>{policyOverview.activeBranchCount}</strong></div>
+                <div className="policy-overview-item"><span>T?n hi?n t?i</span><strong>{policyOverview.totalCurrent.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>Đã gi? ch?</span><strong>{policyOverview.totalReserved.toLocaleString()}</strong></div>
+                <div className="policy-overview-item"><span>Tổng t?n an to�n</span><strong>{policyOverview.totalSafeStock.toLocaleString()}</strong></div>
               </div>
 
               <div className="policy-card">
                 <div className="policy-card-head">
-                  <h3>Cáº¥u hÃ¬nh tá»“n an toÃ n theo chi nhÃ¡nh</h3>
-                  <p>Äáº·t má»©c tá»“n tá»‘i thiá»ƒu riÃªng cho tá»«ng chi nhÃ¡nh Ä‘á»ƒ há»‡ thá»‘ng cáº£nh bÃ¡o sÃ¡t thá»±c táº¿ váº­n hÃ nh.</p>
+                  <h3>C?u h?nh t?n an to?n theo chi nh?nh</h3>
+                  <p>??t m?c t?n t?i thi?u ri?ng cho tổng chi nh?nh d? hệ thống cầnh b?o s?t th?c t? v?n h?nh.</p>
                 </div>
                 <div className="table-wrapper policy-table-wrapper">
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Chi nhÃ¡nh</th>
-                        <th>Tráº¡ng thÃ¡i</th>
-                        <th>Sá»‘ kho</th>
-                        <th>Tá»“n hiá»‡n táº¡i</th>
-                        <th>ÄÃ£ giá»¯ chá»—</th>
-                        <th>Tá»“n an toÃ n</th>
+                        <th>Chi nhánh</th>
+                        <th>Tr?ng th?i</th>
+                        <th>S? kho</th>
+                        <th>T?n hi?n t?i</th>
+                        <th>Đã gi? ch?</th>
+                        <th>T?n an to�n</th>
                       </tr>
                     </thead>
                     <tbody>
                       {branchSummary.length === 0 ? (
-                        <NoDataRow colSpan={6} message="ChÆ°a cÃ³ dá»¯ liá»‡u chi nhÃ¡nh Ä‘á»ƒ cáº¥u hÃ¬nh tá»“n an toÃ n." />
+                        <NoDataRow colSpan={6} message="Chua c? dữ liệu chi nh?nh d? c?u h?nh t?n an to?n." />
                       ) : (
                         branchSummary.map((b) => (
                           <tr key={b.branchId}>
@@ -2012,7 +2012,7 @@ export default function InventoryAdminPage({ section }) {
 
               <div className="table-toolbar policy-savebar">
                 <button className="btn-primary" onClick={() => runAction(() => saveSettings(settings))}>
-                  LÆ°u chÃ­nh sÃ¡ch
+                  Luu chọnh s?ch
                 </button>
               </div>
             </>
@@ -2022,29 +2022,29 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tá»•ng tá»“n", value: toNumber(overview.totalQuantity).toLocaleString() },
-                  { label: "ÄÃ£ giá»¯ chá»—", value: toNumber(overview.reservedQuantity).toLocaleString() },
-                  { label: "Sáº¯p háº¿t", value: toNumber(overview.lowStockCount).toLocaleString() },
-                  { label: "Âm kho", value: toNumber(overview.negativeStockCount).toLocaleString() },
-                  { label: "Kho lá»—i", value: toNumber(overview.defectiveStockCount).toLocaleString() },
-                  { label: "GiÃ¡ trá»‹ tá»“n", value: toNumber(overview.totalInventoryValue).toLocaleString() }
+                  { label: "Tổng t?n", value: toNumber(overview.totalQuantity).toLocaleString() },
+                  { label: "Đã gi? ch?", value: toNumber(overview.reservedQuantity).toLocaleString() },
+                  { label: "S?p h?t", value: toNumber(overview.lowStockCount).toLocaleString() },
+                  { label: "?m kho", value: toNumber(overview.negativeStockCount).toLocaleString() },
+                  { label: "Kho l?i", value: toNumber(overview.defectiveStockCount).toLocaleString() },
+                  { label: "Gi? tr? t?n", value: toNumber(overview.totalInventoryValue).toLocaleString() }
                 ]}
               />
               <div className="table-wrapper">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Chi nhÃ¡nh</th>
-                      <th>Tá»“n hiá»‡n táº¡i</th>
-                      <th>ÄÃ£ giá»¯ chá»—</th>
-                      <th>Sáº¯p háº¿t</th>
-                      <th>Âm kho</th>
-                      <th>GiÃ¡ trá»‹ tá»“n</th>
+                      <th>Chi nhánh</th>
+                      <th>T?n hi?n t?i</th>
+                      <th>Đã gi? ch?</th>
+                      <th>S?p h?t</th>
+                      <th>?m kho</th>
+                      <th>Gi? tr? t?n</th>
                     </tr>
                   </thead>
                   <tbody>
                     {branchSummary.length === 0 ? (
-                      <NoDataRow colSpan={6} message="ChÆ°a cÃ³ dá»¯ liá»‡u giÃ¡m sÃ¡t tá»“n kho." />
+                      <NoDataRow colSpan={6} message="Chua c? dữ liệu gi?m s?t t?n kho." />
                     ) : (
                       branchSummary.map((b) => (
                         <tr key={b.branchId}>
@@ -2069,17 +2069,17 @@ export default function InventoryAdminPage({ section }) {
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>NgÃ y kiá»ƒm kÃª</th>
-                    <th>Chi nhÃ¡nh</th>
+                    <th>Ngày ki?m k�</th>
+                    <th>Chi nhánh</th>
                     <th>Kho</th>
-                    <th>Tráº¡ng thÃ¡i</th>
-                    <th>Tá»•ng chÃªnh lá»‡ch</th>
-                    <th>Thao tÃ¡c</th>
+                    <th>Tr?ng th?i</th>
+                    <th>Tổng ch�nh l?ch</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {audits.length === 0 ? (
-                    <NoDataRow colSpan={7} message="ChÆ°a cÃ³ ká»³ kiá»ƒm kÃª nÃ o." />
+                    <NoDataRow colSpan={7} message="Chua c� k? ki?m k� n�o." />
                   ) : (
                     audits.map((a) => {
                       const status = resolveStatusMeta(a.status, AUDIT_STATUS_META);
@@ -2095,11 +2095,11 @@ export default function InventoryAdminPage({ section }) {
                           <td>
                             {canAction ? (
                               <div className="row-actions">
-                                <button className="btn-icon" onClick={() => runAction(() => handleApproveAudit(a.id))}>Duyá»‡t</button>
-                                <button className="btn-icon" onClick={() => runAction(() => handleRejectAudit(a.id))}>Tá»« chá»‘i</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleApproveAudit(a.id))}>Duy?t</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleRejectAudit(a.id))}>T? ch?i</button>
                               </div>
                             ) : (
-                              <span className="result-count">ÄÃ£ xá»­ lÃ½</span>
+                              <span className="result-count">Đã x? l�</span>
                             )}
                           </td>
                         </tr>
@@ -2114,12 +2114,12 @@ export default function InventoryAdminPage({ section }) {
           {section === "transactions" ? (
             <>
               <ActionPanel
-                title="Bá»™ lá»c truy váº¿t giao dá»‹ch"
-                description="Lá»c theo chi nhÃ¡nh, kho, loáº¡i giao dá»‹ch vÃ  khoáº£ng thá»i gian Ä‘á»ƒ truy xuáº¥t nhanh."
+                title="B? l?c truy v?t giao d?ch"
+                description="L?c theo chi nh?nh, kho, lo?i giao dịch vụ kho?ng thời gian d? truy xu?t nhanh."
               >
                 <div className="table-toolbar inventory-form-grid inventory-form-grid--tx">
                   <label className="compact-field">
-                    <span>Chi nhÃ¡nh</span>
+                    <span>Chi nhánh</span>
                     <select
                       className="search-input"
                       value={txParams.branchId}
@@ -2128,7 +2128,7 @@ export default function InventoryAdminPage({ section }) {
                         handleTxFilterChange("warehouseId", "");
                       }}
                     >
-                      <option value="">Táº¥t cáº£ chi nhÃ¡nh</option>
+                      <option value="">T?t c? chi nh?nh</option>
                       {(warehouseStructure.branches || []).map((b) => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
@@ -2141,23 +2141,23 @@ export default function InventoryAdminPage({ section }) {
                       value={txParams.warehouseId}
                       onChange={(e) => handleTxFilterChange("warehouseId", e.target.value)}
                     >
-                      <option value="">Táº¥t cáº£ kho</option>
+                      <option value="">T?t c? kho</option>
                       {warehouseOptionsByBranch.map((w) => (
                         <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
                       ))}
                     </select>
                   </label>
                   <label className="compact-field">
-                    <span>Loáº¡i giao dá»‹ch</span>
+                    <span>Lo?i giao d?ch</span>
                     <input
                       className="search-input"
-                      placeholder="VÃ­ dá»¥: OUT, SERVICE_ISSUE, RETURN"
+                      placeholder="V� d?: OUT, SERVICE_ISSUE, RETURN"
                       value={txParams.type}
                       onChange={(e) => handleTxFilterChange("type", e.target.value)}
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Tá»« ngÃ y</span>
+                    <span>T? ngày</span>
                     <input
                       className="search-input"
                       type="date"
@@ -2166,7 +2166,7 @@ export default function InventoryAdminPage({ section }) {
                     />
                   </label>
                   <label className="compact-field">
-                    <span>Äáº¿n ngÃ y</span>
+                    <span>Độn ngày</span>
                     <input
                       className="search-input"
                       type="date"
@@ -2176,8 +2176,8 @@ export default function InventoryAdminPage({ section }) {
                   </label>
                 </div>
                 <div className="table-toolbar inventory-form-actions">
-                  <button className="btn-primary" onClick={fetchData}>Lá»c dá»¯ liá»‡u</button>
-                  <button className="btn-ghost" onClick={resetTxFilters}>XÃ³a bá»™ lá»c</button>
+                  <button className="btn-primary" onClick={fetchData}>L?c dữ liệu</button>
+                  <button className="btn-ghost" onClick={resetTxFilters}>X�a b? l?c</button>
                 </div>
               </ActionPanel>
 
@@ -2186,19 +2186,19 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>Thá»i gian</th>
-                      <th>Loáº¡i giao dá»‹ch</th>
-                      <th>Chi nhÃ¡nh</th>
+                      <th>Thời gian</th>
+                      <th>Lo?i giao d?ch</th>
+                      <th>Chi nhánh</th>
                       <th>Kho</th>
                       <th>SKU</th>
-                      <th>Sá»‘ lÆ°á»£ng</th>
-                      <th>Nguá»“n phÃ¡t sinh</th>
-                      <th>NgÆ°á»i thao tÃ¡c</th>
+                      <th>S? lu?ng</th>
+                      <th>Ngu?n ph?t sinh</th>
+                      <th>Ngu?i thao t?c</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(transactions.items || []).length === 0 ? (
-                      <NoDataRow colSpan={9} message="KhÃ´ng cÃ³ giao dá»‹ch nÃ o khá»›p vá»›i bá»™ lá»c hiá»‡n táº¡i." />
+                      <NoDataRow colSpan={9} message="Không c� giao d?ch n�o kh?p v?i b? l?c hi?n t?i." />
                     ) : (
                       (transactions.items || []).map((t) => (
                         <tr key={t.id}>
@@ -2220,10 +2220,10 @@ export default function InventoryAdminPage({ section }) {
 
               <div className="table-toolbar">
                 <button className="btn-ghost" onClick={() => changePage(-1)} disabled={txParams.page <= 1}>
-                  Trang trÆ°á»›c
+                  Trang tru?c
                 </button>
                 <span className="result-count">
-                  Trang {txParams.page} / {txTotalPages} - Tá»•ng {toNumber(transactions.total).toLocaleString()} giao dá»‹ch
+                  Trang {txParams.page} / {txTotalPages} - Tổng {toNumber(transactions.total).toLocaleString()} giao d?ch
                 </span>
                 <button className="btn-ghost" onClick={() => changePage(1)} disabled={txParams.page >= txTotalPages}>
                   Trang sau
@@ -2238,16 +2238,16 @@ export default function InventoryAdminPage({ section }) {
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Loáº¡i yÃªu cáº§u</th>
-                    <th>Tráº¡ng thÃ¡i</th>
-                    <th>NgÆ°á»i gá»­i</th>
-                    <th>LÃ½ do</th>
-                    <th>Thao tÃ¡c</th>
+                    <th>Lo?i yêu cầu</th>
+                    <th>Tr?ng th?i</th>
+                    <th>Ngu?i g?i</th>
+                    <th>L� do</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
                   {approvals.length === 0 ? (
-                    <NoDataRow colSpan={6} message="KhÃ´ng cÃ³ yÃªu cáº§u ngoáº¡i lá»‡ nÃ o." />
+                    <NoDataRow colSpan={6} message="Không c� yêu cầu ngo?i l? n�o." />
                   ) : (
                     approvals.map((a) => {
                       const status = resolveStatusMeta(a.status, APPROVAL_STATUS_META);
@@ -2262,11 +2262,11 @@ export default function InventoryAdminPage({ section }) {
                           <td>
                             {canAction ? (
                               <div className="row-actions">
-                                <button className="btn-icon" onClick={() => runAction(() => handleApproveRequest(a.id))}>Duyá»‡t</button>
-                                <button className="btn-icon" onClick={() => runAction(() => handleRejectRequest(a.id))}>Tá»« chá»‘i</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleApproveRequest(a.id))}>Duy?t</button>
+                                <button className="btn-icon" onClick={() => runAction(() => handleRejectRequest(a.id))}>T? ch?i</button>
                               </div>
                             ) : (
-                              <span className="result-count">ÄÃ£ xá»­ lÃ½</span>
+                              <span className="result-count">Đã x? l�</span>
                             )}
                           </td>
                         </tr>
@@ -2283,17 +2283,17 @@ export default function InventoryAdminPage({ section }) {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Má»©c Ä‘á»™</th>
-                    <th>Loáº¡i cáº£nh bÃ¡o</th>
-                    <th>Ná»™i dung</th>
-                    <th>Chi nhÃ¡nh</th>
+                    <th>M?c d?</th>
+                    <th>Lo?i cầnh b?o</th>
+                    <th>N?i dung</th>
+                    <th>Chi nhánh</th>
                     <th>Kho</th>
-                    <th>Thá»i gian</th>
+                    <th>Thời gian</th>
                   </tr>
                 </thead>
                 <tbody>
                   {alerts.length === 0 ? (
-                    <NoDataRow colSpan={6} message="Hiá»‡n chÆ°a cÃ³ cáº£nh bÃ¡o tá»“n kho." />
+                    <NoDataRow colSpan={6} message="Hi?n chua c? cầnh b?o t?n kho." />
                   ) : (
                     alerts.map((a, idx) => {
                       const severity = resolveStatusMeta(a.severity, ALERT_SEVERITY_META);
@@ -2320,14 +2320,14 @@ export default function InventoryAdminPage({ section }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Chi nhÃ¡nh</th>
-                      <th>Tá»•ng tá»“n</th>
-                      <th>GiÃ¡ trá»‹ tá»“n</th>
+                      <th>Chi nhánh</th>
+                      <th>Tổng t?n</th>
+                      <th>Gi? tr? t?n</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(reports.stockByBranch || []).length === 0 ? (
-                      <NoDataRow colSpan={3} message="ChÆ°a cÃ³ dá»¯ liá»‡u tá»“n kho theo chi nhÃ¡nh." />
+                      <NoDataRow colSpan={3} message="Chua c? dữ liệu t?n kho theo chi nh?nh." />
                     ) : (
                       pagedReportStockByBranch.map((r) => (
                         <tr key={r.branchId}>
@@ -2355,13 +2355,13 @@ export default function InventoryAdminPage({ section }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Top sáº£n pháº©m xuáº¥t nhiá»u</th>
-                      <th>Sá»‘ lÆ°á»£ng xuáº¥t</th>
+                      <th>Top s?n ph?m xu?t nhi?u</th>
+                      <th>S? lu?ng xu?t</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(reports.topOutbound || []).length === 0 ? (
-                      <NoDataRow colSpan={2} message="ChÆ°a cÃ³ dá»¯ liá»‡u top xuáº¥t kho." />
+                      <NoDataRow colSpan={2} message="Chua c� dữ liệu top xu?t kho." />
                     ) : (
                       pagedReportTopOutbound.map((r) => (
                         <tr key={r.productId}>
@@ -2389,15 +2389,15 @@ export default function InventoryAdminPage({ section }) {
                   <thead>
                     <tr>
                       <th>ID</th>
-                      <th>HÃ nh Ä‘á»™ng</th>
-                      <th>Báº£ng dá»¯ liá»‡u</th>
-                      <th>Báº£n ghi</th>
-                      <th>Thá»i gian</th>
+                      <th>H�nh d?ng</th>
+                      <th>Bảng dữ liệu</th>
+                      <th>B?n ghi</th>
+                      <th>Thời gian</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(reports.auditLogs || []).length === 0 ? (
-                      <NoDataRow colSpan={5} message="ChÆ°a cÃ³ audit log liÃªn quan Ä‘áº¿n kho." />
+                      <NoDataRow colSpan={5} message="Chua c� audit log li�n quan d?n kho." />
                     ) : (
                       pagedReportAuditLogs.map((log) => (
                         <tr key={log.id}>
@@ -2429,6 +2429,8 @@ export default function InventoryAdminPage({ section }) {
     </div>
   );
 }
+
+
 
 
 

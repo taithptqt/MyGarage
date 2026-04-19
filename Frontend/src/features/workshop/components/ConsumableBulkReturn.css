@@ -1,4 +1,4 @@
-/* ConsumableBulkReturn.css — B05 */
+﻿/* ConsumableBulkReturn.css — B05 */
 .cbr-wrapper { display: flex; flex-direction: column; gap: 14px; font-family: 'Inter', system-ui, sans-serif; }
 .cbr-header  { display: flex; flex-direction: column; gap: 4px; }
 .cbr-title   { margin: 0; font-size: 16px; font-weight: 800; color: #1e293b; }
@@ -57,3 +57,4 @@
 .cbr-done-icon { font-size: 48px; animation: cbr-pop 0.4s ease; }
 @keyframes cbr-pop { from { transform: scale(0.5); opacity: 0; } }
 .cbr-done p { font-size: 14px; color: #065f46; font-weight: 600; margin: 0; text-align: center; }
+

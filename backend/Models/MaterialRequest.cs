@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -28,4 +28,6 @@ public partial class MaterialRequest
     public virtual Staff? Storekeeper { get; set; }
 
     public virtual Staff? Technician { get; set; }
+
+    public virtual ICollection<MaterialRequestDetail> MaterialRequestDetails { get; set; } = new List<MaterialRequestDetail>();
 }

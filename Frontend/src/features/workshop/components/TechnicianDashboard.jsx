@@ -59,6 +59,8 @@ const QUEUE_CARD_META = {
   GREEN: { accent: "#22c55e", bg: "#f3fff8", badge: "green" },
 };
 
+const TECH_CARD_FONT_FAMILY = "'Be Vietnam Pro', 'Segoe UI', sans-serif";
+
 function toText(value) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
@@ -166,11 +168,34 @@ function getQueueCardMeta(queueColor) {
 }
 
 function isCompletedDiagnosisTask(item) {
+  const workflowStatus = normalizeCode(readValue(item, "workflowStatus", "WorkflowStatus"));
+  if (workflowStatus === "FOREMAN_APPROVED_LOCKED" || workflowStatus === "CANCELED") return true;
+
   const queueState = normalizeCode(readValue(item, "queueState", "QueueState"));
   if (["DIAGNOSED", "COMPLETED", "DONE"].includes(queueState)) return true;
   if (readValue(item, "finalApprovedAt", "FinalApprovedAt")) return true;
   if (readValue(item, "technicalApprovedAt", "TechnicalApprovedAt")) return true;
   return Boolean(readValue(item, "technicianCompletedAt", "TechnicianCompletedAt"));
+}
+
+function isDiagnosisTaskNewByStatus(task) {
+  const workflowStatus = normalizeCode(task?.workflowStatus);
+  return workflowStatus === "NEW";
+}
+
+function isDiagnosisTaskInProgressByStatus(task) {
+  const workflowStatus = normalizeCode(task?.workflowStatus);
+  return workflowStatus === "IN_PROGRESS";
+}
+
+function isDiagnosisTaskAlertByStatus(task) {
+  const workflowStatus = normalizeCode(task?.workflowStatus);
+  const queueState = normalizeCode(task?.queueState);
+  return (
+    workflowStatus === "TL_REJECTED_REDIAGNOSE" ||
+    workflowStatus === "FOREMAN_REJECTED_REDIAGNOSE" ||
+    queueState === "ALERT"
+  );
 }
 
 function isInsuranceProtectedAssignment(assignment) {
@@ -376,6 +401,7 @@ export default function TechnicianDashboard() {
             vehicleVin: vehicle.vehicleVin,
             queueColor: normalizeCode(readValue(item, "queueColor", "QueueColor")) || "WHITE",
             queueState: toText(readValue(item, "queueState", "QueueState")) || "--",
+            workflowStatus: normalizeCode(readValue(item, "workflowStatus", "WorkflowStatus")),
             dispatchTag: normalizeCode(readValue(item, "dispatchTag", "DispatchTag")) || "",
             assignedBayId: toPositiveNumber(readValue(item, "assignedBayId", "AssignedBayId")),
             assignedBayCode: toText(readValue(item, "assignedBayCode", "AssignedBayCode")),
@@ -400,11 +426,11 @@ export default function TechnicianDashboard() {
         })
         .filter(Boolean)
         .sort((a, b) => {
-          if (!a.startedAt && b.startedAt) return -1;
-          if (a.startedAt && !b.startedAt) return 1;
+          if (isDiagnosisTaskAlertByStatus(a) && !isDiagnosisTaskAlertByStatus(b)) return -1;
+          if (!isDiagnosisTaskAlertByStatus(a) && isDiagnosisTaskAlertByStatus(b)) return 1;
 
-          if (a.queueColor === "RED" && b.queueColor !== "RED") return -1;
-          if (a.queueColor !== "RED" && b.queueColor === "RED") return 1;
+          if (isDiagnosisTaskNewByStatus(a) && !isDiagnosisTaskNewByStatus(b)) return -1;
+          if (!isDiagnosisTaskNewByStatus(a) && isDiagnosisTaskNewByStatus(b)) return 1;
 
           const assignedA = new Date(a.assignedAt || 0).getTime();
           const assignedB = new Date(b.assignedAt || 0).getTime();
@@ -597,23 +623,16 @@ export default function TechnicianDashboard() {
   });
 
   const activeAssignments = filteredAssignments.filter((item) => normalizeCode(readValue(item, "status", "Status")) === "IN_PROGRESS");
-  const diagnosisWaitingToStart = filteredDiagnosisTasks.filter(
-    (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt
-  ).length;
-  const diagnosisNewCount = filteredDiagnosisTasks.filter(
-    (task) => !task.startedAt && !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
-  ).length;
-  const diagnosisUrgentCount = filteredDiagnosisTasks.filter((task) => task.queueColor === "RED").length;
+  const diagnosisWaitingToStart = filteredDiagnosisTasks.filter((task) => isDiagnosisTaskNewByStatus(task)).length;
+  const diagnosisNewCount = filteredDiagnosisTasks.filter((task) => isDiagnosisTaskNewByStatus(task)).length;
+  const diagnosisUrgentCount = filteredDiagnosisTasks.filter((task) => isDiagnosisTaskAlertByStatus(task)).length;
   const diagnosisSupportCount = filteredDiagnosisTasks.filter((task) => task.isSupportRequested).length;
   const visibleDiagnosisTasks = useMemo(() => {
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_NEW) {
-      // Keep accepted-but-not-approved tasks visible so technicians do not lose the card after clicking "Nhận yêu cầu".
-      return filteredDiagnosisTasks.filter(
-        (task) => !task.technicalApprovedAt && !task.finalApprovedAt && task.queueColor !== "RED"
-      );
+      return filteredDiagnosisTasks.filter((task) => isDiagnosisTaskNewByStatus(task) || isDiagnosisTaskInProgressByStatus(task));
     }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_RED) {
-      return filteredDiagnosisTasks.filter((task) => task.queueColor === "RED");
+      return filteredDiagnosisTasks.filter((task) => isDiagnosisTaskAlertByStatus(task));
     }
     if (activeKpiFilter === KPI_FILTER_DIAGNOSIS_SUPPORT) {
       return filteredDiagnosisTasks.filter((task) => task.isSupportRequested);
@@ -1027,14 +1046,15 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
               boxShadow: "0 10px 24px rgba(15, 23, 42, 0.10)",
             }
       }
+      fontFamily={TECH_CARD_FONT_FAMILY}
     >
-      <HStack justify="space-between" align="start" spacing={3} flexWrap="wrap">
+      <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={3} alignItems="start">
         <Box minW={0}>
           <Text
             as="button"
             type="button"
-            fontSize="lg"
-            fontWeight="800"
+            fontSize={{ base: "xl", md: "2xl" }}
+            fontWeight="900"
             color={canOpenDiagnosis ? "#1d4ed8" : "#1b2559"}
             textDecoration={canOpenDiagnosis ? "underline" : "none"}
             textDecorationThickness="1.5px"
@@ -1044,51 +1064,49 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
             onClick={canOpenDiagnosis ? onOpenDiagnosis : undefined}
             title={canOpenDiagnosis ? "Mở phiếu chẩn đoán" : "Bấm Nhận yêu cầu trước khi mở phiếu"}
             _hover={canOpenDiagnosis ? { color: "#1e40af" } : undefined}
+            letterSpacing="0.01em"
+            lineHeight="1.15"
           >
             {task.serviceOrderCode}
           </Text>
           <HStack mt={1} spacing={1.5} flexWrap="wrap">
-            <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+            <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} fontWeight="800">
               Biển số: {task.vehicleLicensePlate || "--"}
             </Badge>
-            <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+            <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5} fontWeight="800">
               Dòng xe: {task.vehicleDescriptor || "Chưa rõ dòng xe"}
             </Badge>
           </HStack>
-          <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+          <Text mt={1} fontSize="sm" color="gray.700" fontWeight="700" noOfLines={1}>
             Năm SX: {task.vehicleManufactureYear || "--"} | Màu: {task.vehicleColor || "--"}
           </Text>
           {toText(task.vehicleVin) ? (
-            <Text fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+            <Text fontSize="sm" color="gray.700" fontWeight="700" noOfLines={1}>
               VIN: {task.vehicleVin}
             </Text>
           ) : null}
           {!canOpenDiagnosis && (
-            <Text mt={0.5} fontSize="xs" color="orange.600">
+            <Text mt={0.5} fontSize="xs" color="orange.600" fontWeight="600">
               Nhấn "Nhận yêu cầu" để mở phiếu chẩn đoán.
             </Text>
           )}
         </Box>
-        <HStack spacing={1.5} flexWrap="wrap" justify="flex-end">
-          <Badge colorScheme={queueMeta.badge} borderRadius="full">{task.queueColor}</Badge>
-          <Badge variant="subtle" colorScheme={roleColorScheme} borderRadius="full">{task.roleInPair}</Badge>
-          <Badge variant="subtle" colorScheme="teal" borderRadius="full">{task.teamName || "--"}</Badge>
-          {task.isSupportRequested && <Badge colorScheme="orange" borderRadius="full">Đang chờ hỗ trợ</Badge>}
+        <HStack spacing={1.5} flexWrap="wrap" justify={{ base: "flex-start", xl: "flex-end" }}>
+          <Badge variant="subtle" colorScheme={roleColorScheme} borderRadius="full" px={3} py={1} fontSize="sm" fontWeight="800">
+            {task.roleInPair}
+          </Badge>
+          <Badge variant="subtle" colorScheme="teal" borderRadius="full" px={3} py={1} fontSize="sm" fontWeight="800">
+            {task.teamName || "--"}
+          </Badge>
+          {task.isSupportRequested && (
+            <Badge colorScheme="orange" borderRadius="full" px={3} py={1} fontSize="sm" fontWeight="800">
+              Đang chờ hỗ trợ
+            </Badge>
+          )}
         </HStack>
-      </HStack>
+      </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, md: 2, xl: 4 }} spacing={2.5} mt={3}>
-        <InfoTile
-          title="Xe"
-          icon={MdDirectionsCar}
-          lines={[
-            `Biển số: ${task.vehicleLicensePlate || "--"}`,
-            `Dòng xe: ${task.vehicleDescriptor || "Chưa rõ dòng xe"}`,
-            `Năm SX: ${task.vehicleManufactureYear || "--"}`,
-            `Màu: ${task.vehicleColor || "--"}`,
-            ...(toText(task.vehicleVin) ? [`VIN: ${task.vehicleVin}`] : []),
-          ]}
-        />
+      <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} spacing={2.5} mt={3}>
         <InfoTile
           title="Phân công"
           icon={MdPerson}
@@ -1135,48 +1153,55 @@ function DiagnosisTaskCard({ task, onStart, onOpenDiagnosis, onRequestSupport })
         />
       </SimpleGrid>
 
-      <HStack mt={3} pt={3} borderTop="1px solid" borderColor="gray.200" justify="flex-end" align="center" spacing={2} flexWrap="wrap">
-        <Button
-          size="sm"
-          borderRadius="full"
-          h="36px"
-          minH="36px"
-          leftIcon={<MdPlayArrow />}
-          colorScheme="green"
-          onClick={onStart}
-          isDisabled={!canStart}
-        >
-          {canStart ? "Nhận yêu cầu" : "Đã nhận yêu cầu"}
-        </Button>
-        <Button
-          size="sm"
-          borderRadius="full"
-          h="36px"
-          minH="36px"
-          leftIcon={<MdSupportAgent />}
-          colorScheme="orange"
-          variant="ghost"
-          onClick={onRequestSupport}
-        >
-          Yêu cầu hỗ trợ
-        </Button>
-      </HStack>
+      <Flex mt={3} pt={3} borderTop="1px solid" borderColor="gray.200" justify="space-between" align="center" gap={3} wrap="wrap">
+        <Text fontSize="xs" color="gray.500" fontWeight="700">
+          Cập nhật lần cuối: {formatDateTime(task.technicianCompletedAt || task.startedAt || task.assignedAt)}
+        </Text>
+        <HStack spacing={2} flexWrap="wrap">
+          <Button
+            size="sm"
+            borderRadius="full"
+            h="36px"
+            minH="36px"
+            leftIcon={<MdPlayArrow />}
+            colorScheme="green"
+            onClick={onStart}
+            isDisabled={!canStart}
+            fontWeight="800"
+          >
+            {canStart ? "Nhận yêu cầu" : "Đã nhận yêu cầu"}
+          </Button>
+          <Button
+            size="sm"
+            borderRadius="full"
+            h="36px"
+            minH="36px"
+            leftIcon={<MdSupportAgent />}
+            colorScheme="orange"
+            variant="ghost"
+            onClick={onRequestSupport}
+            fontWeight="800"
+          >
+            Yêu cầu hỗ trợ
+          </Button>
+        </HStack>
+      </Flex>
     </Box>
   );
 }
 
 function InfoTile({ title, icon, lines, footer = null }) {
   return (
-    <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="lg" bg="white">
+    <Box p={3} border="1px solid" borderColor="#e2e8f0" borderRadius="lg" bg="#ffffff" fontFamily={TECH_CARD_FONT_FAMILY}>
       <HStack spacing={1.5} mb={1}>
-        <Icon as={icon} color="gray.500" boxSize={4} />
-        <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+        <Icon as={icon} color="#64748b" boxSize={4} />
+        <Text fontSize="sm" color="#64748b" textTransform="uppercase" fontWeight="800" letterSpacing="0.02em">
           {title}
         </Text>
       </HStack>
       <Stack spacing={1}>
         {(Array.isArray(lines) ? lines : []).map((line) => (
-          <Text key={`${title}-${line}`} fontSize="sm" color="gray.700">
+          <Text key={`${title}-${line}`} fontSize="sm" color="#1e293b" fontWeight="500" lineHeight="1.2">
             {line}
           </Text>
         ))}
@@ -1359,7 +1384,3 @@ const AssignmentCard = ({ assignment, isActive, onConfirm, onReject, onOpenDiagn
     </Box>
   );
 };
-
-
-
-

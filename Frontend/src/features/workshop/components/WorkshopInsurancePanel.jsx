@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import FilterDropdown from "@shared/components/FilterDropdown";
 import {
   INSURANCE_ASSET_TYPE,
@@ -186,7 +186,7 @@ export default function WorkshopInsurancePanel({
           <p className="workshop-insurance-panel-note">
             {locked
               ? "Đã có dịch vụ hoặc gói bảo hiểm trong danh sách, hệ thống giữ luồng bảo hiểm cho lệnh này."
-              : "Bật khi lệnh sửa chữa cần gửi hồ sơ cho công ty bảo hiểm và theo dõi phần khách đồng chi trả."}
+              : "Bật khi lệnh sửa chữa cần gửi hồ sơ cho công ty bảo hiểm và theo dõi phần khách cùng chi trả."}
           </p>
         </div>
 
@@ -333,7 +333,7 @@ export default function WorkshopInsurancePanel({
           <div className="workshop-insurance-upload-grid">
             <InsuranceUploadField
               title="Ảnh thẻ bảo hiểm"
-              description="Nên có để hồ sơ và kế toán đối soát nhanh."
+              description="Nên có đủ hồ sơ và kế toán đối soát nhanh."
               assetType={INSURANCE_ASSET_TYPE.CARD}
               urls={insuranceCardImageUrls}
               maxCount={INSURANCE_CARD_IMAGE_MAX}
@@ -380,3 +380,5 @@ export default function WorkshopInsurancePanel({
     </div>
   );
 }
+
+

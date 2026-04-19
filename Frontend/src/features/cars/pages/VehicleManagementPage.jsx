@@ -28,7 +28,7 @@ const TABS = [
   { id: "location", label: "Vị trí xe" },
   { id: "assignment", label: "Phân công" },
   { id: "history", label: "Lịch sử xe" },
-  { id: "alerts", label: "Cảnh báo" },
+  { id: "alerts", label: "Cầnh b�o" },
   { id: "stats", label: "Thống kê" },
 ];
 
@@ -191,7 +191,7 @@ function VehicleForm({ initial, lookups, onSubmit, onCancel, saving }) {
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="bay-form-row">
         <div className="form-group">
-          <label>Biá»ƒn sá»‘ *</label>
+          <label>Biển số *</label>
           <input name="licensePlate" value={form.licensePlate || ""} onChange={handleChange} pattern={VIETNAM_LICENSE_PLATE_PATTERN} title={VIETNAM_LICENSE_PLATE_TITLE} style={{ textTransform: "uppercase" }} required />
         </div>
         <div className="form-group">
@@ -257,9 +257,9 @@ function VehicleForm({ initial, lookups, onSubmit, onCancel, saving }) {
           <input name="odo" type="number" min="0" value={form.odo} onChange={handleChange} />
         </div>
         <div className="form-group">
-          <label>Chi nhánh</label>
+          <label>Chi nh�nh</label>
           <select name="branchId" value={form.branchId} onChange={handleChange}>
-            <option value="">Không gắn chi nhánh</option>
+            <option value="">Không g?n chi nh�nh</option>
             {(lookups.branches || []).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -271,7 +271,7 @@ function VehicleForm({ initial, lookups, onSubmit, onCancel, saving }) {
 
       <div className="bay-form-row">
         <div className="form-group">
-          <label>Số máy</label>
+          <label>S? m�y</label>
           <input name="engineNumber" value={form.engineNumber || ""} onChange={handleChange} />
         </div>
         <div className="form-group">
@@ -455,7 +455,7 @@ export default function VehicleManagementPage({ section }) {
         await loadVehicleDetail(options.reloadVehicleId || selectedVehicleId);
       }
     } catch (err) {
-      const message = err.message || "Không thể thực hiện thao tác.";
+      const message = err.message || "Không th? th?c hi?n thao t�c.";
       if (options.asFormError) setFormError(message);
       else setError(message);
       throw err;
@@ -544,7 +544,7 @@ export default function VehicleManagementPage({ section }) {
       <header className="admin-header">
         <div>
           <h1>Quản lý xe</h1>
-          <p className="header-sub">Theo dõi danh sách, trạng thái, vị trí khoang, phân công và cảnh báo xe trong xưởng.</p>
+          <p className="header-sub">Theo d�i danh sách, trạng thái, vị trí khoang, phân công v� cầnh b�o xe trong xu?ng.</p>
         </div>
         <div className="bay-header-actions">
           <button className="btn-ghost" type="button" onClick={refreshDashboard}>Tải lại</button>
@@ -559,7 +559,7 @@ export default function VehicleManagementPage({ section }) {
           <div className="stat-card"><div className="stat-value">{summary.totalVehicles || 0}</div><div className="stat-label">Tổng xe</div></div>
           <div className="stat-card"><div className="stat-value">{summary.inShopVehicles || 0}</div><div className="stat-label">Đang trong xưởng</div></div>
           <div className="stat-card"><div className="stat-value">{summary.noBayCount || 0}</div><div className="stat-label">Chưa gắn khoang</div></div>
-          <div className="stat-card"><div className="stat-value">{summary.noStaffCount || 0}</div><div className="stat-label">Chưa phân công</div></div>
+          <div className="stat-card"><div className="stat-value">{summary.noStaffCount || 0}</div><div className="stat-label">Chua phân công</div></div>
         </div>
       )}
 
@@ -567,7 +567,7 @@ export default function VehicleManagementPage({ section }) {
         <>
           <div className="table-toolbar bay-filter-bar">
             <select className="search-input" value={filters.branchId} onChange={(e) => setFilters((prev) => ({ ...prev, branchId: e.target.value }))}>
-              <option value="">Tất cả chi nhánh</option>
+              <option value="">T?t c? chi nh�nh</option>
               {(lookups.branches || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
             <select className="search-input" value={filters.brandId} onChange={(e) => setFilters((prev) => ({ ...prev, brandId: e.target.value, modelId: "" }))}>
@@ -592,7 +592,7 @@ export default function VehicleManagementPage({ section }) {
               {(lookups.colorOptions || []).map((color) => <option key={color} value={color}>{color}</option>)}
             </select>
             <select className="search-input" value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}>
-              <option value="">Tất cả trạng thái</option>
+              <option value="">T?t c? trạng thái</option>
               {availableStatusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
             <select className="search-input" value={filters.bayId} onChange={(e) => setFilters((prev) => ({ ...prev, bayId: e.target.value }))}>
@@ -600,7 +600,7 @@ export default function VehicleManagementPage({ section }) {
               {(lookups.bays || []).map((item) => <option key={item.id} value={item.id}>{item.code} - {item.name}</option>)}
             </select>
             <select className="search-input" value={filters.staffId} onChange={(e) => setFilters((prev) => ({ ...prev, staffId: e.target.value }))}>
-              <option value="">Tất cả nhân sự</option>
+              <option value="">T?t c? nh�n s?</option>
               {(lookups.staffs || []).map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
             </select>
             <select className="search-input" value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}>
@@ -624,15 +624,15 @@ export default function VehicleManagementPage({ section }) {
         <>
           <div className="table-toolbar bay-filter-bar">
             <select className="search-input" value={filters.branchId} onChange={(e) => setFilters((prev) => ({ ...prev, branchId: e.target.value }))}>
-              <option value="">Tất cả chi nhánh</option>
+              <option value="">T?t c? chi nh�nh</option>
               {(lookups.branches || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
             <select className="search-input" value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}>
-              <option value="">Tất cả trạng thái</option>
+              <option value="">T?t c? trạng thái</option>
               {availableStatusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
             <select className="search-input" value={filters.staffId} onChange={(e) => setFilters((prev) => ({ ...prev, staffId: e.target.value }))}>
-              <option value="">Tất cả nhân sự</option>
+              <option value="">T?t c? nh�n s?</option>
               {(lookups.staffs || []).map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
             </select>
             <select className="search-input" value={filters.bayId} onChange={(e) => setFilters((prev) => ({ ...prev, bayId: e.target.value }))}>
@@ -643,7 +643,7 @@ export default function VehicleManagementPage({ section }) {
 
           <div className="table-toolbar bay-filter-bar">
             <select className="search-input" value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}>
-              <option value="status">Sắp xếp: trạng thái</option>
+              <option value="status">S?p x?p: trạng thái</option>
               <option value="checkin">Sắp xếp: vào xưởng</option>
               <option value="code">Sắp xếp: mã xe</option>
             </select>
@@ -659,7 +659,7 @@ export default function VehicleManagementPage({ section }) {
         </>
       )}
 
-      <div className="table-toolbar"><span className="result-count">{rows.length} xe | Module: {isListTab ? "Danh sách & thông tin" : isStatusTab ? "Trạng thái xe" : "Quản lý xe"} | Tìm kiếm: {searchQuery || "(trống)"}</span></div>
+      <div className="table-toolbar"><span className="result-count">{rows.length} xe | Module: {isListTab ? "Danh sách & thông tin" : isStatusTab ? "Trạng thái xe" : "Quản lý xe"} | T�m ki?m: {searchQuery || "(tr?ng)"}</span></div>
       {feedback && <div className="alert bay-alert-success">{feedback}</div>}
       {(error || formError) && <div className="alert alert-error">{error || formError}</div>}
 
@@ -688,10 +688,10 @@ export default function VehicleManagementPage({ section }) {
                       <th>Hãng / dòng</th>
                       <th>VIN</th>
                       <th>Màu / Năm SX</th>
-                      <th>Chi nhánh</th>
+                      <th>Chi nh�nh</th>
                       <th>Khách hàng</th>
                       <th>Cập nhật</th>
-                      <th className="th-center">Thao tác</th>
+                      <th className="th-center">Thao t�c</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -737,10 +737,10 @@ export default function VehicleManagementPage({ section }) {
                       <th>Biển số</th>
                       <th>Hãng / dòng</th>
                       <th>Trạng thái</th>
-                      <th>Giờ trạng thái</th>
+                      <th>Gi? trạng thái</th>
                       <th>Giờ trong xưởng</th>
                       <th>Khoang</th>
-                      <th>Nhân sự</th>
+                      <th>Nh�n s?</th>
                       <th className="th-center">Cập nhật</th>
                     </tr>
                   </thead>
@@ -759,7 +759,7 @@ export default function VehicleManagementPage({ section }) {
                           <td>{item.currentBayCode ? `${item.currentBayCode} - ${item.currentBayName}` : "(chưa gắn)"}</td>
                           <td>{item.currentStaffName || "-"}</td>
                           <td className="td-center">
-                            <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "Đã cập nhật trạng thái xe.").catch(() => {})}>
+                            <select className="bay-inline-select" value={item.currentStatus || "WAITING_RECEIVE"} onClick={(e) => e.stopPropagation()} onChange={(e) => runMutation(() => vehicleAdminApi.updateStatus(item.id, e.target.value), "Đã c?p nh?t trạng thái xe.").catch(() => {})}>
                               {availableStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           </td>
@@ -771,12 +771,12 @@ export default function VehicleManagementPage({ section }) {
               </div>
 
               <div className="bay-panel">
-                <div className="bay-panel-head"><h3>Lịch sử trạng thái</h3></div>
+                <div className="bay-panel-head"><h3>L?ch s? trạng thái</h3></div>
                 <p className="result-count">
                   {selectedVehicle ? `Xe: ${selectedVehicle.vehicleCode} - ${selectedVehicle.licensePlate}` : "Chưa chọn xe"}
                 </p>
                 {statusHistoryItems.length === 0 ? (
-                  <div className="empty-state"><p>Chưa có lịch sử trạng thái.</p></div>
+                  <div className="empty-state"><p>Chua c� l?ch s? trạng thái.</p></div>
                 ) : (
                   <div className="vehicle-status-timeline">
                     {statusHistoryItems.slice(0, 20).map((event, idx) => (
@@ -934,7 +934,7 @@ export default function VehicleManagementPage({ section }) {
                     <tr>
                       <th>Biển số</th>
                       <th>Trạng thái</th>
-                      <th>Người phụ trách</th>
+                      <th>Ngu?i ph? tr�ch</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -954,7 +954,7 @@ export default function VehicleManagementPage({ section }) {
               </div>
               <div className="vehicle-action-panel">
                 <div className="bay-panel">
-                  <div className="bay-panel-head"><h3>Phân công nhân sự</h3></div>
+                  <div className="bay-panel-head"><h3>Phân công nh�n s?</h3></div>
                   <div className="bay-meta-info" style={{ marginBottom: '16px' }}>
                     <div className="bay-meta-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
                       <strong>Xe:</strong> 
@@ -966,7 +966,7 @@ export default function VehicleManagementPage({ section }) {
                     const staffId = Number(e.currentTarget.elements.staffId.value) || null;
                     const technicalTeam = String(e.currentTarget.elements.technicalTeam.value || "").trim();
                     if (!selectedVehicleId) return;
-                    runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "Đã cập nhật phân công xe.").catch(() => {});
+                    runMutation(() => vehicleAdminApi.assignStaff(selectedVehicleId, { staffId, technicalTeam: technicalTeam || null }), "Đã c?p nh?t phân công xe.").catch(() => {});
                   }}>
                     <div className="form-group">
                       <label>Cố vấn dịch vụ / KTV chính</label>
@@ -980,27 +980,27 @@ export default function VehicleManagementPage({ section }) {
                       <input className="search-input" name="technicalTeam" defaultValue={selectedRow?.technicalTeam || ""} placeholder="VD: Tổ Đồng Sơn 1" />
                     </div>
                     <div className="form-actions" style={{ marginTop: '16px' }}>
-                      <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving} style={{ width: '100%' }}>Lưu phân công</button>
+                      <button className="btn-primary" type="submit" disabled={!selectedVehicleId || saving} style={{ width: '100%' }}>Luu phân công</button>
                     </div>
                   </form>
                 </div>
                 
                 <div className="bay-panel">
-                  <div className="bay-panel-head" style={{ marginBottom: '16px' }}><h3>Workload Nhân Sự</h3></div>
+                  <div className="bay-panel-head" style={{ marginBottom: '16px' }}><h3>Workload Nh�n S?</h3></div>
                   <table className="admin-table">
-                    <thead><tr><th>Nhân sự</th><th>Đang xử lý</th><th>Tình trạng</th></tr></thead>
+                    <thead><tr><th>Nh�n s?</th><th>Đang x? l�</th><th>T�nh tr?ng</th></tr></thead>
                     <tbody>
                       {workloadByStaff.length === 0 ? <tr><td colSpan={3}><div className="empty-state" style={{ minHeight: '100px' }}><p>Chưa có dữ liệu.</p></div></td></tr> : workloadByStaff.map((item) => (
                         <tr key={item.staffId}>
                           <td style={{ fontWeight: '600' }}>{item.staffName}</td>
                           <td>{item.total} xe</td>
-                          <td>{item.total > 5 ? <span className="badge badge-suspended">Quá tải</span> : <span className="badge badge-active">Ổn định</span>}</td>
+                          <td>{item.total > 5 ? <span className="badge badge-suspended">Qu� t?i</span> : <span className="badge badge-active">?n d?nh</span>}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <div className="alert alert-error" style={{ marginTop: '16px', margin: '16px 0 0 0' }}>
-                    Cảnh báo nhân sự bị quá tải nếu đang xử lý > 5 xe.
+                    Cầnh b�o nh�n s? b? qu� t?i n?u dang x? l� > 5 xe.
                   </div>
                 </div>
               </div>
@@ -1010,7 +1010,7 @@ export default function VehicleManagementPage({ section }) {
           {currentTab === "history" && (
             <div className="table-wrapper">
               <table className="admin-table">
-                <thead><tr><th>Thời gian</th><th>Loại</th><th>Tiêu đề</th><th>Nội dung</th><th>Người thao tác</th></tr></thead>
+                <thead><tr><th>Thời gian</th><th>Lo?i</th><th>Ti�u d?</th><th>N?i dung</th><th>Ngu?i thao t�c</th></tr></thead>
                 <tbody>
                   {(history.items || []).length === 0 ? <tr><td colSpan={5}><div className="empty-state"><p>Chưa có lịch sử.</p></div></td></tr> : history.items.map((item, idx) => (
                     <tr key={`${item.type}-${item.createdAt}-${idx}`}>
@@ -1025,9 +1025,9 @@ export default function VehicleManagementPage({ section }) {
           {currentTab === "alerts" && (
             <div className="table-wrapper">
               <table className="admin-table">
-                <thead><tr><th>Mức độ</th><th>Loại cảnh báo</th><th>Xe</th><th>Nội dung</th><th>Thời gian</th></tr></thead>
+                <thead><tr><th>M?c d?</th><th>Lo?i cầnh b�o</th><th>Xe</th><th>N?i dung</th><th>Thời gian</th></tr></thead>
                 <tbody>
-                  {(alerts.items || []).length === 0 ? <tr><td colSpan={5}><div className="empty-state"><p>Không có cảnh báo.</p></div></td></tr> : alerts.items.map((item, idx) => (
+                  {(alerts.items || []).length === 0 ? <tr><td colSpan={5}><div className="empty-state"><p>Không c� cầnh b�o.</p></div></td></tr> : alerts.items.map((item, idx) => (
                     <tr key={`${item.type}-${item.vehicleId}-${idx}`}>
                       <td><span className={`badge ${item.severity === "HIGH" ? "badge-warning" : item.severity === "MEDIUM" ? "badge-suspended" : "badge-inactive"}`}>{item.severity}</span></td>
                       <td>{item.type}</td>
@@ -1045,13 +1045,13 @@ export default function VehicleManagementPage({ section }) {
             <div className="bay-grid-two">
               <div className="table-wrapper">
                 <table className="admin-table">
-                  <thead><tr><th>Trạng thái</th><th>Số xe</th><th>Tỷ lệ</th></tr></thead>
+                  <thead><tr><th>Trạng thái</th><th>S? xe</th><th>T? l?</th></tr></thead>
                   <tbody>{(summary.statusBreakdown || []).map((item) => <tr key={item.status}><td>{statusLabelMap[item.status] || item.status}</td><td>{item.count}</td><td>{toNumber(item.rate, 0).toFixed(2)}%</td></tr>)}</tbody>
                 </table>
               </div>
               <div className="table-wrapper">
                 <table className="admin-table">
-                  <thead><tr><th>Chi nhánh</th><th>Tổng xe</th><th>Đang xử lý</th></tr></thead>
+                  <thead><tr><th>Chi nh�nh</th><th>Tổng xe</th><th>Đang x? l�</th></tr></thead>
                   <tbody>{(summary.byBranch || []).map((item) => <tr key={item.branchId}><td>{item.branchName}</td><td>{item.total}</td><td>{item.inShop}</td></tr>)}</tbody>
                 </table>
               </div>
@@ -1078,10 +1078,10 @@ export default function VehicleManagementPage({ section }) {
             <p><strong>Trạng thái:</strong> <span className={`badge ${statusBadgeClass(selectedVehicle.currentStatus)}`}>{statusLabelMap[selectedVehicle.currentStatus] || selectedVehicle.currentStatus}</span></p>
             <p><strong>Giờ trong xưởng:</strong> {formatHours(selectedVehicle.inShopHours)}</p>
             <p><strong>Khoang:</strong> {selectedVehicle.currentBayCode ? <span className="badge badge-active">{selectedVehicle.currentBayCode} - {selectedVehicle.currentBayName}</span> : "(chưa gắn)"}</p>
-            <p><strong>Nhân sự:</strong> {selectedVehicle.currentStaffName || "-"}</p>
+            <p><strong>Nh�n s?:</strong> {selectedVehicle.currentStaffName || "-"}</p>
             <p><strong>Tổ kỹ thuật:</strong> {selectedVehicle.technicalTeam || "-"}</p>
             <p><strong>Ngày cập nhật:</strong> {formatDateTime(selectedVehicle.updatedAt)}</p>
-            <p><strong>Số máy:</strong> {selectedVehicle.engineNumber || "-"}</p>
+            <p><strong>S? m�y:</strong> {selectedVehicle.engineNumber || "-"}</p>
             <p><strong>Số khung:</strong> {selectedVehicle.chassisNumber || "-"}</p>
             <p style={{ gridColumn: '1 / -1' }}><strong>Tình trạng ban đầu:</strong> {selectedVehicle.initialCondition || "-"}</p>
           </div>
@@ -1093,6 +1093,7 @@ export default function VehicleManagementPage({ section }) {
     </div>
   );
 }
+
 
 
 

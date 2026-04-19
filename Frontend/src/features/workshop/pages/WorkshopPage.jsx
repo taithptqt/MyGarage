@@ -265,6 +265,7 @@ export default function WorkshopPage() {
       currentNormalizedPath.startsWith(`${currentRolePath}/dispatch/`)
     ))
   );
+  const isTimesheetPage = currentNormalizedPath === "/workshop/technician/timesheet";
 
   const goReceptionTab = useCallback((tab) => {
     if (tab === "chat") {
@@ -349,7 +350,7 @@ export default function WorkshopPage() {
                   className={`role-sub-item ${isRoleDashboardPage ? "active" : ""}`}
                   onClick={() => goRoleWorkspaceTab("dashboard")}
                 >
-                  Bảng điều phối
+                  {userRole === "TECH" ? "Tác vụ của tôi" : "Bảng điều phối"}
                 </button>
                 <button
                   type="button"
@@ -379,10 +380,10 @@ export default function WorkshopPage() {
                 {userRole === "TECH" && (
                   <button
                     type="button"
-                    className={`role-sub-item ${currentNormalizedPath === "/workshop/technician/my-tasks" ? "active" : ""}`}
-                    onClick={() => navigate("/workshop/technician/my-tasks")}
+                    className={`role-sub-item ${isTimesheetPage ? "active" : ""}`}
+                    onClick={() => navigate("/workshop/technician/timesheet")}
                   >
-                    📋 Tác vụ của tôi
+                    Lịch công tác & chấm công
                   </button>
                 )}
               </div>

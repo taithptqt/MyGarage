@@ -95,6 +95,8 @@ public partial class Voucher
 
     public virtual ICollection<RetailOrder> RetailOrders { get; set; } = new List<RetailOrder>();
 
+    public virtual ICollection<QuotationDiscount> QuotationDiscounts { get; set; } = new List<QuotationDiscount>();
+
     public virtual ICollection<ServiceOrderDiscount> ServiceOrderDiscounts { get; set; } = new List<ServiceOrderDiscount>();
 
     public virtual Staff? UpdatedByNavigation { get; set; }

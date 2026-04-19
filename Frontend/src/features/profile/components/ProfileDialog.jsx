@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { changePassword, getApiBaseUrl } from "@features/auth/api/authApi";
@@ -8,7 +8,7 @@ import { VIETNAM_PHONE_PATTERN, isValidEmail, isValidVietnamesePhone } from "@sh
 import ImageCropper from "@features/workshop/components/ImageCropper";
 import "./ProfileDialog.css";
 
-const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"];
+const STAFF_ROLES = ["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER"];
 
 function toDateInput(value) {
   if (!value) return "";
@@ -114,8 +114,8 @@ export default function ProfileDialog({ onClose }) {
   }, [userId, isStaffRole, user]);
 
   const displayName = useMemo(() => {
-    const name = String(formData.fullName || user?.fullName || user?.FullName || "Người dùng").trim();
-    return name || "Người dùng";
+    const name = String(formData.fullName || user?.fullName || user?.FullName || "Ngu?i d�ng").trim();
+    return name || "Ngu?i d�ng";
   }, [formData.fullName, user?.fullName, user?.FullName]);
 
   const avatarText = useMemo(() => {
@@ -172,15 +172,15 @@ export default function ProfileDialog({ onClose }) {
     try {
       const res = await uploadStaffAvatar(userId, croppedBlob);
       const nextAvatar = res?.avatarUrl || "";
-      if (!nextAvatar) throw new Error("Không nhận được đường dẫn ảnh mới.");
+      if (!nextAvatar) throw new Error("Kh�ng nh?n du?c du?ng d?n ?nh m?i.");
 
       const nextUser = { ...user, avatarUrl: nextAvatar, AvatarUrl: nextAvatar };
       setFormData((prev) => ({ ...prev, avatarUrl: nextAvatar }));
       setUser(nextUser);
       localStorage.setItem("mygarage_user", JSON.stringify(nextUser));
-      setSuccess("Cập nhật ảnh đại diện thành công.");
+      setSuccess("C?p nh?t ?nh d?i di?n th�nh c�ng.");
     } catch (e) {
-      setError(e?.message || "Không thể cập nhật ảnh đại diện.");
+      setError(e?.message || "Kh�ng th? c?p nh?t ?nh d?i di?n.");
     } finally {
       URL.revokeObjectURL(localPreviewUrl);
       setUploadingAvatar(false);
@@ -190,7 +190,7 @@ export default function ProfileDialog({ onClose }) {
   const onSubmit = async (event) => {
     event.preventDefault();
     if (!userId) {
-      setError("Không tìm thấy thông tin người dùng.");
+      setError("Kh�ng t�m th?y th�ng tin ngu?i d�ng.");
       return;
     }
 
@@ -199,15 +199,15 @@ export default function ProfileDialog({ onClose }) {
     const citizenId = String(formData.citizenId || "").trim();
 
     if (!isValidVietnamesePhone(phone)) {
-      setError("Số điện thoại không đúng định dạng.");
+      setError("S? di?n tho?i kh�ng d�ng d?nh d?ng.");
       return;
     }
     if (!isValidEmail(email)) {
-      setError("Email không đúng định dạng.");
+      setError("Email kh�ng d�ng d?nh d?ng.");
       return;
     }
     if (isStaffRole && citizenId && !/^\d{12}$/.test(citizenId)) {
-      setError("Số CCCD phải gồm đúng 12 chữ số.");
+      setError("S? CCCD ph?i g?m d�ng 12 ch? s?.");
       return;
     }
 
@@ -241,9 +241,9 @@ export default function ProfileDialog({ onClose }) {
       setTimeout(() => {
         onClose();
       }, 2000);
-      setSuccess("Lưu hồ sơ thành công.");
+      setSuccess("Luu h? so th�nh c�ng.");
     } catch (e) {
-      setError(e?.message || "Không thể lưu hồ sơ.");
+      setError(e?.message || "Kh�ng th? luu h? so.");
     } finally {
       setSaving(false);
     }
@@ -257,25 +257,25 @@ export default function ProfileDialog({ onClose }) {
     const confirmPassword = String(passwordForm.confirmPassword || "");
 
     if (!oldPassword) {
-      setPasswordError("Vui lòng nhập mật khẩu hiện tại.");
+      setPasswordError("Vui l�ng nh?p m?t kh?u hi?n t?i.");
       setPasswordSuccess("");
       return;
     }
 
     if (newPassword.length < 6) {
-      setPasswordError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      setPasswordError("M?t kh?u m?i ph?i c� �t nh?t 6 k� t?.");
       setPasswordSuccess("");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError("Mật khẩu xác nhận chưa khớp.");
+      setPasswordError("M?t kh?u x?c nh?n chua kh?p.");
       setPasswordSuccess("");
       return;
     }
 
     if (oldPassword === newPassword) {
-      setPasswordError("Mật khẩu mới cần khác mật khẩu hiện tại.");
+      setPasswordError("M?t kh?u m?i c?n kh?c m?t kh?u hi?n t?i.");
       setPasswordSuccess("");
       return;
     }
@@ -290,7 +290,7 @@ export default function ProfileDialog({ onClose }) {
     });
 
     if (!ok) {
-      setPasswordError(data?.message || "Không thể đổi mật khẩu.");
+      setPasswordError(data?.message || "Kh�ng th? d?i m?t kh?u.");
       setChangingPassword(false);
       return;
     }
@@ -300,7 +300,7 @@ export default function ProfileDialog({ onClose }) {
       newPassword: "",
       confirmPassword: "",
     });
-    setPasswordSuccess("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+    setPasswordSuccess("�?i m?t kh?u th�nh c�ng. Vui l�ng dang nh?p l?i.");
     setChangingPassword(false);
 
     window.setTimeout(() => {
@@ -328,10 +328,10 @@ export default function ProfileDialog({ onClose }) {
               </div>
               <div className="profile-dialog-title-wrap">
                 <h2>{displayName}</h2>
-                <p>{user?.role || roleCode || "Khách hàng"}</p>
+                <p>{user?.role || roleCode || "Kh�ch h�ng"}</p>
               </div>
             </div>
-            <button type="button" className="profile-dialog-close" onClick={onClose} aria-label="Đóng">
+            <button type="button" className="profile-dialog-close" onClick={onClose} aria-label="��ng">
               x
             </button>
           </header>
@@ -341,17 +341,17 @@ export default function ProfileDialog({ onClose }) {
 
           <section className="profile-dialog-section">
             <div className="profile-dialog-section-title">
-              <h3>Thông tin hồ sơ</h3>
-              <p>Cập nhật thông tin cá nhân đang dùng trong hệ thống.</p>
+              <h3>Th�ng tin h? so</h3>
+              <p>C?p nh?t th�ng tin c? nh?n dang d?ng trong h? th?ng.</p>
             </div>
 
             <form className="profile-dialog-form" onSubmit={onSubmit}>
               <label>
-                Họ và tên
+                H? v� t�n
                 <input name="fullName" value={formData.fullName} onChange={onChange} required />
               </label>
               <label>
-                Số điện thoại
+                S? di?n tho?i
                 <input
                   type="tel"
                   inputMode="tel"
@@ -359,7 +359,7 @@ export default function ProfileDialog({ onClose }) {
                   value={formData.phone}
                   onChange={onChange}
                   pattern={VIETNAM_PHONE_PATTERN}
-                  title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
+                  title="S? di?n tho?i h?p l?: 0xxxxxxxxx ho?c +84xxxxxxxxx"
                   required
                 />
               </label>
@@ -371,27 +371,27 @@ export default function ProfileDialog({ onClose }) {
               {isStaffRole ? (
                 <>
                   <label>
-                    Số CCCD
-                    <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chưa cập nhật" />
+                    S? CCCD
+                    <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chua c?p nh?t" />
                   </label>
                   <label>
-                    Ngày sinh
+                    Ng�y sinh
                     <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={onChange} />
                   </label>
                 </>
               ) : null}
 
               <label>
-                {isStaffRole ? "Chi nhánh" : "Chi nhánh ưu tiên"}
-                <input value={user?.branchName || "Chưa xác định"} disabled />
+                {isStaffRole ? "Chi nh?nh" : "Chi nh?nh uu ti?n"}
+                <input value={user?.branchName || "Chua x?c d?nh"} disabled />
               </label>
 
               <div className="profile-dialog-actions">
                 <button type="button" className="ghost" onClick={onClose} disabled={saving || uploadingAvatar}>
-                  Hủy
+                  H?y
                 </button>
                 <button type="submit" disabled={saving || uploadingAvatar || loadingProfile}>
-                  {loadingProfile ? "Đang tải..." : saving ? "Đang lưu..." : "Lưu hồ sơ"}
+                  {loadingProfile ? "�ang t?i..." : saving ? "�ang luu..." : "Luu h? so"}
                 </button>
               </div>
             </form>
@@ -399,8 +399,8 @@ export default function ProfileDialog({ onClose }) {
 
           <section className="profile-dialog-section profile-dialog-section-password">
             <div className="profile-dialog-section-title">
-              <h3>Đổi mật khẩu</h3>
-              <p>Sau khi đổi mật khẩu, phiên đăng nhập hiện tại sẽ được đăng xuất để bảo mật.</p>
+              <h3>�?i m?t kh?u</h3>
+              <p>Sau khi d?i m?t kh?u, phi�n dang nh?p hi?n t?i s? du?c dang xu?t d? b?o m?t.</p>
             </div>
 
             {passwordError ? <div className="profile-dialog-alert error">{passwordError}</div> : null}
@@ -408,7 +408,7 @@ export default function ProfileDialog({ onClose }) {
 
             <form className="profile-dialog-form" onSubmit={onPasswordSubmit}>
               <label>
-                Mật khẩu hiện tại
+                M?t kh?u hi?n t?i
                 <input
                   type="password"
                   name="oldPassword"
@@ -419,7 +419,7 @@ export default function ProfileDialog({ onClose }) {
                 />
               </label>
               <label>
-                Mật khẩu mới
+                M?t kh?u m?i
                 <input
                   type="password"
                   name="newPassword"
@@ -431,7 +431,7 @@ export default function ProfileDialog({ onClose }) {
                 />
               </label>
               <label className="profile-dialog-field-full">
-                Xác nhận mật khẩu mới
+                X�c nh?n m?t kh?u m?i
                 <input
                   type="password"
                   name="confirmPassword"
@@ -456,10 +456,10 @@ export default function ProfileDialog({ onClose }) {
                   }
                   disabled={changingPassword}
                 >
-                  Xóa nhanh
+                  X�a nhanh
                 </button>
                 <button type="submit" disabled={changingPassword}>
-                  {changingPassword ? "Đang đổi..." : "Đổi mật khẩu"}
+                  {changingPassword ? "�ang d?i..." : "�?i m?t kh?u"}
                 </button>
               </div>
             </form>
@@ -483,3 +483,4 @@ export default function ProfileDialog({ onClose }) {
   if (typeof document === "undefined") return content;
   return createPortal(content, document.body);
 }
+

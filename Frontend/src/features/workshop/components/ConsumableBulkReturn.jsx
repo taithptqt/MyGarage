@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { executionApi } from "@features/workshop/api/executionApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./ConsumableBulkReturn.css";
 
-/* ── helpers ── */
+/* -- helpers -- */
 function fmtNum(v) { return Number(v ?? 0).toLocaleString("vi-VN"); }
 
-/* ── row component ── */
+/* -- row component -- */
 function ReturnRow({ item, usedQty, onChange }) {
   const issued    = Number(item.issuedQty ?? 0);
   const used      = Number(usedQty ?? issued);
@@ -35,14 +35,14 @@ function ReturnRow({ item, usedQty, onChange }) {
       <div className="cbr-item-remaining">
         <span className="cbr-lbl">Hoàn trả</span>
         <span className={`cbr-remaining-val ${remaining > 0 ? "cbr-has-return" : ""}`}>
-          {isLegal ? fmtNum(remaining) : "⚠️"}
+          {isLegal ? fmtNum(remaining) : "??"}
         </span>
       </div>
     </div>
   );
 }
 
-/* ── main component ── */
+/* -- main component -- */
 export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCancel }) {
   const { user } = useAuth();
   const [items, setItems]     = useState([]);
@@ -59,11 +59,11 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
       const res = await executionApi.getConsumablesForOrder(serviceOrderId);
       const raw = Array.isArray(res) ? res : (res?.items ?? res?.data ?? []);
       const mapped = raw.map(it => ({
-        id:          it.id ?? it.Id ?? it.materialRequestItemId,
-        productId:   it.productId ?? it.ProductId,
+        id: it.id ?? it.Id ?? it.materialRequestItemId,
+        productId: it.productId ?? it.ProductId,
         productName: it.productName ?? it.ProductName ?? it.name,
-        unit:        it.unit ?? it.Unit ?? "cái",
-        issuedQty:   Number(it.issuedQty ?? it.IssuedQty ?? it.quantity ?? 0),
+        unit: it.unit ?? it.Unit ?? "cái",
+        issuedQty: Number(it.issuedQty ?? it.IssuedQty ?? it.quantity ?? 0),
       }));
       setItems(mapped);
       const m = {};
@@ -83,7 +83,7 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
   [items, usedMap]);
 
   const hasErrors = useMemo(() =>
-    items.some(it => { const u = Number(usedMap[it.id] ?? it.issuedQty); return u < 0 || u > it.issuedQty; }),
+    items.some((it) => { const u = Number(usedMap[it.id] ?? it.issuedQty); return u < 0 || u > it.issuedQty; }),
   [items, usedMap]);
 
   const handleSubmit = async () => {
@@ -98,7 +98,7 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
           .map(it => ({
             materialRequestItemId: it.id,
             productId:   it.productId,
-            usedQty:     Number(usedMap[it.id] ?? it.issuedQty),
+            usedQty: Number(usedMap[it.id] ?? it.issuedQty),
             returnedQty: Math.max(0, it.issuedQty - Number(usedMap[it.id] ?? it.issuedQty)),
             unit:        it.unit,
           }))
@@ -124,7 +124,7 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
     <div className="cbr-wrapper">
       <div className="cbr-header">
         <h3 className="cbr-title">📦 Hoàn trả vật tư tiêu hao</h3>
-        <p className="cbr-subtitle">Nhập số lượng đã dùng thực tế — phần còn dư sẽ hoàn kho ngay.</p>
+        <p className="cbr-subtitle">Nhập số lượng đã dùng thực tế – phần còn dư sẽ hoàn kho ngay.</p>
       </div>
       {error && <div className="cbr-alert">{error}</div>}
       {loading ? (
@@ -144,13 +144,13 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
           </div>
           {totalReturn > 0 && (
             <div className="cbr-summary">
-              📦 Tổng sẽ hoàn kho: <strong>{fmtNum(totalReturn)}</strong> đơn vị
+              ✅ Tổng số hoàn kho: <strong>{fmtNum(totalReturn)}</strong> đơn vị
             </div>
           )}
           <div className="cbr-footer">
             {onCancel && <button className="cbr-btn cbr-btn-ghost" onClick={onCancel} disabled={saving}>Hủy</button>}
             <button className="cbr-btn cbr-btn-submit" onClick={handleSubmit} disabled={saving || hasErrors}>
-              {saving ? "⏳ Đang gửi..." : "✅ Xác nhận hoàn vật tư"}
+              {saving ? "⏳ Đang gửi..." : "💾 Xác nhận hoàn vật tư"}
             </button>
           </div>
         </>
@@ -158,3 +158,5 @@ export default function ConsumableBulkReturn({ serviceOrderId, onSuccess, onCanc
     </div>
   );
 }
+
+

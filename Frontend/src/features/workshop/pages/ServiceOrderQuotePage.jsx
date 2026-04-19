@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllStandardServices } from "@features/admin/api/serviceApi";
@@ -49,18 +49,47 @@ import {
   CreditCard
 } from "lucide-react";
 
-const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
-const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
-const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
+const SERVICE_ROW_TOOLTIP_EXPAND = "Nháº¥n Ä‘á»ƒ xem phá»¥ tÃ¹ng thuá»™c dá»‹ch vá»¥ nÃ y.";
+const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nháº¥n Ä‘á»ƒ thu gá»n phá»¥ tÃ¹ng thuá»™c dá»‹ch vá»¥ nÃ y.";
+const SERVICE_ROW_TOOLTIP_STATIC = "DÃ²ng dá»‹ch vá»¥ chÃ­nh trong bÃ¡o giÃ¡.";
+
+const DISCOUNT_MODE_AMOUNT = "AMOUNT";
+const DISCOUNT_MODE_PERCENT = "PERCENT";
+const SERVICE_QTY_WARNING_MESSAGE = "Sá»‘ lÆ°á»£ng dá»‹ch vá»¥ vÆ°á»£t 5. Vui lÃ²ng kiá»ƒm tra láº¡i.";
+const PART_QTY_WARNING_MESSAGE = "Sá»‘ lÆ°á»£ng phá»¥ tÃ¹ng vÆ°á»£t 20. Vui lÃ²ng kiá»ƒm tra láº¡i.";
+
+function getQuantityWarningMessage(quantityValue, isServiceRow) {
+  const quantity = Number(quantityValue);
+  if (!Number.isFinite(quantity) || quantity <= 0) return "";
+  if (isServiceRow && quantity > 5) return SERVICE_QTY_WARNING_MESSAGE;
+  if (!isServiceRow && quantity > 20) return PART_QTY_WARNING_MESSAGE;
+  return "";
+}
+
+const EXCEL_UI_TEXT = {
+  exportButton: "Xuáº¥t Excel",
+  importButton: "Nháº­p Excel",
+  exportTitle: "Xuáº¥t file Excel bÃ¡o giÃ¡ theo tráº¡ng thÃ¡i hiá»‡n táº¡i",
+  importTitle: "Nháº­p láº¡i file Excel bÃ¡o giÃ¡ Ä‘á»ƒ cáº­p nháº­t cá»™t báº£o hiá»ƒm",
+  noQuotationImport: "ChÆ°a cÃ³ bÃ¡o giÃ¡ Ä‘á»ƒ nháº­p Excel.",
+  noQuotationExport: "ChÆ°a cÃ³ bÃ¡o giÃ¡ Ä‘á»ƒ xuáº¥t Excel.",
+  processing: "Há»‡ thá»‘ng Ä‘ang xá»­ lÃ½, vui lÃ²ng chá».",
+  noStaff: "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c nhÃ¢n viÃªn thao tÃ¡c.",
+  orderCanceledImport: "Lá»‡nh sá»­a chá»¯a Ä‘Ã£ há»§y, khÃ´ng thá»ƒ nháº­p Excel.",
+  orderCanceledExport: "Lá»‡nh sá»­a chá»¯a Ä‘Ã£ há»§y, khÃ´ng thá»ƒ xuáº¥t Excel.",
+  quotationCanceledImport: "BÃ¡o giÃ¡ Ä‘Ã£ há»§y, khÃ´ng thá»ƒ nháº­p Excel.",
+  quotationCanceledExport: "BÃ¡o giÃ¡ Ä‘Ã£ há»§y, khÃ´ng thá»ƒ xuáº¥t Excel.",
+  splitLocked: "BÃ¡o giÃ¡ Ä‘Ã£ khÃ³a tÃ¡ch bill theo tráº¡ng thÃ¡i hiá»‡n táº¡i.",
+};
 
 // Sub-components for better organization
 function QuoteStepper({ status }) {
   const steps = [
-    { id: "DRAFT", label: "Bản nháp", icon: <FileText size={18} /> },
-    { id: "PENDING_INSURANCE", label: "Chờ BH duyệt", icon: <ShieldCheck size={18} /> },
-    { id: "INSURANCE_APPROVED", label: "BH đã duyệt", icon: <Check size={18} /> },
-    { id: "PENDING_CUSTOMER", label: "Đợi khách chốt", icon: <User size={18} /> },
-    { id: "CUSTOMER_APPROVED", label: "Hoàn tất", icon: <Check size={18} /> },
+    { id: "DRAFT", label: "Báº£n nhÃ¡p", icon: <FileText size={18} /> },
+    { id: "PENDING_INSURANCE", label: "Chá» BH duyá»‡t", icon: <ShieldCheck size={18} /> },
+    { id: "INSURANCE_APPROVED", label: "BH Ä‘Ã£ duyá»‡t", icon: <Check size={18} /> },
+    { id: "PENDING_CUSTOMER", label: "Äá»£i khÃ¡ch chá»‘t", icon: <User size={18} /> },
+    { id: "CUSTOMER_APPROVED", label: "HoÃ n táº¥t", icon: <Check size={18} /> },
   ];
 
   const currentIdx = steps.findIndex(s => s.id === status);
@@ -297,15 +326,28 @@ export default function ServiceOrderQuotePage() {
   const [removeIdsForClone, setRemoveIdsForClone] = useState([]);
   const [activeActionTab, setActiveActionTab] = useState("insurance"); // 'insurance', 'customer', 'clone'
   const [splitBillingDraft, setSplitBillingDraft] = useState({});
-  const [cancelReason, setCancelReason] = useState("Khách vội");
+  const [lineQuantityDraft, setLineQuantityDraft] = useState({});
+  const [lineDiscountDraft, setLineDiscountDraft] = useState({});
+  const [lineDiscountModeDraft, setLineDiscountModeDraft] = useState({});
+  const [lineDiscountPercentDraft, setLineDiscountPercentDraft] = useState({});
+  const [cancelReason, setCancelReason] = useState("KhÃ¡ch vÃ£ng");
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showMandatoryCloneWarning, setShowMandatoryCloneWarning] = useState(false);
   const [mailSentNotice, setMailSentNotice] = useState("");
   const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
   const [hoveredGroupKey, setHoveredGroupKey] = useState(null);
+  const [discountSaving, setDiscountSaving] = useState(false);
+  const [quotationDiscountDraft, setQuotationDiscountDraft] = useState({
+    manualValue: "",
+    membershipValue: "",
+    voucherCode: "",
+    voucherValue: "",
+    note: "",
+  });
 
   const autoCreateTriedRef = useRef(false);
   const tabSelectionLockedRef = useRef(false);
+  const quotationImportInputRef = useRef(null);
 
   const customerById = useMemo(() => {
     const map = new Map();
@@ -382,6 +424,50 @@ export default function ServiceOrderQuotePage() {
     });
     return map;
   }, [recommendations]);
+
+  const quotationDiscountRows = useMemo(() => {
+    const rows = readField(activeQuotation, "discounts", "Discounts");
+    return Array.isArray(rows) ? rows : [];
+  }, [activeQuotation]);
+
+  useEffect(() => {
+    const byType = new Map();
+    quotationDiscountRows.forEach((row) => {
+      const type = String(readField(row, "discountType", "DiscountType") || "").trim().toUpperCase();
+      if (type && !byType.has(type)) {
+        byType.set(type, row);
+      }
+    });
+
+    const manualRow = byType.get("MANUAL");
+    const membershipRow = byType.get("MEMBERSHIP");
+    const voucherRow = byType.get("VOUCHER");
+
+    const resolveAmount = (row) => {
+      if (!row) return "";
+      const appliedAmount = Number(readField(row, "appliedAmount", "AppliedAmount") || 0);
+      const discountValue = Number(readField(row, "discountValue", "DiscountValue") || 0);
+      const amount = appliedAmount > 0 ? appliedAmount : discountValue;
+      return amount > 0 ? String(Math.round(amount)) : "";
+    };
+
+    setQuotationDiscountDraft((prev) => ({
+      ...prev,
+      manualValue: resolveAmount(manualRow),
+      membershipValue: resolveAmount(membershipRow),
+      voucherCode: "",
+      voucherValue: resolveAmount(voucherRow),
+    }));
+  }, [activeQuotationId, quotationDiscountRows]);
+
+  const quotationLevelDiscountTotal = useMemo(() => {
+    return quotationDiscountRows.reduce((sum, row) => {
+      const appliedAmount = Number(readField(row, "appliedAmount", "AppliedAmount") || 0);
+      const discountValue = Number(readField(row, "discountValue", "DiscountValue") || 0);
+      const amount = appliedAmount > 0 ? appliedAmount : discountValue;
+      return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+    }, 0);
+  }, [quotationDiscountRows]);
 
   const supplementaryMetaByQuotationDetailId = useMemo(() => {
     const bySodQuotationDetailId = new Map();
@@ -505,7 +591,7 @@ export default function ServiceOrderQuotePage() {
     const serviceNameByRecommendationId = new Map();
     baseRows.forEach((entry) => {
       if (entry.itemType === "SERVICE" && entry.recommendationId) {
-        serviceNameByRecommendationId.set(entry.recommendationId, entry.itemName || `Dịch vụ #${entry.recommendationId}`);
+        serviceNameByRecommendationId.set(entry.recommendationId, entry.itemName || `Dá»‹ch vá»¥ #${entry.recommendationId}`);
       }
     });
 
@@ -514,11 +600,11 @@ export default function ServiceOrderQuotePage() {
     const groupedRows = baseRows.map((entry) => {
       const normalizedUrgency = String(entry.urgency || "").toUpperCase();
       const priorityLabel = normalizedUrgency === "URGENT"
-        ? "Cấp bách"
+        ? "Cáº¥p bÃ¡ch"
         : normalizedUrgency === "HIGH"
-          ? "Quan trọng"
+          ? "Quan trá»ng"
           : normalizedUrgency === "NORMAL"
-            ? "Bình thường"
+            ? "BÃ¬nh thÆ°á»ng"
             : ""; // Empty if no urgency defined
 
       if (entry.itemType === "SERVICE") {
@@ -532,8 +618,8 @@ export default function ServiceOrderQuotePage() {
           parentName: "",
           isDependentPart: false,
           isMainService: true,
-          classificationLabel: priorityLabel || "Dịch vụ chính",
-          priorityLabel: priorityLabel || "Bình thường",
+          classificationLabel: priorityLabel || "Dá»‹ch vá»¥ chÃ­nh",
+          priorityLabel: priorityLabel || "BÃ¬nh thÆ°á»ng",
           classificationRank: 0,
         };
       }
@@ -637,9 +723,16 @@ export default function ServiceOrderQuotePage() {
       });
 
     const nextDraft = {};
+    const nextQuantityDraft = {};
+    const nextDiscountDraft = {};
+    const nextDiscountMode = {};
+    const nextDiscountPercent = {};
     details.forEach((row) => {
       const detailId = Number(readField(row, "id", "Id"));
       if (!detailId) return;
+      const quantityRaw = Number(readField(row, "quantity", "Quantity") || 1);
+      const safeQuantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+      nextQuantityDraft[detailId] = safeQuantity;
       const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || 0);
       const insuranceRaw = readField(
         row,
@@ -657,8 +750,37 @@ export default function ServiceOrderQuotePage() {
         ? Math.min(Math.max(insuranceCovered, 0), Math.max(0, finalAmount))
         : Math.max(0, finalAmount);
       nextDraft[detailId] = safeInsurance;
+
+      const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
+      const quantity = safeQuantity;
+      const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const discountRaw = Number(readField(row, "discountValue", "DiscountValue") || 0);
+      const safeDiscount = Number.isFinite(discountRaw)
+        ? Math.min(Math.max(discountRaw, 0), subTotal)
+        : 0;
+      nextDiscountDraft[detailId] = safeDiscount;
+
+      const discountPercentRaw = readField(row, "discountPercentage", "DiscountPercentage");
+      const hasDiscountPercent =
+        discountPercentRaw !== null &&
+        discountPercentRaw !== undefined &&
+        String(discountPercentRaw).trim() !== "";
+      if (hasDiscountPercent) {
+        const discountPercentNumber = Number(discountPercentRaw);
+        nextDiscountMode[detailId] = DISCOUNT_MODE_PERCENT;
+        nextDiscountPercent[detailId] = Number.isFinite(discountPercentNumber)
+          ? Math.min(Math.max(discountPercentNumber, 0), 100)
+          : 0;
+      } else {
+        nextDiscountMode[detailId] = DISCOUNT_MODE_AMOUNT;
+      }
     });
     setSplitBillingDraft(nextDraft);
+    setLineQuantityDraft(nextQuantityDraft);
+    setLineDiscountDraft(nextDiscountDraft);
+    setLineDiscountModeDraft(nextDiscountMode);
+    setLineDiscountPercentDraft(nextDiscountPercent);
   }, [activeQuotationId, activeQuotation]);
 
   useEffect(() => {
@@ -672,7 +794,7 @@ export default function ServiceOrderQuotePage() {
 
   const loadData = useCallback(async () => {
     if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
-      setError("Mã lệnh sửa chữa không hợp lệ.");
+      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
       setLoading(false);
       return;
     }
@@ -725,7 +847,7 @@ export default function ServiceOrderQuotePage() {
         setActiveQuotationId(null);
       }
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu báo giá.");
+      setError(err?.message || "KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u bÃ¡o giÃ¡.");
     } finally {
       setLoading(false);
     }
@@ -766,9 +888,9 @@ export default function ServiceOrderQuotePage() {
       }
 
       if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_APPROVED") {
-        setActionMessage("Khách đã duyệt báo giá online.");
+        setActionMessage("KhÃ¡ch Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡ online.");
       } else if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_REJECTED") {
-        setActionMessage("Khách đã từ chối báo giá online.");
+        setActionMessage("KhÃ¡ch Ä‘Ã£ tá»« chá»‘i bÃ¡o giÃ¡ online.");
       }
     } catch {
       // Silent refresh should not interrupt user actions.
@@ -836,7 +958,7 @@ export default function ServiceOrderQuotePage() {
       if (itemType === "SERVICE" && standardServiceId) {
         const service = serviceLookup.get(standardServiceId);
         itemId = standardServiceId;
-        itemName = extractServiceName(service) || `Dịch vụ #${standardServiceId}`;
+        itemName = extractServiceName(service) || `Dá»‹ch vá»¥ #${standardServiceId}`;
         unitPriceAtTime = extractServicePrice(service);
         taxRate = extractServiceTax(service);
         normalizedItemType = "LABOR";
@@ -845,7 +967,7 @@ export default function ServiceOrderQuotePage() {
       } else if (inventoryItemId) {
         const product = productLookup.get(inventoryItemId);
         itemId = inventoryItemId;
-        itemName = extractProductName(product) || `Vật tư #${inventoryItemId}`;
+        itemName = extractProductName(product) || `Váº­t tÆ° #${inventoryItemId}`;
         unitPriceAtTime = extractProductPrice(product);
         taxRate = extractProductTax(product);
         normalizedItemType = "PART";
@@ -897,7 +1019,7 @@ export default function ServiceOrderQuotePage() {
       const itemName = firstNonEmptyText(
         readField(row, "itemName", "ItemName"),
         extractServiceName(service),
-        `Dịch vụ #${serviceId}`,
+        `Dá»‹ch vá»¥ #${serviceId}`,
       );
       const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractServicePrice(service);
       const taxRate = Number(readField(row, "taxRate", "TaxRate"));
@@ -911,7 +1033,7 @@ export default function ServiceOrderQuotePage() {
         itemType: "LABOR",
         itemId: serviceId,
         itemName,
-        description: readField(row, "description", "Description") || "Dịch vụ khách hàng đã chọn",
+        description: readField(row, "description", "Description") || "Dá»‹ch vá»¥ khÃ¡ch hÃ ng Ä‘Ã£ chá»n",
         quantity,
         unitPriceAtTime,
         costPriceAtTime: null,
@@ -941,7 +1063,7 @@ export default function ServiceOrderQuotePage() {
       if (!itemId) return;
       const product = productLookup.get(itemId);
       const quantity = toSafeQuantity(readField(row, "quantity", "Quantity"));
-      const itemName = firstNonEmptyText(readField(row, "itemName", "ItemName"), extractProductName(product), `Phụ tùng #${itemId}`);
+      const itemName = firstNonEmptyText(readField(row, "itemName", "ItemName"), extractProductName(product), `Phá»¥ tÃ¹ng #${itemId}`);
       const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractProductPrice(product);
       const taxRateRaw = Number(readField(row, "taxRate", "TaxRate"));
       const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw >= 0 ? taxRateRaw : extractProductTax(product);
@@ -951,7 +1073,7 @@ export default function ServiceOrderQuotePage() {
         itemType: "PART",
         itemId,
         itemName,
-        description: readField(row, "description", "Description") || "Phụ tùng khách hàng đã chọn",
+        description: readField(row, "description", "Description") || "Phá»¥ tÃ¹ng khÃ¡ch hÃ ng Ä‘Ã£ chá»n",
         quantity,
         unitPriceAtTime,
         costPriceAtTime: null,
@@ -992,7 +1114,7 @@ export default function ServiceOrderQuotePage() {
           const itemName = firstNonEmptyText(
             readField(bomRow, "productName", "ProductName"),
             extractProductName(product),
-            `Phụ tùng #${productId}`,
+            `Phá»¥ tÃ¹ng #${productId}`,
           );
 
           draftItems.push({
@@ -1000,7 +1122,7 @@ export default function ServiceOrderQuotePage() {
             itemType: "PART",
             itemId: productId,
             itemName,
-            description: `Phụ tùng BOM cho dịch vụ: ${entry.serviceName || `#${entry.serviceId}`}`,
+            description: `Phá»¥ tÃ¹ng BOM cho dá»‹ch vá»¥: ${entry.serviceName || `#${entry.serviceId}`}`,
             quantity: totalQuantity,
             unitPriceAtTime: extractProductPrice(product),
             costPriceAtTime: null,
@@ -1047,13 +1169,13 @@ export default function ServiceOrderQuotePage() {
 
   const handleCreateDraftQuotation = useCallback(async () => {
     if (!numericOrderId || !staffId) {
-      setError("Không xác định được mã lệnh hoặc nhân sự thao tác.");
+      setError("KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c mÃ£ lá»‡nh hoáº·c nhÃ¢n sá»± thao tÃ¡c.");
       return;
     }
 
     const items = await buildQuotationItemsForDraft();
     if (items.length === 0) {
-      setError("Không có dữ liệu dịch vụ/phụ tùng để tạo báo giá.");
+      setError("KhÃ´ng cÃ³ dá»¯ liá»‡u dá»‹ch vá»¥/phá»¥ tÃ¹ng Ä‘á»ƒ táº¡o bÃ¡o giÃ¡.");
       return;
     }
 
@@ -1064,22 +1186,22 @@ export default function ServiceOrderQuotePage() {
 
     try {
       const created = await serviceOrderApi.createQuotation(numericOrderId, {
-        title: `Báo giá v${(quotations?.length || 0) + 1}`,
+        title: `BÃ¡o giÃ¡ v${(quotations?.length || 0) + 1}`,
         quotationType: "NORMAL",
         validUntil: null,
         serviceAdvisorId: staffId,
         customerNotes: null,
-        internalNotes: "Tạo từ chẩn đoán + dịch vụ khách chọn + BOM phụ tùng",
+        internalNotes: "Táº¡o tá»« cháº©n Ä‘oÃ¡n + dá»‹ch vá»¥ khÃ¡ch chá»n + BOM phá»¥ tÃ¹ng",
         submitForApproval: false,
         items,
       });
 
-      setActionMessage("Đã tạo báo giá nháp.");
+      setActionMessage("ÄÃ£ táº¡o bÃ¡o giÃ¡ nhÃ¡p.");
       await loadData();
       const createdId = Number(readField(created, "id", "Id"));
       if (createdId > 0) setActiveQuotationId(createdId);
     } catch (err) {
-      setError(err?.message || "Không thể tạo báo giá nháp.");
+      setError(err?.message || "KhÃ´ng thá»ƒ táº¡o bÃ¡o giÃ¡ nhÃ¡p.");
     } finally {
       setSaving(false);
     }
@@ -1106,15 +1228,24 @@ export default function ServiceOrderQuotePage() {
 
     try {
       const note = String(insuranceApprovalNote || "").trim();
-      await serviceOrderApi.submitQuotation(quoteId, {
+      const updated = await serviceOrderApi.submitQuotationInternalApproval(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gửi báo giá sang bước chờ bảo hiểm duyệt",
+        note: note || "TrÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡",
       });
-      setActionMessage("Đã chuyển báo giá sang trạng thái chờ bảo hiểm duyệt.");
+      const nextStatus = normalizeStatus(readField(updated, "status", "Status"));
+      if (nextStatus === "WAITING_APPROVAL") {
+        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™. Äang chá» quáº£n Ä‘á»‘c duyá»‡t ká»¹ thuáº­t.");
+      } else if (nextStatus === "PENDING_BRANCH_MANAGER") {
+        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™. Äang chá» quáº£n lÃ½ duyá»‡t tÃ i chÃ­nh.");
+      } else if (nextStatus === "PENDING_INSURANCE" || nextStatus === "INSURANCE_APPROVED") {
+        setActionMessage("ÄÃ£ hoÃ n táº¥t duyá»‡t ná»™i bá»™, sáºµn sÃ ng cho bÆ°á»›c báº£o hiá»ƒm.");
+      } else {
+        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡.");
+      }
       setMailSentNotice("");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể gửi báo giá cho bảo hiểm.");
+      setError(err?.message || "KhÃ´ng thá»ƒ trÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡.");
     } finally {
       setSaving(false);
     }
@@ -1126,7 +1257,7 @@ export default function ServiceOrderQuotePage() {
 
     const evidenceUrlsSent = insuranceEvidenceUrls.filter(u => isValidHttpUrl(u));
     if (evidenceUrlsSent.length === 0) {
-      setError("Vui lòng tải lên hoặc nhập link bằng chứng phê duyệt bảo hiểm.");
+      setError("Vui lÃ²ng táº£i lÃªn hoáº·c nháº­p link báº±ng chá»©ng phÃª duyá»‡t báº£o hiá»ƒm.");
       setActionMessage("");
       return;
     }
@@ -1140,12 +1271,12 @@ export default function ServiceOrderQuotePage() {
       await serviceOrderApi.confirmQuotationInsuranceApproval(quoteId, {
         actorStaffId: staffId,
         insuranceApprovalEvidenceUrl: evidenceUrlsSent.join(", "),
-        note: note || "Bảo hiểm đã xác nhận duyệt",
+        note: note || "Báº£o hiá»ƒm Ä‘Ã£ xÃ¡c nháº­n duyá»‡t",
       });
-      setActionMessage("Đã xác nhận bảo hiểm duyệt và khóa dữ liệu bồi thường.");
+      setActionMessage("ÄÃ£ xÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t vÃ  khÃ³a dá»¯ liá»‡u bá»“i thÆ°á»ng.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể xác nhận bảo hiểm duyệt.");
+      setError(err?.message || "KhÃ´ng thá»ƒ xÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t.");
     } finally {
       setSaving(false);
     }
@@ -1163,13 +1294,13 @@ export default function ServiceOrderQuotePage() {
       const note = String(sendEmailNote || "").trim();
       await serviceOrderApi.sendQuotationToCustomer(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gửi báo giá cho khách sau khi bảo hiểm đã duyệt",
+        note: note || "Gá»­i bÃ¡o giÃ¡ cho khÃ¡ch sau khi báº£o hiá»ƒm Ä‘Ã£ duyá»‡t",
       });
-      setActionMessage("Đã gửi báo giá cho khách hàng.");
-      setMailSentNotice("Gửi email báo giá thành công cho khách hàng.");
+      setActionMessage("ÄÃ£ gá»­i bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng.");
+      setMailSentNotice("Gá»­i email bÃ¡o giÃ¡ thÃ nh cÃ´ng cho khÃ¡ch hÃ ng.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể gửi báo giá cho khách hàng.");
+      setError(err?.message || "KhÃ´ng thá»ƒ gá»­i bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng.");
     } finally {
       setSaving(false);
     }
@@ -1189,13 +1320,13 @@ export default function ServiceOrderQuotePage() {
       const response = await serviceOrderApi.uploadQuotationInsuranceEvidence(quoteId, file);
       const uploadedUrl = String(response?.insuranceApprovalEvidenceUrl || response?.url || response?.Url || "").trim();
       if (!uploadedUrl) {
-        throw new Error("Không nhận được URL ảnh sau khi upload.");
+        throw new Error("KhÃ´ng nháº­n Ä‘Æ°á»£c URL áº£nh sau khi upload.");
       }
 
       setInsuranceEvidenceUrls(prev => [...prev, uploadedUrl]);
-      setInsuranceEvidenceUploadMessage("Đã tải ảnh lên thành công.");
+      setInsuranceEvidenceUploadMessage("ÄÃ£ táº£i áº£nh lÃªn thÃ nh cÃ´ng.");
     } catch (err) {
-      setError(err?.message || "Không thể tải ảnh bằng chứng.");
+      setError(err?.message || "KhÃ´ng thá»ƒ táº£i áº£nh báº±ng chá»©ng.");
       setInsuranceEvidenceUploadMessage("");
     } finally {
       setInsuranceEvidenceUploading(false);
@@ -1203,11 +1334,21 @@ export default function ServiceOrderQuotePage() {
   }, [activeQuotation, staffId]);
 
   const handleExportQuotationExcel = useCallback(async () => {
-    if (loading) return;
+    if (loading || saving) return;
+    const currentQuotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+    const currentOrderStatus = normalizeStatus(readField(order, "status", "Status"));
+    if (["CANCELED", "CANCELLED"].includes(currentOrderStatus)) {
+      setError(EXCEL_UI_TEXT.orderCanceledExport);
+      return;
+    }
+    if (["CANCELED", "CANCELLED"].includes(currentQuotationStatus)) {
+      setError(EXCEL_UI_TEXT.quotationCanceledExport);
+      return;
+    }
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
     if (!quoteId) return;
     setError("");
-    setActionMessage("Đang chuẩn bị file Excel...");
+    setActionMessage("Äang chuáº©n bá»‹ file Excel...");
 
     try {
       const { blob, fileName } = await serviceOrderApi.exportQuotationExcel(quoteId);
@@ -1232,7 +1373,7 @@ export default function ServiceOrderQuotePage() {
           savedToDevice = true;
         } catch (saveErr) {
           if (saveErr?.name === "AbortError") {
-            setActionMessage("Đã hủy chọn nơi lưu file.");
+            setActionMessage("ÄÃ£ há»§y chá»n nÆ¡i lÆ°u file.");
             return;
           } else {
             throw saveErr;
@@ -1254,20 +1395,88 @@ export default function ServiceOrderQuotePage() {
       }
 
       if (savedToDevice) {
-        setActionMessage("Đã lưu file Excel vào thiết bị và tải file trên trình duyệt.");
+        setActionMessage("ÄÃ£ lÆ°u file Excel vÃ o thiáº¿t bá»‹ vÃ  táº£i file trÃªn trÃ¬nh duyá»‡t.");
       } else {
-        setActionMessage("Đã tải file Excel trên trình duyệt.");
+        setActionMessage("ÄÃ£ táº£i file Excel trÃªn trÃ¬nh duyá»‡t.");
       }
     } catch (err) {
       if (err?.name === "AbortError") {
-        setActionMessage("Đã hủy chọn nơi lưu file.");
+        setActionMessage("ÄÃ£ há»§y chá»n nÆ¡i lÆ°u file.");
         return;
       }
 
       setActionMessage("");
-      setError(err?.message || "Không thể xuất Excel.");
+      setError(err?.message || "KhÃ´ng thá»ƒ xuáº¥t Excel.");
     }
-  }, [activeQuotation, loading]);
+  }, [activeQuotation, loading, saving, order]);
+
+  const handleImportQuotationExcel = useCallback(async (event) => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    const file = event?.target?.files?.[0];
+    const currentQuotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
+    const currentOrderStatus = normalizeStatus(readField(order, "status", "Status"));
+    const splitBillingLockedStatusesLocal = new Set([
+      "SUPERSEDED",
+      "CANCELED",
+      "INSURANCE_APPROVED",
+      "PENDING_CUSTOMER",
+      "CUSTOMER_APPROVED",
+    ]);
+    const canEditSplitBillingLocal =
+      Boolean(activeQuotation) && !splitBillingLockedStatusesLocal.has(currentQuotationStatus);
+
+    if (!quoteId || !file) {
+      if (event?.target) event.target.value = "";
+      return;
+    }
+
+    if (loading || saving) {
+      setError(EXCEL_UI_TEXT.processing);
+      if (event?.target) event.target.value = "";
+      return;
+    }
+    if (!staffId) {
+      setError(EXCEL_UI_TEXT.noStaff);
+      if (event?.target) event.target.value = "";
+      return;
+    }
+    if (["CANCELED", "CANCELLED"].includes(currentOrderStatus)) {
+      setError(EXCEL_UI_TEXT.orderCanceledImport);
+      if (event?.target) event.target.value = "";
+      return;
+    }
+    if (["CANCELED", "CANCELLED"].includes(currentQuotationStatus)) {
+      setError(EXCEL_UI_TEXT.quotationCanceledImport);
+      if (event?.target) event.target.value = "";
+      return;
+    }
+    if (!canEditSplitBillingLocal) {
+      setError(EXCEL_UI_TEXT.splitLocked);
+      if (event?.target) event.target.value = "";
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setActionMessage("Äang nháº­p dá»¯ liá»‡u tá»« file Excel...");
+
+    try {
+      await serviceOrderApi.importQuotationExcel(
+        quoteId,
+        file,
+        staffId,
+        "Nháº­p pháº§n bá»• báº£o hiá»ƒm tá»« file Excel."
+      );
+      setActionMessage("ÄÃ£ nháº­p dá»¯ liá»‡u Excel thÃ nh cÃ´ng.");
+      await loadData();
+    } catch (err) {
+      setActionMessage("");
+      setError(err?.message || "KhÃ´ng thá»ƒ nháº­p dá»¯ liá»‡u Excel.");
+    } finally {
+      if (event?.target) event.target.value = "";
+      setSaving(false);
+    }
+  }, [activeQuotation, order, staffId, loading, saving, loadData]);
 
   const handleToggleCloneRemove = useCallback((detailId) => {
     setRemoveIdsForClone((prev) => {
@@ -1301,6 +1510,80 @@ export default function ServiceOrderQuotePage() {
     }));
   }, []);
 
+  const handleLineQuantityChange = useCallback((detailId, rawValue, unitPrice) => {
+    const parsed = Number(String(rawValue || "").replace(/[^\d.-]/g, ""));
+    const normalized = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    setLineQuantityDraft((prev) => ({
+      ...prev,
+      [detailId]: normalized,
+    }));
+
+    const mode = lineDiscountModeDraft[detailId] || DISCOUNT_MODE_AMOUNT;
+    if (mode === DISCOUNT_MODE_PERCENT) {
+      const percentRaw = Number(lineDiscountPercentDraft[detailId]);
+      const safePercent = Number.isFinite(percentRaw) ? Math.min(Math.max(percentRaw, 0), 100) : 0;
+      const subTotal = Math.max(0, normalized * Math.max(0, Number(unitPrice) || 0));
+      const nextAmount = Math.round(subTotal * (safePercent / 100) * 100) / 100;
+      setLineDiscountDraft((prev) => ({
+        ...prev,
+        [detailId]: nextAmount,
+      }));
+    }
+  }, [lineDiscountModeDraft, lineDiscountPercentDraft]);
+
+  const handleLineDiscountModeChange = useCallback((detailId, subTotal, nextMode) => {
+    const normalizedMode = nextMode === DISCOUNT_MODE_PERCENT ? DISCOUNT_MODE_PERCENT : DISCOUNT_MODE_AMOUNT;
+    const safeSubTotal = Math.max(0, Number(subTotal) || 0);
+    setLineDiscountModeDraft((prev) => ({
+      ...prev,
+      [detailId]: normalizedMode,
+    }));
+
+    if (normalizedMode === DISCOUNT_MODE_PERCENT) {
+      const amountRaw = Number(lineDiscountDraft[detailId]);
+      const safeAmount = Number.isFinite(amountRaw) ? Math.min(Math.max(amountRaw, 0), safeSubTotal) : 0;
+      const percent = safeSubTotal > 0 ? (safeAmount / safeSubTotal) * 100 : 0;
+      const safePercent = Math.min(Math.max(percent, 0), 100);
+      setLineDiscountPercentDraft((prev) => ({
+        ...prev,
+        [detailId]: Number(safePercent.toFixed(4)),
+      }));
+    } else {
+      const percentRaw = Number(lineDiscountPercentDraft[detailId]);
+      const safePercent = Number.isFinite(percentRaw) ? Math.min(Math.max(percentRaw, 0), 100) : 0;
+      const amount = Math.round(safeSubTotal * (safePercent / 100) * 100) / 100;
+      setLineDiscountDraft((prev) => ({
+        ...prev,
+        [detailId]: amount,
+      }));
+    }
+  }, [lineDiscountDraft, lineDiscountPercentDraft]);
+
+  const handleLineDiscountChange = useCallback((detailId, subTotal, rawValue, mode) => {
+    const parsed = Number(String(rawValue || "").replace(/[^\d.-]/g, ""));
+    const safeSubTotal = Math.max(0, Number(subTotal) || 0);
+    if (mode === DISCOUNT_MODE_PERCENT) {
+      const percent = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 100) : 0;
+      const amount = Math.round(safeSubTotal * (percent / 100) * 100) / 100;
+      setLineDiscountPercentDraft((prev) => ({
+        ...prev,
+        [detailId]: percent,
+      }));
+      setLineDiscountDraft((prev) => ({
+        ...prev,
+        [detailId]: amount,
+      }));
+      return;
+    }
+
+    const normalized = Number.isFinite(parsed) ? parsed : 0;
+    const clamped = Math.min(Math.max(normalized, 0), safeSubTotal);
+    setLineDiscountDraft((prev) => ({
+      ...prev,
+      [detailId]: clamped,
+    }));
+  }, []);
+
   const handleSaveSplitBilling = useCallback(async () => {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
     if (!quoteId || !staffId) return;
@@ -1309,7 +1592,42 @@ export default function ServiceOrderQuotePage() {
     const changedItems = details
       .map((row) => {
         const detailId = Number(readField(row, "id", "Id"));
-        const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || 0);
+        const originalQuantityRaw = Number(readField(row, "quantity", "Quantity") || 1);
+        const originalQuantity = Number.isFinite(originalQuantityRaw) && originalQuantityRaw > 0 ? originalQuantityRaw : 1;
+        const quantityDraft = Number(lineQuantityDraft[detailId]);
+        const quantity = Number.isFinite(quantityDraft) && quantityDraft > 0 ? quantityDraft : originalQuantity;
+        const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
+        const subTotal = Math.max(0, quantity * Math.max(0, unitPrice));
+        const originalDiscount = Number(readField(row, "discountValue", "DiscountValue") || 0);
+        const originalDiscountPercentRaw = readField(row, "discountPercentage", "DiscountPercentage");
+        const hasOriginalDiscountPercent =
+          originalDiscountPercentRaw !== null &&
+          originalDiscountPercentRaw !== undefined &&
+          String(originalDiscountPercentRaw).trim() !== "";
+        const originalDiscountPercent = hasOriginalDiscountPercent
+          ? Number(originalDiscountPercentRaw)
+          : null;
+        const safeOriginalDiscountPercent = Number.isFinite(originalDiscountPercent)
+          ? Math.min(Math.max(originalDiscountPercent, 0), 100)
+          : null;
+        const modeDraft = lineDiscountModeDraft[detailId];
+        const discountMode = modeDraft || (hasOriginalDiscountPercent ? DISCOUNT_MODE_PERCENT : DISCOUNT_MODE_AMOUNT);
+        const draftDiscount = Number(lineDiscountDraft[detailId]);
+        const draftDiscountPercent = Number(lineDiscountPercentDraft[detailId]);
+        const safeDiscountPercent = discountMode === DISCOUNT_MODE_PERCENT
+          ? (Number.isFinite(draftDiscountPercent)
+            ? Math.min(Math.max(draftDiscountPercent, 0), 100)
+            : (safeOriginalDiscountPercent ?? 0))
+          : null;
+        const safeDiscount = discountMode === DISCOUNT_MODE_PERCENT
+          ? Math.round(subTotal * ((safeDiscountPercent || 0) / 100) * 100) / 100
+          : (Number.isFinite(draftDiscount)
+            ? Math.min(Math.max(draftDiscount, 0), subTotal)
+            : Math.min(Math.max(originalDiscount, 0), subTotal));
+        const taxRate = Number(readField(row, "taxRate", "TaxRate") || 0);
+        const taxableBase = Math.max(0, subTotal - safeDiscount);
+        const taxAmount = Math.max(0, taxableBase * (Math.max(0, taxRate) / 100));
+        const finalAmount = Math.max(0, Math.round((taxableBase + taxAmount) * 100) / 100);
         const originalInsurance = Number(
           readField(row, "insuranceCoveredAmount", "InsuranceCoveredAmount", "insuranceRequestedAmount", "InsuranceRequestedAmount") || 0,
         );
@@ -1317,18 +1635,28 @@ export default function ServiceOrderQuotePage() {
         const safeDraft = Number.isFinite(draftInsurance)
           ? Math.min(Math.max(draftInsurance, 0), Math.max(0, finalAmount))
           : originalInsurance;
-        const isChanged = Math.abs(safeDraft - originalInsurance) >= 0.01;
+        const isInsuranceChanged = Math.abs(safeDraft - originalInsurance) >= 0.01;
+        const isQuantityChanged = Math.abs(quantity - originalQuantity) >= 0.0001;
+        const isDiscountValueChanged = Math.abs(safeDiscount - Math.max(0, originalDiscount)) >= 0.01;
+        const isDiscountPercentChanged = discountMode === DISCOUNT_MODE_PERCENT
+          ? Math.abs((safeDiscountPercent || 0) - (safeOriginalDiscountPercent || 0)) >= 0.0001 || !hasOriginalDiscountPercent
+          : hasOriginalDiscountPercent;
+        const isChanged = isInsuranceChanged || isDiscountValueChanged || isDiscountPercentChanged || isQuantityChanged;
         return isChanged
           ? {
             quotationDetailId: detailId,
+            quantity,
             insuranceCoveredAmount: safeDraft,
+            discountPercentage: discountMode === DISCOUNT_MODE_PERCENT ? safeDiscountPercent : null,
+            discountValue: safeDiscount,
           }
           : null;
       })
       .filter(Boolean);
 
-    if (changedItems.length === 0) {
-      setActionMessage("Không có thay đổi tách bill để lưu.");
+    if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
+      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
+      setLoading(false);
       return;
     }
 
@@ -1338,17 +1666,26 @@ export default function ServiceOrderQuotePage() {
     try {
       await serviceOrderApi.updateQuotationSplitBilling(quoteId, {
         actorStaffId: staffId,
-        note: "Cập nhật phân bổ bảo hiểm/khách hàng",
+        note: "Cáº­p nháº­t pháº§n bá»• báº£o hiá»ƒm/khÃ¡ch hÃ ng",
         items: changedItems,
       });
-      setActionMessage("Đã lưu tách bill và cập nhật tổng bảo hiểm/khách.");
+      setActionMessage("ÄÃ£ lÆ°u tÃ¡ch bill vÃ  cáº­p nháº­t tá»•ng báº£o hiá»ƒm/khÃ¡ch.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể lưu tách bill.");
+      setError(err?.message || "KhÃ´ng thá»ƒ lÆ°u tÃ¡ch bill.");
     } finally {
       setSaving(false);
     }
-  }, [activeQuotation, splitBillingDraft, staffId, loadData]);
+  }, [
+    activeQuotation,
+    splitBillingDraft,
+    lineQuantityDraft,
+    lineDiscountDraft,
+    lineDiscountModeDraft,
+    lineDiscountPercentDraft,
+    staffId,
+    loadData,
+  ]);
 
   const handleCloneQuotation = useCallback(async () => {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
@@ -1356,7 +1693,7 @@ export default function ServiceOrderQuotePage() {
     const cloneReason = String(cloneNote || "").trim();
 
     if (!cloneReason) {
-      setError("Vui lòng nhập lý do trước khi tạo bản clone.");
+      setError("Vui lÃ²ng nháº­p lÃ½ do trÆ°á»›c khi táº¡o báº£n clone.");
       setActionMessage("");
       return;
     }
@@ -1384,14 +1721,14 @@ export default function ServiceOrderQuotePage() {
       });
 
       const createdId = Number(readField(created, "id", "Id"));
-      setActionMessage("Đã clone sang phiên bản mới.");
+      setActionMessage("ÄÃ£ clone sang phiÃªn báº£n má»›i.");
       setCloneNote("");
       setRemoveIdsForClone([]);
       setShowMandatoryCloneWarning(false);
       await loadData();
       if (createdId > 0) setActiveQuotationId(createdId);
     } catch (err) {
-      setError(err?.message || "Không thể clone báo giá.");
+      setError(err?.message || "KhÃ´ng thá»ƒ clone bÃ¡o giÃ¡.");
     } finally {
       setSaving(false);
     }
@@ -1409,17 +1746,17 @@ export default function ServiceOrderQuotePage() {
       await serviceOrderApi.applyQuotationCustomerDecision(quoteId, {
         approved,
         actorStaffId: staffId,
-        note: approved ? "Khách đồng ý báo giá" : "Khách từ chối báo giá",
+        note: approved ? "KhÃ¡ch Ä‘á»“ng Ã½ bÃ¡o giÃ¡" : "KhÃ¡ch tá»« chá»‘i bÃ¡o giÃ¡",
       });
 
       setActionMessage(
         approved
-          ? "Khách đã duyệt báo giá. Hệ thống sẽ đồng bộ vào SOD theo backend workflow."
-          : "Khách từ chối báo giá. Bạn có thể clone sang phiên bản mới để đàm phán tiếp.",
+          ? "KhÃ¡ch Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡. Há»‡ thá»‘ng sáº½ Ä‘áº©y vÃ o SOD theo backend workflow."
+          : "KhÃ¡ch tá»« chá»‘i bÃ¡o giÃ¡. Báº¡n cÃ³ thá»ƒ clone sang phiÃªn báº£n má»›i Ä‘á»ƒ Ä‘Ã m phÃ¡n tiáº¿p.",
       );
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể cập nhật quyết định khách hàng.");
+      setError(err?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t quyáº¿t Ä‘á»‹nh khÃ¡ch hÃ ng.");
     } finally {
       setSaving(false);
     }
@@ -1438,15 +1775,67 @@ export default function ServiceOrderQuotePage() {
         reason: cancelReason,
       });
 
-      setActionMessage("Đã ghi nhận yêu cầu hủy toàn bộ dịch vụ.");
+      setActionMessage("ÄÃ£ ghi nháº­n yÃªu cáº§u há»§y toÃ n bá»™ dá»‹ch vá»¥.");
       setShowCancelModal(false);
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể gửi yêu cầu hủy toàn bộ.");
+      setError(err?.message || "KhÃ´ng thá»ƒ gá»­i yÃªu cáº§u há»§y toÃ n bá»™.");
     } finally {
       setSaving(false);
     }
   }, [numericOrderId, staffId, cancelReason, loadData]);
+
+  const handleSaveQuotationDiscounts = useCallback(async () => {
+    const quoteId = Number(readField(activeQuotation, "id", "Id"));
+    if (!quoteId || !staffId) return;
+
+    const parseAmount = (rawValue) => {
+      const normalized = String(rawValue || "").replace(/[^\d.-]/g, "");
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    };
+
+    const manualValue = parseAmount(quotationDiscountDraft.manualValue);
+    const membershipValue = parseAmount(quotationDiscountDraft.membershipValue);
+    const voucherValue = parseAmount(quotationDiscountDraft.voucherValue);
+    const voucherCode = String(quotationDiscountDraft.voucherCode || "").trim();
+
+    const items = [];
+    if (membershipValue > 0) {
+      items.push({ discountType: "MEMBERSHIP", discountValue: membershipValue, appliedAmount: membershipValue, valueType: "AMOUNT" });
+    }
+    if (manualValue > 0) {
+      items.push({ discountType: "MANUAL", discountValue: manualValue, appliedAmount: manualValue, valueType: "AMOUNT" });
+    }
+    if (voucherValue > 0 && voucherCode) {
+      items.push({
+        discountType: "VOUCHER",
+        voucherCode,
+        discountValue: voucherValue,
+        appliedAmount: voucherValue,
+        valueType: "AMOUNT",
+      });
+    }
+
+    setDiscountSaving(true);
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+    try {
+      await serviceOrderApi.upsertQuotationDiscounts(quoteId, {
+        actorStaffId: staffId,
+        note: String(quotationDiscountDraft.note || "").trim() || "Cáº­p nháº­t giáº£m giÃ¡ bÃ¡o giÃ¡",
+        items,
+      });
+      setActionMessage("ÄÃ£ lÆ°u giáº£m giÃ¡ bÃ¡o giÃ¡.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "KhÃ´ng thá»ƒ lÆ°u giáº£m giÃ¡ bÃ¡o giÃ¡.");
+    } finally {
+      setDiscountSaving(false);
+      setSaving(false);
+    }
+  }, [activeQuotation, staffId, quotationDiscountDraft, loadData]);
 
   const quotationStatus = normalizeStatus(readField(activeQuotation, "status", "Status"));
   const splitBillingLockedStatuses = new Set([
@@ -1462,6 +1851,34 @@ export default function ServiceOrderQuotePage() {
   const canSendToCustomer = ["INSURANCE_APPROVED", "PENDING_CUSTOMER"].includes(quotationStatus);
   const canCustomerDecision = ["PENDING_CUSTOMER"].includes(quotationStatus);
   const canClone = !["CUSTOMER_APPROVED", "CANCELED", "CANCELLED"].includes(quotationStatus);
+  const canEditQuotationDiscount = Boolean(activeQuotation) && ![
+    "SUPERSEDED",
+    "CANCELED",
+    "CANCELLED",
+    "INSURANCE_APPROVED",
+    "PENDING_CUSTOMER",
+    "CUSTOMER_APPROVED",
+  ].includes(quotationStatus);
+  const orderStatus = normalizeStatus(readField(order, "status", "Status"));
+  const isOrderCanceled = ["CANCELED", "CANCELLED"].includes(orderStatus);
+  const importExcelDisabledReason = useMemo(() => {
+    if (!activeQuotation) return EXCEL_UI_TEXT.noQuotationImport;
+    if (loading || saving) return EXCEL_UI_TEXT.processing;
+    if (!staffId) return EXCEL_UI_TEXT.noStaff;
+    if (isOrderCanceled) return EXCEL_UI_TEXT.orderCanceledImport;
+    if (["CANCELED", "CANCELLED"].includes(quotationStatus)) return EXCEL_UI_TEXT.quotationCanceledImport;
+    if (!canEditSplitBilling) return EXCEL_UI_TEXT.splitLocked;
+    return "";
+  }, [activeQuotation, loading, saving, staffId, isOrderCanceled, quotationStatus, canEditSplitBilling]);
+  const isImportExcelDisabled = importExcelDisabledReason.length > 0;
+  const exportExcelDisabledReason = useMemo(() => {
+    if (!activeQuotation) return EXCEL_UI_TEXT.noQuotationExport;
+    if (loading || saving) return EXCEL_UI_TEXT.processing;
+    if (isOrderCanceled) return EXCEL_UI_TEXT.orderCanceledExport;
+    if (["CANCELED", "CANCELLED"].includes(quotationStatus)) return EXCEL_UI_TEXT.quotationCanceledExport;
+    return "";
+  }, [activeQuotation, loading, saving, isOrderCanceled, quotationStatus]);
+  const isExportExcelDisabled = exportExcelDisabledReason.length > 0;
   const evidenceUrlsValue = insuranceEvidenceUrls.join(", ");
   const allUrlsValid = insuranceEvidenceUrls.every(u => isValidHttpUrl(u));
   const evidenceUrlError = canConfirmInsuranceApproved && insuranceEvidenceUrls.length > 0 && !allUrlsValid;
@@ -1493,7 +1910,12 @@ export default function ServiceOrderQuotePage() {
       const status = normalizeStatus(readField(row, "status", "Status"));
       if (status === "CANCELED" || status === "CANCELLED") return;
 
-      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const detailId = Number(readField(row, "id", "Id"));
+      const quantityRaw = Number(readField(row, "quantity", "Quantity") || 0);
+      const quantityDraft = Number(lineQuantityDraft[detailId]);
+      const quantity = Number.isFinite(quantityDraft) && quantityDraft > 0
+        ? quantityDraft
+        : quantityRaw;
       const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
       const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
       const discountValue = Math.max(0, Number(readField(row, "discountValue", "DiscountValue") || 0));
@@ -1536,7 +1958,7 @@ export default function ServiceOrderQuotePage() {
       totalWithVat: Number((normalizedBase + normalizedVat).toFixed(2)),
       groups: normalizedGroups,
     };
-  }, [activeQuotation, quotationDetailRows]);
+  }, [activeQuotation, quotationDetailRows, lineQuantityDraft]);
   const splitBillingSummary = useMemo(() => {
     if (!Array.isArray(quotationDetailRows) || quotationDetailRows.length === 0) {
       const dAmt = Number(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount") || 0);
@@ -1559,9 +1981,23 @@ export default function ServiceOrderQuotePage() {
       const detailId = Number(readField(row, "id", "Id"));
       if (!detailId) return;
 
-      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const quantityRaw = Number(readField(row, "quantity", "Quantity") || 0);
+      const quantityDraft = Number(lineQuantityDraft[detailId]);
+      const quantity = Number.isFinite(quantityDraft) && quantityDraft > 0
+        ? quantityDraft
+        : quantityRaw;
       const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
-      const finalAmount = Math.max(0, Number(readField(row, "finalAmount", "FinalAmount") || quantity * unitPrice));
+      const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
+      const subTotal = Number.isFinite(subTotalRaw) ? Math.max(0, subTotalRaw) : Math.max(0, quantity * unitPrice);
+      const originalDiscount = Number(readField(row, "discountValue", "DiscountValue") || 0);
+      const discountRaw = Number(lineDiscountDraft[detailId]);
+      const safeDiscount = Number.isFinite(discountRaw)
+        ? Math.min(Math.max(discountRaw, 0), subTotal)
+        : Math.min(Math.max(originalDiscount, 0), subTotal);
+      const taxRate = Number(readField(row, "taxRate", "TaxRate") || 0);
+      const taxableBase = Math.max(0, subTotal - safeDiscount);
+      const taxAmount = Math.max(0, taxableBase * (Math.max(0, taxRate) / 100));
+      const finalAmount = Math.max(0, Math.round((taxableBase + taxAmount) * 100) / 100);
       const insuranceRaw = Number(splitBillingDraft[detailId]);
       const safeInsurance = Number.isFinite(insuranceRaw)
         ? Math.min(Math.max(insuranceRaw, 0), finalAmount)
@@ -1576,13 +2012,13 @@ export default function ServiceOrderQuotePage() {
       deductible,
       totalCustomerPayable: customer + deductible
     };
-  }, [activeQuotation, quotationDetailRows, splitBillingDraft, order]);
+  }, [activeQuotation, quotationDetailRows, splitBillingDraft, lineQuantityDraft, lineDiscountDraft, order]);
   const vatHeadlineLabel = useMemo(() => {
-    if (!Array.isArray(vatSummary.groups) || vatSummary.groups.length === 0) return "Thuế VAT:";
+    if (!Array.isArray(vatSummary.groups) || vatSummary.groups.length === 0) return "Thuáº¿ VAT:";
     if (vatSummary.groups.length === 1) {
-      return `Thuế VAT (${vatSummary.groups[0].taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%):`;
+      return `Thuáº¿ VAT (${vatSummary.groups[0].taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%):`;
     }
-    return "Thuế VAT (nhiều mức):";
+    return "Thuáº¿ VAT (nhiá»u má»©c):";
   }, [vatSummary.groups]);
   const executionCostSummary = useMemo(() => {
     const rows = Array.isArray(quotationDetailRows) ? quotationDetailRows : [];
@@ -1594,7 +2030,12 @@ export default function ServiceOrderQuotePage() {
       const status = normalizeStatus(readField(row, "status", "Status"));
       if (status === "CANCELED" || status === "CANCELLED") return;
 
-      const quantity = Number(readField(row, "quantity", "Quantity") || 0);
+      const detailId = Number(readField(row, "id", "Id"));
+      const quantityRaw = Number(readField(row, "quantity", "Quantity") || 0);
+      const quantityDraft = Number(lineQuantityDraft[detailId]);
+      const quantity = Number.isFinite(quantityDraft) && quantityDraft > 0
+        ? quantityDraft
+        : quantityRaw;
       const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
       const subTotalRaw = Number(readField(row, "subTotal", "SubTotal"));
       const discountValue = Math.max(0, Number(readField(row, "discountValue", "DiscountValue") || 0));
@@ -1610,7 +2051,7 @@ export default function ServiceOrderQuotePage() {
       laborBeforeVat: Number(laborBeforeVat.toFixed(2)),
       partsAndMaterialBeforeVat: Number(partsAndMaterialBeforeVat.toFixed(2)),
     };
-  }, [quotationDetailRows]);
+  }, [quotationDetailRows, lineQuantityDraft]);
   const vatGroupsForSummary = useMemo(() => {
     if (Array.isArray(vatSummary.groups) && vatSummary.groups.length > 0) return vatSummary.groups;
     return [
@@ -1674,7 +2115,7 @@ export default function ServiceOrderQuotePage() {
 
   const renderDetailRows = (rows) => {
     const groups = buildDetailGroups(rows);
-    return groups.flatMap((group, groupIndex) => {
+    return groups.map((group, groupIndex) => {
       const groupKey = String(group.key);
       const inferredPartCount = group.partRows.length;
       const partCount = partCountByGroup.get(groupKey) || inferredPartCount;
@@ -1686,14 +2127,44 @@ export default function ServiceOrderQuotePage() {
       const groupRenderedRows = visibleRows.map((item, rowIndex) => {
         const row = item.row;
         const detailId = Number(readField(row, "id", "Id"));
-        const qty = Number(readField(row, "quantity", "Quantity") || 1);
+        const originalQty = Number(readField(row, "quantity", "Quantity") || 1);
+        const qtyDraft = Number(lineQuantityDraft[detailId]);
+        const qty = Number.isFinite(qtyDraft) && qtyDraft > 0 ? qtyDraft : (Number.isFinite(originalQty) && originalQty > 0 ? originalQty : 1);
         const unitPrice = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime") || 0);
-        const finalAmount = Number(readField(row, "finalAmount", "FinalAmount") || qty * unitPrice);
+        const subTotal = Math.max(0, qty * unitPrice);
+        const originalDiscount = Number(readField(row, "discountValue", "DiscountValue") || 0);
+        const originalDiscountPercentRaw = readField(row, "discountPercentage", "DiscountPercentage");
+        const hasOriginalDiscountPercent =
+          originalDiscountPercentRaw !== null &&
+          originalDiscountPercentRaw !== undefined &&
+          String(originalDiscountPercentRaw).trim() !== "";
+        const originalDiscountPercent = hasOriginalDiscountPercent ? Number(originalDiscountPercentRaw) : null;
+        const defaultDiscountMode = hasOriginalDiscountPercent ? DISCOUNT_MODE_PERCENT : DISCOUNT_MODE_AMOUNT;
+        const discountMode = lineDiscountModeDraft[detailId] || defaultDiscountMode;
+        const discountDraft = Number(lineDiscountDraft[detailId]);
+        const discountPercentDraft = Number(lineDiscountPercentDraft[detailId]);
+        const safeDiscountPercent = discountMode === DISCOUNT_MODE_PERCENT
+          ? (Number.isFinite(discountPercentDraft)
+            ? Math.min(Math.max(discountPercentDraft, 0), 100)
+            : (Number.isFinite(originalDiscountPercent) ? Math.min(Math.max(originalDiscountPercent, 0), 100) : 0))
+          : null;
+        const safeDiscount = discountMode === DISCOUNT_MODE_PERCENT
+          ? Math.round(subTotal * ((safeDiscountPercent || 0) / 100) * 100) / 100
+          : (Number.isFinite(discountDraft)
+            ? Math.min(Math.max(discountDraft, 0), subTotal)
+            : Math.min(Math.max(originalDiscount, 0), subTotal));
+        const taxRate = Number(readField(row, "taxRate", "TaxRate") || 0);
+        const taxableBase = Math.max(0, subTotal - safeDiscount);
+        const taxAmount = Math.max(0, taxableBase * (Math.max(0, taxRate) / 100));
+        const finalAmount = Math.max(0, Math.round((taxableBase + taxAmount) * 100) / 100);
         const insuranceDraft = Number(splitBillingDraft[detailId]);
-        const insuranceValue = Number.isFinite(insuranceDraft) ? insuranceDraft : finalAmount;
+        const insuranceValue = Number.isFinite(insuranceDraft)
+          ? Math.min(Math.max(insuranceDraft, 0), finalAmount)
+          : finalAmount;
         const customerValue = Math.max(0, finalAmount - insuranceValue);
         const isGroupStart = rowIndex === 0;
         const isGroupEnd = rowIndex === visibleRows.length - 1;
+        const qtyWarningMessage = getQuantityWarningMessage(qty, item.isMainService);
         const serviceRowTooltip = item.isMainService
           ? (canToggle ? (isCollapsed ? SERVICE_ROW_TOOLTIP_EXPAND : SERVICE_ROW_TOOLTIP_COLLAPSE) : SERVICE_ROW_TOOLTIP_STATIC)
           : "";
@@ -1725,17 +2196,56 @@ export default function ServiceOrderQuotePage() {
                 </div>
               ) : (
                 <div className="part-name-cell" style={{ paddingLeft: 20, color: "#475569" }}>
-                  <span style={{ opacity: 0.3, marginRight: 8 }}>└─</span> {item.itemName}
+                  <span style={{ opacity: 0.3, marginRight: 8 }}>+-</span> {item.itemName}
                 </div>
               )}
             </td>
             <td className="col-priority">
               <span className={`priority-badge priority-${item.urgency || "NORMAL"}`}>
-                {item.priorityLabel || "Bình thường"}
+                {item.priorityLabel || "BÃ¬nh thÆ°á»ng"}
               </span>
             </td>
-            <td className="text-right col-qty">{qty}</td>
+            <td className="col-qty">
+              <input
+                type="number"
+                step="0.001"
+                min="0.001"
+                className={`split-input split-input-qty ${qtyWarningMessage ? "split-input-warning" : ""}`}
+                value={qty}
+                onChange={(e) => handleLineQuantityChange(detailId, e.target.value, unitPrice)}
+                disabled={!canEditSplitBilling}
+                onClick={(e) => e.stopPropagation()}
+              />
+              {qtyWarningMessage ? (
+                <div className="split-qty-warning-text" onClick={(e) => e.stopPropagation()}>
+                  {qtyWarningMessage}
+                </div>
+              ) : null}
+            </td>
             <td className="text-right col-money">{formatMoney(unitPrice)}</td>
+            <td className="col-money">
+              <div className="split-discount-editor" onClick={(e) => e.stopPropagation()}>
+                <select
+                  className="split-discount-mode"
+                  value={discountMode}
+                  onChange={(e) => handleLineDiscountModeChange(detailId, subTotal, e.target.value)}
+                  disabled={!canEditSplitBilling}
+                >
+                  <option value={DISCOUNT_MODE_AMOUNT}>VNÄ</option>
+                  <option value={DISCOUNT_MODE_PERCENT}>%</option>
+                </select>
+                <input
+                  type="number"
+                  step={discountMode === DISCOUNT_MODE_PERCENT ? "0.01" : "1000"}
+                  min="0"
+                  max={discountMode === DISCOUNT_MODE_PERCENT ? "100" : undefined}
+                  className="split-input split-input-discount"
+                  value={discountMode === DISCOUNT_MODE_PERCENT ? (safeDiscountPercent || 0) : safeDiscount}
+                  onChange={(e) => handleLineDiscountChange(detailId, subTotal, e.target.value, discountMode)}
+                  disabled={!canEditSplitBilling}
+                />
+              </div>
+            </td>
             <td className="text-right col-money" style={{ fontWeight: 700 }}>{formatMoney(finalAmount)}</td>
             <td className="col-money">
               <input
@@ -1761,15 +2271,16 @@ export default function ServiceOrderQuotePage() {
         );
       });
 
-      if (groupIndex < groups.length - 1) {
-        groupRenderedRows.push(
-          <tr key={`spacer-${groupKey}`} className="group-spacer-row">
-            <td colSpan={8} />
-          </tr>,
-        );
-      }
-
-      return groupRenderedRows;
+      return (
+        <tbody key={groupKey} className="item-group-body">
+          {groupRenderedRows}
+          {groupIndex < groups.length - 1 && (
+            <tr className="group-spacer-row">
+              <td colSpan={9} />
+            </tr>
+          )}
+        </tbody>
+      );
     });
   };
 
@@ -1777,22 +2288,22 @@ export default function ServiceOrderQuotePage() {
     <div className="reception-quote-page">
       <header className="reception-quote-head">
         <div>
-          <h2 className="reception-quote-title">Trung tâm Báo giá Thương mại</h2>
+          <h2 className="reception-quote-title">Trung tÃ¢m BÃ¡o giÃ¡ ThÆ°Æ¡ng máº¡i</h2>
           <div className="reception-quote-subtitle">
             <Clock size={14} style={{ marginRight: 4 }} />
-            Mã lệnh: <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
+            MÃ£ lá»‡nh: <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
           </div>
         </div>
         <button type="button" className="btn-back-premium" onClick={() => navigate("/workshop/reception")}>
           <ChevronRight size={18} style={{ transform: "rotate(180deg)" }} />
-          Quay lại danh sách
+          Quay láº¡i danh sÃ¡ch
         </button>
       </header>
 
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Đang tải dữ liệu báo giá...</p>
+          <p>Äang táº£i dá»¯ liá»‡u bÃ¡o giÃ¡...</p>
         </div>
       ) : (
         <div className="reception-quote-layout">
@@ -1802,56 +2313,56 @@ export default function ServiceOrderQuotePage() {
             {/* Row 1 */}
             <QuoteInfoCard
               icon={<User size={24} />}
-              label="Khách hàng"
+              label="KhÃ¡ch hÃ ng"
               value={customerDisplay}
             />
             <QuoteInfoCard
               icon={<Car size={24} />}
-              label="Thông tin xe"
+              label="ThÃ´ng tin xe"
               value={plateDisplay}
               subValue={vehicleBrandModelDisplay}
             />
             <QuoteInfoCard
               icon={<Activity size={24} />}
-              label="Trạng thái lệnh"
+              label="Tráº¡ng thÃ¡i lá»‡nh"
               value={<span className="status-badge-inline">{getStatusLabelVi(order?.status, "")}</span>}
             />
             <QuoteInfoCard
               icon={<FileText size={24} />}
-              label="Trạng thái báo giá"
+              label="Tráº¡ng thÃ¡i bÃ¡o giÃ¡"
               value={<span className="status-badge-inline">{getStatusLabelVi(quotationStatus, "")}</span>}
             />
 
             {/* Row 2 */}
             <QuoteInfoCard
               icon={<DollarSign size={24} />}
-              label="Tổng giá trị báo giá"
-              value={`${formatMoney(vatSummary.totalWithVat)} đ`}
+              label="Tá»•ng giÃ¡ trá»‹ bÃ¡o giÃ¡"
+              value={`${formatMoney(vatSummary.totalWithVat)} Ä‘`}
             />
             <QuoteInfoCard
               icon={<ShieldCheck size={24} />}
-              label="Bảo hiểm trả"
-              value={`${formatMoney(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount"))} đ`}
+              label="Báº£o hiá»ƒm tráº£"
+              value={`${formatMoney(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount"))} Ä‘`}
             />
             <QuoteInfoCard
               icon={<Wallet size={24} />}
-              label="Miễn thường"
-              value={`${formatMoney(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount"))} đ`}
+              label="Miá»…n thÆ°á»ng"
+              value={`${formatMoney(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount"))} Ä‘`}
             />
             <QuoteInfoCard
               icon={<CreditCard size={24} />}
-              label="Khách phải trả"
-              value={`${formatMoney(splitBillingSummary.totalCustomerPayable)} đ`}
+              label="KhÃ¡ch pháº£i tráº£"
+              value={`${formatMoney(splitBillingSummary.totalCustomerPayable)} Ä‘`}
             />
           </div>
 
           <div className="quote-main-content">
             <aside className="version-timeline-card">
-              <h3>Lịch sử phiên bản</h3>
+              <h3>Lá»‹ch sá»­ phiÃªn báº£n</h3>
               <div className="version-list">
                 {quotations.length === 0 ? (
                   <button type="button" className="btn-quota btn-quota-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
-                    <Plus size={18} /> Tạo báo giá V1
+                    <Plus size={18} /> Táº¡o bÃ¡o giÃ¡ V1
                   </button>
                 ) : (
                   quotations.map((row) => {
@@ -1868,7 +2379,7 @@ export default function ServiceOrderQuotePage() {
                         onClick={() => setActiveQuotationId(id)}
                       >
                         <div className="version-btn-body">
-                          <span className="version-name">Phiên bản V{versionNo}</span>
+                          <span className="version-name">PhiÃªn báº£n V{versionNo}</span>
                           <div className="version-status-line">
                             <span className="version-status-text">{getStatusLabelVi(status, status)}</span>
                           </div>
@@ -1885,7 +2396,7 @@ export default function ServiceOrderQuotePage() {
               {activeQuotation && (
                 <section className="action-console-premium">
                   <div className="action-console-head">
-                    <h3 style={{ margin: 0, fontWeight: 800 }}>Bảng điều khiển nghiệp vụ</h3>
+                    <h3 style={{ margin: 0, fontWeight: 800 }}>Báº£ng Ä‘iá»u khiá»ƒn nghiá»‡p vá»¥</h3>
                     <button
                       type="button"
                       className="btn-quota btn-quota-outline"
@@ -1893,7 +2404,7 @@ export default function ServiceOrderQuotePage() {
                       onClick={() => setShowCancelModal(true)}
                       disabled={saving}
                     >
-                      <Trash2 size={16} /> Hủy toàn bộ phiếu
+                      <Trash2 size={16} /> Há»§y toÃ n bá»™ phiáº¿u
                     </button>
                   </div>
                   {actionMessage ? (
@@ -1908,13 +2419,118 @@ export default function ServiceOrderQuotePage() {
                     </div>
                   ) : null}
 
+                  <input
+                    ref={quotationImportInputRef}
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    style={{ display: "none" }}
+                    onChange={handleImportQuotationExcel}
+                    disabled={isImportExcelDisabled}
+                  />
                   <div className="action-group" style={{ marginBottom: 12 }}>
-                    <button type="button" className="btn-quota btn-quota-outline" onClick={handleExportQuotationExcel} disabled={loading || !activeQuotation}>
-                      <Download size={16} /> Xuất Excel
+                    <button
+                      type="button"
+                      className="btn-quota btn-quota-outline excel-action-btn excel-export-btn"
+                      onClick={handleExportQuotationExcel}
+                      disabled={isExportExcelDisabled}
+                      title={isExportExcelDisabled ? exportExcelDisabledReason : EXCEL_UI_TEXT.exportTitle}
+                    >
+                      <Download size={16} /> {EXCEL_UI_TEXT.exportButton}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-quota btn-quota-outline excel-action-btn excel-import-btn"
+                      onClick={() => quotationImportInputRef.current?.click()}
+                      disabled={isImportExcelDisabled}
+                      title={isImportExcelDisabled ? importExcelDisabledReason : EXCEL_UI_TEXT.importTitle}
+                    >
+                      <Upload size={16} /> {EXCEL_UI_TEXT.importButton}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-quota btn-quota-primary"
+                      onClick={handleSubmitQuotation}
+                      disabled={saving || !canSubmit}
+                    >
+                      <ShieldCheck size={16} /> TrÃ¬nh duyá»‡t ná»™i bá»™
                     </button>
                     <button type="button" className="btn-quota btn-quota-outline" onClick={handleSaveSplitBilling} disabled={saving || !canEditSplitBilling}>
-                      <Save size={16} /> Lưu tách bill
+                      <Save size={16} /> LÆ°u tÃ¡ch bill
                     </button>
+                  </div>
+
+                  <div className="quote-discount-panel">
+                    <div className="quote-discount-header">
+                      <strong>Giáº£m giÃ¡ bÃ¡o giÃ¡</strong>
+                      <span>Tá»•ng giáº£m cáº¥p bÃ¡o giÃ¡: {formatMoney(quotationLevelDiscountTotal)} Ä‘</span>
+                    </div>
+                    <div className="quote-discount-grid">
+                      <div className="input-field-group">
+                        <label className="so-detail-card-label">Giáº£m trá»±c tiáº¿p (VNÄ)</label>
+                        <input
+                          type="number"
+                          className="reception-quote-approval-note-input"
+                          value={quotationDiscountDraft.manualValue}
+                          onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, manualValue: e.target.value }))}
+                          placeholder="0"
+                          disabled={!canEditQuotationDiscount || saving || discountSaving}
+                        />
+                      </div>
+                      <div className="input-field-group">
+                        <label className="so-detail-card-label">Giáº£m theo háº¡ng khÃ¡ch (VNÄ)</label>
+                        <input
+                          type="number"
+                          className="reception-quote-approval-note-input"
+                          value={quotationDiscountDraft.membershipValue}
+                          onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, membershipValue: e.target.value }))}
+                          placeholder="0"
+                          disabled={!canEditQuotationDiscount || saving || discountSaving}
+                        />
+                      </div>
+                      <div className="input-field-group">
+                        <label className="so-detail-card-label">MÃ£ voucher</label>
+                        <input
+                          type="text"
+                          className="reception-quote-approval-note-input"
+                          value={quotationDiscountDraft.voucherCode}
+                          onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, voucherCode: e.target.value }))}
+                          placeholder="Nháº­p mÃ£ voucher"
+                          disabled={!canEditQuotationDiscount || saving || discountSaving}
+                        />
+                      </div>
+                      <div className="input-field-group">
+                        <label className="so-detail-card-label">Giáº£m theo voucher (VNÄ)</label>
+                        <input
+                          type="number"
+                          className="reception-quote-approval-note-input"
+                          value={quotationDiscountDraft.voucherValue}
+                          onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, voucherValue: e.target.value }))}
+                          placeholder="0"
+                          disabled={!canEditQuotationDiscount || saving || discountSaving}
+                        />
+                      </div>
+                    </div>
+                    <div className="input-field-group" style={{ marginTop: 8 }}>
+                      <label className="so-detail-card-label">Ghi chÃº giáº£m giÃ¡</label>
+                      <input
+                        type="text"
+                        className="reception-quote-approval-note-input"
+                        value={quotationDiscountDraft.note}
+                        onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, note: e.target.value }))}
+                        placeholder="LÃ½ do Ã¡p dá»¥ng giáº£m giÃ¡"
+                        disabled={!canEditQuotationDiscount || saving || discountSaving}
+                      />
+                    </div>
+                    <div className="action-group-tabbed" style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className="btn-quota btn-quota-outline"
+                        onClick={handleSaveQuotationDiscounts}
+                        disabled={!canEditQuotationDiscount || saving || discountSaving}
+                      >
+                        <Save size={16} /> LÆ°u giáº£m giÃ¡
+                      </button>
+                    </div>
                   </div>
 
                   <div className="quote-action-tabs">
@@ -1925,7 +2541,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('insurance');
                       }}
                     >
-                      <ShieldCheck size={16} /> Nghiệp vụ Bảo hiểm
+                      <ShieldCheck size={16} /> Nghiá»‡p vá»¥ Báº£o hiá»ƒm
                     </button>
                     <button
                       className={`action-tab-header ${activeActionTab === 'customer' ? 'active' : ''}`}
@@ -1934,7 +2550,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('customer');
                       }}
                     >
-                      <User size={16} /> Gửi khách hàng
+                      <User size={16} /> Gá»­i khÃ¡ch hÃ ng
                     </button>
                     <button
                       className={`action-tab-header ${activeActionTab === 'clone' ? 'active' : ''}`}
@@ -1943,7 +2559,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('clone');
                       }}
                     >
-                      <Plus size={16} /> Quản lý phiên bản
+                      <Plus size={16} /> Quáº£n lÃ½ phiÃªn báº£n
                     </button>
                   </div>
 
@@ -1951,7 +2567,7 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'insurance' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group" style={{ marginBottom: 16 }}>
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Bằng chứng duyệt bảo hiểm (Ảnh/Chụp màn hình)</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Báº±ng chá»©ng duyá»‡t báº£o hiá»ƒm (áº¢nh/Chá»¥p mÃ n hÃ¬nh)</label>
                           <div className="upload-container-professional">
                             <input
                               type="file"
@@ -1962,12 +2578,12 @@ export default function ServiceOrderQuotePage() {
                             />
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                               <label htmlFor="evidence-upload" className={`btn-upload-compact ${(!canConfirmInsuranceApproved || insuranceEvidenceUploading) ? 'disabled' : ''}`}>
-                                {insuranceEvidenceUploading ? <RefreshCw size={16} className="reception-quote-spin" /> : <><Upload size={16} /> Tải thêm ảnh</>}
+                                {insuranceEvidenceUploading ? <RefreshCw size={16} className="reception-quote-spin" /> : <><Upload size={16} /> Táº£i thÃªm áº£nh</>}
                               </label>
                               {insuranceEvidenceUrls.map((url, index) => (
                                 <div key={index} className="uploaded-photo-card" onClick={() => window.open(url, '_blank')}>
                                   <div className="photo-card-icon"><ImageIcon size={18} /></div>
-                                  <div className="photo-card-info"><span className="photo-card-name">Nhấn để xem ảnh</span></div>
+                                  <div className="photo-card-info"><span className="photo-card-name">Nháº¥n Ä‘á»ƒ xem áº£nh</span></div>
                                   <button className="photo-card-remove" onClick={(e) => { e.stopPropagation(); setInsuranceEvidenceUrls(prev => prev.filter((_, i) => i !== index)); }} disabled={!canConfirmInsuranceApproved}><Trash2 size={16} /></button>
                                 </div>
                               ))}
@@ -1975,21 +2591,18 @@ export default function ServiceOrderQuotePage() {
                           </div>
                         </div>
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú làm việc với Bảo hiểm</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chÃº lÃ m viá»‡c vá»›i Báº£o hiá»ƒm</label>
                           <textarea
                             className="reception-quote-approval-note-input"
                             rows={3}
                             value={insuranceApprovalNote}
                             onChange={(e) => setInsuranceApprovalNote(e.target.value)}
-                            placeholder="Nhập ghi chú chi tiết về việc làm việc với bảo hiểm..."
+                            placeholder="Nháº­p ghi chÃº chi tiáº¿t vá» viá»‡c lÃ m viá»‡c vá»›i báº£o hiá»ƒm..."
                           />
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
-                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleSubmitQuotation} disabled={saving || !canSubmit}>
-                            <ShieldCheck size={16} /> Chuyển chờ bảo hiểm
-                          </button>
                           <button type="button" className="btn-quota btn-quota-primary" onClick={handleConfirmInsuranceApproval} disabled={saving || !canConfirmInsuranceApproved || !allUrlsValid}>
-                            <Check size={16} /> Xác nhận bảo hiểm duyệt
+                            <Check size={16} /> XÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t
                           </button>
                         </div>
                       </div>
@@ -1998,19 +2611,19 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'customer' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú gửi cho khách hàng</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chÃº gá»­i cho khÃ¡ch hÃ ng</label>
                           <textarea
                             className="reception-quote-approval-note-input"
                             rows={3}
                             value={sendEmailNote}
                             onChange={(e) => setSendEmailNote(e.target.value)}
-                            placeholder="Thông điệp gửi kèm khi gửi email báo giá cho khách hàng..."
+                            placeholder="ThÃ´ng Ä‘iá»‡p gá»­i kÃ¨m khi gá»­i email bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng..."
                           />
                           {mailSentNotice && <div className="reception-quote-success" style={{ marginTop: 8 }}><Check size={14} /> {mailSentNotice}</div>}
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
                           <button type="button" className="btn-quota btn-quota-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer}>
-                            <Mail size={16} /> Gửi báo giá cho khách
+                            <Mail size={16} /> Gá»­i bÃ¡o giÃ¡ cho khÃ¡ch
                           </button>
                         </div>
                       </div>
@@ -2019,25 +2632,25 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'clone' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Lý do tạo bản sao mới</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>LÃ½ do táº¡o báº£n sao má»›i</label>
                           <div style={{ position: "relative" }}>
                             <textarea
                               className={`reception-quote-approval-note-input ${!hasCloneReason ? "border-danger" : ""}`}
                               rows={3}
                               value={cloneNote}
                               onChange={(e) => setCloneNote(e.target.value)}
-                              placeholder="Giải trình lý do tại sao cần nhân bản báo giá này (Bắt buộc)..."
+                              placeholder="Giáº£i trÃ¬nh lÃ½ do táº¡i sao cáº§n nhÃ¢n báº£n bÃ¡o giÃ¡ nÃ y (Báº¯t buá»™c)..."
                             />
                             {!hasCloneReason && (
                               <small className="reception-quote-error" style={{ position: "absolute", bottom: -20, left: 0 }}>
-                                * Bắt buộc khi clone
+                                * Báº¯t buá»™c khi clone
                               </small>
                             )}
                           </div>
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 24 }}>
                           <button type="button" className="btn-quota btn-quota-outline" onClick={handleCloneQuotation} disabled={saving || !canClone || !hasCloneReason}>
-                            <Plus size={16} /> Tạo bản mới (Sao chép)
+                            <Plus size={16} /> Táº¡o báº£n má»›i (Sao chÃ©p)
                           </button>
                         </div>
                       </div>
@@ -2064,21 +2677,22 @@ export default function ServiceOrderQuotePage() {
                             <th className="col-priority">Độ ưu tiên</th>
                             <th className="text-right col-qty">SL</th>
                             <th className="text-right col-money">Đơn giá</th>
+                            <th className="text-right col-money">Giảm giá</th>
                             <th className="text-right col-money">Thành tiền</th>
                             <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
                             <th className="text-right col-money">Khách bù</th>
                             <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {detailRowsByServiceType.initialRows.length > 0 ? (
-                            renderDetailRows(detailRowsByServiceType.initialRows)
-                          ) : (
+                        {detailRowsByServiceType.initialRows.length > 0 ? (
+                          renderDetailRows(detailRowsByServiceType.initialRows)
+                        ) : (
+                          <tbody>
                             <tr>
-                              <td colSpan={8} className="quote-detail-empty">Không có dịch vụ ban đầu.</td>
+                              <td colSpan={9} className="quote-detail-empty">Không có dịch vụ ban đầu.</td>
                             </tr>
-                          )}
-                        </tbody>
+                          </tbody>
+                        )}
                       </table>
                     </div>
 
@@ -2092,15 +2706,14 @@ export default function ServiceOrderQuotePage() {
                               <th className="col-priority">Độ ưu tiên</th>
                               <th className="text-right col-qty">SL</th>
                               <th className="text-right col-money">Đơn giá</th>
+                              <th className="text-right col-money">Giảm giá</th>
                               <th className="text-right col-money">Thành tiền</th>
                               <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
                               <th className="text-right col-money">Khách bù</th>
                               <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
                             </tr>
                           </thead>
-                          <tbody>
-                            {renderDetailRows(detailRowsByServiceType.supplementaryRows)}
-                          </tbody>
+                          {renderDetailRows(detailRowsByServiceType.supplementaryRows)}
                         </table>
                       </div>
                     ) : null}
@@ -2117,7 +2730,7 @@ export default function ServiceOrderQuotePage() {
                           Tổng chi phí Nhân công
                         </span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value">{formatMoney(executionCostSummary.laborBeforeVat)} đ</span>
+                        <span className="summary-line-value">{formatMoney(executionCostSummary.laborBeforeVat)} d</span>
                       </div>
                       <div className="summary-line">
                         <span className="summary-line-label">
@@ -2125,12 +2738,12 @@ export default function ServiceOrderQuotePage() {
                           Tổng chi phí Phụ tùng / Vật tư
                         </span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value">{formatMoney(executionCostSummary.partsAndMaterialBeforeVat)} đ</span>
+                        <span className="summary-line-value">{formatMoney(executionCostSummary.partsAndMaterialBeforeVat)} d</span>
                       </div>
                       <div className="summary-line summary-line-strong">
                         <span className="summary-line-label">TỔNG TIỀN HÀNG (CHƯA VAT)</span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value">{formatMoney(vatSummary.baseBeforeVat)} đ</span>
+                        <span className="summary-line-value">{formatMoney(vatSummary.baseBeforeVat)} d</span>
                       </div>
 
                       <div className="summary-subtitle">{vatHeadlineLabel}</div>
@@ -2141,13 +2754,13 @@ export default function ServiceOrderQuotePage() {
                             Thuế giá trị gia tăng ({group.taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%)
                           </span>
                           <span className="summary-line-dots" />
-                          <span className="summary-line-value">{formatMoney(group.taxAmount)} đ</span>
+                          <span className="summary-line-value">{formatMoney(group.taxAmount)} d</span>
                         </div>
                       ))}
                       <div className="summary-line summary-line-strong">
                         <span className="summary-line-label">TỔNG CHI PHÍ DỊCH VỤ & PHỤ TÙNG</span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value">{formatMoney(vatSummary.totalWithVat)} đ</span>
+                        <span className="summary-line-value">{formatMoney(vatSummary.totalWithVat)} d</span>
                       </div>
 
                       <div className="summary-divider" />
@@ -2159,15 +2772,15 @@ export default function ServiceOrderQuotePage() {
                           (-) Bảo hiểm phê duyệt / Insurance Cover
                         </span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value text-insurance">-{formatMoney(splitBillingSummary.insurance)} đ</span>
+                        <span className="summary-line-value text-insurance">-{formatMoney(splitBillingSummary.insurance)} d</span>
                       </div>
                       <div className="summary-line">
                         <span className="summary-line-label">
                           <span className="summary-marker marker-deductible" />
-                          (+) Phí Miễn thường / Chế tài / Deductible
+                          (+) Phí miễn thường / chế tài / Deductible
                         </span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value">+{formatMoney(splitBillingSummary.deductible)} đ</span>
+                        <span className="summary-line-value">+{formatMoney(splitBillingSummary.deductible)} d</span>
                       </div>
 
                       <div className="summary-divider" />
@@ -2175,7 +2788,7 @@ export default function ServiceOrderQuotePage() {
                       <div className="summary-line payable-row">
                         <span className="summary-line-label">TỔNG CỘNG KHÁCH HÀNG THANH TOÁN (PAYABLE)</span>
                         <span className="summary-line-dots" />
-                        <span className="summary-line-value final-payable">{formatMoney(splitBillingSummary.totalCustomerPayable)} đ</span>
+                        <span className="summary-line-value final-payable">{formatMoney(splitBillingSummary.totalCustomerPayable)} d</span>
                       </div>
                     </div>
                   </div>
@@ -2207,7 +2820,7 @@ export default function ServiceOrderQuotePage() {
                   onChange={(e) => setCancelReason(e.target.value)}
                 >
                   <option value="Khách vội">Khách vội</option>
-                  <option value="Chê đắt">Chê đắt</option>
+                  <option value="Chờ đợi">Chờ đợi</option>
                   <option value="Đổi ý">Đổi ý</option>
                   <option value="Có việc gấp">Có việc gấp</option>
                   <option value="Khác">Lý do khác...</option>
@@ -2225,5 +2838,6 @@ export default function ServiceOrderQuotePage() {
     </div>
   );
 }
+
 
 

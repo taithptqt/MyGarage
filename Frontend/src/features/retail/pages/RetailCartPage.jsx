@@ -41,6 +41,11 @@ const BRANCH_SHORTCUT_ORDER = [
   },
 ];
 
+const FULFILLMENT_METHOD = {
+  PICKUP: "PICKUP",
+  DELIVERY: "DELIVERY",
+};
+
 function toSafeAmount(value) {
   const parsed = Number(value);
   if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
@@ -79,6 +84,56 @@ function normalizeBranchSearchText(value) {
     .trim();
 }
 
+function resolvePreferredBranch(branches, user) {
+  if (!Array.isArray(branches) || branches.length === 0) return null;
+
+  const rawBranchId = Number(user?.branchId);
+  if (Number.isFinite(rawBranchId) && rawBranchId > 0) {
+    const byId = branches.find((branch) => Number(branch?.id) === rawBranchId);
+    if (byId) return byId;
+  }
+
+  const normalizedProfileBranch = normalizeBranchSearchText(user?.branchName || "");
+  if (!normalizedProfileBranch) return null;
+
+  return (
+    branches.find((branch) =>
+      normalizeBranchSearchText(getBranchLabel(branch)).includes(normalizedProfileBranch)
+    ) || null
+  );
+}
+
+function buildFulfillmentNote({
+  method,
+  address,
+  preferredBranch,
+  selectedBranch,
+  etaDays,
+}) {
+  const methodLabel =
+    method === FULFILLMENT_METHOD.DELIVERY ? "Giao hàng tận nơi" : "Nhận tại cửa hàng";
+  const preferredLabel = preferredBranch
+    ? getBranchLabel(preferredBranch)
+    : "Chưa xác định chi nhánh ưu tiên";
+  const sourceLabel = selectedBranch
+    ? getBranchLabel(selectedBranch)
+    : "Chưa xác định chi nhánh đặt hàng";
+
+  const lines = [
+    `[FULFILLMENT]`,
+    `HinhThuc=${methodLabel}`,
+    `ChiNhanhUuTien=${preferredLabel}`,
+    `ChiNhanhDatHang=${sourceLabel}`,
+    `ThoiGianDuKien=${etaDays} ngay`,
+  ];
+
+  if (method === FULFILLMENT_METHOD.DELIVERY && address) {
+    lines.push(`DiaChiGiao=${address}`);
+  }
+
+  return lines.join(" | ");
+}
+
 export default function RetailCartPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -92,6 +147,10 @@ export default function RetailCartPage() {
   const [bannerMessage, setBannerMessage] = useState("");
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
+  const [fulfillmentMethod, setFulfillmentMethod] = useState(FULFILLMENT_METHOD.PICKUP);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [showDeliveryAddressModal, setShowDeliveryAddressModal] = useState(false);
+  const [pendingCheckoutIntent, setPendingCheckoutIntent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [payingOrder, setPayingOrder] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
@@ -241,6 +300,41 @@ export default function RetailCartPage() {
     () => branches.find((item) => String(item.id) === String(branchId)) || null,
     [branchId, branches]
   );
+
+  const preferredBranch = useMemo(
+    () => resolvePreferredBranch(branches, user),
+    [branches, user]
+  );
+
+  const normalizedDeliveryAddress = useMemo(() => deliveryAddress.trim(), [deliveryAddress]);
+
+  const leadTimeDays = useMemo(() => {
+    const preferredId = Number(preferredBranch?.id || 0);
+    const selectedId = Number(selectedBranch?.id || 0);
+    const isCrossBranch =
+      preferredId > 0 && selectedId > 0 && preferredId !== selectedId;
+
+    if (fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY) {
+      return isCrossBranch ? 30 : 7;
+    }
+
+    return isCrossBranch ? 15 : 3;
+  }, [fulfillmentMethod, preferredBranch, selectedBranch]);
+
+  const fulfillmentPreviewText = useMemo(() => {
+    const preferredLabel = preferredBranch
+      ? getBranchLabel(preferredBranch)
+      : "chi nhánh ưu tiên trong hồ sơ";
+
+    if (fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY) {
+      if (!normalizedDeliveryAddress) {
+        return `Giao hàng tận nơi. Vui lòng nhập địa chỉ trước khi checkout. Dự kiến ${leadTimeDays} ngày.`;
+      }
+      return `Giao hàng đến địa chỉ đăng ký, dự kiến ${leadTimeDays} ngày.`;
+    }
+
+    return `Nhận hàng tại cửa hàng ở ${preferredLabel}, dự kiến ${leadTimeDays} ngày.`;
+  }, [fulfillmentMethod, normalizedDeliveryAddress, preferredBranch, leadTimeDays]);
 
   const branchShortcutOptions = useMemo(() => {
     const usedIds = new Set();
@@ -398,7 +492,7 @@ export default function RetailCartPage() {
     }
   }
 
-  async function handleCheckout() {
+  async function performCheckout() {
     setBannerMessage("");
     setError("");
 
@@ -452,9 +546,24 @@ export default function RetailCartPage() {
         return;
       }
 
+      const fulfillmentNote = buildFulfillmentNote({
+        method: fulfillmentMethod,
+        address:
+          fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY
+            ? normalizedDeliveryAddress
+            : "",
+        preferredBranch,
+        selectedBranch,
+        etaDays: leadTimeDays,
+      });
+
+      const mergedCustomerNotes = [notes.trim(), fulfillmentNote]
+        .filter(Boolean)
+        .join(" || ");
+
       const payload = {
         branchId: Number(branchId),
-        customerNotes: notes.trim() || null,
+        customerNotes: mergedCustomerNotes || null,
         items: selectedItems.map((item) => ({
           productId: Number(item.id),
           quantity: toPositiveInt(item.qty, 1),
@@ -490,7 +599,16 @@ export default function RetailCartPage() {
         id: retailOrderId,
         orderCode,
         branchLabel,
-        customerNotes: createdOrder?.customerNotes || payload.customerNotes || "",
+        customerNotes: createdOrder?.customerNotes || mergedCustomerNotes || "",
+        fulfillmentMethod,
+        deliveryAddress:
+          fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY
+            ? normalizedDeliveryAddress
+            : "",
+        preferredBranchLabel: preferredBranch
+          ? getBranchLabel(preferredBranch)
+          : "Chưa xác định",
+        leadTimeDays,
         subTotal: subTotalAmount,
         taxAmount,
         finalAmount,
@@ -500,6 +618,30 @@ export default function RetailCartPage() {
       setError(checkoutError?.message || "Không thể tạo đơn phụ tùng lúc này.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCheckout() {
+    if (fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY && !normalizedDeliveryAddress) {
+      setShowDeliveryAddressModal(true);
+      setPendingCheckoutIntent(true);
+      return;
+    }
+
+    await performCheckout();
+  }
+
+  async function handleConfirmDeliveryAddress() {
+    if (!normalizedDeliveryAddress) {
+      setError("Vui lòng nhập địa chỉ giao hàng trước khi checkout.");
+      return;
+    }
+
+    setShowDeliveryAddressModal(false);
+
+    if (pendingCheckoutIntent) {
+      setPendingCheckoutIntent(false);
+      await performCheckout();
     }
   }
 
@@ -852,6 +994,40 @@ export default function RetailCartPage() {
                   </div>
                 </label>
 
+                <div className="retail-cart-field">
+                  <span>Hình thức nhận hàng</span>
+                  <div className="retail-cart-fulfillment-options" role="radiogroup" aria-label="Hình thức nhận hàng">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={fulfillmentMethod === FULFILLMENT_METHOD.PICKUP}
+                      className={`retail-cart-fulfillment-option${fulfillmentMethod === FULFILLMENT_METHOD.PICKUP ? " is-active" : ""}`}
+                      onClick={() => setFulfillmentMethod(FULFILLMENT_METHOD.PICKUP)}
+                    >
+                      Lấy tại cửa hàng
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY}
+                      className={`retail-cart-fulfillment-option${fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY ? " is-active" : ""}`}
+                      onClick={() => setFulfillmentMethod(FULFILLMENT_METHOD.DELIVERY)}
+                    >
+                      Giao hàng tận nơi
+                    </button>
+                  </div>
+                  <div className="retail-cart-fulfillment-hint">{fulfillmentPreviewText}</div>
+                  {fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY ? (
+                    <button
+                      type="button"
+                      className="parts-shop-btn parts-shop-btn-ghost retail-cart-delivery-address-btn"
+                      onClick={() => setShowDeliveryAddressModal(true)}
+                    >
+                      {normalizedDeliveryAddress ? "Sửa địa chỉ giao hàng" : "Nhập địa chỉ giao hàng"}
+                    </button>
+                  ) : null}
+                </div>
+
                 <label className="retail-cart-field">
                   <span>Ghi chú cho đơn bán lẻ</span>
                   <textarea
@@ -885,7 +1061,7 @@ export default function RetailCartPage() {
                       : "Checkout sản phẩm đã chọn"}
                 </button>
                 <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost retail-cart-checkout-btn">
-                Quay lại
+                  Quay lại mua tiếp
                 </Link>
               </div>
 
@@ -934,6 +1110,22 @@ export default function RetailCartPage() {
                 <strong>{pendingOrder.branchLabel}</strong>
               </div>
               <div className="parts-shop-modal-row">
+                <span>Hình thức nhận</span>
+                <strong>
+                  {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY
+                    ? "Giao hàng tận nơi"
+                    : "Lấy tại cửa hàng"}
+                </strong>
+              </div>
+              <div className="parts-shop-modal-row">
+                <span>Chi nhánh ưu tiên</span>
+                <strong>{pendingOrder.preferredBranchLabel}</strong>
+              </div>
+              <div className="parts-shop-modal-row">
+                <span>Dự kiến nhận</span>
+                <strong>{pendingOrder.leadTimeDays} ngày</strong>
+              </div>
+              <div className="parts-shop-modal-row">
                 <span>Tạm tính</span>
                 <strong>{formatVnd(pendingOrder.subTotal)}</strong>
               </div>
@@ -951,6 +1143,13 @@ export default function RetailCartPage() {
               <div className="parts-shop-modal-note">
                 <span>Ghi chú đơn</span>
                 <p>{pendingOrder.customerNotes}</p>
+              </div>
+            ) : null}
+
+            {pendingOrder.fulfillmentMethod === FULFILLMENT_METHOD.DELIVERY && pendingOrder.deliveryAddress ? (
+              <div className="parts-shop-modal-note">
+                <span>Địa chỉ giao hàng</span>
+                <p>{pendingOrder.deliveryAddress}</p>
               </div>
             ) : null}
 
@@ -974,6 +1173,63 @@ export default function RetailCartPage() {
               <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
                 Xem đơn của tôi
               </Link>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {showDeliveryAddressModal ? (
+        <div
+          className="parts-shop-modal-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target !== event.currentTarget || submitting) return;
+            setShowDeliveryAddressModal(false);
+            setPendingCheckoutIntent(false);
+          }}
+        >
+          <section
+            className="parts-shop-modal retail-cart-delivery-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retail-delivery-address-title"
+          >
+            <div className="parts-shop-modal-head">
+              <span className="parts-shop-section-kicker">Giao hàng tận nơi</span>
+              <h3 id="retail-delivery-address-title">Nhập địa chỉ giao hàng</h3>
+              <p>
+                Nếu đặt từ chi nhánh khác chi nhánh ưu tiên, thời gian giao đến địa chỉ sẽ khoảng 30 ngày.
+              </p>
+            </div>
+
+            <label className="retail-cart-field">
+              <span>Địa chỉ nhận hàng</span>
+              <textarea
+                value={deliveryAddress}
+                onChange={(event) => setDeliveryAddress(event.target.value)}
+                rows={4}
+                placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành..."
+              />
+            </label>
+
+            <div className="parts-shop-modal-actions">
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-primary"
+                onClick={handleConfirmDeliveryAddress}
+              >
+                Xác nhận địa chỉ
+              </button>
+              <button
+                type="button"
+                className="parts-shop-btn parts-shop-btn-ghost"
+                onClick={() => {
+                  setShowDeliveryAddressModal(false);
+                  setPendingCheckoutIntent(false);
+                }}
+              >
+                Đóng
+              </button>
             </div>
           </section>
         </div>

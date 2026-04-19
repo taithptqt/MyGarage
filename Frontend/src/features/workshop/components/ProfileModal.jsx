@@ -79,7 +79,7 @@ export default function ProfileModal({ user, onClose }) {
         setSuccess("Cập nhật ảnh đại diện thành công!");
       }
     } catch (err) {
-      setError("Không thể tải ảnh lên. Lđ-i: " + err.message);
+      setError("Không thể tải ảnh lên. Lỗi: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -95,7 +95,7 @@ export default function ProfileModal({ user, onClose }) {
     // Validation
     const errors = {};
     if (!isValidVietnamesePhone(formData.phone)) {
-      errors.phone = "Sđ điện thoại phải bao gôm đúng 10 chữ sđ.";
+      errors.phone = "Số điện thoại phải bao gồm đúng 10 chữ số.";
     }
 
     if (!isOptionalEmailValid(formData.email)) {
@@ -103,7 +103,7 @@ export default function ProfileModal({ user, onClose }) {
     }
 
     if (formData.citizenId && !/^\d{12}$/.test(formData.citizenId)) {
-      errors.citizenId = "Sđ CCCD phải bao gôm đúng 12 chữ sđ.";
+      errors.citizenId = "Số CCCD phải bao gồm đúng 12 chữ số.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -133,12 +133,12 @@ export default function ProfileModal({ user, onClose }) {
       setUser(newUser);
       localStorage.setItem('mygarage_user', JSON.stringify(newUser));
       
-      setSuccess("Cập nhật hô sơ thành công!");
+      setSuccess("Cập nhật hồ sơ thành công!");
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {
-      setError(err.message || "Không thể cập nhật hô sơ.");
+      setError(err.message || "Không thể cập nhật hồ sơ.");
     } finally {
       setLoading(false);
     }
@@ -185,7 +185,7 @@ export default function ProfileModal({ user, onClose }) {
                   justifyContent: 'center',
                   fontSize: '16px'
                 }}
-                title="Thay đđ.i ảnh"
+                title="Thay đổi ảnh"
               >
                 {"\u{1F4F7}"}
               </button>
@@ -203,8 +203,8 @@ export default function ProfileModal({ user, onClose }) {
             </div>
           </div>
 
-          {success && <div className="success-msg" style={{ borderLeft: '4px solid #2ecc71', background: '#eefcf5', color: '#1e7e4a', padding: '12px 20px', marginBottom: '20px' }}>đo. {success}</div>}
-          {error && !Object.keys(fieldErrors).length && <div className="error-msg" style={{ borderLeft: '4px solid #e74c3c', marginBottom: '20px' }}>đO {error}</div>}
+          {success && <div className="success-msg" style={{ borderLeft: '4px solid #2ecc71', background: '#eefcf5', color: '#1e7e4a', padding: '12px 20px', marginBottom: '20px' }}>{success}</div>}
+          {error && !Object.keys(fieldErrors).length && <div className="error-msg" style={{ borderLeft: '4px solid #e74c3c', marginBottom: '20px' }}>{error}</div>}
 
           <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div className="form-group">
@@ -214,7 +214,7 @@ export default function ProfileModal({ user, onClose }) {
             </div>
 
             <div className="form-group">
-              <label>Sđ điện thoại *</label>
+              <label>Số điện thoại *</label>
               <input type="tel" inputMode="tel" pattern={VIETNAM_PHONE_PATTERN} title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx" name="phone" value={formData.phone} onChange={handleChange} required />
               {fieldErrors.phone && <p className="field-error-msg" style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>{fieldErrors.phone}</p>}
             </div>
@@ -226,7 +226,7 @@ export default function ProfileModal({ user, onClose }) {
             </div>
 
             <div className="form-group">
-              <label>Sđ CCCD</label>
+              <label>Số CCCD</label>
               <input type="text" name="citizenId" value={formData.citizenId} onChange={handleChange} placeholder="Chưa cập nhật" />
               {fieldErrors.citizenId && <p className="field-error-msg" style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>{fieldErrors.citizenId}</p>}
             </div>
@@ -249,7 +249,7 @@ export default function ProfileModal({ user, onClose }) {
           <div className="form-actions" style={{ marginTop: '32px', borderTop: '1px solid #f4f7fe', paddingTop: '24px' }}>
             <button type="button" className="btn-ghost" onClick={onClose} disabled={loading}>Hủy</button>
             <button type="submit" className="btn-primary" style={{ padding: '0 32px' }} disabled={loading}>
-              {loading ? "Đang lưu..." : "Lưu hô sơ"}
+              {loading ? "Đang lưu..." : "Lưu hồ sơ"}
             </button>
           </div>
         </form>
@@ -265,6 +265,7 @@ export default function ProfileModal({ user, onClose }) {
     </>
   );
 }
+
 
 
 

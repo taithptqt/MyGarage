@@ -1,4 +1,4 @@
-/* ServiceOrderQuote.css - Premium Design System for Quotation Module */
+﻿/* ServiceOrderQuote.css - Premium Design System for Quotation Module */
 
 :root {
   --quota-navy: #1A2332;
@@ -629,6 +629,33 @@
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
+.excel-action-btn {
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+}
+
+.excel-action-btn:hover:not(:disabled) {
+  border-color: #7ea2d5;
+  background: #f3f8ff;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.14);
+  transform: translateY(-1px);
+}
+
+.excel-action-btn:active:not(:disabled) {
+  transform: translateY(0);
+  background: #eaf2fd;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.16);
+}
+
+.excel-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.excel-action-btn:disabled * {
+  cursor: not-allowed !important;
+}
+
 .btn-quota-success {
   background: var(--quota-success);
   color: white;
@@ -781,25 +808,25 @@
   border-top: 1px solid #f1f5f9 !important;
 }
 
-/* Viền dưới của dòng cuối cùng (Đáy hộp) */
+/* Viền dưới của dòng cuối cùng (đáy hộp) */
 .premium-table .item-group-body .group-row.group-end td {
   border-bottom: 1px solid #d9e1f1 !important;
 }
 
 /* Hiệu ứng HOVER cho toàn bộ khối (Đồng bộ với màu primary của trang Public) */
-.item-group-body:hover .group-row td:first-child {
+.premium-table .item-group-body:hover .group-row td:first-child {
   border-left-color: var(--quota-primary) !important;
 }
 
-.item-group-body:hover .group-row td:last-child {
+.premium-table .item-group-body:hover .group-row td:last-child {
   border-right-color: var(--quota-primary) !important;
 }
 
-.item-group-body:hover .group-row.group-start td {
+.premium-table .item-group-body:hover .group-row.group-start td {
   border-top-color: var(--quota-primary) !important;
 }
 
-.item-group-body:hover .group-row.group-end td {
+.premium-table .item-group-body:hover .group-row.group-end td {
   border-bottom-color: var(--quota-primary) !important;
 }
 
@@ -916,6 +943,46 @@
   border-color: var(--quota-primary);
   box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.1);
   background: #fcfdff;
+}
+
+.split-input-qty {
+  width: 86px;
+}
+
+.split-input-qty.split-input-warning {
+  border-color: #f4b400;
+  background: #fffdf3;
+  box-shadow: inset 0 0 0 1px rgba(244, 180, 0, 0.35);
+}
+
+.split-qty-warning-text {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: #dc2626;
+  text-align: left;
+}
+
+.split-discount-editor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.split-discount-mode {
+  min-width: 62px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--quota-primary);
+  font-weight: 700;
+}
+
+.split-input-discount {
+  width: 110px;
 }
 
 
@@ -1148,6 +1215,47 @@
   flex-wrap: wrap;
 }
 
+.quote-discount-panel {
+  border: 1px solid var(--quota-border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: #fcfdff;
+}
+
+.quote-discount-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+.quote-discount-header strong {
+  font-size: 14px;
+  color: var(--quota-navy);
+}
+
+.quote-discount-header span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--quota-primary);
+}
+
+.quote-discount-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+@media (max-width: 900px) {
+  .quote-discount-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .border-danger {
   border-color: var(--quota-danger) !important;
 }
+
+

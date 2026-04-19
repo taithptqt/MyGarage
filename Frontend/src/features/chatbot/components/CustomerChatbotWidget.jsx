@@ -568,7 +568,7 @@ export default function CustomerChatbotWidget() {
         aria-label="Mở MyGarage AI chatbot"
         title="Mở MyGarage AI chatbot"
       >
-        <Bot size={24} strokeWidth={2.1} />
+        <Bot size={26} strokeWidth={2.1} />
       </button>
       {showWelcomeHint ? (
         <div className="chatbot-ai-welcome-hint" role="status" aria-live="polite">

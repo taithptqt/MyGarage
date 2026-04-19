@@ -1,4 +1,4 @@
-export const INSURANCE_ORDER_CATEGORY = "INSURANCE_REPAIR";
+﻿export const INSURANCE_ORDER_CATEGORY = "INSURANCE_REPAIR";
 
 const CUSTOMER_CHARGE_SERVICE_CODES = new Set([
   "BH-MT500",
@@ -181,5 +181,7 @@ export function formatDetailPayerLabel(detail) {
   const payerType = String(detail?.payerType || detail?.PayerType || "").trim().toUpperCase();
   if (payerType === "INSURANCE") return "Bảo hiểm";
   if (payerType === "CUSTOMER") return "Khách hàng";
-  return "Chưa phân loại";
+  return "Chưa phân lo?i";
 }
+
+

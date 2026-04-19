@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { request } from "@app/apiClient";
 import "./StockHistory.css";
 
@@ -27,7 +27,7 @@ export default function StockHistoryPage() {
       setHistory([
         { id: 1, type: "IN", partCode: "PT-001", partName: "Lọc dầu động cơ", qty: 50, ref: "PO-2404-001", date: new Date().toISOString(), by: "Thủ kho A" },
         { id: 2, type: "OUT", partCode: "PT-001", partName: "Lọc dầu động cơ", qty: -2, ref: "SO-10024", date: new Date(Date.now() - 3600000).toISOString(), by: "Thợ B" },
-        { id: 3, type: "OUT", partCode: "PT-002", partName: "Má phanh", qty: -1, ref: "SO-10025", date: new Date(Date.now() - 7200000).toISOString(), by: "Thợ C" }
+        { id: 3, type: "OUT", partCode: "PT-002", partName: "M� phanh", qty: -1, ref: "SO-10025", date: new Date(Date.now() - 7200000).toISOString(), by: "Th? C" }
       ]);
     } finally {
       setLoading(false);
@@ -96,3 +96,5 @@ export default function StockHistoryPage() {
     </div>
   );
 }
+
+

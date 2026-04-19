@@ -1,4 +1,4 @@
-import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
+﻿import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import { isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
 import { isValidVin } from "@shared/utils/vinValidation";
 
@@ -31,19 +31,19 @@ export function validateBookingStep(stepNumber, data) {
   }
 
   if (stepNumber === 3 && !selectedBranchId) {
-    return "Vui lòng chọn chi nhánh tiếp nhận.";
+    return "Vui l�ng chọn chi nh�nh ti?p nh?n.";
   }
 
   if (stepNumber === 4) {
-    if (!String(customerForm?.fullName || "").trim()) return "Vui lòng nhập họ tên khách hàng.";
-    if (!String(customerForm?.phone || "").trim()) return "Vui lòng nhập số điện thoại khách hàng.";
-    if (!isValidVietnamesePhone(customerForm?.phone)) return "Số điện thoại khách hàng không đúng định dạng Việt Nam.";
+    if (!String(customerForm?.fullName || "").trim()) return "Vui l�ng nh?p h? t�n khách hàng.";
+    if (!String(customerForm?.phone || "").trim()) return "Vui l�ng nh?p s? di?n tho?i khách hàng.";
+    if (!isValidVietnamesePhone(customerForm?.phone)) return "S? di?n tho?i khách hàng không d�ng d?nh d?ng Vi?t Nam.";
     if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
     if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
 
     if (isBatchBooking) {
       if ((batchVehicles || []).length === 0) {
-        return "Vui lòng thêm ít nhất một xe vào danh sách đặt nhiều xe.";
+        return "Vui l�ng th�m �t nh?t m?t xe v�o danh sách d?t nhi?u xe.";
       }
       return "";
     }
@@ -67,3 +67,5 @@ export function validateBookingStep(stepNumber, data) {
 
   return "";
 }
+
+

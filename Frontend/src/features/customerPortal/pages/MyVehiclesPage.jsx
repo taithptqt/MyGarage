@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -38,7 +38,7 @@ export default function MyVehiclesPage() {
       setList(Array.isArray(vehicles) ? vehicles : []);
       setLookups(lu || { brands: [], models: [] });
     } catch (e) {
-      setError(e?.message || "Không tải được danh sách xe.");
+      setError(e?.message || "Không t?i du?c danh sách xe.");
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export default function MyVehiclesPage() {
     () => [
       { label: "Tổng số xe", value: list.length },
       { label: "Đang là chủ sở hữu", value: list.filter((item) => item.isCurrentOwner).length },
-      { label: "Đã khai báo VIN", value: list.filter((item) => item.vin).length },
+      { label: "Đã khai b�o VIN", value: list.filter((item) => item.vin).length },
     ],
     [list]
   );
@@ -169,7 +169,7 @@ export default function MyVehiclesPage() {
               </p>
               <div className="cp-veh-actions">
                 <button type="button" className="cp-btn" onClick={openAdd}>
-                  Khai báo xe đầu tiên
+                  Khai b�o xe d?u ti�n
                 </button>
               </div>
             </section>
@@ -384,3 +384,5 @@ export default function MyVehiclesPage() {
     </div>
   );
 }
+
+

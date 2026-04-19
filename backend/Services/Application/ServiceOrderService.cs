@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -35,6 +35,8 @@ namespace MyGarage.Services
         private const string WorkshopDetailDescription = "Dịch vụ khách yêu cầu trước";
         private const string WorkshopDetailUnit = "Lần";
         private const string WorkshopDetailStatus = nameof(ServiceOrderDetailStatusCode.APPROVED);
+        // Keep guard enabled: check-in/order creation must follow branch operating schedule.
+        private static readonly bool BypassBranchDayOffCheckInGuard = false;
         private const string WorkshopEditWindowPassedMessage = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
         private static readonly HashSet<string> WorkshopMilestoneLockedStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -583,7 +585,7 @@ namespace MyGarage.Services
                 OrderCategory = normalizedOrderCategory,
                 ServiceAdvisorId = ResolveServiceAdvisorForWorkshopCreate(item.ServiceAdvisorId, actorStaffId),
                 ReceptionistId = actorStaffId,
-                CustomerNotes = NormalizeText(item.CustomerNotes),
+                CustomerNotes = CustomerNoteFormatter.ToDisplayText(item.CustomerNotes),
                 RequiredDepositAmount = item.RequiredDepositAmount,
                 OldPartsReturnOption = NormalizeText(item.OldPartsReturnOption),
                 CheckInTime = checkInTime,
@@ -610,6 +612,11 @@ namespace MyGarage.Services
 
         private async Task EnsureBranchOpenForCheckInAsync(long branchId, DateTime checkInTime)
         {
+            if (BypassBranchDayOffCheckInGuard)
+            {
+                return;
+            }
+
             if (branchId <= 0)
             {
                 throw new InvalidOperationException("Thiếu thông tin chi nhánh thực hiện lệnh.");
@@ -1612,6 +1619,76 @@ namespace MyGarage.Services
                 entry.State = EntityState.Detached;
             }
         }
+        public async Task<HandoverReadinessResponseDto?> GetHandoverReadinessAsync(long id)
+        {
+            var order = await _context.ServiceOrders
+                .AsNoTracking()
+                .Include(o => o.ServiceOrderDetails)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null) return null;
+
+            var isPaid = string.Equals(order.PaymentStatus, nameof(InvoicePaymentStatusCode.PAID), StringComparison.OrdinalIgnoreCase);
+            var isQcPassed = string.Equals(order.Qcstatus, nameof(ServiceOrderQcStatusCode.PASS), StringComparison.OrdinalIgnoreCase);
+            
+            // Check if all labor/service details are COMPLETED
+            var workDetails = order.ServiceOrderDetails.Where(d => d.ItemType == "LABOR" || d.ItemType == "SERVICE").ToList();
+            var areAllTasksCompleted = workDetails.All(d => string.Equals(d.Status, nameof(ServiceOrderDetailStatusCode.COMPLETED), StringComparison.OrdinalIgnoreCase));
+
+            var response = new HandoverReadinessResponseDto
+            {
+                ServiceOrderId = id,
+                IsPaid = isPaid,
+                PaymentStatus = order.PaymentStatus ?? "PENDING",
+                IsQcPassed = isQcPassed,
+                QcStatus = order.Qcstatus ?? "PENDING",
+                AreAllTasksCompleted = areAllTasksCompleted
+            };
+
+            if (!isPaid) response.BlockingReason = "Đơn hàng chưa được thanh toán đầy đủ.";
+            else if (!isQcPassed) response.BlockingReason = "Chưa hoàn tất kiểm tra chất lượng hoặc QC không đạt.";
+            else if (!areAllTasksCompleted) response.BlockingReason = "Vẫn còn các hạng mục sửa chữa chưa hoàn thành.";
+
+            return response;
+        }
+
+        public async Task<bool> ProcessHandoverAsync(long id, HandoverRequestDto request)
+        {
+            var order = await _context.ServiceOrders.FirstOrDefaultAsync(o => o.Id == id);
+            if (order == null) return false;
+
+            // Enforcement policy: Must be PAID and QC_PASS
+            var readiness = await GetHandoverReadinessAsync(id);
+            if (readiness == null || !readiness.CanHandover)
+            {
+                throw new InvalidOperationException(readiness?.BlockingReason ?? "Không thể bàn giao xe vào lúc này.");
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                order.Status = nameof(ServiceOrderLifecycleStatus.CLOSED);
+                order.ActualHandover = request.HandoverTime ?? VietnamTime.Now;
+                order.UpdatedAt = VietnamTime.Now;
+                order.UpdatedBy = request.StaffId;
+
+                // Create a log or history record if available in the system
+                // For now, we update the core order status to CLOSED
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                _customerLifecycleNotifier.EnqueueAfterStatusChange(order, nameof(ServiceOrderLifecycleStatus.READY));
+                
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
         {
             try
@@ -1625,4 +1702,3 @@ namespace MyGarage.Services
         }
     }
 }
-

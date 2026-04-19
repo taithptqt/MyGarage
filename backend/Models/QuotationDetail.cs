@@ -29,6 +29,8 @@ public partial class QuotationDetail
 
     public decimal SubTotal { get; set; }
 
+    public decimal? DiscountPercentage { get; set; }
+
     public decimal DiscountValue { get; set; }
 
     public decimal TaxRate { get; set; }

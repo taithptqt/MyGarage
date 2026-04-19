@@ -1,4 +1,4 @@
-// Chakra imports
+﻿// Chakra imports
 import {
   Box,
   Flex,
@@ -56,5 +56,6 @@ export default function Project(props) {
     </Card>
   );
 }
+
 
 

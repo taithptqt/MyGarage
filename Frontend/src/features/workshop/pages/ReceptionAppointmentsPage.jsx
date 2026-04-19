@@ -186,6 +186,20 @@ function getAppointmentFilterTimestamp(appt) {
   return Number.isFinite(end) ? end : 0;
 }
 
+function getAppointmentCreatedTimestamp(appt) {
+  const created = new Date(appt?.createdAt || appt?.CreatedAt || 0).getTime();
+  if (Number.isFinite(created) && created > 0) {
+    return created;
+  }
+
+  const updated = new Date(appt?.updatedAt || appt?.UpdatedAt || 0).getTime();
+  if (Number.isFinite(updated) && updated > 0) {
+    return updated;
+  }
+
+  return 0;
+}
+
 export default function ReceptionAppointmentsPage() {
   const navigate = useNavigate();
   const { searchQuery } = useSearch();
@@ -316,8 +330,8 @@ export default function ReceptionAppointmentsPage() {
     });
 
     return list.sort((a, b) => {
-      const aTime = getAppointmentFilterTimestamp(a);
-      const bTime = getAppointmentFilterTimestamp(b);
+      const aTime = getAppointmentCreatedTimestamp(a);
+      const bTime = getAppointmentCreatedTimestamp(b);
       const aName = String(a.customerName || "");
       const bName = String(b.customerName || "");
 
@@ -371,8 +385,8 @@ export default function ReceptionAppointmentsPage() {
         };
       })
       .sort((a, b) => {
-        const aTime = new Date(a.appointments[0]?.startTime || 0).getTime();
-        const bTime = new Date(b.appointments[0]?.startTime || 0).getTime();
+        const aTime = Math.max(...(a.appointments || []).map((appt) => getAppointmentCreatedTimestamp(appt)));
+        const bTime = Math.max(...(b.appointments || []).map((appt) => getAppointmentCreatedTimestamp(appt)));
         return apptSortBy === "OLDEST" ? aTime - bTime : bTime - aTime;
       });
   }, [filteredAppts, apptSortBy]);
@@ -642,4 +656,3 @@ export default function ReceptionAppointmentsPage() {
     </div>
   );
 }
-

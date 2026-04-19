@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -27,6 +27,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _chatHubContext;
+    private readonly IMaterialRequestService _materialRequestService;
 
     private const string StatusDraft = nameof(QuotationStatusCode.DRAFT);
     private const string StatusWaitingApproval = nameof(QuotationStatusCode.WAITING_APPROVAL);
@@ -70,19 +71,25 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     private const string ApprovalActionTypeTechnical = "TECHNICAL";
     private const string ApprovalActionTypeFinancial = "FINANCIAL";
     private const string StatusPendingBranchManager = "PENDING_BRANCH_MANAGER";
+    private const string DiscountTypeMembership = "MEMBERSHIP";
+    private const string DiscountTypeManual = "MANUAL";
+    private const string DiscountTypeVoucher = "VOUCHER";
+    private const string DiscountValueTypeAmount = "AMOUNT";
 
     public QuotationWorkflowService(
         IGarageContext context,
         IServiceOrderDetailService serviceOrderDetailService,
         IEmailService emailService,
         IConfiguration configuration,
-        IHubContext<ChatHub> chatHubContext)
+        IHubContext<ChatHub> chatHubContext,
+        IMaterialRequestService materialRequestService)
     {
         _context = context;
         _serviceOrderDetailService = serviceOrderDetailService;
         _emailService = emailService;
         _configuration = configuration;
         _chatHubContext = chatHubContext;
+        _materialRequestService = materialRequestService;
     }
 
     public async Task<QuotationResponseDto> CreateQuotationAsync(long serviceOrderId, QuotationCreateRequestDto request, long? actorStaffId = null)
@@ -216,6 +223,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         quotation.QuotationDetails = details;
         RecalculateQuotationTotals(quotation);
+        ValidateQuotationSplitBilling(quotation);
         quotation.InsuranceChangeType = await ResolveInsuranceChangeTypeAsync(quotation, null);
 
         var priorOpenQuotations = await _context.Quotations
@@ -420,6 +428,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
     {
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation != null)
         {
@@ -434,6 +443,99 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return MapQuotationResponse(quotation, null, supplementaryMetaByDetailId);
     }
 
+    public async Task<IReadOnlyList<QuotationDiscountResponseDto>> GetQuotationDiscountsAsync(long quotationId)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Mã báo giá không hợp lệ.");
+        }
+
+        var exists = await _context.Quotations.AsNoTracking().AnyAsync(x => x.Id == quotationId);
+        if (!exists)
+        {
+            throw new InvalidOperationException("Không tìm thấy báo giá.");
+        }
+
+        var discounts = await _context.QuotationDiscounts.AsNoTracking()
+            .Where(x => x.QuotationId == quotationId)
+            .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync();
+
+        return discounts.Select(MapQuotationDiscountResponse).ToList();
+    }
+
+    public async Task<IReadOnlyList<QuotationDiscountResponseDto>> UpsertQuotationDiscountsAsync(long quotationId, QuotationDiscountUpsertRequestDto request)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Mã báo giá không hợp lệ.");
+        }
+
+        if (request == null || request.ActorStaffId <= 0)
+        {
+            throw new InvalidOperationException("Thiếu nhân sự cập nhật giảm giá báo giá.");
+        }
+
+        var quotation = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
+            .FirstOrDefaultAsync(x => x.Id == quotationId);
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy báo giá.");
+        }
+
+        if (string.Equals(quotation.Status, StatusSuperseded, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusCanceled, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusInsuranceApproved, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusPendingCustomer, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quotation.Status, StatusCustomerApproved, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Không thể cập nhật giảm giá cho báo giá đã khóa.");
+        }
+
+        var normalizedItems = await NormalizeQuotationDiscountItemsAsync(request.Items, request.ActorStaffId, quotationId);
+
+        var existingRows = quotation.QuotationDiscounts?.ToList() ?? new List<QuotationDiscount>();
+        if (existingRows.Count > 0)
+        {
+            _context.QuotationDiscounts.RemoveRange(existingRows);
+        }
+
+        if (normalizedItems.Count > 0)
+        {
+            _context.QuotationDiscounts.AddRange(normalizedItems);
+            quotation.QuotationDiscounts = normalizedItems;
+        }
+        else
+        {
+            quotation.QuotationDiscounts = new List<QuotationDiscount>();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Note))
+        {
+            var cleaned = request.Note.Trim();
+            quotation.InternalNotes = string.IsNullOrWhiteSpace(quotation.InternalNotes)
+                ? cleaned
+                : $"{quotation.InternalNotes.Trim()} | {cleaned}";
+        }
+
+        var now = VietnamTime.Now;
+        quotation.UpdatedAt = now;
+        quotation.UpdatedBy = request.ActorStaffId;
+        RecalculateQuotationTotals(quotation);
+        quotation.InsuranceChangeType = await ResolveInsuranceChangeTypeAsync(quotation, null);
+
+        await _context.SaveChangesAsync();
+
+        return (quotation.QuotationDiscounts ?? new List<QuotationDiscount>())
+            .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
+            .ThenByDescending(x => x.Id)
+            .Select(MapQuotationDiscountResponse)
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<QuotationResponseDto>> GetQuotationsByServiceOrderAsync(long serviceOrderId)
     {
         var rows = await _context.Quotations
@@ -441,6 +543,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .OrderByDescending(x => x.VersionNo)
             .ThenByDescending(x => x.CreatedAt ?? DateTime.MinValue)
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .ToListAsync();
 
         var changed = false;
@@ -500,6 +603,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var source = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (source == null)
         {
@@ -603,11 +707,37 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         }
 
         var cloned = await CreateQuotationAsync(source.ServiceOrderId, cloneRequest, request.ActorStaffId);
-        var clonedEntity = await _context.Quotations.FirstAsync(x => x.Id == cloned.Id);
+        var clonedEntity = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
+            .FirstAsync(x => x.Id == cloned.Id);
         clonedEntity.SourceSnapshotId = source.SourceSnapshotId;
         clonedEntity.CustomerDecisionStatus = ApprovalPending;
         clonedEntity.UpdatedBy = request.ActorStaffId;
         clonedEntity.UpdatedAt = VietnamTime.Now;
+
+        var sourceDiscounts = source.QuotationDiscounts ?? new List<QuotationDiscount>();
+        if (sourceDiscounts.Count > 0)
+        {
+            var copiedDiscounts = sourceDiscounts.Select(discount => new QuotationDiscount
+            {
+                QuotationId = clonedEntity.Id,
+                DiscountType = discount.DiscountType,
+                CustomerTierId = discount.CustomerTierId,
+                VoucherId = discount.VoucherId,
+                DiscountValue = discount.DiscountValue,
+                ValueType = discount.ValueType,
+                AppliedAmount = discount.AppliedAmount,
+                Reason = discount.Reason,
+                AppliedBy = discount.AppliedBy,
+                CreatedAt = discount.CreatedAt ?? VietnamTime.Now
+            }).ToList();
+            _context.QuotationDiscounts.AddRange(copiedDiscounts);
+            clonedEntity.QuotationDiscounts = copiedDiscounts;
+            RecalculateQuotationTotals(clonedEntity);
+            clonedEntity.InsuranceChangeType = await ResolveInsuranceChangeTypeAsync(clonedEntity, null);
+        }
+
         await _context.SaveChangesAsync();
 
         if (removedMandatoryRows.Count > 0)
@@ -669,6 +799,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -757,6 +888,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -790,8 +922,57 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 continue;
             }
 
+            if (update.Quantity.HasValue)
+            {
+                var normalizedQuantity = update.Quantity.Value <= 0m ? 1m : update.Quantity.Value;
+                detail.Quantity = normalizedQuantity;
+            }
+
+            var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
+            var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
+            var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
+            decimal? nextDiscountPercentage = detail.DiscountPercentage;
+            decimal nextDiscount;
+
+            if (update.DiscountPercentage.HasValue)
+            {
+                var normalizedPercent = update.DiscountPercentage.Value < 0m ? 0m : update.DiscountPercentage.Value;
+                normalizedPercent = Math.Min(normalizedPercent, 100m);
+                nextDiscountPercentage = normalizedPercent;
+                nextDiscount = Math.Round(subTotal * (normalizedPercent / 100m), 2, MidpointRounding.AwayFromZero);
+            }
+            else if (update.DiscountValue.HasValue)
+            {
+                var normalizedDiscount = update.DiscountValue.Value < 0m ? 0m : update.DiscountValue.Value;
+                nextDiscount = Math.Min(normalizedDiscount, Math.Max(0m, subTotal));
+                nextDiscountPercentage = null;
+            }
+            else
+            {
+                var normalizedPercent = detail.DiscountPercentage.HasValue
+                    ? Math.Min(Math.Max(detail.DiscountPercentage.Value, 0m), 100m)
+                    : (decimal?)null;
+                if (normalizedPercent.HasValue)
+                {
+                    nextDiscountPercentage = normalizedPercent.Value;
+                    nextDiscount = Math.Round(subTotal * (normalizedPercent.Value / 100m), 2, MidpointRounding.AwayFromZero);
+                }
+                else
+                {
+                    nextDiscount = detail.DiscountValue < 0m ? 0m : detail.DiscountValue;
+                }
+            }
+
+            nextDiscount = Math.Min(Math.Max(0m, nextDiscount), Math.Max(0m, subTotal));
+            detail.DiscountPercentage = nextDiscountPercentage;
+            detail.DiscountValue = nextDiscount;
+
+            var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
+            var taxableBase = Math.Max(0m, subTotal - nextDiscount);
+            var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
+            var previewFinalAmount = Math.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
             var split = CalculateSplitBilling(
-                detail.FinalAmount,
+                previewFinalAmount,
                 update.InsuranceCoveredAmount,
                 null,
                 update.PayerType ?? detail.PayerType);
@@ -816,6 +997,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         quotation.UpdatedAt = now;
         quotation.UpdatedBy = request.ActorStaffId;
         RecalculateQuotationTotals(quotation);
+        ValidateQuotationSplitBilling(quotation);
         quotation.InsuranceChangeType = await ResolveInsuranceChangeTypeAsync(quotation, null);
 
         var serviceOrder = await _context.ServiceOrders.FirstOrDefaultAsync(x => x.Id == quotation.ServiceOrderId);
@@ -866,6 +1048,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -996,6 +1179,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -1062,6 +1246,18 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             quotation.UpdatedBy = actorId;
             serviceOrder.InsuranceQuoteState = StatusCustomerApproved;
             await ApplyQuotationToServiceOrderAsync(quotation, serviceOrder, actorId, now);
+            
+            // Tự động tạo phiếu yêu cầu vật tư cho các phụ tùng trong báo giá
+            try
+            {
+                await _materialRequestService.CreateFromQuotationAsync(quotationId, actorId);
+            }
+            catch (Exception)
+            {
+                // Không throw lỗi này để tránh làm gián đoạn luồng phê duyệt báo giá
+                // Có thể log lỗi ở đây nếu có logger
+            }
+
             await TryNotifyInsuranceApprovalChainAsync(quotation, serviceOrder, true);
             return MapQuotationResponse(quotation);
         }
@@ -1175,6 +1371,32 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         if (rowsToCreate.Count > 0)
         {
             _context.ServiceOrderDetails.AddRange(rowsToCreate);
+        }
+
+        var existingServiceOrderDiscounts = await _context.ServiceOrderDiscounts
+            .Where(x => x.ServiceOrderId == serviceOrder.Id)
+            .ToListAsync();
+        if (existingServiceOrderDiscounts.Count > 0)
+        {
+            _context.ServiceOrderDiscounts.RemoveRange(existingServiceOrderDiscounts);
+        }
+
+        var quotationDiscounts = (quotation.QuotationDiscounts ?? new List<QuotationDiscount>()).ToList();
+        if (quotationDiscounts.Count > 0)
+        {
+            var serviceOrderDiscounts = quotationDiscounts.Select(discount => new ServiceOrderDiscount
+            {
+                ServiceOrderId = serviceOrder.Id,
+                DiscountType = discount.DiscountType,
+                CustomerTierId = discount.CustomerTierId,
+                VoucherId = discount.VoucherId,
+                DiscountValue = discount.DiscountValue,
+                ValueType = discount.ValueType,
+                AppliedAmount = discount.AppliedAmount,
+                Reason = discount.Reason,
+                AppliedBy = discount.AppliedBy
+            }).ToList();
+            _context.ServiceOrderDiscounts.AddRange(serviceOrderDiscounts);
         }
 
         quotation.IsAppliedToServiceOrder = true;
@@ -1293,6 +1515,92 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return $"{trimmed} | {prefix}{reason}";
     }
 
+    public async Task<QuotationResponseDto> SubmitQuotationForInternalApprovalAsync(long quotationId, long actorStaffId, string? note = null)
+    {
+        if (quotationId <= 0)
+        {
+            throw new InvalidOperationException("Mã báo giá không hợp lệ.");
+        }
+
+        if (actorStaffId <= 0)
+        {
+            throw new InvalidOperationException("Thiếu nhân sự trình duyệt nội bộ.");
+        }
+
+        var quotation = await _context.Quotations
+            .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
+            .FirstOrDefaultAsync(x => x.Id == quotationId);
+        if (quotation == null)
+        {
+            throw new InvalidOperationException("Không tìm thấy báo giá.");
+        }
+
+        if (quotation.Status == StatusSuperseded)
+        {
+            throw new InvalidOperationException("Báo giá đã bị thay thế.");
+        }
+
+        if (quotation.Status == StatusCustomerApproved || quotation.Status == StatusCustomerRejected || quotation.Status == StatusCanceled)
+        {
+            return MapQuotationResponse(quotation);
+        }
+
+        if (!string.Equals(quotation.Status, StatusDraft, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(quotation.Status, StatusWaitingApproval, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Chỉ có thể trình duyệt nội bộ khi báo giá đang ở trạng thái nháp hoặc chờ duyệt.");
+        }
+
+        var requiresTechnicalApproval = await IsTechnicalApprovalRequiredAsync(quotation);
+        var requiresFinancialApproval = await IsFinancialApprovalRequiredAsync(quotation);
+        var now = VietnamTime.Now;
+
+        quotation.UpdatedAt = now;
+        quotation.UpdatedBy = actorStaffId;
+
+        var cleaned = NormalizeText(note, 1000);
+        if (!string.IsNullOrWhiteSpace(cleaned))
+        {
+            quotation.InternalNotes = string.IsNullOrWhiteSpace(quotation.InternalNotes)
+                ? cleaned
+                : $"{quotation.InternalNotes.Trim()} | {cleaned}";
+        }
+
+        quotation.RequiresFinancialApproval = requiresFinancialApproval;
+        quotation.FinancialApprovedBy = null;
+        quotation.FinancialApprovedAt = null;
+        quotation.FinancialApprovalStatus = requiresFinancialApproval
+            ? FinancialApprovalPending
+            : FinancialApprovalNotRequired;
+
+        if (requiresTechnicalApproval)
+        {
+            quotation.TechnicalApprovedBy = null;
+            quotation.TechnicalApprovedAt = null;
+            quotation.TechnicalApprovalStatus = TechnicalApprovalPending;
+            quotation.Status = StatusWaitingApproval;
+
+            await _context.SaveChangesAsync();
+            return MapQuotationResponse(quotation);
+        }
+
+        quotation.TechnicalApprovedBy = actorStaffId;
+        quotation.TechnicalApprovedAt = now;
+        quotation.TechnicalApprovalStatus = TechnicalApprovalApproved;
+
+        if (requiresFinancialApproval)
+        {
+            quotation.Status = StatusPendingBranchManager;
+            await _context.SaveChangesAsync();
+            return MapQuotationResponse(quotation);
+        }
+
+        quotation.Status = StatusDraft;
+        await _context.SaveChangesAsync();
+        return await SubmitQuotationAsync(quotationId, actorStaffId, note);
+    }
+
     public async Task<QuotationResponseDto> SubmitQuotationAsync(long quotationId, long actorStaffId, string? note = null)
     {
         if (quotationId <= 0)
@@ -1307,6 +1615,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -1334,6 +1643,18 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         if (!string.Equals(quotation.Status, StatusDraft, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Chỉ có thể gửi báo giá sang trạng thái chờ bảo hiểm từ bản nháp.");
+        }
+
+        var technicalStatus = (quotation.TechnicalApprovalStatus ?? string.Empty).Trim().ToUpperInvariant();
+        if (!string.Equals(technicalStatus, TechnicalApprovalApproved, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Báo giá chưa hoàn tất duyệt kỹ thuật nội bộ.");
+        }
+
+        if (quotation.RequiresFinancialApproval &&
+            !string.Equals(quotation.FinancialApprovalStatus, FinancialApprovalApproved, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Báo giá chưa hoàn tất duyệt tài chính nội bộ.");
         }
 
         var now = VietnamTime.Now;
@@ -1382,6 +1703,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -1447,6 +1769,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -1664,6 +1987,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .Include(x => x.ServiceOrder)
                 .ThenInclude(x => x.Customer)
             .Include(x => x.ServiceOrder)
@@ -1845,6 +2169,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var accessLink = await ResolveActiveAccessLinkAsync(token);
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .Include(x => x.ServiceOrder)
                 .ThenInclude(x => x.Customer)
             .Include(x => x.ServiceOrder)
@@ -2031,6 +2356,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
         var quotation = await _context.Quotations
             .Include(x => x.QuotationDetails)
+            .Include(x => x.QuotationDiscounts)
             .FirstOrDefaultAsync(x => x.Id == quotationId);
         if (quotation == null)
         {
@@ -2092,8 +2418,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 .Select(x => x.Email)
                 .FirstOrDefaultAsync();
 
-            var roleCodes = new[] { "WORKSHOP_MANAGER", "FOREMAN", "TEAM_LEADER", "STOREKEEPER" };
-            var fallbackRoleHints = new[] { "quan doc", "to truong", "thu kho", "manager", "foreman", "leader", "storekeeper" };
+            var roleCodes = new[] { "WORKSHOP_MANAGER", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER" };
+            var fallbackRoleHints = new[] { "quan doc", "to truong", "thu kho", "manager", "foreman", "leader", "STORE_KEEPER" };
 
             var branchStaffCandidates = await (
                 from staff in _context.Staffs.AsNoTracking()
@@ -2200,7 +2526,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
             var storekeeperIds = branchStaffCandidates
                 .Where(x =>
-                    (x.RoleCode ?? string.Empty).Contains("STOREKEEPER", StringComparison.OrdinalIgnoreCase) ||
+                    (x.RoleCode ?? string.Empty).Contains("STORE_KEEPER", StringComparison.OrdinalIgnoreCase) ||
                     (x.RoleCode ?? string.Empty).Contains("WAREHOUSE", StringComparison.OrdinalIgnoreCase) ||
                     (x.RoleName ?? string.Empty).Contains("thủ kho", StringComparison.OrdinalIgnoreCase))
                 .Select(x => x.Id)
@@ -2726,6 +3052,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             UnitPriceAtTime = unitPrice,
             CostPriceAtTime = dto.CostPriceAtTime,
             SubTotal = subTotal,
+            DiscountPercentage = null,
             DiscountValue = discount,
             TaxRate = taxRate,
             TaxAmount = taxAmount,
@@ -2778,11 +3105,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 insuranceCovered = total;
                 customerCovered = 0m;
             }
-            else if (normalizedPayer == "SPLIT")
-            {
-                insuranceCovered = Math.Round(total / 2m, 2, MidpointRounding.AwayFromZero);
-                customerCovered = Math.Round(total - insuranceCovered, 2, MidpointRounding.AwayFromZero);
-            }
             else
             {
                 insuranceCovered = 0m;
@@ -2806,6 +3128,28 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return Math.Round(value, 2, MidpointRounding.AwayFromZero);
     }
 
+    private static void ValidateQuotationSplitBilling(Quotation quotation)
+    {
+        if (quotation?.QuotationDetails == null) return;
+
+        foreach (var detail in quotation.QuotationDetails)
+        {
+            if (string.Equals(detail.Status, "CANCELED", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var insurance = detail.InsuranceCoveredAmount ?? 0m;
+            var customer = detail.CustomerCoveredAmount ?? 0m;
+            var total = detail.FinalAmount;
+
+            var diff = Math.Abs(total - (insurance + customer));
+            if (diff > 0.05m) // Cho phép sai lệch nhỏ do làm tròn (50 VNĐ)
+            {
+                throw new InvalidOperationException(
+                    $"Dòng h\u1EA1ng m\u1EE5c '{detail.ItemName}' c\u00F3 t\u1ED5ng ti\u1EC1n thanh to\u00E1n kh\u00F4ng kh\u1EDBp: " +
+                    $"T\u1ED5ng ({total:N0}) != B\u1EA3o hi\u1EC3m ({insurance:N0}) + Kh\u00E1ch ({customer:N0}).");
+            }
+        }
+    }
+
     private static bool IsInsuranceApprovalRequiredForQuotation(Quotation quotation)
     {
         if (quotation?.QuotationDetails == null || quotation.QuotationDetails.Count == 0)
@@ -2814,6 +3158,92 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         }
 
         return quotation.QuotationDetails.Any(IsInsuranceResponsibleDetail);
+    }
+
+    private async Task<bool> IsTechnicalApprovalRequiredAsync(Quotation quotation)
+    {
+        if (quotation == null)
+        {
+            return true;
+        }
+
+        if (!quotation.SourceSnapshotId.HasValue || quotation.SourceSnapshotId.Value <= 0)
+        {
+            return true;
+        }
+
+        var snapshotDetails = await _context.TechnicalProposalSnapshotDetails.AsNoTracking()
+            .Where(x => x.SnapshotId == quotation.SourceSnapshotId.Value)
+            .Select(x => new
+            {
+                x.ItemType,
+                x.ItemId,
+                x.ItemName,
+                x.Quantity,
+                x.IsMandatory
+            })
+            .ToListAsync();
+        if (snapshotDetails.Count == 0)
+        {
+            return true;
+        }
+
+        var quotationDetails = (quotation.QuotationDetails ?? new List<QuotationDetail>())
+            .Where(x => !string.Equals(x.Status, DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        static string BuildTechnicalKey(string? itemType, long? itemId, string? itemName)
+        {
+            var normalizedType = (itemType ?? string.Empty).Trim().ToUpperInvariant();
+            var normalizedItemId = itemId.GetValueOrDefault() > 0 ? itemId!.Value.ToString(CultureInfo.InvariantCulture) : "0";
+            var normalizedName = (itemName ?? string.Empty).Trim().ToUpperInvariant();
+            return $"{normalizedType}|{normalizedItemId}|{normalizedName}";
+        }
+
+        var baseline = snapshotDetails
+            .GroupBy(x => BuildTechnicalKey(x.ItemType, x.ItemId, x.ItemName))
+            .ToDictionary(
+                x => x.Key,
+                x => new
+                {
+                    Quantity = x.Sum(y => y.Quantity),
+                    IsMandatory = x.Any(y => y.IsMandatory)
+                });
+
+        var current = quotationDetails
+            .GroupBy(x => BuildTechnicalKey(x.ItemType, x.ItemId, x.ItemName))
+            .ToDictionary(
+                x => x.Key,
+                x => new
+                {
+                    Quantity = x.Sum(y => y.Quantity),
+                    IsMandatory = x.Any(y => y.IsMandatory)
+                });
+
+        if (baseline.Count != current.Count)
+        {
+            return true;
+        }
+
+        foreach (var baselineRow in baseline)
+        {
+            if (!current.TryGetValue(baselineRow.Key, out var currentRow))
+            {
+                return true;
+            }
+
+            if (Math.Abs(baselineRow.Value.Quantity - currentRow.Quantity) > 0.0001m)
+            {
+                return true;
+            }
+
+            if (baselineRow.Value.IsMandatory != currentRow.IsMandatory)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<bool> IsFinancialApprovalRequiredAsync(Quotation quotation)
@@ -3139,10 +3569,16 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         {
             var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
             var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
-            var discount = detail.DiscountValue < 0 ? 0m : detail.DiscountValue;
+            var normalizedDiscountPercentage = detail.DiscountPercentage.HasValue
+                ? Math.Min(Math.Max(detail.DiscountPercentage.Value, 0m), 100m)
+                : (decimal?)null;
             var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
 
             var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
+            var discount = normalizedDiscountPercentage.HasValue
+                ? Math.Round(subTotal * (normalizedDiscountPercentage.Value / 100m), 2, MidpointRounding.AwayFromZero)
+                : detail.DiscountValue < 0 ? 0m : detail.DiscountValue;
+            discount = Math.Min(discount, Math.Max(0m, subTotal));
             var taxableBase = Math.Max(0m, subTotal - discount);
             var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
             var finalAmount = Math.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
@@ -3150,6 +3586,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
             detail.Quantity = quantity;
             detail.UnitPriceAtTime = unitPrice;
+            detail.DiscountPercentage = normalizedDiscountPercentage;
             detail.DiscountValue = discount;
             detail.TaxRate = taxRate;
             detail.SubTotal = subTotal;
@@ -3160,18 +3597,46 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             detail.CustomerCoveredAmount = split.CustomerCoveredAmount;
         }
 
-        quotation.SubTotalAmount = details.Sum(x => x.SubTotal);
-        quotation.TotalDiscount = details.Sum(x => x.DiscountValue);
-        quotation.TaxAmount = details.Sum(x => x.TaxAmount);
-        quotation.FinalAmount = details.Sum(x => x.FinalAmount);
-        quotation.TotalInsuranceAmount = details.Sum(x =>
+        var quotationLevelDiscount = SumQuotationLevelDiscount(quotation.QuotationDiscounts);
+        var detailsLineDiscount = details.Sum(x => x.DiscountValue);
+        var detailsTax = details.Sum(x => x.TaxAmount);
+        var detailsFinal = details.Sum(x => x.FinalAmount);
+        var detailsInsurance = details.Sum(x =>
             x.InsuranceCoveredAmount
             ?? (string.Equals(x.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase) ? x.FinalAmount : 0m));
-        quotation.TotalCustomerAmount = details.Sum(x =>
+        var detailsCustomer = details.Sum(x =>
             x.CustomerCoveredAmount
             ?? (!string.Equals(x.PayerType, "INSURANCE", StringComparison.OrdinalIgnoreCase)
                 ? x.FinalAmount
                 : Math.Max(0m, x.FinalAmount - (x.InsuranceCoveredAmount ?? 0m))));
+
+        quotation.SubTotalAmount = details.Sum(x => x.SubTotal);
+        quotation.TotalDiscount = detailsLineDiscount + quotationLevelDiscount;
+        quotation.TaxAmount = detailsTax;
+        quotation.FinalAmount = Math.Max(0m, detailsFinal - quotationLevelDiscount);
+        quotation.TotalInsuranceAmount = detailsInsurance;
+        quotation.TotalCustomerAmount = Math.Max(0m, detailsCustomer - quotationLevelDiscount);
+    }
+
+    private static decimal SumQuotationLevelDiscount(IEnumerable<QuotationDiscount>? discounts)
+    {
+        if (discounts == null)
+        {
+            return 0m;
+        }
+
+        return discounts
+            .Where(x => x != null)
+            .Sum(x =>
+            {
+                var appliedAmount = x.AppliedAmount < 0m ? 0m : x.AppliedAmount;
+                if (appliedAmount > 0m)
+                {
+                    return appliedAmount;
+                }
+
+                return x.DiscountValue < 0m ? 0m : x.DiscountValue;
+            });
     }
 
     private async Task RecalculateServiceOrderTotalsAsync(long serviceOrderId, long actorStaffId, DateTime now)
@@ -3472,6 +3937,11 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             IsReadyForSplitBilling = quotation.IsReadyForSplitBilling,
             SplitBillingReadyAt = quotation.SplitBillingReadyAt,
             AppliedAt = quotation.AppliedAt,
+            Discounts = (quotation.QuotationDiscounts ?? new List<QuotationDiscount>())
+                .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Id)
+                .Select(MapQuotationDiscountResponse)
+                .ToList(),
             Details = (quotation.QuotationDetails ?? new List<QuotationDetail>())
                 .OrderBy(x => x.Id)
                 .Select(x =>
@@ -3495,6 +3965,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                         UnitPriceAtTime = x.UnitPriceAtTime,
                         CostPriceAtTime = x.CostPriceAtTime,
                         SubTotal = x.SubTotal,
+                        DiscountPercentage = x.DiscountPercentage,
                         DiscountValue = x.DiscountValue,
                         TaxRate = x.TaxRate,
                         TaxAmount = x.TaxAmount,
@@ -3515,6 +3986,105 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                     };
                 })
                 .ToList()
+        };
+    }
+
+    private static QuotationDiscountResponseDto MapQuotationDiscountResponse(QuotationDiscount discount)
+    {
+        return new QuotationDiscountResponseDto
+        {
+            Id = discount.Id,
+            QuotationId = discount.QuotationId,
+            DiscountType = discount.DiscountType,
+            CustomerTierId = discount.CustomerTierId,
+            VoucherId = discount.VoucherId,
+            DiscountValue = discount.DiscountValue,
+            ValueType = discount.ValueType,
+            AppliedAmount = discount.AppliedAmount,
+            Reason = discount.Reason,
+            AppliedBy = discount.AppliedBy,
+            DiscountCategory = discount.DiscountCategory,
+            CreatedAt = discount.CreatedAt
+        };
+    }
+
+    private async Task<List<QuotationDiscount>> NormalizeQuotationDiscountItemsAsync(
+        IReadOnlyCollection<QuotationDiscountUpsertItemDto>? items,
+        long actorStaffId,
+        long quotationId)
+    {
+        var normalizedRows = new List<QuotationDiscount>();
+        if (items == null || items.Count == 0)
+        {
+            return normalizedRows;
+        }
+
+        foreach (var item in items)
+        {
+            if (item == null)
+            {
+                continue;
+            }
+
+            var discountType = NormalizeQuotationDiscountType(item.DiscountType);
+            if (string.IsNullOrWhiteSpace(discountType))
+            {
+                continue;
+            }
+
+            var discountValue = item.DiscountValue.GetValueOrDefault();
+            var appliedAmount = item.AppliedAmount.GetValueOrDefault();
+            if (discountValue < 0m) discountValue = 0m;
+            if (appliedAmount < 0m) appliedAmount = 0m;
+            if (appliedAmount <= 0m && discountValue > 0m)
+            {
+                appliedAmount = discountValue;
+            }
+            if (discountValue <= 0m && appliedAmount <= 0m)
+            {
+                continue;
+            }
+
+            var resolvedVoucherId = item.VoucherId > 0 ? item.VoucherId : null;
+            if (!resolvedVoucherId.HasValue && !string.IsNullOrWhiteSpace(item.VoucherCode))
+            {
+                var voucherCode = item.VoucherCode.Trim();
+                resolvedVoucherId = await _context.Vouchers.AsNoTracking()
+                    .Where(x => x.Code == voucherCode && (x.IsDeleted == null || x.IsDeleted == false))
+                    .Select(x => (long?)x.Id)
+                    .FirstOrDefaultAsync();
+            }
+
+            normalizedRows.Add(new QuotationDiscount
+            {
+                QuotationId = quotationId,
+                DiscountType = discountType,
+                CustomerTierId = item.CustomerTierId > 0 ? item.CustomerTierId : null,
+                VoucherId = resolvedVoucherId,
+                DiscountValue = discountValue,
+                ValueType = string.IsNullOrWhiteSpace(item.ValueType) ? DiscountValueTypeAmount : item.ValueType.Trim().ToUpperInvariant(),
+                AppliedAmount = appliedAmount,
+                Reason = NormalizeText(item.Reason, 500),
+                AppliedBy = actorStaffId,
+                CreatedAt = VietnamTime.Now
+            });
+        }
+
+        return normalizedRows
+            .GroupBy(x => x.DiscountType, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static string? NormalizeQuotationDiscountType(string? discountType)
+    {
+        var normalized = (discountType ?? string.Empty).Trim().ToUpperInvariant();
+        return normalized switch
+        {
+            DiscountTypeMembership => DiscountTypeMembership,
+            DiscountTypeManual => DiscountTypeManual,
+            DiscountTypeVoucher => DiscountTypeVoucher,
+            _ => null
         };
     }
 

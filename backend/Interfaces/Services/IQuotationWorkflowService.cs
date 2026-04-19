@@ -9,6 +9,8 @@ public interface IQuotationWorkflowService
 {
     Task<QuotationResponseDto> CreateQuotationAsync(long serviceOrderId, QuotationCreateRequestDto request, long? actorStaffId = null);
     Task<QuotationResponseDto?> GetQuotationAsync(long quotationId);
+    Task<IReadOnlyList<QuotationDiscountResponseDto>> GetQuotationDiscountsAsync(long quotationId);
+    Task<IReadOnlyList<QuotationDiscountResponseDto>> UpsertQuotationDiscountsAsync(long quotationId, QuotationDiscountUpsertRequestDto request);
     Task<IReadOnlyList<QuotationResponseDto>> GetQuotationsByServiceOrderAsync(long serviceOrderId);
     Task<QuotationResponseDto> ApproveQuotationAsync(long quotationId, QuotationApproveRequestDto request);
     Task<QuotationResponseDto> ApplyCustomerDecisionAsync(long quotationId, QuotationCustomerDecisionRequestDto request);
@@ -18,6 +20,7 @@ public interface IQuotationWorkflowService
     Task<QuotationResponseDto> UpdateSplitBillingAsync(long quotationId, QuotationSplitBillingUpdateRequestDto request);
     Task DecideMandatoryOverrideAsync(long requestId, MandatoryOverrideDecisionRequestDto request);
     Task<IReadOnlyList<MandatoryOverrideRequestResponseDto>> GetMandatoryOverrideRequestsByServiceOrderAsync(long serviceOrderId);
+    Task<QuotationResponseDto> SubmitQuotationForInternalApprovalAsync(long quotationId, long actorStaffId, string? note = null);
     Task<QuotationResponseDto> SubmitQuotationAsync(long quotationId, long actorStaffId, string? note = null);
     Task<QuotationResponseDto> ConfirmInsuranceApprovedAsync(long quotationId, QuotationInsuranceApprovalRequestDto request);
     Task<QuotationResponseDto> FinancialApproveQuotationAsync(long quotationId, QuotationFinancialApprovalRequestDto request);

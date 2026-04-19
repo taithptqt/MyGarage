@@ -1,5 +1,5 @@
 const CANCEL_REASON_TEMPLATES = {
-  AUTO_NO_SHOW_TIMEOUT: "Quá giờ hẹn, hệ thống tự động ghi nhận KHÔNG ĐẾN (NO_SHOW).",
+  AUTO_NO_SHOW_TIMEOUT: "Quá giới hạn, hệ thống tự động ghi nhận KHÔNG ĐẾN (NO_SHOW).",
   AUTO_NO_SHOW_LATE_ARRIVAL: "Khách đến quá ngưỡng cho phép nên hệ thống ghi nhận KHÔNG ĐẾN (NO_SHOW).",
 };
 
@@ -51,4 +51,6 @@ export function formatAppointmentCancelReason(rawReason) {
 
   return raw;
 }
+
+
 

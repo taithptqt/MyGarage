@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import * as authApi from "@features/auth/api/authApi";
 import "./AuthRecoveryPage.css";
@@ -24,7 +24,7 @@ function ResetPasswordPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!token.trim()) {
-      setError("Liên kết đặt lại mật khẩu không hợp lệ hoặc thiếu mã xác thực.");
+      setError("Li�n k?t d?t l?i m?t kh?u không h?p l? ho?c thi?u m� x�c th?c.");
       setSuccess("");
       return;
     }
@@ -36,7 +36,7 @@ function ResetPasswordPage() {
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Mật khẩu xác nhận chưa khớp.");
+      setError("M?t kh?u x�c nh?n chua kh?p.");
       setSuccess("");
       return;
     }
@@ -75,11 +75,11 @@ function ResetPasswordPage() {
         </div>
         <div className="auth-floating-tag auth-floating-tag--right">
           <span>Chỉ lưu mã băm</span>
-          <p>Token được lưu dưới dạng hash và không bị ghi log trong quá trình xử lý.</p>
+          <p>Token du?c luu du?i d?ng hash v� không b? ghi log trong qu� tr�nh x? l�.</p>
         </div>
         <div className="auth-floating-tag auth-floating-tag--bottom">
           <span>Thu hồi</span>
-          <p>Đặt lại thành công sẽ vô hiệu hóa token cũ và các phiên đang mở.</p>
+          <p>Đặt l?i th�nh c�ng s? v� hi?u h�a token cu v� c�c phi�n dang m?.</p>
         </div>
       </div>
 
@@ -111,7 +111,7 @@ function ResetPasswordPage() {
               required
             />
 
-            <label htmlFor="reset-password-confirm">Xác nhận mật khẩu mới</label>
+            <label htmlFor="reset-password-confirm">Xác nhận m?t kh?u m?i</label>
             <input
               id="reset-password-confirm"
               type="password"
@@ -145,3 +145,5 @@ function ResetPasswordPage() {
 }
 
 export default ResetPasswordPage;
+
+

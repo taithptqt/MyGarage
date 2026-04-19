@@ -1,10 +1,58 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
+import { useBranch } from "@shared/core/context/BranchContext";
 import "./Timesheet.css";
 
-/* ‚îÄ‚îÄ helpers ‚îÄ‚îÄ */
-function pad(n) { return n < 10 ? "0" + n : n; }
+const UI_TEXT = {
+  title: "L?CH C‘NG T¡C & CH?M C‘NG H¿NG NG¿Y",
+  breadcrumbHome: "Home",
+  breadcrumbPage: "Schedule",
+  filterShift: "Ca l‡m",
+  staffColumnTeam: "T? nhÛm",
+  staffColumnName: "Nh‚n viÍn",
+  staffColumnShiftStatus: "Tr?ng th·i ca",
+  staffColumnHours: "Gi? cÙng tÌch luy",
+  summaryStatus: "Tr?ng th·i hÙm nay",
+  summaryHours: "Gi? cÙng tÌch luy",
+  summaryPending: "CÙng vi?c dang ch?",
+  shiftLabel: "Ca s·ng: 08:00 - 12:00",
+  serverTime: "Gi? m·y ch?",
+  checkIn: "Check-in",
+  checkOut: "Check-out",
+  locationVerified: "GPS d„ x·c th?c",
+  locationPending: "Ch? x·c th?c v? trÌ",
+  todayHistory: "L?ch s? ch?m cÙng hÙm nay",
+  emptyHistory: "Chua cÛ b?n ghi n‡o.",
+  loading: "–ang t?i d? li?u ch?m cÙng...",
+};
+
+const VIEW_OPTIONS = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+];
+
+const SHIFT_OPTIONS = [
+  { value: "all", label: "T?t c? ca" },
+  { value: "morning", label: "Ca s·ng" },
+  { value: "afternoon", label: "Ca chi?u" },
+];
+
+const ATTENDANCE_STATUS_LABELS = {
+  early: "–?n s?m",
+  ontime: "–˙ng gi?",
+  late: "–i mu?n",
+  absent: "V?ng m?t",
+  leave: "Ngh? phÈp",
+};
+
+const TIME_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+
+function pad(n) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
 function formatTime(secs) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -12,66 +60,238 @@ function formatTime(secs) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
+function toMinutes(timeValue) {
+  const [hour, minute] = String(timeValue).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function toHHmm(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function readValue(source, ...keys) {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return "";
+}
+
+function resolveDepartmentByRole(roleCodeRaw) {
+  const roleCode = String(roleCodeRaw || "").toUpperCase();
+  if (["TECH", "TECHNICIAN", "FOREMAN", "TEAM_LEADER"].includes(roleCode)) return "Mechanics";
+  if (["RECEPTIONIST", "SERVICE_ADVISOR", "ADVISOR"].includes(roleCode)) return "Service Advisors";
+  if (["STORE_KEEPER", "WAREHOUSE", "INVENTORY"].includes(roleCode)) return "Warehouse";
+  return "Back Office";
+}
+
+function deriveAttendanceStatus(staffStatus, activeEntry) {
+  const apiStatus = String(activeEntry?.attendanceStatus || activeEntry?.AttendanceStatus || "").trim().toUpperCase();
+  if (apiStatus === "EARLY") return "early";
+  if (apiStatus === "ON_TIME") return "ontime";
+  if (apiStatus === "LATE") return "late";
+  if (activeEntry) return "ontime";
+  const normalized = String(staffStatus || "").trim().toLowerCase();
+  if (normalized === "inactive") return "leave";
+  if (normalized === "suspended") return "absent";
+  return "late";
+}
+
+function buildTaskBlocks(assignmentsRaw) {
+  const items = Array.isArray(assignmentsRaw) ? assignmentsRaw : [];
+  return items
+    .filter((item) => {
+      const status = String(readValue(item, "status", "Status")).toUpperCase();
+      return status !== "PAUSED" && status !== "CANCELED";
+    })
+    .slice(0, 5)
+    .map((item, index) => {
+      const code =
+        String(readValue(item, "serviceOrderCode", "ServiceOrderCode", "orderCode", "OrderCode")).trim() ||
+        `SO-${24000 + Number(readValue(item, "id", "Id") || index + 1)}`;
+
+      const startedAt = readValue(item, "startedAt", "StartedAt", "startTime", "StartTime", "createdAt", "CreatedAt");
+      const completedAt = readValue(item, "completedAt", "CompletedAt", "endTime", "EndTime");
+      const start = toHHmm(startedAt) || `${8 + index}:00`;
+      const end = toHHmm(completedAt) || `${Math.min(18, 10 + index)}:00`;
+      const normalizedStart = toMinutes(start) < 8 * 60 ? "08:00" : start;
+      const normalizedEnd = toMinutes(end) <= toMinutes(normalizedStart)
+        ? `${pad(Math.min(18, Math.floor(toMinutes(normalizedStart) / 60) + 2))}:00`
+        : end;
+
+      const status = String(readValue(item, "status", "Status")).toUpperCase();
+      const completed = status === "COMPLETED" || Boolean(completedAt);
+
+      return {
+        code,
+        start: normalizedStart,
+        end: normalizedEnd,
+        status: completed ? "completed" : "inProgress",
+      };
+    });
+}
+
 export default function TimesheetPage() {
   const { user } = useAuth();
-  
+  const { selectedBranchId } = useBranch();
+
   const [activeEntry, setActiveEntry] = useState(null);
   const [todayEntries, setTodayEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState(new Date());
+  const [dateValue, setDateValue] = useState(() => new Date().toISOString().slice(0, 10));
+  const [viewMode, setViewMode] = useState("day");
+  const [shiftFilter, setShiftFilter] = useState("all");
+  const [personalTasks, setPersonalTasks] = useState([]);
+  const [gpsVerified, setGpsVerified] = useState(false);
+
+  const currentStaffId = user?.id ?? user?.staffId;
+  const currentBranchId =
+    Number(user?.branchId) ||
+    Number(user?.BranchId) ||
+    (Number(selectedBranchId) > 0 ? Number(selectedBranchId) : null);
+  const currentProfileName = user?.fullName || user?.name || "Nh‚n viÍn k? thu?t";
+  const currentDepartment = resolveDepartmentByRole(user?.roleCode || user?.role);
 
   const fetchTimesheet = useCallback(async () => {
+    if (!currentStaffId) {
+      setTodayEntries([]);
+      setActiveEntry(null);
+      setError("Thi?u thÙng tin nh‚n viÍn d? t?i ch?m cÙng.");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setError("");
     try {
-      // get today's entries
-      const res = await request({ 
-        url: "/api/timesheets/today", 
-        method: "GET", 
-        params: { staffId: user?.id ?? user?.staffId } 
+      const res = await request({
+        url: "/api/timesheets/today",
+        method: "GET",
+        params: { staffId: currentStaffId },
       });
       const data = res?.items ?? res ?? [];
       setTodayEntries(data);
-      // find active (without checkOutTime)
-      const active = data.find(e => !e.checkOutTime && !e.CheckOutTime);
+      const active = data.find((entry) => !entry.checkOutTime && !entry.CheckOutTime);
       setActiveEntry(active || null);
-    } catch (err) {
-      setError("Kh√¥ng th·ªÉ t·∫£i d·ªØ li·ªáu ch·∫•m c√¥ng h√¥m nay.");
+    } catch (fetchError) {
+      setError(fetchError?.response?.data?.message || "KhÙng th? t?i d? li?u ch?m cÙng hÙm nay.");
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [currentStaffId]);
+
+  const fetchPersonalAssignments = useCallback(async () => {
+    try {
+      const res = await request({ url: "/api/service-staff-assignments", method: "GET" });
+      const allAssignments = Array.isArray(res) ? res : res?.items ?? res?.data ?? [];
+      const mine = allAssignments.filter((item) => Number(readValue(item, "technicianId", "TechnicianId")) === Number(currentStaffId));
+      setPersonalTasks(buildTaskBlocks(mine));
+    } catch {
+      setPersonalTasks([]);
+    }
+  }, [currentStaffId]);
 
   useEffect(() => {
     fetchTimesheet();
-    const t = setInterval(() => setNow(new Date()), 1000); // tick for real-time timer
-    return () => clearInterval(t);
-  }, [fetchTimesheet]);
+    fetchPersonalAssignments();
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [fetchTimesheet, fetchPersonalAssignments]);
 
-  // Compute stats
   const totalSecondsToday = useMemo(() => {
-    let secs = 0;
-    todayEntries.forEach(e => {
-      const start = new Date(e.checkInTime || e.CheckInTime);
-      const end = (e.checkOutTime || e.CheckOutTime) ? new Date(e.checkOutTime || e.CheckOutTime) : now;
-      if (end >= start) {
-        secs += Math.floor((end - start) / 1000);
+    let total = 0;
+    todayEntries.forEach((entry) => {
+      const start = new Date(entry.checkInTime || entry.CheckInTime);
+      const endValue = entry.checkOutTime || entry.CheckOutTime;
+      const end = endValue ? new Date(endValue) : now;
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
+        total += Math.floor((end - start) / 1000);
       }
     });
-    return secs;
+    return total;
   }, [todayEntries, now]);
+
+  const attendanceStatus = deriveAttendanceStatus(user?.status, activeEntry);
+
+  const personalMember = useMemo(() => ({
+    id: String(currentStaffId || "me"),
+    name: currentProfileName,
+    attendanceStatus,
+    shift: personalTasks.length > 0 && personalTasks.some((task) => toMinutes(task.start) >= 12 * 60) ? "afternoon" : "morning",
+    shiftLabel: personalTasks.length > 0 && personalTasks.some((task) => toMinutes(task.start) >= 12 * 60) ? "Ca chi?u" : "Ca s·ng",
+    accumulatedHours: formatTime(totalSecondsToday).slice(0, 5),
+    tasks: personalTasks,
+  }), [attendanceStatus, currentProfileName, currentStaffId, personalTasks, totalSecondsToday]);
+
+  const filteredGroups = useMemo(() => {
+    const byShift = shiftFilter === "all" || personalMember.shift === shiftFilter;
+    if (!byShift) return [];
+    return [{ department: currentDepartment, members: [personalMember] }];
+  }, [currentDepartment, personalMember, shiftFilter]);
+
+  const summary = useMemo(() => ({
+    status: ATTENDANCE_STATUS_LABELS[attendanceStatus] || "Chua x·c d?nh",
+    workedHours: formatTime(totalSecondsToday).slice(0, 5),
+    pendingTasks: personalTasks.filter((task) => task.status === "inProgress").length,
+  }), [attendanceStatus, personalTasks, totalSecondsToday]);
+
+  const locationVerified = gpsVerified || Boolean(activeEntry);
+  const timelineStart = toMinutes(TIME_SLOTS[0]);
+  const timelineEnd = toMinutes(TIME_SLOTS[TIME_SLOTS.length - 1]);
+
+  const getCurrentPosition = () =>
+    new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Thi?t b? khÙng h? tr? GPS."));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve(position),
+        (geoError) => reject(geoError),
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    });
 
   const handleCheckIn = async () => {
     setError("");
+    if (!currentStaffId) {
+      setError("Thi?u thÙng tin nh‚n viÍn.");
+      return;
+    }
     try {
+      const position = await getCurrentPosition();
+      const latitude = position?.coords?.latitude;
+      const longitude = position?.coords?.longitude;
+      const accuracyMeters = position?.coords?.accuracy;
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setGpsVerified(false);
+        setError("KhÙng l?y du?c t?a d? GPS h?p l?.");
+        return;
+      }
+
       await request({
         url: "/api/timesheets/check-in",
         method: "POST",
-        data: { staffId: user?.id ?? user?.staffId }
+        data: {
+          staffId: currentStaffId,
+          branchId: currentBranchId,
+          latitude,
+          longitude,
+          accuracyMeters,
+        },
       });
+      setGpsVerified(true);
       await fetchTimesheet();
-    } catch (err) {
-      setError(err?.response?.data?.message || "L·ªói khi Check-in.");
+    } catch (actionError) {
+      setGpsVerified(false);
+      setError(actionError?.response?.data?.message || "L?i khi Check-in.");
     }
   };
 
@@ -83,70 +303,191 @@ export default function TimesheetPage() {
       await request({
         url: `/api/timesheets/${id}/check-out`,
         method: "PUT",
-        data: { staffId: user?.id ?? user?.staffId }
+        data: {},
       });
       await fetchTimesheet();
-    } catch (err) {
-      setError(err?.response?.data?.message || "L·ªói khi Check-out.");
+    } catch (actionError) {
+      setError(actionError?.response?.data?.message || "L?i khi Check-out.");
     }
   };
 
   return (
-    <div className="time-page">
-      <div className="time-card">
-        {error && <div className="time-alert">{error}</div>}
-
-        <div className="time-header">
-          <h2 className="time-title">üïí Ch·∫•m c√¥ng (Timesheet)</h2>
-          <p className="time-subtitle">Ng√†y {now.toLocaleDateString("vi-VN")}</p>
-        </div>
-        
-        {loading ? (
-          <div className="time-loading">ƒêang t·∫£i bi·ªÉu m·∫´u...</div>
-        ) : (
-          <div className="time-body">
-            
-            <div className="time-clock-display">
-               <div className="time-now">{now.toLocaleTimeString("vi-VN", { hour12: false })}</div>
-               <div className="time-total">ƒê√£ l√†m h√¥m nay: <strong>{formatTime(totalSecondsToday)}</strong></div>
+    <div className="schedule-page">
+      <section className="schedule-shell">
+        <header className="schedule-topnav">
+          <div className="schedule-breadcrumbs">
+            <span>{UI_TEXT.breadcrumbHome}</span>
+            <span className="schedule-breadcrumb-sep">&gt;</span>
+            <span>{UI_TEXT.breadcrumbPage}</span>
+          </div>
+          <div className="schedule-toolbar">
+            <div className="schedule-view-switch" role="tablist" aria-label="Date view mode">
+              {VIEW_OPTIONS.map((view) => (
+                <button
+                  key={view.value}
+                  type="button"
+                  className={`schedule-view-btn ${viewMode === view.value ? "is-active" : ""}`}
+                  onClick={() => setViewMode(view.value)}
+                >
+                  {view.label}
+                </button>
+              ))}
             </div>
+            <input type="date" className="schedule-date-picker" value={dateValue} onChange={(event) => setDateValue(event.target.value)} />
+            <div className="schedule-profile" title={currentProfileName}>
+              <span className="schedule-profile-avatar">{currentProfileName.charAt(0).toUpperCase()}</span>
+              <span className="schedule-profile-name">{currentProfileName}</span>
+            </div>
+          </div>
+        </header>
 
-            <div className="time-actions">
+        <div className="schedule-title-wrap">
+          <h1 className="schedule-page-title">{UI_TEXT.title}</h1>
+          <p className="schedule-page-subtitle">Theo dıi l?ch ph‚n cÙng v‡ ch?m cÙng c· nh‚n theo th?i gian th?c.</p>
+        </div>
+
+        {error && <div className="schedule-alert">{error}</div>}
+
+        <section className="schedule-summary-row">
+          <article className="summary-card">
+            <span className="summary-label">{UI_TEXT.summaryStatus}</span>
+            <strong className="summary-value">{summary.status}</strong>
+          </article>
+          <article className="summary-card">
+            <span className="summary-label">{UI_TEXT.summaryHours}</span>
+            <strong className="summary-value">{summary.workedHours}</strong>
+          </article>
+          <article className="summary-card">
+            <span className="summary-label">{UI_TEXT.summaryPending}</span>
+            <strong className="summary-value">{summary.pendingTasks}</strong>
+          </article>
+        </section>
+
+        <section className="schedule-main-layout">
+          <aside className="attendance-panel">
+            <h2 className="attendance-title">Check-in / Check-out</h2>
+            <div className="attendance-server-time">
+              <span>{UI_TEXT.serverTime}</span>
+              <strong>{now.toLocaleTimeString("vi-VN", { hour12: false })}</strong>
+            </div>
+            <div className="attendance-shift">{UI_TEXT.shiftLabel}</div>
+            <div className={`attendance-location ${locationVerified ? "is-ok" : "is-pending"}`}>
+              <span className="attendance-location-dot" />
+              <span>{locationVerified ? UI_TEXT.locationVerified : UI_TEXT.locationPending}</span>
+            </div>
+            <div className="attendance-total-hours">
+              –„ l‡m hÙm nay: <strong>{formatTime(totalSecondsToday)}</strong>
+            </div>
+            <div className="attendance-actions">
               {activeEntry ? (
-                <button className="time-btn time-btn-out" onClick={handleCheckOut}>
-                  üî¥ K·∫øt th√∫c ca (Check-out)
+                <button type="button" className="attendance-btn checkout" onClick={handleCheckOut}>
+                  {UI_TEXT.checkOut}
                 </button>
               ) : (
-                <button className="time-btn time-btn-in" onClick={handleCheckIn}>
-                  üü¢ B·∫Øt ƒë·∫ßu ca (Check-in)
+                <button type="button" className="attendance-btn checkin" onClick={handleCheckIn}>
+                  {UI_TEXT.checkIn}
                 </button>
               )}
             </div>
-
-            {/* List entries today */}
-            <div className="time-history">
-              <h4 className="time-h-title">L·ªãch s·ª≠ h√¥m nay</h4>
-              {todayEntries.length === 0 ? (
-                <div className="time-empty">Ch∆∞a c√≥ b·∫£n ghi n√†o.</div>
+            <div className="attendance-history">
+              <h3>{UI_TEXT.todayHistory}</h3>
+              {loading ? (
+                <p>{UI_TEXT.loading}</p>
+              ) : todayEntries.length === 0 ? (
+                <p>{UI_TEXT.emptyHistory}</p>
               ) : (
-                <ul className="time-list">
-                  {todayEntries.map(e => {
-                     const tIn = e.checkInTime || e.CheckInTime;
-                     const tOut = e.checkOutTime || e.CheckOutTime;
-                     return (
-                       <li key={e.id || e.Id}>
-                         <span>üîµ In: {new Date(tIn).toLocaleTimeString("vi-VN")}</span>
-                         <span>{tOut ? `üî¥ Out: ${new Date(tOut).toLocaleTimeString("vi-VN")}` : "‚è≥ ƒêang l√†m..."}</span>
-                       </li>
-                     )
+                <ul>
+                  {todayEntries.map((entry) => {
+                    const checkInTime = entry.checkInTime || entry.CheckInTime;
+                    const checkOutTime = entry.checkOutTime || entry.CheckOutTime;
+                    return (
+                      <li key={entry.id || entry.Id}>
+                        <span>In: {new Date(checkInTime).toLocaleTimeString("vi-VN")}</span>
+                        <span>{checkOutTime ? `Out: ${new Date(checkOutTime).toLocaleTimeString("vi-VN")}` : "–ang l‡m..."}</span>
+                      </li>
+                    );
                   })}
                 </ul>
               )}
             </div>
-            
-          </div>
-        )}
-      </div>
+          </aside>
+
+          <section className="schedule-grid-panel">
+            <div className="schedule-filters">
+              <label>
+                <span>{UI_TEXT.filterShift}</span>
+                <select value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}>
+                  {SHIFT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="timeline-scroll">
+              <div className="timeline-header-row">
+                <div className="timeline-staff-columns">
+                  <span>{UI_TEXT.staffColumnTeam}</span>
+                  <span>{UI_TEXT.staffColumnName}</span>
+                  <span>{UI_TEXT.staffColumnShiftStatus}</span>
+                  <span>{UI_TEXT.staffColumnHours}</span>
+                </div>
+                <div className="timeline-hours">
+                  {TIME_SLOTS.map((slot) => (
+                    <span key={slot}>{slot}</span>
+                  ))}
+                </div>
+              </div>
+
+              {filteredGroups.map((group) => (
+                <div key={group.department} className="timeline-department-group">
+                  <div className="timeline-department-title">{group.department}</div>
+                  {group.members.map((member) => (
+                    <div className="timeline-staff-row" key={member.id}>
+                      <div className="timeline-staff-columns">
+                        <span>{group.department}</span>
+                        <span className="timeline-staff-name">{member.name}</span>
+                        <span className="timeline-attendance">
+                          <i className={`attendance-dot ${member.attendanceStatus}`} />
+                          {ATTENDANCE_STATUS_LABELS[member.attendanceStatus]}
+                        </span>
+                        <span>{member.accumulatedHours}</span>
+                      </div>
+
+                      <div className="timeline-track">
+                        {TIME_SLOTS.map((slot) => (
+                          <span key={`${member.id}-${slot}`} className="timeline-cell" />
+                        ))}
+                        {member.tasks.map((task) => {
+                          const taskStart = toMinutes(task.start);
+                          const taskEnd = toMinutes(task.end);
+                          const clampedStart = Math.max(taskStart, timelineStart);
+                          const clampedEnd = Math.min(taskEnd, timelineEnd);
+                          const left = ((clampedStart - timelineStart) / 60) * 100;
+                          const width = ((clampedEnd - clampedStart) / 60) * 100;
+                          return (
+                            <div
+                              key={`${member.id}-${task.code}`}
+                              className={`timeline-task ${task.status === "inProgress" ? "in-progress" : "completed"}`}
+                              style={{ left: `${left}px`, width: `${Math.max(width, 54)}px` }}
+                              title={`${task.code} (${task.start} - ${task.end})`}
+                            >
+                              <strong>{task.code}</strong>
+                              <span>{member.shiftLabel}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+      </section>
     </div>
   );
 }

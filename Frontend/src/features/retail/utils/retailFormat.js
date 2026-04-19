@@ -37,9 +37,9 @@ export function writeStoredRetailBranchId(branchId) {
 
 const moneyFormatter = new Intl.NumberFormat("vi-VN");
 const mojibakePattern =
-  /(?:\u00C3\u0192|\u00C3\u201A|\u00C3\u0090|\u00C3\u2020|\u00C3\u201E|\u00C3\u00A1\u00C2[\u00BA-\u00BF]|\u00C3\u00A2\u00E2\u201A\u00AC|\uFFFD)/u;
+  /(?:Ã.|Â.|Ä‘|Æ°|Æ¡|áº|á»|â€|Ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿]|ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿])/u;
 const mojibakePatternGlobal =
-  /(?:\u00C3\u0192|\u00C3\u201A|\u00C3\u0090|\u00C3\u2020|\u00C3\u201E|\u00C3\u00A1\u00C2[\u00BA-\u00BF]|\u00C3\u00A2\u00E2\u201A\u00AC|\uFFFD)/gu;
+  /(?:Ã.|Â.|Ä‘|Æ°|Æ¡|áº|á»|â€|Ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿]|ă[¡¢£¨©ª¬®°±²³´µ¶·¸¹º»¼½¾¿])/gu;
 const utf8RepairDecoder = typeof TextDecoder !== "undefined" ? new TextDecoder("utf-8") : null;
 
 const RETAIL_ORDER_STATUS_META = {

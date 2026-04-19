@@ -13,6 +13,9 @@ namespace MyGarage.DTOs.Responses.Execution
         public int BreakMinutes { get; set; }
         public string WorkType { get; set; } = "Regular";
         public string Status { get; set; } = "Pending";
+        public string AttendanceStatus { get; set; } = "UNKNOWN";
+        public string? ScheduledStartTime { get; set; }
+        public int? CheckInDeltaMinutes { get; set; }
         public string? Notes { get; set; }
         public decimal? NetHours { get; set; }
     }

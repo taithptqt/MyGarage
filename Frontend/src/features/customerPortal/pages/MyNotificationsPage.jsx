@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -74,7 +74,7 @@ export default function MyNotificationsPage() {
         Object.fromEntries(entries.filter(([, path]) => typeof path === "string" && path.length > 0))
       );
     } catch (e) {
-      setError(e?.message || "Không tải được thông báo.");
+      setError(e?.message || "Không t?i du?c th�ng b�o.");
     } finally {
       setLoading(false);
     }
@@ -131,9 +131,9 @@ export default function MyNotificationsPage() {
           <section className="cp-card cp-card--highlight cp-notif-hero">
             <div className="cp-notif-hero-copy">
               <p className="cp-eyebrow">Garage của tôi</p>
-              <h1 className="cp-title">Thông báo</h1>
+              <h1 className="cp-title">Th�ng b�o</h1>
               <p className="cp-desc">
-                Nhắc bảo dưỡng, khảo sát sau dịch vụ, bảo hiểm và cập nhật tiến độ từ xưởng
+                Nh?c b?o du?ng, kh?o s�t sau dịch vụ, b?o hi?m v� c?p nh?t ti?n d? t? xu?ng
                 đều được gom về một inbox dễ theo dõi.
               </p>
             </div>
@@ -178,7 +178,7 @@ export default function MyNotificationsPage() {
                 onClick={onMarkAll}
                 disabled={markingAll || unreadCount === 0}
               >
-                {markingAll ? "Đang xử lý…" : "Đánh dấu đã đọc tất cả"}
+                {markingAll ? "Đang x? lĐã" : "Đánh d?u d� d?c t?t c?"}
               </button>
             </div>
           </section>
@@ -190,7 +190,7 @@ export default function MyNotificationsPage() {
             <section className="cp-card cp-empty-state">
               <h2 className="cp-empty-title">Inbox đang trống</h2>
               <p className="cp-muted">
-                Khi có nhắc bảo dưỡng, bảo hiểm hay cập nhật từ xưởng, bạn sẽ thấy chúng ở đây.
+                Khi c� nh?c b?o du?ng, b?o hi?m hay c?p nh?t t? xu?ng, b?n s? th?y ch�ng ? d�y.
               </p>
             </section>
           ) : null}
@@ -234,7 +234,7 @@ export default function MyNotificationsPage() {
                         </button>
                       ) : (
                         <span className="cp-muted cp-notif-hint">
-                          Thông báo này hiện chưa có màn hình điều hướng trực tiếp.
+                          Th�ng b�o n�y hi?n chua c� m�n h�nh di?u hu?ng tr?c ti?p.
                         </span>
                       )}
 
@@ -245,7 +245,7 @@ export default function MyNotificationsPage() {
                           disabled={busyId === item.id}
                           onClick={() => onMarkOne(item.id)}
                         >
-                          {busyId === item.id ? "Đang cập nhật…" : "Đánh dấu đã đọc"}
+                          {busyId === item.id ? "Đang c?p nh?t�" : "Đánh d?u d� d?c"}
                         </button>
                       ) : (
                         <span className="cp-notif-read-pill">Đã đọc</span>
@@ -261,3 +261,5 @@ export default function MyNotificationsPage() {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -70,9 +70,9 @@ function maintenanceKindLabel(kind) {
     case "ODO_DELTA":
       return "Chu kỳ quãng đường";
     case "AI_FORECAST":
-      return "Dự báo AI";
+      return "D? b�o AI";
     default:
-      return kind || "Khuyến cáo";
+      return kind || "Khuy?n c�o";
   }
 }
 
@@ -177,7 +177,7 @@ export default function VehicleDetailPage() {
 
                 <div className="cp-detail-head-actions">
                   <Link className="cp-btn cp-btn-ghost" to="/my-vehicles">
-                    Về danh sách xe
+                    V? danh sách xe
                   </Link>
                   <Link className="cp-btn" to="/my-garage-dashboard">
                     Xem xe đang sửa
@@ -270,7 +270,7 @@ export default function VehicleDetailPage() {
                     <section className="cp-card cp-empty-state">
                       <h2 className="cp-empty-title">Chưa có lịch sử sửa chữa</h2>
                       <p className="cp-muted">
-                        Lịch sử lệnh sửa chữa, dịch vụ và biên bản tiếp nhận/trả xe sẽ hiện ở đây khi phát sinh.
+                        L?ch s? l?nh s?a ch?a, dịch vụ v� bi�n b?n ti?p nh?n/tr? xe s? hi?n ? d�y khi ph�t sinh.
                       </p>
                     </section>
                   ) : (
@@ -317,7 +317,7 @@ export default function VehicleDetailPage() {
                               </strong>
                             </div>
                             <span className="cp-chip cp-chip--soft">
-                              Thanh toán: {row.paymentStatus || "—"}
+                              Thanh to�n: {row.paymentStatus || "�"}
                             </span>
                             {row.invoiceUrl ? (
                               <a
@@ -355,7 +355,7 @@ export default function VehicleDetailPage() {
                                           target="_blank"
                                           rel="noopener noreferrer"
                                         >
-                                          Xem chữ ký xác nhận
+                                          Xem chữ ký x�c nh?n
                                         </a>
                                       ) : null}
                                     </div>
@@ -369,7 +369,7 @@ export default function VehicleDetailPage() {
                                       ) : null}
                                       {sanitizeConditionWarnings(log.dashboardWarningLights) ? (
                                         <span className="cp-chip cp-chip--soft">
-                                          Đèn cảnh báo: {sanitizeConditionWarnings(log.dashboardWarningLights)}
+                                          Đãn cầnh b�o: {sanitizeConditionWarnings(log.dashboardWarningLights)}
                                         </span>
                                       ) : null}
                                     </div>
@@ -403,7 +403,7 @@ export default function VehicleDetailPage() {
                     <section className="cp-card cp-empty-state">
                       <h2 className="cp-empty-title">Chưa có hóa đơn liên kết</h2>
                       <p className="cp-muted">
-                        Hóa đơn và trạng thái thanh toán của từng lệnh sẽ xuất hiện khi xưởng phát hành.
+                        H�a don v� trạng thái thanh to�n c?a tổng l?nh s? xu?t hi?n khi xu?ng ph�t h�nh.
                       </p>
                     </section>
                   ) : (
@@ -417,7 +417,7 @@ export default function VehicleDetailPage() {
                         </div>
                         <div className="cp-history-finance">
                           <span className="cp-chip cp-chip--soft">
-                            Thanh toán: {row.paymentStatus || "—"}
+                            Thanh to�n: {row.paymentStatus || "�"}
                           </span>
                           {row.totalAmount != null ? (
                             <strong className="cp-history-invoice-amount">
@@ -447,9 +447,9 @@ export default function VehicleDetailPage() {
                 <section className="cp-maintenance-panel">
                   {hints.length === 0 ? (
                     <article className="cp-card cp-empty-state">
-                      <h2 className="cp-empty-title">Chưa có khuyến cáo tự động</h2>
+                      <h2 className="cp-empty-title">Chua c� khuy?n c�o t? d?ng</h2>
                       <p className="cp-muted">
-                        Khi đạt ngưỡng thời gian, ODO hoặc có forecast AI sắp tới, hệ thống sẽ hiển thị gợi ý bảo trì ở đây.
+                        Khi d?t ngu?ng thời gian, ODO ho?c c� forecast AI s?p t?i, hệ thống s? hi?n th? g?i � bảo trì ? d�y.
                       </p>
                     </article>
                   ) : (
@@ -477,3 +477,5 @@ export default function VehicleDetailPage() {
     </div>
   );
 }
+
+

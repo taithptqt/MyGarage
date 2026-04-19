@@ -78,6 +78,7 @@ namespace MyGarage.Interfaces
         DbSet<QcChecklistItem> QcChecklistItems { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<QuotationDetail> QuotationDetails { get; }
+        DbSet<QuotationDiscount> QuotationDiscounts { get; }
         DbSet<QuotationApprovalAction> QuotationApprovalActions { get; }
         DbSet<QuotationAccessLink> QuotationAccessLinks { get; }
         DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; }

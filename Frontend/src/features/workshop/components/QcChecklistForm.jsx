@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { executionApi } from "@features/workshop/api/executionApi";
 
 const RESULT_OPTIONS = ["PASS", "FAIL", "N/A"];
@@ -160,4 +160,5 @@ export default function QcChecklistForm({ staffId = null }) {
     </section>
   );
 }
+
 

@@ -81,6 +81,14 @@ namespace MyGarage.Controllers
             }
             return NoContent();
         }
+
+        [HttpGet("recommend-bay/{serviceOrderId}")]
+        public async Task<ActionResult<AiDispatchRecommendationResponseDto>> RecommendBay(long serviceOrderId)
+        {
+            var recommendation = await _aiSmartDispatchingService.RecommendBayAsync(serviceOrderId);
+            if (recommendation == null) return NotFound();
+            return Ok(recommendation);
+        }
     }
 }
 

@@ -167,12 +167,12 @@ export default function BookingInsurancePanel({
         <p className="booking-insurance-copy">
           {normalizedMode === "booking"
             ? `Chọn hãng bảo hiểm và tải ảnh nếu có để hoàn tất ${contextLabel}.`
-            : `Snapshot ban đầu giúp lễ tân chuẩn bị hồ sơ khi ${contextLabel}.`}
+            : `Snapshot ban d?u gi�p l? t�n chu?n b? h? so khi ${contextLabel}.`}
         </p>
       </div>
 
       {vehicleOptions.length > 1 ? (
-        <div className="booking-insurance-vehicle-tabs" role="tablist" aria-label="Xe cần khai báo bảo hiểm">
+        <div className="booking-insurance-vehicle-tabs" role="tablist" aria-label="Xe cần khai b�o b?o hi?m">
           {vehicleOptions.map((vehicle) => (
             <button
               key={vehicle.key}
@@ -206,7 +206,7 @@ export default function BookingInsurancePanel({
         <div className="booking-insurance-summary">
           <div className="booking-insurance-summary-row">
             <span>Xe</span>
-            <strong>{activeVehicle?.label || "Chưa xác định"}</strong>
+            <strong>{activeVehicle?.label || "Chua x�c d?nh"}</strong>
           </div>
           <div className="booking-insurance-summary-row">
             <span>{normalizedMode === "booking" ? "Gói" : "Tạm tính"}</span>
@@ -233,7 +233,7 @@ export default function BookingInsurancePanel({
         <div className="booking-insurance-upload-grid">
           <InsuranceUploadField
             title="Ảnh thẻ bảo hiểm"
-            description={normalizedMode === "booking" ? "Tùy chọn. Giúp lễ tân kiểm tra nhanh." : "Chụp nhanh để lưu đúng hồ sơ."}
+            description={normalizedMode === "booking" ? "T�y chọn. Gi�p l? t�n ki?m tra nhanh." : "Ch?p nhanh d? luu d�ng h? so."}
             assetType={INSURANCE_ASSET_TYPE.CARD}
             urls={summary.insuranceCardImageUrls}
             maxCount={INSURANCE_CARD_IMAGE_MAX}
@@ -259,7 +259,7 @@ export default function BookingInsurancePanel({
       {normalizedMode === "booking" ? (
         <>
           <p className="booking-insurance-note">
-            Miễn thường và cách xử lý sẽ xác nhận khi tiếp nhận xe.
+            Mi?n thu?ng v� c�ch x? l� s? x�c nh?n khi ti?p nh?n xe.
           </p>
         </>
       ) : (
@@ -280,8 +280,8 @@ export default function BookingInsurancePanel({
                     <strong>{option.label}</strong>
                     <small>
                       {option.value === "CONSULT"
-                        ? "Chọn khi khách chưa nhớ hợp đồng."
-                        : "Dùng để ước tính phần khách cùng chi trả."}
+                        ? "Chọn khi kh�ch chua nh? h?p d?ng."
+                        : "D�ng d? u?c t�nh ph?n kh�ch c�ng chi tr?."}
                     </small>
                   </span>
                 </label>
@@ -307,8 +307,8 @@ export default function BookingInsurancePanel({
                       {option.value === "LINKED"
                         ? "Gara bảo lãnh hoặc liên kết trực tiếp."
                         : option.value === "SELF_PAY"
-                          ? "Khách thanh toán trước, gara hỗ trợ hồ sơ."
-                          : "Dùng khi khách chưa rõ cách xử lý."}
+                          ? "Kh�ch thanh to�n tru?c, gara h? tr? h? so."
+                          : "D�ng khi kh�ch chua r� c�ch x? l�."}
                     </small>
                   </span>
                 </label>
@@ -324,3 +324,4 @@ export default function BookingInsurancePanel({
     </section>
   );
 }
+

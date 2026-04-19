@@ -1,4 +1,4 @@
-﻿const ADMIN_FALLBACK_EMAIL = "hieuvo.23102004@gmail.com";
+const ADMIN_FALLBACK_EMAIL = "hieuvo.23102004@gmail.com";
 
 function normalizeRoleCode(user) {
   return String(user?.roleCode || "").toUpperCase();
@@ -37,7 +37,7 @@ export function getUnauthorizedRedirectPath(user) {
   if (roleCode === "ADMIN") {
     return "/admin/default";
   }
-  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode)) {
+  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER"].includes(roleCode)) {
     return "/workshop";
   }
   if (roleCode === "CUSTOMER") {

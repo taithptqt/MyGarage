@@ -221,7 +221,7 @@ export default function AdminSalaryPage() {
 
     const staffId = toId(profileForm.staffId);
     if (!staffId) {
-      setError("Vui lòng chọn nhân sự.");
+      setError("Vui l�ng chọn nh�n s?.");
       return;
     }
 
@@ -251,10 +251,10 @@ export default function AdminSalaryPage() {
 
       if (editingProfileId) {
         await updateSalaryProfile(editingProfileId, payload);
-        toast({ status: "success", title: "Đã cập nhật bảng lương nhân sự." });
+        toast({ status: "success", title: "Đã c?p nh?t bảng luong nh�n s?." });
       } else {
         await createSalaryProfile(payload);
-        toast({ status: "success", title: "Đã tạo bảng lương nhân sự." });
+        toast({ status: "success", title: "Đã t?o bảng luong nh�n s?." });
       }
 
       resetProfileForm();
@@ -275,7 +275,7 @@ export default function AdminSalaryPage() {
     setError("");
     try {
       await deleteSalaryProfile(profileId);
-      toast({ status: "success", title: "Đã xóa bảng lương nhân sự." });
+      toast({ status: "success", title: "Đã x�a bảng luong nh�n s?." });
       if (editingProfileId === profileId) {
         resetProfileForm();
       }
@@ -351,7 +351,7 @@ export default function AdminSalaryPage() {
       ) : null}
 
       <SimpleGrid columns={{ base: 1, md: 3 }} gap="20px" mb="20px">
-        <MiniStatistics name="Bảng lương nhân viên" value={String(summary.profileCount)} />
+        <MiniStatistics name="Bảng luong nhân viên" value={String(summary.profileCount)} />
         <MiniStatistics name="Yêu cầu chờ duyệt" value={String(summary.pendingRequests)} />
         <MiniStatistics name="Yêu cầu đã duyệt" value={String(summary.approvedRequests)} />
       </SimpleGrid>
@@ -359,7 +359,7 @@ export default function AdminSalaryPage() {
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap="20px" mb="20px">
         <Card p="16px">
           <Text color={textColor} fontWeight="700" mb="10px">
-            {editingProfileId ? "Cập nhật bảng lương" : "Tạo bảng lương nhân viên"}
+            {editingProfileId ? "C?p nh?t bảng luong" : "T?o bảng luong nhân viên"}
           </Text>
           {!isAdminStaff ? (
             <Text color="orange.500" fontSize="xs" mb="10px">
@@ -369,13 +369,13 @@ export default function AdminSalaryPage() {
 
           <SimpleGrid columns={1} gap="10px">
             <FormControl>
-              <FormLabel fontSize="xs" mb="4px">Nhân sự</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Nh�n s?</FormLabel>
               <Select
                 value={profileForm.staffId}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, staffId: e.target.value }))}
                 isDisabled={!isAdminStaff}
               >
-                <option value="">Chọn nhân sự</option>
+                <option value="">Chọn nh�n s?</option>
                 {scopedStaffs.map((staff) => {
                   const id = toId(pick(staff, "id", "Id"));
                   if (!id) return null;
@@ -457,16 +457,16 @@ export default function AdminSalaryPage() {
         </Card>
 
         <Card p="16px" gridColumn={{ base: "span 1", xl: "span 2" }}>
-          <Text color={textColor} fontWeight="700" mb="10px">Bảng lương nhân viên</Text>
+          <Text color={textColor} fontWeight="700" mb="10px">Bảng luong nhân viên</Text>
           <Table size="sm">
             <Thead>
               <Tr>
                 <Th>ID</Th>
-                <Th>Nhân sự</Th>
+                <Th>Nh�n s?</Th>
                 <Th>Lương cơ bản</Th>
                 <Th>Hiệu lực</Th>
                 <Th>Trạng thái</Th>
-                <Th textAlign="right">Thao tác</Th>
+                <Th textAlign="right">Thao t�c</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -523,7 +523,7 @@ export default function AdminSalaryPage() {
 
       <Card p="20px">
         <Flex justify="space-between" align="center" mb="10px" wrap="wrap" gap="10px">
-          <Text color={textColor} fontWeight="700">Yêu cầu tạo lương từ kế toán</Text>
+          <Text color={textColor} fontWeight="700">Yêu cầu t?o luong t? k? to�n</Text>
           <Select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} maxW="200px">
             <option value="PENDING">PENDING</option>
             <option value="APPROVED">APPROVED</option>
@@ -536,13 +536,13 @@ export default function AdminSalaryPage() {
           <Thead>
             <Tr>
               <Th>Request</Th>
-              <Th>Nhân sự</Th>
+              <Th>Nh�n s?</Th>
               <Th>Lương đề xuất</Th>
               <Th>Hiệu lực từ</Th>
               <Th>Người yêu cầu</Th>
               <Th>Trạng thái</Th>
               <Th>Lý do</Th>
-              <Th textAlign="right">Thao tác</Th>
+              <Th textAlign="right">Thao t�c</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -613,3 +613,4 @@ export default function AdminSalaryPage() {
     </Box>
   );
 }
+

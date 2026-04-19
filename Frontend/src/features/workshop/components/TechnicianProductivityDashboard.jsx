@@ -8,7 +8,7 @@ function pct(value) {
 }
 
 function money(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")} đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")} d`;
 }
 
 export default function TechnicianProductivityDashboard() {
@@ -96,4 +96,5 @@ export default function TechnicianProductivityDashboard() {
     </div>
   );
 }
+
 

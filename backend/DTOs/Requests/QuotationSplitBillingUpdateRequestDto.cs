@@ -12,6 +12,9 @@ public sealed class QuotationSplitBillingUpdateRequestDto
 public sealed class QuotationSplitBillingUpdateItemDto
 {
     public long QuotationDetailId { get; set; }
+    public decimal? Quantity { get; set; }
     public decimal? InsuranceCoveredAmount { get; set; }
+    public decimal? DiscountPercentage { get; set; }
+    public decimal? DiscountValue { get; set; }
     public string? PayerType { get; set; }
 }

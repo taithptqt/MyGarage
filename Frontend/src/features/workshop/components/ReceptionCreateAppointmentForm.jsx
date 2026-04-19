@@ -153,7 +153,7 @@ function normalizeSearchText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/Ä‘/g, "d");
+    .replace(/đ/g, "d");
 }
 
 function isValidPhone(phone) {
@@ -164,7 +164,7 @@ function normalizeText(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/Ä‘/gi, "d")
+    .replace(/đ/gi, "d")
     .trim()
     .toLowerCase();
 }
@@ -316,7 +316,7 @@ function getVehicleIdFromKey(vehicleKey) {
 }
 
 function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}Ä‘`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelInfoById = new Map()) {
@@ -355,7 +355,7 @@ function formatSavedVehicleDescriptor(vehicle, brandNameById = new Map(), modelI
   if (brandName && modelName) return `${brandName} ${modelName}`;
   if (modelName) return modelName;
   if (brandName) return brandName;
-  return "ChÆ°a rÃµ hÃ£ng - chÆ°a rÃµ dÃ²ng xe";
+  return "Chưa rõ hãng - chưa rõ dòng xe";
 }
 
 function toVehicleTabLabel(vehicleLabel, fallback = "") {
@@ -386,7 +386,7 @@ function toTimeValue(value) {
 
 function formatDateTimeWithFullDate(value) {
   const parsed = value instanceof Date ? value : new Date(value);
-  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "ChÆ°a chá»n";
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "Chưa chọn";
 
   const hour = String(parsed.getHours()).padStart(2, "0");
   const minute = String(parsed.getMinutes()).padStart(2, "0");
@@ -397,15 +397,15 @@ function formatDateTimeWithFullDate(value) {
 }
 
 function formatCompletionWarningTime(value) {
-  if (!value) return "chÆ°a xÃ¡c Ä‘á»‹nh";
+  if (!value) return "chưa xác định";
   const parsed = value instanceof Date ? value : new Date(value);
-  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "chÆ°a xÃ¡c Ä‘á»‹nh";
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return "chưa xác định";
   const hour = String(parsed.getHours()).padStart(2, "0");
   const minute = String(parsed.getMinutes()).padStart(2, "0");
   const day = String(parsed.getDate()).padStart(2, "0");
   const month = String(parsed.getMonth() + 1).padStart(2, "0");
   const year = String(parsed.getFullYear());
-  return `${hour} giá» ${minute} phÃºt ngÃ y ${day}/${month}/${year}`;
+  return `${hour} giờ ${minute} phút ngày ${day}/${month}/${year}`;
 }
 
 function normalizeSlotSelection(slot) {
@@ -443,7 +443,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   normalizedServices.forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `NhÃ³m ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
     }
   });
 
@@ -473,12 +473,12 @@ function getMissingSpecificServiceByVehicle(planSummaries, serviceCategoryMap, c
 
       const missingCategoryNames = categoryIds
         .filter((categoryId) => !coveredCategoryIds.has(Number(categoryId)))
-        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `NhÃ³m ${categoryId}`);
+        .map((categoryId) => categoryNameById.get(Number(categoryId)) || `Nhóm ${categoryId}`);
 
       if (missingCategoryNames.length === 0) return null;
 
       return {
-        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chÆ°a xÃ¡c Ä‘á»‹nh"),
+        vehicleLabel: String(plan?.vehicleLabel || plan?.vehicleKey || "Xe chưa xác định"),
         missingCategoryNames
       };
     })
@@ -493,7 +493,7 @@ function buildMissingSpecificServiceMessage(missingByVehicle) {
     return `${item.vehicleLabel}: ${categories}`;
   });
 
-  return `Vui lÃ²ng chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ cho tá»«ng loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n khung giá». Thiáº¿u trÃªn cÃ¡c xe: ${details.join("; ")}.`;
+  return `Vui lòng chọn dịch vụ cụ thể cho từng loại dịch vụ trước khi chọn khung giờ. Thiếu trên các xe: ${details.join("; ")}.`;
 }
 
 export default function ReceptionCreateAppointmentForm({
@@ -510,7 +510,7 @@ export default function ReceptionCreateAppointmentForm({
   initialValues = null,
   formId,
   showFooterActions = true,
-  submitLabel = "XÃ¡c nháº­n Ä‘áº·t lá»‹ch"
+  submitLabel = "Xác nhận đặt lịch"
 }) {
   const [formData, setFormData] = useState(() => buildInitialFormData(initialValues));
   const [search, setSearch] = useState("");
@@ -896,8 +896,7 @@ export default function ReceptionCreateAppointmentForm({
   const hasMultipleSelectedVehicles = selectedVehicleKeys.length > 1;
   const showServiceModeSwitch = hasMultipleSelectedVehicles && !formData.isQuickOrder;
   const effectiveServiceMode = hasMultipleSelectedVehicles ? serviceMode : SERVICE_MODE.SHARED;
-  const selectedVehicleModelIds = useMemo(
-    () =>
+  const selectedVehicleModelIds = useMemo(() =>
       selectedVehicleKeys
         .map((vehicleKey) => Number(vehicleModelIdByKey.get(vehicleKey) || 0))
         .filter((modelId) => Number.isFinite(modelId) && modelId > 0),
@@ -906,11 +905,11 @@ export default function ReceptionCreateAppointmentForm({
 
   const vehicleLabelByKey = useMemo(() => {
     const map = new Map();
-    map.set("guest", "Xe khÃ¡ch vÃ£ng lai");
-    map.set("new-customer", "Xe má»›i cá»§a khÃ¡ch");
+    map.set("guest", "Xe khách vãng lai");
+    map.set("new-customer", "Xe mới của khách");
     customerVehiclesFiltered.forEach((vehicle) => {
       const key = getVehicleKeyFromId(vehicle.id);
-      const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
+      const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
       const descriptor = describeSavedVehicle(vehicle);
       const label = descriptor ? `${plate} - ${descriptor}` : plate;
       map.set(key, label);
@@ -1236,7 +1235,7 @@ export default function ReceptionCreateAppointmentForm({
     }
 
     if ((sharedPlan.categoryIds || []).includes(id)) {
-      setErrorText('Loáº¡i dá»‹ch vá»¥ dÃ¹ng chung chá»‰ cÃ³ thá»ƒ há»§y á»Ÿ tab "DÃ¹ng chung táº¥t cáº£ xe".');
+      setErrorText('Loại dịch vụ dùng chung chỉ có thể hủy ở tab "Dùng chung tất cả xe".');
       return;
     }
 
@@ -1481,7 +1480,7 @@ export default function ReceptionCreateAppointmentForm({
       const serviceGroupsByCategory = Array.from(
         selectedServices.reduce((map, service) => {
           const categoryId = Number(service?.categoryId || 0);
-          const categoryName = categoryNameById.get(categoryId) || `NhÃ³m ${categoryId || "KhÃ¡c"}`;
+          const categoryName = categoryNameById.get(categoryId) || `Nhóm ${categoryId || "Khác"}`;
           const serviceName = String(service?.name || "").trim();
           if (!serviceName) return map;
           if (!map.has(categoryName)) map.set(categoryName, []);
@@ -1512,13 +1511,13 @@ export default function ReceptionCreateAppointmentForm({
       const hasValidStart = Boolean(parsedStart) && !Number.isNaN(parsedStart.getTime());
       const hasValidSlotEnd = Boolean(parsedSlotEnd) && !Number.isNaN(parsedSlotEnd.getTime());
       const resolvedEnd = schedule.endDate || (hasValidSlotEnd ? parsedSlotEnd : null);
-      const startTimeLabel = hasValidStart ? formatDateTimeWithFullDate(parsedStart) : "ChÆ°a chá»n";
-      const endTimeLabel = resolvedEnd ? formatDateTimeWithFullDate(resolvedEnd) : "ChÆ°a chá»n";
+      const startTimeLabel = hasValidStart ? formatDateTimeWithFullDate(parsedStart) : "Chưa chọn";
+      const endTimeLabel = resolvedEnd ? formatDateTimeWithFullDate(resolvedEnd) : "Chưa chọn";
       const completionMs = Number.isFinite(schedule.completionMs)
         ? schedule.completionMs
         : (hasValidSlotEnd ? parsedSlotEnd.getTime() : null);
       const flowWarningLabel = bookingFlow === BOOKING_FLOW.FLEXIBLE && Number.isFinite(completionMs)
-        ? `Thá»i gian hoÃ n thÃ nh dá»± kiáº¿n cho xe ${vehicleLabelByKey.get(vehicleKey) || vehicleKey} lÃ  ${formatCompletionWarningTime(new Date(completionMs))}. Thá»i gian hoÃ n táº¥t thá»±c táº¿ sáº½ Ä‘Æ°á»£c tÆ° váº¥n viÃªn cáº­p nháº­t sau khi xe vÃ o khoang.`
+        ? `Thời gian hoàn thành dự kiến cho xe ${vehicleLabelByKey.get(vehicleKey) || vehicleKey} là ${formatCompletionWarningTime(new Date(completionMs))}. Thời gian hoàn tất thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`
         : "";
 
       return {
@@ -1526,7 +1525,7 @@ export default function ReceptionCreateAppointmentForm({
         vehicleId: getVehicleIdFromKey(vehicleKey),
         vehicleLabel: vehicleLabelByKey.get(vehicleKey) || vehicleKey,
         categoryIds,
-        categoryNames: categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`),
+        categoryNames: categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`),
         serviceGroupsByCategory,
         serviceIds,
         serviceNames: selectedServices.map((item) => item.name),
@@ -1565,7 +1564,7 @@ export default function ReceptionCreateAppointmentForm({
   );
   const dateSelectionGuardMessage = useMemo(() => {
     if (selectedVehicleKeys.length === 0) {
-      return "Vui lÃ²ng chá»n xe trÆ°á»›c khi chá»n ngÃ y Ä‘áº·t lá»‹ch.";
+      return "Vui lòng chọn xe trước khi chọn ngày đặt lịch.";
     }
 
     for (const vehicleKey of selectedVehicleKeys) {
@@ -1578,15 +1577,15 @@ export default function ReceptionCreateAppointmentForm({
         serviceById
       );
       if (unresolvedPackageIds.length > 0) {
-        return `Vui lÃ²ng chá»n láº¡i gÃ³i dá»‹ch vá»¥ cho ${vehicleLabel} (mÃ£ khÃ´ng há»£p lá»‡: #${unresolvedPackageIds.join(", #")}) trÆ°á»›c khi chá»n ngÃ y Ä‘áº·t lá»‹ch.`;
+        return `Vui lòng chọn lại gói dịch vụ cho ${vehicleLabel} (mã không hợp lệ: #${unresolvedPackageIds.join(", #")}) trước khi chọn ngày đặt lịch.`;
       }
 
       if (categoryCount === 0) {
-        return `Vui lÃ²ng chá»n loáº¡i dá»‹ch vá»¥ cho ${vehicleLabel} trÆ°á»›c khi chá»n ngÃ y Ä‘áº·t lá»‹ch.`;
+        return `Vui lòng chọn loại dịch vụ cho ${vehicleLabel} trước khi chọn ngày đặt lịch.`;
       }
 
       if (serviceCount === 0) {
-        return `Vui lÃ²ng chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ cho ${vehicleLabel} trÆ°á»›c khi chá»n ngÃ y Ä‘áº·t lá»‹ch.`;
+        return `Vui lòng chọn dịch vụ cụ thể cho ${vehicleLabel} trước khi chọn ngày đặt lịch.`;
       }
     }
 
@@ -1617,11 +1616,11 @@ export default function ReceptionCreateAppointmentForm({
     [planSummaries]
   );
   const fleetCompletionDateTimeLabel = useMemo(() => {
-    if (!Array.isArray(planSummaries) || planSummaries.length === 0) return "ChÆ°a chá»n";
+    if (!Array.isArray(planSummaries) || planSummaries.length === 0) return "Chưa chọn";
     const endTimes = planSummaries
       .map((item) => Number(item.completionMs))
       .filter((value) => Number.isFinite(value) && value > 0);
-    if (endTimes.length !== planSummaries.length) return "ChÆ°a chá»n";
+    if (endTimes.length !== planSummaries.length) return "Chưa chọn";
     return formatDateTimeWithFullDate(new Date(Math.max(...endTimes)));
   }, [planSummaries]);
 
@@ -1789,15 +1788,15 @@ export default function ReceptionCreateAppointmentForm({
           setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
             successMessage:
               assetType === INSURANCE_ASSET_TYPE.CARD
-                ? "ÄÃ£ táº£i áº£nh tháº» báº£o hiá»ƒm."
-                : "ÄÃ£ táº£i áº£nh hiá»‡n tráº¡ng xe.",
+                ? "Đã tải ảnh thẻ bảo hiểm."
+                : "Đã tải ảnh hiện trạng xe.",
           });
         }
       } catch (uploadError) {
         setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
           successMessage: "",
         });
-        setErrorText(uploadError?.message || "KhÃ´ng thá»ƒ táº£i áº£nh báº£o hiá»ƒm. Vui lÃ²ng thá»­ láº¡i.");
+        setErrorText(uploadError?.message || "Không thể tải ảnh bảo hiểm. Vui lòng thử lại.");
       } finally {
         setInsuranceUploadState(activeInsuranceVehicleKey, assetType, {
           uploading: false,
@@ -1888,9 +1887,9 @@ export default function ReceptionCreateAppointmentForm({
 
   const slotSelectionGuide = useMemo(() => {
     if (effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE) {
-      return "Chá»n khung giá» check-in (tiáº¿p nháº­n).";
+      return "Chọn khung giờ check-in (tiếp nhận).";
     }
-    return "Chá»n khung giá» sá»­a chá»¯a.";
+    return "Chọn khung giờ sửa chữa.";
   }, [effectiveSlotFlow]);
 
   const availableSlots = useMemo(() => {
@@ -1960,7 +1959,7 @@ export default function ReceptionCreateAppointmentForm({
     }
 
     if (selectedVehicleKeys.length === 0) return "";
-    return `ÄÃ£ chá»n khung giá» cho ${selectedSlotCount}/${selectedVehicleKeys.length} xe.`;
+    return `Đã chọn khung giờ cho ${selectedSlotCount}/${selectedVehicleKeys.length} xe.`;
   }, [parallelSlot, selectedSlotCount, selectedVehicleKeys.length, slotMode]);
 
   const selectedServiceIdsUnion = useMemo(
@@ -2114,7 +2113,7 @@ export default function ReceptionCreateAppointmentForm({
       setSlots(Array.isArray(data) ? data : []);
     } catch (slotError) {
       setSlots([]);
-      setErrorText(slotError?.message || "KhÃ´ng thá»ƒ táº£i khung giá». Vui lÃ²ng thá»­ láº¡i.");
+      setErrorText(slotError?.message || "Không thể tải khung giờ. Vui lòng thử lại.");
     } finally {
       setSlotsLoading(false);
     }
@@ -2155,7 +2154,7 @@ export default function ReceptionCreateAppointmentForm({
         vehicleCount: 1
       });
       const token = readField(response, ["holdToken", "HoldToken"], "");
-      if (!token) throw new Error("KhÃ´ng thá»ƒ giá»¯ chá»— khung giá» Ä‘Ã£ chá»n.");
+      if (!token) throw new Error("Không thể giữ chỗ khung giờ đã chọn.");
       setSlotHoldTokens((prev) => ({ ...prev, [vehicleKey]: token }));
     },
     [branchId, packageIdsByVehicleKey, serviceIdsByVehicleKey]
@@ -2221,7 +2220,7 @@ export default function ReceptionCreateAppointmentForm({
 
     const effectiveBranchId = Number(branchId || 0);
     if (!Number.isFinite(effectiveBranchId) || effectiveBranchId <= 0) {
-      setErrorText("Vui lÃ²ng chá»n Ä‘Ãºng chi nhÃ¡nh lÃ m viá»‡c trÆ°á»›c khi chá»n khung giá».");
+      setErrorText("Vui lòng chọn đúng chi nhánh làm việc trước khi chọn khung giờ.");
       return;
     }
 
@@ -2265,7 +2264,7 @@ export default function ReceptionCreateAppointmentForm({
         startTime: selection.slotTime || prev.startTime
       }));
     } catch (slotError) {
-      setErrorText(slotError?.message || "KhÃ´ng thá»ƒ giá»¯ chá»— khung giá». Vui lÃ²ng chá»n láº¡i.");
+      setErrorText(slotError?.message || "Không thể giữ chỗ khung giờ. Vui lòng chọn lại.");
     } finally {
       setSelectingSlot(false);
     }
@@ -2494,74 +2493,74 @@ export default function ReceptionCreateAppointmentForm({
 
   const validateBeforeSubmit = () => {
     if (formData.isQuickOrder) {
-      if (!String(formData.guestName || "").trim()) return "Vui lÃ²ng nháº­p tÃªn khÃ¡ch vÃ£ng lai.";
-      if (!isValidPhone(formData.guestPhone)) return "Sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch vÃ£ng lai khÃ´ng há»£p lá»‡.";
-      if (!String(formData.guestVehiclePlate || "").trim()) return "Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe.";
-      if (!isValidVietnameseLicensePlate(formData.guestVehiclePlate)) return "Biá»ƒn sá»‘ xe khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.";
-      if (!formData.guestVehicleModelId) return "Vui lÃ²ng chá»n dÃ²ng xe cho khÃ¡ch vÃ£ng lai.";
-      if (!String(formData.guestVehicleVin || "").trim()) return "Vui lÃ²ng nháº­p sá»‘ VIN cho xe vÃ£ng lai.";
-      if (!isValidVin(formData.guestVehicleVin)) return "Sá»‘ VIN khÃ´ng há»£p lá»‡ (17 kÃ½ tá»±, khÃ´ng chá»©a I, O, Q).";
+      if (!String(formData.guestName || "").trim()) return "Vui lòng nhập tên khách vãng lai.";
+      if (!isValidPhone(formData.guestPhone)) return "Số điện thoại khách vãng lai không hợp lệ.";
+      if (!String(formData.guestVehiclePlate || "").trim()) return "Vui lòng nhập biển số xe.";
+      if (!isValidVietnameseLicensePlate(formData.guestVehiclePlate)) return "Biển số xe không đúng định dạng Việt Nam.";
+      if (!formData.guestVehicleModelId) return "Vui lòng chọn dòng xe cho khách vãng lai.";
+      if (!String(formData.guestVehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe vãng lai.";
+      if (!isValidVin(formData.guestVehicleVin)) return "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
     } else {
-      if (!formData.customerId) return "Vui lÃ²ng chá»n khÃ¡ch hÃ ng.";
-      if (!isValidPhone(formData.customerPhone)) return "Sá»‘ Ä‘iá»‡n thoáº¡i khÃ¡ch hÃ ng khÃ´ng há»£p lá»‡.";
+      if (!formData.customerId) return "Vui lòng chọn khách hàng.";
+      if (!isValidPhone(formData.customerPhone)) return "Số điện thoại khách hàng không hợp lệ.";
 
       if (formData.isNewVehicle) {
-        if (!String(formData.vehicleLicensePlate || "").trim()) return "Vui lÃ²ng nháº­p biá»ƒn sá»‘ xe má»›i.";
-        if (!isValidVietnameseLicensePlate(formData.vehicleLicensePlate)) return "Biá»ƒn sá»‘ xe má»›i khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng Viá»‡t Nam.";
-        if (!formData.vehicleModelId) return "Vui lÃ²ng chá»n dÃ²ng xe má»›i.";
-        if (!String(formData.vehicleVin || "").trim()) return "Vui lÃ²ng nháº­p sá»‘ VIN cho xe má»›i.";
-        if (!isValidVin(formData.vehicleVin)) return "Sá»‘ VIN khÃ´ng há»£p lá»‡ (17 kÃ½ tá»±, khÃ´ng chá»©a I, O, Q).";
+        if (!String(formData.vehicleLicensePlate || "").trim()) return "Vui lòng nhập biển số xe mới.";
+        if (!isValidVietnameseLicensePlate(formData.vehicleLicensePlate)) return "Biển số xe mới không đúng định dạng Việt Nam.";
+        if (!formData.vehicleModelId) return "Vui lòng chọn dòng xe mới.";
+        if (!String(formData.vehicleVin || "").trim()) return "Vui lòng nhập số VIN cho xe mới.";
+        if (!isValidVin(formData.vehicleVin)) return "Số VIN không hợp lệ (17 ký tự, không chứa I, O, Q).";
       } else if (toNumberList(formData.selectedVehicleIds).length === 0) {
-        return "Vui lÃ²ng chá»n Ã­t nháº¥t 1 xe cá»§a khÃ¡ch.";
+        return "Vui lòng chọn ít nhất 1 xe của khách.";
       }
     }
 
     if (selectedVehicleKeys.length === 0) {
-      return "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t xe Ä‘á»ƒ gÃ¡n dá»‹ch vá»¥.";
+      return "Vui lòng chọn ít nhất một xe để gán dịch vụ.";
     }
 
     if (slotMode === SLOT_MODE.PARALLEL) {
       if (!formData.appointmentDate) {
-        return "Vui lÃ²ng chá»n ngÃ y Ä‘áº·t lá»‹ch.";
+        return "Vui lòng chọn ngày đặt lịch.";
       }
       if (!parallelSlot) {
-        return "Vui lÃ²ng chá»n khung giá» háº¹n.";
+        return "Vui lòng chọn khung giờ hẹn.";
       }
       const missingHeldVehicles = selectedVehicleKeys
         .filter((vehicleKey) => !Boolean(slotHoldTokens?.[vehicleKey]))
         .map((vehicleKey) => vehicleLabelByKey.get(vehicleKey) || vehicleKey);
       if (missingHeldVehicles.length > 0) {
-        return `Giá»¯ chá»— chÆ°a hoÃ n táº¥t cho: ${missingHeldVehicles.join(", ")}. Vui lÃ²ng chá»n láº¡i khung giá».`;
+        return `Giữ chỗ chưa hoàn tất cho: ${missingHeldVehicles.join(", ")}. Vui lòng chọn lại khung giờ.`;
       }
     } else {
       const missingDateVehicles = selectedVehicleKeys
         .filter((vehicleKey) => !String(selectedDatesByVehicle?.[vehicleKey] || "").trim())
         .map((vehicleKey) => vehicleLabelByKey.get(vehicleKey) || vehicleKey);
       if (missingDateVehicles.length > 0) {
-        return `Vui lÃ²ng chá»n ngÃ y Ä‘áº·t lá»‹ch cho: ${missingDateVehicles.join(", ")}.`;
+        return `Vui lòng chọn ngày đặt lịch cho: ${missingDateVehicles.join(", ")}.`;
       }
 
       const missingSlotVehicles = selectedVehicleKeys
         .filter((vehicleKey) => !Boolean(selectedSlotsByVehicle?.[vehicleKey]))
         .map((vehicleKey) => vehicleLabelByKey.get(vehicleKey) || vehicleKey);
       if (missingSlotVehicles.length > 0) {
-        return `Vui lÃ²ng chá»n khung giá» cho: ${missingSlotVehicles.join(", ")}.`;
+        return `Vui lòng chọn khung giờ cho: ${missingSlotVehicles.join(", ")}.`;
       }
 
       const missingHeldVehicles = selectedVehicleKeys
         .filter((vehicleKey) => !Boolean(slotHoldTokens?.[vehicleKey]))
         .map((vehicleKey) => vehicleLabelByKey.get(vehicleKey) || vehicleKey);
       if (missingHeldVehicles.length > 0) {
-        return `Giá»¯ chá»— chÆ°a hoÃ n táº¥t cho: ${missingHeldVehicles.join(", ")}. Vui lÃ²ng chá»n láº¡i khung giá».`;
+        return `Giữ chỗ chưa hoàn tất cho: ${missingHeldVehicles.join(", ")}. Vui lòng chọn lại khung giờ.`;
       }
     }
 
     for (const plan of planSummaries) {
       if ((plan.categoryIds || []).length === 0) {
-        return `Vui lÃ²ng chá»n loáº¡i dá»‹ch vá»¥ cho ${plan.vehicleLabel}.`;
+        return `Vui lòng chọn loại dịch vụ cho ${plan.vehicleLabel}.`;
       }
       if ((plan.serviceIds || []).length === 0) {
-        return `Vui lÃ²ng chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ cho ${plan.vehicleLabel}.`;
+        return `Vui lòng chọn dịch vụ cụ thể cho ${plan.vehicleLabel}.`;
       }
     }
 
@@ -2659,16 +2658,16 @@ export default function ReceptionCreateAppointmentForm({
         fleetTotalPrice: totalPrice
       });
     } catch (submitError) {
-      const message = submitError?.message || "KhÃ´ng thá»ƒ Ä‘áº·t lá»‹ch. Vui lÃ²ng thá»­ láº¡i.";
+      const message = submitError?.message || "Không thể đặt lịch. Vui lòng thử lại.";
       if (isSlotHoldStaleMessage(message)) {
         const failedVehicles = await refreshSelectedSlotHolds();
         await loadSlots();
         if (Array.isArray(failedVehicles) && failedVehicles.length > 0) {
           setErrorText(
-            `Giá»¯ chá»— Ä‘Ã£ háº¿t háº¡n vÃ  khÃ´ng thá»ƒ giá»¯ láº¡i cho: ${failedVehicles.join(", ")}. Vui lÃ²ng chá»n láº¡i khung giá» cho cÃ¡c xe nÃ y.`
+            `Giữ chỗ đã hết hạn và không thể giữ lại cho: ${failedVehicles.join(", ")}. Vui lòng chọn lại khung giờ cho các xe này.`
           );
         } else {
-          setErrorText("ThÃ´ng tin giá»¯ chá»— Ä‘Ã£ Ä‘Æ°á»£c Ä‘á»“ng bá»™ láº¡i. Vui lÃ²ng báº¥m xÃ¡c nháº­n láº¡i.");
+          setErrorText("Thông tin giữ chỗ đã được đồng bộ lại. Vui lòng bấm xác nhận lại.");
         }
       } else {
         setErrorText(message);
@@ -2685,7 +2684,7 @@ export default function ReceptionCreateAppointmentForm({
         <div className="reception-appt-left-column">
           <section className="reception-appt-section">
             <div className="reception-appt-step-head">
-              <span className="reception-step-badge">BÆ¯á»šC 1</span>
+              <span className="reception-step-badge">BƯỚC 1</span>
               <label className="reception-appt-quick-toggle" htmlFor="appt-quick-toggle">
                 <input
                   id="appt-quick-toggle"
@@ -2693,21 +2692,21 @@ export default function ReceptionCreateAppointmentForm({
                   checked={formData.isQuickOrder}
                   onChange={toggleQuickOrder}
                 />
-                <span>Äáº·t lá»‹ch cho khÃ¡ch vÃ£ng lai</span>
+                <span>Đặt lịch cho khách vãng lai</span>
               </label>
             </div>
             <h4 className="reception-appt-section-title">
-              {!formData.isQuickOrder ? "KhÃ¡ch hÃ ng vÃ  xe" : "KhÃ¡ch vÃ£ng lai"}
+              {!formData.isQuickOrder ? "Khách hàng và xe" : "Khách vãng lai"}
             </h4>
 
             {!formData.isQuickOrder ? (
               <>
                 <div className="form-group">
-                  <label>TÃ¬m khÃ¡ch hÃ ng</label>
+                  <label>Tìm khách hàng</label>
                   <div className="search-input-wrapper">
                     <input
                       type="text"
-                      placeholder="Nháº­p tÃªn hoáº·c sá»‘ Ä‘iá»‡n thoáº¡i..."
+                      placeholder="Nhập tên hoặc số điện thoại..."
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       required={!formData.customerId}
@@ -2743,9 +2742,9 @@ export default function ReceptionCreateAppointmentForm({
 
                 {!formData.isNewVehicle ? (
                   <div className="form-group">
-                    <label>Xe cá»§a khÃ¡ch (cÃ³ thá»ƒ chá»n nhiá»u xe)</label>
+                    <label>Xe của khách (có thể chọn nhiều xe)</label>
                     {!formData.customerId ? (
-                      <div className="reception-muted-note">HÃ£y chá»n khÃ¡ch hÃ ng trÆ°á»›c.</div>
+                      <div className="reception-muted-note">Hãy chọn khách hàng trước.</div>
                     ) : (
                       <>
                         <div className="reception-vehicle-popup-toolbar">
@@ -2755,24 +2754,24 @@ export default function ReceptionCreateAppointmentForm({
                             onClick={() => setIsSavedVehiclePopupOpen(true)}
                             disabled={customerVehiclesFiltered.length === 0}
                           >
-                            Chá»n xe Ä‘Ã£ lÆ°u
+                            Chọn xe đã lưu
                           </button>
                           <button
                             type="button"
                             className="reception-open-vehicle-popup-btn"
                             onClick={switchToNewVehicleMode}
                           >
-                            ThÃªm xe má»›i
+                            Thêm xe mới
                           </button>
                         </div>
                         {customerVehiclesFiltered.length === 0 ? (
-                          <div className="reception-muted-note">KhÃ¡ch hÃ ng chÆ°a cÃ³ xe Ä‘Ã£ lÆ°u.</div>
+                          <div className="reception-muted-note">Khách hàng chưa có xe đã lưu.</div>
                         ) : (
                           <>
                             {selectedCustomerVehicles.length > 0 ? (
                               <div className="reception-selected-vehicle-list">
                                 {selectedCustomerVehicles.map((vehicle) => {
-                                  const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
+                                  const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
                                   return (
                                     <div
                                       key={`selected-vehicle-${vehicle.id}`}
@@ -2787,7 +2786,7 @@ export default function ReceptionCreateAppointmentForm({
                                         className="reception-selected-vehicle-chip-remove"
                                         onClick={() => toggleVehicleSelection(vehicle.id)}
                                       >
-                                        XÃ³a
+                                        Xóa
                                       </button>
                                     </div>
                                   );
@@ -2804,31 +2803,31 @@ export default function ReceptionCreateAppointmentForm({
                                   className="reception-vehicle-popup-card"
                                   role="dialog"
                                   aria-modal="true"
-                                  aria-label="Chá»n xe Ä‘Ã£ lÆ°u"
+                                  aria-label="Chọn xe đã lưu"
                                   onClick={(event) => event.stopPropagation()}
                                 >
                                   <div className="reception-vehicle-popup-head">
                                     <div className="reception-vehicle-popup-head-copy">
-                                      <h5>Chá»n xe Ä‘Ã£ lÆ°u láº¡i</h5>
-                                      <p>Chá»‰ hiá»ƒn thá»‹ cÃ¡c xe chÆ°a chá»n.</p>
+                                      <h5>Chọn xe đã lưu lại</h5>
+                                      <p>Chỉ hiển thị các xe chưa chọn.</p>
                                     </div>
                                     <button
                                       type="button"
                                       className="reception-vehicle-popup-close-btn"
                                       onClick={() => setIsSavedVehiclePopupOpen(false)}
                                     >
-                                      ÄÃ³ng
+                                      Đóng
                                     </button>
                                   </div>
 
                                   <div className="reception-vehicle-popup-list">
                                     {selectableCustomerVehicles.length === 0 ? (
                                       <div className="reception-muted-note">
-                                        Báº¡n Ä‘Ã£ chá»n háº¿t xe Ä‘Ã£ lÆ°u. Bá» xe á»Ÿ danh sÃ¡ch Ä‘Ã£ chá»n Ä‘á»ƒ chá»n láº¡i.
+                                        Bạn đã chọn hết xe đã lưu. Bỏ xe ở danh sách đã chọn để chọn lại.
                                       </div>
                                     ) : (
                                       selectableCustomerVehicles.map((vehicle) => {
-                                        const plate = String(vehicle.licensePlate || "").trim() || "KhÃ´ng biá»ƒn sá»‘";
+                                        const plate = String(vehicle.licensePlate || "").trim() || "Không biển số";
                                         return (
                                           <button
                                             key={`popup-vehicle-${vehicle.id}`}
@@ -2843,7 +2842,7 @@ export default function ReceptionCreateAppointmentForm({
                                               <strong>{plate}</strong>
                                               <small>{describeSavedVehicle(vehicle)}</small>
                                             </span>
-                                            <span className="reception-vehicle-popup-item-action">ThÃªm xe</span>
+                                            <span className="reception-vehicle-popup-item-action">Thêm xe</span>
                                           </button>
                                         );
                                       })
@@ -2866,18 +2865,18 @@ export default function ReceptionCreateAppointmentForm({
                           onClick={switchToSavedVehicleMode}
                           disabled={customerHasNoVehicles}
                         >
-                          Chá»n xe Ä‘Ã£ lÆ°u
+                          Chọn xe đã lưu
                         </button>
                       <button
                         type="button"
                         className="reception-open-vehicle-popup-btn is-active"
                         onClick={switchToNewVehicleMode}
                       >
-                        ThÃªm xe má»›i
+                        Thêm xe mới
                       </button>
                     </div>
                     <div className="form-group">
-                      <label>Biá»ƒn sá»‘ xe má»›i *</label>
+                      <label>Biển số xe mới *</label>
                       <input
                         type="text"
                         name="vehicleLicensePlate"
@@ -2892,9 +2891,9 @@ export default function ReceptionCreateAppointmentForm({
                     </div>
                     <div className="reception-grid reception-grid-2">
                       <div className="form-group">
-                        <label>HÃ£ng xe *</label>
+                        <label>Hãng xe *</label>
                         <select value={selectedBrandId} onChange={(event) => setSelectedBrandId(event.target.value)}>
-                          <option value="">-- Chá»n hÃ£ng --</option>
+                          <option value="">-- Chọn hãng --</option>
                           {brands.map((brand) => (
                             <option key={brand.id} value={brand.id}>
                               {brand.name}
@@ -2903,14 +2902,14 @@ export default function ReceptionCreateAppointmentForm({
                         </select>
                       </div>
                       <div className="form-group">
-                        <label>DÃ²ng xe *</label>
+                        <label>Dòng xe *</label>
                         <select
                           name="vehicleModelId"
                           value={formData.vehicleModelId}
                           onChange={handleChange}
                           disabled={!selectedBrandId}
                         >
-                          <option value="">-- Chá»n dÃ²ng xe --</option>
+                          <option value="">-- Chọn dòng xe --</option>
                           {models
                             .filter((model) => Number(model.brandId) === Number(selectedBrandId))
                             .map((model) => (
@@ -2923,13 +2922,13 @@ export default function ReceptionCreateAppointmentForm({
                     </div>
                     <div className="reception-grid reception-grid-3">
                       <div className="form-group">
-                        <label>MÃ u sáº¯c</label>
+                        <label>Màu sắc</label>
                         <input name="vehicleColor" value={formData.vehicleColor} onChange={handleChange} />
                       </div>
                       <div className="form-group">
-                        <label>NÄƒm sáº£n xuáº¥t</label>
+                        <label>Năm sản xuất</label>
                         <select name="vehicleYear" value={formData.vehicleYear} onChange={handleChange}>
-                          <option value="">-- Chá»n nÄƒm --</option>
+                          <option value="">-- Chọn năm --</option>
                           {years.map((year) => (
                             <option key={year} value={year}>
                               {year}
@@ -2956,10 +2955,10 @@ export default function ReceptionCreateAppointmentForm({
                         className="reception-open-vehicle-popup-btn is-active"
                         onClick={confirmNewVehicleMode}
                       >
-                        XÃ¡c nháº­n
+                        Xác nhận
                       </button>
                       <button type="button" className="reception-open-vehicle-popup-btn" onClick={cancelNewVehicleMode}>
-                        Há»§y
+                        Hủy
                       </button>
                     </div>
                   </div>
@@ -2969,11 +2968,11 @@ export default function ReceptionCreateAppointmentForm({
               <div className="reception-new-vehicle-box">
                 <div className="reception-grid reception-grid-2">
                   <div className="form-group">
-                    <label>TÃªn khÃ¡ch *</label>
+                    <label>Tên khách *</label>
                     <input name="guestName" value={formData.guestName} onChange={handleChange} />
                   </div>
                   <div className="form-group">
-                    <label>Sá»‘ Ä‘iá»‡n thoáº¡i *</label>
+                    <label>Số điện thoại *</label>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -2981,12 +2980,12 @@ export default function ReceptionCreateAppointmentForm({
                     value={formData.guestPhone}
                     onChange={handleChange}
                     pattern={VN_PHONE_PATTERN}
-                    title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
+                    title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
                   />
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Biá»ƒn sá»‘ xe *</label>
+                  <label>Biển số xe *</label>
                   <input
                     name="guestVehiclePlate"
                     value={formData.guestVehiclePlate}
@@ -2999,9 +2998,9 @@ export default function ReceptionCreateAppointmentForm({
                 </div>
                 <div className="reception-grid reception-grid-2">
                   <div className="form-group">
-                    <label>HÃ£ng xe *</label>
+                    <label>Hãng xe *</label>
                     <select value={guestSelectedBrandId} onChange={(event) => setGuestSelectedBrandId(event.target.value)}>
-                      <option value="">-- Chá»n hÃ£ng --</option>
+                      <option value="">-- Chọn hãng --</option>
                       {brands.map((brand) => (
                         <option key={brand.id} value={brand.id}>
                           {brand.name}
@@ -3010,14 +3009,14 @@ export default function ReceptionCreateAppointmentForm({
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>DÃ²ng xe *</label>
+                    <label>Dòng xe *</label>
                     <select
                       name="guestVehicleModelId"
                       value={formData.guestVehicleModelId}
                       onChange={handleChange}
                       disabled={!guestSelectedBrandId}
                     >
-                      <option value="">-- Chá»n dÃ²ng xe --</option>
+                      <option value="">-- Chọn dòng xe --</option>
                       {models
                         .filter((model) => Number(model.brandId) === Number(guestSelectedBrandId))
                         .map((model) => (
@@ -3030,13 +3029,13 @@ export default function ReceptionCreateAppointmentForm({
                 </div>
                 <div className="reception-grid reception-grid-3">
                   <div className="form-group">
-                    <label>MÃ u sáº¯c</label>
+                    <label>Màu sắc</label>
                     <input name="guestVehicleColor" value={formData.guestVehicleColor} onChange={handleChange} />
                   </div>
                   <div className="form-group">
-                    <label>NÄƒm sáº£n xuáº¥t</label>
+                    <label>Năm sản xuất</label>
                     <select name="guestVehicleYear" value={formData.guestVehicleYear} onChange={handleChange}>
-                      <option value="">-- Chá»n nÄƒm --</option>
+                      <option value="">-- Chọn năm --</option>
                       {years.map((year) => (
                         <option key={year} value={year}>
                           {year}
@@ -3063,10 +3062,10 @@ export default function ReceptionCreateAppointmentForm({
 
           <section className="reception-appt-section">
             <div className="reception-appt-step-head reception-appt-step-head-service">
-              <span className="reception-step-badge">BÆ¯á»šC 2</span>
+              <span className="reception-step-badge">BƯỚC 2</span>
             </div>
             <h4 className="reception-appt-section-title reception-appt-section-title-service">
-              Loáº¡i dá»‹ch vá»¥ vÃ  dá»‹ch vá»¥ cá»¥ thá»ƒ
+              Loại dịch vụ và dịch vụ cụ thể
             </h4>
 
             {showServiceModeSwitch ? (
@@ -3076,16 +3075,16 @@ export default function ReceptionCreateAppointmentForm({
                   className={effectiveServiceMode === SERVICE_MODE.SHARED ? "active" : ""}
                   onClick={() => handleServiceModeChange(SERVICE_MODE.SHARED)}
                 >
-                  DÃ¹ng chung táº¥t cáº£ xe
+                  Dùng chung tất cả xe
                 </button>
                 <button
                   type="button"
                   className={effectiveServiceMode === SERVICE_MODE.CUSTOM ? "active" : ""}
                   onClick={() => handleServiceModeChange(SERVICE_MODE.CUSTOM)}
                   disabled={!hasMultipleSelectedVehicles}
-                  title={!hasMultipleSelectedVehicles ? "Cáº§n chá»n tá»« 2 xe trá»Ÿ lÃªn Ä‘á»ƒ tÃ¹y chá»‰nh riÃªng" : undefined}
+                  title={!hasMultipleSelectedVehicles ? "Cần chọn từ 2 xe trở lên để tùy chỉnh riêng" : undefined}
                 >
-                  TÃ¹y chá»‰nh theo tá»«ng xe
+                  Tùy chỉnh theo từng xe
                 </button>
               </div>
             ) : null}
@@ -3116,7 +3115,7 @@ export default function ReceptionCreateAppointmentForm({
                     <button
                       type="button"
                       className="reception-selected-tab-remove"
-                      aria-label={`Bá» ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                      aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         const vehicleId = getVehicleIdFromKey(vehicleKey);
@@ -3125,7 +3124,7 @@ export default function ReceptionCreateAppointmentForm({
                         }
                       }}
                     >
-                      Ã—
+                      ×
                     </button>
                   </div>
                 ))}
@@ -3133,14 +3132,14 @@ export default function ReceptionCreateAppointmentForm({
             ) : null}
 
             <div className="reception-service-subsection reception-service-type-subsection">
-              <h5 className="reception-service-subtitle">Loáº¡i dá»‹ch vá»¥</h5>
+              <h5 className="reception-service-subtitle">Loại dịch vụ</h5>
               <button
                 type="button"
                 className={`reception-section-collapse-btn reception-section-collapse-btn-corner ${
                   isServicePickerCollapsed ? "is-collapsed" : "is-expanded"
                 }`}
                 aria-expanded={!isServicePickerCollapsed}
-                aria-label={isServicePickerCollapsed ? "Má»Ÿ pháº§n loáº¡i dá»‹ch vá»¥" : "Thu gá»n pháº§n loáº¡i dá»‹ch vá»¥"}
+                aria-label={isServicePickerCollapsed ? "Mở phần loại dịch vụ" : "Thu gọn phần loại dịch vụ"}
                 onClick={() => setIsServicePickerCollapsed((prev) => !prev)}
               >
                 <span className="reception-section-collapse-glyph" aria-hidden="true" />
@@ -3163,18 +3162,18 @@ export default function ReceptionCreateAppointmentForm({
                 </div>
               ) : (
                 <div className="reception-service-collapsed-card">
-                  <span className="reception-service-collapsed-label">Loáº¡i dá»‹ch vá»¥</span>
+                  <span className="reception-service-collapsed-label">Loại dịch vụ</span>
                   <span className="reception-service-collapsed-value">
                     {activePlan.categoryIds.length > 0
-                      ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`).join(", ")
-                      : "ChÆ°a chá»n loáº¡i dá»‹ch vá»¥"}
+                      ? activePlan.categoryIds.map((categoryId) => categoryNameById.get(categoryId) || `Nhóm ${categoryId}`).join(", ")
+                      : "Chưa chọn loại dịch vụ"}
                   </span>
                 </div>
               )}
             </div>
 
             <div className="reception-service-subsection reception-service-detail-subsection">
-              <h5 className="reception-service-subtitle">Dá»‹ch vá»¥ cá»¥ thá»ƒ</h5>
+              <h5 className="reception-service-subtitle">Dịch vụ cụ thể</h5>
               {activePlan.categoryIds.length > 0 ? (
                 <>
                   <div className="reception-selected-tabs reception-category-tabs-layout">
@@ -3188,28 +3187,28 @@ export default function ReceptionCreateAppointmentForm({
                           className="reception-selected-tab-main"
                           onClick={() => setActiveCategoryId(String(categoryId))}
                         >
-                          {categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`}
+                          {categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}
                         </button>
                         <button
                           type="button"
                           className="reception-selected-tab-remove"
-                          aria-label={`Bá» ${categoryNameById.get(categoryId) || `NhÃ³m ${categoryId}`}`}
+                          aria-label={`Bỏ ${categoryNameById.get(categoryId) || `Nhóm ${categoryId}`}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             toggleCategory(categoryId);
                           }}
                         >
-                          Ã—
+                          ×
                         </button>
                       </div>
                     ))}
                   </div>
 
                   <div className="form-group">
-                    <label>TÃ¬m dá»‹ch vá»¥</label>
+                    <label>Tìm dịch vụ</label>
                     <input
                       type="text"
-                      placeholder="TÃ¬m theo tÃªn dá»‹ch vá»¥..."
+                      placeholder="Tìm theo tên dịch vụ..."
                       value={serviceSearch}
                       onChange={(event) => setServiceSearch(event.target.value)}
                     />
@@ -3218,7 +3217,7 @@ export default function ReceptionCreateAppointmentForm({
                   <div className="reception-service-list">
                     {filteredServices.length === 0 ? (
                       <div className="reception-muted-note">
-                        KhÃ´ng tÃ¬m tháº¥y dá»‹ch vá»¥ phÃ¹ há»£p trong nhÃ³m Ä‘Ã£ chá»n.
+                        Không tìm thấy dịch vụ phù hợp trong nhóm đã chọn.
                       </div>
                     ) : (
                       filteredServices.map((service) => {
@@ -3232,7 +3231,7 @@ export default function ReceptionCreateAppointmentForm({
                           >
                             <div className="reception-service-card-main">
                               <strong>{service.name}</strong>
-                              <small>{service.minutes > 0 ? `${service.minutes} phÃºt` : "ChÆ°a cÃ³ thá»i lÆ°á»£ng"}</small>
+                              <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng"}</small>
                             </div>
                             <span>{formatCurrency(service.price)}</span>
                           </button>
@@ -3242,7 +3241,7 @@ export default function ReceptionCreateAppointmentForm({
                   </div>
                 </>
               ) : (
-                <div className="reception-muted-note">HÃ£y chá»n Ã­t nháº¥t má»™t loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n dá»‹ch vá»¥ cá»¥ thá»ƒ.</div>
+                <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
               )}
             </div>
 
@@ -3259,7 +3258,7 @@ export default function ReceptionCreateAppointmentForm({
                   uploadingState={insuranceUploadStateByVehicleKey[activeInsuranceVehicleKey] || {}}
                   companies={insuranceCompanies}
                   companyNameById={insuranceCompanyNameById}
-                  contextLabel="tiáº¿p nháº­n xe"
+                  contextLabel="tiếp nhận xe"
                   mode="booking"
                 />
               </div>
@@ -3270,10 +3269,10 @@ export default function ReceptionCreateAppointmentForm({
         <div className="reception-appt-right-column">
           <section className="reception-appt-section reception-appt-timing-section">
             <div className="reception-appt-step-head">
-              <span className="reception-step-badge">BÆ¯á»šC 3</span>
+              <span className="reception-step-badge">BƯỚC 3</span>
             </div>
-            <h4 className="reception-appt-section-title">ThÃ´ng tin lá»‹ch háº¹n</h4>
-            <p className="reception-step-subtitle">Chá»n thá»i gian vÃ  mÃ´ táº£ Ä‘á»ƒ xÃ¡c nháº­n lá»‹ch háº¹n.</p>
+            <h4 className="reception-appt-section-title">Thông tin lịch hẹn</h4>
+            <p className="reception-step-subtitle">Chọn thời gian và mô tả để xác nhận lịch hẹn.</p>
 
             {hasMultipleSelectedVehicles ? (
               <div className="reception-scope-switch reception-slot-mode-switch">
@@ -3293,7 +3292,7 @@ export default function ReceptionCreateAppointmentForm({
                     void handleSlotModeChange(SLOT_MODE.INDIVIDUAL);
                   }}
                 >
-                  RiÃªng láº»
+                  Riêng lẻ
                 </button>
               </div>
             ) : null}
@@ -3318,7 +3317,7 @@ export default function ReceptionCreateAppointmentForm({
             ) : null}
 
             <div className="form-group">
-              <label>NgÃ y Ä‘áº·t lá»‹ch *</label>
+              <label>Ngày đặt lịch *</label>
               <DateTimePicker
                 value={effectiveSelectedDate ? `${effectiveSelectedDate}T08:00:00` : ""}
                 onChange={(value) => {
@@ -3334,22 +3333,22 @@ export default function ReceptionCreateAppointmentForm({
                   }
                   return true;
                 }}
-                placeholder="Chá»n ngÃ y..."
+                placeholder="Chọn ngày..."
               />
               {appointmentSummary ? <div className="reception-muted-note">{appointmentSummary}</div> : null}
             </div>
 
             <div className="slot-section reception-slot-section">
               {!Number(branchId) ? (
-                <div className="booking-empty">Vui lÃ²ng chá»n Ä‘Ãºng chi nhÃ¡nh lÃ m viá»‡c trÆ°á»›c khi chá»n giá».</div>
+                <div className="booking-empty">Vui lòng chọn đúng chi nhánh làm việc trước khi chọn giờ.</div>
               ) : !effectiveSelectedDate ? (
                 <div className="booking-empty">
                   {slotMode === SLOT_MODE.INDIVIDUAL
-                    ? "Vui lÃ²ng chá»n ngÃ y cho xe Ä‘ang thao tÃ¡c trÆ°á»›c khi chá»n giá»."
-                    : "Vui lÃ²ng chá»n ngÃ y trÆ°á»›c khi chá»n giá»."}
+                    ? "Vui lòng chọn ngày cho xe đang thao tác trước khi chọn giờ."
+                    : "Vui lòng chọn ngày trước khi chọn giờ."}
                 </div>
               ) : slotsLoading ? (
-                <div className="booking-empty">Äang táº£i khung giá»...</div>
+                <div className="booking-empty">Đang tải khung giờ...</div>
               ) : (
                 <>
                   <p className={`slot-flow-note ${effectiveSlotFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
@@ -3376,7 +3375,7 @@ export default function ReceptionCreateAppointmentForm({
                         className="slot-expand-toggle"
                         onClick={() => toggleOddSlotsForSession(activeSession)}
                       >
-                        {showOddSlots[activeSession] ? "áº¨n" : "Xem thÃªm"}
+                        {showOddSlots[activeSession] ? "Ẩn" : "Xem thêm"}
                       </button>
                     </div>
                   ) : null}
@@ -3406,7 +3405,7 @@ export default function ReceptionCreateAppointmentForm({
                           <div className="slot-meta">
                             <span className={`slot-state-dot ${hasCapacity ? "ok" : "full"}`} />
                             <span className={`slot-state-text ${hasCapacity ? "ok" : "full"}`}>
-                              {hasCapacity ? `CÃ²n ${remaining} chá»—` : "Háº¿t chá»—"}
+                              {hasCapacity ? `Còn ${remaining} chỗ` : "Hết chỗ"}
                             </span>
                           </div>
                         </button>
@@ -3415,14 +3414,14 @@ export default function ReceptionCreateAppointmentForm({
                   </div>
 
                   {displayedSlots.length === 0 ? (
-                    <div className="booking-empty">KhÃ´ng cÃ³ khung giá» phÃ¹ há»£p cho ngÃ y Ä‘Ã£ chá»n.</div>
+                    <div className="booking-empty">Không có khung giờ phù hợp cho ngày đã chọn.</div>
                   ) : null}
                 </>
               )}
             </div>
 
             <div className="form-group">
-              <label>Ghi chÃº theo tá»«ng xe</label>
+              <label>Ghi chú theo từng xe</label>
               {selectedVehicleKeys.length > 0 ? (
                 <div className="reception-note-editor">
                   {selectedVehicleKeys.length > 1 ? (
@@ -3442,7 +3441,7 @@ export default function ReceptionCreateAppointmentForm({
                           <button
                             type="button"
                             className="reception-selected-tab-remove"
-                              aria-label={`Bá» ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
+                              aria-label={`Bỏ ${vehicleLabelByKey.get(vehicleKey) || vehicleKey}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               const vehicleId = getVehicleIdFromKey(vehicleKey);
@@ -3451,7 +3450,7 @@ export default function ReceptionCreateAppointmentForm({
                               }
                             }}
                           >
-                            Ã—
+                            ×
                           </button>
                         </div>
                       ))}
@@ -3464,32 +3463,32 @@ export default function ReceptionCreateAppointmentForm({
                       className="reception-note-input"
                       rows={3}
                       value={activeNoteValue}
-                      placeholder="Nháº­p ghi chÃº cho xe nÃ y..."
+                      placeholder="Nhập ghi chú cho xe này..."
                       onChange={(event) => onVehicleNoteChange(activeNoteKey, event.target.value)}
                     />
                   </div>
                   {selectedVehicleKeys.length > 1 ? (
-                    <p className="reception-muted-note">Chá»n xe á»Ÿ tab bÃªn trÃªn Ä‘á»ƒ nháº­p ghi chÃº theo tá»«ng xe.</p>
+                    <p className="reception-muted-note">Chọn xe ở tab bên trên để nhập ghi chú theo từng xe.</p>
                   ) : null}
                 </div>
               ) : (
-                <div className="reception-muted-note">HÃ£y chá»n xe trÆ°á»›c khi nháº­p ghi chÃº.</div>
+                <div className="reception-muted-note">Hãy chọn xe trước khi nhập ghi chú.</div>
               )}
             </div>
 
             <div className="reception-summary-inline" role="status" aria-live="polite">
               <div className="reception-summary-inline-row">
-                <span>Thá»i gian dá»± kiáº¿n hoÃ n táº¥t toÃ n bá»™ xe</span>
+                <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
                 <strong>{fleetCompletionDateTimeLabel}</strong>
               </div>
               <div className="reception-summary-inline-row">
-                <span>Tá»•ng giÃ¡ dá»‹ch vá»¥ táº¥t cáº£ xe</span>
+                <span>Tổng giá dịch vụ tất cả xe</span>
                 <strong>{formatCurrency(totalPrice)}</strong>
               </div>
               <div className="reception-summary-inline-row">
-                <span>Sá»‘ xe</span>
+                <span>Số xe</span>
                 <strong>
-                  {selectedVehicleCount} {selectedVehicleCount > 1 ? "(lá»‹ch nhÃ³m)" : "(lá»‹ch thÆ°á»ng)"}
+                  {selectedVehicleCount} {selectedVehicleCount > 1 ? "(lịch nhóm)" : "(lịch thường)"}
                 </strong>
               </div>
             </div>
@@ -3505,7 +3504,7 @@ export default function ReceptionCreateAppointmentForm({
                     <div className="reception-plan-summary-head">
                       <h5 className="reception-plan-summary-title">{plan.vehicleLabel}</h5>
                       <span className="reception-plan-summary-badge">
-                        {`${plan.serviceIds.length} dá»‹ch vá»¥`}
+                        {`${plan.serviceIds.length} dịch vụ`}
                       </span>
                     </div>
 
@@ -3530,40 +3529,40 @@ export default function ReceptionCreateAppointmentForm({
                           ))}
                         </ul>
                       ) : (
-                        <p className="reception-plan-summary-text">ChÆ°a cÃ³ dá»‹ch vá»¥</p>
+                        <p className="reception-plan-summary-text">Chưa có dịch vụ</p>
                       )}
                     </div>
 
                     {insuranceSummary ? (
                       <div className="reception-plan-summary-block">
-                        <p className="reception-plan-summary-block-label">Báº¢O HIá»‚M</p>
+                        <p className="reception-plan-summary-block-label">BẢO HIỂM</p>
                         <div className="reception-plan-summary-time-row">
-                          <span>CÃ´ng ty báº£o hiá»ƒm:</span>
+                          <span>Công ty bảo hiểm:</span>
                           <strong>{insuranceSummary.companyName}</strong>
                         </div>
                         <div className="reception-plan-summary-time-row">
-                          <span>Há»“ sÆ¡ báº£o hiá»ƒm:</span>
+                          <span>Hồ sơ bảo hiểm:</span>
                           <strong>{insuranceSummary.assetSummaryLabel}</strong>
                         </div>
                         <p className="reception-plan-summary-text">
-                          {`Ghi chÃº báº£o hiá»ƒm: ${insuranceSummary.intakeNote}`}
+                          {`Ghi chú bảo hiểm: ${insuranceSummary.intakeNote}`}
                         </p>
                       </div>
                     ) : null}
 
                     <div className="reception-plan-summary-block">
-                      <p className="reception-plan-summary-block-label">KHUNG GIá»œ</p>
+                      <p className="reception-plan-summary-block-label">KHUNG GIỜ</p>
                       <div className="reception-plan-summary-time-row">
-                        <span>Giá» báº¯t Ä‘áº§u:</span>
+                        <span>Giờ bắt đầu:</span>
                         <strong>{plan.startTimeLabel}</strong>
                       </div>
                       <div className="reception-plan-summary-time-row">
-                        <span>Giá» káº¿t thÃºc:</span>
+                        <span>Giờ kết thúc:</span>
                         <strong>{plan.endTimeLabel}</strong>
                       </div>
                       <div className="reception-plan-summary-time-row">
-                        <span>Tá»•ng thá»i lÆ°á»£ng:</span>
-                        <strong>{`${plan.totalMinutes} phÃºt`}</strong>
+                        <span>Tổng thời lượng:</span>
+                        <strong>{`${plan.totalMinutes} phút`}</strong>
                       </div>
                     </div>
 
@@ -3574,7 +3573,7 @@ export default function ReceptionCreateAppointmentForm({
                     ) : null}
 
                     <div className="reception-plan-summary-footer">
-                      <span>Tá»•ng giÃ¡ dá»‹ch vá»¥</span>
+                      <span>Tổng giá dịch vụ</span>
                       <strong>{formatCurrency(plan.totalPrice)}</strong>
                     </div>
                   </article>
@@ -3588,13 +3587,15 @@ export default function ReceptionCreateAppointmentForm({
       {showFooterActions ? (
         <div className="form-actions reception-form-actions">
           <button type="button" className="btn-ghost" onClick={onCancel}>
-            Há»§y
+            Hủy
           </button>
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Äang xá»­ lÃ½..." : submitLabel}
+            {loading ? "Đang xử lý..." : submitLabel}
           </button>
         </div>
       ) : null}
     </form>
   );
 }
+
+

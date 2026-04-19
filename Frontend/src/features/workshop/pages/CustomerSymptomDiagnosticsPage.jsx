@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -40,7 +40,7 @@ const SYSTEM_CATEGORIES = [
   { id: "engine", label: "Động cơ", icon: Activity },
   { id: "transmission", label: "Hộp số", icon: Wrench },
   { id: "brakes", label: "Phanh & ABS", icon: AlertTriangle },
-  { id: "steering", label: "Hệ thống Lái / Gầm", icon: Car },
+  { id: "steering", label: "Hệ thống lái / gầm", icon: Car },
   { id: "electrical", label: "Điện / Bình ắc quy", icon: Zap },
   { id: "hvac", label: "Điều hòa / Sưởi", icon: Wind },
   { id: "fluids", label: "Chất lỏng / Rò rỉ", icon: Droplets },
@@ -50,9 +50,9 @@ const SYSTEM_CATEGORIES = [
 const SYMPTOM_TYPES = {
   engine: ["Rung giật", "Mất công suất", "Chết máy", "Không khởi động được", "Khói bất thường"],
   transmission: ["Khó sang số", "Trượt số", "Giật cục", "Chậm phản hồi"],
-  brakes: ["Kêu rít / Xào xạo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
-  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va dập gầm"],
-  electrical: ["Đèn pha mờ", "Còi tịt", "Đồng hồ taplo lỗi", "Hết bình"],
+  brakes: ["Kêu rít / xào xạo", "Chân phanh mềm", "Xe bị lệch khi phanh", "Cứng chân phanh"],
+  steering: ["Vô lăng nặng", "Xe nhao lái", "Lốp mòn không đều", "Tiếng va đập gầm"],
+  electrical: ["Đèn pha mờ", "Còi tắt", "Đồng hồ taplo lỗi", "Hết bình"],
   hvac: ["Không mát", "Mát yếu", "Mùi hôi", "Quạt gió kêu"],
   fluids: ["Nước làm mát", "Dầu máy", "Dầu phanh", "Nước rửa kính"],
   other: ["Tiếng ồn lạ", "Mùi khét", "Hư hỏng ngoại thất", "Khác"],
@@ -96,7 +96,7 @@ export default function CustomerSymptomDiagnosticsPage() {
     setTimeout(() => {
       setIsSubmitting(false);
       toast({
-        title: "Đã lưu chuẩn đoán",
+        title: "Lưu chẩn đoán",
         description: "Dữ liệu triệu chứng đã được ghi nhận chờ phân tích.",
         status: "success",
         duration: 3000,
@@ -118,7 +118,7 @@ export default function CustomerSymptomDiagnosticsPage() {
             </Button>
             <Box>
               <Heading size="md" color="#2b3674">Chi tiết Triệu chứng (Dành cho AI)</Heading>
-              <Text color="#a3aed0" fontSize="sm">Ghi nhận thông tin chuẩn đoán từ mô tả của khách hàng</Text>
+              <Text color="#a3aed0" fontSize="sm">Ghi nhận thông tin chẩn đoán từ mô tả của khách hàng</Text>
             </Box>
           </HStack>
           <Button colorScheme="blue" leftIcon={<Icon as={CheckCircle} />} onClick={handleSubmit} isLoading={isSubmitting}>
@@ -158,9 +158,9 @@ export default function CustomerSymptomDiagnosticsPage() {
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Mã lỗi OBD / Đèn cảnh báo</FormLabel>
+                  <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Mã lỗi OBD / đèn cảnh báo</FormLabel>
                   <Input
-                    placeholder="VD: Đèn cá vàng sáng, mã P0300..."
+                    placeholder="VD: đèn cá vàng sáng, mã P0300..."
                     value={form.dashboardCodes}
                     onChange={(e) => setForm({ ...form, dashboardCodes: e.target.value })}
                     focusBorderColor="#4318ff"
@@ -187,7 +187,7 @@ export default function CustomerSymptomDiagnosticsPage() {
                     <option value="today">Vừa mới xảy ra (Hôm nay)</option>
                     <option value="few_days">Vài ngày trước</option>
                     <option value="weeks">Vài tuần trước</option>
-                    <option value="months">Đã bị từ lâu (&gt; 1 tháng)</option>
+                    <option value="months">Đã từ lâu (&gt; 1 tháng)</option>
                   </Select>
                 </FormControl>
 
@@ -208,7 +208,7 @@ export default function CustomerSymptomDiagnosticsPage() {
                 <FormControl>
                   <FormLabel fontSize="sm" color="#2b3674" fontWeight="600">Điều kiện xảy ra rõ nhất</FormLabel>
                   <Select
-                    placeholder="Hoàn cảnh phát sinh lỗi"
+                    placeholder="Hoàn cảnh phát sinh lại"
                     focusBorderColor="#4318ff"
                     value={form.occurrenceCondition}
                     onChange={(e) => setForm({ ...form, occurrenceCondition: e.target.value })}
@@ -216,10 +216,10 @@ export default function CustomerSymptomDiagnosticsPage() {
                     <option value="cold_start">Khi nổ máy nguội (Sáng sớm)</option>
                     <option value="idling">Khi nổ máy không tải (Dừng đèn đỏ)</option>
                     <option value="accelerating">Khi tăng tốc / đạp ga</option>
-                    <option value="braking">Khi r? phanh</option>
-                    <option value="turning">Khi đánh lái / Cua</option>
+                    <option value="braking">Khi rà phanh</option>
+                    <option value="turning">Khi đánh lái / cua</option>
                     <option value="high_speed">Khi chạy tốc độ cao (&gt; 60km/h)</option>
-                    <option value="always">Bất kỳ lúc nào</option>
+                    <option value="always">Bất kể lúc nào</option>
                   </Select>
                 </FormControl>
               </VStack>
@@ -303,14 +303,14 @@ export default function CustomerSymptomDiagnosticsPage() {
 
               <FormControl>
                 <Textarea
-                  placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rít rít rồi lên đèn check engine, xe rung bần bật không chạy được...'"
+                  placeholder="VD: 'Sáng nay tôi đề máy thì nghe tiếng rít rít rồi lên đèn check engine, xe rung và bật không chạy được...'"
                   rows={4}
                   value={form.customerDescription}
                   onChange={(e) => setForm({ ...form, customerDescription: e.target.value })}
                   focusBorderColor="#05cd99"
                   borderRadius="lg"
                 />
-                <Text fontSize="xs" color="#a3aed0" mt={2}>Trích dẫn nguyên văn lời khách hàng để mô hình AI nắm bắt bối cảnh tốt nhất.</Text>
+                <Text fontSize="xs" color="#a3aed0" mt={2}>Trích dẫn nguyên văn từ khách hàng để mô hình AI nắm bắt bối cảnh tốt nhất.</Text>
               </FormControl>
             </Box>
 
@@ -320,7 +320,7 @@ export default function CustomerSymptomDiagnosticsPage() {
                 <Icon as={Camera} boxSize={8} color="#94a3b8" />
                 <Heading size="sm" color="#64748b">Đính kèm Hình ảnh / Video / Audio (Sắp tới)</Heading>
                 <Text fontSize="sm" color="#94a3b8" maxW="400px">
-                  Khách hàng gửi clip nghe tiếng máy gõ, hình ảnh vết nứt rò rỉ dưới gầm có thể đính kèm ở đây để cung cấp bằng chứng cho AI.
+                  Khách hàng gửi clip tiếng máy gõ, hình ảnh vết nứt/rò rỉ dưới gầm để cung cấp bằng chứng cho AI.
                 </Text>
                 <Button size="sm" colorScheme="gray" isDisabled>
                   Tải tệp lên
@@ -333,5 +333,7 @@ export default function CustomerSymptomDiagnosticsPage() {
     </Box>
   );
 }
+
+
 
 

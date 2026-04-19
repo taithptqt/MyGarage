@@ -41,7 +41,7 @@ function formatDateTimeValue(value) {
 
 function formatMoney(value) {
   const amount = Number(value || 0);
-  return `${amount.toLocaleString("vi-VN")}Ä‘`;
+  return `${amount.toLocaleString("vi-VN")}d`;
 }
 
 function normalizeImageUrls(value) {
@@ -82,10 +82,10 @@ function resolveSeverityLabel(rawSeverity) {
   const normalized = String(rawSeverity || "").trim().toUpperCase();
   if (!normalized) return "--";
   const labels = {
-    LOW: "Tháº¥p",
-    MEDIUM: "Trung bÃ¬nh",
+    LOW: "Thấp",
+    MEDIUM: "Trung bình",
     HIGH: "Cao",
-    CRITICAL: "NghiÃªm trá»ng",
+    CRITICAL: "Nghiêm trọng",
   };
   return labels[normalized] || normalized;
 }
@@ -183,7 +183,7 @@ export default function ServiceOrderDiagnosisReportPage() {
 
   const loadData = useCallback(async () => {
     if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
-      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
+      setError("Mã lệnh sửa chữa không hợp lệ.");
       setLoading(false);
       return;
     }
@@ -218,7 +218,7 @@ export default function ServiceOrderDiagnosisReportPage() {
       setStaffs(Array.isArray(staffsRes) ? staffsRes : []);
       setQuotationCount(getCollectionLength(quotationsRes));
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ táº£i trang káº¿t quáº£ chuáº©n Ä‘oÃ¡n.");
+      setError(err?.message || "Không thể tải trang kết quả chẩn đoán.");
     } finally {
       setLoading(false);
     }
@@ -312,10 +312,8 @@ export default function ServiceOrderDiagnosisReportPage() {
       latestDiagnosis?.DiagnosedByName
     );
     if (explicitName) return explicitName;
-    const technicianId = toPositiveNumber(latestDiagnosis?.technicianId, latestDiagnosis?.TechnicianId);
-    if (!technicianId) return "";
     const matched = staffLookup.get(technicianId);
-    return firstText(matched?.fullName, matched?.FullName, `NhÃ¢n sá»± #${technicianId}`);
+    return firstText(matched?.fullName, matched?.FullName, `Nhân sự #${technicianId}`);
   }, [
     latestDiagnosis?.DiagnosedByName,
     latestDiagnosis?.TechnicianId,
@@ -335,12 +333,10 @@ export default function ServiceOrderDiagnosisReportPage() {
     );
     if (explicitName) return explicitName;
     const leaderId = toPositiveNumber(
-      latestDiagnosis?.assignedTeamLeaderId,
-      latestDiagnosis?.AssignedTeamLeaderId,
       latestDiagnosis?.teamLeaderId,
       latestDiagnosis?.TeamLeaderId
     );
-    return leaderId > 0 ? `NhÃ¢n sá»± #${leaderId}` : "";
+    return leaderId > 0 ? `Nhân sự #${leaderId}` : "";
   }, [
     latestDiagnosis?.AssignedTeamLeaderId,
     latestDiagnosis?.AssignedTeamLeaderName,
@@ -364,9 +360,9 @@ export default function ServiceOrderDiagnosisReportPage() {
         detail?.itemName,
         detail?.ItemName,
         extractServiceName(service),
-        standardServiceId ? `Dá»‹ch vá»¥ #${standardServiceId}` : "",
-        fallbackItemId ? `Dá»‹ch vá»¥ #${fallbackItemId}` : "",
-        "Dá»‹ch vá»¥"
+        standardServiceId ? `Dịch vụ #${standardServiceId}` : "",
+        fallbackItemId ? `Dịch vụ #${fallbackItemId}` : "",
+        "Dịch vụ"
       );
 
       return {
@@ -411,7 +407,7 @@ export default function ServiceOrderDiagnosisReportPage() {
             item?.inventoryItemName,
             item?.InventoryItemName
           ) ||
-          `Dá»‹ch vá»¥ #${standardServiceId || recommendationId || "N/A"}`;
+          `Dịch vụ #${standardServiceId || recommendationId || "N/A"}`;
 
         const quantityRaw = Number(item?.quantity ?? item?.Quantity ?? 1);
         const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
@@ -434,7 +430,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                 extractProductName(product),
                 child?.serviceName,
                 child?.ServiceName,
-                "Phá»¥ tÃ¹ng chÆ°a Ä‘áº·t tÃªn"
+                "Phụ tùng chưa đặt tên"
               ),
               quantity: Number.isFinite(partQtyRaw) && partQtyRaw > 0 ? partQtyRaw : 1,
               note: firstText(child?.technicianNotes, child?.TechnicianNotes, ""),
@@ -497,7 +493,7 @@ export default function ServiceOrderDiagnosisReportPage() {
   if (loading) {
     return (
       <div className="workshop-table-card diagnosis-report-shell">
-        <div className="diagnosis-report-state">Äang táº£i trang chuáº©n Ä‘oÃ¡n...</div>
+        <div className="diagnosis-report-state">Đang tải trang chẩn đoán...</div>
       </div>
     );
   }
@@ -508,7 +504,7 @@ export default function ServiceOrderDiagnosisReportPage() {
         <div className="diagnosis-report-state diagnosis-report-state-error">
           <p>{error}</p>
           <button type="button" className="diagnosis-report-btn diagnosis-report-btn-primary" onClick={loadData}>
-            Táº£i láº¡i
+            Tải lại
           </button>
         </div>
       </div>
@@ -519,9 +515,9 @@ export default function ServiceOrderDiagnosisReportPage() {
     return (
       <div className="workshop-table-card diagnosis-report-shell">
         <div className="diagnosis-report-state">
-          <p>Lá»‡nh nÃ y chÆ°a cÃ³ káº¿t quáº£ chuáº©n Ä‘oÃ¡n.</p>
+          <p>Lệnh này chưa có kết quả chẩn đoán.</p>
           <button type="button" className="diagnosis-report-btn diagnosis-report-btn-primary" onClick={goBack}>
-            Quay láº¡i danh sÃ¡ch lá»‡nh
+            Quay lại danh sách lệnh
           </button>
         </div>
       </div>
@@ -532,9 +528,9 @@ export default function ServiceOrderDiagnosisReportPage() {
     <div className="workshop-table-card diagnosis-report-shell">
       <header className="diagnosis-report-header">
         <div>
-          <p className="diagnosis-report-eyebrow">Lá»‡nh sá»­a chá»¯a #{order?.id || numericOrderId}</p>
-          <h1>Káº¿t quáº£ chuáº©n Ä‘oÃ¡n lá»… tÃ¢n</h1>
-          <p className="diagnosis-report-subtitle">{order?.code ? `MÃ£ lá»‡nh: ${order.code}` : "Theo dÃµi chi tiáº¿t chuáº©n Ä‘oÃ¡n."}</p>
+          <p className="diagnosis-report-eyebrow">Lệnh sửa chữa #{order?.id || numericOrderId}</p>
+          <h1>Kết quả chẩn đoán lệnh số</h1>
+          <p className="diagnosis-report-subtitle">{order?.code ? `Mã lệnh: ${order.code}` : "Theo dõi chi tiết chẩn đoán."}</p>
         </div>
         <div className="diagnosis-report-action-row">
           {canShowQuoteButton ? (
@@ -543,59 +539,59 @@ export default function ServiceOrderDiagnosisReportPage() {
               className="diagnosis-report-btn diagnosis-report-btn-accent"
               onClick={() => navigate(`/workshop/reception/orders/${numericOrderId}/quote`)}
             >
-              Xem bÃ¡o giÃ¡
+              Xem báo giá
             </button>
           ) : null}
           <button type="button" className="diagnosis-report-btn diagnosis-report-btn-primary" onClick={goBack}>
-            Quay láº¡i
+            Quay lại
           </button>
         </div>
       </header>
 
       <section className="diagnosis-report-chip-grid">
         <article className="diagnosis-report-chip">
-          <span>Tráº¡ng thÃ¡i chuáº©n Ä‘oÃ¡n</span>
+          <span>Trạng thái chẩn đoán</span>
           <strong>{diagnosisStatusLabel}</strong>
         </article>
         <article className="diagnosis-report-chip">
-          <span>Má»©c Ä‘á»™</span>
+          <span>Mức độ</span>
           <strong>{diagnosisSeverityText}</strong>
         </article>
         <article className="diagnosis-report-chip">
-          <span>Thá»i Ä‘iá»ƒm cáº­p nháº­t</span>
+          <span>Thời điểm cập nhật</span>
           <strong>{formatDateTimeValue(diagnosisUpdatedAt)}</strong>
         </article>
         <article className="diagnosis-report-chip">
-          <span>Tráº¡ng thÃ¡i lá»‡nh</span>
+          <span>Trạng thái lệnh</span>
           <strong>{getStatusLabelVi(order?.status ?? order?.Status)}</strong>
         </article>
       </section>
 
       <section className="diagnosis-report-grid">
         <article className="diagnosis-report-card">
-          <h2>ThÃ´ng tin tiáº¿p nháº­n</h2>
+          <h2>Thông tin tiếp nhận</h2>
           <div className="diagnosis-report-field">
-            <span>Váº¥n Ä‘á» khÃ¡ch mÃ´ táº£</span>
+            <span>Vấn đề khách mô tả</span>
             <strong>{customerIssueText}</strong>
           </div>
           <div className="diagnosis-report-field">
-            <span>NguyÃªn nhÃ¢n gá»‘c</span>
+            <span>Nguyên nhân gốc</span>
             <strong>{diagnosisRootCauseText}</strong>
           </div>
           <div className="diagnosis-report-field">
-            <span>Ghi chÃº Ä‘iá»u phá»‘i lá»… tÃ¢n</span>
+            <span>Ghi chú điều phối lệnh số</span>
             <strong>{receptionDiagnosisNote}</strong>
           </div>
         </article>
 
         <article className="diagnosis-report-card">
-          <h2>NhÃ¢n sá»± phá»¥ trÃ¡ch chuáº©n Ä‘oÃ¡n</h2>
+          <h2>Nhân sự phụ trách chẩn đoán</h2>
           <div className="diagnosis-report-field">
-            <span>Thá»£ Ä‘Ã£ chuáº©n Ä‘oÃ¡n</span>
+            <span>Thợ đã chẩn đoán</span>
             <strong>{diagnosedTechnicianLabel}</strong>
           </div>
           <div className="diagnosis-report-field">
-            <span>Tá»• trÆ°á»Ÿng phá»¥ trÃ¡ch</span>
+            <span>Tổ trưởng phụ trách</span>
             <strong>{teamLeaderLabel}</strong>
           </div>
         </article>
@@ -603,9 +599,9 @@ export default function ServiceOrderDiagnosisReportPage() {
 
       <section className="diagnosis-report-grid diagnosis-report-grid-lower">
         <article className="diagnosis-report-card">
-          <h2>Dá»‹ch vá»¥ khÃ¡ch Ä‘Ã£ chá»n</h2>
+          <h2>Dịch vụ khách đã chọn</h2>
           {selectedServiceRows.length === 0 ? (
-            <p className="diagnosis-report-empty">KhÃ´ng cÃ³ dá»¯ liá»‡u dá»‹ch vá»¥ khÃ¡ch chá»n.</p>
+            <p className="diagnosis-report-empty">Không có dữ liệu dịch vụ khách chọn.</p>
           ) : (
             <div className="diagnosis-report-table-wrap">
               <table className="diagnosis-report-table diagnosis-selected-service-table">
@@ -615,7 +611,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>Dá»‹ch vá»¥</th>
+                    <th>Dịch vụ</th>
                     <th>SL</th>
                   </tr>
                 </thead>
@@ -635,9 +631,9 @@ export default function ServiceOrderDiagnosisReportPage() {
         </article>
 
         <article className="diagnosis-report-card">
-          <h2>Dá»‹ch vá»¥ vÃ  phá»¥ tÃ¹ng thá»£ Ä‘á» xuáº¥t</h2>
+          <h2>Dịch vụ và phụ tùng thợ đề xuất</h2>
           {recommendedServiceGroups.length === 0 ? (
-            <p className="diagnosis-report-empty">ChÆ°a cÃ³ Ä‘á» xuáº¥t tá»« thá»£ chuáº©n Ä‘oÃ¡n.</p>
+            <p className="diagnosis-report-empty">Chưa có đề xuất từ thợ chẩn đoán.</p>
           ) : (
             <div className="diagnosis-recommendation-group-list">
               {recommendedServiceGroups.map((group, index) => {
@@ -662,7 +658,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                             {isCollapsed ? `Hiện phụ tùng (${group.requiredParts.length})` : "Thu gọn phụ tùng"}
                           </button>
                         ) : null}
-                        <span>Sá»‘ lÆ°á»£ng: {group.quantity}</span>
+                        <span>Số lượng: {group.quantity}</span>
                       </div>
                     </header>
 
@@ -686,7 +682,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                                 rel="noreferrer"
                                 className="diagnosis-recommendation-image-tile"
                               >
-                                <img src={url} alt={`áº¢nh dá»‹ch vá»¥ ${index + 1}.${imageIndex + 1}`} loading="lazy" />
+                                <img src={url} alt={`Ảnh dịch vụ ${index + 1}.${imageIndex + 1}`} loading="lazy" />
                               </a>
                             ))}
                           </div>
@@ -710,7 +706,7 @@ export default function ServiceOrderDiagnosisReportPage() {
                               <thead>
                                 <tr>
                                   <th>Phụ tùng</th>
-                                  <th>Sá»‘ lÆ°á»£ng</th>
+                                  <th>Số lượng</th>
                                   <th>Ghi chú</th>
                                 </tr>
                               </thead>
@@ -738,3 +734,5 @@ export default function ServiceOrderDiagnosisReportPage() {
     </div>
   );
 }
+
+

@@ -114,7 +114,7 @@ export default function PartCategoriesPage() {
       <header className="admin-header">
         <div>
           <h1>Danh mục phụ tùng</h1>
-          <p className="header-sub">Quản lý các nhóm phụ tùng (Lđp, Phanh, Dầu nhơt, v.v.)</p>
+          <p className="header-sub">Quản lý c�c nh�m phụ tùng (Ldp, Phanh, D?u nhot, v.v.)</p>
         </div>
         <button className="btn-primary" onClick={() => setModal("create")}>+ Thêm danh mục</button>
       </header>
@@ -133,7 +133,7 @@ export default function PartCategoriesPage() {
                 <th>ID</th>
                 <th>Tên danh mục</th>
                 <th>Đặt cọc</th>
-                <th>Thao tác</th>
+                <th>Thao t�c</th>
               </tr>
             </thead>
             <tbody>
@@ -172,13 +172,14 @@ export default function PartCategoriesPage() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="Xác nhận x�a" onClose={closeModal}>
           <ConfirmDialog message={`Xóa danh mục "${selected.categoryName}"? Tất cả phụ tùng thuộc danh mục này sẽ bị ảnh hưởng.`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>
   );
 }
+
 
 
 

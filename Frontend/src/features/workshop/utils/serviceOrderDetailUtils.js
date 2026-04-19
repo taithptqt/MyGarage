@@ -137,4 +137,3 @@ export function calculateOrderTotal(details = []) {
 export const formatLicensePlate = (val) => {
   return formatVietnameseLicensePlateInput(val);
 };
-

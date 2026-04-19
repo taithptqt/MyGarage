@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createCustomerConversation,
   getCustomerConversations,
@@ -89,7 +89,7 @@ export default function CustomerChatPage() {
           null;
         setSelectedConversationId(wantedId);
       } catch (err) {
-      setError(err.message || "Không tải được danh sách hội thoại.");
+      setError(err.message || "Không t?i du?c danh sách h?i tho?i.");
       } finally {
         setLoadingConversations(false);
       }
@@ -343,4 +343,6 @@ export default function CustomerChatPage() {
     </div>
   );
 }
+
+
 

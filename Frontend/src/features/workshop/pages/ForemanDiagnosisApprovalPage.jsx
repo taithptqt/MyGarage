@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Minus, Plus, Settings, Trash2 } from "lucide-react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
@@ -35,13 +35,21 @@ function toEditableQuantity(value) {
   return String(parsed);
 }
 
+function getQuantityWarningMessage(itemTypeToken, quantityValue) {
+  const quantity = Number(quantityValue);
+  if (!Number.isFinite(quantity) || quantity <= 0) return "";
+  if (itemTypeToken === "SERVICE" && quantity > 5) return "Số lượng dịch vụ vượt 5. Vui lòng kiểm tra lại.";
+  if (itemTypeToken !== "SERVICE" && quantity > 20) return "Số lượng phụ tùng vượt 20. Vui lòng kiểm tra lại.";
+  return "";
+}
+
 function detectAssignmentNoteFromSystem(noteText, noteSource) {
   const sourceToken = normalizeStatus(noteSource);
   if (sourceToken.includes("SYSTEM") || sourceToken.includes("AUTO")) return true;
 
   const text = String(noteText || "").trim().toLowerCase();
   if (!text) return false;
-  return text.includes("hệ thống") || text.includes("tự động") || text.startsWith("⚙️");
+  return text.includes("h? thợng") || text.includes("t? đếng") || text.startsWith("??");
 }
 
 function resolveCustomerDisplay(order, customerById) {
@@ -119,9 +127,9 @@ function getUrgencyLabelVi(rawUrgency) {
   const token = String(rawUrgency || "").trim().toUpperCase();
   if (!token) return "-";
 
-  if (token === "CRITICAL" || token === "SAFETY" || token === "SAFETY_CRITICAL") return "Khẩn cấp";
-  if (token === "RECOMMENDED" || token === "NORMAL") return "Khuyến nghị";
-  if (token === "LOW") return "Thấp";
+  if (token === "CRITICAL" || token === "SAFETY" || token === "SAFETY_CRITICAL") return "Kh?n cấp";
+  if (token === "RECOMMENDED" || token === "NORMAL") return "Khuy?n ngh?";
+  if (token === "LOW") return "Th?p";
 
   return token;
 }
@@ -189,6 +197,7 @@ export default function ForemanDiagnosisApprovalPage() {
   const [order, setOrder] = useState(null);
   const [diagnoses, setDiagnoses] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
+  const [quotations, setQuotations] = useState([]);
 
   const [services, setServices] = useState([]);
   const [products, setProducts] = useState([]);
@@ -240,7 +249,7 @@ export default function ForemanDiagnosisApprovalPage() {
 
   const loadData = useCallback(async () => {
     if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
-      setError("Mã lệnh sửa chữa không hợp lệ.");
+      setError("Mã lệnh sửa chờa không hợp lệ.");
       setLoading(false);
       return;
     }
@@ -253,6 +262,7 @@ export default function ForemanDiagnosisApprovalPage() {
       const [
         orderRes,
         diagnosesRes,
+        quotationsRes,
         serviceRes,
         productRes,
         customerRes,
@@ -260,6 +270,7 @@ export default function ForemanDiagnosisApprovalPage() {
       ] = await Promise.all([
         serviceOrderApi.getById(numericOrderId),
         serviceOrderApi.getDiagnoses(numericOrderId),
+        serviceOrderApi.getQuotationsByServiceOrder(numericOrderId).catch(() => []),
         getAllStandardServices().catch(() => []),
         inventoryApi.getProducts().catch(() => []),
         getAllCustomers().catch(() => []),
@@ -284,6 +295,7 @@ export default function ForemanDiagnosisApprovalPage() {
       setOrder(orderRes || null);
       setDiagnoses(Array.isArray(diagnosesRes) ? diagnosesRes : []);
       setRecommendations(safeRecommendations);
+      setQuotations(Array.isArray(quotationsRes) ? quotationsRes : []);
       setServices(Array.isArray(serviceRes) ? serviceRes : []);
       setProducts(Array.isArray(productRes) ? productRes : []);
       setCustomers(Array.isArray(customerRes) ? customerRes : []);
@@ -294,7 +306,7 @@ export default function ForemanDiagnosisApprovalPage() {
       setShowRejectBox(false);
       setRejectNote("");
     } catch (err) {
-      setError(err?.message || "Không thể tải dữ liệu duyệt chuẩn đoán.");
+      setError(err?.message || "Kh?ng thể t?i dữ liệu duyệt chuẩn do?n.");
     } finally {
       setLoading(false);
     }
@@ -316,6 +328,23 @@ export default function ForemanDiagnosisApprovalPage() {
 
     return sorted[0] || null;
   }, [diagnoses]);
+
+  const latestQuotation = useMemo(() => {
+    const list = Array.isArray(quotations) ? quotations : [];
+    if (list.length === 0) return null;
+
+    const sorted = [...list].sort((a, b) => {
+      const versionA = Number(readField(a, "versionNo", "VersionNo") || 0);
+      const versionB = Number(readField(b, "versionNo", "VersionNo") || 0);
+      if (versionB !== versionA) return versionB - versionA;
+
+      const timeA = new Date(readField(a, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      const timeB = new Date(readField(b, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return sorted[0] || null;
+  }, [quotations]);
 
   const activeRecommendationList = useMemo(
     () =>
@@ -367,6 +396,14 @@ export default function ForemanDiagnosisApprovalPage() {
     normalizeStatus(readField(latestDiagnosis, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus")) || "PENDING";
   const finalStatus =
     normalizeStatus(readField(latestDiagnosis, "finalApprovalStatus", "FinalApprovalStatus")) || "PENDING";
+  const quotationStatus =
+    normalizeStatus(readField(latestQuotation, "status", "Status")) || "DRAFT";
+  const quotationTechnicalStatus =
+    normalizeStatus(readField(latestQuotation, "technicalApprovalStatus", "TechnicalApprovalStatus")) || "PENDING";
+  const canApproveQuotationTechnical =
+    Boolean(latestQuotation) &&
+    quotationStatus === "WAITING_APPROVAL" &&
+    quotationTechnicalStatus === "PENDING";
   const teamLeaderPendingMinutes = Number(
     readField(latestDiagnosis, "teamLeaderApprovalPendingMinutes", "TeamLeaderApprovalPendingMinutes") || 0
   );
@@ -392,7 +429,7 @@ export default function ForemanDiagnosisApprovalPage() {
   const symptom = readField(latestDiagnosis, "symptom", "Symptom") || readField(order, "symptom", "Symptom") || "-";
   const rootCauseRaw = readField(latestDiagnosis, "rootCause", "RootCause");
   const rootCauseText = resolveRootCauseText(rootCauseRaw);
-  const diagnosisNoteText = assignmentNote || "Không có ghi chú từ lễ tân.";
+  const diagnosisNoteText = assignmentNote || "Kh?ng c? ghi chờ t? l? t?n.";
 
   const customerDisplay = resolveCustomerDisplay(order, customerById);
   const plateDisplay = resolveVehiclePlateDisplay(order, vehicleById);
@@ -407,7 +444,7 @@ export default function ForemanDiagnosisApprovalPage() {
 
   const slaSeverity = resolveSlaSeverity(readField(latestDiagnosis, "createdAt", "CreatedAt"));
   const slaLabel =
-    slaSeverity === "RED" ? "Quá hạn > 30 phút" : slaSeverity === "YELLOW" ? "Cảnh báo > 15 phút" : "Trong SLA";
+    slaSeverity === "RED" ? "Qu? h?n > 30 ph?t" : slaSeverity === "YELLOW" ? "Cầnh b?o > 15 ph?t" : "Trong SLA";
 
   const changeQuantity = useCallback((rowId, updater) => {
     if (!rowId) return;
@@ -535,11 +572,11 @@ export default function ForemanDiagnosisApprovalPage() {
         approve: true,
         note: approveNote || null,
       });
-      setActionMessage("Quản đốc đã duyệt và chuyển sang luồng báo giá thương mại.");
-      window.alert("Duyệt & chuyển báo giá thành công.");
+      setActionMessage("Qu?n d?c d? duyệt v? chuy?n sang lu?ng b?o giờ thuong m?i.");
+      window.alert("Duyệt & chuy?n b?o giờ thợnh cầng.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể duyệt chuyển báo giá.");
+      setError(err?.message || "Kh?ng thợ duyệt chuy?n b?o giờ.");
     } finally {
       setSaving(false);
     }
@@ -552,7 +589,7 @@ export default function ForemanDiagnosisApprovalPage() {
       return;
     }
     if (!String(rejectNote || "").trim()) {
-      setError("Vui lòng nhập lý do từ chối để trả phiếu khám lại.");
+      setError("Vui l?ng nhợp lệ do từ chối d? tr? phi?u kh?m lại.");
       return;
     }
 
@@ -567,26 +604,50 @@ export default function ForemanDiagnosisApprovalPage() {
         approve: false,
         note: rejectNote,
       });
-      setActionMessage("Đã từ chối và chuyển lại cho kỹ thuật khám lại.");
-      window.alert("Từ chối duyệt thành công.");
+      setActionMessage("từ chối v? chuy?n lại cho kỹ thuật kh?m lại.");
+      window.alert("T? chời duyệt thành công.");
       setRejectNote("");
       setShowRejectBox(false);
       await loadData();
     } catch (err) {
-      setError(err?.message || "Không thể từ chối phiếu chuẩn đoán.");
+      setError(err?.message || "Kh?ng thể từ chối phi?u chuẩn do?n.");
     } finally {
       setSaving(false);
     }
   }, [numericOrderId, staffId, rejectNote, persistDraftChanges, loadData, isForemanDecisionLocked]);
+
+  const handleApproveQuotationTechnical = useCallback(async () => {
+    const quotationId = toPositiveNumber(readField(latestQuotation, "id", "Id"));
+    if (!quotationId || !staffId) return;
+
+    setSaving(true);
+    setError("");
+    setActionMessage("");
+
+    try {
+      await serviceOrderApi.approveQuotation(quotationId, {
+        approvedBy: staffId,
+        note: String(approveNote || "").trim() || "Duyệt kỹ thuật b?o giờ",
+        decisions: [],
+      });
+
+      setActionMessage("duyệt kỹ thuật b?o giờ thợnh cầng.");
+      await loadData();
+    } catch (err) {
+      setError(err?.message || "Kh?ng thợ duyệt kỹ thuật b?o giờ.");
+    } finally {
+      setSaving(false);
+    }
+  }, [latestQuotation, staffId, approveNote, loadData]);
 
   return (
     <div className="foreman-approval-page">
       <div className="foreman-approval-container">
         <header className="foreman-approval-header">
           <div>
-            <h1>Duyệt chuẩn đoán - Quản đốc</h1>
+            <h1>Duyệt chuẩn do?n - Qu?n d?c</h1>
             <p>
-              Lệnh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
+              L?nh <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
             </p>
           </div>
           <button type="button" className="fa-back-btn" onClick={() => navigate(backPath)}>
@@ -597,17 +658,17 @@ export default function ForemanDiagnosisApprovalPage() {
 
         {loading ? (
           <section className="fa-card">
-            <p className="fa-loading">Đang tải dữ liệu duyệt chuẩn đoán...</p>
+            <p className="fa-loading">?ang t?i dữ liệu duyệt chuẩn do?n...</p>
           </section>
         ) : (
           <>
             <section className="fa-card fa-summary-grid">
               <article className="fa-summary-item">
-                <span>Khách hàng</span>
+                <span>Kh?ch h?ng</span>
                 <strong>{customerDisplay}</strong>
               </article>
               <article className="fa-summary-item">
-                <span>Biển số</span>
+                <span>Bi?n s?</span>
                 <strong>{plateDisplay}</strong>
               </article>
               <article className="fa-summary-item">
@@ -615,11 +676,11 @@ export default function ForemanDiagnosisApprovalPage() {
                 <strong className={`fa-sla-chip ${slaSeverity === "RED" ? "red" : slaSeverity === "YELLOW" ? "yellow" : "green"}`}>{slaLabel}</strong>
               </article>
               <article className="fa-summary-item">
-                <span>Số đề xuất</span>
+                <span>S? đề xuất</span>
                 <strong>{totalSuggestions}</strong>
               </article>
               <article className="fa-summary-item">
-                <span>Duyệt tổ trưởng</span>
+                <span>Duyệt t? tru?ng</span>
                 <strong>{getStatusLabelVi(technicalStatus, technicalStatus)}</strong>
               </article>
               <article className="fa-summary-item">
@@ -629,15 +690,15 @@ export default function ForemanDiagnosisApprovalPage() {
             </section>
 
             <section className="fa-card">
-              <h2>Thông tin chuẩn đoán kỹ thuật</h2>
+              <h2>Th?ng tin chuẩn do?n kỹ thuật</h2>
               <div className={`fa-info-grid ${assignmentNote ? "with-assignment" : "without-assignment"}`}>
                 <div className="fa-readonly-box">
-                  <label>Triệu chứng</label>
+                  <label>Tri?u chọng</label>
                   <p>{symptom}</p>
                 </div>
 
                 <div className="fa-readonly-box">
-                  <label>Cập nhật gần nhất</label>
+                  <label>C?p nh?t g?n nh?t</label>
                   <p>{formatDateTime(readField(latestDiagnosis, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt"))}</p>
                 </div>
 
@@ -645,7 +706,7 @@ export default function ForemanDiagnosisApprovalPage() {
 
               <div className="fa-diagnosis-note-grid">
                 <div className="fa-root-cause-wrap">
-                  <label htmlFor="fa-root-cause">Nguyên nhân</label>
+                  <label htmlFor="fa-root-cause">Nguy?n nh?n</label>
                   <textarea id="fa-root-cause" rows={2} value={rootCauseText} readOnly />
                 </div>
                 <div className="fa-root-cause-wrap">
@@ -665,7 +726,7 @@ export default function ForemanDiagnosisApprovalPage() {
               {actionMessage ? <p className="fa-success">{actionMessage}</p> : null}
               {isTeamLeaderWarning ? (
                 <p className="fa-note">
-                  Cảnh báo SLA: Phiếu đã chờ tổ trưởng duyệt {teamLeaderPendingMinutes} phút.
+                  Cầnh b?o SLA: Phiếu d? chờ t? tru?ng duyệt {teamLeaderPendingMinutes} ph?t.
                 </p>
               ) : null}
               {isTeamLeaderEscalated ? (
@@ -716,8 +777,10 @@ export default function ForemanDiagnosisApprovalPage() {
                         const parentQty = Number(
                           quantityById[parentRowId] || readField(parentRow, "quantity", "Quantity") || 1
                         );
+                        const parentTypeToken = normalizeRecommendationItemType(readField(parentRow, "itemType", "ItemType"));
+                        const parentQtyWarningMessage = getQuantityWarningMessage(parentTypeToken, parentQty);
                         const visibleChildren = (group.children || []).filter((child) => !child.isSynthetic);
-                        const parentUrgencyValue = normalizeUrgencyToken(urgencyById[group.parentId] ?? parentUrgencyRaw);
+                          const parentUrgencyValue = normalizeUrgencyToken(urgencyById[group.parentId] ?? parentUrgencyRaw);
 
                         return (
                           <React.Fragment key={group.parentId || `group-parent-${parentLabel}`}>
@@ -756,30 +819,33 @@ export default function ForemanDiagnosisApprovalPage() {
                               </td>
                               <td className="fa-col-center">
                                 {parentRowId ? (
-                                  <div className="fa-qty-control">
-                                    <button type="button" onClick={() => decreaseQuantity(parentRowId)} disabled={isRecommendationEditingLocked} aria-label="Giảm số lượng dịch vụ">
-                                      <Minus size={14} />
-                                    </button>
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      step={1}
-                                      value={quantityById[parentRowId] ?? String(parentQty)}
-                                      onChange={(event) => editQuantityInput(parentRowId, event.target.value)}
-                                      onBlur={() => commitQuantityInput(parentRowId)}
-                                      disabled={isRecommendationEditingLocked}
-                                      className="fa-qty-input"
-                                      aria-label="Nhập trực tiếp số lượng dịch vụ"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => changeQuantity(parentRowId, (current) => current + 1)}
-                                      disabled={isRecommendationEditingLocked}
-                                      aria-label="Tăng số lượng dịch vụ"
-                                    >
-                                      <Plus size={14} />
-                                    </button>
-                                  </div>
+                                  <>
+                                    <div className="fa-qty-control">
+                                      <button type="button" onClick={() => decreaseQuantity(parentRowId)} disabled={isRecommendationEditingLocked} aria-label="Giảm số lượng dịch vụ">
+                                        <Minus size={14} />
+                                      </button>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                  value={quantityById[parentRowId] ?? String(parentQty)}
+                                        onChange={(event) => editQuantityInput(parentRowId, event.target.value)}
+                                        onBlur={() => commitQuantityInput(parentRowId)}
+                                        disabled={isRecommendationEditingLocked}
+                                        className={`fa-qty-input ${parentQtyWarningMessage ? "fa-qty-warning" : ""}`}
+                                        aria-label="Nhập trực tiếp số lượng dịch vụ"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => changeQuantity(parentRowId, (current) => current + 1)}
+                                        disabled={isRecommendationEditingLocked}
+                                        aria-label="Tăng số lượng dịch vụ"
+                                      >
+                                        <Plus size={14} />
+                                      </button>
+                                    </div>
+                                    {parentQtyWarningMessage ? <p className="fa-qty-warning-text">{parentQtyWarningMessage}</p> : null}
+                                  </>
                                 ) : (
                                   "-"
                                 )}
@@ -829,6 +895,8 @@ export default function ForemanDiagnosisApprovalPage() {
                               const childType = normalizeRecommendationItemType(readField(row, "itemType", "ItemType")) === "SERVICE"
                                 ? "Dịch vụ"
                                 : "Vật tư";
+                              const childTypeToken = normalizeRecommendationItemType(readField(row, "itemType", "ItemType"));
+                              const childQtyWarningMessage = getQuantityWarningMessage(childTypeToken, qty);
 
                               const itemOrderNo = childIndex + 1;
 
@@ -837,34 +905,37 @@ export default function ForemanDiagnosisApprovalPage() {
                                   <td className="fa-child-name">
                                     <div className="fa-item-cell">
                                       <span className={`fa-item-kind ${childType === "Vật tư" ? "part" : "service"}`}>{childType} #{itemOrderNo}</span>
-                                      <span className="fa-item-name">└─ {itemName}</span>
+                                      <span className="fa-item-name">+- {itemName}</span>
                                     </div>
                                   </td>
                                   <td className="fa-col-center">
-                                    <div className="fa-qty-control">
-                                      <button type="button" onClick={() => decreaseQuantity(rowId)} disabled={isRecommendationEditingLocked} aria-label="Giảm số lượng">
-                                        <Minus size={14} />
-                                      </button>
-                                      <input
-                                        type="number"
-                                        min={1}
-                                        step={1}
+                                    <>
+                                      <div className="fa-qty-control">
+                                        <button type="button" onClick={() => decreaseQuantity(rowId)} disabled={isRecommendationEditingLocked} aria-label="Giảm số lượng">
+                                          <Minus size={14} />
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          step={1}
                                         value={quantityById[rowId] ?? String(qty)}
-                                        onChange={(event) => editQuantityInput(rowId, event.target.value)}
-                                        onBlur={() => commitQuantityInput(rowId)}
-                                        disabled={isRecommendationEditingLocked}
-                                        className="fa-qty-input"
-                                        aria-label="Nhập trực tiếp số lượng"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => changeQuantity(rowId, (current) => current + 1)}
-                                        disabled={isRecommendationEditingLocked}
-                                        aria-label="Tăng số lượng"
-                                      >
-                                        <Plus size={14} />
-                                      </button>
-                                    </div>
+                                          onChange={(event) => editQuantityInput(rowId, event.target.value)}
+                                          onBlur={() => commitQuantityInput(rowId)}
+                                          disabled={isRecommendationEditingLocked}
+                                          className={`fa-qty-input ${childQtyWarningMessage ? "fa-qty-warning" : ""}`}
+                                          aria-label="Nhập trực tiếp số lượng"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => changeQuantity(rowId, (current) => current + 1)}
+                                          disabled={isRecommendationEditingLocked}
+                                          aria-label="Tăng số lượng"
+                                        >
+                                          <Plus size={14} />
+                                        </button>
+                                      </div>
+                                      {childQtyWarningMessage ? <p className="fa-qty-warning-text">{childQtyWarningMessage}</p> : null}
+                                    </>
                                   </td>
                                   <td>
                                     {!child.isSynthetic ? (
@@ -966,7 +1037,7 @@ export default function ForemanDiagnosisApprovalPage() {
                         }}
                         disabled={saving}
                       >
-                        Hủy nhập lý do
+                        H?y nhập lý do
                       </button>
                     </>
                   ) : (
@@ -976,9 +1047,22 @@ export default function ForemanDiagnosisApprovalPage() {
                       onClick={() => setShowRejectBox(true)}
                       disabled={saving || !staffId || isForemanDecisionLocked}
                     >
-                      Từ chối & Khám lại
+                      T? chời & Kh?m lại
                     </button>
                   )}
+                </div>
+              ) : null}
+
+              {canApproveQuotationTechnical ? (
+                <div className="fa-actions" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleApproveQuotationTechnical}
+                    disabled={saving || !staffId}
+                  >
+                    Duyệt kỹ thuật b?o giờ
+                  </button>
                 </div>
               ) : null}
             </section>
@@ -988,3 +1072,5 @@ export default function ForemanDiagnosisApprovalPage() {
     </div>
   );
 }
+
+

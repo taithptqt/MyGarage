@@ -1,7 +1,7 @@
 ﻿# Kiến trúc Frontend (Chuẩn hóa)
 
 Mục tiêu:
-- Tách rõ phần `app`, `features`, `shared`, `legacy`.
+- T�ch r� ph?n `app`, `features`, `shared`, `legacy`.
 - Giảm coupling giữa module.
 - Dđ. mở rộng theo nguyên tắc SOLID cho frontend.
 
@@ -18,7 +18,7 @@ Mục tiêu:
   - `shared/components/`, `shared/layouts/`: UI dùng lại.
 - `legacy/`
   - Mã Horizon cũ, giữ tương thích tạm thời.
-  - Không thêm logic mơi vào đây.
+  - Kh�ng th�m logic moi v�o d�y.
 
 ## Quy tắc import
 
@@ -31,8 +31,9 @@ Mục tiêu:
 
 ## Tương thích ngược
 
-- Các thư mục cũ `context`, `hooks`, `utils`, `components/auth`, `styles` được giữ bằng file forwarder.
-- Không xóa file cũ ở giai đoạn chuyển tiếp để tránh vỡ import.
+- C�c thu m?c cu `context`, `hooks`, `utils`, `components/auth`, `styles` du?c gi? b?ng file forwarder.
+- Kh�ng x�a file cu ? giai do?n chuy?n ti?p d? tr�nh v? import.
+
 
 
 

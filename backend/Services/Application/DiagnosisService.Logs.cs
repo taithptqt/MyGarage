@@ -19,7 +19,9 @@ public partial class DiagnosisService
     private const string DiagnoseLogEventTechnicalApproved = "TECHNICAL_APPROVED";
     private const string DiagnoseLogEventTechnicalRejected = "TECHNICAL_REJECTED";
     private const string DiagnoseLogEventFinalApproved = "FINAL_APPROVED";
+    private const string DiagnoseLogEventFinalRejected = "FINAL_REJECTED";
     private const string DiagnoseLogEventFinalApprovedBypass = "FINAL_APPROVED_BYPASS";
+    private const string DiagnoseLogEventRediagnoseRequested = "REDIAGNOSE_REQUESTED";
 
     private DiagnosisAssignment BuildDiagnosisAssignment(
         Diagnosis diagnosis,
@@ -90,5 +92,4 @@ public partial class DiagnosisService
         await PreloadAssignmentStatesAsync(diagnoses);
     }
 }
-
 

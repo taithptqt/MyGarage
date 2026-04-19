@@ -212,13 +212,14 @@ namespace MyGarage.Services
             var rows = await _context.DiagnosisAssignments
                 .AsNoTracking()
                 .Where(x => normalizedIds.Contains(x.DiagnosisId))
-                .OrderByDescending(x => x.CreatedAt)
-                .ThenByDescending(x => x.Id)
+                .OrderBy(x => x.DiagnosisId)
+                .ThenBy(x => x.Id)
+                .ThenBy(x => x.CreatedAt)
                 .ToListAsync();
 
             return rows
                 .GroupBy(x => x.DiagnosisId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(g => g.Key, g => BuildVersionSnapshotsFromLogs(g.ToList()).OrderByDescending(x => x.Id).ToList());
         }
 
         public async Task<IReadOnlyList<Diagnosis>> GetLatestWorkflowDiagnosesByServiceOrderAsync(long serviceOrderId)

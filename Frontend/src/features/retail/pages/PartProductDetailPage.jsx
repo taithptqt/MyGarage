@@ -444,7 +444,7 @@ export default function PartProductDetailPage() {
           <div className="parts-shop-hero-actions">
             <RetailCartEntry itemCount={totalLineItems} label="Giỏ hàng" />
             <Link to="/parts-shop" className="parts-shop-btn parts-shop-btn-ghost">
-            Quay lại
+              Quay lại catalog
             </Link>
             <Link to="/my-retail-orders" className="parts-shop-btn parts-shop-btn-ghost">
               Xem đơn phụ tùng

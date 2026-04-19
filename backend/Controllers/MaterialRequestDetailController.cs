@@ -34,9 +34,20 @@ namespace MyGarage.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MaterialRequestDetailResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<MaterialRequestDetailResponseDto>>> GetAll([FromQuery] long? serviceOrderId = null)
         {
-            var items = await _materialRequestDetailService.GetAllAsync();
+            IEnumerable<MaterialRequestDetail> items;
+            if (serviceOrderId.HasValue)
+            {
+                items = await _context.MaterialRequestDetails
+                    .Include(d => d.Product)
+                    .Where(d => d.Request.ServiceOrderId == serviceOrderId.Value && (d.IssuedQuantity ?? 0) > 0)
+                    .ToListAsync();
+            }
+            else
+            {
+                items = await _materialRequestDetailService.GetAllAsync();
+            }
             var dtos = _mapper.Map<IEnumerable<MaterialRequestDetailResponseDto>>(items);
             return Ok(dtos);
         }

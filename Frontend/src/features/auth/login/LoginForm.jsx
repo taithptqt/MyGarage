@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 
 function LoginForm({ form, onChange, onSubmit, isValid, loading }) {
   return (
@@ -40,3 +40,4 @@ function LoginForm({ form, onChange, onSubmit, isValid, loading }) {
 }
 
 export default LoginForm;
+

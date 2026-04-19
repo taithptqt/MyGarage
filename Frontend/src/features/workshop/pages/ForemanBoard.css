@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════
    ForemanBoard.css — Kanban điều phối xưởng (A17)
    Style: consistent với ForemanApproval.css / Workshop.css
    Font: Inter system stack
@@ -461,3 +461,4 @@
   .fb-stat-value { font-size: 22px; }
   .fb-header-actions { flex-wrap: wrap; }
 }
+

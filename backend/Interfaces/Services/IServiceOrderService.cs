@@ -14,5 +14,7 @@ namespace MyGarage.Interfaces
         Task EnsureQuoteAndPartsEditableAsync(long id);
         Task EnsureAssignmentEditableAsync(long id);
         Task EnsurePartsEditableAsync(long id);
+        Task<HandoverReadinessResponseDto?> GetHandoverReadinessAsync(long id);
+        Task<bool> ProcessHandoverAsync(long id, HandoverRequestDto request);
     }
 }

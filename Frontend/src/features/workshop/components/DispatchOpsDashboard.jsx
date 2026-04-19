@@ -994,154 +994,154 @@ function DispatchQueueCard({
       borderLeftColor={meta.cardAccent}
       borderRadius="xl"
       bg={isSelected ? "#f8fbff" : "white"}
-      p={3.5}
+      p={{ base: 2.5, md: 3 }}
       cursor="pointer"
       transition="all 0.18s ease"
       boxShadow={isSelected ? "0 12px 26px rgba(37, 99, 235, 0.16)" : "0 4px 12px rgba(15,23,42,0.06)"}
       _hover={{ borderColor: meta.activeBg, transform: "translateY(-1px)" }}
       onClick={() => onSelect(item.serviceOrderId)}
     >
-      <Stack spacing={3}>
-        <HStack justify="space-between" align="start" spacing={3}>
+      <Stack spacing={2}>
+        <HStack justify="space-between" align="start" spacing={2.5} flexWrap="wrap">
           <Box minW={0}>
-            <Text fontWeight="800" color="gray.800" noOfLines={1}>
+            <Text fontSize={{ base: "xl", md: "xl" }} fontWeight="800" color="gray.800" noOfLines={1} lineHeight="1.1">
               {item.serviceOrderCode}
             </Text>
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
+            <Text mt={0.5} fontSize="sm" color="gray.700" fontWeight="500" noOfLines={1}>
               {item.customerName || "Khách hàng chưa rõ"}
             </Text>
-            <HStack mt={1} spacing={1.5} flexWrap="wrap">
-              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5}>
+            <HStack mt={1} spacing={1.5} flexWrap="wrap" align="center">
+              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
                 Biển số: {vehicle.plate}
               </Badge>
-              <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5}>
+              <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
                 Dòng xe: {vehicle.descriptor}
               </Badge>
             </HStack>
-            <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+            <Text mt={1} fontSize={{ base: "sm", md: "md" }} color="gray.800" fontWeight="700" noOfLines={1}>
               Năm SX: {vehicle.manufactureYear} | Màu: {vehicle.color}
             </Text>
             {vehicle.vin ? (
-              <Text mt={1} fontSize="sm" color="gray.700" fontWeight="600" noOfLines={1}>
+              <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" fontWeight="700" noOfLines={1}>
                 VIN: {vehicle.vin}
               </Text>
             ) : null}
           </Box>
 
-          <HStack align="start" spacing={2}>
-            {alerts.length > 0 && (
-              <Box
-                maxW={{ base: "220px", md: "320px" }}
-                border="1px solid"
-                borderColor="red.200"
-                bg="red.50"
-                borderRadius="md"
-                px={3}
-                py={2}
-                transform="translateY(-4px)"
-              >
-                <VStack align="start" spacing={1}>
-                  {alerts.slice(0, 2).map((reason) => (
-                    <Text
-                      key={`${item.serviceOrderId}-top-${reason}`}
-                      fontSize="sm"
-                      color="red.700"
-                      fontWeight="700"
-                      lineHeight="1.3"
-                      noOfLines={2}
-                    >
-                      {reason}
-                    </Text>
-                  ))}
-                </VStack>
-              </Box>
+          <VStack align={{ base: "start", md: "end" }} spacing={1.5} flexShrink={0}>
+            <HStack align="start" spacing={2} flexWrap="wrap" justify={{ base: "start", md: "end" }}>
+              {alerts.length > 0 && (
+                <Box
+                  maxW={{ base: "100%", md: "300px" }}
+                  border="1px solid"
+                  borderColor="red.200"
+                  bg="red.50"
+                  borderRadius="md"
+                  px={2.5}
+                  py={1.5}
+                >
+                  <VStack align="start" spacing={1}>
+                    {alerts.slice(0, 2).map((reason) => (
+                      <Text
+                        key={`${item.serviceOrderId}-top-${reason}`}
+                        fontSize={{ base: "sm", md: "md" }}
+                        color="red.700"
+                        fontWeight="700"
+                        lineHeight="1.25"
+                        noOfLines={2}
+                      >
+                        {reason}
+                      </Text>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+              <Badge colorScheme={queueStateMeta.colorScheme} borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
+                {queueStateMeta.label}
+              </Badge>
+            </HStack>
+            {(canViewCancelRequest || canViewQuote) && (
+              <HStack spacing={2} justify={{ base: "start", md: "end" }} flexWrap="wrap">
+                {canViewCancelRequest && (
+                  <Button
+                    size="sm"
+                    colorScheme="red"
+                    variant="outline"
+                    borderRadius="full"
+                    fontWeight="700"
+                    animation={`${cancelAttentionPulse} 1.8s ease-in-out infinite`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewCancelRequest(item);
+                    }}
+                  >
+                    Xem yêu cầu hủy
+                  </Button>
+                )}
+                {canViewQuote && (
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    variant="solid"
+                    borderRadius="full"
+                    fontWeight="700"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewQuote(item);
+                    }}
+                  >
+                    Xem chuẩn đoán
+                  </Button>
+                )}
+              </HStack>
             )}
-            <Badge colorScheme={queueStateMeta.colorScheme} borderRadius="full" px={2.5} py={1}>
-              {queueStateMeta.label}
-            </Badge>
-          </HStack>
+          </VStack>
         </HStack>
 
-        <HStack spacing={2} flexWrap="wrap">
-          <Badge colorScheme="purple" borderRadius="full" px={2.5}>
+        <HStack spacing={2} flexWrap="wrap" align="center">
+          <Badge colorScheme="purple" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
             Chuyên môn: {dispatchTagLabel || getDispatchTagLabel(item.dispatchTag)}
           </Badge>
-          <Badge colorScheme="gray" borderRadius="full" px={2.5}>
+          <Badge colorScheme="gray" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
             Chờ nhận: {formatMinutes(item.pendingMinutes)}
           </Badge>
-          <Badge colorScheme="orange" borderRadius="full" px={2.5}>
+          <Badge colorScheme="orange" borderRadius="full" px={2.5} py={1} fontSize="sm" fontWeight="700">
             Đang xử lý: {formatMinutes(item.assignedMinutes)}
           </Badge>
         </HStack>
 
         <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={2}>
-          <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
-            <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+          <Box p={1.5} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
+            <Text fontSize="xs" color="gray.600" textTransform="uppercase" fontWeight="800">
               Nhân sự
             </Text>
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Tổ chính: {item.primaryTeamName || item.teamName || "Chưa giao tổ"}
+            <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
+              <Text as="span" fontWeight="700">Tổ chính:</Text> {item.primaryTeamName || item.teamName || "Chưa giao tổ"}
             </Text>
             {Array.isArray(item.supportingTeamNames) && item.supportingTeamNames.length > 0 && (
-              <Text fontSize="sm" color="gray.600" noOfLines={2}>
-                Tổ phối hợp: {item.supportingTeamNames.join(", ")}
+              <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={2}>
+                <Text as="span" fontWeight="700">Tổ phối hợp:</Text> {item.supportingTeamNames.join(", ")}
               </Text>
             )}
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Thợ chính: {item.technicianName || ""}
+            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
+              <Text as="span" fontWeight="700">Thợ chính:</Text> {item.technicianName || "--"}
             </Text>
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Thợ phụ: {item.assistantTechnicianName || ""}
+            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
+              <Text as="span" fontWeight="700">Thợ phụ:</Text> {item.assistantTechnicianName || "--"}
             </Text>
           </Box>
-          <Box p={2} border="1px solid" borderColor="gray.100" borderRadius="md" bg="white">
-            <Text fontSize="xs" color="gray.500" textTransform="uppercase" fontWeight="700">
+          <Box p={1.5} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
+            <Text fontSize="xs" color="gray.600" textTransform="uppercase" fontWeight="800">
               Tiến độ
             </Text>
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Khoang: {item.assignedBayCode || "Chưa chỉ định"}
+            <Text mt={0.5} fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
+              <Text as="span" fontWeight="700">Khoang:</Text> {item.assignedBayCode || "Chưa chỉ định"}
             </Text>
-            <Text fontSize="sm" color="gray.600" noOfLines={1}>
-              Yêu cầu lúc: {formatDateTime(item.requestedAt)}
+            <Text fontSize={{ base: "sm", md: "md" }} color="gray.800" noOfLines={1}>
+              <Text as="span" fontWeight="700">Yêu cầu lúc:</Text> {formatDateTime(item.requestedAt)}
             </Text>
           </Box>
         </Grid>
-
-        {(canViewCancelRequest || canViewQuote) && (
-          <HStack justify="flex-end" spacing={2} pt={1} borderTop="1px solid" borderColor="gray.100">
-            {canViewCancelRequest && (
-              <Button
-                size="sm"
-                colorScheme="red"
-                variant="outline"
-                borderRadius="full"
-                fontWeight="700"
-                animation={`${cancelAttentionPulse} 1.8s ease-in-out infinite`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onViewCancelRequest(item);
-                }}
-              >
-                Xem yêu cầu hủy
-              </Button>
-            )}
-            {canViewQuote && (
-              <Button
-                size="sm"
-                colorScheme="blue"
-                variant="solid"
-                borderRadius="full"
-                fontWeight="700"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onViewQuote(item);
-                }}
-              >
-                Xem chuẩn đoán
-              </Button>
-            )}
-          </HStack>
-        )}
       </Stack>
     </Box>
   );

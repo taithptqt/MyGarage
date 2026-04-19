@@ -1,4 +1,4 @@
-import {
+﻿import {
   extractField,
   formatStoredVehicleLabel,
   formatVehicleDescriptor,
@@ -77,3 +77,4 @@ export function buildCurrentVehiclePayload({
     displayLabel,
   };
 }
+

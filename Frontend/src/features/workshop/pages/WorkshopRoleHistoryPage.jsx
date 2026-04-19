@@ -64,10 +64,17 @@ const DIAGNOSIS_WORKFLOW_STATUS_LABELS = {
 };
 
 const HISTORY_STATUS_BY_ROLE = {
-  FOREMAN: ["FOREMAN_APPROVED_LOCKED", "CANCELED"],
-  TEAM_LEADER: ["TL_APPROVED", "CANCELED"],
-  TECH: ["TL_APPROVED", "FOREMAN_APPROVED_LOCKED", "CANCELED"],
+  FOREMAN: ["FOREMAN_APPROVED_LOCKED", "FOREMAN_REJECTED_REDIAGNOSE", "CANCELED"],
+  TEAM_LEADER: ["TL_APPROVED", "TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE", "CANCELED"],
+  TECH: ["TL_APPROVED", "FOREMAN_APPROVED_LOCKED", "TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE", "CANCELED"],
 };
+
+const HISTORY_FILTER_TABS = [
+  { value: "ALL", label: "Tất cả" },
+  { value: "COMPLETED", label: "Hoàn thành" },
+  { value: "CANCELED", label: "Đã hủy" },
+  { value: "REDIAGNOSE", label: "Làm lại" },
+];
 
 function toText(value) {
   if (value === null || value === undefined) return "";
@@ -173,17 +180,26 @@ function getWorkflowStatusLabel(statusCode) {
 function getHistoryStatusLabel(statusCode, roleCode) {
   const normalized = normalizeCode(statusCode);
   if (normalized === "CANCELED") return "Đã hủy";
+  if (["TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE"].includes(normalized)) return "Làm lại";
 
   if (roleCode === "FOREMAN") {
-    if (normalized === "FOREMAN_APPROVED_LOCKED") return "Đã duyệt";
+    if (normalized === "FOREMAN_APPROVED_LOCKED") return "Hoàn thành";
   }
 
   if (roleCode === "TEAM_LEADER") {
-    if (normalized === "TL_APPROVED") return "Đã duyệt";
+    if (normalized === "TL_APPROVED") return "Hoàn thành";
   }
 
-  if (normalized.endsWith("_APPROVED") || normalized.includes("APPROVED")) return "Đã duyệt";
+  if (normalized.endsWith("_APPROVED") || normalized.includes("APPROVED")) return "Hoàn thành";
   return getWorkflowStatusLabel(statusCode);
+}
+
+function toHistoryFilterStatus(statusCode) {
+  const normalized = normalizeCode(statusCode);
+  if (normalized === "CANCELED") return "CANCELED";
+  if (["TL_REJECTED_REDIAGNOSE", "FOREMAN_REJECTED_REDIAGNOSE"].includes(normalized)) return "REDIAGNOSE";
+  if (["TL_APPROVED", "FOREMAN_APPROVED_LOCKED"].includes(normalized)) return "COMPLETED";
+  return "ALL";
 }
 
 function resolveAssignedAt(item) {
@@ -233,6 +249,8 @@ function resolveHistoryStatusFromDiagnosis(item, roleCode) {
   ) {
     return "CANCELED";
   }
+  if (finalApprovalStatus === "REJECTED") return "FOREMAN_REJECTED_REDIAGNOSE";
+  if (teamLeaderApprovalStatus === "REJECTED") return "TL_REJECTED_REDIAGNOSE";
 
   if (roleCode === "FOREMAN") {
     return finalApprovalStatus === "APPROVED" ? "FOREMAN_APPROVED_LOCKED" : null;
@@ -383,8 +401,8 @@ export default function WorkshopRoleHistoryPage() {
   const [rows, setRows] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("COMPLETED_DESC");
-  const [dateFrom, setDateFrom] = useState(() => toDateText(new Date()));
-  const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [isDateRangePickerOpen, setIsDateRangePickerOpen] = useState(false);
 
   const fetchHistory = useCallback(async () => {
@@ -539,10 +557,6 @@ export default function WorkshopRoleHistoryPage() {
     fetchHistory();
   }, [fetchHistory]);
 
-  const statusOptions = useMemo(() => {
-    return HISTORY_STATUS_BY_ROLE[roleCode] || [];
-  }, [roleCode]);
-
   const dateFilterButtonLabel = useMemo(
     () =>
       getDateRangeButtonLabel(dateFrom, dateTo, {
@@ -559,7 +573,8 @@ export default function WorkshopRoleHistoryPage() {
     const endDate = toEndOfDay(dateTo);
 
     const list = rows.filter((row) => {
-      const byStatus = statusFilter === "ALL" || normalizeCode(row.workflowStatus) === statusFilter;
+      const historyFilterStatus = toHistoryFilterStatus(row.workflowStatus);
+      const byStatus = statusFilter === "ALL" || historyFilterStatus === statusFilter;
       if (!byStatus) return false;
 
       const completedAtValue = new Date(row.completedAt || 0).getTime();
@@ -665,17 +680,19 @@ export default function WorkshopRoleHistoryPage() {
         <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
           <div className="table-toolbar" style={{ marginBottom: 0 }}>
             <div className="toolbar-controls">
-              <FilterDropdown
-                id="history-status-filter"
-                label="Trạng thái"
-                value={statusFilter}
-                options={[
-                  { value: "ALL", label: "Tất cả trạng thái" },
-                  ...statusOptions.map((status) => ({ value: status, label: getHistoryStatusLabel(status, roleCode) })),
-                ]}
-                onChange={(value) => setStatusFilter(String(value || "ALL"))}
-                minWidth={210}
-              />
+              <HStack spacing={2} flexWrap="wrap">
+                {HISTORY_FILTER_TABS.map((tab) => (
+                  <Button
+                    key={tab.value}
+                    size="sm"
+                    variant={statusFilter === tab.value ? "solid" : "outline"}
+                    colorScheme={statusFilter === tab.value ? "blue" : "gray"}
+                    onClick={() => setStatusFilter(tab.value)}
+                  >
+                    {tab.label}
+                  </Button>
+                ))}
+              </HStack>
               <FilterDropdown
                 id="history-sort-filter"
                 label="Sắp xếp"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./MyPayslip.css";
@@ -23,7 +23,7 @@ export default function MyPayslipPage() {
         setSelectedSlip(list[0]);
       }
     } catch (e) {
-      setError("Không thể tải danh sách phiếu lương.");
+      setError("Không th? t?i danh sách phi?u luong.");
     } finally {
       setLoading(false);
     }
@@ -35,7 +35,7 @@ export default function MyPayslipPage() {
     <div className="ps-page">
       <div className="ps-header">
         <h1 className="ps-title">📄 Phiếu Lương Của Tôi</h1>
-        <p className="ps-subtitle">Xem lịch sử lương và chi tiết thu nhập từng tháng.</p>
+        <p className="ps-subtitle">Xem l?ch s? luong v� chi ti?t thu nh?p tổng th�ng.</p>
       </div>
 
       <div className="ps-layout">
@@ -77,7 +77,7 @@ export default function MyPayslipPage() {
                 <div className="ps-dc-avatar">{(user?.fullName || "A").charAt(0)}</div>
                 <div>
                   <h2 className="ps-dc-name">{user?.fullName || "Nhân viên"}</h2>
-                  <div className="ps-dc-role">{user?.role || "Kỹ thuật viên"} / {user?.branchName || "Chi nhánh chính"}</div>
+                  <div className="ps-dc-role">{user?.role || "K? thu?t vi�n"} / {user?.branchName || "Chi nh�nh ch�nh"}</div>
                 </div>
               </div>
 
@@ -88,7 +88,7 @@ export default function MyPayslipPage() {
                   <div className="ps-dc-row"><span className="ps-row-label">Lương cơ bản</span><span className="ps-row-val">{fmtCurrency(selectedSlip.baseSalary)}</span></div>
                   <div className="ps-dc-row"><span className="ps-row-label">Hoa hồng (Comm.)</span><span className="ps-row-val">{fmtCurrency(selectedSlip.commissionAmount)}</span></div>
                   <div className="ps-dc-row"><span className="ps-row-label">Làm thêm giờ (OT)</span><span className="ps-row-val">{fmtCurrency(selectedSlip.overtimeAmount)}</span></div>
-                  <div className="ps-dc-row"><span className="ps-row-label">Thưởng khác</span><span className="ps-row-val">{fmtCurrency(selectedSlip.bonus)}</span></div>
+                  <div className="ps-dc-row"><span className="ps-row-label">Thu?ng kh�c</span><span className="ps-row-val">{fmtCurrency(selectedSlip.bonus)}</span></div>
                 </div>
 
                 {/* Khấu trừ */}
@@ -105,7 +105,7 @@ export default function MyPayslipPage() {
               </div>
 
               <div className="ps-dc-footer">
-                <p>Mọi thắc mắc về phiếu lương vui lòng liên hệ bộ phận HR (Nhân sự) trong vòng 3 ngày kể từ khi nhận phiếu.</p>
+                <p>M?i th?c m?c v? phi?u luong vui l�ng li�n h? b? ph?n HR (Nh�n s?) trong v�ng 3 ngày k? t? khi nh?n phi?u.</p>
                 <div className="pt-4 flex gap-2">
                   <button className="ps-btn ps-btn-print" onClick={() => window.print()}>🖨 In Phiếu</button>
                 </div>
@@ -117,3 +117,5 @@ export default function MyPayslipPage() {
     </div>
   );
 }
+
+

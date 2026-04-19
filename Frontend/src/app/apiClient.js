@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 
 function resolveApiBaseUrl() {
   const configured = (import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -138,3 +138,4 @@ export async function requestSafe(config) {
     };
   }
 }
+

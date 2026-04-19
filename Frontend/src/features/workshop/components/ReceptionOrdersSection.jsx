@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { createChatHubConnection } from "@features/chat/realtime/chatHubConnection";
@@ -563,7 +563,7 @@ export default function ReceptionOrdersSection() {
       alert("Lệnh này đã kết thúc hoặc đã hủy, không thể bàn giao.");
       return;
     }
-    if (!window.confirm(`Xác nhận bàn giao xe ${order.code} cho khách?`)) return;
+    if (!window.confirm(`Xác nhận bàn giao xe ${order.code} cho kháchờ`)) return;
 
     setSaving(true);
     try {
@@ -601,18 +601,18 @@ export default function ReceptionOrdersSection() {
     if (cancellableOrders.length === 0) return;
 
     const warningMessage = cancellableOrders.length === (group?.orders || []).length
-      ? "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y to\u00e0n b\u1ed9 nh\u00f3m l\u1ec7nh n\u00e0y kh\u00f4ng?"
-      : "Nh\u00f3m n\u00e0y c\u00f3 m\u1ed9t s\u1ed1 l\u1ec7nh kh\u00f4ng th\u1ec3 h\u1ee7y theo tr\u1ea1ng th\u00e1i hi\u1ec7n t\u1ea1i. B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n h\u1ee7y c\u00e1c l\u1ec7nh c\u00f2n l\u1ea1i kh\u00f4ng?";
+      ? "Bạn có chắc chắn muốn hủy toàn bộ nhóm lệnh này không?"
+      : "Nhóm này có một số lệnh không thể hủy theo trạng thái hiện tại. Bạn có chắc chắn muốn hủy các lệnh còn lại không?";
     if (!window.confirm(warningMessage)) return;
 
     const reasonInput = window.prompt(
-      "Nh\u1eadp l\u00fd do h\u1ee7y (b\u1eaft bu\u1ed9c):",
-      "Kh\u00e1ch h\u00e0ng y\u00eau c\u1ea7u h\u1ee7y",
+      "Nhập lý do hủy (bắt buộc):",
+      "Khách hàng yêu cầu hủy",
     );
     if (reasonInput === null) return;
     const reason = String(reasonInput || "").trim();
     if (!reason) {
-      alert("L\u00fd do h\u1ee7y l\u00e0 b\u1eaft bu\u1ed9c.");
+      alert("Lý do hủy là bắt buộc.");
       return;
     }
 
@@ -624,7 +624,7 @@ export default function ReceptionOrdersSection() {
       );
       await fetchData();
     } catch (err) {
-      setError("L\u1ed7i khi h\u1ee7y nh\u00f3m l\u1ec7nh: " + (err?.message || "Kh\u00f4ng r\u00f5 l\u1ed7i"));
+      setError("Lỗi khi hủy nhóm lệnh: " + (err?.message || "Không rõ lỗi"));
     } finally {
       setActingGroup(null);
       setSaving(false);
@@ -881,7 +881,7 @@ function OrdersTableContent({
             handleCompleteOrder(order);
           }}
         >
-          🚗 Bàn giao
+          ✅ Bàn giao
         </button>
       ) : null}
       {statusPermitUpdate(order.status) ? (
@@ -893,13 +893,13 @@ function OrdersTableContent({
             minWidth: 74,
             margin: 0,
           }}
-          title={"H\u1ee7y l\u1ec7nh"}
+          title={"Hủy lệnh"}
           onClick={(event) => {
             event.stopPropagation();
             handleCancelOrder(order);
           }}
         >
-          {"H\u1ee7y"}
+          {"Hủy"}
         </button>
       ) : null}
     </div>
@@ -914,7 +914,7 @@ function OrdersTableContent({
           onClick={onRefresh}
           disabled={loading}
         >
-          ⟳ Làm mới
+          🔄 Làm mới
         </button>
       </div>
 
@@ -997,7 +997,7 @@ function OrdersTableContent({
 
       <div className="workshop-table-card">
         {loading ? (
-          <div className="loading-state"><div className="spinner" /><p>Đang tải danh sách lệnh...</p></div>
+          <div className="loading-state"><div className="spinner" /><p>⏳ Đang tải danh sách lệnh...</p></div>
         ) : filteredOrders.length === 0 ? (
           <table className="admin-table">
             <tbody>
@@ -1051,7 +1051,7 @@ function OrdersTableContent({
                         </span>
                         <button
                           className={`btn-icon btn-action-pill btn-action-cancel ${groupActionDisabled ? "is-disabled-action" : ""}`}
-                          title={"H\u1ee7y nh\u00f3m l\u1ec7nh"}
+                          title={"Hủy nhóm lệnh"}
                           style={{
                             height: 30,
                             display: "inline-flex",
@@ -1066,7 +1066,7 @@ function OrdersTableContent({
                             handleCancelGroupOrders(group);
                           }}
                         >
-                          {"Hủy"}
+                          Hủy
                         </button>
                       </div>
                     </header>
@@ -1217,5 +1217,7 @@ function OrdersTableContent({
     </>
   );
 }
+
+
 
 

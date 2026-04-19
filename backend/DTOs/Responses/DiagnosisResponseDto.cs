@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+
 namespace MyGarage.DTOs.Responses
 {
     public class DiagnosisResponseDto
@@ -55,6 +57,6 @@ namespace MyGarage.DTOs.Responses
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
+        public List<DiagnosisAssignmentVersionDto> AssignmentVersions { get; set; } = new();
     }
 }
-

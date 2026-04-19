@@ -1,4 +1,4 @@
-export const VIETNAM_VIN_PATTERN = "^[A-HJ-NPR-Z0-9]{17}$";
+﻿export const VIETNAM_VIN_PATTERN = "^[A-HJ-NPR-Z0-9]{17}$";
 export const VIETNAM_VIN_TITLE =
   "Số VIN hợp lệ gồm 17 ký tự chữ in hoa và số, không chứa I, O, Q.";
 
@@ -15,3 +15,4 @@ export function formatVinInput(value) {
 export function isValidVin(value) {
   return /^[A-HJ-NPR-Z0-9]{17}$/.test(formatVinInput(value));
 }
+

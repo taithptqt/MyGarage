@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --booking-bg: #f6fbff;
   --booking-card: rgba(255, 255, 255, 0.97);
   --booking-ink: #1d1c15;
@@ -2208,3 +2208,4 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     grid-column: 1 / -1;
   }
 }
+

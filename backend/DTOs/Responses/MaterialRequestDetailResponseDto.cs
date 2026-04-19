@@ -13,6 +13,8 @@ namespace MyGarage.DTOs.Responses
         public decimal? ReturnedQuantity { get; set; }
         public decimal? WastedQuantity { get; set; }
         public long? ServiceOrderDetailId { get; set; }
+        public string? ProductName { get; set; }
+        public string? ProductSku { get; set; }
         public string? Status { get; set; }
         public string? Note { get; set; }
         public DateTime? CreatedAt { get; set; }

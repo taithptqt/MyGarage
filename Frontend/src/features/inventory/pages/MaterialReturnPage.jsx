@@ -4,7 +4,6 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import "./MaterialReturn.css";
 
 function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ₫"; }
-function fmtNum(v) { return Number(v ?? 0).toLocaleString("vi-VN"); }
 
 const APPROVAL_THRESHOLD = 5000000; // 5 triệu VND (ví dụ)
 
@@ -14,14 +13,15 @@ export default function MaterialReturnPage() {
   
   // Form state
   const [serviceOrders, setServiceOrders] = useState([]);
-  const [parts, setParts] = useState([]);
+  const [requestDetails, setRequestDetails] = useState([]);
   const [selectedSo, setSelectedSo] = useState("");
   
   const [form, setForm] = useState({
-    productId: "",
-    qty: 1,
-    condition: "NEW", // NEW, USED, DAMAGED
-    reason: ""
+    materialRequestDetailId: "",
+    returnedQuantity: 1,
+    itemCondition: "NEW", // NEW, USED, DAMAGED
+    reason: "",
+    notes: ""
   });
 
   const [saving, setSaving] = useState(false);
@@ -37,45 +37,51 @@ export default function MaterialReturnPage() {
       .catch(console.error);
   }, []);
 
-  // Fetch parts when SO selected
+  // Fetch issued items when SO selected
   useEffect(() => {
     if (!selectedSo) {
-      setParts([]);
-      setForm(f => ({ ...f, productId: "" }));
+      setRequestDetails([]);
+      setForm(f => ({ ...f, materialRequestDetailId: "" }));
       return;
     }
-    request({ url: `/api/service-orders/${selectedSo}/items`, method: "GET" })
+    // Lấy các chi tiết yêu cầu vật tư đã xuất (IssuedQuantity > 0)
+    request({ url: "/api/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } })
       .then(res => {
         const raw = res?.items ?? res ?? [];
-        // Only high-value / non-consumable parts
-        setParts(raw.filter(it => !it.isConsumable));
+        setRequestDetails(raw);
       })
       .catch(console.error);
   }, [selectedSo]);
 
   const loadHistory = useCallback(() => {
     setLoadingHistory(true);
-    request({ url: "/api/material-returns", method: "GET", params: { branchId: user?.branchId } })
+    request({ url: "/api/material-returns", method: "GET" })
       .then(res => setHistory(res?.items ?? res ?? []))
       .catch(console.error)
       .finally(() => setLoadingHistory(false));
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === "HISTORY") loadHistory();
   }, [activeTab, loadHistory]);
 
-  const selectedPart = useMemo(() => parts.find(p => String(p.productId) === String(form.productId)), [form.productId, parts]);
+  const selectedItem = useMemo(() => 
+    requestDetails.find(d => String(d.id) === String(form.materialRequestDetailId)), 
+    [form.materialRequestDetailId, requestDetails]
+  );
   
   const needsApproval = useMemo(() => {
-    if (!selectedPart) return false;
-    const val = Number(selectedPart.unitCost ?? selectedPart.price ?? 0) * form.qty;
+    if (!selectedItem) return false;
+    // Giả định đơn giá lấy từ Product hoặc thông tin đi kèm (Trong thực tế cần giá nhập/xuất chính xác)
+    // Ở đây ta dùng 0 nếu không có thông tin giá trực tiếp trong MR Detail
+    const unitPrice = selectedItem.unitPrice ?? 0; 
+    const val = unitPrice * form.returnedQuantity;
     return val >= APPROVAL_THRESHOLD;
-  }, [selectedPart, form.qty]);
+  }, [selectedItem, form.returnedQuantity]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedSo || !form.productId || form.qty <= 0) return;
+    if (!selectedSo || !form.materialRequestDetailId || form.returnedQuantity <= 0) return;
     setSaving(true);
     setError("");
     setSuccessMsg("");
@@ -86,18 +92,29 @@ export default function MaterialReturnPage() {
         method: "POST",
         data: {
           serviceOrderId: selectedSo,
-          productId: form.productId,
-          returnedQty: form.qty,
-          condition: form.condition,
+          materialRequestDetailId: form.materialRequestDetailId,
+          productId: selectedItem.productId,
+          returnedQuantity: form.returnedQuantity,
+          itemCondition: form.itemCondition,
           reason: form.reason,
-          returnedBy: user?.id,
-          needsApproval
+          notes: form.notes,
+          returnedByStaffId: user?.id,
+          returnTime: new Date().toISOString()
         }
       });
-      setSuccessMsg("Đã gửi yêu cầu trả phụ tùng.");
-      setForm({ ...form, qty: 1, reason: "" });
+      setSuccessMsg("Đã thực hiện hoàn trả vật tư và cập nhật kho thành công.");
+      setForm({
+        materialRequestDetailId: "",
+        returnedQuantity: 1,
+        itemCondition: "NEW",
+        reason: "",
+        notes: ""
+      });
+      // Refresh list
+      const updatedDetails = await request({ url: "/api/material-request-details", method: "GET", params: { serviceOrderId: selectedSo } });
+      setRequestDetails(updatedDetails?.items ?? updatedDetails ?? []);
     } catch (err) {
-      setError(err?.response?.data?.message || "Lỗi khi gửi yêu cầu.");
+      setError(err?.response?.data?.message || "Lỗi khi xử lý hoàn trả.");
     } finally {
       setSaving(false);
     }
@@ -107,12 +124,12 @@ export default function MaterialReturnPage() {
     <div className="mret-page">
       <div className="mret-header">
         <div>
-          <h1 className="mret-title">♻️ Trả lại Phụ tùng (High-Value)</h1>
-          <p className="mret-subtitle">Trả lại kho phụ tùng không dùng đến, bị lỗi, hoặc thừa.</p>
+          <h1 className="mret-title">♻️ Hoàn trả Vật tư / Phụ tùng</h1>
+          <p className="mret-subtitle">Nhập lại kho các vật tư đã xuất nhưng không sử dụng hết hoặc cần thay thế.</p>
         </div>
         <div className="mret-tabs">
           <button className={`mret-tab ${activeTab === "NEW" ? "active" : ""}`} onClick={() => setActiveTab("NEW")}>Tạo phiếu mới</button>
-          <button className={`mret-tab ${activeTab === "HISTORY" ? "active" : ""}`} onClick={() => setActiveTab("HISTORY")}>Lịch sử / Phê duyệt</button>
+          <button className={`mret-tab ${activeTab === "HISTORY" ? "active" : ""}`} onClick={() => setActiveTab("HISTORY")}>Lịch sử hoàn trả</button>
         </div>
       </div>
 
@@ -133,50 +150,69 @@ export default function MaterialReturnPage() {
             </div>
 
             <div className="mret-form-group">
-              <label>Phụ tùng trả lại</label>
-              <select value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))} required disabled={!selectedSo}>
-                <option value="">-- Chọn phụ tùng --</option>
-                {parts.map(p => (
-                  <option key={p.productId} value={p.productId}>{p.productName ?? p.name}</option>
+              <label>Vật tư đã xuất</label>
+              <select 
+                value={form.materialRequestDetailId} 
+                onChange={e => setForm(f => ({ ...f, materialRequestDetailId: e.target.value }))} 
+                required 
+                disabled={!selectedSo}
+              >
+                <option value="">-- Chọn vật tư cần trả --</option>
+                {requestDetails.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.productName} (Đã xuất: {d.issuedQuantity} - Đã trả: {d.returnedQuantity || 0})
+                  </option>
                 ))}
               </select>
             </div>
             
             <div className="mret-form-group">
-              <label>Số lượng</label>
-              <input type="number" min="0.5" step="0.5" value={form.qty} onChange={e => setForm(f => ({ ...f, qty: Number(e.target.value) }))} required />
+              <label>Số lượng trả lại</label>
+              <input 
+                type="number" 
+                min="0.01" 
+                step="0.01" 
+                max={selectedItem ? (selectedItem.issuedQuantity - (selectedItem.returnedQuantity || 0)) : 999}
+                value={form.returnedQuantity} 
+                onChange={e => setForm(f => ({ ...f, returnedQuantity: Number(e.target.value) }))} 
+                required 
+              />
             </div>
 
             <div className="mret-form-group">
-              <label>Tình trạng</label>
-              <select value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}>
-                <option value="NEW">Mới 100% (còn nguyên seal)</option>
-                <option value="USED">Đã tháo lắp (không lỗi)</option>
-                <option value="DAMAGED">Hỏng / Lỗi NSX</option>
+              <label>Tình trạng hàng</label>
+              <select value={form.itemCondition} onChange={e => setForm(f => ({ ...f, itemCondition: e.target.value }))}>
+                <option value="NEW">Mới 100% (nguyên bao bì)</option>
+                <option value="USED">Đã tháo lắp (còn sử dụng được)</option>
+                <option value="DAMAGED">Hỏng / Lỗi kỹ thuật</option>
               </select>
             </div>
           </div>
 
           <div className="mret-form-group">
-            <label>Lý do trả</label>
-            <textarea placeholder="Nhập lý do chi tiết..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} required />
+            <label>Lý do hoàn trả</label>
+            <textarea 
+              placeholder="Ví dụ: Khách hàng đổi ý, Chẩn đoán lại không cần thay, Phụ tùng không tương thích..." 
+              value={form.reason} 
+              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} 
+              required 
+            />
           </div>
 
           <div className="mret-summary">
             <div className="mret-summary-info">
-              <span>Đơn giá nhập: <strong>{selectedPart ? fmtCurrency(selectedPart.unitCost ?? selectedPart.price) : "--"}</strong></span>
-              <span>Tổng giá trị trả: <strong>{selectedPart ? fmtCurrency((selectedPart.unitCost ?? selectedPart.price ?? 0) * form.qty) : "--"}</strong></span>
+              {selectedItem && (
+                <>
+                  <span>Vật tư: <strong>{selectedItem.productName}</strong></span>
+                  <span>SKU: <strong>{selectedItem.productSku || "--"}</strong></span>
+                </>
+              )}
             </div>
-            {needsApproval && (
-              <div className="mret-approval-badge">
-                ⚠️ Giá trị &gt; 5tr, cần Quản lý duyệt trước khi nhập kho.
-              </div>
-            )}
           </div>
 
           <div className="mret-footer">
-            <button type="submit" className="mret-btn mret-btn-primary" disabled={saving || !form.productId}>
-               {saving ? "⏳ Đang gửi..." : " Gửi phiếu trả"}
+            <button type="submit" className="mret-btn mret-btn-primary" disabled={saving || !form.materialRequestDetailId}>
+               {saving ? "⏳ Đang xử lý..." : "Xác nhận hoàn trả"}
             </button>
           </div>
         </form>
@@ -185,7 +221,7 @@ export default function MaterialReturnPage() {
           {loadingHistory ? (
             <div className="p-4 text-center text-slate-500">Đang tải...</div>
           ) : history.length === 0 ? (
-            <div className="p-4 text-center text-slate-500">Không có lịch sử trả phụ tùng.</div>
+            <div className="p-4 text-center text-slate-500">Không có lịch sử hoàn trả.</div>
           ) : (
              <div className="mret-table-wrap">
                <table className="mret-table">
@@ -193,25 +229,25 @@ export default function MaterialReturnPage() {
                    <tr>
                      <th>Mã phiếu</th>
                      <th>Sản phẩm</th>
-                     <th>SL</th>
+                     <th>Số lượng</th>
                      <th>Tình trạng</th>
                      <th>Trạng thái</th>
-                     <th>Ngày</th>
+                     <th>Thời gian</th>
                    </tr>
                  </thead>
                  <tbody>
                    {history.map(h => (
                      <tr key={h.id}>
                        <td>#{h.id}</td>
-                       <td className="font-semibold">{h.productName}</td>
-                       <td>{h.returnedQty}</td>
-                       <td>{h.condition}</td>
+                       <td className="font-semibold">{h.productName || h.productId}</td>
+                       <td>{h.returnedQuantity}</td>
+                       <td>{h.itemCondition}</td>
                        <td>
-                         <span className={`mret-status-badge st-${(h.status||"PENDING").toLowerCase()}`}>
-                           {h.status}
+                         <span className={`mret-status-badge st-${(h.status||"COMPLETED").toLowerCase()}`}>
+                           {h.status || "Hoàn tất"}
                          </span>
                        </td>
-                       <td>{new Date(h.createdAt).toLocaleDateString("vi-VN")}</td>
+                       <td>{new Date(h.returnTime || h.createdAt).toLocaleString("vi-VN")}</td>
                      </tr>
                    ))}
                  </tbody>
@@ -223,3 +259,5 @@ export default function MaterialReturnPage() {
     </div>
   );
 }
+
+

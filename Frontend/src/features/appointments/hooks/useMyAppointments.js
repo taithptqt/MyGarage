@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+﻿import { useCallback, useMemo, useState } from "react";
 import { cancelAppointment, getMyAppointments } from "@features/appointments/api/appointmentApi";
 import { getMyGroupSessionDetail, getMyGroupSessions } from "@features/appointments/api/groupSessionApi";
 import { APPOINTMENT_STATUS } from "@features/appointments/constants/appointmentStatuses";
@@ -85,7 +85,7 @@ export function useMyAppointments() {
     setCancelling(cancelTarget.id);
     setError("");
     try {
-      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng tự hủy");
+      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng t? h?y");
       closeCancelPopup();
       await loadAppointments();
     } catch (err) {
@@ -194,3 +194,5 @@ export function useMyAppointments() {
     handleConfirmCancel,
   };
 }
+
+

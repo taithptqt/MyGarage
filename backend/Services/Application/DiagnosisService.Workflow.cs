@@ -2281,13 +2281,15 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
-            AppendDiagnosisAssignments(list.Select(diagnosis =>
+            var rejectedLogs = list.Select(diagnosis =>
                 BuildDiagnosisAssignment(
                     diagnosis,
                     DiagnoseLogEventTechnicalRejected,
                     oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
                     createdBy: teamLeaderId,
-                    note: GetForemanRejectReason(diagnosis))));
+                    note: GetForemanRejectReason(diagnosis)))
+                .ToList();
+            AppendDiagnosisAssignments(rejectedLogs);
             await _context.SaveChangesAsync();
         }
 
@@ -2369,14 +2371,344 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
+            var rejectedLogs = list.Select(diagnosis =>
+                BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventFinalRejected,
+                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
+                    createdBy: foremanId,
+                    note: GetForemanRejectReason(diagnosis)))
+                .ToList();
+            AppendDiagnosisAssignments(rejectedLogs);
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task CreateRediagnosisVersionsAsync(
+            IReadOnlyList<Diagnosis> diagnoses,
+            IReadOnlyList<DiagnosisAssignment> rejectedLogs,
+            long actorId,
+            DateTime now,
+            string sourceTag)
+        {
+            if (diagnoses == null || diagnoses.Count == 0 || rejectedLogs == null || rejectedLogs.Count == 0)
+            {
+                return;
+            }
+
+            var rejectedByDiagnosisId = rejectedLogs
+                .Where(x => x != null && x.DiagnosisId > 0)
+                .GroupBy(x => x.DiagnosisId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First());
+
+            var rediagnoseLogs = new List<DiagnosisAssignment>();
+            foreach (var diagnosis in diagnoses)
+            {
+                if (!rejectedByDiagnosisId.TryGetValue(diagnosis.Id, out var rejectedLog))
+                {
+                    continue;
+                }
+
+                diagnosis.Status = DiagnosisStatusPending;
+                SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetForemanRejectReason(diagnosis, null);
+                SetApprovedByForemanId(diagnosis, null);
+                SetApprovedByForemanAt(diagnosis, null);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetApprovedByTeamLeaderAt(diagnosis, null);
+                SetTeamLeaderNote(diagnosis, null);
+                SetTechnicianAcceptedAt(diagnosis, null);
+                SetTechnicianCompletedAt(diagnosis, null);
+                diagnosis.SubmittedAt = null;
+                diagnosis.SlaDueAt = null;
+                diagnosis.IsEscalated = false;
+                diagnosis.UpdatedBy = actorId;
+                diagnosis.UpdatedAt = now;
+
+                var rediagnoseLog = BuildDiagnosisAssignment(
+                    diagnosis,
+                    DiagnoseLogEventRediagnoseRequested,
+                    oldStatus: DiagnosisStatusPending,
+                    createdBy: actorId,
+                    note: $"[{sourceTag}] Clone from rejected assignment #{rejectedLog.Id}");
+                rediagnoseLogs.Add(rediagnoseLog);
+            }
+
+            if (rediagnoseLogs.Count == 0)
+            {
+                return;
+            }
+
+            _context.Diagnoses.UpdateRange(diagnoses);
+            AppendDiagnosisAssignments(rediagnoseLogs);
+            await _context.SaveChangesAsync();
+
+            var activeLogsByDiagnosisId = rediagnoseLogs
+                .Where(x => x.Id > 0)
+                .GroupBy(x => x.DiagnosisId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First());
+
+            foreach (var diagnosis in diagnoses)
+            {
+                if (!rejectedByDiagnosisId.TryGetValue(diagnosis.Id, out var rejectedLog))
+                {
+                    continue;
+                }
+
+                if (!activeLogsByDiagnosisId.TryGetValue(diagnosis.Id, out var activeLog))
+                {
+                    continue;
+                }
+
+                await CloneRecommendationsToNewAssignmentAsync(
+                    diagnosisId: diagnosis.Id,
+                    sourceAssignmentId: rejectedLog.Id,
+                    targetAssignmentId: activeLog.Id,
+                    actorId: actorId,
+                    now: now);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> CloneRejectedDiagnosesVersionAsync(IEnumerable<Diagnosis> diagnoses, long actorId, string? note = null)
+        {
+            var now = VietnamTime.Now;
+            var list = diagnoses?.ToList() ?? new List<Diagnosis>();
+            if (list.Count == 0)
+            {
+                return 0;
+            }
+
+            static bool IsRejected(string? value) =>
+                string.Equals(value, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+
+            var rejectedDiagnoses = list
+                .Where(diagnosis => IsRejected(GetTeamLeaderApprovalStatus(diagnosis)) || IsRejected(GetFinalApprovalStatus(diagnosis)))
+                .ToList();
+            if (rejectedDiagnoses.Count == 0)
+            {
+                return 0;
+            }
+
+            var sourceAssignmentIdsByDiagnosis = rejectedDiagnoses
+                .Select(diagnosis => new
+                {
+                    DiagnosisId = diagnosis.Id,
+                    AssignmentId = ReadDiagnosisAssignmentId(diagnosis)
+                })
+                .Where(x => x.AssignmentId.HasValue && x.AssignmentId.Value > 0)
+                .ToDictionary(x => x.DiagnosisId, x => x.AssignmentId!.Value);
+            if (sourceAssignmentIdsByDiagnosis.Count == 0)
+            {
+                return 0;
+            }
+
+            var sourceAssignmentIds = sourceAssignmentIdsByDiagnosis.Values.Distinct().ToList();
+            var sourceLogs = await _context.DiagnosisAssignments
+                .AsNoTracking()
+                .Where(x => sourceAssignmentIds.Contains(x.Id))
+                .Where(x => sourceAssignmentIdsByDiagnosis.Keys.Contains(x.DiagnosisId))
+                .ToListAsync();
+
+            var validSourceLogs = sourceLogs
+                .Where(log => sourceAssignmentIdsByDiagnosis.TryGetValue(log.DiagnosisId, out var expectedId) && log.Id == expectedId)
+                .ToList();
+            if (validSourceLogs.Count == 0)
+            {
+                return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(note))
+            {
+                var normalizedNote = note.Trim();
+                foreach (var diagnosis in rejectedDiagnoses)
+                {
+                    SetForemanNote(diagnosis, normalizedNote);
+                }
+            }
+
+            await CreateRediagnosisVersionsAsync(
+                rejectedDiagnoses,
+                validSourceLogs,
+                actorId,
+                now,
+                "MANUAL_REDIAGNOSE_BY_TECHNICIAN");
+
+            return validSourceLogs.Count;
+        }
+
+        private async Task CloneRecommendationsToNewAssignmentAsync(
+            long diagnosisId,
+            long sourceAssignmentId,
+            long targetAssignmentId,
+            long actorId,
+            DateTime now)
+        {
+            if (diagnosisId <= 0 || sourceAssignmentId <= 0 || targetAssignmentId <= 0)
+            {
+                return;
+            }
+
+            var sourceRows = await _context.DiagnosisRecommendations
+                .AsNoTracking()
+                .Where(x => x.DiagnosisId == diagnosisId && x.DiagnosisAssignmentId == sourceAssignmentId)
+                .Where(x => !string.Equals(x.RecommendationStatus, nameof(RecommendationLifecycleStatusCode.SOFT_DELETED_BY_TL), StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.ParentRecommendationId.HasValue ? 1 : 0)
+                .ThenBy(x => x.Id)
+                .ToListAsync();
+            if (sourceRows.Count == 0)
+            {
+                return;
+            }
+
+            var idMap = new Dictionary<long, long>();
+            foreach (var row in sourceRows.Where(x => !x.ParentRecommendationId.HasValue))
+            {
+                var clone = new DiagnosisRecommendation
+                {
+                    DiagnosisId = diagnosisId,
+                    DiagnosisAssignmentId = targetAssignmentId,
+                    ParentRecommendationId = null,
+                    ItemType = row.ItemType,
+                    StandardServiceId = row.StandardServiceId,
+                    InventoryItemId = row.InventoryItemId,
+                    Quantity = row.Quantity,
+                    RecommendationStatus = string.IsNullOrWhiteSpace(row.RecommendationStatus)
+                        ? nameof(RecommendationLifecycleStatusCode.ACTIVE)
+                        : row.RecommendationStatus,
+                    SoftDeletedAt = null,
+                    SoftDeletedBy = null,
+                    Urgency = row.Urgency,
+                    EvidenceMediaUrls = row.EvidenceMediaUrls,
+                    TechnicianNotes = row.TechnicianNotes,
+                    CreatedAt = now,
+                    CreatedBy = actorId,
+                    UpdatedAt = now,
+                    UpdatedBy = actorId
+                };
+
+                _context.DiagnosisRecommendations.Add(clone);
+                await _context.SaveChangesAsync();
+                idMap[row.Id] = clone.Id;
+            }
+
+            foreach (var row in sourceRows.Where(x => x.ParentRecommendationId.HasValue))
+            {
+                var mappedParentId = row.ParentRecommendationId.HasValue && idMap.TryGetValue(row.ParentRecommendationId.Value, out var parentId)
+                    ? parentId
+                    : (long?)null;
+                if (!mappedParentId.HasValue || mappedParentId.Value <= 0)
+                {
+                    continue;
+                }
+
+                var clone = new DiagnosisRecommendation
+                {
+                    DiagnosisId = diagnosisId,
+                    DiagnosisAssignmentId = targetAssignmentId,
+                    ParentRecommendationId = mappedParentId.Value,
+                    ItemType = row.ItemType,
+                    StandardServiceId = row.StandardServiceId,
+                    InventoryItemId = row.InventoryItemId,
+                    Quantity = row.Quantity,
+                    RecommendationStatus = string.IsNullOrWhiteSpace(row.RecommendationStatus)
+                        ? nameof(RecommendationLifecycleStatusCode.ACTIVE)
+                        : row.RecommendationStatus,
+                    SoftDeletedAt = null,
+                    SoftDeletedBy = null,
+                    Urgency = row.Urgency,
+                    EvidenceMediaUrls = row.EvidenceMediaUrls,
+                    TechnicianNotes = row.TechnicianNotes,
+                    CreatedAt = now,
+                    CreatedBy = actorId,
+                    UpdatedAt = now,
+                    UpdatedBy = actorId
+                };
+
+                _context.DiagnosisRecommendations.Add(clone);
+            }
+        }
+
+        public async Task<IReadOnlyList<Diagnosis>> RequeueRecalledDiagnosesAsync(
+            IEnumerable<Diagnosis> recalledDiagnoses,
+            long? assignedTeamId,
+            long? assignedBayId,
+            string? dispatchTag = null,
+            string? assignmentNote = null,
+            long? actorStaffId = null)
+        {
+            var now = VietnamTime.Now;
+            var normalizedDispatchTag = NormalizeDispatchTag(dispatchTag);
+            var normalizedAssignmentNote = string.IsNullOrWhiteSpace(assignmentNote)
+                ? null
+                : assignmentNote.Trim();
+
+            var list = (recalledDiagnoses ?? Array.Empty<Diagnosis>())
+                .Where(x => x != null)
+                .ToList();
+            if (list.Count == 0)
+            {
+                return list;
+            }
+
+            foreach (var diagnosis in list)
+            {
+                diagnosis.Status = DiagnosisStatusPending;
+                diagnosis.DispatchTag = normalizedDispatchTag ?? diagnosis.DispatchTag;
+                diagnosis.AssignmentNote = normalizedAssignmentNote ?? diagnosis.AssignmentNote;
+                diagnosis.DiagnosedAt = null;
+                diagnosis.SubmittedAt = null;
+                diagnosis.SlaDueAt = null;
+                diagnosis.IsEscalated = false;
+
+                SetTechnicianId(diagnosis, null);
+                SetAssistantTechnicianId(diagnosis, null);
+                SetAssignedTeamId(diagnosis, assignedTeamId.HasValue && assignedTeamId.Value > 0 ? assignedTeamId : null);
+                SetAssignedBayId(diagnosis, assignedBayId.HasValue && assignedBayId.Value > 0 ? assignedBayId : null);
+                SetAssignedAt(
+                    diagnosis,
+                    (assignedTeamId.HasValue && assignedTeamId.Value > 0) || (assignedBayId.HasValue && assignedBayId.Value > 0)
+                        ? now
+                        : null);
+
+                SetTechnicianAcceptedAt(diagnosis, null);
+                SetTechnicianCompletedAt(diagnosis, null);
+                SetSupportRequestedAt(diagnosis, null);
+                SetSupportRequestedBy(diagnosis, null);
+                SetSupportRequestNote(diagnosis, null);
+                SetTeamLeaderApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetFinalApprovalStatus(diagnosis, nameof(ApprovalDecisionStatusCode.PENDING));
+                SetForemanRejectReason(diagnosis, null);
+                SetApprovedByForemanId(diagnosis, null);
+                SetApprovedByForemanAt(diagnosis, null);
+                SetApprovedByTeamLeaderId(diagnosis, null);
+                SetApprovedByTeamLeaderAt(diagnosis, null);
+                SetTeamLeaderNote(diagnosis, null);
+                SetForemanNote(diagnosis, null);
+                SetCancellationStatus(diagnosis, CancellationStatusNone);
+                SetCancellationReason(diagnosis, null);
+                SetCancellationRequestedAt(diagnosis, null);
+                SetCancellationRequestedBy(diagnosis, null);
+                SetCancellationDecisionAt(diagnosis, null);
+                SetCancellationDecisionBy(diagnosis, null);
+                SetCancellationDecisionNote(diagnosis, null);
+
+                diagnosis.UpdatedAt = now;
+                diagnosis.UpdatedBy = actorStaffId;
+            }
+
+            _context.Diagnoses.UpdateRange(list);
             AppendDiagnosisAssignments(list.Select(diagnosis =>
                 BuildDiagnosisAssignment(
                     diagnosis,
-                    DiagnoseLogEventFinalApproved,
-                    oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
-                    createdBy: foremanId,
-                    note: GetForemanRejectReason(diagnosis))));
+                    DiagnoseLogEventRediagnoseRequested,
+                    oldStatus: DiagnosisStatusCanceled,
+                    createdBy: actorStaffId,
+                    note: "[RECALL_REQUEUED] Re-queued after receptionist recall")));
+
             await _context.SaveChangesAsync();
+            return list;
         }
 
         public async Task RecallDiagnosesAsync(ServiceOrder serviceOrder, IReadOnlyList<Diagnosis> activeDiagnoses)
@@ -2534,7 +2866,16 @@ namespace MyGarage.Services
 
         private static bool IsPendingLikeStatus(string? status)
         {
-            return status == DiagnosisStatusPending;
+            var normalized = NormalizeToken(status);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            return normalized == NormalizeToken(DiagnosisStatusPending)
+                || normalized == "NEW"
+                || normalized == "REQUESTED"
+                || normalized == "QUEUED";
         }
 
         private bool IsWithinGoldenCancelWindow(Diagnosis diagnosis, DateTime now)
@@ -2550,13 +2891,3 @@ namespace MyGarage.Services
         }
     }
 }
-
-
-
-
-
-
-
-
-
-

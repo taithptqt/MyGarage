@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -381,6 +381,30 @@ namespace MyGarage.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        [HttpGet("{id}/handover-readiness")]
+        public async Task<ActionResult<HandoverReadinessResponseDto>> GetHandoverReadiness(long id)
+        {
+            var readiness = await _serviceOrderService.GetHandoverReadinessAsync(id);
+            if (readiness == null) return NotFound();
+            return Ok(readiness);
+        }
+
+        [HttpPost("{id}/handover")]
+        public async Task<IActionResult> ProcessHandover(long id, [FromBody] HandoverRequestDto request)
+        {
+            try
+            {
+                var result = await _serviceOrderService.ProcessHandoverAsync(id, request);
+                if (!result) return NotFound();
+                return Ok(new { message = "Vehicle handover completed successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
 
         [HttpPut("{id}")]
         public async Task<ActionResult<ServiceOrderResponseDto>> Update(long id, [FromBody] ServiceOrderUpdateDto itemDto)

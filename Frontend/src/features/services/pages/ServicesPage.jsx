@@ -117,7 +117,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-price`}>Đơn giá (VNĐ) *</label>
+          <label htmlFor={`${formPrefix}-price`}>Đơn gi� (VN�) *</label>
           <input
             id={`${formPrefix}-price`}
             name="basePrice"
@@ -311,11 +311,11 @@ export default function ServicesPage() {
               <tr>
                 <th>Code</th>
                 <th>Tên dịch vụ</th>
-                <th>Đơn giá</th>
+                <th>Đơn gi�</th>
                 <th>Thời gian</th>
                 <th className="th-center">Danh mục</th>
                 <th className="th-center">Trạng thái</th>
-                <th className="th-center">Thao tác</th>
+                <th className="th-center">Thao t�c</th>
               </tr>
             </thead>
             <tbody>
@@ -399,7 +399,7 @@ export default function ServicesPage() {
       ) : null}
 
       {modal === "delete" && selected ? (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="Xác nhận x�a" onClose={closeModal}>
           <ConfirmDialog
             message={`Xóa dịch vụ "${selected.name}"?`}
             onConfirm={handleDelete}
@@ -411,3 +411,4 @@ export default function ServicesPage() {
     </div>
   );
 }
+

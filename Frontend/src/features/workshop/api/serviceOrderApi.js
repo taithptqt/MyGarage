@@ -1,4 +1,4 @@
-import { getApiBaseUrl, request, requestSafe } from "@app/apiClient";
+﻿import { getApiBaseUrl, request, requestSafe } from "@app/apiClient";
 
 /**
  * SERVICE ORDER API
@@ -168,6 +168,8 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/insurance-evidence`, method: "DELETE" }),
   approveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/approve`, method: "POST", data }),
+  submitQuotationInternalApproval: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/internal-submit`, method: "POST", data }),
   financialApproveQuotation: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/financial-approval`, method: "POST", data }),
   getBranchQuotationApprovalPolicy: (branchId) =>
@@ -178,6 +180,10 @@ export const serviceOrderApi = {
     request({ url: `/api/quotations/${quotationId}/clone`, method: "POST", data }),
   updateQuotationSplitBilling: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/split-billing`, method: "POST", data }),
+  getQuotationDiscounts: (quotationId) =>
+    request({ url: `/api/quotations/${quotationId}/discounts`, method: "GET" }),
+  upsertQuotationDiscounts: (quotationId, data) =>
+    request({ url: `/api/quotations/${quotationId}/discounts`, method: "PUT", data }),
   applyQuotationCustomerDecision: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/customer-decision`, method: "POST", data }),
   getQuotationByPublicToken: (token) =>
@@ -347,6 +353,12 @@ export const serviceOrderApi = {
       method: "POST",
       data,
     }),
+  cloneRejectedDiagnosisVersion: (serviceOrderId, data) =>
+    request({
+      url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/clone-version`,
+      method: "POST",
+      data,
+    }),
   approveDiagnosisFinal: (serviceOrderId, data) =>
     request({
       url: `/api/diagnoses/service-orders/${serviceOrderId}/diagnosis-queues/final-approval`,
@@ -391,8 +403,16 @@ export const serviceOrderApi = {
     }),
 
   // --- Diagnosis Recommendations ---
-  getDiagnosisRecommendations: (diagnosisId) =>
-    request({ url: "/api/diagnosis-recommendations", method: "GET", params: diagnosisId ? { diagnosisId } : undefined }),
+  getDiagnosisRecommendations: (diagnosisIdOrQuery) => {
+    const isQueryObject =
+      diagnosisIdOrQuery &&
+      typeof diagnosisIdOrQuery === "object" &&
+      !Array.isArray(diagnosisIdOrQuery);
+    const params = isQueryObject
+      ? diagnosisIdOrQuery
+      : (diagnosisIdOrQuery ? { diagnosisId: diagnosisIdOrQuery } : undefined);
+    return request({ url: "/api/diagnosis-recommendations", method: "GET", params });
+  },
   createDiagnosisRecommendation: (data) =>
     request({ url: "/api/diagnosis-recommendations", method: "POST", data }),
   updateDiagnosisRecommendation: (id, data) =>
@@ -428,3 +448,5 @@ export const serviceOrderApi = {
   // --- Helpers ---
   generateCode: () => `SO-${new Date().getTime().toString().slice(-6)}`,
 };
+
+

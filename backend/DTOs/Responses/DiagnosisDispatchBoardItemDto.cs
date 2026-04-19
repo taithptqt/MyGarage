@@ -13,6 +13,7 @@ namespace MyGarage.DTOs.Responses
         public string? QueueState { get; set; }
         public string? QueueColor { get; set; }
         public string? WorkflowStatus { get; set; }
+        public string? DispatchBucket { get; set; }
         public string? DispatchTag { get; set; }
         public long? TeamId { get; set; }
         public string? TeamName { get; set; }
@@ -50,4 +51,3 @@ namespace MyGarage.DTOs.Responses
         public string? ForemanApprovalStatus { get; set; }
     }
 }
-

@@ -117,4 +117,6 @@ public partial class Quotation
     public virtual ICollection<QuotationAccessLink> QuotationAccessLinks { get; set; } = new List<QuotationAccessLink>();
 
     public virtual ICollection<QuotationApprovalAction> QuotationApprovalActions { get; set; } = new List<QuotationApprovalAction>();
+
+    public virtual ICollection<QuotationDiscount> QuotationDiscounts { get; set; } = new List<QuotationDiscount>();
 }

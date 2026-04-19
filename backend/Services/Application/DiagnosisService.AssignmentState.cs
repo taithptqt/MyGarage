@@ -11,6 +11,11 @@ namespace MyGarage.Services;
 public partial class DiagnosisService
 {
     private readonly Dictionary<long, DiagnosisAssignment> _assignmentStateByDiagnosisId = new();
+    private static readonly HashSet<string> VersionAnchorEvents = new(StringComparer.OrdinalIgnoreCase)
+    {
+        DiagnoseLogEventCreated,
+        DiagnoseLogEventRediagnoseRequested,
+    };
 
     private static DiagnosisAssignment CloneAssignmentState(DiagnosisAssignment source)
     {
@@ -62,20 +67,24 @@ public partial class DiagnosisService
             return cached;
         }
 
+        var historyLogs = _context.DiagnosisAssignments.AsNoTracking()
+            .Where(x => x.DiagnosisId == diagnosis.Id)
+            .OrderBy(x => x.Id)
+            .ThenBy(x => x.CreatedAt)
+            .ToList();
+
         DiagnosisAssignment? latest = null;
-        if (diagnosis.DiagnosisAssignments != null && diagnosis.DiagnosisAssignments.Count > 0)
+        if (historyLogs.Count > 0)
+        {
+            latest = historyLogs[^1];
+        }
+        else if (diagnosis.DiagnosisAssignments != null && diagnosis.DiagnosisAssignments.Count > 0)
         {
             latest = diagnosis.DiagnosisAssignments
                 .OrderByDescending(x => x.Id)
                 .ThenByDescending(x => x.CreatedAt)
                 .FirstOrDefault();
         }
-
-        latest ??= _context.DiagnosisAssignments.AsNoTracking()
-            .Where(x => x.DiagnosisId == diagnosis.Id)
-            .OrderByDescending(x => x.Id)
-            .ThenByDescending(x => x.CreatedAt)
-            .FirstOrDefault();
 
         var state = latest != null
             ? CloneAssignmentState(latest)
@@ -86,6 +95,12 @@ public partial class DiagnosisService
                 EventType = DiagnoseLogEventCreated,
                 CreatedAt = diagnosis.UpdatedAt ?? diagnosis.CreatedAt ?? VietnamTime.Now
             };
+
+        var versionSnapshots = BuildVersionSnapshotsFromLogs(historyLogs);
+        if (versionSnapshots.Count > 0)
+        {
+            state.Id = versionSnapshots[^1].Id;
+        }
 
         _assignmentStateByDiagnosisId[diagnosis.Id] = state;
         return state;
@@ -99,27 +114,128 @@ public partial class DiagnosisService
         }
 
         var diagnosisIds = diagnoses.Select(x => x.Id).Distinct().ToList();
-        var latestLogs = await _context.DiagnosisAssignments.AsNoTracking()
+        var allLogs = await _context.DiagnosisAssignments.AsNoTracking()
             .Where(x => diagnosisIds.Contains(x.DiagnosisId))
-            .OrderByDescending(x => x.Id)
-            .ThenByDescending(x => x.CreatedAt)
+            .OrderBy(x => x.DiagnosisId)
+            .ThenBy(x => x.Id)
+            .ThenBy(x => x.CreatedAt)
             .ToListAsync();
 
-        var latestByDiagnosisId = latestLogs
+        var groupedByDiagnosis = allLogs
             .GroupBy(x => x.DiagnosisId)
-            .ToDictionary(g => g.Key, g => g.First());
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var diagnosis in diagnoses)
         {
-            if (!latestByDiagnosisId.TryGetValue(diagnosis.Id, out var latest))
+            if (!groupedByDiagnosis.TryGetValue(diagnosis.Id, out var logs) || logs.Count == 0)
             {
                 continue;
             }
 
+            var latest = logs[^1];
             var clone = CloneAssignmentState(latest);
+            var versionSnapshots = BuildVersionSnapshotsFromLogs(logs);
+            if (versionSnapshots.Count > 0)
+            {
+                clone.Id = versionSnapshots[^1].Id;
+            }
             _assignmentStateByDiagnosisId[diagnosis.Id] = clone;
             diagnosis.DiagnosisAssignments = new List<DiagnosisAssignment> { clone };
         }
+    }
+
+    private static bool IsAssignmentIdentityChanged(DiagnosisAssignment current, DiagnosisAssignment? previous)
+    {
+        if (previous == null)
+        {
+            return true;
+        }
+
+        return current.AssignedTeamId != previous.AssignedTeamId
+            || current.TechnicianId != previous.TechnicianId
+            || current.AssistantTechnicianId != previous.AssistantTechnicianId;
+    }
+
+    private static bool IsVersionAnchor(DiagnosisAssignment current, DiagnosisAssignment? previous)
+    {
+        var eventType = (current.EventType ?? string.Empty).Trim();
+        if (VersionAnchorEvents.Contains(eventType))
+        {
+            return true;
+        }
+
+        if (string.Equals(eventType, DiagnoseLogEventAssigned, StringComparison.OrdinalIgnoreCase))
+        {
+            return IsAssignmentIdentityChanged(current, previous);
+        }
+
+        return false;
+    }
+
+    private static DiagnosisAssignment BuildVersionSnapshot(DiagnosisAssignment anchor, DiagnosisAssignment latestInBucket)
+    {
+        var snapshot = CloneAssignmentState(latestInBucket);
+        snapshot.Id = anchor.Id;
+        snapshot.CreatedAt = anchor.CreatedAt;
+        snapshot.EventType = anchor.EventType;
+        snapshot.Note = anchor.Note;
+        snapshot.OldStatus = anchor.OldStatus;
+        return snapshot;
+    }
+
+    private static IReadOnlyList<DiagnosisAssignment> BuildVersionSnapshotsFromLogs(IReadOnlyList<DiagnosisAssignment> logs)
+    {
+        if (logs == null || logs.Count == 0)
+        {
+            return Array.Empty<DiagnosisAssignment>();
+        }
+
+        var ordered = logs
+            .Where(x => x != null)
+            .OrderBy(x => x.Id)
+            .ThenBy(x => x.CreatedAt)
+            .ToList();
+        if (ordered.Count == 0)
+        {
+            return Array.Empty<DiagnosisAssignment>();
+        }
+
+        var snapshots = new List<DiagnosisAssignment>();
+        DiagnosisAssignment? previous = null;
+        DiagnosisAssignment? currentAnchor = null;
+        DiagnosisAssignment? latestInBucket = null;
+
+        foreach (var log in ordered)
+        {
+            if (IsVersionAnchor(log, previous))
+            {
+                if (currentAnchor != null && latestInBucket != null)
+                {
+                    snapshots.Add(BuildVersionSnapshot(currentAnchor, latestInBucket));
+                }
+
+                currentAnchor = log;
+                latestInBucket = log;
+            }
+            else
+            {
+                latestInBucket = log;
+            }
+
+            previous = log;
+        }
+
+        if (currentAnchor != null && latestInBucket != null)
+        {
+            snapshots.Add(BuildVersionSnapshot(currentAnchor, latestInBucket));
+        }
+
+        if (snapshots.Count == 0)
+        {
+            snapshots.Add(BuildVersionSnapshot(ordered[0], ordered[^1]));
+        }
+
+        return snapshots;
     }
 
     private long? GetAssignedTeamId(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).AssignedTeamId;
@@ -150,6 +266,8 @@ public partial class DiagnosisService
     private string? GetForemanNote(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).ForemanNote;
     private bool GetRequiresInsuranceProof(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).RequiresInsuranceProof;
     private string? GetProofImageUrl(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).ProofImageUrl;
+    private string? GetAssignmentStatus(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).Status;
+    private string? GetAssignmentEventType(Diagnosis diagnosis) => EnsureAssignmentState(diagnosis).EventType;
 
     private void SetAssignedTeamId(Diagnosis diagnosis, long? value) => EnsureAssignmentState(diagnosis).AssignedTeamId = value;
     private void SetTechnicianId(Diagnosis diagnosis, long? value) => EnsureAssignmentState(diagnosis).TechnicianId = value;

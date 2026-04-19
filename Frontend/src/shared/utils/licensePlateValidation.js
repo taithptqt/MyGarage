@@ -1,4 +1,4 @@
-export const VIETNAM_LICENSE_PLATE_PATTERN =
+﻿export const VIETNAM_LICENSE_PLATE_PATTERN =
   "^(?:[0-9]{2}[A-Z0-9]{1,2}-?[0-9]{3}(?:\\.[0-9]{1,2})?|[0-9]{2}[A-Z0-9]{1,2}-?[0-9]{4,5})$";
 
 export const VIETNAM_LICENSE_PLATE_TITLE =
@@ -35,3 +35,4 @@ export function formatVietnameseLicensePlateInput(value) {
 
   return `${prefix}-${numberPart.slice(0, 3)}.${numberPart.slice(3)}`;
 }
+

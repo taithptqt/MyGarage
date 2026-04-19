@@ -16,6 +16,7 @@ public partial class QcInspection
     public string Status { get; set; } = null!;
 
     public string? FailReason { get; set; }
+    public string? OverallNote { get; set; }
 
     public long? ReworkTechnicianId { get; set; }
 

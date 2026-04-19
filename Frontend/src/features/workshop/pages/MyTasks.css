@@ -126,7 +126,7 @@
 /* ── stats ── */
 .mt-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 @media (max-width: 900px)  { .mt-stats { grid-template-columns: repeat(2, 1fr); } }
@@ -208,11 +208,75 @@
 
 /* ── task list ── */
 .mt-task-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-@media (max-width: 640px) { .mt-task-list { grid-template-columns: 1fr; } }
+
+.mt-task-row {
+  background: var(--mt-surface);
+  border: 1px solid var(--mt-border);
+  border-left: 6px solid #e2e8f0;
+  border-radius: var(--mt-rad-lg);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  box-shadow: var(--mt-shad-sm);
+}
+
+.mt-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mt-row-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mt-text);
+}
+
+.mt-code {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.mt-dot {
+  color: #94a3b8;
+}
+
+.mt-row-status-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mt-row-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--mt-muted);
+  font-weight: 600;
+}
+
+.mt-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 
 /* ── task card ── */
 .mt-task-card {
@@ -338,7 +402,7 @@
   .mt-title { font-size: 22px; }
 }
 @media (max-width: 480px) {
-  .mt-task-list { grid-template-columns: 1fr; }
   .mt-stats { grid-template-columns: repeat(2, 1fr); }
   .mt-tab { font-size: 12px; padding: 7px 12px; }
+  .mt-task-row { grid-template-columns: 1fr; }
 }

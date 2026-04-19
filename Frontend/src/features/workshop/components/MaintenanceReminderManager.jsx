@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { executionApi } from "@features/workshop/api/executionApi";
 
 export default function MaintenanceReminderManager() {
@@ -102,7 +102,7 @@ export default function MaintenanceReminderManager() {
         <form className="inventory-panel-body inventory-form-grid" onSubmit={handleSchedule}>
           <input className="search-input" placeholder="CustomerId" value={form.customerId} onChange={(e) => setForm((p) => ({ ...p, customerId: e.target.value }))} required />
           <input className="search-input" placeholder="VehicleId" value={form.vehicleId} onChange={(e) => setForm((p) => ({ ...p, vehicleId: e.target.value }))} required />
-          <input className="search-input" placeholder="ServiceOrderId (tuỳ chọn)" value={form.serviceOrderId} onChange={(e) => setForm((p) => ({ ...p, serviceOrderId: e.target.value }))} />
+          <input className="search-input" placeholder="ServiceOrderId (tùy chọn)" value={form.serviceOrderId} onChange={(e) => setForm((p) => ({ ...p, serviceOrderId: e.target.value }))} />
           <select className="search-input" value={form.reminderType} onChange={(e) => setForm((p) => ({ ...p, reminderType: e.target.value }))}>
             <option value="PostServiceFollowUp">Hậu mãi sau sửa chữa</option>
             <option value="NextOilChange">Nhắc thay dầu</option>
@@ -110,7 +110,7 @@ export default function MaintenanceReminderManager() {
             <option value="Anniversary">Nhắc theo mốc thời gian</option>
           </select>
           <input className="search-input" type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm((p) => ({ ...p, scheduledAt: e.target.value }))} />
-          <input className="search-input" placeholder="Km nhắc (tuỳ chọn)" value={form.reminderMileage} onChange={(e) => setForm((p) => ({ ...p, reminderMileage: e.target.value }))} />
+          <input className="search-input" placeholder="Km nhắc (tùy chọn)" value={form.reminderMileage} onChange={(e) => setForm((p) => ({ ...p, reminderMileage: e.target.value }))} />
           <select className="search-input" value={form.channel} onChange={(e) => setForm((p) => ({ ...p, channel: e.target.value }))}>
             <option value="SMS">SMS</option>
             <option value="EMAIL">Email</option>
@@ -158,4 +158,3 @@ export default function MaintenanceReminderManager() {
     </div>
   );
 }
-

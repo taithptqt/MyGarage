@@ -1,4 +1,4 @@
-import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
+﻿import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
 
 export function extractField(obj, keys, fallback = null) {
   for (const key of keys) {
@@ -112,9 +112,9 @@ export function resolveBookingItemIcon(item) {
     if (code.includes("HEAVY") || name.includes("tai nạn") || name.includes("tai nan")) return "💥";
     if (code.includes("LIENKET") || name.includes("liên kết") || name.includes("lien ket")) return "🤝";
     if (code.includes("TUTUC") || name.includes("tự túc") || name.includes("tu tuc")) return "🧾";
-    if (code.includes("FAST") || name.includes("xước xát") || name.includes("xuoc xat")) return "🎨";
+    if (code.includes("FAST") || name.includes("xu?c x�t") || name.includes("xuoc xat")) return "??";
     if (code.includes("ADVISOR") || name.includes("tư vấn") || name.includes("tu van")) return "💬";
-    return "🛡️";
+    return "ðŸ›¡ï¸";
   }
 
   return iconByIndex(extractField(item, ["id", "Id"], 0));
@@ -133,4 +133,6 @@ export function isQuickCategory(category) {
     raw.includes("quick")
   );
 }
+
+
 

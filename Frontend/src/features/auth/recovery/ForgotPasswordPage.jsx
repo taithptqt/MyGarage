@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import * as authApi from "@features/auth/api/authApi";
 import "./AuthRecoveryPage.css";
@@ -90,3 +90,4 @@ function ForgotPasswordPage() {
 }
 
 export default ForgotPasswordPage;
+

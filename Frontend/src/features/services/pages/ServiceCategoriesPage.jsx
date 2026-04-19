@@ -177,7 +177,7 @@ export default function ServiceCategoriesPage() {
                 <th>Tên danh mục</th>
                 <th>Thứ tự</th>
                 <th>Trạng thái</th>
-                <th>Thao tác</th>
+                <th>Thao t�c</th>
               </tr>
             </thead>
             <tbody>
@@ -238,7 +238,7 @@ export default function ServiceCategoriesPage() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="Xác nhận x�a" onClose={closeModal}>
           <ConfirmDialog
             message={`Xóa danh mục "${selected.name}"? Tất cả dịch vụ thuộc danh mục này sẽ bị ảnh hưởng.`}
             onConfirm={handleDelete}
@@ -250,3 +250,4 @@ export default function ServiceCategoriesPage() {
     </div>
   );
 }
+

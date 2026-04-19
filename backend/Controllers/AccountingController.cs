@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -15,7 +15,7 @@ namespace MyGarage.Controllers;
 
 [Route("api/accounting")]
 [ApiController]
-[Authorize]
+[Authorize(Roles = "ADMIN, ACCOUNTANT, HR_MANAGER")]
 public class AccountingController : ControllerBase
 {
     private static readonly HashSet<string> RestrictedGenericWriteTables = new(StringComparer.OrdinalIgnoreCase)

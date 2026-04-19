@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 function formatCurrency(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
@@ -63,3 +63,5 @@ export default function InsuranceBillingOverview({
     </section>
   );
 }
+
+

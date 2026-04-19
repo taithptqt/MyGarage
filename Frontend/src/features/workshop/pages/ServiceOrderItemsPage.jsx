@@ -62,7 +62,7 @@ export default function ServiceOrderItemsPage() {
             <tfoot>
               <tr>
                 <td colSpan={3} style={{ textAlign: "right", fontWeight: 700 }}>
-                  Tđ.ng cộng:
+                  Tổng cộng:
                 </td>
                 <td style={{ fontWeight: 800, color: "#4318ff" }}>
                   {totalAmount.toLocaleString("vi-VN")}
@@ -75,6 +75,7 @@ export default function ServiceOrderItemsPage() {
     </div>
   );
 }
+
 
 
 

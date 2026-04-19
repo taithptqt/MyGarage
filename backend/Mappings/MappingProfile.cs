@@ -154,7 +154,9 @@ namespace MyGarage.Mappings
             CreateMap<MaterialRequestCreateDto, MaterialRequest>();
             CreateMap<MaterialRequestUpdateDto, MaterialRequest>();
             // MaterialRequestDetail Mappings
-            CreateMap<MaterialRequestDetail, MaterialRequestDetailResponseDto>();
+            CreateMap<MaterialRequestDetail, MaterialRequestDetailResponseDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : null))
+                .ForMember(dest => dest.ProductSku, opt => opt.MapFrom(src => src.Product != null ? src.Product.Sku : null));
             CreateMap<MaterialRequestDetailCreateDto, MaterialRequestDetail>();
             CreateMap<MaterialRequestDetailUpdateDto, MaterialRequestDetail>();
             // MaterialReturn Mappings

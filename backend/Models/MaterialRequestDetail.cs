@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -46,6 +46,8 @@ public partial class MaterialRequestDetail
     public virtual ServiceOrderDetail? ServiceOrderDetail { get; set; }
 
     public virtual Staff? UpdatedByNavigation { get; set; }
+
+    public virtual MaterialRequest Request { get; set; } = null!;
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }

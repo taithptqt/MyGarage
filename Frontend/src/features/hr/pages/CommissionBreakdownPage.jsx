@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./CommissionBreakdown.css";
@@ -54,7 +54,7 @@ export default function CommissionBreakdownPage() {
       <div className="comm-header">
         <div>
           <h1 className="comm-title">💰 Bảng Kê Hoa Hồng</h1>
-          <p className="comm-subtitle">Theo dõi và đối soát hoa hồng theo từng nhân viên trong tháng.</p>
+          <p className="comm-subtitle">Theo d�i v� d?i so�t hoa h?ng theo tổng nhân viên trong th�ng.</p>
         </div>
         <div className="comm-filters">
           <input type="month" className="comm-month-input" value={period} onChange={e => setPeriod(e.target.value)} />
@@ -67,13 +67,13 @@ export default function CommissionBreakdownPage() {
       ) : loading ? (
         <div className="comm-loading">Đang tải dữ liệu...</div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="comm-empty">Trong tháng này chưa có phát sinh hoa hồng nào.</div>
+        <div className="comm-empty">Trong th�ng n�y chua c� ph�t sinh hoa h?ng n�o.</div>
       ) : (
         <div className="comm-list">
           {Object.values(grouped).map((group, gIdx) => (
             <div key={gIdx} className="comm-group">
               <div className="comm-group-header">
-                <h2>👤 {group.staffName}</h2>
+                <h2>ðŸ‘¤ {group.staffName}</h2>
                 <div className="comm-group-total">Tổng: <span>{fmtCurrency(group.total)}</span></div>
               </div>
               <table className="comm-table">
@@ -109,3 +109,5 @@ export default function CommissionBreakdownPage() {
     </div>
   );
 }
+
+

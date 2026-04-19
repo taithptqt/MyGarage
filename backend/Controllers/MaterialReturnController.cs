@@ -61,8 +61,7 @@ namespace MyGarage.Controllers
                     await _serviceOrderService.EnsurePartsEditableAsync(itemDto.ServiceOrderId.Value);
                 }
 
-                var entity = _mapper.Map<MaterialReturn>(itemDto);
-                var createdItem = await _materialReturnService.AddAsync(entity);
+                var createdItem = await _materialReturnService.ProcessReturnAsync(itemDto);
                 await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);

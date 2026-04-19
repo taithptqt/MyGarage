@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getPaymentStatus, syncOrder } from "@features/payment/api/payosApi";
 
@@ -20,8 +20,8 @@ function normalizeOrderStatus(order) {
 function getMessageByStatus(status, isRetail) {
   if (status === "COMPLETED") {
     return isRetail
-      ? "Thanh toán đơn phụ tùng đã được xác nhận thành công."
-      : "Thanh toán đã được xác nhận thành công.";
+      ? "Thanh to�n don phụ tùng d� du?c x�c nh?n th�nh c�ng."
+      : "Thanh to�n d� du?c x�c nh?n th�nh c�ng.";
   }
 
   if (status === "CANCELED" || status === "FAILED") {
@@ -29,10 +29,10 @@ function getMessageByStatus(status, isRetail) {
   }
 
   if (status === "UNKNOWN") {
-    return "Không thể đối soát giao dịch lúc này.";
+    return "Không th? d?i so�t giao d?ch l�c n�y.";
   }
 
-  return "Giao dịch đang chờ xác nhận. Hệ thống sẽ tự động cập nhật.";
+  return "Giao d?ch dang ch? x�c nh?n. Hệ thống s? t? d?ng c?p nh?t.";
 }
 
 function getStatusStyle(status) {
@@ -59,7 +59,7 @@ export default function PaymentSuccessPage() {
   const retrySearch = useMemo(() => localStorage.getItem("payos_last_payment_search") || "", []);
 
   const [status, setStatus] = useState("PENDING");
-  const [message, setMessage] = useState("Đang xác nhận giao dịch với PayOS...");
+  const [message, setMessage] = useState("Đang x�c nh?n giao dịch vụi PayOS...");
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -84,20 +84,20 @@ export default function PaymentSuccessPage() {
       }
     }
 
-    // Nếu đã xác định được status từ order và không có paymentId (retail không có payment record)
+    // N?u d� x�c d?nh du?c status t? order v� không c� paymentId (retail không c� payment record)
     if (!paymentId) {
       const current = orderBasedStatus || "UNKNOWN";
       setStatus(current);
       setMessage(
         orderBasedStatus
           ? getMessageByStatus(current, isRetailCheckout)
-          : "Không tìm thấy mã giao dịch để đối soát."
+          : "Không t�m th?y m� giao d?ch d? d?i so�t."
       );
       setLoading(false);
       return current;
     }
 
-    // Bước 2: Kiểm tra trạng thái payment record
+    // Bu?c 2: Ki?m tra trạng thái payment record
     try {
       const result = await getPaymentStatus(paymentId);
       if (!result.ok) {
@@ -106,7 +106,7 @@ export default function PaymentSuccessPage() {
         setMessage(
           orderBasedStatus
             ? getMessageByStatus(fallbackStatus, isRetailCheckout)
-            : (result.data?.message || "Không lấy được trạng thái thanh toán.")
+            : (result.data?.message || "Không l?y du?c trạng thái thanh to�n.")
         );
         setLoading(false);
         return fallbackStatus;
@@ -190,7 +190,7 @@ export default function PaymentSuccessPage() {
   return (
     <div>
       <h1 style={{ fontSize: 26, fontWeight: 700, color: "#111827", marginBottom: 14 }}>
-        Kết quả thanh toán
+        K?t qu? thanh to�n
       </h1>
 
       <div className="booking-card" style={{ maxWidth: 760 }}>
@@ -216,7 +216,7 @@ export default function PaymentSuccessPage() {
 
         {redirecting ? (
           <p style={{ marginTop: 10, marginBottom: 0, color: "#1d4ed8", fontWeight: 600 }}>
-            Đang chuyển đến danh sách đơn phụ tùng...
+            Đang chuy?n d?n danh sách don phụ tùng...
           </p>
         ) : null}
 
@@ -252,3 +252,5 @@ export default function PaymentSuccessPage() {
     </div>
   );
 }
+
+

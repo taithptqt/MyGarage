@@ -1,4 +1,4 @@
-export const INSURANCE_DEDUCTIBLE_OPTIONS = [
+﻿export const INSURANCE_DEDUCTIBLE_OPTIONS = [
   { value: "500K", label: "500.000đ" },
   { value: "1000K", label: "1.000.000đ" },
   { value: "CONSULT", label: "Tôi không nhớ / cần tư vấn" },
@@ -6,7 +6,7 @@ export const INSURANCE_DEDUCTIBLE_OPTIONS = [
 
 export const INSURANCE_CLAIM_MODE_OPTIONS = [
   { value: "LINKED", label: "Gara liên kết / bảo lãnh" },
-  { value: "SELF_PAY", label: "Khách tự túc, gara hỗ trợ hồ sơ" },
+  { value: "SELF_PAY", label: "Kh�ch t? t�c, gara h? tr? h? so" },
   { value: "ADVISOR", label: "Chưa rõ, cần tư vấn" },
 ];
 
@@ -61,8 +61,8 @@ function normalizeInsuranceFormMode(options) {
 
 function buildInsuranceIntakeNote(mode) {
   return mode === INSURANCE_FORM_MODE.BOOKING
-    ? "Mức miễn thường và hình thức xử lý sẽ được cố vấn xác nhận khi tiếp nhận xe."
-    : "Thông tin bảo hiểm đã đủ để lễ tân chốt tiếp nhận và tư vấn.";
+    ? "M?c mi?n thu?ng v� h�nh th?c x? l� s? du?c c? v?n x�c nh?n khi ti?p nh?n xe."
+    : "Thông tin b?o hi?m d� d? d? l? t�n ch?t ti?p nh?n v� tu v?n.";
 }
 
 function formatImageCount(count, singularLabel) {
@@ -237,7 +237,7 @@ export function buildInsuranceSummary(snapshot, companyNameById, options = {}) {
     intakeNote: buildInsuranceIntakeNote(mode),
     intakeStatusLabel:
       mode === INSURANCE_FORM_MODE.BOOKING
-        ? "Xác nhận khi tiếp nhận"
+        ? "Xác nhận khi ti?p nh?n"
         : normalized.insuranceQuoteState === INSURANCE_QUOTE_STATE.NEEDS_ADVISOR
           ? "Chờ tư vấn"
           : "Đã có snapshot chi tiết",
@@ -284,3 +284,4 @@ export function buildInsuranceSnapshotPayload(snapshot, options = {}) {
     insuranceDamageImageUrls: normalized.insuranceDamageImageUrls,
   };
 }
+

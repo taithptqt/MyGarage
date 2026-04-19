@@ -1,4 +1,4 @@
-export const PACKAGE_MANAGED_CODE_PREFIX = "PKG-";
+﻿export const PACKAGE_MANAGED_CODE_PREFIX = "PKG-";
 
 export function normalizeStandardServiceCode(value) {
   return String(value || "").trim().toUpperCase();
@@ -17,3 +17,4 @@ export function filterPackageManagedStandardServices(services) {
     (service) => !isPackageManagedStandardServiceCode(service?.code ?? service?.Code)
   );
 }
+

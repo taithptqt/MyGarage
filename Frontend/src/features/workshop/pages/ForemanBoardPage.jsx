@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
@@ -93,19 +93,19 @@ function SoKanbanCard({ order, onAssign, onViewDetail }) {
 
       {/* vehicle */}
       <div className="fb-card-vehicle">
-        <span className="fb-card-plate">🚘 {order.vehicleLicensePlate || "--"}</span>
+        <span className="fb-card-plate">ðŸš˜ {order.vehicleLicensePlate || "--"}</span>
         <span className="fb-card-model">{order.vehicleDescriptor || order.vehicleModelName || "Chưa rõ"}</span>
       </div>
 
       {/* customer */}
       <div className="fb-card-customer">
-        👤 {order.customerName || "Khách hàng"}
+        {order.customerName || "Khách hàng"}
       </div>
 
       {/* bay */}
       {order.bayCode && (
         <div className="fb-card-bay">
-          🏭 Khoang: <strong>{order.bayCode}</strong>
+          ðŸ­ Khoang: <strong>{order.bayCode}</strong>
         </div>
       )}
 
@@ -143,7 +143,7 @@ function SoKanbanCard({ order, onAssign, onViewDetail }) {
 
       {/* footer */}
       <div className="fb-card-footer">
-        <span className="fb-card-time">🕐 {order.checkinTime ? fmt(order.checkinTime) : "--"}</span>
+        <span className="fb-card-time">ðŸ• {order.checkinTime ? fmt(order.checkinTime) : "--"}</span>
         {order.pendingMinutes > 0 && (
           <span className="fb-card-wait" style={{ color: urgency === "HIGH" ? "#dc2626" : "#64748b" }}>
             {fmtMins(order.pendingMinutes)} chờ
@@ -158,7 +158,7 @@ function SoKanbanCard({ order, onAssign, onViewDetail }) {
           onClick={() => onAssign(order)}
           title="Phân công thợ"
         >
-          ⚙️ Phân công
+          Phân công
         </button>
       </div>
     </article>
@@ -243,7 +243,7 @@ export default function ForemanBoardPage() {
       const assigns  = Array.isArray(assignmentsRes) ? assignmentsRes : [];
       const bays     = Array.isArray(baysRes)        ? baysRes        : [];
 
-      const bayMap = new Map(bays.map(b => [b.id ?? b.Id, b]));
+      const bayMap = new Map(bays.map((b) => [b.id ?? b.Id, b]));
 
       /* Only show active orders */
       const active = raw.filter(o => {
@@ -253,31 +253,31 @@ export default function ForemanBoardPage() {
 
       /* Enrich with assignees + bay + task counts */
       const enriched = active.map(o => {
-        const oid = o.id ?? o.Id;
+          const oid = o.id ?? o.Id;
         const myAssigns = assigns.filter(a =>
-          (a.serviceOrderId ?? a.ServiceOrderId) === oid ||
+            (a.serviceOrderId ?? a.ServiceOrderId) === oid ||
           // fallback: match via detail
           false
         );
-        const bayId = o.bayId ?? o.BayId ?? o.currentBayId ?? o.CurrentBayId;
+          const bayId = o.bayId ?? o.BayId ?? o.currentBayId ?? o.CurrentBayId;
         const bay   = bayId ? bayMap.get(bayId) : null;
-        const totalTasks     = Number(o.totalTasks     ?? o.TotalTasks     ?? 0);
-        const completedTasks = Number(o.completedTasks ?? o.CompletedTasks ?? 0);
+          const totalTasks = Number(o.totalTasks ?? o.TotalTasks ?? 0);
+          const completedTasks = Number(o.completedTasks ?? o.CompletedTasks ?? 0);
         return {
           id: oid,
-          code: o.code ?? o.Code ?? `SO-${oid}`,
-          status: o.status ?? o.Status ?? "",
-          customerName: o.customerName ?? o.CustomerName ?? "",
-          vehicleLicensePlate: o.vehicleLicensePlate ?? o.VehicleLicensePlate ?? "--",
-          vehicleDescriptor:   o.vehicleDescriptor   ?? o.VehicleDescriptor   ?? "",
-          vehicleModelName:    o.vehicleModelName     ?? o.VehicleModelName    ?? "",
-          checkinTime:  o.checkInTime ?? o.CheckInTime ?? o.checkinTime ?? o.CheckinTime,
-          pendingMinutes: Number(o.pendingMinutes ?? o.PendingMinutes ?? 0),
-          bayCode: bay ? (bay.code ?? bay.Code ?? bay.name ?? bay.Name ?? `Bay-${bayId}`) : (o.bayCode ?? o.BayCode ?? ""),
+            code: o.code ?? o.Code ?? `SO-${oid}`,
+            status: o.status ?? o.Status ?? "",
+            customerName: o.customerName ?? o.CustomerName ?? "",
+            vehicleLicensePlate: o.vehicleLicensePlate ?? o.VehicleLicensePlate ?? "--",
+            vehicleDescriptor: o.vehicleDescriptor ?? o.VehicleDescriptor ?? "",
+            vehicleModelName: o.vehicleModelName ?? o.VehicleModelName ?? "",
+            checkinTime: o.checkInTime ?? o.CheckInTime ?? o.checkinTime ?? o.CheckinTime,
+            pendingMinutes: Number(o.pendingMinutes ?? o.PendingMinutes ?? 0),
+            bayCode: bay ? (bay.code ?? bay.Code ?? bay.name ?? bay.Name ?? `Bay-${bayId}`) : (o.bayCode ?? o.BayCode ?? ""),
           assignees: myAssigns.map(a => ({
-            id:   a.technicianId ?? a.TechnicianId,
-            name: a.technicianName ?? a.TechnicianName ?? "Thợ",
-            role: a.roleInTask ?? a.RoleInTask ?? "Primary",
+                id: a.technicianId ?? a.TechnicianId,
+                name: a.technicianName ?? a.TechnicianName ?? "Thợ",
+                role: a.roleInTask ?? a.RoleInTask ?? "Primary",
           })),
           totalTasks,
           completedTasks,
@@ -287,7 +287,7 @@ export default function ForemanBoardPage() {
       setOrders(enriched);
       setLastRefresh(new Date());
     } catch (err) {
-      setError("Không thể tải dữ liệu. Kiểm tra kết nối máy chủ.");
+      setError("Không thể t?i dữ liệu. Kiểm tra kết nối máy chủ.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -376,7 +376,7 @@ export default function ForemanBoardPage() {
             onClick={() => navigate("/workshop/foreman/bay-timeline")}
             title="Xem timeline khoang"
           >
-            🏭 Timeline khoang
+            ðŸ­ Timeline khoang
           </button>
         </div>
       </div>
@@ -392,12 +392,12 @@ export default function ForemanBoardPage() {
         <StatCard label="Đang làm" value={stats.inprogress} color="#0ea5e9" onClick={() => setFilter("INPROGRESS")} active={filter === "INPROGRESS"} sub="lệnh đang thi công" />
         <StatCard label="Đang QC"  value={stats.qc}         color="#f59e0b" onClick={() => setFilter("QC")} active={filter === "QC"} />
         <StatCard label="Sẵn giao" value={stats.ready}      color="#10b981" onClick={() => setFilter("READY")} active={filter === "READY"} />
-        <StatCard label="⚠️ Quá hạn" value={stats.urgent}  color="#ef4444" onClick={() => setFilter("ALL")} active={false} sub=">4 giờ chờ" />
+        <StatCard label="Quá hạn" value={stats.urgent}  color="#ef4444" onClick={() => setFilter("ALL")} active={false} sub=">4 giờ chờ" />
       </div>
 
       {/* ── search bar ── */}
       <div className="fb-search-bar">
-        <span className="fb-search-icon">🔍</span>
+        <span className="fb-search-icon">ðŸ”</span>
         <input
           className="fb-search-input"
           placeholder="Tìm theo mã SO, biển số, khách hàng..."
@@ -427,3 +427,5 @@ export default function ForemanBoardPage() {
     </div>
   );
 }
+
+

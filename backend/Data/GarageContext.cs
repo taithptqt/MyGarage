@@ -18,6 +18,11 @@ public partial class GarageContext : DbContext, IGarageContext
         _httpContextAccessor = httpContextAccessor;
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<decimal>().HaveColumnType("decimal(18, 4)");
+    }
+
     public virtual DbSet<AiForecast> AiForecasts { get; set; }
 
     public virtual DbSet<AiFraudMonitor> AiFraudMonitors { get; set; }
@@ -145,6 +150,8 @@ public partial class GarageContext : DbContext, IGarageContext
     public virtual DbSet<Quotation> Quotations { get; set; }
 
     public virtual DbSet<QuotationDetail> QuotationDetails { get; set; }
+
+    public virtual DbSet<QuotationDiscount> QuotationDiscounts { get; set; }
 
     public virtual DbSet<QuotationApprovalAction> QuotationApprovalActions { get; set; }
 
@@ -2303,6 +2310,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.UnitPriceAtTime).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CostPriceAtTime).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.SubTotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DiscountPercentage).HasColumnType("decimal(7, 4)");
             entity.Property(e => e.DiscountValue)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2350,6 +2358,51 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.QuotationDetailUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_QuotationDetails_UpdatedBy");
+        });
+
+        modelBuilder.Entity<QuotationDiscount>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_QuotationDiscounts");
+
+            entity.HasIndex(e => e.QuotationId, "IX_QuotationDiscounts_QuotationId");
+            entity.HasIndex(e => e.AppliedBy, "IX_QuotationDiscounts_AppliedBy");
+            entity.HasIndex(e => e.CustomerTierId, "IX_QuotationDiscounts_CustomerTierId");
+            entity.HasIndex(e => e.VoucherId, "IX_QuotationDiscounts_VoucherId");
+            entity.HasIndex(e => new { e.QuotationId, e.DiscountType }, "UQ_QuotationDiscounts_Quotation_DiscountType")
+                .IsUnique()
+                .HasFilter("[QuotationId] IS NOT NULL AND [DiscountType] IS NOT NULL");
+
+            entity.Property(e => e.DiscountType)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.DiscountValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ValueType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.AppliedAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.DiscountCategory)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasComputedColumnSql("(case when [DiscountType]='MEMBERSHIP' then (1) when [DiscountType]='MANUAL' OR [DiscountType]='VOUCHER' then (2) end)", true);
+
+            entity.HasOne(d => d.Quotation).WithMany(p => p.QuotationDiscounts)
+                .HasForeignKey(d => d.QuotationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_QuotationDiscounts_QuotationId");
+
+            entity.HasOne(d => d.AppliedByNavigation).WithMany(p => p.QuotationDiscounts)
+                .HasForeignKey(d => d.AppliedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_QuotationDiscounts_AppliedBy");
+
+            entity.HasOne(d => d.CustomerTier).WithMany(p => p.QuotationDiscounts)
+                .HasForeignKey(d => d.CustomerTierId)
+                .HasConstraintName("FK_QuotationDiscounts_CustomerTierId");
+
+            entity.HasOne(d => d.Voucher).WithMany(p => p.QuotationDiscounts)
+                .HasForeignKey(d => d.VoucherId)
+                .HasConstraintName("FK_QuotationDiscounts_VoucherId");
         });
 
         modelBuilder.Entity<QuotationAccessLink>(entity =>
@@ -3732,6 +3785,22 @@ public partial class GarageContext : DbContext, IGarageContext
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("FK__WorkSlots__Vehic__1CA7377D");
         });
+
+        modelBuilder.Entity<Role>().HasData(
+            new Role
+            {
+                Id = 3,
+                RoleName = "Thủ kho",
+                RoleCode = "STORE_KEEPER",
+                Scope = "BRANCH",
+                Description = "Quản lý vật tư, phụ tùng và điều phối kho.",
+                IsActive = true,
+                IsDeleted = false,
+                CreatedAt = new DateTime(2024, 1, 1),
+                UpdatedAt = new DateTime(2024, 1, 1),
+                CreatedBy = 1 // Giả định admin đầu tiên
+            }
+        );
 
         OnModelCreatingPartial(modelBuilder);
     }

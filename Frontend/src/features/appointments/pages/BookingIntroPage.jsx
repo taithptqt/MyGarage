@@ -13,13 +13,13 @@ const showcaseServices = [
     image: "/assets/booking/showcase-1.jpg",
   },
   {
-    title: "Chẩn đoán lỗi bằng máy chuyên dụng",
-    desc: "Đọc lỗi điện tử nhanh, minh bạch báo cáo trước khi thực hiện sửa chữa.",
+    title: "Chọn do�n l?i bảng m�y chuy�n d?ng",
+    desc: "Độc l?i di?n t? nhanh, minh b?ch b�o c�o tru?c khi th?c hi?n s?a ch?a.",
     image: "/assets/booking/showcase-2.jpg",
   },
   {
     title: "Chăm sóc xe cao cấp",
-    desc: "Đánh bóng, phủ bảo vệ bề mặt và chăm sóc nội thất theo tiêu chuẩn showroom.",
+    desc: "Đánh b�ng, ph? b?o v? b? m?t v� cham s�c n?i th?t theo ti�u chu?n showroom.",
     image: "/assets/booking/hero.jpg",
   },
 ];
@@ -28,21 +28,21 @@ const highlights = [
   { number: "15+", label: "Năm kinh nghiệm vận hành chuỗi gara" },
   { number: "24/7", label: "Hệ thống nhắc lịch và theo dõi tiến độ" },
   { number: "10K+", label: "Lượt xe phục vụ mỗi năm" },
-  { number: "98%", label: "Khách hàng hài lòng sau dịch vụ" },
+  { number: "98%", label: "Khách hàng h�i l�ng sau dịch vụ" },
 ];
 
 const processSteps = [
   {
     title: "Tiếp nhận thông tin xe",
-    desc: "Tư vấn viên ghi nhận tình trạng và nhu cầu chi tiết của khách hàng.",
+    desc: "Tu v?n vi�n ghi nh?n t�nh tr?ng v� nhu c?u chi ti?t c?a khách hàng.",
   },
   {
-    title: "Xác nhận gói dịch vụ",
-    desc: "Đề xuất hạng mục phù hợp, báo giá rõ ràng trước khi xử lý.",
+    title: "Xác nhận g�i dịch vụ",
+    desc: "Độ xu?t h?ng m?c ph� h?p, b�o gi� r� r�ng tru?c khi x? l�.",
   },
   {
-    title: "Thi công và kiểm soát chất lượng",
-    desc: "Kỹ thuật viên chuyên trách xử lý theo checklist tiêu chuẩn.",
+    title: "Thi c�ng v� ki?m so�t ch?t lu?ng",
+    desc: "K? thu?t vi�n chuy�n tr�ch x? l� theo checklist ti�u chu?n.",
   },
   {
     title: "Bàn giao và nhắc lịch lần sau",
@@ -55,38 +55,38 @@ const LOW_FEE_THRESHOLD = 100000;
 const categoryPresets = [
   {
     keywords: ["dich vu nhanh", "nhanh", "quick", "fast"],
-    desc: "Gói xử lý nhanh cho các hạng mục phổ biến, hạn chế chờ lâu tại xưởng.",
-    promo: "Ưu tiên thao tác gọn, kiểm tra chuẩn kỹ thuật và bàn giao ngay khi hoàn tất.",
+    desc: "G�i x? l� nhanh cho c�c h?ng m?c ph? bi?n, h?n ch? ch? l�u t?i xu?ng.",
+    promo: "Uu ti�n thao t�c g?n, ki?m tra chu?n k? thu?t v� b�n giao ngay khi hoàn tất.",
     cta: "Đặt lịch nhanh",
   },
   {
     keywords: ["sua chua chung", "sua chua", "repair"],
-    desc: "Giải pháp sửa chữa tổng quát cho động cơ, điện, gầm và hệ thống vận hành.",
-    promo: "Khoanh vùng lỗi minh bạch, báo giá trước khi làm và theo dõi tiến độ rõ ràng.",
-    cta: "Xem phương án sửa",
+    desc: "Gi?i ph�p s?a ch?a tổng qu�t cho d?ng co, di?n, g?m v� hệ thống v?n h�nh.",
+    promo: "Khoanh v�ng l?i minh b?ch, b�o gi� tru?c khi l�m v� theo d�i ti?n d? r� r�ng.",
+    cta: "Xem phuong �n s?a",
   },
   {
     keywords: ["bao duong", "maintenance"],
-    desc: "Bảo dưỡng định kỳ theo mốc km giúp xe bền máy, tiết kiệm nhiên liệu hơn.",
+    desc: "B?o du?ng d?nh k? theo m?c km gi�p xe b?n m�y, ti?t ki?m nhi�n li?u hon.",
     promo: "Checklist chi tiết theo dòng xe, tối ưu tuổi thọ linh kiện và độ ổn định vận hành.",
     cta: "Chọn gói bảo dưỡng",
   },
   {
     keywords: ["bao hiem", "insurance"],
     desc: "Hỗ trợ quy trình sửa chữa bảo hiểm với hồ sơ rõ ràng và thời gian xử lý tối ưu.",
-    promo: "Đồng hành từ bước kiểm tra tổn thất đến lúc bàn giao xe, giảm áp lực thủ tục.",
+    promo: "Động h�nh t? bu?c ki?m tra t?n th?t d?n l�c b�n giao xe, gi?m �p l?c th? t?c.",
     cta: "Tư vấn bảo hiểm",
   },
   {
     keywords: ["rework", "sua chua lai"],
-    desc: "Gói xử lý lại các hạng mục chưa đạt kỳ vọng để đảm bảo chất lượng cuối cùng.",
-    promo: "Kiểm tra nguyên nhân gốc và hoàn thiện triệt để theo tiêu chuẩn kỹ thuật.",
+    desc: "G�i x? l� l?i c�c h?ng m?c chua d?t k? v?ng d? d?m b?o ch?t lu?ng cu?i c�ng.",
+    promo: "Ki?m tra nguy�n nh�n g?c v� ho�n thi?n tri?t d? theo ti�u chu?n k? thu?t.",
     cta: "Đặt lịch kiểm tra lại",
   },
   {
     keywords: ["bao hanh", "warranty"],
-    desc: "Dịch vụ bảo hành chính sách rõ ràng, giúp bạn an tâm sau mỗi lần sửa chữa.",
-    promo: "Tiếp nhận nhanh, đối soát lịch sử dịch vụ đầy đủ và xử lý đúng cam kết.",
+    desc: "Dịch vụ b?o h�nh ch�nh s�ch r� r�ng, gi�p b?n an t�m sau m?i l?n s?a ch?a.",
+    promo: "Ti?p nh?n nhanh, d?i so�t l?ch s? dịch vụ d?y d? v� x? l� d�ng cam k?t.",
     cta: "Kiểm tra bảo hành",
   },
 ];
@@ -94,16 +94,16 @@ const categoryPresets = [
 const genericPresets = [
   {
     desc: "Danh mục dịch vụ chuyên biệt theo từng nhu cầu bảo dưỡng và sửa chữa xe.",
-    promo: "Quy trình minh bạch, kỹ thuật viên theo dõi sát để đảm bảo chất lượng đầu ra.",
-    cta: "Khám phá gói",
+    promo: "Quy tr�nh minh b?ch, k? thu?t vi�n theo d�i s�t d? d?m b?o ch?t lu?ng d?u ra.",
+    cta: "Kh�m ph� g�i",
   },
   {
-    desc: "Giải pháp chăm xe được tối ưu theo tình trạng thực tế và mục tiêu vận hành.",
-    promo: "Tư vấn rõ ràng từng hạng mục để bạn chủ động thời gian và ngân sách.",
+    desc: "Gi?i ph�p cham xe du?c t?i uu theo t�nh tr?ng th?c t? v� m?c ti�u v?n h�nh.",
+    promo: "Tu v?n r� r�ng tổng h?ng m?c d? b?n ch? d?ng thời gian v� ng�n s�ch.",
     cta: "Xem chi tiết",
   },
   {
-    desc: "Danh mục linh hoạt từ chăm sóc cơ bản đến xử lý chuyên sâu cho mọi dòng xe.",
+    desc: "Danh m?c linh ho?t t? cham s�c co b?n d?n x? l� chuy�n s�u cho m?i d�ng xe.",
     promo: "Cam kết minh bạch chi phí và kết quả kỹ thuật trong từng bước thực hiện.",
     cta: "Đặt lịch tư vấn",
   },
@@ -323,7 +323,7 @@ export default function BookingIntroPage() {
           <p className="booking-intro-eyebrow">MY GARAGE PREMIUM CARE</p>
           <h1>Dịch vụ gara chuyên nghiệp cho mọi hành trình của bạn</h1>
           <p>
-            Từ bảo dưỡng định kỳ đến xử lý lỗi chuyên sâu, đội ngũ kỹ thuật viên của
+            T? b?o du?ng d?nh k? d?n x? l� l?i chuy�n s�u, d?i ngu k? thu?t vi�n c?a
             MyGarage mang lại quy trình rõ ràng, chất lượng ổn định và trải nghiệm
             dịch vụ đẳng cấp.
           </p>
@@ -342,7 +342,7 @@ export default function BookingIntroPage() {
       <section className="booking-intro-services">
         <header>
           <p className="booking-intro-eyebrow">Dịch vụ nổi bật</p>
-          <h2>Giải pháp toàn diện cho xe của bạn</h2>
+          <h2>Gi?i ph�p to�n di?n cho xe c?a b?n</h2>
         </header>
         <div className="booking-intro-service-grid">
           {showcaseServices.map((service) => (
@@ -359,7 +359,7 @@ export default function BookingIntroPage() {
 
       <section className="booking-intro-types">
         <header>
-          <p className="booking-intro-eyebrow">Các loại dịch vụ</p>
+          <p className="booking-intro-eyebrow">C�c lo?i dịch vụ</p>
           <h2>Danh mục dịch vụ tại gara</h2>
           <p className="booking-intro-types-subtitle">
             Chọn đúng loại dịch vụ theo tình trạng xe để chủ động thời gian,
@@ -428,10 +428,10 @@ export default function BookingIntroPage() {
 
       <section className="booking-intro-cta">
         <p className="booking-intro-eyebrow">Sẵn sàng đặt lịch?</p>
-        <h2>Cuộn đến đây là động lực để chăm sóc xe của bạn</h2>
+        <h2>Cu?n d?n d�y l� d?ng l?c d? cham s�c xe c?a b?n</h2>
         <p>
-          Đặt lịch ngay để chọn khung giờ phù hợp, tránh chờ đợi và nhận tư vấn
-          chính xác theo tình trạng xe.
+          Đặt l?ch ngay d? chọn khung gi? ph� h?p, tr�nh ch? d?i v� nh?n tu v?n
+          ch�nh x�c theo t�nh tr?ng xe.
         </p>
         <button
           type="button"
@@ -446,6 +446,7 @@ export default function BookingIntroPage() {
     </div>
   );
 }
+
 
 
 

@@ -66,7 +66,7 @@ namespace MyGarage.Services
                 ExecuteBranchId = appointment.BranchId,
                 ServiceAdvisorId = actorStaffId,
                 ReceptionistId = actorStaffId,
-                CustomerNotes = appointment.CustomerNotes,
+                CustomerNotes = CustomerNoteFormatter.ToDisplayText(appointment.CustomerNotes),
                 RequestedPackageIds = appointment.RequestedPackageIds,
                 InsuranceDeductibleAmount = appointment.InsuranceDeductibleAmount,
                 InsuranceDeductibleOption = appointment.InsuranceDeductibleOption,

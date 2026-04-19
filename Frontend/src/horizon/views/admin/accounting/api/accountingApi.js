@@ -252,6 +252,14 @@ export async function markPayrollRunPaid(id, paidBy) {
   });
 }
 
+export async function cancelPayrollRun(id, payload = {}) {
+  return request({
+    url: `/api/accounting/payroll-runs/${id}/cancel`,
+    method: "POST",
+    data: payload
+  });
+}
+
 export async function getStaffSalaryCoefficient(staffId, asOfDate) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
@@ -262,9 +270,12 @@ export async function getStaffSalaryCoefficient(staffId, asOfDate) {
   });
 }
 
-export async function getStaffBaseSalary(staffId, asOfDate) {
+export async function getStaffBaseSalary(staffId, asOfDate, options = {}) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
+  if (typeof options.includeTierFallback === "boolean") {
+    params.includeTierFallback = options.includeTierFallback;
+  }
   return request({
     url: `/api/accounting/staff-salary/${staffId}/base`,
     method: "GET",
@@ -285,6 +296,23 @@ export async function calculatePayrollForAllStaff(payload = {}) {
     url: "/api/accounting/payroll-runs/calculate-all",
     method: "POST",
     data: payload
+  });
+}
+
+export async function getAccountingDashboardV2(params = {}) {
+  return request({
+    url: "/api/accounting/dashboard-v2",
+    method: "GET",
+    params
+  });
+}
+
+export async function exportAccountingDashboardV2Csv(params = {}) {
+  return request({
+    url: "/api/accounting/dashboard-v2/export",
+    method: "GET",
+    params,
+    responseType: "blob"
   });
 }
 

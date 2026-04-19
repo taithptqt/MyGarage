@@ -4,7 +4,7 @@ import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./MaterialRequestQueue.css";
 
-/* ── helpers ── */
+/* -- helpers -- */
 function fmt(v) {
   if (!v) return "--";
   return new Date(v).toLocaleString("vi-VN", {
@@ -26,17 +26,17 @@ const STATUS_MAP = {
   ISSUED:    { label: "Đã xuất",     bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
   REJECTED:  { label: "Từ chối",     bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" },
   PARTIAL:   { label: "Xuất 1 phần", bg: "#ede9fe", color: "#4c1d95", dot: "#7c3aed" },
-  CANCELLED: { label: "Đã hủy",     bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" },
+  CANCELLED: { label: "Đã hủy",      bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" },
 };
 
 const TABS = [
   { key: "PENDING",  label: "⏳ Chờ duyệt" },
   { key: "ISSUED",   label: "📦 Đã xuất" },
-  { key: "REJECTED", label: "❌ Từ chối" },
-  { key: "ALL",      label: "🗂️ Tất cả" },
+  { key: "REJECTED", label: "🚫 Từ chối" },
+  { key: "ALL",      label: "📋 Tất cả" },
 ];
 
-/* ── sub-components ── */
+/* -- sub-components -- */
 function StatusBadge({ status }) {
   const m = STATUS_MAP[String(status).toUpperCase()] || { label: status, bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" };
   return (
@@ -103,7 +103,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
         </div>
         <div className="mrq-card-right">
           <span className="mrq-item-count">{totalItems} vật tư</span>
-          <span className="mrq-chevron">{expanded ? "▲" : "▼"}</span>
+          <span className="mrq-chevron">{expanded ? "🔼" : "🔽"}</span>
         </div>
       </div>
 
@@ -138,7 +138,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
                     autoFocus
                   />
                   <button className="mrq-btn mrq-btn-red" onClick={handleReject} disabled={rejecting}>
-                    {rejecting ? "⏳" : "Xác nhận từ chối"}
+                    {rejecting ? "⌛" : "Xác nhận từ chối"}
                   </button>
                   <button className="mrq-btn mrq-btn-ghost" onClick={() => setShowRejectInput(false)}>Hủy</button>
                 </div>
@@ -149,14 +149,14 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
                     onClick={() => setShowRejectInput(true)}
                     disabled={issuing}
                   >
-                    ❌ Từ chối
+                    🚫 Từ chối
                   </button>
                   <button
                     className="mrq-btn mrq-btn-green"
                     onClick={() => onIssue(req.id)}
                     disabled={issuing}
                   >
-                    {issuing ? "⏳ Đang xuất..." : "📦 Duyệt & Xuất kho"}
+                    {issuing ? "⌛ Đang xuất..." : "✅ Duyệt & Xuất kho"}
                   </button>
                 </>
               )}
@@ -168,7 +168,7 @@ function RequestCard({ req, onIssue, onReject, issuing, rejecting }) {
   );
 }
 
-/* ── main page ── */
+/* -- main page -- */
 export default function MaterialRequestQueuePage() {
   const { user }  = useAuth();
   const navigate  = useNavigate();
@@ -182,7 +182,7 @@ export default function MaterialRequestQueuePage() {
   const [rejectingId, setRejectingId] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  /* ── fetch ── */
+  /* -- fetch -- */
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError("");
@@ -209,7 +209,7 @@ export default function MaterialRequestQueuePage() {
     return () => clearInterval(id);
   }, [fetchData]);
 
-  /* ── issue ── */
+  /* -- issue -- */
   const handleIssue = async (reqId) => {
     setIssuingId(reqId);
     try {
@@ -225,7 +225,7 @@ export default function MaterialRequestQueuePage() {
     }
   };
 
-  /* ── reject ── */
+  /* -- reject -- */
   const handleReject = async (reqId, reason) => {
     setRejectingId(reqId);
     try {
@@ -241,7 +241,7 @@ export default function MaterialRequestQueuePage() {
     }
   };
 
-  /* ── filter ── */
+  /* -- filter -- */
   const filtered = useMemo(() => {
     let list = [...requests];
     if (activeTab !== "ALL") {
@@ -259,7 +259,7 @@ export default function MaterialRequestQueuePage() {
     return list.sort((a, b) => new Date(b.createdAt ?? b.CreatedAt ?? 0) - new Date(a.createdAt ?? a.CreatedAt ?? 0));
   }, [requests, activeTab, search]);
 
-  /* ── tab counts ── */
+  /* -- tab counts -- */
   const counts = useMemo(() => {
     const c = { PENDING: 0, ISSUED: 0, REJECTED: 0, ALL: requests.length };
     requests.forEach(r => {
@@ -276,7 +276,7 @@ export default function MaterialRequestQueuePage() {
         <div>
           <h1 className="mrq-title">📦 Hàng đợi xuất vật tư</h1>
           <p className="mrq-subtitle">
-            Cập nhật lúc {fmt(lastRefresh)} · Tự động làm mới sau 30s
+            Cập nhật lúc {fmt(lastRefresh)} • Tự động làm mới sau 30s
           </p>
         </div>
         <div className="mrq-header-actions">
@@ -284,7 +284,7 @@ export default function MaterialRequestQueuePage() {
             🔄 Làm mới
           </button>
           <button className="mrq-btn mrq-btn-outline" onClick={() => navigate("/inventory/stock-history")}>
-            📊 Lịch sử kho
+            📜 Lịch sử kho
           </button>
         </div>
       </div>
@@ -295,7 +295,7 @@ export default function MaterialRequestQueuePage() {
       <div className="mrq-stat-bar">
         <div className="mrq-stat" style={{ borderTopColor: "#f59e0b" }}>
           <span className="mrq-stat-num" style={{ color: "#b45309" }}>{counts.PENDING}</span>
-          <span className="mrq-stat-lbl">⏳ Chờ duyệt</span>
+          <span className="mrq-stat-lbl">⌛ Chờ duyệt</span>
         </div>
         <div className="mrq-stat" style={{ borderTopColor: "#3b82f6" }}>
           <span className="mrq-stat-num" style={{ color: "#1d4ed8" }}>{counts.ISSUED}</span>
@@ -303,11 +303,11 @@ export default function MaterialRequestQueuePage() {
         </div>
         <div className="mrq-stat" style={{ borderTopColor: "#ef4444" }}>
           <span className="mrq-stat-num" style={{ color: "#b91c1c" }}>{counts.REJECTED}</span>
-          <span className="mrq-stat-lbl">❌ Từ chối</span>
+          <span className="mrq-stat-lbl">🚫 Từ chối</span>
         </div>
         <div className="mrq-stat" style={{ borderTopColor: "#6366f1" }}>
           <span className="mrq-stat-num" style={{ color: "#4338ca" }}>{counts.ALL}</span>
-          <span className="mrq-stat-lbl">🗂️ Tất cả</span>
+          <span className="mrq-stat-lbl">📋 Tất cả</span>
         </div>
       </div>
 

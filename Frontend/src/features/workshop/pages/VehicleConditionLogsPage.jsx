@@ -529,7 +529,7 @@ export default function VehicleConditionLogsPage() {
       await persistCheckIn("");
       toast({
         title: "Đã lưu tạm check-in",
-        description: "Bạn có thể tiếp tục chỉnh sửa trước khi khách hàng ký.",
+        description: "B?n có thợ ti?p t?c chọnh sửa trước khi khách hàng ký.",
         status: "success",
         duration: 2800,
       });
@@ -554,7 +554,7 @@ export default function VehicleConditionLogsPage() {
     if (!hasRequiredCornerCoverage(defectItems)) {
       toast({
         title: "Chưa đủ ảnh 4 góc xe",
-        description: "Cần có ảnh cho đủ trước trái, trước phải, sau trái, sau phải trước khi ký.",
+        description: "Cần có ảnh cho góc trước trái, trước phải, sau trái, sau phải trước khi ký.",
         status: "warning",
         duration: 4200,
       });
@@ -663,7 +663,7 @@ export default function VehicleConditionLogsPage() {
                   fontSize="11px"
                   fontWeight="700"
                 >
-                  Lễ tân xử lý trực tiếp check-in/check-out
+                  Lễ tân xử lý tr?c ti?p check-in/check-out
                 </Badge>
               </VStack>
             </HStack>
@@ -863,7 +863,7 @@ export default function VehicleConditionLogsPage() {
                 <VStack align="stretch" spacing={4}>
                   <Heading size="xs" color="#2b3674" textTransform="uppercase">Tài sản trên xe</Heading>
                   <Textarea
-                    placeholder="Ghi chú các tài sản có giá trị (ví tiền, kính mát, điện thoại...)"
+                    placeholder="Ghi chú các tài sản có giá trị (ví dụ: tiền, kính mát, điện thoại...)"
                     value={valuables}
                     onChange={(e) => setValuables(e.target.value)}
                     borderRadius="xl"
@@ -876,7 +876,7 @@ export default function VehicleConditionLogsPage() {
             <VStack align="stretch" spacing={6}>
               <Heading size="md" color="#2b3674">Danh sách hư hại và hình ảnh</Heading>
               <Text fontSize="sm" color="red.500" fontWeight="600">
-                Bắt buộc có ảnh cho đủ 4 góc: góc trước trái, góc trước phải, góc sau trái, góc sau phải.
+                B?t bu?c có ?nh cho d? 4 góc: góc trước trái, góc trước phải, góc sau trái, góc sau phải.
               </Text>
               {defectItems.map((item, idx) => (
                 <Card key={item.id} {...infoCardProps}>
@@ -1135,6 +1135,7 @@ export default function VehicleConditionLogsPage() {
     </Box>
   );
 }
+
 
 
 

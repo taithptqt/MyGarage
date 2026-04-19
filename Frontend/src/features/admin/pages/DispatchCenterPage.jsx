@@ -147,7 +147,7 @@ export default function DispatchCenterPage() {
       <header className="dispatch-header">
         <div>
           <h1>Dispatch Center</h1>
-          <p>Giám sát khoang theo thời gian thực và điều phối xe check-in linh hoạt.</p>
+          <p>Gi�m s�t khoang theo thời gian th?c v� di?u ph?i xe check-in linh ho?t.</p>
         </div>
         <div className="dispatch-toolbar">
           <select
@@ -219,7 +219,7 @@ export default function DispatchCenterPage() {
             <div><span>Queue trước</span><strong>{cycleResult?.queueBefore ?? cycleResult?.QueueBefore ?? 0}</strong></div>
             <div><span>Queue sau</span><strong>{cycleResult?.queueAfter ?? cycleResult?.QueueAfter ?? 0}</strong></div>
             <div><span>Số xe điều phối</span><strong>{cycleResult?.dispatchedCount ?? cycleResult?.DispatchedCount ?? 0}</strong></div>
-            <div><span>Thông báo trễ</span><strong>{cycleResult?.delayNotifications ?? cycleResult?.DelayNotifications ?? 0}</strong></div>
+            <div><span>Th�ng b�o tr?</span><strong>{cycleResult?.delayNotifications ?? cycleResult?.DelayNotifications ?? 0}</strong></div>
           </div>
         </section>
       ) : null}
@@ -265,6 +265,7 @@ export default function DispatchCenterPage() {
     </div>
   );
 }
+
 
 
 

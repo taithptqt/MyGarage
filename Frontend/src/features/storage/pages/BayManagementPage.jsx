@@ -28,7 +28,7 @@ const TABS = [
   { id: "vehicles", label: "Xe trong khoang" },
   { id: "usage", label: "Theo dõi sử dụng" },
   { id: "layout", label: "Sơ đồ & điều phối" },
-  { id: "alerts", label: "Cảnh báo" },
+  { id: "alerts", label: "Cầnh b�o" },
   { id: "stats", label: "Thống kê" },
 ];
 
@@ -233,9 +233,9 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
 
       <FormRow>
         <div className="form-group">
-          <label>Chi nhánh *</label>
+          <label>Chi nh�nh *</label>
           <select name="branchId" value={form.branchId} onChange={handleChange} required>
-            <option value="">Chọn chi nhánh</option>
+            <option value="">Chọn chi nh�nh</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name}
@@ -304,7 +304,7 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
       </div>
 
       <div className="form-group">
-        <label>Phân khúc xe phù hợp (cách nhau bằng dấu phẩy)</label>
+        <label>Ph�n kh�c xe ph� h?p (c�ch nhau bảng d?u ph?y)</label>
         <input
           name="supportedSegmentsText"
           value={form.supportedSegmentsText || ""}
@@ -574,13 +574,13 @@ export default function BayManagementPage({ section }) {
 
     try {
       await task();
-      setFeedback(successMessage || "Thao tác thành công.");
+      setFeedback(successMessage || "Thao t�c th�nh c�ng.");
       await refreshDashboard();
       if (options.reloadBayId || selectedBayId) {
         await loadSelectedBayDetails(options.reloadBayId || selectedBayId);
       }
     } catch (err) {
-      const message = getFriendlyErrorMessage(err, "Không thể thực hiện thao tác.");
+      const message = getFriendlyErrorMessage(err, "Không th? th?c hi?n thao t�c.");
       if (options.asFormError) {
         setFormError(message);
       } else {
@@ -617,7 +617,7 @@ export default function BayManagementPage({ section }) {
         maxTonnage: item.maxTonnage ?? "",
         operationalStatus: item.operationalStatus || "EMPTY",
         isActive: !item.isLocked,
-        area: item.area || "Chưa phân khu",
+        area: item.area || "Chua ph�n khu",
         capacity: item.capacity || 1,
         supportedSegmentsText: (item.supportedSegments || []).join(", "),
       },
@@ -657,7 +657,7 @@ export default function BayManagementPage({ section }) {
     const bayId = Number(assignForm.bayId || selectedBayId);
     const vehicleId = Number(assignForm.vehicleId);
     if (!bayId || !vehicleId) {
-      setError("Cần chọn khoang và xe để gán.");
+      setError("Cần chọn khoang v� xe d? g�n.");
       return;
     }
 
@@ -667,7 +667,7 @@ export default function BayManagementPage({ section }) {
         serviceStatus: assignForm.serviceStatus || null,
         note: assignForm.note || null,
       }),
-      "Đã gán xe vào khoang.",
+      "Đã g�n xe v�o khoang.",
       { reloadBayId: bayId }
     ).then(() => {
       setAssignForm((prev) => ({ ...prev, vehicleId: "", note: "" }));
@@ -750,7 +750,7 @@ export default function BayManagementPage({ section }) {
           value={filters.branchId}
           onChange={(event) => setFilters((prev) => ({ ...prev, branchId: event.target.value }))}
         >
-          <option value="">Tất cả chi nhánh</option>
+          <option value="">T?t c? chi nh�nh</option>
           {(lookups.branches || []).map((branch) => (
             <option key={branch.id} value={branch.id}>
               {branch.name}
@@ -774,7 +774,7 @@ export default function BayManagementPage({ section }) {
           value={filters.status}
           onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
         >
-          <option value="">Tất cả trạng thái</option>
+          <option value="">T?t c? trạng thái</option>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -843,13 +843,13 @@ export default function BayManagementPage({ section }) {
                       <th>STT</th>
                       <th>Mã</th>
                       <th>Tên khoang</th>
-                      <th>Chi nhánh</th>
+                      <th>Chi nh�nh</th>
                       <th>Khu vực</th>
                       <th>Trạng thái</th>
                       <th>Sức chứa</th>
                       <th>Đang chứa</th>
                       <th>Mức sử dụng</th>
-                      <th className="th-center">Thao tác</th>
+                      <th className="th-center">Thao t�c</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -893,7 +893,7 @@ export default function BayManagementPage({ section }) {
                                 className="bay-inline-select"
                                 value={item.operationalStatus}
                                 onClick={(event) => event.stopPropagation()}
-                                onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã cập nhật trạng thái khoang.").catch(() => { })}
+                                onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã c?p nh?t trạng thái khoang.").catch(() => { })}
                               >
                                 {STATUS_OPTIONS.map((option) => (
                                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -946,9 +946,9 @@ export default function BayManagementPage({ section }) {
                       <tr>
                         <th>Biển số</th>
                         <th>Dòng xe</th>
-                        <th>Phân khúc</th>
+                        <th>Ph�n kh�c</th>
                         <th>Thời gian trong khoang</th>
-                        <th className="th-center">Thao tác</th>
+                        <th className="th-center">Thao t�c</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -984,10 +984,10 @@ export default function BayManagementPage({ section }) {
               </div>
 
               <div className="bay-panel">
-                <div className="bay-panel-head"><h3>Gán / điều phối xe</h3></div>
+                <div className="bay-panel-head"><h3>G�n / di?u ph?i xe</h3></div>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleAssignVehicle}>
-                  <label>Gán xe vào khoang</label>
+                  <label>G�n xe v�o khoang</label>
                   <select className="search-input" value={assignForm.vehicleId} onChange={(event) => setAssignForm((prev) => ({ ...prev, vehicleId: event.target.value }))}>
                     <option value="">Chọn xe</option>
                     {(lookups.vehicles || []).map((vehicle) => (
@@ -996,13 +996,13 @@ export default function BayManagementPage({ section }) {
                       </option>
                     ))}
                   </select>
-                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={assignForm.serviceStatus} onChange={(event) => setAssignForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={assignForm.serviceStatus} onChange={(event) => setAssignForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <input className="search-input" placeholder="Ghi chú (tùy chọn)" value={assignForm.note} onChange={(event) => setAssignForm((prev) => ({ ...prev, note: event.target.value }))} />
-                  <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>Gán xe</button>
+                  <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>G�n xe</button>
                 </form>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleMoveVehicle}>
-                  <label>Điều phối xe giữa các khoang</label>
+                  <label>Điều ph?i xe gi?a c�c khoang</label>
                   <select className="search-input" value={moveForm.vehicleId} onChange={(event) => setMoveForm((prev) => ({ ...prev, vehicleId: event.target.value }))}>
                     <option value="">Chọn xe đang trong khoang</option>
                     {activeVehicles.map((vehicle) => (
@@ -1019,7 +1019,7 @@ export default function BayManagementPage({ section }) {
                       </option>
                     ))}
                   </select>
-                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={moveForm.serviceStatus} onChange={(event) => setMoveForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={moveForm.serviceStatus} onChange={(event) => setMoveForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>Điều phối</button>
                 </form>
 
@@ -1034,7 +1034,7 @@ export default function BayManagementPage({ section }) {
                     ))}
                   </select>
                   <input className="search-input" placeholder="Khu vực ưu tiên (tùy chọn)" value={suggestForm.preferredArea} onChange={(event) => setSuggestForm((prev) => ({ ...prev, preferredArea: event.target.value }))} />
-                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={suggestForm.serviceStatus} onChange={(event) => setSuggestForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={suggestForm.serviceStatus} onChange={(event) => setSuggestForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <button className="btn-ghost" type="submit">Lấy gợi ý</button>
                 </form>
 
@@ -1074,7 +1074,7 @@ export default function BayManagementPage({ section }) {
                       <th>Khu vực</th>
                       <th>Tần suất sử dụng</th>
                       <th>Tổng giờ sử dụng</th>
-                      <th>Chiếm lâu nhất</th>
+                      <th>Chi?m l�u nh?t</th>
                       <th>Lần dùng cuối</th>
                     </tr>
                   </thead>
@@ -1239,7 +1239,7 @@ export default function BayManagementPage({ section }) {
                   <thead>
                     <tr>
                       <th>Mức độ</th>
-                      <th>Loại cảnh báo</th>
+                      <th>Lo?i cầnh b�o</th>
                       <th>Khoang</th>
                       <th>Nội dung</th>
                       <th>Thời gian</th>
@@ -1247,7 +1247,7 @@ export default function BayManagementPage({ section }) {
                   </thead>
                   <tbody>
                     {(alerts.items || []).length === 0 ? (
-                      <tr><td colSpan={5}><div className="empty-state"><p>Không có cảnh báo.</p></div></td></tr>
+                      <tr><td colSpan={5}><div className="empty-state"><p>Không c� cầnh b�o.</p></div></td></tr>
                     ) : (
                       pagedAlertRows.map((item, idx) => (
                         <tr key={`${item.type}-${item.bayId}-${idx}`}>
@@ -1307,7 +1307,7 @@ export default function BayManagementPage({ section }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Chi nhánh</th>
+                      <th>Chi nh�nh</th>
                       <th>Số khoang</th>
                       <th>Sức chứa</th>
                       <th>Đang chứa</th>
@@ -1349,5 +1349,6 @@ export default function BayManagementPage({ section }) {
     </div>
   );
 }
+
 
 

@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+﻿import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { request } from "@app/apiClient";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./GoodsReceipt.css";
 
-function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ₫"; }
+function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ?"; }
 function fmtDate(v) { return v ? new Date(v).toLocaleDateString("vi-VN") : "--"; }
 
 export default function GoodsReceiptPage() {
@@ -15,12 +15,12 @@ export default function GoodsReceiptPage() {
   const isNew = searchParams.get("action") === "new" || searchParams.has("poId");
   const defaultPoId = searchParams.get("poId") || "";
 
-  // ── FOR LIST VIEW ──
+  // -- FOR LIST VIEW --
   const [grns, setGrns] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
   const [listError, setListError] = useState("");
 
-  // ── FOR FORM VIEW ──
+  // -- FOR FORM VIEW --
   const [approvedPos, setApprovedPos] = useState([]);
   const [selectedPo, setSelectedPo] = useState(null);
   
@@ -40,7 +40,7 @@ export default function GoodsReceiptPage() {
       const res = await request({ url: "/api/goods-receipts", method: "GET", params: { branchId: user?.branchId } });
       setGrns(res?.items ?? res ?? []);
     } catch (e) {
-      setListError("Không thể tải danh sách phiếu nhập.");
+      setListError("Kh?ng th? t?i danh s?ch phi?u nh?p.");
     } finally {
       setLoadingList(false);
     }
@@ -110,18 +110,18 @@ export default function GoodsReceiptPage() {
       });
       setSearchParams(new URLSearchParams());
     } catch (err) {
-      setFormError(err?.response?.data?.message || "Lỗi khi tạo phiếu nhập kho.");
+      setFormError(err?.response?.data?.message || "L?i khi t?o phi?u nh?p kho.");
     } finally {
       setSaving(false);
     }
   };
 
-  /* ── RENDER FORM ── */
+  /* -- RENDER FORM -- */
   if (isNew) {
     return (
       <div className="grn-page">
         <div className="grn-header">
-          <h1 className="grn-title">📥 Tạo Phiếu Nhập Kho (GRN)</h1>
+          <h1 className="grn-title">?? T?o Phi?u Nh?p Kho (GRN)</h1>
           <button className="grn-btn grn-btn-ghost" onClick={() => setSearchParams(new URLSearchParams())}>🔙 Xem danh sách</button>
         </div>
 
@@ -130,32 +130,32 @@ export default function GoodsReceiptPage() {
           
           <div className="grn-grid">
             <div className="grn-form-group">
-              <label>Đơn Đặt Hàng (PO) đã duyệt</label>
+              <label>Đơn Đặt H�ng (PO) d� duy?t</label>
               <select value={form.purchaseOrderId} onChange={e => setForm(f => ({ ...f, purchaseOrderId: e.target.value }))} required>
-                <option value="">-- Chọn đơn đặt hàng --</option>
+                <option value="">-- Chọn don d?t h�ng --</option>
                 {approvedPos.map(p => <option key={p.id} value={p.id}>#{p.code || p.id} - {p.supplierName || p.supplier?.name}</option>)}
               </select>
             </div>
             <div className="grn-form-group span-2">
-              <label>Ghi chú nhập kho</label>
-              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nhập ghi chú tình trạng hàng, hóa đơn..." />
+              <label>Ghi ch� nh?p kho</label>
+              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nh?p ghi ch� t�nh tr?ng h�ng, h�a don..." />
             </div>
           </div>
 
           {selectedPo && (
             <div className="grn-po-info">
-              <span>Đang nhập cho <strong>#{selectedPo.code || selectedPo.id}</strong></span>
+              <span>Đang nh?p cho <strong>#{selectedPo.code || selectedPo.id}</strong></span>
               <span>NCC: <strong>{selectedPo.supplierName || selectedPo.supplier?.name}</strong></span>
             </div>
           )}
 
-          <h3 className="grn-section-title">Chi tiết hàng hóa nhập kho</h3>
+          <h3 className="grn-section-title">Chi ti?t h�ng h�a nh?p kho</h3>
           {form.items.length === 0 ? (
-            <div className="grn-empty-list">Vui lòng chọn PO để hiển thị hàng hóa</div>
+            <div className="grn-empty-list">Vui l�ng chọn PO d? hi?n th? h�ng h�a</div>
           ) : (
             <div className="grn-items">
               <div className="grn-items-header">
-                <span>Sản phẩm</span><span>SL Đặt</span><span>SL Thực Nhận</span>
+                <span>S?n ph?m</span><span>SL Đặt</span><span>SL Th?c Nh?n</span>
               </div>
               {form.items.map((item, idx) => {
                 const isOver = item.receivedQty > item.orderedQty;
@@ -171,7 +171,7 @@ export default function GoodsReceiptPage() {
                         onChange={e => updateItem(idx, Number(e.target.value))} 
                         required 
                       />
-                      {isOver && <div className="grn-warn-text">⚠️ Nhận lố SL đặt</div>}
+                      {isOver && <div className="grn-warn-text">?? Nh?n l? SL d?t</div>}
                     </div>
                   </div>
                 )
@@ -181,7 +181,7 @@ export default function GoodsReceiptPage() {
 
           <div className="grn-footer">
              <button type="submit" className="grn-btn grn-btn-primary" disabled={saving || form.items.length === 0 || hasItemErrors}>
-               {saving ? "⏳ Đang ghi nhận..." : "📥 Ghi Nận Nhập Kho"}
+               {saving ? "? Đang ghi nh?n..." : "?? Ghi N?n Nh?p Kho"}
              </button>
           </div>
         </form>
@@ -189,29 +189,29 @@ export default function GoodsReceiptPage() {
     );
   }
 
-  /* ── RENDER LIST ── */
+  /* -- RENDER LIST -- */
   return (
     <div className="grn-page">
       <div className="grn-header">
         <div>
-          <h1 className="grn-title">📦 Phiếu Nhập Kho (GRN)</h1>
-          <p className="grn-subtitle">Lịch sử nhận hàng hóa nhập vào kho chi nhánh.</p>
+          <h1 className="grn-title">?? Phi?u Nh?p Kho (GRN)</h1>
+          <p className="grn-subtitle">L?ch s? nh?n h?ng h?a nh?p v?o kho chi nh?nh.</p>
         </div>
         <button className="grn-btn grn-btn-primary" onClick={() => setSearchParams(new URLSearchParams({ action: "new" }))}>
-          + Nhập kho từ PO
+          + Nh?p kho t? PO
         </button>
       </div>
 
       <div className="grn-board">
-        {loadingList ? <div className="grn-loading">Đang tải...</div> : 
-         grns.length === 0 ? <div className="grn-empty">Chưa có dữ liệu phiếu nhập.</div> : (
+        {loadingList ? <div className="grn-loading">Đang t?i...</div> : 
+         grns.length === 0 ? <div className="grn-empty">Chua c� dữ liệu phi?u nh?p.</div> : (
            <table className="grn-table">
              <thead>
                <tr>
-                 <th>Mã Phiếu Nhập</th>
-                 <th>Ngày Nhập</th>
-                 <th>Mã PO</th>
-                 <th>Người Nhận</th>
+                 <th>M� Phi?u Nh?p</th>
+                 <th>Ngày Nh?p</th>
+                 <th>M� PO</th>
+                 <th>Ngu?i Nh?n</th>
                </tr>
              </thead>
              <tbody>
@@ -230,3 +230,5 @@ export default function GoodsReceiptPage() {
     </div>
   );
 }
+
+

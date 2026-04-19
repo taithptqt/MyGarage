@@ -145,6 +145,7 @@ builder.Services.AddScoped<IInventoryAdminService, InventoryAdminService>();
 
 builder.Services.AddScoped<IStaffScheduleRepository, StaffScheduleRepository>();
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();
+builder.Services.AddScoped<ITimesheetService, TimesheetService>();
 
 builder.Services.AddScoped<IAiForecastRepository, AiForecastRepository>();
 builder.Services.AddScoped<IAiForecastService, AiForecastService>();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { executionApi } from "@features/workshop/api/executionApi";
 
 function formatQty(value) {
@@ -85,4 +85,6 @@ export default function StockAlertBanner({ branchId = null, maxItems = 5 }) {
     </div>
   );
 }
+
+
 

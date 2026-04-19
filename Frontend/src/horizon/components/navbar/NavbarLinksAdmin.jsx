@@ -1,4 +1,4 @@
-﻿// Chakra Imports
+// Chakra Imports
 import {
   Avatar,
   Button,
@@ -341,7 +341,3 @@ HeaderLinks.propTypes = {
   secondary: PropTypes.bool,
   onOpen: PropTypes.func,
 };
-
-
-
-

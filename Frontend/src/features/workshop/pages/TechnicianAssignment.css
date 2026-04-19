@@ -1,4 +1,4 @@
-/* TechnicianAssignment.css — A15, consistent với Workshop.css */
+﻿/* TechnicianAssignment.css — A15, consistent với Workshop.css */
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
@@ -241,3 +241,4 @@
   animation: ta-spin 0.7s linear infinite;
 }
 @keyframes ta-spin { to { transform: rotate(360deg); } }
+

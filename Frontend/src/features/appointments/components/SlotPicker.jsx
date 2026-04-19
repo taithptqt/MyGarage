@@ -14,7 +14,7 @@
         <div className="empty-icon">{isSunday ? "\u{1F634}" : "\u{1F4C5}"}</div>
         <p>
           {isSunday
-            ? "Chủ nhật là ngày nghệ. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
+            ? "Ch? nh?t l� ngày ngh?. Vui l�ng chọn ngày kh�c (Th? 2 - Th? 7)."
             : "Không có khung giờ nào khả dụng cho ngày này."}
         </p>
       </div>
@@ -72,6 +72,7 @@
     </div>
   );
 }
+
 
 
 

@@ -5,7 +5,7 @@ import { executionApi } from "@features/workshop/api/executionApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./BayTimeline.css";
 
-/* ─────────── helpers ─────────── */
+/* ----------- helpers ----------- */
 function fmt(v, opts = {}) {
   if (!v) return "--";
   return new Date(v).toLocaleString("vi-VN", {
@@ -47,12 +47,30 @@ const SERVICE_AREA_ICONS = {
   GENERAL:   "🔧",
 };
 
-/* ─────────── AllocateBayModal ─────────── */
+/* ----------- AllocateBayModal ----------- */
 function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
   const [selectedSoId, setSelectedSoId] = useState("");
   const [plannedDuration, setPlannedDuration] = useState(60);
   const [notes, setNotes] = useState("");
   const [errMsg, setErrMsg] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState(null);
+
+  const handleGetAiRecommendation = async () => {
+    if (!selectedSoId) { setErrMsg("Vui lòng chọn lệnh sửa chữa để nhận gợi ý."); return; }
+    setIsAiLoading(true);
+    setErrMsg("");
+    setAiRecommendation(null);
+    try {
+      const res = await request({ url: `/api/ai-smart-dispatchings/recommend-bay/${selectedSoId}`, method: "GET" });
+      setAiRecommendation(res);
+    } catch (err) {
+      setErrMsg("Không thể lấy gợi ý từ AI.");
+      console.error(err);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -71,8 +89,8 @@ function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
     <div className="bt-modal-backdrop" onClick={onClose}>
       <div className="bt-modal" onClick={e => e.stopPropagation()}>
         <div className="bt-modal-header">
-          <h2>🏭 Phân xe vào khoang {bay.code || bay.name}</h2>
-          <button className="bt-modal-close" onClick={onClose}>✕</button>
+          <h2>Phân xe vào khoang {bay.code || bay.name}</h2>
+          <button className="bt-modal-close" onClick={onClose}>×</button>
         </div>
         <form className="bt-modal-body" onSubmit={handleSubmit}>
           {errMsg && <div className="bt-alert bt-alert-error">{errMsg}</div>}
@@ -87,12 +105,40 @@ function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
               <option value="">-- Chọn lệnh sửa chữa --</option>
               {availableOrders.map(o => (
                 <option key={o.id} value={o.id}>
-                  {o.code || `SO-${o.id}`} · {o.vehicleLicensePlate || "--"} · {o.customerName || ""}
+                  {o.code || `SO-${o.id}`} - {o.vehicleLicensePlate || "--"} - {o.customerName || ""}
                 </option>
               ))}
             </select>
             {availableOrders.length === 0 && (
               <p className="bt-hint">Không có lệnh nào đang chờ phân khoang.</p>
+            )}
+
+            {selectedSoId && (
+              <div className="bt-ai-trigger">
+                <button 
+                  type="button" 
+                  className={`bt-btn-ai ${isAiLoading ? "is-loading" : ""}`} 
+                  onClick={handleGetAiRecommendation}
+                  disabled={isAiLoading}
+                >
+                  {isAiLoading ? "⏳ Đang tính toán..." : "🪄 AI gợi ý khoang"}
+                </button>
+              </div>
+            )}
+
+            {aiRecommendation && (
+              <div className="bt-ai-result">
+                {aiRecommendation.recommendedBayId === bay.id ? (
+                  <div className="bt-hint-success">
+                    ✨ <strong>Thông báo từ AI:</strong> Khoang <strong>{bay.code}</strong> là lựa chọn tối ưu nhất cho lệnh này! (Độ tin cậy: {Math.round(aiRecommendation.confidenceScore * 100)}%)
+                  </div>
+                ) : (
+                  <div className="bt-hint-warning">
+                    💡 <strong>Gợi ý từ AI:</strong> Khoang <strong>{aiRecommendation.recommendedBayCode}</strong> có thể phù hợp hơn cho lệnh này.
+                    <p className="bt-ai-reason">{aiRecommendation.reason}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -124,7 +170,7 @@ function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
           <div className="bt-modal-actions">
             <button type="button" className="bt-btn-ghost" onClick={onClose}>Hủy</button>
             <button type="submit" className="bt-btn-primary" disabled={saving}>
-              {saving ? "Đang phân..." : "✅ Xác nhận phân khoang"}
+              {saving ? "Đang phân..." : "Xác nhận phân khoang"}
             </button>
           </div>
         </form>
@@ -133,7 +179,7 @@ function AllocateBayModal({ bay, serviceOrders, onConfirm, onClose, saving }) {
   );
 }
 
-/* ─────────── BayCard ─────────── */
+/* ----------- BayCard ----------- */
 function BayCard({ bay, onAllocate, onRelease }) {
   const meta     = getBayMeta(bay.status);
   const areaIcon = SERVICE_AREA_ICONS[String(bay.serviceArea || "GENERAL").toUpperCase()] || "🔧";
@@ -187,7 +233,7 @@ function BayCard({ bay, onAllocate, onRelease }) {
           </div>
           {occupiedMins > 0 && (
             <div className="bt-time-pill" style={{ color: occupiedMins > 240 ? "#dc2626" : "#0369a1" }}>
-              ⏱️ {fmtDuration(occupiedMins)} đã sử dụng
+              {fmtDuration(occupiedMins)} đã sử dụng
             </div>
           )}
         </div>
@@ -195,7 +241,7 @@ function BayCard({ bay, onAllocate, onRelease }) {
 
       {/* empty state */}
       {!isOccupied && bay.status === "AVAILABLE" && (
-        <div className="bt-bay-empty">🟢 Sẵn sàng tiếp nhận</div>
+        <div className="bt-bay-empty">Sẵn sàng tiếp nhận</div>
       )}
       {!isOccupied && bay.status !== "AVAILABLE" && (
         <div className="bt-bay-empty" style={{ color: "#92400e" }}>
@@ -207,12 +253,12 @@ function BayCard({ bay, onAllocate, onRelease }) {
       <div className="bt-bay-actions">
         {bay.status === "AVAILABLE" && (
           <button className="bt-btn-allocate" onClick={() => onAllocate(bay)}>
-            📥 Phân xe vào
+            Phân xe vào
           </button>
         )}
         {isOccupied && (
           <button className="bt-btn-release" onClick={() => onRelease(bay)}>
-            📤 Giải phóng khoang
+            Giải phóng khoang
           </button>
         )}
       </div>
@@ -220,7 +266,7 @@ function BayCard({ bay, onAllocate, onRelease }) {
   );
 }
 
-/* ─────────── main page ─────────── */
+/* ----------- main page ----------- */
 export default function BayTimelinePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -251,7 +297,7 @@ export default function BayTimelinePage() {
       const rawOrders = Array.isArray(ordersRes)  ? ordersRes : (ordersRes?.items || []);
       const allocs    = Array.isArray(allocationsRes) ? allocationsRes : [];
 
-      /* Build alloc map: bayId → active allocation */
+      /* Build alloc map: bayId -> active allocation */
       const allocMap = new Map();
       allocs.forEach(a => {
         if (!a.releasedAt && !a.ReleasedAt) {
@@ -273,12 +319,12 @@ export default function BayTimelinePage() {
           status: b.operationalStatus ?? b.OperationalStatus ?? b.status ?? b.Status ?? "AVAILABLE",
           serviceArea: b.serviceArea ?? b.ServiceArea ?? "GENERAL",
           maintenanceNote: b.maintenanceNote ?? b.MaintenanceNote ?? "",
-          currentSoCode:     so ? (so.code ?? so.Code ?? `SO-${soId}`) : null,
-          currentPlate:      so ? (so.vehicleLicensePlate ?? so.VehicleLicensePlate) : null,
-          currentCustomer:   so ? (so.customerName ?? so.CustomerName) : null,
+          currentSoCode: so ? (so.code ?? so.Code ?? `SO-${soId}`) : null,
+          currentPlate: so ? (so.vehicleLicensePlate ?? so.VehicleLicensePlate) : null,
+          currentCustomer: so ? (so.customerName ?? so.CustomerName) : null,
           currentAllocatedAt: alloc ? (alloc.allocatedAt ?? alloc.AllocatedAt) : null,
-          plannedDuration:   alloc ? (alloc.plannedDuration ?? alloc.PlannedDuration) : null,
-          allocationId:      alloc ? (alloc.id ?? alloc.Id) : null,
+          plannedDuration: alloc ? (alloc.plannedDuration ?? alloc.PlannedDuration) : null,
+          allocationId: alloc ? (alloc.id ?? alloc.Id) : null,
         };
       });
 
@@ -373,13 +419,13 @@ export default function BayTimelinePage() {
 
   return (
     <div className="bt-page">
-      {/* ── header ── */}
+      {/* -- header -- */}
       <div className="bt-header">
         <div className="bt-header-left">
-          <h1 className="bt-title">🏭 Timeline Khoang Sửa Chữa</h1>
+          <h1 className="bt-title">Timeline Khoang S?a Ch?a</h1>
           <p className="bt-subtitle">
-            Quản lý phân bổ khoang theo thời gian thực ·{" "}
-            <strong>Hôm nay — {new Date().toLocaleDateString("vi-VN")}</strong>
+            Quản lý phân bổ khoang theo thời gian thực{" "}
+            <strong>Hôm nay - {new Date().toLocaleDateString("vi-VN")}</strong>
           </p>
         </div>
         <div className="bt-header-actions">
@@ -389,17 +435,17 @@ export default function BayTimelinePage() {
             disabled={loading}
             title="Làm mới"
           >
-            {loading ? "⏳" : "🔄"} {loading ? "Đang tải..." : `Cập nhật · ${fmt(lastRefresh)}`}
+            {loading ? "⏳" : "🔄"} {loading ? "Đang tải..." : `Cập nhật - ${fmt(lastRefresh)}`}
           </button>
           <button className="bt-btn-back" onClick={() => navigate("/workshop/foreman")}>
-            ← Bảng Kanban
+            Bảng Kanban
           </button>
         </div>
       </div>
 
-      {error && <div className="bt-alert bt-alert-error">⚠️ {error}</div>}
+      {error && <div className="bt-alert bt-alert-error">{error}</div>}
 
-      {/* ── summary stats ── */}
+      {/* -- summary stats -- */}
       <div className="bt-stats-row">
         <div className="bt-stat" style={{ borderTopColor: "#6366f1" }}>
           <span className="bt-stat-num" style={{ color: "#6366f1" }}>{stats.total}</span>
@@ -407,15 +453,15 @@ export default function BayTimelinePage() {
         </div>
         <div className="bt-stat" style={{ borderTopColor: "#10b981" }}>
           <span className="bt-stat-num" style={{ color: "#10b981" }}>{stats.available}</span>
-          <span className="bt-stat-lbl">🟢 Đang trống</span>
+          <span className="bt-stat-lbl">Đang trống</span>
         </div>
         <div className="bt-stat" style={{ borderTopColor: "#3b82f6" }}>
           <span className="bt-stat-num" style={{ color: "#3b82f6" }}>{stats.occupied}</span>
-          <span className="bt-stat-lbl">🔵 Đang dùng</span>
+          <span className="bt-stat-lbl">Đang dùng</span>
         </div>
         <div className="bt-stat" style={{ borderTopColor: "#f59e0b" }}>
           <span className="bt-stat-num" style={{ color: "#f59e0b" }}>{stats.maintenance}</span>
-          <span className="bt-stat-lbl">🟡 Bảo trì</span>
+          <span className="bt-stat-lbl">Bảo trì</span>
         </div>
         <div className="bt-stat bt-stat-load" style={{ borderTopColor: loadFactor > 90 ? "#ef4444" : loadFactor > 60 ? "#f59e0b" : "#10b981" }}>
           <div className="bt-load-ring" style={{ "--pct": `${loadFactor}%` }}>
@@ -425,7 +471,7 @@ export default function BayTimelinePage() {
         </div>
       </div>
 
-      {/* ── filters ── */}
+      {/* -- filters -- */}
       <div className="bt-filters">
         <div className="bt-filter-group">
           <span className="bt-filter-label">Khu vực:</span>
@@ -447,13 +493,13 @@ export default function BayTimelinePage() {
               className={`bt-filter-chip ${filterStatus === s ? "bt-chip-active" : ""}`}
               onClick={() => setFilterStatus(s)}
             >
-              {s === "ALL" ? "Tất cả" : s === "AVAILABLE" ? "🟢 Trống" : s === "OCCUPIED" ? "🔵 Có xe" : "🟡 Bảo trì"}
+              {s === "ALL" ? "Tất cả" : s === "AVAILABLE" ? "Trống" : s === "OCCUPIED" ? "Có xe" : "Bảo trì"}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── bay grid ── */}
+      {/* -- bay grid -- */}
       {loading && bays.length === 0 ? (
         <div className="bt-loading">
           <div className="bt-spinner" />
@@ -476,7 +522,7 @@ export default function BayTimelinePage() {
         </div>
       )}
 
-      {/* ── allocate modal ── */}
+      {/* -- allocate modal -- */}
       {allocatingBay && (
         <AllocateBayModal
           bay={allocatingBay}
@@ -489,3 +535,5 @@ export default function BayTimelinePage() {
     </div>
   );
 }
+
+

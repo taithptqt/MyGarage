@@ -130,6 +130,7 @@ namespace MyGarage.Controllers
             {
                 ApplyAssignmentStateToDto(items[i], mappedDtos[i]);
             }
+            await ApplyAssignmentVersionsToDtosAsync(items, mappedDtos);
             var dtos = await EnrichDiagnosisDtosAsync(mappedDtos);
             return Ok(dtos);
         }
@@ -138,9 +139,10 @@ namespace MyGarage.Controllers
         public async Task<ActionResult<IEnumerable<DiagnosisDispatchBoardItemDto>>> GetDispatchBoard(
             [FromQuery] long? branchId = null,
             [FromQuery] long? teamId = null,
-            [FromQuery] bool includeCompleted = false)
+            [FromQuery] bool includeCompleted = false,
+            [FromQuery] string? viewMode = null)
         {
-            var board = await _diagnosisService.GetDispatchBoardAsync(branchId, teamId, includeCompleted);
+            var board = await _diagnosisService.GetDispatchBoardAsync(branchId, teamId, includeCompleted, viewMode);
             return Ok(board);
         }
 
@@ -280,6 +282,7 @@ namespace MyGarage.Controllers
 
             var dto = _mapper.Map<DiagnosisResponseDto>(item);
             ApplyAssignmentStateToDto(item, dto);
+            await ApplyAssignmentVersionsToDtosAsync(new[] { item }, new[] { dto });
             dto = await EnrichDiagnosisDtoAsync(dto, new Dictionary<long, Team?>(), new Dictionary<long, Staff?>());
             return Ok(dto);
         }
@@ -357,6 +360,16 @@ namespace MyGarage.Controllers
                     !string.Equals(x.Status, DiagnosisStatusCompleted, StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(x.Status, DiagnosisStatusCanceled, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            static bool IsFinalDecisionMade(string? finalStatus) =>
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.APPROVED), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(finalStatus, nameof(ApprovalDecisionStatusCode.REJECTED), StringComparison.OrdinalIgnoreCase);
+
+            var recalledDiagnoses = allDiagnosis
+                .Where(x => string.Equals(x.Status, DiagnosisStatusCanceled, StringComparison.OrdinalIgnoreCase))
+                .Where(x => !IsFinalDecisionMade(_diagnosisService.ReadFinalApprovalStatus(x)))
+                .ToList();
+
             if (activeDiagnosis.Count > 0)
             {
                 await _diagnosisService.ArchiveDiagnosesAsSupersededAsync(activeDiagnosis);
@@ -416,14 +429,26 @@ namespace MyGarage.Controllers
                 bufferMinutes: 15,
                 preferredBayId: resolvedDiagnoseBayId);
             var finalAssignedBayId = scheduledSlot?.BayId ?? resolvedDiagnoseBayId;
-            var newDiagnosis = await _diagnosisService.CreatePendingDiagnosesAsync(
-                serviceOrderId,
-                technicianId: null,
-                symptoms,
-                dispatchTag,
-                assignedTeamId: resolvedTeamId,
-                assignedBayId: finalAssignedBayId,
-                assignmentNote: request?.AssignmentNote);
+            var actorStaffId = serviceOrder.ReceptionistId
+                ?? serviceOrder.ServiceAdvisorId
+                ?? serviceOrder.UpdatedBy
+                ?? serviceOrder.CreatedBy;
+            var newDiagnosis = recalledDiagnoses.Count > 0 && activeDiagnosis.Count == 0
+                ? await _diagnosisService.RequeueRecalledDiagnosesAsync(
+                    recalledDiagnoses,
+                    assignedTeamId: resolvedTeamId,
+                    assignedBayId: finalAssignedBayId,
+                    dispatchTag: dispatchTag,
+                    assignmentNote: request?.AssignmentNote,
+                    actorStaffId: actorStaffId)
+                : await _diagnosisService.CreatePendingDiagnosesAsync(
+                    serviceOrderId,
+                    technicianId: null,
+                    symptoms,
+                    dispatchTag,
+                    assignedTeamId: resolvedTeamId,
+                    assignedBayId: finalAssignedBayId,
+                    assignmentNote: request?.AssignmentNote);
 
             if (intakeSuggestion != null)
             {
@@ -608,6 +633,29 @@ namespace MyGarage.Controllers
 
             await _diagnosisService.RejectTechnicalAsync(diagnoses, request.TeamLeaderId, request.Note);
             return Ok(new { message = "Tổ trưởng đã từ chối và trả về cho thợ làm lại." });
+        }
+
+        [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/clone-version")]
+        public async Task<IActionResult> CloneRejectedVersion(long serviceOrderId, [FromBody] DiagnosisCloneVersionRequestDto? request)
+        {
+            if (request == null || request.ActorId <= 0)
+            {
+                return BadRequest(new { message = "Thiếu thông tin người thao tác clone phiên bản." });
+            }
+
+            var diagnoses = await _diagnosisService.GetLatestWorkflowDiagnosesByServiceOrderAsync(serviceOrderId);
+            if (diagnoses.Count == 0)
+            {
+                return BadRequest(new { message = "Không có phiếu chẩn đoán để clone phiên bản." });
+            }
+
+            var affected = await _diagnosisService.CloneRejectedDiagnosesVersionAsync(diagnoses, request.ActorId, request.Note);
+            if (affected <= 0)
+            {
+                return BadRequest(new { message = "Chỉ clone được khi phiên bản hiện tại đang bị từ chối duyệt." });
+            }
+
+            return Ok(new { message = "Đã tạo phiên bản mới để kỹ thuật viên chỉnh sửa lại.", affected });
         }
 
         [HttpPost("service-orders/{serviceOrderId:long}/diagnosis-queues/final-approval")]
@@ -1555,6 +1603,61 @@ namespace MyGarage.Controllers
             target.CancellationDecisionAt = _diagnosisService.ReadCancellationDecisionAt(source);
         }
 
+        private async Task ApplyAssignmentVersionsToDtosAsync(IEnumerable<Diagnosis> sources, IEnumerable<DiagnosisResponseDto> targets)
+        {
+            var sourceList = sources?.ToList() ?? new List<Diagnosis>();
+            var targetList = targets?.ToList() ?? new List<DiagnosisResponseDto>();
+            if (sourceList.Count == 0 || targetList.Count == 0)
+            {
+                return;
+            }
+
+            var sourceById = sourceList
+                .Where(x => x != null && x.Id > 0)
+                .ToDictionary(x => x.Id, x => x);
+            if (sourceById.Count == 0)
+            {
+                return;
+            }
+
+            var historyByDiagnosisId = await _diagnosisService.GetAssignmentHistoryByDiagnosisIdsAsync(sourceById.Keys);
+            foreach (var dto in targetList)
+            {
+                if (dto == null || dto.Id <= 0)
+                {
+                    continue;
+                }
+
+                if (!historyByDiagnosisId.TryGetValue(dto.Id, out var historyRows) || historyRows == null)
+                {
+                    dto.AssignmentVersions = new List<DiagnosisAssignmentVersionDto>();
+                    continue;
+                }
+
+                var currentAssignmentId = dto.DiagnosisAssignmentId;
+                dto.AssignmentVersions = historyRows
+                    .Select(row => new DiagnosisAssignmentVersionDto
+                    {
+                        DiagnosisAssignmentId = row.Id,
+                        EventType = row.EventType,
+                        Status = row.Status,
+                        TeamLeaderApprovalStatus = row.TeamLeaderApprovalStatus,
+                        FinalApprovalStatus = row.FinalApprovalStatus,
+                        ForemanRejectReason = row.ForemanRejectReason,
+                        AssignedAt = row.AssignedAt,
+                        TechnicianAcceptedAt = row.TechnicianAcceptedAt,
+                        TechnicianCompletedAt = row.TechnicianCompletedAt,
+                        CreatedAt = row.CreatedAt,
+                        CreatedBy = row.CreatedBy,
+                        Note = row.Note,
+                        IsCurrent = currentAssignmentId.HasValue && currentAssignmentId.Value > 0 && row.Id == currentAssignmentId.Value
+                    })
+                    .OrderByDescending(x => x.CreatedAt)
+                    .ThenByDescending(x => x.DiagnosisAssignmentId)
+                    .ToList();
+            }
+        }
+
         private async Task<ActionResult<DiagnosisResponseDto>> AssignRequestAsync(long serviceOrderId, DiagnosisAcceptRequestDto request)
         {
             if (request == null || request.TechnicianId <= 0)
@@ -1838,6 +1941,3 @@ namespace MyGarage.Controllers
         }
     }
 }
-
-
-

@@ -227,6 +227,9 @@ namespace MyGarage.Controllers
                 var entity = _mapper.Map<DiagnosisRecommendation>(itemDto);
                 entity.DiagnosisId = diagnosisLink.Value.DiagnosisId;
                 entity.DiagnosisAssignmentId = diagnosisLink.Value.DiagnosisAssignmentId;
+                entity.RecommendationStatus = string.IsNullOrWhiteSpace(entity.RecommendationStatus)
+                    ? nameof(RecommendationLifecycleStatusCode.ACTIVE)
+                    : entity.RecommendationStatus;
 
                 if (RequiresEvidenceForServiceRecommendation(entity) && !HasEvidenceMedia(entity.EvidenceMediaUrls))
                 {

@@ -99,7 +99,7 @@ export default function UserReports() {
               Sơ đồ
             </Button>
             <Button as={RouterLink} to='/admin/bays/alerts' size='sm' variant='outline'>
-              Cảnh báo
+              Cầnh b�o
             </Button>
           </HStack>
         </Flex>
@@ -211,4 +211,5 @@ export default function UserReports() {
     </Box>
   );
 }
+
 

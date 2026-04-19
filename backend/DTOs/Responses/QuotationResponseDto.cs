@@ -42,6 +42,7 @@ public sealed class QuotationResponseDto
     public bool IsReadyForSplitBilling { get; set; }
     public DateTime? SplitBillingReadyAt { get; set; }
     public DateTime? AppliedAt { get; set; }
+    public List<QuotationDiscountResponseDto> Discounts { get; set; } = new();
     public List<QuotationDetailResponseDto> Details { get; set; } = new();
 }
 
@@ -61,6 +62,7 @@ public sealed class QuotationDetailResponseDto
     public decimal UnitPriceAtTime { get; set; }
     public decimal? CostPriceAtTime { get; set; }
     public decimal SubTotal { get; set; }
+    public decimal? DiscountPercentage { get; set; }
     public decimal DiscountValue { get; set; }
     public decimal TaxRate { get; set; }
     public decimal TaxAmount { get; set; }

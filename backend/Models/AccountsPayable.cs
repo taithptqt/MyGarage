@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using MyGarage.Interfaces;
 
 namespace MyGarage.Models;
 
-public partial class AccountsPayable
+public partial class AccountsPayable : IAuditableEntity
 {
     public long Id { get; set; }
 
@@ -31,9 +32,13 @@ public partial class AccountsPayable
 
     public string? Note { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    
+    public long? CreatedBy { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    
+    public long? UpdatedBy { get; set; }
 
     public virtual Branch? Branch { get; set; }
 

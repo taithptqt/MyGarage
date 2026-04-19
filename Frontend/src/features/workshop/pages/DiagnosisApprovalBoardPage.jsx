@@ -7,7 +7,6 @@ import { inventoryApi } from "@features/admin/api/inventoryApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
 import {
-  extractLatestDiagnosisId,
   firstNonEmptyText,
   formatDateTime,
   normalizeRecommendationItemType,
@@ -95,6 +94,69 @@ function toEditableQuantity(value) {
   return String(parsed);
 }
 
+function extractDiagnosisAssignmentId(diagnosis) {
+  return toPositiveNumber(
+    readField(
+      diagnosis,
+      "diagnosisAssignmentId",
+      "DiagnosisAssignmentId",
+      "assignmentId",
+      "AssignmentId",
+    ),
+  );
+}
+
+function buildDiagnosisVersions(diagnoses) {
+  const list = Array.isArray(diagnoses) ? diagnoses : [];
+  const grouped = new Map();
+
+  list.forEach((diagnosis) => {
+    const diagnosisId = toPositiveNumber(readField(diagnosis, "id", "Id"));
+    if (!diagnosisId) return;
+
+    const assignmentId = extractDiagnosisAssignmentId(diagnosis);
+    const key = assignmentId ? `assignment-${assignmentId}` : `diagnosis-${diagnosisId}`;
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, {
+        key,
+        assignmentId,
+        diagnoses: [diagnosis],
+      });
+      return;
+    }
+
+    existing.diagnoses.push(diagnosis);
+  });
+
+  const versions = Array.from(grouped.values()).map((group) => {
+    const sorted = [...group.diagnoses].sort((a, b) => {
+      const aTime = new Date(readField(a, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      const bTime = new Date(readField(b, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+      if (bTime !== aTime) return bTime - aTime;
+      return (toPositiveNumber(readField(b, "id", "Id")) || 0) - (toPositiveNumber(readField(a, "id", "Id")) || 0);
+    });
+
+    return {
+      key: group.key,
+      assignmentId: group.assignmentId,
+      latestDiagnosis: sorted[0] || null,
+      diagnoses: sorted,
+    };
+  });
+
+  versions.sort((a, b) => {
+    const aTime = new Date(readField(a.latestDiagnosis, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+    const bTime = new Date(readField(b.latestDiagnosis, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
+    if (bTime !== aTime) return bTime - aTime;
+    return (toPositiveNumber(readField(b.latestDiagnosis, "id", "Id")) || 0)
+      - (toPositiveNumber(readField(a.latestDiagnosis, "id", "Id")) || 0);
+  });
+
+  return versions;
+}
+
 export default function DiagnosisApprovalBoardPage({
   mode,
   title,
@@ -136,6 +198,7 @@ export default function DiagnosisApprovalBoardPage({
   const [rejectNote, setRejectNote] = useState("");
   const [quantityById, setQuantityById] = useState({});
   const [collapsedPartsByRoot, setCollapsedPartsByRoot] = useState({});
+  const [selectedVersionKey, setSelectedVersionKey] = useState("");
 
   const customerById = useMemo(() => {
     const map = new Map();
@@ -195,15 +258,9 @@ export default function DiagnosisApprovalBoardPage({
         getAllVehicles().catch(() => []),
       ]);
 
-      const latestDiagnosisId = extractLatestDiagnosisId(diagnosesRes);
-      const recommendationRes = latestDiagnosisId
-        ? await serviceOrderApi.getDiagnosisRecommendations(latestDiagnosisId).catch(() => [])
-        : [];
-      const safeRecommendations = Array.isArray(recommendationRes) ? recommendationRes : [];
-
       setOrder(orderRes || null);
       setDiagnoses(Array.isArray(diagnosesRes) ? diagnosesRes : []);
-      setRecommendations(safeRecommendations);
+      setRecommendations([]);
       setQuotations(Array.isArray(quotationsRes) ? quotationsRes : []);
       setServices(Array.isArray(serviceRes) ? serviceRes : []);
       setProducts(Array.isArray(productRes) ? productRes : []);
@@ -220,18 +277,60 @@ export default function DiagnosisApprovalBoardPage({
     void loadData();
   }, [loadData]);
 
-  const latestDiagnosis = useMemo(() => {
-    const list = Array.isArray(diagnoses) ? diagnoses : [];
-    if (list.length === 0) return null;
+  const diagnosisVersions = useMemo(() => buildDiagnosisVersions(diagnoses), [diagnoses]);
 
-    const sorted = [...list].sort((a, b) => {
-      const aTime = new Date(readField(a, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
-      const bTime = new Date(readField(b, "updatedAt", "UpdatedAt", "createdAt", "CreatedAt") || 0).getTime();
-      return bTime - aTime;
-    });
+  const selectedVersion = useMemo(() => {
+    if (diagnosisVersions.length === 0) return null;
+    return diagnosisVersions.find((item) => item.key === selectedVersionKey) || diagnosisVersions[0] || null;
+  }, [diagnosisVersions, selectedVersionKey]);
 
-    return sorted[0] || null;
-  }, [diagnoses]);
+  const latestDiagnosis = selectedVersion?.latestDiagnosis || null;
+
+  useEffect(() => {
+    if (diagnosisVersions.length === 0) {
+      setSelectedVersionKey("");
+      setRecommendations([]);
+      return;
+    }
+
+    if (!diagnosisVersions.some((item) => item.key === selectedVersionKey)) {
+      setSelectedVersionKey(diagnosisVersions[0].key);
+      return;
+    }
+
+    const targetVersion = diagnosisVersions.find((item) => item.key === selectedVersionKey);
+    const diagnosisId = toPositiveNumber(readField(targetVersion?.latestDiagnosis, "id", "Id"));
+    const assignmentId = toPositiveNumber(targetVersion?.assignmentId);
+
+    let cancelled = false;
+
+    (async () => {
+      let recommendationRes = [];
+
+      if (assignmentId) {
+        recommendationRes = await serviceOrderApi
+          .getDiagnosisRecommendations({ diagnosisAssignmentId: assignmentId })
+          .catch(() => []);
+      }
+
+      const shouldFallbackByDiagnosisId =
+        diagnosisId &&
+        (!Array.isArray(recommendationRes) || recommendationRes.length === 0);
+
+      if (shouldFallbackByDiagnosisId) {
+        recommendationRes = await serviceOrderApi
+          .getDiagnosisRecommendations({ diagnosisId })
+          .catch(() => []);
+      }
+
+      if (cancelled) return;
+      setRecommendations(Array.isArray(recommendationRes) ? recommendationRes : []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [diagnosisVersions, selectedVersionKey]);
 
   const latestQuotation = useMemo(() => {
     const list = Array.isArray(quotations) ? quotations : [];
@@ -533,6 +632,35 @@ export default function DiagnosisApprovalBoardPage({
         </div>
       ) : (
         <div className="reception-quote-layout">
+          <div className="approval-two-column-layout">
+          <aside className="approval-version-sidebar">
+            <div className="approval-version-sidebar-head">
+              <h3>Phiên bản chẩn đoán</h3>
+              <span>{diagnosisVersions.length}</span>
+            </div>
+            <div className="approval-version-list">
+              {diagnosisVersions.length === 0 ? (
+                <p className="reception-quote-note">Chưa có phiên bản chẩn đoán.</p>
+              ) : (
+                diagnosisVersions.map((version, index) => {
+                  const versionTechnicalStatus = normalizeStatus(readField(version.latestDiagnosis, "teamLeaderApprovalStatus", "TeamLeaderApprovalStatus")) || "PENDING";
+                  return (
+                    <button
+                      type="button"
+                      key={version.key}
+                      className={`approval-version-item ${selectedVersionKey === version.key ? "is-active" : ""}`}
+                      onClick={() => setSelectedVersionKey(version.key)}
+                    >
+                      <strong>Phiên bản {index + 1}</strong>
+                      <span>Tổ trưởng: {getStatusLabelVi(versionTechnicalStatus, versionTechnicalStatus)}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          <div className="reception-quote-layout">
           <section className="reception-quote-summary-card">
             <article>
               <span>Khách hàng</span>
@@ -590,6 +718,9 @@ export default function DiagnosisApprovalBoardPage({
               </p>
             ) : null}
           </section>
+
+          </div>
+          </div>
 
           <section className="reception-quote-table-card">
             <div className="reception-quote-table-head">
@@ -843,3 +974,4 @@ export default function DiagnosisApprovalBoardPage({
     </div>
   );
 }
+

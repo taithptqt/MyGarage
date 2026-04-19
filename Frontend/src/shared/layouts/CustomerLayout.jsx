@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+﻿import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./CustomerLayout.css";
 
@@ -44,7 +44,7 @@ export default function CustomerLayout({ children }) {
                 Xe của tôi
               </NavLink>
               <NavLink to="/my-notifications" className={({ isActive }) => isActive ? "active" : ""}>
-                Thông báo
+                Th�ng b�o
               </NavLink>
               <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
                 Lịch hẹn
@@ -68,5 +68,7 @@ export default function CustomerLayout({ children }) {
     </div>
   );
 }
+
+
 
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { request } from "@app/apiClient";
 import { executionApi } from "@features/workshop/api/executionApi";
@@ -17,7 +17,7 @@ const GROUP_ICONS = {
   OPERATION: { icon: "⚙️", label: "Vận hành" },
   COSMETIC:  { icon: "✨", label: "Mỹ thuật" },
   ELECTRIC:  { icon: "⚡", label: "Điện" },
-  GENERAL:   { icon: "📋", label: "Tổng quát" },
+  GENERAL:   { icon: "??", label: "Tổng quát" },
 };
 
 /* ── sub-components ── */
@@ -140,7 +140,7 @@ function FailModal({ onConfirm, onClose, staff }) {
     <div className="qc-modal-backdrop" onClick={onClose}>
       <div className="qc-modal" onClick={e => e.stopPropagation()}>
         <div className="qc-modal-header">
-          <h2>❌ Xác nhận KHÔNG ĐẠT</h2>
+          <h2>Xác nhận KHÔNG ĐẠT</h2>
           <button className="qc-modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="qc-modal-body">
@@ -217,21 +217,21 @@ export default function QcChecklistPage() {
 
       const tpls = Array.isArray(templatesRes) ? templatesRes : (templatesRes?.items ?? []);
       // Flatten all items from all templates
-      const allItems = tpls.flatMap(t =>
-        (t.items ?? t.Items ?? []).map(it => ({
-          id:          it.id ?? it.Id,
-          name:        it.name ?? it.Name ?? it.itemName ?? "Hạng mục",
+      const allItems = tpls.flatMap((t) =>
+        (t.items ?? t.Items ?? []).map((it) => ({
+          id: it.id ?? it.Id,
+          name: it.name ?? it.Name ?? it.itemName ?? "Hạng mục",
           description: it.description ?? it.Description ?? "",
-          required:    it.isRequired ?? it.IsRequired ?? false,
-          group:       it.category ?? it.Category ?? "GENERAL",
-          sortOrder:   it.sortOrder ?? it.SortOrder ?? 0,
+          required: it.isRequired ?? it.IsRequired ?? false,
+          group: it.category ?? it.Category ?? "GENERAL",
+          sortOrder: it.sortOrder ?? it.SortOrder ?? 0,
         }))
       );
       const sorted = [...allItems].sort((a, b) => a.sortOrder - b.sortOrder);
       setTemplateItems(sorted);
 
       const rawStaff = Array.isArray(staffRes) ? staffRes : (staffRes?.items ?? []);
-      setStaff(rawStaff.map(s => ({
+      setStaff(rawStaff.map((s) => ({
         id: s.id ?? s.Id ?? s.staffId ?? s.StaffId,
         fullName: s.fullName ?? s.FullName ?? "Thợ",
       })));
@@ -249,10 +249,10 @@ export default function QcChecklistPage() {
           // pre-fill results
           const r = {};
           const n = {};
-          (existing.items ?? existing.Items ?? []).forEach(it => {
+          (existing.items ?? existing.Items ?? []).forEach((it) => {
             const iid = it.checklistItemId ?? it.ChecklistItemId ?? it.id ?? it.Id;
             r[iid] = it.result ?? it.Result ?? null;
-            n[iid] = it.note   ?? it.Note   ?? "";
+            n[iid] = it.note ?? it.Note ?? "";
           });
           setResults(r);
           setNotes(n);
@@ -330,7 +330,7 @@ export default function QcChecklistPage() {
       const inspId = inspection?.id ?? inspection?.Id;
       if (inspId) {
         await request({ url: `/api/qc-inspections/${inspId}/pass`, method: "PUT",
-          data: { inspectedBy: user?.id ?? user?.staffId } });
+          data: { inspectorId: user?.id ?? user?.staffId } });
       }
       setSuccess("✅ QC ĐẠT — Xe sẵn sàng bàn giao!");
       setTimeout(() => navigate(`/workshop/reception/orders/${orderId}/handover`), 1600);
@@ -350,9 +350,9 @@ export default function QcChecklistPage() {
       const inspId = inspection?.id ?? inspection?.Id;
       if (inspId) {
         await request({ url: `/api/qc-inspections/${inspId}/fail`, method: "PUT",
-          data: { reason, assignToTechnicianId: technicianId || null, inspectedBy: user?.id ?? user?.staffId } });
+          data: { reason, assignToTechnicianId: technicianId || null, inspectorId: user?.id ?? user?.staffId } });
       }
-      setSuccess("❌ Đã đánh dấu KHÔNG ĐẠT — Trả về thợ sửa lại.");
+      setSuccess("Đã đánh dấu KHÔNG ĐẠT - Trả về thợ sửa lại.");
       setTimeout(() => navigate(`/workshop/foreman/board`), 1600);
     } catch (err) {
       setError(err?.response?.data?.message || "Không thể cập nhật QC FAIL.");
@@ -435,7 +435,7 @@ export default function QcChecklistPage() {
       <div className="qc-checklist">
         {templateItems.length === 0 ? (
           <div className="qc-no-template">
-            <span>📋</span>
+            <span>ðŸ“‹</span>
             <p>Chưa có mẫu QC nào được cấu hình cho loại lệnh này.</p>
           </div>
         ) : (
@@ -495,3 +495,5 @@ export default function QcChecklistPage() {
     </div>
   );
 }
+
+

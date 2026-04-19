@@ -236,10 +236,10 @@ export default function StaffManagement() {
       <header className="admin-header">
         <div>
           <h1>Quản lý nhân viên</h1>
-          <p className="header-sub">Quản lý tài khoản nhân viên trên toàn hệ thống</p>
+          <p className="header-sub">Quản lý t�i kho?n nhân viên tr�n to�n hệ thống</p>
         </div>
         <button className="btn-primary" onClick={openCreate}>
-          + Thêm nhân viên
+          + Th�m nhân viên
         </button>
       </header>
 
@@ -285,7 +285,7 @@ export default function StaffManagement() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">{"\u{1F464}"}</div>
-            <p>Không tìm thấy nhân viên nào.</p>
+            <p>Không t�m th?y nhân viên n�o.</p>
           </div>
         ) : (
           <table className="admin-table">
@@ -297,7 +297,7 @@ export default function StaffManagement() {
                 <th>Email</th>
                 <th>Trạng thái</th>
                 <th>Ngày tạo</th>
-                <th>Thao tác</th>
+                <th>Thao t�c</th>
               </tr>
             </thead>
             <tbody>
@@ -351,7 +351,7 @@ export default function StaffManagement() {
 
       {/* Modals */}
       {modal === "create" && (
-        <Modal title="Thêm nhân viên mới" onClose={closeModal}>
+        <Modal title="Th�m nhân viên m?i" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
           <StaffForm
             initial={EMPTY_FORM}
@@ -381,10 +381,10 @@ export default function StaffManagement() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận xóa" onClose={closeModal}>
+        <Modal title="Xác nhận x�a" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
           <ConfirmDialog
-            message={`Bạn có chắc chắn muđn xóa "${selected.fullName}"? Hành động này không thể hoàn tác.`}
+            message={`B?n c� ch?c chọn mudn x�a "${selected.fullName}"? H�nh d?ng n�y không th? ho�n t�c.`}
             onConfirm={handleDelete}
             onCancel={closeModal}
             loading={saving}
@@ -394,6 +394,7 @@ export default function StaffManagement() {
     </div>
   );
 }
+
 
 
 
