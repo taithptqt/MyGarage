@@ -330,7 +330,7 @@ export default function ServiceOrderQuotePage() {
   const [lineDiscountDraft, setLineDiscountDraft] = useState({});
   const [lineDiscountModeDraft, setLineDiscountModeDraft] = useState({});
   const [lineDiscountPercentDraft, setLineDiscountPercentDraft] = useState({});
-  const [cancelReason, setCancelReason] = useState("KhÃ¡ch vÃ£ng");
+  const [cancelReason, setCancelReason] = useState("Khách vãng");
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showMandatoryCloneWarning, setShowMandatoryCloneWarning] = useState(false);
   const [mailSentNotice, setMailSentNotice] = useState("");
@@ -591,7 +591,7 @@ export default function ServiceOrderQuotePage() {
     const serviceNameByRecommendationId = new Map();
     baseRows.forEach((entry) => {
       if (entry.itemType === "SERVICE" && entry.recommendationId) {
-        serviceNameByRecommendationId.set(entry.recommendationId, entry.itemName || `Dá»‹ch vá»¥ #${entry.recommendationId}`);
+        serviceNameByRecommendationId.set(entry.recommendationId, entry.itemName || `Dịch vụ #${entry.recommendationId}`);
       }
     });
 
@@ -600,11 +600,11 @@ export default function ServiceOrderQuotePage() {
     const groupedRows = baseRows.map((entry) => {
       const normalizedUrgency = String(entry.urgency || "").toUpperCase();
       const priorityLabel = normalizedUrgency === "URGENT"
-        ? "Cáº¥p bÃ¡ch"
+        ? "Cấp bách"
         : normalizedUrgency === "HIGH"
-          ? "Quan trá»ng"
+          ? "Quan trọng"
           : normalizedUrgency === "NORMAL"
-            ? "BÃ¬nh thÆ°á»ng"
+            ? "Bình thường"
             : ""; // Empty if no urgency defined
 
       if (entry.itemType === "SERVICE") {
@@ -967,7 +967,7 @@ export default function ServiceOrderQuotePage() {
       } else if (inventoryItemId) {
         const product = productLookup.get(inventoryItemId);
         itemId = inventoryItemId;
-        itemName = extractProductName(product) || `Váº­t tÆ° #${inventoryItemId}`;
+        itemName = extractProductName(product) || `Vật tư #${inventoryItemId}`;
         unitPriceAtTime = extractProductPrice(product);
         taxRate = extractProductTax(product);
         normalizedItemType = "PART";
@@ -1019,7 +1019,7 @@ export default function ServiceOrderQuotePage() {
       const itemName = firstNonEmptyText(
         readField(row, "itemName", "ItemName"),
         extractServiceName(service),
-        `Dá»‹ch vá»¥ #${serviceId}`,
+        `Dịch vụ #${serviceId}`,
       );
       const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractServicePrice(service);
       const taxRate = Number(readField(row, "taxRate", "TaxRate"));
@@ -1114,7 +1114,7 @@ export default function ServiceOrderQuotePage() {
           const itemName = firstNonEmptyText(
             readField(bomRow, "productName", "ProductName"),
             extractProductName(product),
-            `Phá»¥ tÃ¹ng #${productId}`,
+            `Phụ tùng #${productId}`,
           );
 
           draftItems.push({
@@ -1348,7 +1348,7 @@ export default function ServiceOrderQuotePage() {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
     if (!quoteId) return;
     setError("");
-    setActionMessage("Äang chuáº©n bá»‹ file Excel...");
+    setActionMessage("Đang chuẩn bị file Excel...");
 
     try {
       const { blob, fileName } = await serviceOrderApi.exportQuotationExcel(quoteId);
@@ -2196,7 +2196,7 @@ export default function ServiceOrderQuotePage() {
                 </div>
               ) : (
                 <div className="part-name-cell" style={{ paddingLeft: 20, color: "#475569" }}>
-                  <span style={{ opacity: 0.3, marginRight: 8 }}>â””â”€</span> {item.itemName}
+                  <span style={{ opacity: 0.3, marginRight: 8 }}>└─</span> {item.itemName}
                 </div>
               )}
             </td>
@@ -2231,7 +2231,7 @@ export default function ServiceOrderQuotePage() {
                   onChange={(e) => handleLineDiscountModeChange(detailId, subTotal, e.target.value)}
                   disabled={!canEditSplitBilling}
                 >
-                  <option value={DISCOUNT_MODE_AMOUNT}>VNÄ</option>
+                  <option value={DISCOUNT_MODE_AMOUNT}>VNĐ</option>
                   <option value={DISCOUNT_MODE_PERCENT}>%</option>
                 </select>
                 <input
@@ -2313,46 +2313,46 @@ export default function ServiceOrderQuotePage() {
             {/* Row 1 */}
             <QuoteInfoCard
               icon={<User size={24} />}
-              label="KhÃ¡ch hÃ ng"
+              label="Khách hàng"
               value={customerDisplay}
             />
             <QuoteInfoCard
               icon={<Car size={24} />}
-              label="ThÃ´ng tin xe"
+              label="Thông tin xe"
               value={plateDisplay}
               subValue={vehicleBrandModelDisplay}
             />
             <QuoteInfoCard
               icon={<Activity size={24} />}
-              label="Tráº¡ng thÃ¡i lá»‡nh"
+              label="Trạng thái lệnh"
               value={<span className="status-badge-inline">{getStatusLabelVi(order?.status, "")}</span>}
             />
             <QuoteInfoCard
               icon={<FileText size={24} />}
-              label="Tráº¡ng thÃ¡i bÃ¡o giÃ¡"
+              label="Trạng thái báo giá"
               value={<span className="status-badge-inline">{getStatusLabelVi(quotationStatus, "")}</span>}
             />
 
             {/* Row 2 */}
             <QuoteInfoCard
               icon={<DollarSign size={24} />}
-              label="Tá»•ng giÃ¡ trá»‹ bÃ¡o giÃ¡"
-              value={`${formatMoney(vatSummary.totalWithVat)} Ä‘`}
+              label="Tổng giá trị báo giá"
+              value={`${formatMoney(vatSummary.totalWithVat)} đ`}
             />
             <QuoteInfoCard
               icon={<ShieldCheck size={24} />}
-              label="Báº£o hiá»ƒm tráº£"
-              value={`${formatMoney(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount"))} Ä‘`}
+              label="Bảo hiểm trả"
+              value={`${formatMoney(readField(activeQuotation, "totalInsuranceAmount", "TotalInsuranceAmount"))} đ`}
             />
             <QuoteInfoCard
               icon={<Wallet size={24} />}
-              label="Miá»…n thÆ°á»ng"
-              value={`${formatMoney(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount"))} Ä‘`}
+              label="Miễn thường"
+              value={`${formatMoney(readField(order, "insuranceDeductibleAmount", "InsuranceDeductibleAmount"))} đ`}
             />
             <QuoteInfoCard
               icon={<CreditCard size={24} />}
-              label="KhÃ¡ch pháº£i tráº£"
-              value={`${formatMoney(splitBillingSummary.totalCustomerPayable)} Ä‘`}
+              label="Khách phải trả"
+              value={`${formatMoney(splitBillingSummary.totalCustomerPayable)} đ`}
             />
           </div>
 
@@ -2379,7 +2379,7 @@ export default function ServiceOrderQuotePage() {
                         onClick={() => setActiveQuotationId(id)}
                       >
                         <div className="version-btn-body">
-                          <span className="version-name">PhiÃªn báº£n V{versionNo}</span>
+                          <span className="version-name">Phiên bản V{versionNo}</span>
                           <div className="version-status-line">
                             <span className="version-status-text">{getStatusLabelVi(status, status)}</span>
                           </div>
@@ -2528,7 +2528,7 @@ export default function ServiceOrderQuotePage() {
                         onClick={handleSaveQuotationDiscounts}
                         disabled={!canEditQuotationDiscount || saving || discountSaving}
                       >
-                        <Save size={16} /> LÆ°u giáº£m giÃ¡
+                        <Save size={16} /> Lưu giảm giá
                       </button>
                     </div>
                   </div>
@@ -2680,7 +2680,7 @@ export default function ServiceOrderQuotePage() {
                             <th className="text-right col-money">Giảm giá</th>
                             <th className="text-right col-money">Thành tiền</th>
                             <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
-                            <th className="text-right col-money">Khách bï¿½</th>
+                            <th className="text-right col-money">Khách bù</th>
                             <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
                           </tr>
                         </thead>

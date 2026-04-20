@@ -904,7 +904,7 @@ export default function ReceptionChatPage() {
                   type="button"
                   className="chat-attach-btn"
                   onClick={() => setOrderPickerOpen(false)}
-                  aria-label="Đồng danh sách don h�ng"
+                  aria-label="Đóng danh sách đơn hàng"
                 >
                   <X size={12} />
                 </button>
@@ -1027,7 +1027,7 @@ export default function ReceptionChatPage() {
               <strong>{orderPreview.statusLabel}</strong>
               <span>Tổng tiền</span>
               <strong>{formatOrderAmount(orderPreview.totalAmount) || "--"}</strong>
-              <span>Chi nh�nh</span>
+                  <span>Chi nhánh</span>
               <strong>{orderPreview.branchName || "--"}</strong>
             </div>
             {orderPreview.detailUrl ? (
@@ -1049,4 +1049,3 @@ export default function ReceptionChatPage() {
     </div>
   );
 }
-

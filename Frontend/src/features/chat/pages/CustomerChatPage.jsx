@@ -89,7 +89,7 @@ export default function CustomerChatPage() {
           null;
         setSelectedConversationId(wantedId);
       } catch (err) {
-      setError(err.message || "Không t?i ??c danh sách h?i tho?i.");
+        setError(err.message || "Không tải được danh sách hội thoại.");
       } finally {
         setLoadingConversations(false);
       }
@@ -343,6 +343,5 @@ export default function CustomerChatPage() {
     </div>
   );
 }
-
 
 

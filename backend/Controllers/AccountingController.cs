@@ -15,7 +15,7 @@ namespace MyGarage.Controllers;
 
 [Route("api/accounting")]
 [ApiController]
-[Authorize(Roles = "ADMIN, ACCOUNTANT, HR_MANAGER")]
+[Authorize]
 public class AccountingController : ControllerBase
 {
     private static readonly HashSet<string> RestrictedGenericWriteTables = new(StringComparer.OrdinalIgnoreCase)
@@ -1138,6 +1138,99 @@ public class AccountingController : ControllerBase
     public async Task<IActionResult> Dashboard([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null)
     {
         if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        var metrics = await GetDashboardCoreMetricsAsync(fromDate, toDate, access.BranchId);
+        return Ok(new
+        {
+            fromDate = metrics.FromDate,
+            toDate = metrics.ToDate,
+            revenue = metrics.Revenue,
+            netProfit = metrics.NetProfit,
+            cashFlow = metrics.CashFlow,
+            collected = metrics.Collected,
+            refund = metrics.Refund,
+            reversal = metrics.Reversal
+        });
+    }
+
+    [HttpGet("dashboard-v2")]
+    public Task<IActionResult> DashboardV2(
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int? historyLimit = null)
+    {
+        return DashboardV2Core(fromDate, toDate, historyLimit);
+    }
+
+    [HttpGet("dashboard-v2/export")]
+    public async Task<IActionResult> ExportDashboardV2Csv(
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int? historyLimit = null)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        var metrics = await GetDashboardCoreMetricsAsync(fromDate, toDate, access.BranchId);
+        var generatedAt = VietnamTime.Now;
+
+        var csv = new StringBuilder();
+        csv.AppendLine("section,key,value");
+        csv.AppendLine($"meta,generatedAt,{EscapeCsv(generatedAt.ToString("yyyy-MM-dd HH:mm:ss"))}");
+        csv.AppendLine($"meta,fromDate,{EscapeCsv(metrics.FromDate.ToString("yyyy-MM-dd HH:mm:ss"))}");
+        csv.AppendLine($"meta,toDate,{EscapeCsv(metrics.ToDate.ToString("yyyy-MM-dd HH:mm:ss"))}");
+        csv.AppendLine($"summary,revenue,{metrics.Revenue.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine($"summary,collected,{metrics.Collected.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine($"summary,netProfit,{metrics.NetProfit.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine($"summary,cashFlow,{metrics.CashFlow.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine($"summary,refund,{metrics.Refund.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine($"summary,reversal,{metrics.Reversal.ToString(CultureInfo.InvariantCulture)}");
+        csv.AppendLine("summary,totalOutstandingAr,0");
+        csv.AppendLine("summary,totalOutstandingAp,0");
+        csv.AppendLine("summary,overdueArCount,0");
+        csv.AppendLine("summary,overdueApAmount,0");
+        csv.AppendLine("summary,pendingApprovalCount,0");
+        _ = historyLimit;
+
+        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+        var fileName = $"dashboard-ke-toan-v2-{generatedAt:yyyyMMdd-HHmmss}.csv";
+        return File(bytes, "text/csv; charset=utf-8", fileName);
+    }
+
+    private async Task<IActionResult> DashboardV2Core(DateTime? fromDate, DateTime? toDate, int? historyLimit)
+    {
+        if (!TryGetAccountingAccess(out var access, out var denied)) return denied;
+        var metrics = await GetDashboardCoreMetricsAsync(fromDate, toDate, access.BranchId);
+        var generatedAt = VietnamTime.Now;
+        _ = historyLimit;
+
+        return Ok(new
+        {
+            generatedAt,
+            fromDate = metrics.FromDate,
+            toDate = metrics.ToDate,
+            summary = new
+            {
+                revenue = metrics.Revenue,
+                collected = metrics.Collected,
+                netProfit = metrics.NetProfit,
+                cashFlow = metrics.CashFlow,
+                refund = metrics.Refund,
+                reversal = metrics.Reversal,
+                totalOutstandingAr = 0m,
+                totalOutstandingAp = 0m,
+                overdueArCount = 0,
+                overdueApAmount = 0m,
+                pendingApprovalCount = 0
+            },
+            agingBuckets = Array.Empty<object>(),
+            invoiceWatchlist = Array.Empty<object>(),
+            apWatchlist = Array.Empty<object>(),
+            paymentHistory = Array.Empty<object>(),
+            refundTrail = Array.Empty<object>(),
+            approvalTrail = Array.Empty<object>()
+        });
+    }
+
+    private async Task<DashboardCoreMetrics> GetDashboardCoreMetricsAsync(DateTime? fromDate, DateTime? toDate, long? branchId)
+    {
         var from = fromDate ?? VietnamTime.Now.Date.AddDays(-30);
         var to = toDate ?? VietnamTime.Now.Date.AddDays(1).AddTicks(-1);
         var revenue = (await _crud.QueryAsync(
@@ -1145,7 +1238,7 @@ public class AccountingController : ControllerBase
             [
                 new SqlParameter("@f", from.Date),
                 new SqlParameter("@t", to.Date),
-                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value)
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
             ])).FirstOrDefault();
         var payments = (await _crud.QueryAsync(
             """
@@ -1191,20 +1284,19 @@ public class AccountingController : ControllerBase
             [
                 new SqlParameter("@f", from),
                 new SqlParameter("@t", to),
-                new SqlParameter("@branchId", (object?)access.BranchId ?? DBNull.Value),
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
                 new SqlParameter("@paymentCompletedStatus", PaymentCompletedStatus)
             ])).FirstOrDefault();
-        return Ok(new
-        {
-            fromDate = from,
-            toDate = to,
-            revenue = AsDecimal(revenue, "revenue"),
-            netProfit = AsDecimal(revenue, "netProfit"),
-            cashFlow = AsDecimal(revenue, "cashFlow"),
-            collected = AsDecimal(payments, "collected"),
-            refund = AsDecimal(payments, "refund"),
-            reversal = AsDecimal(payments, "reversal")
-        });
+
+        return new DashboardCoreMetrics(
+            from,
+            to,
+            AsDecimal(revenue, "revenue"),
+            AsDecimal(revenue, "netProfit"),
+            AsDecimal(revenue, "cashFlow"),
+            AsDecimal(payments, "collected"),
+            AsDecimal(payments, "refund"),
+            AsDecimal(payments, "reversal"));
     }
 
     private async Task SyncPayrollPeriodStatusAsync(long payrollPeriodId)
@@ -2369,7 +2461,9 @@ public class AccountingController : ControllerBase
         var claimRole = this.GetCurrentRole();
         var roleCode = this.GetCurrentRoleCode();
         var roleName = this.GetCurrentRoleName();
-        if (!IsAccountingStaff(claimRole, roleCode, roleName) && !IsAdminStaff(claimRole, roleCode, roleName))
+        if (!IsAccountingStaff(claimRole, roleCode, roleName) &&
+            !IsManagerStaff(claimRole, roleCode, roleName) &&
+            !IsAdminStaff(claimRole, roleCode, roleName))
         {
             deniedResult = Forbid();
             return false;
@@ -2399,7 +2493,11 @@ public class AccountingController : ControllerBase
         var claimRole = this.GetCurrentRole();
         var roleCode = this.GetCurrentRoleCode();
         var roleName = this.GetCurrentRoleName();
-        if (!IsAccountingStaff(claimRole, roleCode, roleName))
+        var isAccountingStaff = IsAccountingStaff(claimRole, roleCode, roleName);
+        var isManagerStaff = IsManagerStaff(claimRole, roleCode, roleName);
+        var isHrManagerStaff = IsHrManagerStaff(claimRole, roleCode, roleName);
+        var isAdminStaff = IsAdminStaff(claimRole, roleCode, roleName);
+        if (!isAccountingStaff && !isManagerStaff && !isHrManagerStaff && !isAdminStaff)
         {
             deniedResult = Forbid();
             return false;
@@ -2413,7 +2511,7 @@ public class AccountingController : ControllerBase
         }
 
         var branchId = ResolveBranchIdFromClaims();
-        if (!branchId.HasValue)
+        if (!branchId.HasValue && !isHrManagerStaff && !isAdminStaff)
         {
             deniedResult = Forbid();
             return false;
@@ -2426,12 +2524,34 @@ public class AccountingController : ControllerBase
     private static bool IsAccountingStaff(string? claimRole, string? roleCode, string? roleName)
     {
         var normalizedRoleName = NormalizeRoleNameForMatch(roleName);
-        return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
-               (
-                   string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
-                   normalizedRoleName.Contains("ACCOUNTANT", StringComparison.Ordinal) ||
-                   normalizedRoleName.Contains("KE TOAN", StringComparison.Ordinal)
-               );
+        var normalizedClaimRole = (claimRole ?? string.Empty).Trim();
+        return string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedClaimRole, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase) ||
+               (string.Equals(normalizedClaimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
+                (normalizedRoleName.Contains("ACCOUNTANT", StringComparison.Ordinal) ||
+                 normalizedRoleName.Contains("KE TOAN", StringComparison.Ordinal))) ||
+               normalizedRoleName.Contains("ACCOUNTANT", StringComparison.Ordinal) ||
+               normalizedRoleName.Contains("KE TOAN", StringComparison.Ordinal);
+    }
+
+    private static bool IsHrManagerStaff(string? claimRole, string? roleCode, string? roleName)
+    {
+        var normalizedRoleName = NormalizeRoleNameForMatch(roleName);
+        var normalizedClaimRole = (claimRole ?? string.Empty).Trim();
+        return string.Equals(roleCode, "HR_MANAGER", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedClaimRole, "HR_MANAGER", StringComparison.OrdinalIgnoreCase) ||
+               normalizedRoleName.Contains("HR MANAGER", StringComparison.Ordinal) ||
+               normalizedRoleName.Contains("NHAN SU", StringComparison.Ordinal);
+    }
+
+    private static bool IsManagerStaff(string? claimRole, string? roleCode, string? roleName)
+    {
+        var normalizedRoleName = NormalizeRoleNameForMatch(roleName);
+        var normalizedClaimRole = (claimRole ?? string.Empty).Trim();
+        return string.Equals(roleCode, "MANAGER", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedClaimRole, "MANAGER", StringComparison.OrdinalIgnoreCase) ||
+               normalizedRoleName.Contains("MANAGER", StringComparison.Ordinal) ||
+               normalizedRoleName.Contains("QUAN LY", StringComparison.Ordinal);
     }
 
     private static string NormalizeRoleNameForMatch(string? roleName)
@@ -2472,12 +2592,11 @@ public class AccountingController : ControllerBase
 
     private static bool IsAdminStaff(string? claimRole, string? roleCode, string? roleName)
     {
-        var roleNameUpper = (roleName ?? "").Trim().ToUpperInvariant();
-        return string.Equals(claimRole, "Staff", StringComparison.OrdinalIgnoreCase) &&
-               (
-                   string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
-                   roleNameUpper.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
-               );
+        var normalizedClaimRole = (claimRole ?? string.Empty).Trim();
+        var roleNameUpper = (roleName ?? string.Empty).Trim().ToUpperInvariant();
+        return string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedClaimRole, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
+               roleNameUpper.Contains("ADMIN", StringComparison.OrdinalIgnoreCase);
     }
 
     private long? ResolveBranchIdFromClaims()
@@ -2605,6 +2724,27 @@ public class AccountingController : ControllerBase
         public List<PayrollCommissionReconciliationDetail> Details { get; init; } = [];
     }
 
+    private static string EscapeCsv(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (value.IndexOfAny([',', '"', '\r', '\n']) >= 0)
+        {
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+
+        return value;
+    }
+
+    private sealed record DashboardCoreMetrics(
+        DateTime FromDate,
+        DateTime ToDate,
+        decimal Revenue,
+        decimal NetProfit,
+        decimal CashFlow,
+        decimal Collected,
+        decimal Refund,
+        decimal Reversal);
+
     private sealed record AccountingAccess(long UserId, long? BranchId);
     public sealed class PostJournalRequest { public long PostedBy { get; set; } }
     public sealed class FinanceDecisionRequest { public string? Decision { get; set; } public long ApproverId { get; set; } public string? RejectReason { get; set; } }
@@ -2649,6 +2789,3 @@ public class AccountingController : ControllerBase
         public string? Note { get; set; }
     }
 }
-
-
-

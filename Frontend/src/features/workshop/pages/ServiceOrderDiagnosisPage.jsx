@@ -113,45 +113,45 @@ function formatDateTime(value) {
 }
 
 const SYSTEM_ASSIGNMENT_NOTE_MAP = {
-  "Created diagnosis ticket": "ÄÃ£ táº¡o phiáº¿u cháº©n Ä‘oÃ¡n.",
-  "Assigned diagnosis": "ÄÃ£ phÃ¢n cÃ´ng phiáº¿u cháº©n Ä‘oÃ¡n.",
-  "Assigned by manager override": "Quáº£n Ä‘á»‘c Ä‘Ã£ phÃ¢n cÃ´ng trá»±c tiáº¿p phiáº¿u cháº©n Ä‘oÃ¡n.",
-  "Lead technician accepted diagnosis": "Thá»£ chÃ­nh Ä‘Ã£ nháº­n phiáº¿u cháº©n Ä‘oÃ¡n.",
-  "Created supporting-team diagnosis clone": "ÄÃ£ táº¡o phiÃªn báº£n há»— trá»£ cho tá»• phá»‘i há»£p.",
-  "Canceled because customer picked up vehicle": "ÄÃ£ há»§y vÃ¬ khÃ¡ch hÃ ng Ä‘Ã£ nháº­n xe.",
-  "Diagnosis completed": "ÄÃ£ hoÃ n thÃ nh cháº©n Ä‘oÃ¡n.",
+  "Created diagnosis ticket": "Đã tạo phiếu chẩn đoán.",
+  "Assigned diagnosis": "Đã phân công phiếu chẩn đoán.",
+  "Assigned by manager override": "Quản đốc đã phân công trực tiếp phiếu chẩn đoán.",
+  "Lead technician accepted diagnosis": "Thợ chính đã nhận phiếu chẩn đoán.",
+  "Created supporting-team diagnosis clone": "Đã tạo phiên bản hỗ trợ cho tổ phối hợp.",
+  "Canceled because customer picked up vehicle": "Đã hủy vì khách hàng đã nhận xe.",
+  "Diagnosis completed": "Đã hoàn thành chẩn đoán.",
 };
 
 function buildAutoAssignmentNote(version) {
   if (!version) return "";
   if (version?.foremanRejectReason) {
-    return `Bá»‹ tá»« chá»‘i duyá»‡t: ${version.foremanRejectReason}`;
+    return `Bị từ chối duyệt: ${version.foremanRejectReason}`;
   }
 
   const eventType = normalizeStatusCode(version?.eventType);
   if (eventType === "TECHNICAL_REJECTED" || eventType === "FINAL_REJECTED") {
-    return "PhiÃªn báº£n nÃ y Ä‘Ã£ bá»‹ tá»« chá»‘i duyá»‡t.";
+    return "Phiên bản này đã bị từ chối duyệt.";
   }
   if (eventType === "TECHNICAL_APPROVED") {
-    return "Tá»• trÆ°á»Ÿng Ä‘Ã£ duyá»‡t ká»¹ thuáº­t.";
+    return "Tổ trưởng đã duyệt kỹ thuật.";
   }
   if (eventType === "FINAL_APPROVED") {
-    return "Quáº£n Ä‘á»‘c Ä‘Ã£ duyá»‡t cuá»‘i.";
+    return "Quản đốc đã duyệt cuối.";
   }
   if (eventType === "STARTED") {
-    return "Thá»£ chÃ­nh Ä‘Ã£ nháº­n phiáº¿u cháº©n Ä‘oÃ¡n.";
+    return "Thợ chính đã nhận phiếu chẩn đoán.";
   }
   if (eventType === "ASSIGNED") {
-    return "ÄÃ£ phÃ¢n cÃ´ng phiáº¿u cháº©n Ä‘oÃ¡n.";
+    return "Đã phân công phiếu chẩn đoán.";
   }
   if (eventType === "CREATED") {
-    return "ÄÃ£ táº¡o phiáº¿u cháº©n Ä‘oÃ¡n.";
+    return "Đã tạo phiếu chẩn đoán.";
   }
   if (eventType === "COMPLETED") {
-    return "ÄÃ£ hoÃ n thÃ nh cháº©n Ä‘oÃ¡n.";
+    return "Đã hoàn thành chẩn đoán.";
   }
   if (eventType === "CANCELED") {
-    return "Phiáº¿u Ä‘Ã£ há»§y.";
+    return "Phiếu đã hủy.";
   }
   return "";
 }
@@ -324,7 +324,7 @@ function normalizeLookupText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/Ä‘/g, "d");
+    .replace(/đ/g, "d");
 }
 
 const INTERNAL_CUSTOMER_NOTE_MARKER_REGEX = /\[(?:FLOW:[^\]]+|CLUSTER:[^\]]+|[A-Z][A-Z0-9_]{2,})\]/g;
@@ -475,7 +475,7 @@ function resolveApiErrorMessage(error) {
     payload?.message ||
     payload?.title ||
     error?.message ||
-    "KhÃ´ng thá»ƒ táº£i váº­t tÆ° tá»± Ä‘á»™ng tá»« BOM."
+    "Không thể tải vật tư tự động từ BOM."
   );
 }
 
@@ -648,10 +648,10 @@ function buildVehicleDisplay(order, modelById, brandById, vehicleContext = null)
   const year = Number.isFinite(yearNumber) && yearNumber > 1900 ? String(Math.trunc(yearNumber)) : "";
 
   return {
-    plate: plate || "ChÆ°a cÃ³",
-    brand: brand || "ChÆ°a cÃ³",
-    model: model || "ChÆ°a cÃ³",
-    year: year || "ChÆ°a cÃ³",
+    plate: plate || "Chưa có",
+    brand: brand || "Chưa có",
+    model: model || "Chưa có",
+    year: year || "Chưa có",
   };
 }
 
@@ -759,7 +759,7 @@ export default function ServiceOrderDiagnosisPage() {
   const defaultBackPath = isTechnician ? "/workshop/technician" : "/workshop/reception";
   const fallbackHistoryPath = isTechnician && fromHistoryQuery ? "/workshop/technician/history" : "";
   const backPath = safeReturnPath || fallbackHistoryPath || defaultBackPath;
-  const backButtonLabel = "Quay láº¡i";
+  const backButtonLabel = "Quay lại";
   const customerDescription = useMemo(() => {
     const raw = String(order?.customerNotes || "").trim();
     if (!raw) return "";
@@ -775,7 +775,7 @@ export default function ServiceOrderDiagnosisPage() {
       return sanitizeCustomerNoteText(raw);
     }
   }, [order?.customerNotes]);
-  const customerDescriptionDisplay = customerDescription || "KhÃ¡ch chÆ°a mÃ´ táº£ chi tiáº¿t.";
+  const customerDescriptionDisplay = customerDescription || "Khách chưa mô tả chi tiết.";
   const diagnosisAssignmentNote = useMemo(() => {
     const raw = firstNonEmptyText(
       selectedAssignmentVersion?.note,
@@ -885,7 +885,7 @@ export default function ServiceOrderDiagnosisPage() {
       if (model.toLowerCase().includes(brand.toLowerCase())) return model;
       return `${brand} ${model}`.trim();
     }
-    return model || brand || "ChÆ°a cÃ³";
+    return model || brand || "Chưa có";
   }, [vehicleDisplay.brand, vehicleDisplay.model]);
 
   const resolvedVehicleModelForServiceFilter = useMemo(
@@ -924,7 +924,7 @@ export default function ServiceOrderDiagnosisPage() {
       const serviceId = extractServiceId(service);
       if (!serviceId) return;
       const name = extractServiceName(service);
-      map.set(String(serviceId), name || `Dá»‹ch vá»¥ #${serviceId}`);
+      map.set(String(serviceId), name || `Dịch vụ #${serviceId}`);
     });
     return map;
   }, [services]);
@@ -948,7 +948,7 @@ export default function ServiceOrderDiagnosisPage() {
       const itemType = String(detail?.itemType ?? detail?.ItemType ?? "").trim().toUpperCase();
 
       if (serviceId) {
-        names.add(serviceNameById.get(String(serviceId)) || detailName || `Dá»‹ch vá»¥ #${serviceId}`);
+        names.add(serviceNameById.get(String(serviceId)) || detailName || `Dịch vụ #${serviceId}`);
         return;
       }
 
@@ -966,7 +966,7 @@ export default function ServiceOrderDiagnosisPage() {
     (serviceCategories || []).forEach((category) => {
       const id = extractCategoryId(category);
       if (!id) return;
-      const label = extractCategoryName(category) || `NhÃ³m ${id}`;
+      const label = extractCategoryName(category) || `Nhóm ${id}`;
       map.set(String(id), { value: String(id), label });
     });
 
@@ -974,7 +974,7 @@ export default function ServiceOrderDiagnosisPage() {
       const categoryId = extractServiceCategoryId(service);
       if (!categoryId) return;
       if (map.has(String(categoryId))) return;
-      const fallbackLabel = extractServiceCategoryName(service) || `NhÃ³m ${categoryId}`;
+      const fallbackLabel = extractServiceCategoryName(service) || `Nhóm ${categoryId}`;
       map.set(String(categoryId), { value: String(categoryId), label: fallbackLabel });
     });
 
@@ -1030,7 +1030,7 @@ export default function ServiceOrderDiagnosisPage() {
       if (cleaned.length > 0) return cleaned;
     } catch {}
     const text = sanitizeCustomerNoteText(rawNotes);
-    return text ? [text] : ["KhÃ¡ch chÆ°a mÃ´ táº£ chi tiáº¿t"];
+    return text ? [text] : ["Khách chưa mô tả chi tiết"];
   };
 
   const decodeRootCause = (rawRootCause) => {
@@ -1066,7 +1066,7 @@ export default function ServiceOrderDiagnosisPage() {
   const loadData = async () => {
     const id = Number(orderId);
     if (!id) {
-      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
+      setError("Mã lệnh sửa chữa không hợp lệ.");
       setLoading(false);
       return;
     }
@@ -1105,14 +1105,14 @@ export default function ServiceOrderDiagnosisPage() {
           return type === "CHECK_IN" && signature.length > 0;
         });
       if (!signedCheckInExists) {
-        const message = "KhÃ¡ch chÆ°a kÃ½ check-in. Vui lÃ²ng hoÃ n táº¥t Nháº­t kÃ½ xe trÆ°á»›c khi vÃ o chuáº©n Ä‘oÃ¡n.";
+        const message = "Khách chưa ký check-in. Vui lòng hoàn tất Nhật ký xe trước khi vào chuẩn đoán.";
         if (isTechnician) {
           setError(message);
           return;
         }
 
         toast({
-          title: "ChÆ°a hoÃ n táº¥t check-in",
+          title: "Chưa hoàn tất check-in",
           description: message,
           status: "warning",
           duration: 4500,
@@ -1153,7 +1153,7 @@ export default function ServiceOrderDiagnosisPage() {
         await selectDiagnosis(initialActive.id, diagnosesList, initialAssignmentId);
       }
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u chuáº©n Ä‘oÃ¡n.");
+      setError(err?.message || "Không thể tải dữ liệu chuẩn đoán.");
     } finally {
       setLoading(false);
     }
@@ -1232,16 +1232,16 @@ export default function ServiceOrderDiagnosisPage() {
       });
       await loadData();
       toast({
-        title: "ÄÃ£ táº¡o phiÃªn báº£n má»›i",
-        description: "Ká»¹ thuáº­t viÃªn cÃ³ thá»ƒ chá»‰nh sá»­a láº¡i trÃªn phiÃªn báº£n má»›i.",
+        title: "Đã tạo phiên bản mới",
+        description: "Kỹ thuật viên có thể chỉnh sửa lại trên phiên bản mới.",
         status: "success",
         duration: 2800,
         isClosable: true,
       });
     } catch (err) {
       toast({
-        title: "KhÃ´ng thá»ƒ táº¡o phiÃªn báº£n má»›i",
-        description: err?.message || "Vui lÃ²ng thá»­ láº¡i.",
+        title: "Không thể tạo phiên bản mới",
+        description: err?.message || "Vui lòng thử lại.",
         status: "error",
         duration: 3200,
         isClosable: true,
@@ -1401,8 +1401,8 @@ export default function ServiceOrderDiagnosisPage() {
         const vehicleModelId = resolvedVehicleModelIdForBom;
         if (!vehicleModelId) {
           toast({
-            title: "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c dÃ²ng xe",
-            description: "KhÃ´ng thá»ƒ lá»c BOM theo dÃ²ng xe. Vui lÃ²ng kiá»ƒm tra láº¡i thÃ´ng tin dÃ²ng xe cá»§a lá»‡nh.",
+            title: "Không xác định được dòng xe",
+            description: "Không thể lọc BOM theo dòng xe. Vui lòng kiểm tra lại thông tin dòng xe của lệnh.",
             status: "warning",
             duration: 3200,
             isClosable: true,
@@ -1467,7 +1467,7 @@ export default function ServiceOrderDiagnosisPage() {
         setExpandedMaterialByService((prev) => ({ ...prev, [recommendationKey]: false }));
       } catch (error) {
         toast({
-          title: "KhÃ´ng tá»± táº£i Ä‘Æ°á»£c váº­t tÆ° tá»« BOM",
+          title: "Không tự tải được vật tư từ BOM",
           description: resolveApiErrorMessage(error),
           status: "warning",
           duration: 3200,
@@ -1624,7 +1624,7 @@ export default function ServiceOrderDiagnosisPage() {
       }
 
       if (!currentDiagnosisAssignmentId) {
-        throw new Error("Thiáº¿u DiagnosisAssignmentId há»£p lá»‡ Ä‘á»ƒ táº¡o kiáº¿n nghá»‹ ká»¹ thuáº­t.");
+        throw new Error("Thiếu DiagnosisAssignmentId hợp lệ để tạo kiến nghị kỹ thuật.");
       }
 
       const normalizeRecommendationPayload = (rec, parentRecommendationId = null) => {
@@ -1657,22 +1657,22 @@ export default function ServiceOrderDiagnosisPage() {
           toPositiveNumber(root.serviceCategoryId) ||
           toPositiveNumber(serviceCategoryByServiceId.get(String(root.standardServiceId)));
         if (!effectiveCategoryId) {
-          throw new Error("Vui lÃ²ng chá»n loáº¡i dá»‹ch vá»¥ trÆ°á»›c khi chá»n dá»‹ch vá»¥ sá»­a chá»¯a.");
+          throw new Error("Vui lòng chọn loại dịch vụ trước khi chọn dịch vụ sửa chữa.");
         }
         if (!toPositiveNumber(root.standardServiceId)) {
-          throw new Error("Vui lÃ²ng chá»n dá»‹ch vá»¥ sá»­a chá»¯a cho tá»«ng dÃ²ng dá»‹ch vá»¥.");
+          throw new Error("Vui lòng chọn dịch vụ sửa chữa cho từng dòng dịch vụ.");
         }
         if (!String(root.technicianNotes || "").trim()) {
-          throw new Error("Vui lÃ²ng nháº­p lÃ½ do cho tá»«ng dá»‹ch vá»¥ Ä‘Ã£ chá»n trÆ°á»›c khi lÆ°u.");
+          throw new Error("Vui lòng nhập lý do cho từng dịch vụ đã chọn trước khi lưu.");
         }
         if (isNewRecommendationItem(root) && normalizeImageUrls(root.evidenceMediaUrls).length === 0) {
-          throw new Error("Má»—i dá»‹ch vá»¥ pháº£i cÃ³ Ã­t nháº¥t 1 áº£nh hiá»‡n tráº¡ng trÆ°á»›c khi lÆ°u.");
+          throw new Error("Mỗi dịch vụ phải có ít nhất 1 ảnh hiện trạng trước khi lưu.");
         }
       }
 
       for (const child of children) {
         if (!toPositiveNumber(child.inventoryItemId)) {
-          throw new Error("Vui lÃ²ng chá»n váº­t tÆ° cá»¥ thá»ƒ cho tá»«ng dÃ²ng váº­t tÆ°.");
+          throw new Error("Vui lòng chọn vật tư cụ thể cho từng dòng vật tư.");
         }
       }
 
@@ -1683,7 +1683,7 @@ export default function ServiceOrderDiagnosisPage() {
             const uploadRes = await vehicleConditionLogApi.uploadImage(url);
             const uploadedUrl = String(uploadRes?.url || "").trim();
             if (!uploadedUrl) {
-              throw new Error("KhÃ´ng thá»ƒ upload áº£nh hiá»‡n tráº¡ng cá»§a dá»‹ch vá»¥.");
+              throw new Error("Không thể upload ảnh hiện trạng của dịch vụ.");
             }
             rootEvidenceUrls.push(uploadedUrl);
           } else {
@@ -1718,7 +1718,7 @@ export default function ServiceOrderDiagnosisPage() {
             const uploadRes = await vehicleConditionLogApi.uploadImage(url);
             const uploadedUrl = String(uploadRes?.url || "").trim();
             if (!uploadedUrl) {
-              throw new Error("KhÃ´ng thá»ƒ upload áº£nh Ä‘Ã­nh kÃ¨m cá»§a váº­t tÆ°.");
+              throw new Error("Không thể upload ảnh đính kèm của vật tư.");
             }
             childEvidenceUrls.push(uploadedUrl);
           } else {
@@ -1737,10 +1737,10 @@ export default function ServiceOrderDiagnosisPage() {
         }
       }
 
-      toast({ title: "ÄÃ£ lÆ°u chuáº©n Ä‘oÃ¡n", status: "success", duration: 2500, isClosable: true });
+      toast({ title: "Đã lưu chuẩn đoán", status: "success", duration: 2500, isClosable: true });
       await loadData();
     } catch (err) {
-      toast({ title: "LÆ°u chuáº©n Ä‘oÃ¡n tháº¥t báº¡i", description: err.message, status: "error" });
+      toast({ title: "Lưu chuẩn đoán thất bại", description: err.message, status: "error" });
     } finally {
       setSaving(false);
     }
@@ -1765,22 +1765,22 @@ export default function ServiceOrderDiagnosisPage() {
     <Box className="workshop-table-card diagnosis-page-force-select" p={{ base: 4, md: 6 }}>
       <HStack justify="space-between" mb={5} flexWrap="wrap" gap={3}>
         <Box>
-          <Heading size="md" color="#2b3674">BÃ¡o cÃ¡o Chuáº©n Ä‘oÃ¡n ChuyÃªn sÃ¢u</Heading>
+          <Heading size="md" color="#2b3674">Báo cáo Chuẩn đoán Chuyên sâu</Heading>
           <Text color="#707eae" mt={1}>
-            Lá»‡nh sá»­a chá»¯a: <strong>{order?.code || `#${orderId}`}</strong>
+            Lệnh sửa chữa: <strong>{order?.code || `#${orderId}`}</strong>
             {" | "}
-            Biá»ƒn sá»‘: <strong>{vehicleDisplay.plate}</strong>
+            Biển số: <strong>{vehicleDisplay.plate}</strong>
             {" | "}
-            DÃ²ng xe: <strong>{vehicleModelDisplay}</strong>
+            Dòng xe: <strong>{vehicleModelDisplay}</strong>
             {" | "}
-            NÄƒm sáº£n xuáº¥t: <strong>{vehicleDisplay.year}</strong>
+            Năm sản xuất: <strong>{vehicleDisplay.year}</strong>
           </Text>
           <Text color="#707eae" mt={1}>
-            Dá»‹ch vá»¥:{" "}
+            Dịch vụ:{" "}
             <strong>
               {selectedCustomerServiceNames.length > 0
                 ? selectedCustomerServiceNames.join(" | ")
-                : "ChÆ°a cÃ³"}
+                : "Chưa có"}
             </strong>
           </Text>
         </Box>
@@ -1790,19 +1790,19 @@ export default function ServiceOrderDiagnosisPage() {
       {error ? (
         <Box p={4} bg="red.50" color="red.600" borderRadius="md">{error}</Box>
       ) : allDiagnoses.length === 0 ? (
-        <Text color="#707eae">ChÆ°a cÃ³ yÃªu cáº§u chuáº©n Ä‘oÃ¡n nÃ o.</Text>
+        <Text color="#707eae">Chưa có yêu cầu chuẩn đoán nào.</Text>
       ) : (
         <VStack align="stretch" spacing={5}>
               <Grid templateColumns={{ base: "1fr", xl: "280px minmax(0,1fr)" }} gap={4}>
                 <GridItem>
                   <Box p={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                     <HStack justify="space-between" mb={3}>
-                      <Heading size="sm" color="#244887">PhiÃªn báº£n cháº©n Ä‘oÃ¡n</Heading>
+                      <Heading size="sm" color="#244887">Phiên bản chẩn đoán</Heading>
                       <Text fontSize="xs" fontWeight="700" color="#4a5c84">{assignmentVersions.length}</Text>
                     </HStack>
                     <VStack align="stretch" spacing={2} maxH="420px" overflowY="auto">
                       {assignmentVersions.length === 0 ? (
-                        <Text color="#7f8fb2" fontSize="sm">ChÆ°a cÃ³ phiÃªn báº£n.</Text>
+                        <Text color="#7f8fb2" fontSize="sm">Chưa có phiên bản.</Text>
                       ) : (
                         assignmentVersions.map((version, index) => {
                           const isSelected = Number(version.diagnosisAssignmentId) === Number(selectedAssignmentVersion?.diagnosisAssignmentId);
@@ -1837,7 +1837,7 @@ export default function ServiceOrderDiagnosisPage() {
                     <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                       <HStack color="#f56565" mb={3}>
                         <Icon as={MessageSquare} size={20} />
-                        <Heading size="sm">MÃ´ táº£ cá»§a KhÃ¡ch hÃ ng</Heading>
+                        <Heading size="sm">Mô tả của Khách hàng</Heading>
                       </HStack>
                       <Box bg="#f8fbff" border="1px solid #dbe7ff" borderRadius="md" px={4} py={3}>
                         <Text color="#2b3674" whiteSpace="pre-wrap" lineHeight="1.6">{customerDescriptionDisplay}</Text>
@@ -1846,18 +1846,18 @@ export default function ServiceOrderDiagnosisPage() {
                     <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                       <HStack color="#ffb547" mb={4}>
                         <Icon as={AlertTriangle} size={20} />
-                        <Heading size="sm">Káº¿t luáº­n & Má»©c Ä‘á»™</Heading>
+                        <Heading size="sm">Kết luận & Mức độ</Heading>
                       </HStack>
                       <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={4}>
                         <GridItem>
                           <FormControl>
-                            <FormLabel fontSize="sm" fontWeight="600" color="#2b3674">Káº¿t luáº­n nguyÃªn nhÃ¢n</FormLabel>
+                            <FormLabel fontSize="sm" fontWeight="600" color="#2b3674">Kết luận nguyên nhân</FormLabel>
                             <Textarea
                               value={form.rootCause}
                               onChange={(e) => setForm((prev) => ({ ...prev, rootCause: e.target.value }))}
                               isDisabled={!canEdit}
                               rows={3}
-                              placeholder="VD: Cáº£m biáº¿n oxy sá»‘ 1 bá»‹ Ä‘á»©t dÃ¢y ga..."
+                              placeholder="VD: Cảm biến oxy số 1 bị đứt dây ga..."
                               bg="gray.50"
                               borderColor="#e2e8f0"
                               color="#1b2559"
@@ -1869,15 +1869,15 @@ export default function ServiceOrderDiagnosisPage() {
                         <GridItem>
                           <FormControl>
                             <DiagnosisDropdown
-                              label="Má»©c Ä‘á»™ nghiÃªm trá»ng"
+                              label="Mức độ nghiêm trọng"
                               value={form.severity}
                               onChange={(value) => setForm((prev) => ({ ...prev, severity: value }))}
                               isDisabled={!canEdit}
                             >
-                              <option value="LOW">Tháº¥p (ChÆ°a gáº¥p)</option>
-                              <option value="MEDIUM">Trung bÃ¬nh</option>
+                              <option value="LOW">Thấp (Chưa gấp)</option>
+                              <option value="MEDIUM">Trung bình</option>
                               <option value="HIGH">Cao</option>
-                              <option value="CRITICAL">Kháº©n cáº¥p (Nguy hiá»ƒm)</option>
+                              <option value="CRITICAL">Khẩn cấp (Nguy hiểm)</option>
                             </DiagnosisDropdown>
                           </FormControl>
                         </GridItem>
@@ -1887,11 +1887,11 @@ export default function ServiceOrderDiagnosisPage() {
                   <Box p={5} mt={4} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                     <HStack color="#2b6cb0" mb={3}>
                       <Icon as={StickyNote} size={20} />
-                      <Heading size="sm">Ghi chÃº Ä‘iá»u phá»‘i</Heading>
+                      <Heading size="sm">Ghi chú điều phối</Heading>
                     </HStack>
                     <Box bg="#f8fbff" border="1px solid #dbe7ff" borderRadius="md" px={4} py={3}>
                       <Text color="#2b3674" whiteSpace="pre-wrap" lineHeight="1.6">
-                        {diagnosisAssignmentNote || "KhÃ´ng cÃ³ ghi chÃº Ä‘iá»u phá»‘i."}
+                        {diagnosisAssignmentNote || "Không có ghi chú điều phối."}
                       </Text>
                     </Box>
                                         {!canEdit && isRejectedAssignmentVersion ? (
@@ -1916,19 +1916,19 @@ export default function ServiceOrderDiagnosisPage() {
                 </GridItem>
               </Grid>
 
-              {/* KHU Vá»°C 4: Äá» xuáº¥t sá»­a chá»¯a */}
+              {/* KHU VỰC 4: Đề xuất sửa chữa */}
               <Box p={5} bg="white" borderRadius="xl" border="1px solid #e9edf7" boxShadow="sm">
                 <HStack justify="space-between" mb={4}>
                   <HStack color="#05cd99">
                     <Icon as={Wrench} size={20} />
-                    <Heading size="sm">Váº­t tÆ° & NhÃ¢n cÃ´ng Ä‘á» xuáº¥t</Heading>
+                    <Heading size="sm">Vật tư & Nhân công đề xuất</Heading>
                   </HStack>
                 </HStack>
 
                 <Box mb={4} p={4} border="1px solid #d7e3f5" borderRadius="lg" bg="#f8fbff" position="relative" overflow="visible" zIndex={50}>
                   <HStack spacing={3} align="end" flexWrap="wrap">
                     <DiagnosisDropdown
-                      label="Loáº¡i dá»‹ch vá»¥"
+                      label="Loại dịch vụ"
                       labelFontSize="xs"
                       labelColor="#5c6b8a"
                       minW="220px"
@@ -1936,7 +1936,7 @@ export default function ServiceOrderDiagnosisPage() {
                       onChange={(value) => setQuickPickCategoryId(value || "")}
                       isDisabled={!canEdit}
                     >
-                      <option value="">-- Táº¥t cáº£ loáº¡i dá»‹ch vá»¥ --</option>
+                      <option value="">-- Tất cả loại dịch vụ --</option>
                       {(serviceCategoryOptions || []).map((category) => (
                         <option key={category.value} value={category.value}>
                           {category.label}
@@ -1946,7 +1946,7 @@ export default function ServiceOrderDiagnosisPage() {
 
                     <Box minW="320px" flex="1" ref={quickPickRef} position="relative" zIndex={70}>
                       <Text fontSize="xs" fontWeight="600" color="#5c6b8a" mb={2}>
-                        TÃ¬m dá»‹ch vá»¥
+                        Tìm dịch vụ
                       </Text>
                       <Box position="relative">
                         <Input
@@ -1959,8 +1959,8 @@ export default function ServiceOrderDiagnosisPage() {
                           onFocus={() => setQuickPickOpen(true)}
                           placeholder={
                             quickPickCategoryId
-                              ? "Nháº­p tÃªn dá»‹ch vá»¥ trong loáº¡i Ä‘Ã£ chá»n..."
-                              : "Nháº­p tÃªn dá»‹ch vá»¥ Ä‘á»ƒ tÃ¬m trÃªn toÃ n bá»™ danh sÃ¡ch..."
+                              ? "Nhập tên dịch vụ trong loại đã chọn..."
+                              : "Nhập tên dịch vụ để tìm trên toàn bộ danh sách..."
                           }
                           isDisabled={!canEdit}
                           bg="white"
@@ -1982,13 +1982,13 @@ export default function ServiceOrderDiagnosisPage() {
                           >
                             {quickPickFilteredServices.length === 0 ? (
                               <Text px={3} py={2} fontSize="sm" color="#7f8fb2">
-                                KhÃ´ng cÃ³ dá»‹ch vá»¥ phÃ¹ há»£p.
+                                Không có dịch vụ phù hợp.
                               </Text>
                             ) : (
                               quickPickFilteredServices.map((service) => {
                                 const serviceId = String(extractServiceId(service) || "");
                                 const existed = existingRootServiceIdSet.has(serviceId);
-                                const serviceName = extractServiceName(service) || `Dá»‹ch vá»¥ #${serviceId}`;
+                                const serviceName = extractServiceName(service) || `Dịch vụ #${serviceId}`;
                                 const categoryName = extractServiceCategoryName(service);
                                 return (
                                   <Box
@@ -2026,7 +2026,7 @@ export default function ServiceOrderDiagnosisPage() {
 
                 {recommendations.length === 0 ? (
                   <Text color="#707eae" fontSize="sm">
-                    ChÆ°a cÃ³ dá»‹ch vá»¥ Ä‘á» xuáº¥t cho lá»‡nh sá»­a chá»¯a nÃ y. HÃ£y thÃªm dá»‹ch vá»¥ trÆ°á»›c, sau Ä‘Ã³ thÃªm váº­t tÆ° cho tá»«ng dá»‹ch vá»¥.
+                    Chưa có dịch vụ đề xuất cho lệnh sửa chữa này. Hãy thêm dịch vụ trước, sau đó thêm vật tư cho từng dịch vụ.
                   </Text>
                 ) : (
                   <VStack align="stretch" spacing={3}>
@@ -2084,14 +2084,14 @@ export default function ServiceOrderDiagnosisPage() {
                                   partCategories={partCategories}
                                   onChange={updateRecommendation}
                                   onRemove={removeRecommendation}
-                                  parentServiceName={serviceNameById.get(String(root.standardServiceId)) || `Dá»‹ch vá»¥ #${root.id}`}
+                                  parentServiceName={serviceNameById.get(String(root.standardServiceId)) || `Dịch vụ #${root.id}`}
                                 />
                               ))}
                             </VStack>
                           )}
                           {!hasChildItems && (
                             <Text mt={2} fontSize="xs" color="#7f8fb2">
-                              ChÆ°a cÃ³ váº­t tÆ° cho dá»‹ch vá»¥ nÃ y.
+                              Chưa có vật tư cho dịch vụ này.
                             </Text>
                           )}
                         </Box>
@@ -2105,7 +2105,7 @@ export default function ServiceOrderDiagnosisPage() {
               {canEdit && (
                 <HStack justify="flex-end" pt={4} pb={10}>
                   <Button size="lg" colorScheme="blue" onClick={saveAllDiagnoses} isLoading={saving}>
-                    LÆ°u chuáº©n Ä‘oÃ¡n
+                    Lưu chuẩn đoán
                   </Button>
                 </HStack>
               )}
