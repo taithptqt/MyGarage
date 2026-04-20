@@ -533,7 +533,7 @@ function isTeamLeaderNeedApprovalItem(item) {
   return false;
 }
 
-function resolveDispatchTabByStatus(item, { isManagerMode, isTeamLeaderMode }) {
+function resolveDispatchTabByStatus(item) {
   if (!item) return null;
   const dispatchBucket = normalizeCode(item.dispatchBucket);
   if (dispatchBucket === "APPROVAL_BUCKET") return "APPROVAL_BUCKET";
@@ -541,38 +541,6 @@ function resolveDispatchTabByStatus(item, { isManagerMode, isTeamLeaderMode }) {
   if (dispatchBucket === "YELLOW") return "YELLOW";
   if (dispatchBucket === "RED") return "RED";
   if (dispatchBucket === "GREEN") return "GREEN";
-
-  const workflowStatus = normalizeCode(item.workflowStatus);
-  const teamLeaderApprovalStatus = normalizeCode(item.teamLeaderApprovalStatus);
-  const foremanApprovalStatus = normalizeCode(item.foremanApprovalStatus);
-
-  if (workflowStatus === "CANCELED" || foremanApprovalStatus === "APPROVED" || workflowStatus === "FOREMAN_APPROVED_LOCKED") {
-    return null;
-  }
-
-  if (isTeamLeaderMode && isTeamLeaderNeedApprovalItem(item)) {
-    return "APPROVAL_BUCKET";
-  }
-
-  if (isManagerMode && isForemanMyTaskItem(item)) {
-    return "APPROVAL_BUCKET";
-  }
-
-  if (workflowStatus === "NEW") return "WHITE";
-  if (workflowStatus === "IN_PROGRESS") return "YELLOW";
-
-  if (
-    workflowStatus === "TL_REJECTED_REDIAGNOSE" ||
-    workflowStatus === "FOREMAN_REJECTED_REDIAGNOSE"
-  ) {
-    return "RED";
-  }
-
-  if (workflowStatus === "SUBMITTED" || workflowStatus === "TL_APPROVED" || workflowStatus === "ESCALATED_TO_FOREMAN") {
-    return isManagerMode || isTeamLeaderMode ? "APPROVAL_BUCKET" : "YELLOW";
-  }
-
-  // Lọc tab chỉ theo status; queueColor/queueState chỉ dùng cho hiển thị.
   return null;
 }
 
@@ -1710,7 +1678,6 @@ export default function DispatchOpsDashboard({
       if (Array.isArray(item.supportingTeamIds) && item.supportingTeamIds.includes(currentStaffTeamId)) return true;
 
       if (!item.teamId) {
-        if (item.queueColor !== "WHITE" && item.queueColor !== "RED") return false;
         if (currentTeamSpecialty && item.dispatchTag && !dispatchTagIncludes(item.dispatchTag, currentTeamSpecialty)) return false;
         return true;
       }
@@ -1754,7 +1721,7 @@ export default function DispatchOpsDashboard({
     const sourceItems = isManagerMode ? managerScopedItems : visibleItems;
 
     sourceItems.forEach((item) => {
-      const bucket = resolveDispatchTabByStatus(item, { isManagerMode, isTeamLeaderMode });
+      const bucket = resolveDispatchTabByStatus(item);
       if (!bucket || !grouped[bucket]) return;
       grouped[bucket].push(item);
     });
@@ -1766,7 +1733,7 @@ export default function DispatchOpsDashboard({
       ...grouped.RED,
     ];
     return grouped;
-  }, [isManagerMode, isTeamLeaderMode, managerScopedItems, visibleItems]);
+  }, [isManagerMode, managerScopedItems, visibleItems]);
 
   const teamLeaderSupportNotifications = useMemo(() => {
     if (!isTeamLeaderMode || !currentStaffTeamId) return [];
@@ -1880,10 +1847,10 @@ export default function DispatchOpsDashboard({
   useEffect(() => {
     if (!isAssignmentPage) return;
     if (!selectedItem) return;
-    const byStatus = resolveDispatchTabByStatus(selectedItem, { isManagerMode, isTeamLeaderMode });
+    const byStatus = resolveDispatchTabByStatus(selectedItem);
     const targetTab = dashboardTabOrder.includes(byStatus) ? byStatus : (dashboardTabOrder[0] || "WHITE");
     if (targetTab !== activeColorTab) setActiveColorTab(targetTab);
-  }, [isAssignmentPage, selectedItem, isManagerMode, isTeamLeaderMode, activeColorTab, dashboardTabOrder]);
+  }, [isAssignmentPage, selectedItem, activeColorTab, dashboardTabOrder]);
   useEffect(() => {
     if (!selectedItem) return;
 
@@ -3205,7 +3172,7 @@ export default function DispatchOpsDashboard({
 
                             <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
                               <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                                Luu - phân quy?n
+                                Lưu - phân quyền
                               </Text>
                               <Text mt={1} fontSize="sm" color="blue.700">
                                 Tổ trưởng tổ chính chỉ giao cặp thợ cho tổ chính. Nhu cầu tổ phụ sẽ được gửi riêng ở bước hỗ trợ bên dưới.
@@ -3557,13 +3524,12 @@ export default function DispatchOpsDashboard({
 
                         <Box mt={2} p={2.5} border="1px dashed" borderColor="blue.200" borderRadius="lg" bg="blue.50">
                           <Text fontSize="xs" color="blue.700" fontWeight="700" textTransform="uppercase">
-                            Luu - phân quy?n
+                            Lưu - phân quyền
                           </Text>
                           <Text mt={1} fontSize="sm" color="blue.700">
-                            Qu?n d?c có quy?n override t?, cấp thợ, khoang và chờ đếnh t? phải h?p d? cón t?i nhanh theo thợc t? xưởng.
+                            Quản đốc có quyền override tổ, cặp thợ, khoang và chủ động điều phối tổ phù hợp để cân tải nhàn theo thực tế xưởng.
                           </Text>
                         </Box>
-
                         <HStack mt={3} spacing={2} align="stretch">
                           <Button
                             variant="unstyled"
@@ -4116,6 +4082,3 @@ function SupportingTeamSelector({
     </Box>
   );
 }
-
-
-

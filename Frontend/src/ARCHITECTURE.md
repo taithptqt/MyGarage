@@ -31,8 +31,8 @@ Mục tiêu:
 
 ## Tương thích ngược
 
-- C�c thu m?c cu `context`, `hooks`, `utils`, `components/auth`, `styles` du?c gi? b?ng file forwarder.
-- Kh�ng x�a file cu ? giai do?n chuy?n ti?p d? tr�nh v? import.
+- C�c thu m?c cu `context`, `hooks`, `utils`, `components/auth`, `styles` ??c gi? b?ng file forwarder.
+- Kh�ng x�a file cu ? giai ?o?n chuy?n ti?p d? tr�nh v? import.
 
 
 

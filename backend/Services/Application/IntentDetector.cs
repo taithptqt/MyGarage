@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -16,82 +16,82 @@ public class IntentDetector : IIntentDetector
     {
         [nameof(ChatbotIntentType.CONSULTATION)] =
         [
-            "tu van",
+            "tư vấn",
             "consult",
             "advice",
-            "nen",
-            "goi y",
+            "nên",
+            "gợi ý",
             "recommend",
-            "chan doan so bo",
-            "tu van bao duong",
-            "tu van sua chua"
+            "chẩn đoán sơ bộ",
+            "tư vấn bảo dưỡng",
+            "tư vấn sửa chữa"
         ],
         [nameof(ChatbotIntentType.INQUIRY)] =
         [
-            "hoi",
-            "thong tin",
-            "bao gia",
-            "gia bao nhieu",
+            "hỏi",
+            "thông tin",
+            "báo giá",
+            "giá bao nhiêu",
             "voucher",
-            "ma giam",
-            "giam gia",
-            "khuyen mai",
-            "uu dai",
-            "quyen loi",
-            "diem tich luy",
-            "tich diem",
+            "mã giảm",
+            "giảm giá",
+            "khuyến mãi",
+            "ưu đãi",
+            "quyền lợi",
+            "điểm tích lũy",
+            "tích điểm",
             "where",
             "what",
             "how",
-            "khi nao",
-            "o dau",
-            "chi tiet"
+            "khi nào",
+            "ở đâu",
+            "chi tiết"
         ],
         [nameof(ChatbotIntentType.PURCHASE)] =
         [
             "mua",
             "buy",
-            "dat mua",
-            "phu tung",
-            "san pham",
-            "thanh toan",
+            "đặt mua",
+            "phụ tùng",
+            "sản phẩm",
+            "thanh toán",
             "checkout"
         ],
         [nameof(ChatbotIntentType.SERVICE_ORDER)] =
         [
-            "lenh sua",
+            "lệnh sửa",
             "service order",
             "invoice",
-            "hoa don",
-            "trang thai sua chua",
-            "don dich vu",
-            "so don"
+            "hóa đơn",
+            "trạng thái sửa chữa",
+            "đơn dịch vụ",
+            "số đơn"
         ],
         [nameof(ChatbotIntentType.BOOKING)] =
         [
-            "dat lich",
-            "dat hen",
-            "lich hen",
+            "đặt lịch",
+            "đặt hẹn",
+            "lịch hẹn",
             "booking",
             "appointment",
-            "hen",
+            "hẹn",
             "slot",
-            "khung gio",
+            "khung giờ",
             "book",
-            "dang ky lich",
-            "dat lich giup toi",
-            "giup toi dat lich",
-            "book ho",
-            "book giup",
-            "xep lich",
-            "len lich"
+            "đăng ký lịch",
+            "đặt lịch giúp tôi",
+            "giúp tôi đặt lịch",
+            "book hộ",
+            "book giúp",
+            "xếp lịch",
+            "lên lịch"
         ],
         [nameof(ChatbotIntentType.HANDOFF)] =
         [
-            "nhan vien",
-            "nguoi that",
+            "nhân viên",
+            "người thật",
             "reception",
-            "ho tro truc tiep",
+            "hỗ trợ trực tiếp",
             "handoff",
             "agent"
         ]
@@ -106,14 +106,14 @@ public class IntentDetector : IIntentDetector
     [
         "ok",
         "oke",
-        "vang",
-        "duoc",
-        "dong y",
-        "xac nhan",
+        "vâng",
+        "được",
+        "đồng ý",
+        "xác nhận",
         "yes",
-        "roi",
-        "tiep",
-        "tiep tuc"
+        "rồi",
+        "tiếp",
+        "tiếp tục"
     ];
 
     private static readonly Regex NumberRegex = new(@"\d+", RegexOptions.Compiled);

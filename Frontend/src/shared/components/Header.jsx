@@ -35,6 +35,7 @@ function Header({ overlay = false }) {
   const avatarUrl = resolveAvatarUrl(user?.avatarUrl || user?.AvatarUrl);
   const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "B";
   const roleCode = String(user?.roleCode || user?.RoleCode || "").toUpperCase();
+  const isCustomer = roleCode === "CUSTOMER";
   const isStaffOrAdmin = ["ADMIN", "ACCOUNTANT", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER"].includes(roleCode);
   const customerPortalLinks = useMemo(
     () => [
@@ -106,10 +107,10 @@ function Header({ overlay = false }) {
   return (
     <nav className={`mg-header-wrap ${overlay ? "overlay" : "solid"}`}>
       <div className="mg-header-main">
-        <span className="mg-header-hotline">+45 69 133 911</span>
+        <span className="mg-header-hotline">1900 0000</span>
 
         <div className="mg-header-side">
-          <a href="/about" onClick={(event) => { event.preventDefault(); handleNavigate("/about"); }}>ABOUT US</a>
+          <a href="/home" onClick={(event) => { event.preventDefault(); handleNavigate("/home"); }}>TRANG CHỦ</a>
           <a href="/booking" onClick={(event) => { event.preventDefault(); handleNavigate("/booking"); }}>ĐẶT LỊCH</a>
           <a href="/parts-shop" onClick={(event) => { event.preventDefault(); handleNavigate("/parts-shop"); }}>PART SHOP</a>
         </div>
@@ -154,16 +155,18 @@ function Header({ overlay = false }) {
             {menuOpen && (
               <div className="mg-header-user-menu">
                 <div className="mg-header-user-menu-head">Xin chào, {displayName}</div>
-                {customerPortalLinks.map((item) => (
-                  <button
-                    key={item.path}
-                    type="button"
-                    className="mg-header-user-menu-item"
-                    onClick={() => handleNavigate(item.path)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                {isCustomer
+                  ? customerPortalLinks.map((item) => (
+                    <button
+                      key={item.path}
+                      type="button"
+                      className="mg-header-user-menu-item"
+                      onClick={() => handleNavigate(item.path)}
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                  : null}
                 <button
                   type="button"
                   className="mg-header-user-menu-item"

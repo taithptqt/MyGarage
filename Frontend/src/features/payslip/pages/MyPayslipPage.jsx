@@ -88,7 +88,7 @@ export default function MyPayslipPage() {
                   <div className="ps-dc-row"><span className="ps-row-label">Lương cơ bản</span><span className="ps-row-val">{fmtCurrency(selectedSlip.baseSalary)}</span></div>
                   <div className="ps-dc-row"><span className="ps-row-label">Hoa hồng (Comm.)</span><span className="ps-row-val">{fmtCurrency(selectedSlip.commissionAmount)}</span></div>
                   <div className="ps-dc-row"><span className="ps-row-label">Làm thêm giờ (OT)</span><span className="ps-row-val">{fmtCurrency(selectedSlip.overtimeAmount)}</span></div>
-                  <div className="ps-dc-row"><span className="ps-row-label">Thu?ng kh�c</span><span className="ps-row-val">{fmtCurrency(selectedSlip.bonus)}</span></div>
+                  <div className="ps-dc-row"><span className="ps-row-label">Th??ng kh�c</span><span className="ps-row-val">{fmtCurrency(selectedSlip.bonus)}</span></div>
                 </div>
 
                 {/* Khấu trừ */}

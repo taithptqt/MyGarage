@@ -2334,7 +2334,7 @@
 }
 
 .reception-quote-action-row .btn-success,
-.reception-quote-action-row .btn-danger {
+.reception-quote-action-row .btn-?anger {
   border: 1px solid transparent;
   border-radius: 10px;
   min-height: 38px;
@@ -2349,14 +2349,14 @@
   color: #0f7b55;
 }
 
-.reception-quote-action-row .btn-danger {
+.reception-quote-action-row .btn-?anger {
   border-color: #f0b6be;
   background: #fff1f3;
   color: #b4233a;
 }
 
 .reception-quote-action-row .btn-success:disabled,
-.reception-quote-action-row .btn-danger:disabled {
+.reception-quote-action-row .btn-?anger:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -2527,7 +2527,7 @@
   .reception-quote-action-row .btn-primary,
   .reception-quote-action-row .toolbar-action-btn,
   .reception-quote-action-row .btn-success,
-  .reception-quote-action-row .btn-danger {
+  .reception-quote-action-row .btn-?anger {
     width: 100%;
   }
 
@@ -3499,7 +3499,7 @@
   border-color: #10b981;
 }
 
-.btn-action-danger:hover {
+.btn-action-?anger:hover {
   background: #fff1f2;
   border-color: #ef4444;
 }
@@ -3554,6 +3554,10 @@
 }
 
 .service-order-create-page .reception-appt-form.admin-form {
+  padding-inline: 0;
+}
+
+.reception-create-appointment-page .reception-appt-form.admin-form {
   padding-inline: 0;
 }
 

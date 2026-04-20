@@ -151,7 +151,7 @@ export default function PayosCheckoutPage() {
         });
 
         if (orderAmount <= 0) {
-          setError("Không l?y du?c tổng ti?n don h�ng. Vui l�ng quay l?i danh sách don d? thanh to�n l?i.");
+          setError("Khong lay duoc tong tien don hang. Vui long quay lai danh sach don de thanh toan lai.");
           return;
         }
 
@@ -207,24 +207,24 @@ export default function PayosCheckoutPage() {
     setError("");
 
     if (!isAuthenticated) {
-      setError("B?n cần dang nh?p tru?c khi thanh to�n.");
+      setError("Ban can dang nhap truoc khi thanh toan.");
       return;
     }
 
     if (isRetailCheckout && retailAmountLoading) {
-      setError("Đang d?ng b? tổng ti?n don retail, vui l�ng ch? trong gi�y l�t.");
+      setError("Dang dong bo tong tien don retail, vui long cho trong giay lat.");
       return;
     }
 
     if (isRetailCheckout && !retailAmountReady) {
-      setError("Chua x�c nh?n du?c tổng ti?n don retail. Vui l�ng th? l?i t? trang don h�ng.");
+      setError("Chua xac nhan duoc tong tien don retail. Vui long thu lai tu trang don hang.");
       return;
     }
 
     if (validAmount < 1000) {
       setError(
         isRetailCheckout
-          ? "Không x�c d?nh du?c s? ti?n don retail. Vui l�ng thanh to�n l?i t? trang don h�ng."
+          ? "Không x�c d?nh ??c s? ti?n don retail. Vui l�ng thanh to�n l?i t? trang don h�ng."
           : "Số tiền tối thiểu là 1,000đ."
       );
       return;
@@ -263,7 +263,7 @@ export default function PayosCheckoutPage() {
 
       const result = await createPayosOrder(payload);
       if (!result.ok) {
-        throw new Error(result.data?.message || "Không t?o du?c link thanh to�n.");
+        throw new Error(result.data?.message || "Không t?o ??c link thanh to�n.");
       }
 
       const order = result.data;
@@ -327,7 +327,7 @@ export default function PayosCheckoutPage() {
         </h3>
         <p style={{ marginTop: 0, color: "#4a5568", lineHeight: 1.7 }}>
           {isRetailCheckout
-        ? `B?n dang thanh to�n cho don retail #${retailOrderId}. S? ti?n du?c kh�a theo tổng ti?n don.`
+        ? `B?n ?ang thanh to�n cho don retail #${retailOrderId}. S? ti?n ??c kh�a theo tổng ti?n don.`
             : "Ban co the tao link PayOS thu cong cho giao dich customer."}
         </p>
 

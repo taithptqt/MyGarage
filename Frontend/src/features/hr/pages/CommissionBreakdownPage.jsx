@@ -67,7 +67,7 @@ export default function CommissionBreakdownPage() {
       ) : loading ? (
         <div className="comm-loading">Đang tải dữ liệu...</div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="comm-empty">Trong th�ng n�y chua c� ph�t sinh hoa h?ng n�o.</div>
+        <div className="comm-empty">Trong th�ng n�y ch?a c� ph�t sinh hoa h?ng n�o.</div>
       ) : (
         <div className="comm-list">
           {Object.values(grouped).map((group, gIdx) => (

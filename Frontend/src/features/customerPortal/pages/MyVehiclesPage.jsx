@@ -38,7 +38,7 @@ export default function MyVehiclesPage() {
       setList(Array.isArray(vehicles) ? vehicles : []);
       setLookups(lu || { brands: [], models: [] });
     } catch (e) {
-      setError(e?.message || "Không t?i du?c danh sách xe.");
+      setError(e?.message || "Không t?i ??c danh sách xe.");
     } finally {
       setLoading(false);
     }

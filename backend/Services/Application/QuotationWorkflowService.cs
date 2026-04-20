@@ -683,7 +683,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 Quantity = detail.Quantity,
                 UnitPriceAtTime = repriced.UnitPrice,
                 CostPriceAtTime = repriced.CostPrice,
-                DiscountValue = detail.DiscountValue,
+                DiscountValue = ResolveQuotationDetailDiscountAmount(detail, source.QuotationDiscounts),
                 TaxRate = repriced.TaxRate,
                 PayerType = detail.PayerType,
                 InsuranceCompanyId = detail.InsuranceCompanyId,
@@ -931,7 +931,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
             var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
             var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
-            decimal? nextDiscountPercentage = detail.DiscountPercentage;
+            decimal? nextDiscountPercentage = ResolveQuotationDetailDiscountPercentage(detail);
             decimal nextDiscount;
 
             if (update.DiscountPercentage.HasValue)
@@ -949,8 +949,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             }
             else
             {
-                var normalizedPercent = detail.DiscountPercentage.HasValue
-                    ? Math.Min(Math.Max(detail.DiscountPercentage.Value, 0m), 100m)
+                var currentDiscountPercentage = ResolveQuotationDetailDiscountPercentage(detail);
+                var normalizedPercent = currentDiscountPercentage.HasValue
+                    ? Math.Min(Math.Max(currentDiscountPercentage.Value, 0m), 100m)
                     : (decimal?)null;
                 if (normalizedPercent.HasValue)
                 {
@@ -959,13 +960,12 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 }
                 else
                 {
-                    nextDiscount = detail.DiscountValue < 0m ? 0m : detail.DiscountValue;
+                    nextDiscount = ResolveQuotationDetailDiscountAmount(detail);
                 }
             }
 
             nextDiscount = Math.Min(Math.Max(0m, nextDiscount), Math.Max(0m, subTotal));
-            detail.DiscountPercentage = nextDiscountPercentage;
-            detail.DiscountValue = nextDiscount;
+            SetLegacyQuotationDetailDiscounts(detail, nextDiscountPercentage, nextDiscount);
 
             var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
             var taxableBase = Math.Max(0m, subTotal - nextDiscount);
@@ -1453,7 +1453,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         existingDetail.CostPriceAtTime = approvedDetail.CostPriceAtTime;
         existingDetail.UnitPriceAtTime = approvedDetail.UnitPriceAtTime;
         existingDetail.SubTotal = approvedDetail.SubTotal;
-        existingDetail.DiscountValue = approvedDetail.DiscountValue;
+        existingDetail.DiscountAllocatedAmount = ResolveQuotationDetailDiscountAmount(approvedDetail, quotation.QuotationDiscounts);
         existingDetail.TaxRate = approvedDetail.TaxRate;
         existingDetail.TaxAmount = approvedDetail.TaxAmount;
         existingDetail.FinalAmount = approvedDetail.FinalAmount;
@@ -3040,7 +3040,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             ? (dto.CanceledBy ?? actorStaffId)
             : null;
 
-        return new QuotationDetail
+        var detail = new QuotationDetail
         {
             ServiceOrderId = serviceOrderId,
             SourceQuotationDetailId = dto.SourceQuotationDetailId,
@@ -3052,8 +3052,6 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             UnitPriceAtTime = unitPrice,
             CostPriceAtTime = dto.CostPriceAtTime,
             SubTotal = subTotal,
-            DiscountPercentage = null,
-            DiscountValue = discount,
             TaxRate = taxRate,
             TaxAmount = taxAmount,
             FinalAmount = finalAmount,
@@ -3074,6 +3072,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             CreatedBy = actorStaffId,
             UpdatedBy = actorStaffId
         };
+
+        SetLegacyQuotationDetailDiscounts(detail, null, discount);
+        return detail;
     }
 
     private static (decimal InsuranceCoveredAmount, decimal CustomerCoveredAmount, string PayerType) CalculateSplitBilling(
@@ -3268,7 +3269,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         var highValueThreshold = policy?.HighValueThreshold ?? DefaultHighValueThreshold;
 
         var subtotal = Math.Max(0m, quotation.SubTotalAmount);
-        var totalDiscount = Math.Max(0m, quotation.TotalDiscount);
+        var totalDiscount = ResolveQuotationTotalDiscountAmount(quotation);
         var discountPercent = subtotal <= 0m
             ? 0m
             : Math.Round((totalDiscount / subtotal) * 100m, 2, MidpointRounding.AwayFromZero);
@@ -3431,7 +3432,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             UnitPriceAtTime = detail.UnitPriceAtTime,
             Unit = "EA",
             SubTotal = detail.SubTotal,
-            DiscountValue = detail.DiscountValue,
+            DiscountAllocatedAmount = ResolveQuotationDetailDiscountAmount(detail, quotation.QuotationDiscounts),
             TaxRate = detail.TaxRate,
             TaxAmount = detail.TaxAmount,
             FinalAmount = detail.FinalAmount,
@@ -3559,26 +3560,117 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
         return (detail.UnitPriceAtTime, detail.CostPriceAtTime, detail.TaxRate);
     }
 
+    private static decimal ResolveQuotationTotalDiscountAmount(Quotation quotation)
+    {
+        if (quotation == null)
+        {
+            return 0m;
+        }
+
+        var relationalDiscount = SumQuotationLevelDiscount(quotation.QuotationDiscounts);
+        if (relationalDiscount > 0m)
+        {
+            return relationalDiscount;
+        }
+
+#pragma warning disable CS0618
+        return Math.Max(0m, quotation.TotalDiscount);
+#pragma warning restore CS0618
+    }
+
+    private static decimal? ResolveQuotationDetailDiscountPercentage(QuotationDetail detail)
+    {
+        if (detail == null)
+        {
+            return null;
+        }
+
+#pragma warning disable CS0618
+        return detail.DiscountPercentage;
+#pragma warning restore CS0618
+    }
+
+    private static decimal ResolveQuotationDetailDiscountAmount(
+        QuotationDetail detail,
+        IEnumerable<QuotationDiscount>? quotationDiscounts = null)
+    {
+        if (detail == null)
+        {
+            return 0m;
+        }
+
+        var matchedDiscounts = (quotationDiscounts ?? Enumerable.Empty<QuotationDiscount>())
+            .Where(x => x != null && x.QuotationDetailId == detail.Id)
+            .ToList();
+        if (matchedDiscounts.Count > 0)
+        {
+            return matchedDiscounts.Sum(x => x.AppliedAmount > 0m ? x.AppliedAmount : Math.Max(0m, x.DiscountValue));
+        }
+
+#pragma warning disable CS0618
+        return detail.DiscountValue < 0m ? 0m : detail.DiscountValue;
+#pragma warning restore CS0618
+    }
+
+    private static void SetLegacyQuotationDetailDiscounts(QuotationDetail detail, decimal? percentage, decimal amount)
+    {
+        if (detail == null)
+        {
+            return;
+        }
+
+#pragma warning disable CS0618
+        detail.DiscountPercentage = percentage;
+        detail.DiscountValue = Math.Max(0m, amount);
+#pragma warning restore CS0618
+    }
+
+    private static void SetLegacyQuotationTotalDiscount(Quotation quotation, decimal amount)
+    {
+        if (quotation == null)
+        {
+            return;
+        }
+
+#pragma warning disable CS0618
+        quotation.TotalDiscount = Math.Max(0m, amount);
+#pragma warning restore CS0618
+    }
+
+    private static void SetLegacyServiceOrderTotalDiscount(ServiceOrder serviceOrder, decimal amount)
+    {
+        if (serviceOrder == null)
+        {
+            return;
+        }
+
+#pragma warning disable CS0618
+        serviceOrder.TotalDiscount = Math.Max(0m, amount);
+#pragma warning restore CS0618
+    }
+
     private static void RecalculateQuotationTotals(Quotation quotation)
     {
         var details = (quotation.QuotationDetails ?? new List<QuotationDetail>())
             .Where(x => !string.Equals(x.Status, DetailStatusCanceled, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        var allDiscounts = quotation.QuotationDiscounts ?? new List<QuotationDiscount>();
+
         foreach (var detail in details)
         {
             var quantity = detail.Quantity <= 0 ? 1m : detail.Quantity;
             var unitPrice = detail.UnitPriceAtTime < 0 ? 0m : detail.UnitPriceAtTime;
-            var normalizedDiscountPercentage = detail.DiscountPercentage.HasValue
-                ? Math.Min(Math.Max(detail.DiscountPercentage.Value, 0m), 100m)
-                : (decimal?)null;
             var taxRate = detail.TaxRate < 0 ? 0m : detail.TaxRate;
 
             var subTotal = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
-            var discount = normalizedDiscountPercentage.HasValue
-                ? Math.Round(subTotal * (normalizedDiscountPercentage.Value / 100m), 2, MidpointRounding.AwayFromZero)
-                : detail.DiscountValue < 0 ? 0m : detail.DiscountValue;
-            discount = Math.Min(discount, Math.Max(0m, subTotal));
+            
+            // Rule 2: Strictly use QuotationDiscounts relational table
+            var lineDiscounts = allDiscounts
+                .Where(d => d.QuotationDetailId == detail.Id)
+                .Sum(d => d.AppliedAmount > 0 ? d.AppliedAmount : d.DiscountValue);
+
+            var discount = Math.Min(lineDiscounts, Math.Max(0m, subTotal));
             var taxableBase = Math.Max(0m, subTotal - discount);
             var taxAmount = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
             var finalAmount = Math.Round(Math.Max(0m, taxableBase + taxAmount), 2, MidpointRounding.AwayFromZero);
@@ -3586,8 +3678,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
 
             detail.Quantity = quantity;
             detail.UnitPriceAtTime = unitPrice;
-            detail.DiscountPercentage = normalizedDiscountPercentage;
-            detail.DiscountValue = discount;
+            // detail.DiscountPercentage = ...; // Đã Obsolete, không cập nhật nữa
+            // detail.DiscountValue = discount; // Đã Obsolete
             detail.TaxRate = taxRate;
             detail.SubTotal = subTotal;
             detail.TaxAmount = taxAmount;
@@ -3597,8 +3689,9 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             detail.CustomerCoveredAmount = split.CustomerCoveredAmount;
         }
 
-        var quotationLevelDiscount = SumQuotationLevelDiscount(quotation.QuotationDiscounts);
-        var detailsLineDiscount = details.Sum(x => x.DiscountValue);
+        // Quotation-level discounts have null QuotationDetailId
+        var quotationLevelDiscount = SumQuotationLevelDiscount(allDiscounts.Where(d => d.QuotationDetailId == null));
+        
         var detailsTax = details.Sum(x => x.TaxAmount);
         var detailsFinal = details.Sum(x => x.FinalAmount);
         var detailsInsurance = details.Sum(x =>
@@ -3611,7 +3704,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                 : Math.Max(0m, x.FinalAmount - (x.InsuranceCoveredAmount ?? 0m))));
 
         quotation.SubTotalAmount = details.Sum(x => x.SubTotal);
-        quotation.TotalDiscount = detailsLineDiscount + quotationLevelDiscount;
+        SetLegacyQuotationTotalDiscount(quotation, details.Sum(x => ResolveQuotationDetailDiscountAmount(x, allDiscounts)) + quotationLevelDiscount);
         quotation.TaxAmount = detailsTax;
         quotation.FinalAmount = Math.Max(0m, detailsFinal - quotationLevelDiscount);
         quotation.TotalInsuranceAmount = detailsInsurance;
@@ -3654,14 +3747,18 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             .Select(group => new
             {
                 SubTotal = group.Sum(x => x.SubTotal),
-                Discount = group.Sum(x => x.DiscountValue ?? 0m),
+                Discount = group.Sum(x => x.DiscountAllocatedAmount ?? 0m),
                 Tax = group.Sum(x => x.TaxAmount),
                 Final = group.Sum(x => x.FinalAmount)
             })
             .FirstOrDefaultAsync();
 
+        var serviceOrderDiscountTotal = await _context.ServiceOrderDiscounts.AsNoTracking()
+            .Where(x => x.ServiceOrderId == serviceOrderId)
+            .SumAsync(x => (decimal?)(x.AppliedAmount > 0m ? x.AppliedAmount : x.DiscountValue)) ?? 0m;
+
         serviceOrder.SubTotalAmount = summary?.SubTotal ?? 0m;
-        serviceOrder.TotalDiscount = summary?.Discount ?? 0m;
+        SetLegacyServiceOrderTotalDiscount(serviceOrder, Math.Max(summary?.Discount ?? 0m, serviceOrderDiscountTotal));
         serviceOrder.TaxAmount = summary?.Tax ?? 0m;
         serviceOrder.FinalAmount = summary?.Final ?? 0m;
         serviceOrder.UpdatedBy = actorStaffId;
@@ -3926,7 +4023,7 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
             CustomerDecisionStatus = quotation.CustomerDecisionStatus,
             ValidUntil = quotation.ValidUntil,
             SubTotalAmount = quotation.SubTotalAmount,
-            TotalDiscount = quotation.TotalDiscount,
+            TotalDiscount = ResolveQuotationTotalDiscountAmount(quotation),
             TaxAmount = quotation.TaxAmount,
             FinalAmount = quotation.FinalAmount,
             TotalInsuranceAmount = quotation.TotalInsuranceAmount,
@@ -3965,8 +4062,8 @@ public sealed class QuotationWorkflowService : IQuotationWorkflowService
                         UnitPriceAtTime = x.UnitPriceAtTime,
                         CostPriceAtTime = x.CostPriceAtTime,
                         SubTotal = x.SubTotal,
-                        DiscountPercentage = x.DiscountPercentage,
-                        DiscountValue = x.DiscountValue,
+                        DiscountPercentage = ResolveQuotationDetailDiscountPercentage(x),
+                        DiscountValue = ResolveQuotationDetailDiscountAmount(x, quotation.QuotationDiscounts),
                         TaxRate = x.TaxRate,
                         TaxAmount = x.TaxAmount,
                         FinalAmount = x.FinalAmount,

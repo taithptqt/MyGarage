@@ -1,4 +1,4 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
@@ -33,7 +33,7 @@ function getPriorityLabel(row) {
 }
 
 function normalizeBooleanLike(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
+  const normalized = String(value || "").trim().toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
@@ -439,7 +439,7 @@ export default function PublicQuotationAccessPage() {
       setOtpExpiresAt(resolvedExpiresAt);
       setOtpRemainingSeconds(Math.max(0, Math.ceil((resolvedExpiresAt.getTime() - Date.now()) / 1000)));
       const masked = data?.maskedEmail ? ` (${data.maskedEmail})` : "";
-      setMessage(`M� OTP d� du?c g?i${masked}. Vui l�ng nh?p m� d? ${approved ? "duy?t" : "t? ch?i"} b�o gi�.`);
+      setMessage(`M� OTP d� ??c g?i${masked}. Vui l�ng nh?p m� d? ${approved ? "duy?t" : "t? ch?i"} b�o gi�.`);
       setTimeout(() => {
         const wrap = document.querySelector(".quote-portal-otp-wrap");
         if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -485,7 +485,7 @@ export default function PublicQuotationAccessPage() {
             </p>
             {isExpiredLink ? (
               <p className="quote-portal-alert quote-portal-alert-expired">
-                Li�n k?t b�o gi� d� h?t h?n ho?c không c�n hi?u l?c. Vui l�ng li�n h? c? v?n dịch vụ d? du?c c?p li�n k?t m?i.
+                Li�n k?t b�o gi� d� h?t h?n ho?c không c�n hi?u l?c. Vui l�ng li�n h? c? v?n dịch vụ d? ??c c?p li�n k?t m?i.
               </p>
             ) : null}
           </section>
@@ -536,7 +536,7 @@ export default function PublicQuotationAccessPage() {
           <div className="summary-details">
             <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
 
-            <div className="summary-subtitle">Ph�n t�ch gi� tr? (Chua VAT):</div>
+            <div className="summary-subtitle">Ph�n t�ch gi� tr? (Ch?a VAT):</div>
             <div className="summary-line">
               <span className="summary-line-label">
                 <span className="summary-marker marker-labor" />
@@ -720,5 +720,4 @@ export default function PublicQuotationAccessPage() {
     </div>
   );
 }
-
 

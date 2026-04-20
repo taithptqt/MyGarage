@@ -20,8 +20,8 @@ function normalizeOrderStatus(order) {
 function getMessageByStatus(status, isRetail) {
   if (status === "COMPLETED") {
     return isRetail
-      ? "Thanh to�n don phụ tùng d� du?c x�c nh?n th�nh c�ng."
-      : "Thanh to�n d� du?c x�c nh?n th�nh c�ng.";
+      ? "Thanh to�n don phụ tùng d� ??c x�c nh?n th�nh c�ng."
+      : "Thanh toan da duoc xac nhan thanh cong.";
   }
 
   if (status === "CANCELED" || status === "FAILED") {
@@ -29,10 +29,10 @@ function getMessageByStatus(status, isRetail) {
   }
 
   if (status === "UNKNOWN") {
-    return "Không th? d?i so�t giao d?ch l�c n�y.";
+    return "Khong the doi soat giao dich luc nay.";
   }
 
-  return "Giao d?ch dang ch? x�c nh?n. Hệ thống s? t? d?ng c?p nh?t.";
+  return "Giao dich dang cho xac nhan. He thong se tu dong cap nhat.";
 }
 
 function getStatusStyle(status) {
@@ -59,7 +59,7 @@ export default function PaymentSuccessPage() {
   const retrySearch = useMemo(() => localStorage.getItem("payos_last_payment_search") || "", []);
 
   const [status, setStatus] = useState("PENDING");
-  const [message, setMessage] = useState("Đang x�c nh?n giao dịch vụi PayOS...");
+  const [message, setMessage] = useState("Dang xac nhan giao dich voi PayOS...");
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -84,14 +84,14 @@ export default function PaymentSuccessPage() {
       }
     }
 
-    // N?u d� x�c d?nh du?c status t? order v� không c� paymentId (retail không c� payment record)
+    // N?u d� x�c d?nh ??c status t? order v� không c� paymentId (retail không c� payment record)
     if (!paymentId) {
       const current = orderBasedStatus || "UNKNOWN";
       setStatus(current);
       setMessage(
         orderBasedStatus
           ? getMessageByStatus(current, isRetailCheckout)
-          : "Không t�m th?y m� giao d?ch d? d?i so�t."
+          : "Khong tim thay ma giao dich de doi soat."
       );
       setLoading(false);
       return current;
@@ -106,7 +106,7 @@ export default function PaymentSuccessPage() {
         setMessage(
           orderBasedStatus
             ? getMessageByStatus(fallbackStatus, isRetailCheckout)
-            : (result.data?.message || "Không l?y du?c trạng thái thanh to�n.")
+            : (result.data?.message || "Không l?y ??c trạng thái thanh to�n.")
         );
         setLoading(false);
         return fallbackStatus;

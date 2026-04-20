@@ -529,7 +529,7 @@ export default function VehicleConditionLogsPage() {
       await persistCheckIn("");
       toast({
         title: "Đã lưu tạm check-in",
-        description: "B?n có thợ ti?p t?c chọnh sửa trước khi khách hàng ký.",
+        description: "Bạn có thể tiếp tục chọn sửa trước khi khách hàng ký.",
         status: "success",
         duration: 2800,
       });
@@ -663,7 +663,7 @@ export default function VehicleConditionLogsPage() {
                   fontSize="11px"
                   fontWeight="700"
                 >
-                  Lễ tân xử lý tr?c ti?p check-in/check-out
+                  Lễ tân xử lý trực tiếp check-in/check-out
                 </Badge>
               </VStack>
             </HStack>
@@ -876,7 +876,7 @@ export default function VehicleConditionLogsPage() {
             <VStack align="stretch" spacing={6}>
               <Heading size="md" color="#2b3674">Danh sách hư hại và hình ảnh</Heading>
               <Text fontSize="sm" color="red.500" fontWeight="600">
-                B?t bu?c có ?nh cho d? 4 góc: góc trước trái, góc trước phải, góc sau trái, góc sau phải.
+                Bắt buộc có ảnh cho đủ 4 góc: góc trước trái, góc trước phải, góc sau trái, góc sau phải.
               </Text>
               {defectItems.map((item, idx) => (
                 <Card key={item.id} {...infoCardProps}>
@@ -1135,7 +1135,6 @@ export default function VehicleConditionLogsPage() {
     </Box>
   );
 }
-
 
 
 

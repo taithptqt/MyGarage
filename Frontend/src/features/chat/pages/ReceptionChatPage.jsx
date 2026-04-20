@@ -350,7 +350,7 @@ export default function ReceptionChatPage() {
         setSelectedConversationId(wantedId);
       } catch (err) {
         if (!silent) {
-          setError(err.message || "Không t?i du?c danh sách h?i tho?i.");
+          setError(err.message || "Không tải được danh sách hội thoại.");
         }
       } finally {
         if (!silent) {
@@ -431,7 +431,7 @@ export default function ReceptionChatPage() {
       const items = getItems(data).map((item) => getOrderCardFromMessage({ orderCard: item })).filter(Boolean);
       setConversationOrders(items);
     } catch (err) {
-      setOrderPickerError(err.message || "Không t?i du?c danh sách don h�ng.");
+      setOrderPickerError(err.message || "Không tải được danh sách đơn hàng.");
       setConversationOrders([]);
     } finally {
       setLoadingOrders(false);
@@ -669,7 +669,7 @@ export default function ReceptionChatPage() {
       }
 
       if (file.size > CHAT_MAX_ATTACHMENT_SIZE_BYTES) {
-        setError(`T?p ${file.name} vu?t qu� ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
+        setError(`Tệp ${file.name} vượt quá ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
         continue;
       }
 
@@ -766,7 +766,7 @@ export default function ReceptionChatPage() {
                   ? getCustomerDisplayName(selectedConversation)
                   : "Chọn user để nhắn tin"}
               </h2>
-              <small>Nh?n tin tr?c ti?p v?i khách hàng</small>
+              <small>Nhắn tin trực tiếp với khách hàng</small>
             </div>
             {selectedConversation ? (
               <span className={`chat-live-chip ${isSelectedCustomerOnline ? "online" : "offline"}`}>

@@ -359,16 +359,16 @@ export default function TaxDocumentsPage() {
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
           <Badge colorScheme={taxFilings.available ? "green" : "orange"}>
-            API TaxFiling: {taxFilings.available ? "OK" : "Chua co"}
+            API TaxFiling: {taxFilings.available ? "OK" : "Ch?a co"}
           </Badge>
           <Badge colorScheme={legalDocuments.available ? "green" : "orange"}>
-            API LegalDocument: {legalDocuments.available ? "OK" : "Chua co"}
+            API LegalDocument: {legalDocuments.available ? "OK" : "Ch?a co"}
           </Badge>
           <Badge colorScheme={attachments.available ? "green" : "orange"}>
-            API DocumentAttachment: {attachments.available ? "OK" : "Chua co"}
+            API DocumentAttachment: {attachments.available ? "OK" : "Ch?a co"}
           </Badge>
           <Badge colorScheme={invoices.available ? "green" : "orange"}>
-            API Invoices: {invoices.available ? "OK" : "Chua co"}
+            API Invoices: {invoices.available ? "OK" : "Ch?a co"}
           </Badge>
         </Flex>
       </Card>

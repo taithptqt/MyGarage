@@ -2732,10 +2732,7 @@ namespace MyGarage.Services
 
             _context.Diagnoses.UpdateRange(list);
 
-            if (serviceOrder.Status == ServiceOrderStatusDiagnosing)
-            {
-                serviceOrder.Status = ServiceOrderStatusCheckedIn;
-            }
+            serviceOrder.Status = ServiceOrderStatusCheckedIn;
 
             serviceOrder.UpdatedAt = now;
             _context.ServiceOrders.Update(serviceOrder);

@@ -1,0 +1,319 @@
+﻿.storage-page {
+  background: #f8f5ee;
+  color: #14202f;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.container-xl {
+  width: min(1440px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+.storage-hero {
+  position: relative;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 160px 24px 48px;
+  overflow: hidden;
+  background: #0f1a29;
+}
+
+.storage-hero__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storage-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 16, 26, 0.58);
+}
+
+.storage-hero__content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 960px;
+}
+
+.storage-hero__title {
+  margin: 0 0 16px;
+  color: #ffffff;
+  font-size: clamp(2rem, 5.8vw, 4.5rem);
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+}
+
+.storage-hero__subtitle {
+  margin: 0;
+  color: #f6e6c9;
+  font-size: 0.82rem;
+  letter-spacing: 0.28em;
+  font-weight: 700;
+}
+
+.storage-intro {
+  display: grid;
+  grid-template-columns: 5fr 1px 6fr;
+  gap: 48px;
+  padding: 88px 0;
+}
+
+.storage-intro__title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 3.8rem);
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+}
+
+.storage-intro__divider {
+  background: rgba(197, 160, 89, 0.25);
+}
+
+.storage-intro__text-wrap {
+  display: grid;
+  gap: 28px;
+}
+
+.storage-intro__text-wrap p {
+  margin: 0;
+  font-size: 1.06rem;
+  line-height: 1.75;
+  color: #3f4d60;
+}
+
+.storage-tiers {
+  background: #f0ece2;
+  padding: 88px 0;
+}
+
+.storage-section-head {
+  text-align: center;
+  margin-bottom: 52px;
+}
+
+.storage-section-kicker {
+  margin: 0 0 8px;
+  color: #bd8f44;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  font-size: 0.72rem;
+}
+
+.storage-section-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 3.8vw, 2.8rem);
+}
+
+.storage-tiers__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.storage-tier {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 14px 28px rgba(11, 23, 37, 0.08);
+}
+
+.storage-tier__image-wrap {
+  height: 250px;
+  overflow: hidden;
+}
+
+.storage-tier__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storage-tier__body {
+  padding: 28px;
+  text-align: center;
+  display: grid;
+  gap: 14px;
+}
+
+.storage-tier__name {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  font-weight: 800;
+}
+
+.storage-tier__price {
+  margin: 0;
+  font-size: 2rem;
+  color: #bd8f44;
+}
+
+.storage-tier__price span {
+  font-size: 0.85rem;
+  color: #5a687a;
+  margin-left: 4px;
+}
+
+.storage-tier__features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  color: #4b5a6d;
+  font-size: 0.94rem;
+}
+
+.storage-tier__button {
+  margin-top: 10px;
+  border: 1px solid #bd8f44;
+  background: transparent;
+  color: #bd8f44;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.storage-tier--premium .storage-tier__button {
+  background: #bd8f44;
+  color: #1f2c3e;
+}
+
+.storage-standards {
+  padding: 88px 0;
+}
+
+.storage-standards__head h3 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+}
+
+.storage-standards__line {
+  margin-top: 16px;
+  width: 120px;
+  height: 1px;
+  background: #bd8f44;
+}
+
+.storage-standards__grid {
+  margin-top: 42px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.storage-standard-card {
+  padding: 18px;
+  border: 1px solid #e2d5bd;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.storage-standard-card__icon {
+  color: #bd8f44;
+  width: 32px;
+  height: 32px;
+}
+
+.storage-standard-card__value {
+  margin: 14px 0 8px;
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.storage-standard-card__label {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #66758b;
+  font-weight: 700;
+}
+
+.storage-testimonial {
+  background: #ece6da;
+  padding: 86px 24px;
+}
+
+.storage-testimonial__inner {
+  max-width: 920px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.storage-testimonial blockquote {
+  margin: 0 0 24px;
+  font-size: clamp(1.35rem, 3vw, 2.1rem);
+  line-height: 1.5;
+  color: #253347;
+  font-style: italic;
+}
+
+.storage-testimonial__author {
+  margin: 0;
+  color: #bd8f44;
+  letter-spacing: 0.24em;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.storage-testimonial__car {
+  margin: 8px 0 0;
+  color: #5d6c7f;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1024px) {
+  .storage-intro {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .storage-intro__divider {
+    display: none;
+  }
+
+  .storage-tiers__grid,
+  .storage-standards__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .container-xl {
+    width: calc(100% - 28px);
+  }
+
+  .storage-hero {
+    min-height: 470px;
+    padding-top: 120px;
+  }
+
+  .storage-hero__subtitle {
+    letter-spacing: 0.17em;
+  }
+
+  .storage-intro,
+  .storage-tiers,
+  .storage-standards,
+  .storage-testimonial {
+    padding-top: 54px;
+    padding-bottom: 54px;
+  }
+
+  .storage-tiers__grid,
+  .storage-standards__grid {
+    grid-template-columns: 1fr;
+  }
+}

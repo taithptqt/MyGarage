@@ -1,0 +1,470 @@
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { getApiBaseUrl } from "@features/auth/api/authApi";
+import AuthResult from "@features/auth/components/AuthResult";
+import GoogleLoginButton from "@features/auth/components/GoogleLoginButton";
+import LoginForm from "@features/auth/login/LoginForm";
+import { isLoginFormValid } from "@features/auth/login/loginValidation";
+import RegisterForm from "@features/auth/register/RegisterForm";
+import { isRegisterFormValid } from "@features/auth/register/registerValidation";
+import { clearAuthStorage, readAuthToken } from "@features/auth/utils/authStorage";
+import { useAuth } from "@shared/core/context/AuthContext";
+import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
+import "./AuthPage.css";
+
+const AUTH_HIGHLIGHTS = [
+  {
+    title: "Äáº·t lá»‹ch nhanh chÃ³ng",
+    description: "Chá»‰ cáº§n chá»n dá»‹ch vá»¥, chi nhÃ¡nh vÃ  khung giá» phÃ¹ há»£p chá»‰ trong vÃ i phÃºt.",
+  },
+  {
+    title: "Theo dÃµi minh báº¡ch",
+    description: "Cáº­p nháº­t tiáº¿n Ä‘á»™ xá»­ lÃ½ xe theo tá»«ng cÃ´ng Ä‘oáº¡n ngay trÃªn há»‡ thá»‘ng.",
+  },
+  {
+    title: "Dá»¯ liá»‡u táº­p trung",
+    description: "LÆ°u trá»¯ lá»‹ch sá»­ sá»­a chá»¯a vÃ  thÃ´ng tin xe Ä‘á»ƒ tÆ° váº¥n chÃ­nh xÃ¡c hÆ¡n má»—i láº§n quay láº¡i.",
+  },
+];
+
+const PHONE_REQUEST_CODE = "PHONE_REQUEST";
+const PHONE_REQUEST_STAFF_CODE = `${PHONE_REQUEST_CODE}:STAFF`;
+const GOOGLE_PHONE_ROLE = {
+  CUSTOMER: "CUSTOMER",
+  STAFF: "STAFF",
+};
+
+function shouldReturnToRequestedCustomerPath(roleCode, requestedPath = "") {
+  const normalizedRoleCode = String(roleCode || "").trim().toUpperCase();
+  const normalizedPath = String(requestedPath || "").trim();
+  if (normalizedRoleCode !== "CUSTOMER") {
+    return false;
+  }
+  if (!normalizedPath || normalizedPath === "/login") {
+    return false;
+  }
+  return normalizedPath.startsWith("/");
+}
+
+function resolvePostAuthDestination(data, requestedPath) {
+  const code = String(data?.roleCode || "").toUpperCase();
+  const roleName = String(data?.role || "").toLowerCase();
+  if (shouldReturnToRequestedCustomerPath(code, requestedPath)) {
+    return requestedPath;
+  }
+  if (code === "ADMIN" || roleName === "admin") {
+    return "/admin";
+  }
+  if (code === "ACCOUNTANT") {
+    return "/accounting/dashboard";
+  }
+  if (["RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER"].includes(code)) {
+    return "/workshop";
+  }
+  return "/home";
+}
+
+function AuthPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const {
+    login: contextLogin,
+    register: contextRegister,
+    googleLogin: contextGoogleLogin,
+    logout: contextLogout,
+    user,
+    isAuthenticated,
+    loading: authLoading,
+  } = useAuth();
+
+  const [mode, setMode] = useState("login");
+  const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
+  const [registerForm, setRegisterForm] = useState({
+    fullName: "",
+    phone: "",
+    email: "",
+    password: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [flashMessage, setFlashMessage] = useState("");
+  const [result, setResult] = useState(null);
+  const [pendingGoogleToken, setPendingGoogleToken] = useState("");
+  const [needGooglePhone, setNeedGooglePhone] = useState(false);
+  const [googlePhone, setGooglePhone] = useState("");
+  const [pendingGoogleRole, setPendingGoogleRole] = useState(GOOGLE_PHONE_ROLE.CUSTOMER);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const requestedPath = location?.state?.from?.pathname || "";
+  const isStaffPhoneRequest = pendingGoogleRole === GOOGLE_PHONE_ROLE.STAFF;
+
+  useEffect(() => {
+    document.title = mode === "login" ? "ÄÄƒng nháº­p | MyGarage" : "ÄÄƒng kÃ½ | MyGarage";
+  }, [mode]);
+
+  useEffect(() => {
+    const incomingFlash = location?.state?.flashMessage;
+    if (!incomingFlash) return;
+
+    setFlashMessage(String(incomingFlash));
+    const timer = setTimeout(() => setFlashMessage(""), 3000);
+    navigate(location.pathname, { replace: true, state: null });
+
+    return () => clearTimeout(timer);
+  }, [location, navigate]);
+
+  useEffect(() => {
+    if (navigator?.permissions) {
+      navigator.permissions
+        .query({ name: "geolocation" })
+        .then((permissionResult) => {
+          setLocationDenied(permissionResult.state === "denied");
+          permissionResult.onchange = () => setLocationDenied(permissionResult.state === "denied");
+        })
+        .catch(() => {
+          // ignore
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated && readAuthToken()) {
+      clearAuthStorage();
+    }
+  }, [authLoading, isAuthenticated]);
+
+  const isLoginValid = useMemo(() => isLoginFormValid(loginForm), [loginForm]);
+  const isRegisterValid = useMemo(() => isRegisterFormValid(registerForm), [registerForm]);
+
+  const getLocationPayload = async () => {
+    if (!navigator?.geolocation) return {};
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) =>
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }),
+        () => resolve({}),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+      );
+    });
+  };
+
+  const updateLogin = (key, value) => setLoginForm((prev) => ({ ...prev, [key]: value }));
+  const updateRegister = (key, value) => setRegisterForm((prev) => ({ ...prev, [key]: value }));
+
+  const redirectAfterAuth = (data) => {
+    navigate(resolvePostAuthDestination(data, requestedPath), { replace: true });
+  };
+
+  const handleLogin = async (event) => {
+    if (event) event.preventDefault();
+    setError("");
+    setResult(null);
+
+    if (!isLoginValid) {
+      setError("ThÃ´ng tin Ä‘Äƒng nháº­p chÆ°a há»£p lá»‡.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const location = await getLocationPayload();
+      const data = await contextLogin({
+        identifier: loginForm.identifier.trim(),
+        password: loginForm.password,
+        ...location,
+      });
+      setResult(data);
+      redirectAfterAuth(data);
+    } catch (apiError) {
+      setError(apiError?.message || "ÄÄƒng nháº­p tháº¥t báº¡i.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (event) => {
+    if (event) event.preventDefault();
+    setError("");
+    setResult(null);
+
+    if (!isRegisterValid) {
+      setError("ThÃ´ng tin Ä‘Äƒng kÃ½ chÆ°a há»£p lá»‡.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const location = await getLocationPayload();
+      const data = await contextRegister({
+        fullName: registerForm.fullName.trim(),
+        phone: registerForm.phone.trim(),
+        email: registerForm.email.trim() || null,
+        password: registerForm.password,
+        ...location,
+      });
+      setResult(data);
+      redirectAfterAuth(data);
+    } catch (apiError) {
+      setError(apiError?.message || "ÄÄƒng kÃ½ tháº¥t báº¡i.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    contextLogout();
+    setResult(null);
+  };
+
+  const handleGoogleLogin = async (idToken) => {
+    setError("");
+    setResult(null);
+    setLoading(true);
+
+    try {
+      const location = await getLocationPayload();
+      const data = await contextGoogleLogin({ idToken, ...location });
+      setNeedGooglePhone(false);
+      setPendingGoogleToken("");
+      setGooglePhone("");
+      setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
+      setResult(data);
+      redirectAfterAuth(data);
+    } catch (apiError) {
+      const msg = apiError?.message || "ÄÄƒng nháº­p Google tháº¥t báº¡i.";
+      const normalizedMessage = String(msg).toUpperCase();
+      if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
+        setNeedGooglePhone(true);
+        setPendingGoogleToken(idToken);
+        setPendingGoogleRole(
+          normalizedMessage.includes(PHONE_REQUEST_STAFF_CODE)
+            ? GOOGLE_PHONE_ROLE.STAFF
+            : GOOGLE_PHONE_ROLE.CUSTOMER
+        );
+        setError("");
+      } else {
+        setNeedGooglePhone(false);
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGooglePhoneConfirm = async (event) => {
+    if (event) event.preventDefault();
+    if (!googlePhone.trim() || !pendingGoogleToken) return;
+    if (!isValidVietnamesePhone(googlePhone.trim())) {
+      setError("Sá»‘ Ä‘iá»‡n thoáº¡i khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng (0xxxxxxxxx hoáº·c +84xxxxxxxxx).");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const location = await getLocationPayload();
+      const data = await contextGoogleLogin({
+        idToken: pendingGoogleToken,
+        phone: googlePhone.trim(),
+        ...location,
+      });
+      setNeedGooglePhone(false);
+      setPendingGoogleToken("");
+      setGooglePhone("");
+      setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
+      setResult(data);
+      redirectAfterAuth(data);
+    } catch (apiError) {
+      const msg = apiError?.message || "Liên kết số điện thoại thất bại.";
+      const normalizedMessage = String(msg).toUpperCase();
+      if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
+        setNeedGooglePhone(true);
+        setPendingGoogleRole(
+          normalizedMessage.includes(PHONE_REQUEST_STAFF_CODE)
+            ? GOOGLE_PHONE_ROLE.STAFF
+            : GOOGLE_PHONE_ROLE.CUSTOMER
+        );
+        setError("");
+      } else {
+        setNeedGooglePhone(false);
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeGooglePhoneModal = () => {
+    if (loading) return;
+    setNeedGooglePhone(false);
+    setPendingGoogleToken("");
+    setGooglePhone("");
+    setPendingGoogleRole(GOOGLE_PHONE_ROLE.CUSTOMER);
+    setError("");
+  };
+
+  if (authLoading) {
+    return (
+      <main className="page">
+        <div className="auth-shell">
+          <section className="card">
+            <h1>Äang kiá»ƒm tra phiÃªn Ä‘Äƒng nháº­p...</h1>
+            <p className="subtitle">MyGarage Ä‘ang Ä‘á»“ng bá»™ tráº¡ng thÃ¡i tÃ i khoáº£n cá»§a báº¡n.</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (isAuthenticated && user) {
+    return <Navigate to={resolvePostAuthDestination(user, requestedPath)} replace />;
+  }
+
+  return (
+    <main className="page">
+      {flashMessage ? <div className="auth-toast-success">{flashMessage}</div> : null}
+      <div className="auth-scene" aria-hidden="true">
+        <div className="auth-floating-tag auth-floating-tag--left">
+          <span>15.000+</span>
+          <p>LÆ°á»£t xe Ä‘Æ°á»£c phá»¥c vá»¥ má»—i nÄƒm</p>
+        </div>
+        <div className="auth-floating-tag auth-floating-tag--right">
+          <span>4.9 / 5</span>
+          <p>ÄÃ¡nh giÃ¡ trung bÃ¬nh tá»« khÃ¡ch hÃ ng</p>
+        </div>
+        <div className="auth-floating-tag auth-floating-tag--bottom">
+          <span>30+</span>
+          <p>Ká»¹ thuáº­t viÃªn nhiá»u kinh nghiá»‡m</p>
+        </div>
+      </div>
+
+      <div className="auth-shell">
+        <section className="auth-showcase">
+          <div className="auth-showcase-content">
+            <p className="auth-showcase-kicker">MYGARAGE PREMIUM CARE</p>
+            <h2>
+              Ná»n táº£ng Ä‘áº·t lá»‹ch vÃ  theo dÃµi dá»‹ch vá»¥ xe
+              theo chuáº©n gara chuyÃªn nghiá»‡p
+            </h2>
+            <p>
+              ÄÄƒng nháº­p Ä‘á»ƒ quáº£n lÃ½ lá»‹ch háº¹n, lá»‹ch sá»­ sá»­a chá»¯a vÃ  nháº­n
+              gá»£i Ã½ dá»‹ch vá»¥ phÃ¹ há»£p theo tÃ¬nh tráº¡ng xe cá»§a báº¡n.
+            </p>
+
+            <div className="auth-showcase-features">
+              {AUTH_HIGHLIGHTS.map((item, index) => (
+                <article key={item.title} className="auth-feature-card">
+                  <span className="auth-feature-index">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <h1>{mode === "login" ? "ÄÄƒng nháº­p" : "ÄÄƒng kÃ½"}</h1>
+          <p className="subtitle">Má»™t tÃ i khoáº£n sá»­ dá»¥ng táº¥t cáº£ dá»‹ch vá»¥ cá»§a MyGarage</p>
+
+          {mode === "login" ? (
+            <LoginForm
+              form={loginForm}
+              onChange={updateLogin}
+              onSubmit={handleLogin}
+              isValid={isLoginValid}
+              loading={loading}
+            />
+          ) : (
+            <RegisterForm
+              form={registerForm}
+              onChange={updateRegister}
+              onSubmit={handleRegister}
+              isValid={isRegisterValid}
+              loading={loading}
+            />
+          )}
+
+          {error && <div className="error">{error}</div>}
+
+          {locationDenied && !error && (
+            <div className="location-hint">
+              Máº¹o: Báº­t vá»‹ trÃ­ Ä‘á»ƒ há»‡ thá»‘ng Æ°u tiÃªn gá»£i Ã½ chi nhÃ¡nh gáº§n nháº¥t.
+            </div>
+          )}
+
+          <div className="footer-switcher">
+            {mode === "login" ? (
+              <>
+                Báº¡n chÆ°a cÃ³ tÃ i khoáº£n,
+                <span className="switcher-link" onClick={() => { setMode("register"); setError(""); }}>
+                  Ä‘Äƒng kÃ½ ngay
+                </span>
+              </>
+            ) : (
+              <>
+                Báº¡n Ä‘Ã£ cÃ³ tÃ i khoáº£n?
+                <span className="switcher-link" onClick={() => { setMode("login"); setError(""); }}>
+                  Ä‘Äƒng nháº­p ngay
+                </span>
+              </>
+            )}
+          </div>
+
+          <div className="divider">
+            <span>Hoáº·c Ä‘Äƒng nháº­p vá»›i</span>
+          </div>
+
+          <div className="google-login-btn-container">
+            <GoogleLoginButton onCredential={handleGoogleLogin} onError={(message) => setError(message)} />
+          </div>
+
+          <AuthResult result={result} onLogout={handleLogout} />
+        </section>
+      </div>
+
+      {needGooglePhone && (
+        <div className="phone-modal-backdrop" onClick={closeGooglePhoneModal}>
+          <div className="phone-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{isStaffPhoneRequest ? "Cáº­p nháº­t sá»‘ Ä‘iá»‡n thoáº¡i nhÃ¢n viÃªn" : "LiÃªn káº¿t sá»‘ Ä‘iá»‡n thoáº¡i"}</h3>
+            <p>
+              {isStaffPhoneRequest
+                ? "TÃ i khoáº£n nhÃ¢n viÃªn cá»§a báº¡n chÆ°a cÃ³ sá»‘ Ä‘iá»‡n thoáº¡i. Vui lÃ²ng nháº­p Ä‘á»ƒ hoÃ n táº¥t Ä‘Äƒng nháº­p Google."
+                : "ChÃ o má»«ng! Vui lÃ²ng nháº­p sá»‘ Ä‘iá»‡n thoáº¡i Ä‘á»ƒ chÃºng tÃ´i tÃ¬m lá»‹ch sá»­ sá»­a xe cá»§a báº¡n."}
+            </p>
+            <form onSubmit={handleGooglePhoneConfirm} className="form">
+              <label htmlFor="google-phone">
+                {isStaffPhoneRequest ? "Sá»‘ Ä‘iá»‡n thoáº¡i nhÃ¢n viÃªn" : "Sá»‘ Ä‘iá»‡n thoáº¡i"}
+              </label>
+              <input
+                id="google-phone"
+                type="tel"
+                value={googlePhone}
+                onChange={(e) => setGooglePhone(e.target.value)}
+                placeholder="0900000000"
+                pattern="^(0[0-9]{9}|\+84[0-9]{9})$"
+                title="Sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡: 0xxxxxxxxx hoáº·c +84xxxxxxxxx"
+                required
+                autoFocus
+              />
+              <div className="phone-modal-actions">
+                <button type="button" className="btn-cancel" onClick={closeGooglePhoneModal} disabled={loading}>
+                  Há»§y
+                </button>
+                <button type="submit" disabled={loading || !googlePhone.trim()}>
+                  {loading ? "Äang xá»­ lÃ½..." : isStaffPhoneRequest ? "Cáº­p nháº­t" : "XÃ¡c nháº­n"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <p className="api-hint">API: {getApiBaseUrl()}</p>
+    </main>
+  );
+}
+
+export default AuthPage;

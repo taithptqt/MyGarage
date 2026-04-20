@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MyGarage.Models;
@@ -8,6 +8,8 @@ public partial class ServiceOrderDiscount
     public long Id { get; set; }
 
     public long ServiceOrderId { get; set; }
+
+    public long? ServiceOrderDetailId { get; set; }
 
     public string DiscountType { get; set; } = null!;
 
@@ -34,6 +36,8 @@ public partial class ServiceOrderDiscount
     public virtual CustomerTier? CustomerTier { get; set; }
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
+
+    public virtual ServiceOrderDetail? ServiceOrderDetail { get; set; }
 
     public virtual Voucher? Voucher { get; set; }
 }

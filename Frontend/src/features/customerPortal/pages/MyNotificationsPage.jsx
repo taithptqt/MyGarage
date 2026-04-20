@@ -74,7 +74,7 @@ export default function MyNotificationsPage() {
         Object.fromEntries(entries.filter(([, path]) => typeof path === "string" && path.length > 0))
       );
     } catch (e) {
-      setError(e?.message || "Không t?i du?c th�ng b�o.");
+      setError(e?.message || "Không t?i ??c th�ng b�o.");
     } finally {
       setLoading(false);
     }
@@ -133,7 +133,7 @@ export default function MyNotificationsPage() {
               <p className="cp-eyebrow">Garage của tôi</p>
               <h1 className="cp-title">Th�ng b�o</h1>
               <p className="cp-desc">
-                Nh?c b?o du?ng, kh?o s�t sau dịch vụ, b?o hi?m v� c?p nh?t ti?n d? t? xu?ng
+                Nhắc bảo dưỡng, khảo sát sau dịch vụ, bảo hiểm và cập nhật tiến độ từ xưởng
                 đều được gom về một inbox dễ theo dõi.
               </p>
             </div>
@@ -190,7 +190,7 @@ export default function MyNotificationsPage() {
             <section className="cp-card cp-empty-state">
               <h2 className="cp-empty-title">Inbox đang trống</h2>
               <p className="cp-muted">
-                Khi c� nh?c b?o du?ng, b?o hi?m hay c?p nh?t t? xu?ng, b?n s? th?y ch�ng ? d�y.
+                Khi có nhắc bảo dưỡng, bảo hiểm hay cập nhật từ xưởng, bạn sẽ thấy chúng ở đây.
               </p>
             </section>
           ) : null}
@@ -234,7 +234,7 @@ export default function MyNotificationsPage() {
                         </button>
                       ) : (
                         <span className="cp-muted cp-notif-hint">
-                          Th�ng b�o n�y hi?n chua c� m�n h�nh di?u hu?ng tr?c ti?p.
+                          Thông báo này hiện chưa có màn hình điều hướng trực tiếp.
                         </span>
                       )}
 

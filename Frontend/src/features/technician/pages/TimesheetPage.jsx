@@ -5,26 +5,26 @@ import { useBranch } from "@shared/core/context/BranchContext";
 import "./Timesheet.css";
 
 const UI_TEXT = {
-  title: "L?CH C�NG T�C & CH?M C�NG H�NG NG�Y",
+  title: "LỊCH CÔNG TÁC & CHẤM CÔNG HÀNG NGÀY",
   breadcrumbHome: "Home",
   breadcrumbPage: "Schedule",
-  filterShift: "Ca l�m",
-  staffColumnTeam: "T? nh�m",
-  staffColumnName: "Nh�n vi�n",
-  staffColumnShiftStatus: "Tr?ng th�i ca",
-  staffColumnHours: "Gi? c�ng t�ch luy",
-  summaryStatus: "Tr?ng th�i h�m nay",
-  summaryHours: "Gi? c�ng t�ch luy",
-  summaryPending: "C�ng vi?c dang ch?",
-  shiftLabel: "Ca s�ng: 08:00 - 12:00",
-  serverTime: "Gi? m�y ch?",
+  filterShift: "Ca làm",
+  staffColumnTeam: "Tổ nhóm",
+  staffColumnName: "Nhân viên",
+  staffColumnShiftStatus: "Trạng thái ca",
+  staffColumnHours: "Giờ công tích lũy",
+  summaryStatus: "Trạng thái hôm nay",
+  summaryHours: "Giờ công tích lũy",
+  summaryPending: "Công việc đang chờ",
+  shiftLabel: "Ca sáng: 08:00 - 12:00",
+  serverTime: "Giờ máy chủ",
   checkIn: "Check-in",
   checkOut: "Check-out",
-  locationVerified: "GPS d� x�c th?c",
-  locationPending: "Ch? x�c th?c v? tr�",
-  todayHistory: "L?ch s? ch?m c�ng h�m nay",
-  emptyHistory: "Chua c� b?n ghi n�o.",
-  loading: "�ang t?i d? li?u ch?m c�ng...",
+  locationVerified: "GPS đã xác thực",
+  locationPending: "Chờ xác thực vị trí",
+  todayHistory: "LỊCH SỬ CHẤM CÔNG HÔM NAY",
+  emptyHistory: "Chưa có bản ghi nào.",
+  loading: "Đang tải dữ liệu chấm công...",
 };
 
 const VIEW_OPTIONS = [
@@ -34,17 +34,17 @@ const VIEW_OPTIONS = [
 ];
 
 const SHIFT_OPTIONS = [
-  { value: "all", label: "T?t c? ca" },
-  { value: "morning", label: "Ca s�ng" },
-  { value: "afternoon", label: "Ca chi?u" },
+  { value: "all", label: "Tất cả ca" },
+  { value: "morning", label: "Ca sáng" },
+  { value: "afternoon", label: "Ca chiều" },
 ];
 
 const ATTENDANCE_STATUS_LABELS = {
-  early: "�?n s?m",
-  ontime: "��ng gi?",
-  late: "�i mu?n",
-  absent: "V?ng m?t",
-  leave: "Ngh? ph�p",
+  early: "Đến sớm",
+  ontime: "Đúng giờ",
+  late: "Đi muộn",
+  absent: "Vắng mặt",
+  leave: "Nghỉ phép",
 };
 
 const TIME_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
@@ -156,14 +156,14 @@ export default function TimesheetPage() {
     Number(user?.branchId) ||
     Number(user?.BranchId) ||
     (Number(selectedBranchId) > 0 ? Number(selectedBranchId) : null);
-  const currentProfileName = user?.fullName || user?.name || "Nh�n vi�n k? thu?t";
+  const currentProfileName = user?.fullName || user?.name || "Nhân viên kỹ thuật";
   const currentDepartment = resolveDepartmentByRole(user?.roleCode || user?.role);
 
   const fetchTimesheet = useCallback(async () => {
     if (!currentStaffId) {
       setTodayEntries([]);
       setActiveEntry(null);
-      setError("Thi?u th�ng tin nh�n vi�n d? t?i ch?m c�ng.");
+      setError("Thiếu thông tin nhân viên để tải chấm công.");
       setLoading(false);
       return;
     }
@@ -180,7 +180,7 @@ export default function TimesheetPage() {
       const active = data.find((entry) => !entry.checkOutTime && !entry.CheckOutTime);
       setActiveEntry(active || null);
     } catch (fetchError) {
-      setError(fetchError?.response?.data?.message || "Kh�ng th? t?i d? li?u ch?m c�ng h�m nay.");
+      setError(fetchError?.response?.data?.message || "Không thể tải dữ liệu chấm công hôm nay.");
     } finally {
       setLoading(false);
     }
@@ -224,7 +224,7 @@ export default function TimesheetPage() {
     name: currentProfileName,
     attendanceStatus,
     shift: personalTasks.length > 0 && personalTasks.some((task) => toMinutes(task.start) >= 12 * 60) ? "afternoon" : "morning",
-    shiftLabel: personalTasks.length > 0 && personalTasks.some((task) => toMinutes(task.start) >= 12 * 60) ? "Ca chi?u" : "Ca s�ng",
+    shiftLabel: personalTasks.length > 0 && personalTasks.some((task) => toMinutes(task.start) >= 12 * 60) ? "Ca chiều" : "Ca sáng",
     accumulatedHours: formatTime(totalSecondsToday).slice(0, 5),
     tasks: personalTasks,
   }), [attendanceStatus, currentProfileName, currentStaffId, personalTasks, totalSecondsToday]);
@@ -236,7 +236,7 @@ export default function TimesheetPage() {
   }, [currentDepartment, personalMember, shiftFilter]);
 
   const summary = useMemo(() => ({
-    status: ATTENDANCE_STATUS_LABELS[attendanceStatus] || "Chua x�c d?nh",
+    status: ATTENDANCE_STATUS_LABELS[attendanceStatus] || "Chưa xác định",
     workedHours: formatTime(totalSecondsToday).slice(0, 5),
     pendingTasks: personalTasks.filter((task) => task.status === "inProgress").length,
   }), [attendanceStatus, personalTasks, totalSecondsToday]);
@@ -248,7 +248,7 @@ export default function TimesheetPage() {
   const getCurrentPosition = () =>
     new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error("Thi?t b? kh�ng h? tr? GPS."));
+        reject(new Error("Thiết bị không hỗ trợ GPS."));
         return;
       }
       navigator.geolocation.getCurrentPosition(
@@ -261,7 +261,7 @@ export default function TimesheetPage() {
   const handleCheckIn = async () => {
     setError("");
     if (!currentStaffId) {
-      setError("Thi?u th�ng tin nh�n vi�n.");
+      setError("Thiếu thông tin nhân viên.");
       return;
     }
     try {
@@ -272,7 +272,7 @@ export default function TimesheetPage() {
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         setGpsVerified(false);
-        setError("Kh�ng l?y du?c t?a d? GPS h?p l?.");
+        setError("Không lấy được tọa độ GPS hợp lệ.");
         return;
       }
 
@@ -291,7 +291,7 @@ export default function TimesheetPage() {
       await fetchTimesheet();
     } catch (actionError) {
       setGpsVerified(false);
-      setError(actionError?.response?.data?.message || "L?i khi Check-in.");
+      setError(actionError?.response?.data?.message || "Lỗi khi Check-in.");
     }
   };
 
@@ -307,7 +307,7 @@ export default function TimesheetPage() {
       });
       await fetchTimesheet();
     } catch (actionError) {
-      setError(actionError?.response?.data?.message || "L?i khi Check-out.");
+      setError(actionError?.response?.data?.message || "Lỗi khi Check-out.");
     }
   };
 
@@ -343,7 +343,7 @@ export default function TimesheetPage() {
 
         <div className="schedule-title-wrap">
           <h1 className="schedule-page-title">{UI_TEXT.title}</h1>
-          <p className="schedule-page-subtitle">Theo d�i l?ch ph�n c�ng v� ch?m c�ng c� nh�n theo th?i gian th?c.</p>
+          <p className="schedule-page-subtitle">Theo dõi lịch phân công và chấm công cá nhân theo thời gian thực.</p>
         </div>
 
         {error && <div className="schedule-alert">{error}</div>}
@@ -376,7 +376,7 @@ export default function TimesheetPage() {
               <span>{locationVerified ? UI_TEXT.locationVerified : UI_TEXT.locationPending}</span>
             </div>
             <div className="attendance-total-hours">
-              �� l�m h�m nay: <strong>{formatTime(totalSecondsToday)}</strong>
+              Đã làm hôm nay: <strong>{formatTime(totalSecondsToday)}</strong>
             </div>
             <div className="attendance-actions">
               {activeEntry ? (
@@ -403,7 +403,7 @@ export default function TimesheetPage() {
                     return (
                       <li key={entry.id || entry.Id}>
                         <span>In: {new Date(checkInTime).toLocaleTimeString("vi-VN")}</span>
-                        <span>{checkOutTime ? `Out: ${new Date(checkOutTime).toLocaleTimeString("vi-VN")}` : "�ang l�m..."}</span>
+                        <span>{checkOutTime ? `Out: ${new Date(checkOutTime).toLocaleTimeString("vi-VN")}` : "Đang làm..."}</span>
                       </li>
                     );
                   })}
@@ -491,3 +491,4 @@ export default function TimesheetPage() {
     </div>
   );
 }
+

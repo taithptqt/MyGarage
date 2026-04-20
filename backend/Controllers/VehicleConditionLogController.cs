@@ -414,6 +414,9 @@ namespace MyGarage.Controllers
                 var existingDiagnoses = await _diagnosisService.GetAllByServiceOrderAsync(serviceOrderId);
                 if (existingDiagnoses.Count > 0)
                 {
+                    await _diagnosisService.UpdateServiceOrderStatusAsync(
+                        serviceOrder,
+                        nameof(ServiceOrderLifecycleStatus.DIAGNOSING));
                     return;
                 }
 
@@ -446,6 +449,10 @@ namespace MyGarage.Controllers
                     intakeSuggestion.DispatchTag,
                     assignedTeamId: suggestedTeamId.Value,
                     assignedBayId: finalAssignedBayId);
+
+                await _diagnosisService.UpdateServiceOrderStatusAsync(
+                    serviceOrder,
+                    nameof(ServiceOrderLifecycleStatus.DIAGNOSING));
             }
             catch
             {
@@ -866,7 +873,6 @@ namespace MyGarage.Controllers
         }
     }
 }
-
 
 
 

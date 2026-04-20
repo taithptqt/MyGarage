@@ -168,7 +168,7 @@ export function formatCompletionWarningTime(value) {
 export function buildFlexibleCompletionWarningMessage({ vehicleLabel, completionValue }) {
   const completionText = formatCompletionWarningTime(completionValue);
   if (!completionText) return "";
-  const normalizedVehicleLabel = String(vehicleLabel || "").trim() || "xe chua x�c d?nh";
+  const normalizedVehicleLabel = String(vehicleLabel || "").trim() || "xe ch?a x�c d?nh";
   return `Thời gian hoàn thành dự kiến cho xe ${normalizedVehicleLabel} là ${completionText}. Thời gian hoàn thiện ca sửa thực tế sẽ được tư vấn viên cập nhật sau khi xe vào khoang.`;
 }
 

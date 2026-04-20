@@ -2,8 +2,8 @@
 import { GROUP_SESSION_STATUS } from "@features/appointments/constants/groupSessionStatuses";
 
 export const STATUS_META = {
-  [APPOINTMENT_STATUS.PENDING]: { label: "Ch? x�c nh?n", tone: "pending" },
-  [APPOINTMENT_STATUS.CONFIRMED]: { label: "Đã x�c nh?n", tone: "confirmed" },
+  [APPOINTMENT_STATUS.PENDING]: { label: "Chờ xác nhận", tone: "pending" },
+  [APPOINTMENT_STATUS.CONFIRMED]: { label: "Đã xác nhận", tone: "confirmed" },
   [APPOINTMENT_STATUS.ARRIVED]: { label: "Đã đến", tone: "arrived" },
   [APPOINTMENT_STATUS.CANCELED]: { label: "Đã hủy", tone: "canceled" },
   [APPOINTMENT_STATUS.NO_SHOW]: { label: "Không đến", tone: "no-show" },
@@ -11,16 +11,16 @@ export const STATUS_META = {
 
 export const GROUP_STATUS_META = {
   [GROUP_SESSION_STATUS.PENDING]: { label: "Đang chờ", tone: "pending" },
-  [GROUP_SESSION_STATUS.PARTIAL_CONFIRMED]: { label: "Xác nhận m?t ph?n", tone: "arrived" },
-  [GROUP_SESSION_STATUS.CONFIRMED]: { label: "Đã x�c nh?n", tone: "confirmed" },
+  [GROUP_SESSION_STATUS.PARTIAL_CONFIRMED]: { label: "Xác nhận một phần", tone: "arrived" },
+  [GROUP_SESSION_STATUS.CONFIRMED]: { label: "Đã xác nhận", tone: "confirmed" },
   [GROUP_SESSION_STATUS.COMPLETED]: { label: "Đã hoàn tất", tone: "confirmed" },
   [GROUP_SESSION_STATUS.CANCELED]: { label: "Đã hủy", tone: "canceled" },
 };
 
 export const FILTERS = [
   { key: "", label: "Tất cả" },
-  { key: APPOINTMENT_STATUS.PENDING, label: "Ch? x�c nh?n" },
-  { key: APPOINTMENT_STATUS.CONFIRMED, label: "Đã x�c nh?n" },
+  { key: APPOINTMENT_STATUS.PENDING, label: "Chờ xác nhận" },
+  { key: APPOINTMENT_STATUS.CONFIRMED, label: "Đã xác nhận" },
   { key: APPOINTMENT_STATUS.ARRIVED, label: "Đã đến" },
   { key: APPOINTMENT_STATUS.CANCELED, label: "Đã hủy" },
   { key: APPOINTMENT_STATUS.NO_SHOW, label: "Không đến" },

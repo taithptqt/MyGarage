@@ -70,9 +70,9 @@ function maintenanceKindLabel(kind) {
     case "ODO_DELTA":
       return "Chu kỳ quãng đường";
     case "AI_FORECAST":
-      return "D? b�o AI";
+      return "Dự báo AI";
     default:
-      return kind || "Khuy?n c�o";
+      return kind || "Khuyến cáo";
   }
 }
 
@@ -177,7 +177,7 @@ export default function VehicleDetailPage() {
 
                 <div className="cp-detail-head-actions">
                   <Link className="cp-btn cp-btn-ghost" to="/my-vehicles">
-                    V? danh sách xe
+                    Về danh sách xe
                   </Link>
                   <Link className="cp-btn" to="/my-garage-dashboard">
                     Xem xe đang sửa
@@ -270,7 +270,7 @@ export default function VehicleDetailPage() {
                     <section className="cp-card cp-empty-state">
                       <h2 className="cp-empty-title">Chưa có lịch sử sửa chữa</h2>
                       <p className="cp-muted">
-                        L?ch s? l?nh s?a ch?a, dịch vụ v� bi�n b?n ti?p nh?n/tr? xe s? hi?n ? d�y khi ph�t sinh.
+                        Lịch sử lệnh sửa chữa, dịch vụ và biên bản tiếp nhận/trả xe sẽ hiện ở đây khi phát sinh.
                       </p>
                     </section>
                   ) : (
@@ -355,7 +355,7 @@ export default function VehicleDetailPage() {
                                           target="_blank"
                                           rel="noopener noreferrer"
                                         >
-                                          Xem chữ ký x�c nh?n
+                                          Xem chữ ký xác nhận
                                         </a>
                                       ) : null}
                                     </div>
@@ -403,7 +403,7 @@ export default function VehicleDetailPage() {
                     <section className="cp-card cp-empty-state">
                       <h2 className="cp-empty-title">Chưa có hóa đơn liên kết</h2>
                       <p className="cp-muted">
-                        H�a don v� trạng thái thanh to�n c?a tổng l?nh s? xu?t hi?n khi xu?ng ph�t h�nh.
+                        Hóa đơn và trạng thái thanh toán của từng lệnh sẽ xuất hiện khi xưởng phát hành.
                       </p>
                     </section>
                   ) : (
@@ -447,9 +447,9 @@ export default function VehicleDetailPage() {
                 <section className="cp-maintenance-panel">
                   {hints.length === 0 ? (
                     <article className="cp-card cp-empty-state">
-                      <h2 className="cp-empty-title">Chua c� khuy?n c�o t? d?ng</h2>
+                      <h2 className="cp-empty-title">Chưa có khuyến cáo tự động</h2>
                       <p className="cp-muted">
-                        Khi d?t ngu?ng thời gian, ODO ho?c c� forecast AI s?p t?i, hệ thống s? hi?n th? g?i � bảo trì ? d�y.
+                        Khi đạt ngưỡng thời gian, ODO hoặc có forecast AI sắp tới, hệ thống sẽ hiển thị gợi ý bảo trì ở đây.
                       </p>
                     </article>
                   ) : (

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { getAllStaff } from "@features/admin/api/staffApi";
@@ -184,7 +184,7 @@ export default function QCDashboard() {
 
       <style>{`
         .btn-success { background: #05cd99; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
-        .btn-danger { background: #ee5d50; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
+        .btn-?anger { background: #ee5d50; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
       `}</style>
     </div>
   );

@@ -401,14 +401,16 @@ export default function RetailCartPage() {
 
         setStockByProductId(nextStockByProductId);
 
-        const syncResult = syncCartWithAvailability(nextStockByProductId);
+        const syncResult = syncCartWithAvailability(nextStockByProductId, {
+          removeUnavailable: false,
+        });
         if (syncResult?.adjusted) {
           const adjustments = [
             syncResult.updatedProductIds?.length
               ? `${syncResult.updatedProductIds.length} mặt hàng đã được giảm về mức tồn kho hợp lệ`
               : null,
             syncResult.removedProductIds?.length
-              ? `${syncResult.removedProductIds.length} mặt hàng đã được gỡ khỏi giỏ vì chi nhánh này đã hết hàng`
+              ? `${syncResult.removedProductIds.length} mặt hàng tạm hết hàng đã được giữ lại trong giỏ`
               : null,
           ]
             .filter(Boolean)
@@ -537,7 +539,9 @@ export default function RetailCartPage() {
         .filter((item) => item.requestedQuantity > item.availableQuantity);
 
       if (stockIssues.length) {
-        syncCartWithAvailability(latestStockByProductId);
+        syncCartWithAvailability(latestStockByProductId, {
+          removeUnavailable: false,
+        });
         setError(
           `Không đủ tồn kho tại chi nhánh đã chọn cho: ${stockIssues
             .map((item) => `${item.name} (còn ${item.availableQuantity})`)

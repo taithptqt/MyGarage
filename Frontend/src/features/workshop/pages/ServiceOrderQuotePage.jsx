@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
 import { getAllStandardServices } from "@features/admin/api/serviceApi";
@@ -49,14 +49,14 @@ import {
   CreditCard
 } from "lucide-react";
 
-const SERVICE_ROW_TOOLTIP_EXPAND = "Nháº¥n Ä‘á»ƒ xem phá»¥ tÃ¹ng thuá»™c dá»‹ch vá»¥ nÃ y.";
-const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nháº¥n Ä‘á»ƒ thu gá»n phá»¥ tÃ¹ng thuá»™c dá»‹ch vá»¥ nÃ y.";
-const SERVICE_ROW_TOOLTIP_STATIC = "DÃ²ng dá»‹ch vá»¥ chÃ­nh trong bÃ¡o giÃ¡.";
+const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
 
 const DISCOUNT_MODE_AMOUNT = "AMOUNT";
 const DISCOUNT_MODE_PERCENT = "PERCENT";
-const SERVICE_QTY_WARNING_MESSAGE = "Sá»‘ lÆ°á»£ng dá»‹ch vá»¥ vÆ°á»£t 5. Vui lÃ²ng kiá»ƒm tra láº¡i.";
-const PART_QTY_WARNING_MESSAGE = "Sá»‘ lÆ°á»£ng phá»¥ tÃ¹ng vÆ°á»£t 20. Vui lÃ²ng kiá»ƒm tra láº¡i.";
+const SERVICE_QTY_WARNING_MESSAGE = "Số lượng dịch vụ vượt 5. Vui lòng kiểm tra lại.";
+const PART_QTY_WARNING_MESSAGE = "Số lượng phụ tùng vượt 20. Vui lòng kiểm tra lại.";
 
 function getQuantityWarningMessage(quantityValue, isServiceRow) {
   const quantity = Number(quantityValue);
@@ -67,29 +67,29 @@ function getQuantityWarningMessage(quantityValue, isServiceRow) {
 }
 
 const EXCEL_UI_TEXT = {
-  exportButton: "Xuáº¥t Excel",
-  importButton: "Nháº­p Excel",
-  exportTitle: "Xuáº¥t file Excel bÃ¡o giÃ¡ theo tráº¡ng thÃ¡i hiá»‡n táº¡i",
-  importTitle: "Nháº­p láº¡i file Excel bÃ¡o giÃ¡ Ä‘á»ƒ cáº­p nháº­t cá»™t báº£o hiá»ƒm",
-  noQuotationImport: "ChÆ°a cÃ³ bÃ¡o giÃ¡ Ä‘á»ƒ nháº­p Excel.",
-  noQuotationExport: "ChÆ°a cÃ³ bÃ¡o giÃ¡ Ä‘á»ƒ xuáº¥t Excel.",
-  processing: "Há»‡ thá»‘ng Ä‘ang xá»­ lÃ½, vui lÃ²ng chá».",
-  noStaff: "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c nhÃ¢n viÃªn thao tÃ¡c.",
-  orderCanceledImport: "Lá»‡nh sá»­a chá»¯a Ä‘Ã£ há»§y, khÃ´ng thá»ƒ nháº­p Excel.",
-  orderCanceledExport: "Lá»‡nh sá»­a chá»¯a Ä‘Ã£ há»§y, khÃ´ng thá»ƒ xuáº¥t Excel.",
-  quotationCanceledImport: "BÃ¡o giÃ¡ Ä‘Ã£ há»§y, khÃ´ng thá»ƒ nháº­p Excel.",
-  quotationCanceledExport: "BÃ¡o giÃ¡ Ä‘Ã£ há»§y, khÃ´ng thá»ƒ xuáº¥t Excel.",
-  splitLocked: "BÃ¡o giÃ¡ Ä‘Ã£ khÃ³a tÃ¡ch bill theo tráº¡ng thÃ¡i hiá»‡n táº¡i.",
+  exportButton: "Xuất Excel",
+  importButton: "Nhập Excel",
+  exportTitle: "Xuất file Excel báo giá theo trạng thái hiện tại",
+  importTitle: "Nhập lại file Excel báo giá để cập nhật cột bảo hiểm",
+  noQuotationImport: "Chưa có báo giá để nhập Excel.",
+  noQuotationExport: "Chưa có báo giá để xuất Excel.",
+  processing: "Hệ thống đang xử lý, vui lòng chờ.",
+  noStaff: "Không xác định được nhân viên thao tác.",
+  orderCanceledImport: "Lệnh sửa chữa đã hủy, không thể nhập Excel.",
+  orderCanceledExport: "Lệnh sửa chữa đã hủy, không thể xuất Excel.",
+  quotationCanceledImport: "Báo giá đã hủy, không thể nhập Excel.",
+  quotationCanceledExport: "Báo giá đã hủy, không thể xuất Excel.",
+  splitLocked: "Báo giá đã khóa tách bill theo trạng thái hiện tại.",
 };
 
 // Sub-components for better organization
 function QuoteStepper({ status }) {
   const steps = [
-    { id: "DRAFT", label: "Báº£n nhÃ¡p", icon: <FileText size={18} /> },
-    { id: "PENDING_INSURANCE", label: "Chá» BH duyá»‡t", icon: <ShieldCheck size={18} /> },
-    { id: "INSURANCE_APPROVED", label: "BH Ä‘Ã£ duyá»‡t", icon: <Check size={18} /> },
-    { id: "PENDING_CUSTOMER", label: "Äá»£i khÃ¡ch chá»‘t", icon: <User size={18} /> },
-    { id: "CUSTOMER_APPROVED", label: "HoÃ n táº¥t", icon: <Check size={18} /> },
+    { id: "DRAFT", label: "Bản nháp", icon: <FileText size={18} /> },
+    { id: "PENDING_INSURANCE", label: "Chờ BH duyệt", icon: <ShieldCheck size={18} /> },
+    { id: "INSURANCE_APPROVED", label: "BH đã duyệt", icon: <Check size={18} /> },
+    { id: "PENDING_CUSTOMER", label: "Đợi khách chốt", icon: <User size={18} /> },
+    { id: "CUSTOMER_APPROVED", label: "Hoàn tất", icon: <Check size={18} /> },
   ];
 
   const currentIdx = steps.findIndex(s => s.id === status);
@@ -618,8 +618,8 @@ export default function ServiceOrderQuotePage() {
           parentName: "",
           isDependentPart: false,
           isMainService: true,
-          classificationLabel: priorityLabel || "Dá»‹ch vá»¥ chÃ­nh",
-          priorityLabel: priorityLabel || "BÃ¬nh thÆ°á»ng",
+          classificationLabel: priorityLabel || "Dịch vụ chính",
+          priorityLabel: priorityLabel || "Bình thường",
           classificationRank: 0,
         };
       }
@@ -794,7 +794,7 @@ export default function ServiceOrderQuotePage() {
 
   const loadData = useCallback(async () => {
     if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
-      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
+      setError("Mã lệnh sửa chữa không hợp lệ.");
       setLoading(false);
       return;
     }
@@ -847,7 +847,7 @@ export default function ServiceOrderQuotePage() {
         setActiveQuotationId(null);
       }
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u bÃ¡o giÃ¡.");
+      setError(err?.message || "Không thể tải dữ liệu báo giá.");
     } finally {
       setLoading(false);
     }
@@ -888,9 +888,9 @@ export default function ServiceOrderQuotePage() {
       }
 
       if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_APPROVED") {
-        setActionMessage("KhÃ¡ch Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡ online.");
+        setActionMessage("Khách đã duyệt báo giá online.");
       } else if (prevStatus !== nextStatus && nextStatus === "CUSTOMER_REJECTED") {
-        setActionMessage("KhÃ¡ch Ä‘Ã£ tá»« chá»‘i bÃ¡o giÃ¡ online.");
+        setActionMessage("Khách đã từ chối báo giá online.");
       }
     } catch {
       // Silent refresh should not interrupt user actions.
@@ -958,7 +958,7 @@ export default function ServiceOrderQuotePage() {
       if (itemType === "SERVICE" && standardServiceId) {
         const service = serviceLookup.get(standardServiceId);
         itemId = standardServiceId;
-        itemName = extractServiceName(service) || `Dá»‹ch vá»¥ #${standardServiceId}`;
+        itemName = extractServiceName(service) || `Dịch vụ #${standardServiceId}`;
         unitPriceAtTime = extractServicePrice(service);
         taxRate = extractServiceTax(service);
         normalizedItemType = "LABOR";
@@ -1033,7 +1033,7 @@ export default function ServiceOrderQuotePage() {
         itemType: "LABOR",
         itemId: serviceId,
         itemName,
-        description: readField(row, "description", "Description") || "Dá»‹ch vá»¥ khÃ¡ch hÃ ng Ä‘Ã£ chá»n",
+        description: readField(row, "description", "Description") || "Dịch vụ khách hàng đã chọn",
         quantity,
         unitPriceAtTime,
         costPriceAtTime: null,
@@ -1063,7 +1063,7 @@ export default function ServiceOrderQuotePage() {
       if (!itemId) return;
       const product = productLookup.get(itemId);
       const quantity = toSafeQuantity(readField(row, "quantity", "Quantity"));
-      const itemName = firstNonEmptyText(readField(row, "itemName", "ItemName"), extractProductName(product), `Phá»¥ tÃ¹ng #${itemId}`);
+      const itemName = firstNonEmptyText(readField(row, "itemName", "ItemName"), extractProductName(product), `Phụ tùng #${itemId}`);
       const unitPriceAtTime = Number(readField(row, "unitPriceAtTime", "UnitPriceAtTime")) || extractProductPrice(product);
       const taxRateRaw = Number(readField(row, "taxRate", "TaxRate"));
       const taxRate = Number.isFinite(taxRateRaw) && taxRateRaw >= 0 ? taxRateRaw : extractProductTax(product);
@@ -1073,7 +1073,7 @@ export default function ServiceOrderQuotePage() {
         itemType: "PART",
         itemId,
         itemName,
-        description: readField(row, "description", "Description") || "Phá»¥ tÃ¹ng khÃ¡ch hÃ ng Ä‘Ã£ chá»n",
+        description: readField(row, "description", "Description") || "Phụ tùng khách hàng đã chọn",
         quantity,
         unitPriceAtTime,
         costPriceAtTime: null,
@@ -1122,7 +1122,7 @@ export default function ServiceOrderQuotePage() {
             itemType: "PART",
             itemId: productId,
             itemName,
-            description: `Phá»¥ tÃ¹ng BOM cho dá»‹ch vá»¥: ${entry.serviceName || `#${entry.serviceId}`}`,
+            description: `Phụ tùng BOM cho dịch vụ: ${entry.serviceName || `#${entry.serviceId}`}`,
             quantity: totalQuantity,
             unitPriceAtTime: extractProductPrice(product),
             costPriceAtTime: null,
@@ -1169,13 +1169,13 @@ export default function ServiceOrderQuotePage() {
 
   const handleCreateDraftQuotation = useCallback(async () => {
     if (!numericOrderId || !staffId) {
-      setError("KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c mÃ£ lá»‡nh hoáº·c nhÃ¢n sá»± thao tÃ¡c.");
+      setError("Không xác định được mã lệnh hoặc nhân sự thao tác.");
       return;
     }
 
     const items = await buildQuotationItemsForDraft();
     if (items.length === 0) {
-      setError("KhÃ´ng cÃ³ dá»¯ liá»‡u dá»‹ch vá»¥/phá»¥ tÃ¹ng Ä‘á»ƒ táº¡o bÃ¡o giÃ¡.");
+      setError("Không có dữ liệu dịch vụ/phụ tùng để tạo báo giá.");
       return;
     }
 
@@ -1186,22 +1186,22 @@ export default function ServiceOrderQuotePage() {
 
     try {
       const created = await serviceOrderApi.createQuotation(numericOrderId, {
-        title: `BÃ¡o giÃ¡ v${(quotations?.length || 0) + 1}`,
+        title: `Báo giá v${(quotations?.length || 0) + 1}`,
         quotationType: "NORMAL",
         validUntil: null,
         serviceAdvisorId: staffId,
         customerNotes: null,
-        internalNotes: "Táº¡o tá»« cháº©n Ä‘oÃ¡n + dá»‹ch vá»¥ khÃ¡ch chá»n + BOM phá»¥ tÃ¹ng",
+        internalNotes: "Tạo từ chuẩn đoán + dịch vụ khách chọn + BOM phụ tùng",
         submitForApproval: false,
         items,
       });
 
-      setActionMessage("ÄÃ£ táº¡o bÃ¡o giÃ¡ nhÃ¡p.");
+      setActionMessage("Đã tạo báo giá nháp.");
       await loadData();
       const createdId = Number(readField(created, "id", "Id"));
       if (createdId > 0) setActiveQuotationId(createdId);
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ táº¡o bÃ¡o giÃ¡ nhÃ¡p.");
+      setError(err?.message || "Không thể tạo báo giá nháp.");
     } finally {
       setSaving(false);
     }
@@ -1230,22 +1230,22 @@ export default function ServiceOrderQuotePage() {
       const note = String(insuranceApprovalNote || "").trim();
       const updated = await serviceOrderApi.submitQuotationInternalApproval(quoteId, {
         actorStaffId: staffId,
-        note: note || "TrÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡",
+        note: note || "Trình duyệt nội bộ báo giá",
       });
       const nextStatus = normalizeStatus(readField(updated, "status", "Status"));
       if (nextStatus === "WAITING_APPROVAL") {
-        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™. Äang chá» quáº£n Ä‘á»‘c duyá»‡t ká»¹ thuáº­t.");
+        setActionMessage("Đã trình duyệt nội bộ. Đang chờ quản đốc duyệt kỹ thuật.");
       } else if (nextStatus === "PENDING_BRANCH_MANAGER") {
-        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™. Äang chá» quáº£n lÃ½ duyá»‡t tÃ i chÃ­nh.");
+        setActionMessage("Đã trình duyệt nội bộ. Đang chờ quản lý duyệt tài chính.");
       } else if (nextStatus === "PENDING_INSURANCE" || nextStatus === "INSURANCE_APPROVED") {
-        setActionMessage("ÄÃ£ hoÃ n táº¥t duyá»‡t ná»™i bá»™, sáºµn sÃ ng cho bÆ°á»›c báº£o hiá»ƒm.");
+        setActionMessage("Đã hoàn tất duyệt nội bộ, sẵn sàng cho bước bảo hiểm.");
       } else {
-        setActionMessage("ÄÃ£ trÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡.");
+        setActionMessage("Đã trình duyệt nội bộ báo giá.");
       }
       setMailSentNotice("");
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ trÃ¬nh duyá»‡t ná»™i bá»™ bÃ¡o giÃ¡.");
+      setError(err?.message || "Không thể trình duyệt nội bộ báo giá.");
     } finally {
       setSaving(false);
     }
@@ -1257,7 +1257,7 @@ export default function ServiceOrderQuotePage() {
 
     const evidenceUrlsSent = insuranceEvidenceUrls.filter(u => isValidHttpUrl(u));
     if (evidenceUrlsSent.length === 0) {
-      setError("Vui lÃ²ng táº£i lÃªn hoáº·c nháº­p link báº±ng chá»©ng phÃª duyá»‡t báº£o hiá»ƒm.");
+      setError("Vui lòng tải lên hoặc nhập link bằng chứng phê duyệt bảo hiểm.");
       setActionMessage("");
       return;
     }
@@ -1271,12 +1271,12 @@ export default function ServiceOrderQuotePage() {
       await serviceOrderApi.confirmQuotationInsuranceApproval(quoteId, {
         actorStaffId: staffId,
         insuranceApprovalEvidenceUrl: evidenceUrlsSent.join(", "),
-        note: note || "Báº£o hiá»ƒm Ä‘Ã£ xÃ¡c nháº­n duyá»‡t",
+        note: note || "Bảo hiểm đã xác nhận duyệt",
       });
-      setActionMessage("ÄÃ£ xÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t vÃ  khÃ³a dá»¯ liá»‡u bá»“i thÆ°á»ng.");
+      setActionMessage("Đã xác nhận bảo hiểm duyệt và khóa dữ liệu bồi thường.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ xÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t.");
+      setError(err?.message || "Không thể xác nhận bảo hiểm duyệt.");
     } finally {
       setSaving(false);
     }
@@ -1294,13 +1294,13 @@ export default function ServiceOrderQuotePage() {
       const note = String(sendEmailNote || "").trim();
       await serviceOrderApi.sendQuotationToCustomer(quoteId, {
         actorStaffId: staffId,
-        note: note || "Gá»­i bÃ¡o giÃ¡ cho khÃ¡ch sau khi báº£o hiá»ƒm Ä‘Ã£ duyá»‡t",
+        note: note || "Gửi báo giá cho khách sau khi bảo hiểm đã duyệt",
       });
-      setActionMessage("ÄÃ£ gá»­i bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng.");
-      setMailSentNotice("Gá»­i email bÃ¡o giÃ¡ thÃ nh cÃ´ng cho khÃ¡ch hÃ ng.");
+      setActionMessage("Đã gửi báo giá cho khách hàng.");
+      setMailSentNotice("Gửi email báo giá thành công cho khách hàng.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ gá»­i bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng.");
+      setError(err?.message || "Không thể gửi báo giá cho khách hàng.");
     } finally {
       setSaving(false);
     }
@@ -1320,13 +1320,13 @@ export default function ServiceOrderQuotePage() {
       const response = await serviceOrderApi.uploadQuotationInsuranceEvidence(quoteId, file);
       const uploadedUrl = String(response?.insuranceApprovalEvidenceUrl || response?.url || response?.Url || "").trim();
       if (!uploadedUrl) {
-        throw new Error("KhÃ´ng nháº­n Ä‘Æ°á»£c URL áº£nh sau khi upload.");
+        throw new Error("Không nhận được URL ảnh sau khi upload.");
       }
 
       setInsuranceEvidenceUrls(prev => [...prev, uploadedUrl]);
-      setInsuranceEvidenceUploadMessage("ÄÃ£ táº£i áº£nh lÃªn thÃ nh cÃ´ng.");
+      setInsuranceEvidenceUploadMessage("Đã tải ảnh lên thành công.");
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ táº£i áº£nh báº±ng chá»©ng.");
+      setError(err?.message || "Không thể tải ảnh bằng chứng.");
       setInsuranceEvidenceUploadMessage("");
     } finally {
       setInsuranceEvidenceUploading(false);
@@ -1373,7 +1373,7 @@ export default function ServiceOrderQuotePage() {
           savedToDevice = true;
         } catch (saveErr) {
           if (saveErr?.name === "AbortError") {
-            setActionMessage("ÄÃ£ há»§y chá»n nÆ¡i lÆ°u file.");
+            setActionMessage("Đã hủy chọn nơi lưu file.");
             return;
           } else {
             throw saveErr;
@@ -1395,18 +1395,18 @@ export default function ServiceOrderQuotePage() {
       }
 
       if (savedToDevice) {
-        setActionMessage("ÄÃ£ lÆ°u file Excel vÃ o thiáº¿t bá»‹ vÃ  táº£i file trÃªn trÃ¬nh duyá»‡t.");
+        setActionMessage("Đã lưu file Excel vào thiết bị và tải file trên trình duyệt.");
       } else {
-        setActionMessage("ÄÃ£ táº£i file Excel trÃªn trÃ¬nh duyá»‡t.");
+        setActionMessage("Đã tải file Excel trên trình duyệt.");
       }
     } catch (err) {
       if (err?.name === "AbortError") {
-        setActionMessage("ÄÃ£ há»§y chá»n nÆ¡i lÆ°u file.");
+        setActionMessage("Đã hủy chọn nơi lưu file.");
         return;
       }
 
       setActionMessage("");
-      setError(err?.message || "KhÃ´ng thá»ƒ xuáº¥t Excel.");
+      setError(err?.message || "Không thể xuất Excel.");
     }
   }, [activeQuotation, loading, saving, order]);
 
@@ -1458,20 +1458,20 @@ export default function ServiceOrderQuotePage() {
 
     setSaving(true);
     setError("");
-    setActionMessage("Äang nháº­p dá»¯ liá»‡u tá»« file Excel...");
+    setActionMessage("Đang nhập dữ liệu từ file Excel...");
 
     try {
       await serviceOrderApi.importQuotationExcel(
         quoteId,
         file,
         staffId,
-        "Nháº­p pháº§n bá»• báº£o hiá»ƒm tá»« file Excel."
+        "Nhập phần bổ bảo hiểm từ file Excel."
       );
-      setActionMessage("ÄÃ£ nháº­p dá»¯ liá»‡u Excel thÃ nh cÃ´ng.");
+      setActionMessage("Đã nhập dữ liệu Excel thành công.");
       await loadData();
     } catch (err) {
       setActionMessage("");
-      setError(err?.message || "KhÃ´ng thá»ƒ nháº­p dá»¯ liá»‡u Excel.");
+      setError(err?.message || "Không thể nhập dữ liệu Excel.");
     } finally {
       if (event?.target) event.target.value = "";
       setSaving(false);
@@ -1655,7 +1655,7 @@ export default function ServiceOrderQuotePage() {
       .filter(Boolean);
 
     if (!Number.isFinite(numericOrderId) || numericOrderId <= 0) {
-      setError("MÃ£ lá»‡nh sá»­a chá»¯a khÃ´ng há»£p lá»‡.");
+      setError("Mã lệnh sửa chữa không hợp lệ.");
       setLoading(false);
       return;
     }
@@ -1666,13 +1666,13 @@ export default function ServiceOrderQuotePage() {
     try {
       await serviceOrderApi.updateQuotationSplitBilling(quoteId, {
         actorStaffId: staffId,
-        note: "Cáº­p nháº­t pháº§n bá»• báº£o hiá»ƒm/khÃ¡ch hÃ ng",
+        note: "Cập nhật phần bổ bảo hiểm/khách hàng",
         items: changedItems,
       });
-      setActionMessage("ÄÃ£ lÆ°u tÃ¡ch bill vÃ  cáº­p nháº­t tá»•ng báº£o hiá»ƒm/khÃ¡ch.");
+      setActionMessage("Đã lưu tách bill và cập nhật tổng bảo hiểm/khách.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ lÆ°u tÃ¡ch bill.");
+      setError(err?.message || "Không thể lưu tách bill.");
     } finally {
       setSaving(false);
     }
@@ -1693,7 +1693,7 @@ export default function ServiceOrderQuotePage() {
     const cloneReason = String(cloneNote || "").trim();
 
     if (!cloneReason) {
-      setError("Vui lÃ²ng nháº­p lÃ½ do trÆ°á»›c khi táº¡o báº£n clone.");
+      setError("Vui lòng nhập lý do trước khi tạo bản clone.");
       setActionMessage("");
       return;
     }
@@ -1721,14 +1721,14 @@ export default function ServiceOrderQuotePage() {
       });
 
       const createdId = Number(readField(created, "id", "Id"));
-      setActionMessage("ÄÃ£ clone sang phiÃªn báº£n má»›i.");
+      setActionMessage("Đã clone sang phiên bản mới.");
       setCloneNote("");
       setRemoveIdsForClone([]);
       setShowMandatoryCloneWarning(false);
       await loadData();
       if (createdId > 0) setActiveQuotationId(createdId);
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ clone bÃ¡o giÃ¡.");
+      setError(err?.message || "Không thể clone báo giá.");
     } finally {
       setSaving(false);
     }
@@ -1746,17 +1746,17 @@ export default function ServiceOrderQuotePage() {
       await serviceOrderApi.applyQuotationCustomerDecision(quoteId, {
         approved,
         actorStaffId: staffId,
-        note: approved ? "KhÃ¡ch Ä‘á»“ng Ã½ bÃ¡o giÃ¡" : "KhÃ¡ch tá»« chá»‘i bÃ¡o giÃ¡",
+        note: approved ? "Khách đồng ý báo giá" : "Khách từ chối báo giá",
       });
 
       setActionMessage(
         approved
-          ? "KhÃ¡ch Ä‘Ã£ duyá»‡t bÃ¡o giÃ¡. Há»‡ thá»‘ng sáº½ Ä‘áº©y vÃ o SOD theo backend workflow."
-          : "KhÃ¡ch tá»« chá»‘i bÃ¡o giÃ¡. Báº¡n cÃ³ thá»ƒ clone sang phiÃªn báº£n má»›i Ä‘á»ƒ Ä‘Ã m phÃ¡n tiáº¿p.",
+          ? "Khách đã duyệt báo giá. Hệ thống sẽ đẩy vào SOD theo backend workflow."
+          : "Khách từ chối báo giá. Bạn có thể clone sang phiên bản mới để đàm phán tiếp.",
       );
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t quyáº¿t Ä‘á»‹nh khÃ¡ch hÃ ng.");
+      setError(err?.message || "Không thể cập nhật quyết định khách hàng.");
     } finally {
       setSaving(false);
     }
@@ -1775,11 +1775,11 @@ export default function ServiceOrderQuotePage() {
         reason: cancelReason,
       });
 
-      setActionMessage("ÄÃ£ ghi nháº­n yÃªu cáº§u há»§y toÃ n bá»™ dá»‹ch vá»¥.");
+      setActionMessage("Đã ghi nhận yêu cầu hủy toàn bộ dịch vụ.");
       setShowCancelModal(false);
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ gá»­i yÃªu cáº§u há»§y toÃ n bá»™.");
+      setError(err?.message || "Không thể gửi yêu cầu hủy toàn bộ.");
     } finally {
       setSaving(false);
     }
@@ -1824,13 +1824,13 @@ export default function ServiceOrderQuotePage() {
     try {
       await serviceOrderApi.upsertQuotationDiscounts(quoteId, {
         actorStaffId: staffId,
-        note: String(quotationDiscountDraft.note || "").trim() || "Cáº­p nháº­t giáº£m giÃ¡ bÃ¡o giÃ¡",
+        note: String(quotationDiscountDraft.note || "").trim() || "Cập nhật giảm giá báo giá",
         items,
       });
-      setActionMessage("ÄÃ£ lÆ°u giáº£m giÃ¡ bÃ¡o giÃ¡.");
+      setActionMessage("Đã lưu giảm giá báo giá.");
       await loadData();
     } catch (err) {
-      setError(err?.message || "KhÃ´ng thá»ƒ lÆ°u giáº£m giÃ¡ bÃ¡o giÃ¡.");
+      setError(err?.message || "Không thể lưu giảm giá báo giá.");
     } finally {
       setDiscountSaving(false);
       setSaving(false);
@@ -2014,11 +2014,11 @@ export default function ServiceOrderQuotePage() {
     };
   }, [activeQuotation, quotationDetailRows, splitBillingDraft, lineQuantityDraft, lineDiscountDraft, order]);
   const vatHeadlineLabel = useMemo(() => {
-    if (!Array.isArray(vatSummary.groups) || vatSummary.groups.length === 0) return "Thuáº¿ VAT:";
+    if (!Array.isArray(vatSummary.groups) || vatSummary.groups.length === 0) return "Thuế VAT:";
     if (vatSummary.groups.length === 1) {
-      return `Thuáº¿ VAT (${vatSummary.groups[0].taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%):`;
+      return `Thuế VAT (${vatSummary.groups[0].taxRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%):`;
     }
-    return "Thuáº¿ VAT (nhiá»u má»©c):";
+    return "Thuế VAT (nhiều mức):";
   }, [vatSummary.groups]);
   const executionCostSummary = useMemo(() => {
     const rows = Array.isArray(quotationDetailRows) ? quotationDetailRows : [];
@@ -2196,13 +2196,13 @@ export default function ServiceOrderQuotePage() {
                 </div>
               ) : (
                 <div className="part-name-cell" style={{ paddingLeft: 20, color: "#475569" }}>
-                  <span style={{ opacity: 0.3, marginRight: 8 }}>+-</span> {item.itemName}
+                  <span style={{ opacity: 0.3, marginRight: 8 }}>â””â”€</span> {item.itemName}
                 </div>
               )}
             </td>
             <td className="col-priority">
               <span className={`priority-badge priority-${item.urgency || "NORMAL"}`}>
-                {item.priorityLabel || "BÃ¬nh thÆ°á»ng"}
+                {item.priorityLabel || "Bình thường"}
               </span>
             </td>
             <td className="col-qty">
@@ -2288,22 +2288,22 @@ export default function ServiceOrderQuotePage() {
     <div className="reception-quote-page">
       <header className="reception-quote-head">
         <div>
-          <h2 className="reception-quote-title">Trung tÃ¢m BÃ¡o giÃ¡ ThÆ°Æ¡ng máº¡i</h2>
+          <h2 className="reception-quote-title">Trung tâm Báo giá Thương mại</h2>
           <div className="reception-quote-subtitle">
             <Clock size={14} style={{ marginRight: 4 }} />
-            MÃ£ lá»‡nh: <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
+            Mã lệnh: <strong>{readField(order, "code", "Code") || `#${orderId}`}</strong>
           </div>
         </div>
         <button type="button" className="btn-back-premium" onClick={() => navigate("/workshop/reception")}>
           <ChevronRight size={18} style={{ transform: "rotate(180deg)" }} />
-          Quay láº¡i danh sÃ¡ch
+          Quay lại danh sách
         </button>
       </header>
 
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Äang táº£i dá»¯ liá»‡u bÃ¡o giÃ¡...</p>
+          <p>Đang tải dữ liệu báo giá...</p>
         </div>
       ) : (
         <div className="reception-quote-layout">
@@ -2358,11 +2358,11 @@ export default function ServiceOrderQuotePage() {
 
           <div className="quote-main-content">
             <aside className="version-timeline-card">
-              <h3>Lá»‹ch sá»­ phiÃªn báº£n</h3>
+              <h3>Lịch sử phiên bản</h3>
               <div className="version-list">
                 {quotations.length === 0 ? (
                   <button type="button" className="btn-quota btn-quota-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
-                    <Plus size={18} /> Táº¡o bÃ¡o giÃ¡ V1
+                    <Plus size={18} /> Tạo báo giá V1
                   </button>
                 ) : (
                   quotations.map((row) => {
@@ -2396,7 +2396,7 @@ export default function ServiceOrderQuotePage() {
               {activeQuotation && (
                 <section className="action-console-premium">
                   <div className="action-console-head">
-                    <h3 style={{ margin: 0, fontWeight: 800 }}>Báº£ng Ä‘iá»u khiá»ƒn nghiá»‡p vá»¥</h3>
+                    <h3 style={{ margin: 0, fontWeight: 800 }}>Bảng điều khiển nghiệp vụ</h3>
                     <button
                       type="button"
                       className="btn-quota btn-quota-outline"
@@ -2404,7 +2404,7 @@ export default function ServiceOrderQuotePage() {
                       onClick={() => setShowCancelModal(true)}
                       disabled={saving}
                     >
-                      <Trash2 size={16} /> Há»§y toÃ n bá»™ phiáº¿u
+                      <Trash2 size={16} /> Hủy toàn bộ phiếu
                     </button>
                   </div>
                   {actionMessage ? (
@@ -2452,21 +2452,21 @@ export default function ServiceOrderQuotePage() {
                       onClick={handleSubmitQuotation}
                       disabled={saving || !canSubmit}
                     >
-                      <ShieldCheck size={16} /> TrÃ¬nh duyá»‡t ná»™i bá»™
+                      <ShieldCheck size={16} /> Trình duyệt nội bộ
                     </button>
                     <button type="button" className="btn-quota btn-quota-outline" onClick={handleSaveSplitBilling} disabled={saving || !canEditSplitBilling}>
-                      <Save size={16} /> LÆ°u tÃ¡ch bill
+                      <Save size={16} /> Lưu tách bill
                     </button>
                   </div>
 
                   <div className="quote-discount-panel">
                     <div className="quote-discount-header">
-                      <strong>Giáº£m giÃ¡ bÃ¡o giÃ¡</strong>
-                      <span>Tá»•ng giáº£m cáº¥p bÃ¡o giÃ¡: {formatMoney(quotationLevelDiscountTotal)} Ä‘</span>
+                      <strong>Giảm giá báo giá</strong>
+                      <span>Tổng giảm cấp báo giá: {formatMoney(quotationLevelDiscountTotal)} ₫</span>
                     </div>
                     <div className="quote-discount-grid">
                       <div className="input-field-group">
-                        <label className="so-detail-card-label">Giáº£m trá»±c tiáº¿p (VNÄ)</label>
+                        <label className="so-detail-card-label">Giảm trực tiếp (VNĐ)</label>
                         <input
                           type="number"
                           className="reception-quote-approval-note-input"
@@ -2477,7 +2477,7 @@ export default function ServiceOrderQuotePage() {
                         />
                       </div>
                       <div className="input-field-group">
-                        <label className="so-detail-card-label">Giáº£m theo háº¡ng khÃ¡ch (VNÄ)</label>
+                        <label className="so-detail-card-label">Giảm theo hạng khách (VNĐ)</label>
                         <input
                           type="number"
                           className="reception-quote-approval-note-input"
@@ -2488,18 +2488,18 @@ export default function ServiceOrderQuotePage() {
                         />
                       </div>
                       <div className="input-field-group">
-                        <label className="so-detail-card-label">MÃ£ voucher</label>
+                        <label className="so-detail-card-label">Mã voucher</label>
                         <input
                           type="text"
                           className="reception-quote-approval-note-input"
                           value={quotationDiscountDraft.voucherCode}
                           onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, voucherCode: e.target.value }))}
-                          placeholder="Nháº­p mÃ£ voucher"
+                          placeholder="Nhập mã voucher"
                           disabled={!canEditQuotationDiscount || saving || discountSaving}
                         />
                       </div>
                       <div className="input-field-group">
-                        <label className="so-detail-card-label">Giáº£m theo voucher (VNÄ)</label>
+                        <label className="so-detail-card-label">Giảm theo voucher (VNĐ)</label>
                         <input
                           type="number"
                           className="reception-quote-approval-note-input"
@@ -2511,13 +2511,13 @@ export default function ServiceOrderQuotePage() {
                       </div>
                     </div>
                     <div className="input-field-group" style={{ marginTop: 8 }}>
-                      <label className="so-detail-card-label">Ghi chÃº giáº£m giÃ¡</label>
+                      <label className="so-detail-card-label">Ghi chú giảm giá</label>
                       <input
                         type="text"
                         className="reception-quote-approval-note-input"
                         value={quotationDiscountDraft.note}
                         onChange={(e) => setQuotationDiscountDraft((prev) => ({ ...prev, note: e.target.value }))}
-                        placeholder="LÃ½ do Ã¡p dá»¥ng giáº£m giÃ¡"
+                        placeholder="Lý do áp dụng giảm giá"
                         disabled={!canEditQuotationDiscount || saving || discountSaving}
                       />
                     </div>
@@ -2541,7 +2541,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('insurance');
                       }}
                     >
-                      <ShieldCheck size={16} /> Nghiá»‡p vá»¥ Báº£o hiá»ƒm
+                      <ShieldCheck size={16} /> Nghiệp vụ Bảo hiểm
                     </button>
                     <button
                       className={`action-tab-header ${activeActionTab === 'customer' ? 'active' : ''}`}
@@ -2550,7 +2550,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('customer');
                       }}
                     >
-                      <User size={16} /> Gá»­i khÃ¡ch hÃ ng
+                      <User size={16} /> Gửi khách hàng
                     </button>
                     <button
                       className={`action-tab-header ${activeActionTab === 'clone' ? 'active' : ''}`}
@@ -2559,7 +2559,7 @@ export default function ServiceOrderQuotePage() {
                         setActiveActionTab('clone');
                       }}
                     >
-                      <Plus size={16} /> Quáº£n lÃ½ phiÃªn báº£n
+                      <Plus size={16} /> Quản lý phiên bản
                     </button>
                   </div>
 
@@ -2567,7 +2567,7 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'insurance' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group" style={{ marginBottom: 16 }}>
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Báº±ng chá»©ng duyá»‡t báº£o hiá»ƒm (áº¢nh/Chá»¥p mÃ n hÃ¬nh)</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Bằng chứng duyệt bảo hiểm (ảnh/Chụp màn hình)</label>
                           <div className="upload-container-professional">
                             <input
                               type="file"
@@ -2578,12 +2578,12 @@ export default function ServiceOrderQuotePage() {
                             />
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                               <label htmlFor="evidence-upload" className={`btn-upload-compact ${(!canConfirmInsuranceApproved || insuranceEvidenceUploading) ? 'disabled' : ''}`}>
-                                {insuranceEvidenceUploading ? <RefreshCw size={16} className="reception-quote-spin" /> : <><Upload size={16} /> Táº£i thÃªm áº£nh</>}
+                                {insuranceEvidenceUploading ? <RefreshCw size={16} className="reception-quote-spin" /> : <><Upload size={16} /> Tải thêm ảnh</>}
                               </label>
                               {insuranceEvidenceUrls.map((url, index) => (
                                 <div key={index} className="uploaded-photo-card" onClick={() => window.open(url, '_blank')}>
                                   <div className="photo-card-icon"><ImageIcon size={18} /></div>
-                                  <div className="photo-card-info"><span className="photo-card-name">Nháº¥n Ä‘á»ƒ xem áº£nh</span></div>
+                                  <div className="photo-card-info"><span className="photo-card-name">Nhấn để xem ảnh</span></div>
                                   <button className="photo-card-remove" onClick={(e) => { e.stopPropagation(); setInsuranceEvidenceUrls(prev => prev.filter((_, i) => i !== index)); }} disabled={!canConfirmInsuranceApproved}><Trash2 size={16} /></button>
                                 </div>
                               ))}
@@ -2591,18 +2591,18 @@ export default function ServiceOrderQuotePage() {
                           </div>
                         </div>
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chÃº lÃ m viá»‡c vá»›i Báº£o hiá»ƒm</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú làm việc với Bảo hiểm</label>
                           <textarea
                             className="reception-quote-approval-note-input"
                             rows={3}
                             value={insuranceApprovalNote}
                             onChange={(e) => setInsuranceApprovalNote(e.target.value)}
-                            placeholder="Nháº­p ghi chÃº chi tiáº¿t vá» viá»‡c lÃ m viá»‡c vá»›i báº£o hiá»ƒm..."
+                            placeholder="Nhập ghi chú chi tiết về việc làm việc với bảo hiểm..."
                           />
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
                           <button type="button" className="btn-quota btn-quota-primary" onClick={handleConfirmInsuranceApproval} disabled={saving || !canConfirmInsuranceApproved || !allUrlsValid}>
-                            <Check size={16} /> XÃ¡c nháº­n báº£o hiá»ƒm duyá»‡t
+                            <Check size={16} /> Xác nhận bảo hiểm duyệt
                           </button>
                         </div>
                       </div>
@@ -2611,19 +2611,19 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'customer' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chÃº gá»­i cho khÃ¡ch hÃ ng</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Ghi chú gửi cho khách hàng</label>
                           <textarea
                             className="reception-quote-approval-note-input"
                             rows={3}
                             value={sendEmailNote}
                             onChange={(e) => setSendEmailNote(e.target.value)}
-                            placeholder="ThÃ´ng Ä‘iá»‡p gá»­i kÃ¨m khi gá»­i email bÃ¡o giÃ¡ cho khÃ¡ch hÃ ng..."
+                            placeholder="Thông điệp gửi kèm khi gửi email báo giá cho khách hàng..."
                           />
                           {mailSentNotice && <div className="reception-quote-success" style={{ marginTop: 8 }}><Check size={14} /> {mailSentNotice}</div>}
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
                           <button type="button" className="btn-quota btn-quota-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer}>
-                            <Mail size={16} /> Gá»­i bÃ¡o giÃ¡ cho khÃ¡ch
+                            <Mail size={16} /> Gửi báo giá cho khách
                           </button>
                         </div>
                       </div>
@@ -2632,25 +2632,25 @@ export default function ServiceOrderQuotePage() {
                     {activeActionTab === 'clone' && (
                       <div className="tab-pane-fade-in">
                         <div className="input-field-group">
-                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>LÃ½ do táº¡o báº£n sao má»›i</label>
+                          <label className="so-detail-card-label" style={{ fontWeight: 800 }}>Lý do tạo bản sao mới</label>
                           <div style={{ position: "relative" }}>
                             <textarea
                               className={`reception-quote-approval-note-input ${!hasCloneReason ? "border-danger" : ""}`}
                               rows={3}
                               value={cloneNote}
                               onChange={(e) => setCloneNote(e.target.value)}
-                              placeholder="Giáº£i trÃ¬nh lÃ½ do táº¡i sao cáº§n nhÃ¢n báº£n bÃ¡o giÃ¡ nÃ y (Báº¯t buá»™c)..."
+                              placeholder="Giải trình lý do tại sao cần nhân bản báo giá này (Bắt buộc)..."
                             />
                             {!hasCloneReason && (
                               <small className="reception-quote-error" style={{ position: "absolute", bottom: -20, left: 0 }}>
-                                * Báº¯t buá»™c khi clone
+                                * Bắt buộc khi clone
                               </small>
                             )}
                           </div>
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 24 }}>
                           <button type="button" className="btn-quota btn-quota-outline" onClick={handleCloneQuotation} disabled={saving || !canClone || !hasCloneReason}>
-                            <Plus size={16} /> Táº¡o báº£n má»›i (Sao chÃ©p)
+                            <Plus size={16} /> Tạo bản mới (Sao chép)
                           </button>
                         </div>
                       </div>
@@ -2680,7 +2680,7 @@ export default function ServiceOrderQuotePage() {
                             <th className="text-right col-money">Giảm giá</th>
                             <th className="text-right col-money">Thành tiền</th>
                             <th className="text-right" style={{ width: 140 }}>Bảo hiểm đền</th>
-                            <th className="text-right col-money">Khách bù</th>
+                            <th className="text-right col-money">Khách bï¿½</th>
                             <th className="col-clone-header" style={{ width: 140, fontSize: 11, color: "#64748b", textAlign: "center" }}>Loại khỏi bản mới</th>
                           </tr>
                         </thead>

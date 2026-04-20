@@ -22,6 +22,7 @@ public partial class Quotation
 
     public decimal SubTotalAmount { get; set; }
 
+    [Obsolete("Sử dụng bảng QuotationDiscounts thay thế")]
     public decimal TotalDiscount { get; set; }
 
     public decimal TaxAmount { get; set; }

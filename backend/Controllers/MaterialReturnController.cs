@@ -56,12 +56,18 @@ namespace MyGarage.Controllers
         {
             try
             {
-                if (itemDto?.ServiceOrderId > 0)
+                var request = itemDto;
+                if (request == null)
                 {
-                    await _serviceOrderService.EnsurePartsEditableAsync(itemDto.ServiceOrderId.Value);
+                    return BadRequest(new { message = "Dữ liệu trả vật tư không hợp lệ." });
                 }
 
-                var createdItem = await _materialReturnService.ProcessReturnAsync(itemDto);
+                if (request.ServiceOrderId > 0)
+                {
+                    await _serviceOrderService.EnsurePartsEditableAsync(request.ServiceOrderId.Value);
+                }
+
+                var createdItem = await _materialReturnService.ProcessReturnAsync(request);
                 await _inventoryAdminService.RebuildStockAlertsAsync(this.GetCurrentUserId());
                 var responseDto = _mapper.Map<MaterialReturnResponseDto>(createdItem);
                 return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, responseDto);
@@ -137,8 +143,6 @@ namespace MyGarage.Controllers
         }
     }
 }
-
-
 
 
 

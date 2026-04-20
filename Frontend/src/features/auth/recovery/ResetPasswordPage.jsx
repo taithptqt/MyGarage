@@ -36,7 +36,7 @@ function ResetPasswordPage() {
     }
 
     if (newPassword !== confirmPassword) {
-      setError("M?t kh?u x�c nh?n chua kh?p.");
+      setError("M?t kh?u x�c nh?n ch?a kh?p.");
       setSuccess("");
       return;
     }
@@ -75,11 +75,11 @@ function ResetPasswordPage() {
         </div>
         <div className="auth-floating-tag auth-floating-tag--right">
           <span>Chỉ lưu mã băm</span>
-          <p>Token du?c luu du?i d?ng hash v� không b? ghi log trong qu� tr�nh x? l�.</p>
+          <p>Token ??c luu du?i d?ng hash v� không b? ghi log trong qu� tr�nh x? l�.</p>
         </div>
         <div className="auth-floating-tag auth-floating-tag--bottom">
           <span>Thu hồi</span>
-          <p>Đặt l?i th�nh c�ng s? v� hi?u h�a token cu v� c�c phi�n dang m?.</p>
+          <p>Đặt l?i th�nh c�ng s? v� hi?u h�a token cu v� c�c phi�n ?ang m?.</p>
         </div>
       </div>
 

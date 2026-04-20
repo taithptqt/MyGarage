@@ -26,7 +26,7 @@ function GoogleLoginButton({ onCredential, onError }) {
     try {
       await callbackRef.current?.(response.credential);
     } catch (err) {
-      errorRef.current?.(`L?i dang nh?p Google: ${err?.message || "Không x�c d?nh"}`);
+      errorRef.current?.(`L?i ?ang nh?p Google: ${err?.message || "Không x�c d?nh"}`);
     }
   }, []);
 

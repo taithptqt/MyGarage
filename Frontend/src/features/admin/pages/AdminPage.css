@@ -8,7 +8,7 @@
   --border: #e9edf7;
   --bg-main: #f4f7fe;
   --bg-card: #ffffff;
-  --danger: #ee5d50;
+  --?anger: #ee5d50;
   --success: #05cd99;
   --warning: #ffb547;
   display: flex;
@@ -377,9 +377,9 @@ select.search-input:not([multiple]):focus {
   background: #f7f9ff;
 }
 
-.btn-danger {
+.btn-?anger {
   border: none;
-  background: var(--danger);
+  background: var(--?anger);
   color: #fff;
   border-radius: 12px;
   padding: 10px 16px;
@@ -388,7 +388,7 @@ select.search-input:not([multiple]):focus {
   cursor: pointer;
 }
 
-.btn-danger:disabled {
+.btn-?anger:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

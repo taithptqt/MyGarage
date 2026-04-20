@@ -441,7 +441,7 @@ namespace MyGarage.Services
                     CalculateTaxAmount(serviceMap[serviceId].BasePrice, serviceMap[serviceId].TaxRate ?? 0m));
                 order.SubTotalAmount = subTotal;
                 order.TaxAmount = taxAmount;
-                order.FinalAmount = subTotal + taxAmount - (order.TotalDiscount ?? 0m);
+                order.FinalAmount = subTotal + taxAmount - ResolveServiceOrderTotalDiscountAmount(order);
 
                 _customerLifecycleNotifier.EnqueueAfterStatusChange(order, previousLifecycleStatus);
                 await _context.SaveChangesAsync();
@@ -1008,7 +1008,7 @@ namespace MyGarage.Services
             var taxAmount = details.Sum(detail => detail.TaxAmount);
             serviceOrder.SubTotalAmount = subTotal;
             serviceOrder.TaxAmount = taxAmount;
-            serviceOrder.FinalAmount = subTotal + taxAmount - (serviceOrder.TotalDiscount ?? 0m);
+            serviceOrder.FinalAmount = subTotal + taxAmount - ResolveServiceOrderTotalDiscountAmount(serviceOrder);
             serviceOrder.UpdatedAt = now;
             serviceOrder.UpdatedBy = actorStaffId;
 
@@ -1324,11 +1324,31 @@ namespace MyGarage.Services
 
             var subTotal = order.SubTotalAmount ?? 0m;
             var tax = order.TaxAmount ?? 0m;
-            var discount = order.TotalDiscount ?? 0m;
+            var discount = ResolveServiceOrderTotalDiscountAmount(order);
             var fallbackAmount = subTotal + tax - discount;
             return fallbackAmount > 0m
                 ? Math.Round(fallbackAmount, 2, MidpointRounding.AwayFromZero)
                 : 0m;
+        }
+
+        private static decimal ResolveServiceOrderTotalDiscountAmount(ServiceOrder order)
+        {
+            if (order == null)
+            {
+                return 0m;
+            }
+
+            var relationalDiscount = (order.ServiceOrderDiscounts ?? new List<ServiceOrderDiscount>())
+                .Where(x => x != null)
+                .Sum(x => x.AppliedAmount > 0m ? x.AppliedAmount : Math.Max(0m, x.DiscountValue));
+            if (relationalDiscount > 0m)
+            {
+                return relationalDiscount;
+            }
+
+#pragma warning disable CS0618
+            return Math.Max(0m, order.TotalDiscount ?? 0m);
+#pragma warning restore CS0618
         }
 
         private static decimal CalculateCommissionAmount(decimal baseAmount, string commissionType, decimal commissionValue)

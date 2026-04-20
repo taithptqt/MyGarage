@@ -192,7 +192,7 @@ export default function ServiceCategoriesPage() {
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td>{c.displayOrder}</td>
                     <td>
-                      <span className={`badge ${c.isActive ? "badge-success" : "badge-danger"}`}>
+                      <span className={`badge ${c.isActive ? "badge-success" : "badge-?anger"}`}>
                         {c.isActive ? "Hoạt động" : "Tạm dừng"}
                       </span>
                     </td>

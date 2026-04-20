@@ -47,6 +47,7 @@ public partial class ServiceOrderDetail
 
     public decimal SubTotal { get; set; }
 
+    [Obsolete("Sử dụng bảng ServiceOrderDiscounts thay thế")]
     public decimal? DiscountValue { get; set; }
 
     public decimal? DiscountAllocatedAmount { get; set; }

@@ -42,7 +42,7 @@ export default function PurchaseOrderPage() {
       const res = await request({ url: "/api/purchase-orders", method: "GET", params: { branchId: user?.branchId } });
       setPos(res?.items ?? res ?? []);
     } catch (e) {
-      setError("Kh?ng th? t?i danh s?ch PO.");
+      setError("Không thể tải danh sách PO.");
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ export default function PurchaseOrderPage() {
     e.preventDefault();
     if (!form.supplierId || form.items.length === 0) return;
     if (form.items.some(i => !i.productId || i.qty <= 0)) {
-       setError("Vui l�ng nh?p d?y d? thông tin s?n ph?m v� s? lu?ng > 0");
+       setError("Vui lòng nhập đầy đủ thông tin sản phẩm và số lượng > 0");
        return;
     }
     setSaving(true);
@@ -119,8 +119,8 @@ export default function PurchaseOrderPage() {
     return (
       <div className="po-page">
         <div className="po-header">
-          <h1 className="po-title">?? T?o Đơn Đặt H�ng (PO)</h1>
-          <button className="po-btn po-btn-ghost" onClick={() => setSearchParams(new URLSearchParams())}>?? Tr? v? danh s?ch</button>
+          <h1 className="po-title">📝 Tạo Đơn Đặt Hàng (PO)</h1>
+          <button className="po-btn po-btn-ghost" onClick={() => setSearchParams(new URLSearchParams())}>🔙 Trở về danh sách</button>
         </div>
 
         <form className="po-board" onSubmit={handleSubmit}>
@@ -128,26 +128,26 @@ export default function PurchaseOrderPage() {
           
           <div className="po-grid">
             <div className="po-form-group">
-              <label>Nh� cung c?p (*)</label>
+              <label>Nhà cung cấp (*)</label>
               <select value={form.supplierId} onChange={e => setForm(f => ({ ...f, supplierId: e.target.value }))} required>
-                <option value="">-- Chọn Nh� Cung C?p --</option>
+                <option value="">-- Chọn Nhà Cung Cấp --</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
               </select>
             </div>
             <div className="po-form-group">
-              <label>Ngày d? ki?n nh?n</label>
+              <label>Ngày dự kiến nhận</label>
               <input type="date" value={form.expectedDate} onChange={e => setForm(f => ({ ...f, expectedDate: e.target.value }))} />
             </div>
             <div className="po-form-group span-full">
               <label>Ghi ch�</label>
-              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nh?p ghi ch� cho NCC..." />
+              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nhập ghi chú cho NCC..." />
             </div>
           </div>
 
-          <h3 className="po-section-title">Danh s?ch vật tư / ph? tổng</h3>
+          <h3 className="po-section-title">Danh sách vật tư / phụ tùng</h3>
           <div className="po-items">
             <div className="po-items-header">
-              <span>S?n ph?m</span><span>S? lu?ng</span><span>?on gi? nh?p</span><span>Th?nh ti?n</span><span></span>
+              <span>Sản phẩm</span><span>Số lượng</span><span>Đơn giá nhập</span><span>Thành tiền</span><span></span>
             </div>
             {form.items.map((item, idx) => (
               <div className="po-item-row" key={idx}>
@@ -183,16 +183,16 @@ export default function PurchaseOrderPage() {
     <div className="po-page">
       <div className="po-header">
         <div>
-          <h1 className="po-title">?? Quản lý Đơn Đặt H�ng (PO)</h1>
-          <p className="po-subtitle">Theo d�i t�nh tr?ng d?t mua v� ph� duy?t nh?p kho.</p>
+          <h1 className="po-title">📦 Quản lý Đơn Đặt Hàng (PO)</h1>
+          <p className="po-subtitle">Theo dõi tình trạng đặt mua và phê duyệt nhập kho.</p>
         </div>
         <button className="po-btn po-btn-primary" onClick={() => setSearchParams(new URLSearchParams({ action: "new" }))}>
-          + L?p PO m?i
+          + Lập PO mới
         </button>
       </div>
 
       <div className="po-tabs">
-        {[{k:"ALL", l:"T?t c?"}, {k:"PENDING", l:"Ch? duy?t"}, {k:"APPROVED", l:"Đã duy?t / Đang giao"}, {k:"RECEIVED", l:"Đã nh?n (GRN)"}].map(t => (
+        {[{k:"ALL", l:"Tất cả"}, {k:"PENDING", l:"Chờ duyệt"}, {k:"APPROVED", l:"Đã duyệt / Đang giao"}, {k:"RECEIVED", l:"Đã nhận (GRN)"}].map(t => (
           <button key={t.k} className={`po-tab ${activeTab === t.k ? "active" : ""}`} onClick={() => setActiveTab(t.k)}>{t.l}</button>
         ))}
       </div>
@@ -204,10 +204,10 @@ export default function PurchaseOrderPage() {
              <thead>
                <tr>
                  <th>M� PO</th>
-                 <th>Ngày t?o</th>
-                 <th>Nh� cung c?p</th>
-                 <th className="t-right">Tổng ti?n</th>
-                 <th>Tr?ng th?i</th>
+                 <th>Ngày tạo</th>
+                 <th>Nhà cung cấp</th>
+                 <th className="t-right">Tổng tiền</th>
+                 <th>Trạng thái</th>
                  <th>Thao tác</th>
                </tr>
              </thead>

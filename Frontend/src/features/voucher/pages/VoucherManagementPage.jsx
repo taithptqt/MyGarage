@@ -6,14 +6,14 @@ import "../../admin/pages/AdminPage.css";
 import "./VoucherManagementPage.css";
 
 const TITLES = {
-  dashboard: ["Bảng điều khiển voucher", "Tđ.ng quan hiệu quả voucher"],
-  list: ["Danh sách voucher", "T?o, s?a v� quản lý v�ng d?i voucher"],
-  campaigns: ["Chiến dịch", "Tđ.ng hợp voucher theo chiến dịch"],
-  conflicts: ["Ki?m tra xung d?t", "Ki?m tra xung d?t di?u ki?n �p d?ng"],
-  redemptions: ["L?ch s? s? d?ng", "Theo d�i �p d?ng v� ho�n voucher"],
+  dashboard: ["Bảng điều khiển voucher", "Tổng quan hiệu quả voucher"],
+  list: ["Danh sách voucher", "Tạo, sửa và quản lý vòng đời voucher"],
+  campaigns: ["Chiến dịch", "Tổng hợp voucher theo chiến dịch"],
+  conflicts: ["Kiểm tra xung đột", "Kiểm tra xung đột điều kiện áp dụng"],
+  redemptions: ["Lịch sử sử dụng", "Theo dõi áp dụng và hoàn voucher"],
   approvals: ["Hàng chờ phê duyệt", "Xử lý yêu cầu ngoại lệ"],
-  reports: ["B�o c�o hi?u qu?", "B�o c�o hi?u qu? v� r?i ro"],
-  settings: ["Thi?t l?p ch�nh s�ch", "Ch�nh s�ch v?n h�nh voucher"]
+  reports: ["Báo cáo hiệu quả", "Báo cáo hiệu quả và rủi ro"],
+  settings: ["Thiết lập chính sách", "Chính sách vận hành voucher"]
 };
 
 const STATUS_BADGE = {
@@ -35,7 +35,7 @@ const STATUS_BADGE = {
 };
 
 const STATUS_LABEL = {
-  DRAFT: "Nh�p",
+  DRAFT: "Nháp",
   PENDING_APPROVAL: "Chờ duyệt",
   SCHEDULED: "Đã lên lịch",
   ACTIVE: "Đang hoạt động",
@@ -47,7 +47,7 @@ const STATUS_LABEL = {
   ARCHIVED: "Lưu trữ",
   PENDING: "Chờ duyệt",
   APPROVED: "Đã duyệt",
-  REJECTED: "Từ chđi",
+  REJECTED: "Từ chối",
   REDEEMED: "Đã sử dụng",
   REVERSED: "Đã hoàn"
 };
@@ -87,9 +87,9 @@ const money = (v) =>
     ? Number(v).toLocaleString("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 })
     : "-";
 const budgetAlertText = (campaign) => {
-  if (campaign?.isBudgetExceeded) return "Vu?t ng�n s�ch";
-  if (campaign?.isNearBudgetLimit) return "S?p ch?m ng�n s�ch";
-  if (num(campaign?.budgetLimit, 0) <= 0) return "Không giơi hạn";
+  if (campaign?.isBudgetExceeded) return "Vượt ngân sách";
+  if (campaign?.isNearBudgetLimit) return "Sắp chạm ngân sách";
+  if (num(campaign?.budgetLimit, 0) <= 0) return "Không giới hạn";
   return "Bình thường";
 };
 const budgetAlertClass = (campaign) => {
@@ -268,10 +268,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
     const tasks = [];
 
     if (SECTION_NEEDS.vouchers.has(targetSection)) {
-      tasks.push({ key: "vouchers", promise: withTimeout(voucherApi.getVouchers(), timeoutMs, "H?t thời gian t?i danh sách voucher") });
+      tasks.push({ key: "vouchers", promise: withTimeout(voucherApi.getVouchers(), timeoutMs, "Hết thời gian tải danh sách voucher") });
     }
     if (SECTION_NEEDS.campaigns.has(targetSection)) {
-      tasks.push({ key: "campaigns", promise: withTimeout(voucherApi.getCampaigns({ includeDeleted: false }), timeoutMs, "H?t thời gian t?i danh sách chi?n d?ch") });
+      tasks.push({ key: "campaigns", promise: withTimeout(voucherApi.getCampaigns({ includeDeleted: false }), timeoutMs, "Hết thời gian tải danh sách chiến dịch") });
     }
     if (SECTION_NEEDS.redemptions.has(targetSection)) {
       tasks.push({ key: "redemptions", promise: withTimeout(voucherApi.getRedemptions(), timeoutMs, "Hết thời gian tải lịch sử sử dụng") });
@@ -294,7 +294,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       if (key === "campaigns") setCampaigns([]);
       if (key === "redemptions") setRedemptions([]);
       if (key === "approvals") setApprovals([]);
-      errors.push(result.reason?.message || `Lđ-i tải ${key}`);
+      errors.push(result.reason?.message || `Lỗi tải ${key}`);
     });
 
     setError(errors.join(" | "));
@@ -486,7 +486,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   async function submitCampaign(e) {
     e.preventDefault();
     if (!campaignForm.name.trim()) {
-      setError("Tên chiến dịch không được để trđng.");
+      setError("Tên chiến dịch không được để trống.");
       return;
     }
     if (new Date(campaignForm.endDate) < new Date(campaignForm.startDate)) {
@@ -532,7 +532,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   async function removeCampaign(campaign) {
     const label = campaign?.name || campaign?.campaignCode || `#${campaign?.id}`;
-    const ok = window.confirm(`Bạn có chắc muđn xóa chiến dịch ${label}?`);
+    const ok = window.confirm(`Bạn có chắc muốn xóa chiến dịch ${label}?`);
     if (!ok) return;
 
     try {
@@ -595,7 +595,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       if (action === "revoke") await voucherApi.revokeVoucher(id);
       await refresh();
     } catch (e) {
-      setError(e.message || "Không dd.i du?c trạng thái");
+      setError(e.message || "Không đđ.i được trạng thái");
     }
   }
 
@@ -607,7 +607,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
     }
     try {
       if (act === "approve") await voucherApi.approveRequest(item.id, { approverId, note: tnull(approvalNote) });
-      else await voucherApi.rejectRequest(item.id, { approverId, note: tnull(approvalNote), reason: tnull(approvalNote) || "Từ chđi" });
+      else await voucherApi.rejectRequest(item.id, { approverId, note: tnull(approvalNote), reason: tnull(approvalNote) || "Từ chối" });
       await refresh();
     } catch (e) {
       setError(e.message || "Không xử lý được phê duyệt");
@@ -642,10 +642,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
         <>
           <div className="stats-bar">
             <div className="stat-card"><div className="stat-value">{activeCount}</div><div className="stat-label">Voucher hoạt động</div></div>
-            <div className="stat-card"><div className="stat-value">{issued}</div><div className="stat-label">Đã ph�t h�nh</div></div>
+            <div className="stat-card"><div className="stat-value">{issued}</div><div className="stat-label">Đã phát hành</div></div>
             <div className="stat-card"><div className="stat-value">{redeemed}</div><div className="stat-label">Đã sử dụng</div></div>
             <div className="stat-card"><div className="stat-value">{pct(redeemed, issued)}%</div><div className="stat-label">Tỷ lệ sử dụng</div></div>
-            <div className="stat-card"><div className="stat-value">{money(discount)}</div><div className="stat-label">Td.ng gi?m gi�</div></div>
+            <div className="stat-card"><div className="stat-value">{money(discount)}</div><div className="stat-label">Tổng giảm giá</div></div>
             <div className="stat-card"><div className="stat-value">{pendingApprovals}</div><div className="stat-label">Chờ phê duyệt</div></div>
           </div>
 
@@ -655,7 +655,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>Top voucher</th><th>M�</th><th>Đã s? d?ng</th><th>Đã ph�t h�nh</th><th>T? l?</th></tr></thead>
+              <thead><tr><th>Top voucher</th><th>Mã</th><th>Đã sử dụng</th><th>Đã phát hành</th><th>Tỷ lệ</th></tr></thead>
               <tbody>
                 {topVouchers.length === 0 ? <tr><td colSpan={5}><EmptyState message="Chưa có dữ liệu top voucher" /></td></tr> : topVouchers.map((v) => (
                   <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.redeemed}</td><td>{v.issued}</td><td>{pct(v.redeemed, v.issued)}%</td></tr>
@@ -666,14 +666,14 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
           <div className="voucher-card-grid">
             <div className="voucher-panel-card">
-              <h3>Ng�n s�ch voucher</h3>
+              <h3>Ngân sách voucher</h3>
               <p>Đã dùng: <strong>{money(budgetUsed)}</strong></p>
-              <p>Giơi hạn: <strong>{money(budgetLimit)}</strong></p>
+              <p>Giới hạn: <strong>{money(budgetLimit)}</strong></p>
               <div className="voucher-progress"><div className="voucher-progress-fill" style={{ width: `${pct(budgetUsed, budgetLimit)}%` }} /></div>
             </div>
             <div className="voucher-panel-card">
               <h3>Voucher sắp hết quota</h3>
-              {nearQuotaVouchers.length === 0 ? <p className="voucher-subtext">Không c� voucher cầnh b�o</p> : nearQuotaVouchers.map((v) => (
+              {nearQuotaVouchers.length === 0 ? <p className="voucher-subtext">Không có voucher cảnh báo</p> : nearQuotaVouchers.map((v) => (
                 <div key={v.id} className="voucher-subtext">{v.code || v.voucherName}: {Math.round(v.ratio * 100)}%</div>
               ))}
             </div>
@@ -696,12 +696,12 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
               {statusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "Tất cả" : statusText(x)}</option>)}
             </select>
             <button className="btn-primary" onClick={openCreate}>+ Tạo voucher</button>
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang l�m moi..." : "L�m moi danh sách"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới danh sách"}</button>
           </div>
 
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>ID</th><th>M�</th><th>T�n voucher</th><th>Lo?i</th><th>Gi� tr?</th><th>Thời gian hi?u l?c</th><th>Lu?t d�ng</th><th>Trạng thái</th><th>Thao t�c</th></tr></thead>
+              <thead><tr><th>ID</th><th>Mã</th><th>Tên voucher</th><th>Loại</th><th>Giá trị</th><th>Thời gian hiệu lực</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
                 {filteredVouchers.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : pagedVouchers.map((v) => (
                   <tr key={v.id}>
@@ -739,22 +739,22 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {isCampaigns ? (
         <>
           <div className="voucher-card-grid">
-            <div className="voucher-panel-card"><h3>Tđ.ng chiến dịch</h3><p><strong>{campaignRows.length}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng chiến dịch</h3><p><strong>{campaignRows.length}</strong></p></div>
             <div className="voucher-panel-card"><h3>Chiến dịch đang hoạt động</h3><p><strong>{campaignRows.filter((x) => up(x.status) === "ACTIVE").length}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tđ.ng lượt sử dụng</h3><p><strong>{campaignRows.reduce((s, x) => s + x.redeemed, 0)}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Cầnh b�o ng�n s�ch</h3><p><strong>{budgetWarningCampaigns.length}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng lượt sử dụng</h3><p><strong>{campaignRows.reduce((s, x) => s + x.redeemed, 0)}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Cảnh báo ngân sách</h3><p><strong>{budgetWarningCampaigns.length}</strong></p></div>
           </div>
           <div className="table-toolbar voucher-toolbar">
             <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm chiến dịch..." />
             <select className="voucher-select" value={campaignFilterStatus} onChange={(e) => setCampaignFilterStatus(e.target.value)}>
-              {campaignStatusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "T?t c? trạng thái" : statusText(x)}</option>)}
+              {campaignStatusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "Tất cả trạng thái" : statusText(x)}</option>)}
             </select>
             <button className="btn-primary" onClick={openCreateCampaign}>+ Tạo chiến dịch</button>
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mơi chiến dịch"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mới chiến dịch"}</button>
           </div>
           {budgetWarningCampaigns.length > 0 ? (
             <div className="voucher-budget-warning-box">
-              <strong>{budgetWarningCampaigns.length} chi?n d?ch dang s?p h?t ho?c vu?t ng�n s�ch:</strong>
+              <strong>{budgetWarningCampaigns.length} chiến dịch đang sắp hết hoặc vượt ngân sách:</strong>
               <div className="voucher-budget-warning-list">
                 {budgetWarningCampaigns.slice(0, 6).map((c) => (
                   <span key={c.id} className="voucher-budget-warning-chip">
@@ -766,7 +766,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           ) : null}
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>ID</th><th>M� chi?n d?ch</th><th>T�n chi?n d?ch</th><th>Thời gian</th><th>Voucher �p d?ng</th><th>Đã s? d?ng</th><th>Ng�n s�ch d� d�ng</th><th>T? l? ng�n s�ch</th><th>Cầnh b�o</th><th>Trạng thái</th><th>Thao t�c</th></tr></thead>
+              <thead><tr><th>ID</th><th>Mã chiến dịch</th><th>Tên chiến dịch</th><th>Thời gian</th><th>Voucher áp dụng</th><th>Đã sử dụng</th><th>Ngân sách đã dùng</th><th>Tỷ lệ ngân sách</th><th>Cảnh báo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
                 {filteredCampaignRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : pagedCampaigns.map((r) => (
                   <tr key={r.id}>
@@ -812,7 +812,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {isConflicts ? (
         <div className="voucher-card-grid">
           <div className="voucher-panel-card">
-            <h3>So s�nh voucher</h3>
+            <h3>So sánh voucher</h3>
             <p className="voucher-subtext">Chọn 2 voucher để kiểm tra xung đột cơ bản về mã, cộng dồn và thời gian.</p>
             <div className="voucher-form-grid voucher-form-grid--2">
               <select value={confA} onChange={(e) => setConfA(e.target.value)}><option value="">Voucher A</option>{vouchers.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
@@ -826,7 +826,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <h3>Hương dẫn xử lý</h3>
             <p className="voucher-subtext">1. Nếu trùng mã hoặc không cộng dồn được thì chặn ngay.</p>
             <p className="voucher-subtext">2. Nếu trùng thời gian thì cần thêm rule xung đột ở backend.</p>
-            <p className="voucher-subtext">3. Nếu voucher % cộng vơi voucher % thì cần giơi hạn trần tđ.ng.</p>
+            <p className="voucher-subtext">3. Nếu voucher % cộng với voucher % thì cần giới hạn trần tổng.</p>
           </div>
         </div>
       ) : null}
@@ -839,7 +839,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>ID</th><th>Voucher</th><th>Khách hàng</th><th>Gi?m gi�</th><th>Trạng thái</th><th>Ngày t?o</th></tr></thead>
+              <thead><tr><th>ID</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
                 {filteredRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : pagedRedemptions.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td><span className={`badge ${STATUS_BADGE[up(r.redemptionStatus)] || "badge-inactive"}`}>{statusText(r.redemptionStatus)}</span></td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
@@ -874,7 +874,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>ID</th><th>Lo?i yêu cầu</th><th>Voucher</th><th>M?c r?i ro</th><th>Trạng thái</th><th>Thao t�c</th></tr></thead>
+              <thead><tr><th>ID</th><th>Loại yêu cầu</th><th>Voucher</th><th>Mức rủi ro</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
                 {filteredApprovals.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : pagedApprovals.map((a) => (
                   <tr key={a.id}><td>#{a.id}</td><td>{a.requestType}</td><td>{a.voucherId ? `#${a.voucherId}` : "-"}</td><td>{a.riskLevel || "-"}</td><td><span className={`badge ${STATUS_BADGE[up(a.status)] || "badge-inactive"}`}>{statusText(a.status)}</span></td><td>{up(a.status) === "PENDING" ? <div className="row-actions"><button className="btn-icon" onClick={() => decide(a, "approve")}>Duyệt</button><button className="btn-icon" onClick={() => decide(a, "reject")}>Từ chối</button></div> : "Đã xử lý"}</td></tr>
@@ -901,17 +901,17 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
         <>
           <div className="voucher-card-grid">
             <div className="voucher-panel-card"><h3>Tỷ lệ sử dụng</h3><p><strong>{pct(redeemed, issued)}%</strong></p></div>
-            <div className="voucher-panel-card"><h3>Td.ng gi� tr? gi?m</h3><p><strong>{money(discount)}</strong></p></div>
-            <div className="voucher-panel-card"><h3>T? l? d�ng ng�n s�ch</h3><p><strong>{pct(budgetUsed, budgetLimit)}%</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng giá trị giảm</h3><p><strong>{money(discount)}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tỷ lệ dùng ngân sách</h3><p><strong>{pct(budgetUsed, budgetLimit)}%</strong></p></div>
           </div>
           <div className="table-toolbar voucher-toolbar">
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang l�m moi..." : "L�m moi b�o c�o"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới báo cáo"}</button>
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>Voucher</th><th>M�</th><th>Đã ph�t h�nh</th><th>Đã s? d?ng</th><th>T? l?</th><th>Ng�n s�ch d� d�ng</th></tr></thead>
+              <thead><tr><th>Voucher</th><th>Mã</th><th>Đã phát hành</th><th>Đã sử dụng</th><th>Tỷ lệ</th><th>Ngân sách đã dùng</th></tr></thead>
               <tbody>
-                {reportVoucherRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không c� dữ liệu b�o c�o voucher" /></td></tr> : pagedReportVouchers.map((v) => (
+                {reportVoucherRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : pagedReportVouchers.map((v) => (
                   <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.issued}</td><td>{v.redeemed}</td><td>{pct(v.redeemed, v.issued)}%</td><td>{money(v.budgetUsed)}</td></tr>
                 ))}
               </tbody>
@@ -931,7 +931,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
-              <thead><tr><th>ID s? d?ng</th><th>Voucher</th><th>Khách hàng</th><th>Gi?m gi�</th><th>Trạng thái</th><th>Ngày t?o</th></tr></thead>
+              <thead><tr><th>ID sử dụng</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
                 {topDiscountRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : pagedReportRedemptions.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td>{statusText(r.redemptionStatus)}</td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
@@ -957,7 +957,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {isSettings ? (
         <div className="voucher-card-grid">
           <div className="voucher-panel-card">
-            <h3>Ch�nh s�ch</h3>
+            <h3>Chính sách</h3>
             <div className="voucher-settings-policy-grid">
               <label className="voucher-toggle-item voucher-settings-policy-item">
                 <span>Bắt buộc trần giảm cho voucher phần trểm</span>
@@ -978,7 +978,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             </div>
             <div className="form-actions voucher-form-actions-left">
               <button className="btn-primary" onClick={() => localStorage.setItem("voucher_admin_policy", JSON.stringify(policy))}>
-                Luu ch�nh s�ch
+                Lưu chính sách
               </button>
             </div>
           </div>
@@ -989,24 +989,24 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
         <Modal title={mode === "create" ? "Tạo voucher" : `Sửa voucher #${form.id}`} onClose={() => setModalOpen(false)}>
           <form className="admin-form" onSubmit={submit}>
             <div className="voucher-form-grid voucher-form-grid--2">
-              <input value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} placeholder="M? voucher *" required />
+              <input value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} placeholder="Mã voucher *" required />
               <input value={form.voucherName} onChange={(e) => setForm((p) => ({ ...p, voucherName: e.target.value }))} placeholder="Tên voucher *" required />
               <input value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))} placeholder="Loại voucher" />
-              <input value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} placeholder="Gi� tr?" />
+              <input value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} placeholder="Giá trị" />
               <input value={form.minOrderValue} onChange={(e) => setForm((p) => ({ ...p, minOrderValue: e.target.value }))} placeholder="Hóa đơn tđi thiểu" />
               <input value={form.maxDiscountAmount} onChange={(e) => setForm((p) => ({ ...p, maxDiscountAmount: e.target.value }))} placeholder="Giảm tđi đa" />
               <input type="datetime-local" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} />
               <input type="datetime-local" value={form.endDate} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} />
-              <input value={form.usageLimit} onChange={(e) => setForm((p) => ({ ...p, usageLimit: e.target.value }))} placeholder="Giơi hạn lượt dùng" />
-              <input value={form.budgetLimit} onChange={(e) => setForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ng�n s�ch t?i da" />
+              <input value={form.usageLimit} onChange={(e) => setForm((p) => ({ ...p, usageLimit: e.target.value }))} placeholder="Giới hạn lượt dùng" />
+              <input value={form.budgetLimit} onChange={(e) => setForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ngân sách tối đa" />
             </div>
             <textarea rows={3} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Mô tả" />
             <div className="voucher-toggle-grid">
-              <label className="voucher-check-item"><input type="checkbox" checked={form.isStackable} onChange={(e) => setForm((p) => ({ ...p, isStackable: e.target.checked }))} /><span>Cho phép cộng dôn</span></label>
+              <label className="voucher-check-item"><input type="checkbox" checked={form.isStackable} onChange={(e) => setForm((p) => ({ ...p, isStackable: e.target.checked }))} /><span>Cho phép cộng dồn</span></label>
               <label className="voucher-check-item"><input type="checkbox" checked={form.approvalRequired} onChange={(e) => setForm((p) => ({ ...p, approvalRequired: e.target.checked }))} /><span>Yêu cầu phê duyệt</span></label>
               <label className="voucher-check-item"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} /><span>Kích hoạt</span></label>
             </div>
-            <div className="form-actions"><button type="button" className="btn-ghost" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đđ.i"}</button></div>
+            <div className="form-actions"><button type="button" className="btn-ghost" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn-primary" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</button></div>
           </form>
         </Modal>
       ) : null}
@@ -1021,10 +1021,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
               <input value={campaignForm.ownerStaffId} onChange={(e) => setCampaignForm((p) => ({ ...p, ownerStaffId: e.target.value }))} placeholder="ID quản lý chiến dịch" />
               <input type="datetime-local" value={campaignForm.startDate} onChange={(e) => setCampaignForm((p) => ({ ...p, startDate: e.target.value }))} />
               <input type="datetime-local" value={campaignForm.endDate} onChange={(e) => setCampaignForm((p) => ({ ...p, endDate: e.target.value }))} />
-              <input value={campaignForm.budgetLimit} onChange={(e) => setCampaignForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ng�n s�ch gi?i h?n (VND)" />
+              <input value={campaignForm.budgetLimit} onChange={(e) => setCampaignForm((p) => ({ ...p, budgetLimit: e.target.value }))} placeholder="Ngân sách giới hạn (VND)" />
               <select value={campaignForm.status} onChange={(e) => setCampaignForm((p) => ({ ...p, status: e.target.value }))}>
                 <option value="">Tự động theo thời gian</option>
-                <option value="DRAFT">Nh�p</option>
+                <option value="DRAFT">Nháp</option>
                 <option value="PENDING_APPROVAL">Chờ duyệt</option>
                 <option value="SCHEDULED">Đã lên lịch</option>
                 <option value="ACTIVE">Đang hoạt động</option>
@@ -1038,17 +1038,17 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
             <div className="voucher-toggle-grid">
               <label className="voucher-check-item"><input type="checkbox" checked={campaignForm.isActive} onChange={(e) => setCampaignForm((p) => ({ ...p, isActive: e.target.checked }))} /><span>Chiến dịch đang hoạt động</span></label>
-              <label className="voucher-check-item"><input type="checkbox" checked={campaignForm.replaceVoucherScope} onChange={(e) => setCampaignForm((p) => ({ ...p, replaceVoucherScope: e.target.checked }))} /><span>Thay to�n b? danh sách voucher �p d?ng</span></label>
+              <label className="voucher-check-item"><input type="checkbox" checked={campaignForm.replaceVoucherScope} onChange={(e) => setCampaignForm((p) => ({ ...p, replaceVoucherScope: e.target.checked }))} /><span>Thay toàn bộ danh sách voucher áp dụng</span></label>
             </div>
 
             <div className="voucher-campaign-voucher-box">
               <div className="voucher-campaign-voucher-head">
-                <h3>Voucher du?c ph�p �p d?ng trong chi?n d?ch</h3>
+                <h3>Voucher được phép áp dụng trong chiến dịch</h3>
                 <span>{campaignForm.voucherIds.length} voucher đã chọn</span>
               </div>
               <div className="voucher-campaign-voucher-list">
                 {campaignSelectableVouchers.length === 0 ? (
-                  <div className="voucher-subtext">Chua c� voucher d? g�n.</div>
+                  <div className="voucher-subtext">Chưa có voucher để gán.</div>
                 ) : campaignSelectableVouchers.map((voucher) => (
                   <label key={voucher.id} className="voucher-campaign-voucher-item">
                     <input
@@ -1080,10 +1080,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <div><strong>Mô tả:</strong> {selectedCampaign.description || "-"}</div>
             <div><strong>Thời gian:</strong> {dt(selectedCampaign.startDate)} - {dt(selectedCampaign.endDate)}</div>
             <div><strong>Trạng thái:</strong> {statusText(selectedCampaign.status)}</div>
-            <div><strong>Voucher �p d?ng:</strong> {selectedCampaign.voucherCount || 0}</div>
-            <div><strong>Ng�n s�ch d� d�ng:</strong> {money(selectedCampaign.budgetUsed)} / {money(selectedCampaign.budgetLimit)}</div>
-            <div><strong>T? l? ng�n s�ch:</strong> {num(selectedCampaign.budgetUsagePercent, 0)}%</div>
-            <div><strong>Cầnh b�o:</strong> {budgetAlertText(selectedCampaign)}</div>
+            <div><strong>Voucher áp dụng:</strong> {selectedCampaign.voucherCount || 0}</div>
+            <div><strong>Ngân sách đã dùng:</strong> {money(selectedCampaign.budgetUsed)} / {money(selectedCampaign.budgetLimit)}</div>
+            <div><strong>Tỷ lệ ngân sách:</strong> {num(selectedCampaign.budgetUsagePercent, 0)}%</div>
+            <div><strong>Cảnh báo:</strong> {budgetAlertText(selectedCampaign)}</div>
           </div>
           <div className="voucher-campaign-detail-vouchers">
             <strong>Danh sách voucher:</strong>
@@ -1106,17 +1106,19 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <div><strong>M?:</strong> {selected.code || "-"}</div>
             <div><strong>Tên:</strong> {selected.voucherName || "-"}</div>
             <div><strong>Loại:</strong> {selected.type || "-"}</div>
-            <div><strong>Gi� tr?:</strong> {selected.type === "PERCENT" ? `${selected.value || 0}%` : money(selected.value)}</div>
+            <div><strong>Giá trị:</strong> {selected.type === "PERCENT" ? `${selected.value || 0}%` : money(selected.value)}</div>
             <div><strong>Trạng thái:</strong> {statusText(selected.status)}</div>
             <div><strong>Thời gian:</strong> {dt(selected.startDate)} - {dt(selected.endDate)}</div>
             <div><strong>Hạn mức:</strong> {num(selected.redeemedCount, num(selected.usedCount, 0))}/{num(selected.issuedCount, num(selected.usageLimit, 0))}</div>
-            <div><strong>Ng�n s�ch:</strong> {money(selected.budgetUsed)} / {money(selected.budgetLimit)}</div>
+            <div><strong>Ngân sách:</strong> {money(selected.budgetUsed)} / {money(selected.budgetLimit)}</div>
           </div>
         </Modal>
       ) : null}
     </div>
   );
 }
+
+
 
 
 

@@ -67,11 +67,11 @@ const DEFAULT_FORM_DATA = {
   serviceIds: [],
 };
 
-const EDIT_WINDOW_PASSED_MESSAGE = "Kh�ng th? s?a service order v� d� qua m?c v?n h�nh cho ph�p ch?nh s?a.";
-const REQUEST_EDIT_REASON_REQUIRED = "Vui l�ng nh?p l� do y�u c?u s?a tru?c khi g?i.";
-const REQUEST_EDIT_ERROR = "Kh�ng th? g?i y�u c?u s?a service order.";
-const REQUEST_EDIT_SUCCESS = "�� g?i y�u c?u s?a service order d?n c?p ph� duy?t.";
-const REQUEST_DECISION_ERROR = "Kh�ng th? x? l� y�u c?u s?a service order.";
+const EDIT_WINDOW_PASSED_MESSAGE = "Không thể sửa service order vì đã qua mốc vận hành cho phép chỉnh sửa.";
+const REQUEST_EDIT_REASON_REQUIRED = "Vui lòng nhập lý do yêu cầu sửa trước khi gửi.";
+const REQUEST_EDIT_ERROR = "Không thể gửi yêu cầu sửa service order.";
+const REQUEST_EDIT_SUCCESS = "Đã gửi yêu cầu sửa service order đến cấp phê duyệt.";
+const REQUEST_DECISION_ERROR = "Không thể xử lý yêu cầu sửa service order.";
 
 const SUPPLEMENTARY_SOURCE_TECHNICIAN = "SUPPLEMENTARY_TECHNICIAN";
 const SUPPLEMENTARY_SOURCE_CUSTOMER = "SUPPLEMENTARY_CUSTOMER";
@@ -105,14 +105,14 @@ function normalizeSearchText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/d/g, "d");
+    .replace(/đ/g, "d");
 }
 
 function normalizeRoleToken(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/d/gi, "d")
+    .replace(/đ/gi, "d")
     .trim()
     .toUpperCase()
     .replace(/-/g, "_")
@@ -132,7 +132,7 @@ function canApproveServiceOrderSection(roleCode, roleName, section) {
   const normalizedSection = String(section || "WORKSHOP").trim().toUpperCase();
   const isAdmin = containsRoleKeyword(roleCode, roleName, ["ADMIN", "OWNER", "DIRECTOR", "CHU_XUONG", "SUPERADMIN", "SUPER_ADMIN"]);
   const isManager = containsRoleKeyword(roleCode, roleName, ["MANAGER", "SERVICE_MANAGER", "FOREMAN", "TEAM_LEAD", "QUAN_DOC"]);
-  const isWarehouse = containsRoleKeyword(roleCode, roleName, ["WAREHOUSE", "STORE_KEEPER", "INVENTORY", "THU_KHO"]);
+  const isWarehouse = containsRoleKeyword(roleCode, roleName, ["WAREHOUSE", "STORE_KEEPER", "STOREKEEPER", "INVENTORY", "THU_KHO"]);
   const isAccounting = containsRoleKeyword(roleCode, roleName, ["ACCOUNTANT", "FINANCE", "KE_TOAN", "CHIEF_ACCOUNTANT", "CFO"]);
 
   if (["PARTS"].includes(normalizedSection)) return isWarehouse || isManager || isAdmin;
@@ -169,9 +169,9 @@ function normalizeServiceOrderEditRequestItem(raw) {
 
 function getRequestStatusLabel(status) {
   const normalized = String(status || "").trim().toUpperCase();
-  if (normalized === "APPROVED") return "�� duy?t";
-  if (normalized === "REJECTED") return "�� t? ch?i";
-  return "Ch? duy?t";
+  if (normalized === "APPROVED") return "Đã duyệt";
+  if (normalized === "REJECTED") return "Đã từ chối";
+  return "Chờ duyệt";
 }
 
 function getRequestStatusColor(status) {
@@ -242,9 +242,9 @@ function isInitialEditableDetail(detail) {
 }
 
 function getSupplementarySourceLabel(source) {
-  if (source === SUPPLEMENTARY_SOURCE_TECHNICIAN) return "Ph?t sinh sau ch?n do?n";
-  if (source === SUPPLEMENTARY_SOURCE_CUSTOMER) return "Kh?ch y?u c?u th?m";
-  return "Ph�t sinh";
+  if (source === SUPPLEMENTARY_SOURCE_TECHNICIAN) return "Phát sinh sau chẩn đoán";
+  if (source === SUPPLEMENTARY_SOURCE_CUSTOMER) return "Khách yêu cầu thêm";
+  return "Phát sinh";
 }
 
 function buildCategoryOptions(serviceCategories, normalizedServices) {
@@ -262,7 +262,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
   (normalizedServices || []).forEach((service) => {
     if (!Number.isFinite(service.categoryId) || service.categoryId <= 0) return;
     if (!map.has(service.categoryId)) {
-      map.set(service.categoryId, { id: service.categoryId, name: `Nh�m ${service.categoryId}` });
+      map.set(service.categoryId, { id: service.categoryId, name: `Nhóm ${service.categoryId}` });
     }
   });
 
@@ -270,7 +270,7 @@ function buildCategoryOptions(serviceCategories, normalizedServices) {
 }
 
 function formatCurrency(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")}d`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 function formatDateTimeValue(value) {
@@ -367,7 +367,7 @@ function parseCustomerNote(rawCustomerNotes) {
 }
 
 function getApiErrorMessage(err) {
-  const fallback = "Kh�ng th? c?p nh?t l?nh s?a ch?a. Vui l�ng ki?m tra d? li?u v� th? l?i.";
+  const fallback = "Không thể cập nhật lệnh sửa chữa. Vui lòng kiểm tra dữ liệu và thử lại.";
   const data = err?.response?.data;
   const serverErrors = data?.errors && typeof data.errors === "object" ? Object.values(data.errors).flat() : [];
   if (serverErrors.length > 0) return String(serverErrors[0] || fallback);
@@ -485,7 +485,7 @@ export default function ServiceOrderEditPage() {
     categoryOptions.forEach((category) => {
       const id = Number(category?.id || 0);
       if (!Number.isFinite(id) || id <= 0) return;
-      map.set(id, String(category?.name || "").trim() || `Nh�m ${id}`);
+      map.set(id, String(category?.name || "").trim() || `Nhóm ${id}`);
     });
     return map;
   }, [categoryOptions]);
@@ -553,7 +553,7 @@ export default function ServiceOrderEditPage() {
       Array.from(
         selectedServices.reduce((map, service) => {
           const categoryId = Number(service?.categoryId || 0);
-          const categoryName = categoryNameById.get(categoryId) || `Nh?m ${categoryId || "Kh?c"}`;
+          const categoryName = categoryNameById.get(categoryId) || `Nhóm ${categoryId || "Khác"}`;
           const serviceName = String(service?.name || "").trim();
           if (!serviceName) return map;
           if (!map.has(categoryName)) map.set(categoryName, []);
@@ -669,8 +669,8 @@ export default function ServiceOrderEditPage() {
     const fullName = String(readField(customer, ["fullName", "FullName"], "") || "").trim();
     const phone = String(readField(customer, ["phone", "Phone"], "") || "").trim();
     return {
-      fullName: fullName || (customerId > 0 ? `Kh?ch h?ng #${customerId}` : "Chua x?c d?nh"),
-      phone: phone || "Chua c� s? di?n tho?i",
+      fullName: fullName || (customerId > 0 ? `Khách hàng #${customerId}` : "Chưa xác định"),
+      phone: phone || "Chưa có số điện thoại",
     };
   }, [customerById, order?.CustomerId, order?.customerId]);
 
@@ -682,8 +682,8 @@ export default function ServiceOrderEditPage() {
     const color = String(readField(vehicle, ["color", "Color"], "") || "").trim();
     const descriptor = [modelName, color].filter(Boolean).join(" - ");
     return {
-      plate: plate ? formatLicensePlate(plate) : "Chua c� bi?n s?",
-      descriptor: descriptor || "Chua r� d�ng xe",
+      plate: plate ? formatLicensePlate(plate) : "Chưa có biển số",
+      descriptor: descriptor || "Chưa rõ dòng xe",
     };
   }, [order?.VehicleId, order?.vehicleId, vehicleById]);
 
@@ -751,7 +751,7 @@ export default function ServiceOrderEditPage() {
       ]);
 
       if (!orderRes) {
-        throw new Error("Kh�ng t�m th?y l?nh s?a ch?a.");
+        throw new Error("Không tìm thấy lệnh sửa chữa.");
       }
 
       const staffList = Array.isArray(staffRes) ? staffRes : [];
@@ -818,7 +818,7 @@ export default function ServiceOrderEditPage() {
       setCustomerNote(parseCustomerNote(readField(orderRes, ["customerNotes", "CustomerNotes"])));
 
     } catch (err) {
-      setError(getApiErrorMessage(err) || "Kh�ng th? t?i d? li?u l?nh s?a ch?a.");
+      setError(getApiErrorMessage(err) || "Không thể tải dữ liệu lệnh sửa chữa.");
     } finally {
       setLoading(false);
       setLoadingEditRequests(false);
@@ -831,14 +831,14 @@ export default function ServiceOrderEditPage() {
 
   const validateForm = useCallback(() => {
     const errors = {};
-    if (!formData.checkInTime) errors.checkInTime = "Vui l�ng ch?n th?i di?m xe v�o xu?ng.";
-    if (!formData.serviceAdvisorId) errors.serviceAdvisorId = "Vui l�ng ch?n c? v?n d?ch v?.";
-    if (toNumberList(formData.serviceIds).length === 0) errors.serviceIds = "Vui l�ng ch?n �t nh?t m?t d?ch v?.";
+    if (!formData.checkInTime) errors.checkInTime = "Vui lòng chọn thời điểm xe vào xưởng.";
+    if (!formData.serviceAdvisorId) errors.serviceAdvisorId = "Vui lòng chọn cố vấn dịch vụ.";
+    if (toNumberList(formData.serviceIds).length === 0) errors.serviceIds = "Vui lòng chọn ít nhất một dịch vụ.";
 
     if (isInsuranceOrderEnabled) {
-      if (!formData.insuranceCompanyId) errors.insuranceCompanyId = "Vui l�ng ch?n c�ng ty b?o hi?m.";
-      if (!formData.insuranceDeductibleOption) errors.insuranceDeductibleOption = "Vui l�ng ch?n t�y ch?n m?c mi?n thu?ng.";
-      if (!formData.insuranceClaimMode) errors.insuranceClaimMode = "Vui l�ng ch?n h�nh th?c b?i thu?ng.";
+      if (!formData.insuranceCompanyId) errors.insuranceCompanyId = "Vui lòng chọn công ty bảo hiểm.";
+      if (!formData.insuranceDeductibleOption) errors.insuranceDeductibleOption = "Vui lòng chọn tùy chọn mức miễn thường.";
+      if (!formData.insuranceClaimMode) errors.insuranceClaimMode = "Vui lòng chọn hình thức bồi thường.";
     }
 
     setFieldErrors(errors);
@@ -1038,7 +1038,7 @@ export default function ServiceOrderEditPage() {
 
     const note = String(decisionNotesByRequestId[safeRequestId] || "").trim();
     if (!approve && !note) {
-      setError("Vui l�ng nh?p l� do t? ch?i.");
+      setError("Vui lòng nhập lý do từ chối.");
       return;
     }
 
@@ -1061,7 +1061,7 @@ export default function ServiceOrderEditPage() {
           .map(normalizeServiceOrderEditRequestItem)
           .filter((item) => item.requestId > 0)
       );
-      setRequestEditNotice(String(response?.message || (approve ? "�� duy?t y�u c?u s?a." : "�� t? ch?i y�u c?u s?a.")));
+      setRequestEditNotice(String(response?.message || (approve ? "Đã duyệt yêu cầu sửa." : "Đã từ chối yêu cầu sửa.")));
       setDecisionNotesByRequestId((prev) => ({
         ...prev,
         [safeRequestId]: "",
@@ -1077,7 +1077,7 @@ export default function ServiceOrderEditPage() {
     return (
       <div className="create-order-page reception-create-appointment-page">
         <div className="reception-appt-section">
-          <p className="reception-muted-note">�ang t?i d? li?u l?nh s?a ch?a...</p>
+          <p className="reception-muted-note">Đang tải dữ liệu lệnh sửa chữa...</p>
         </div>
       </div>
     );
@@ -1087,12 +1087,12 @@ export default function ServiceOrderEditPage() {
     <div className="create-order-page reception-create-appointment-page">
       <div className="page-header-actions reception-create-header">
         <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-          Quay l?i Dashboard
+          Quay lại Dashboard
         </button>
         <div className="reception-create-header-copy">
-          <h2 className="page-title">{`Ch?nh s?a l?nh s?a ch?a ${order?.code ? `#${order.code}` : ""}`}</h2>
+          <h2 className="page-title">{`Chỉnh sửa lệnh sửa chữa ${order?.code ? `#${order.code}` : ""}`}</h2>
           <p className="reception-create-header-note">
-            C?p nh?t d?ch v? v� th�ng tin ti?p nh?n theo lu?ng m?i. H? th?ng ch? luu khi to�n b? d? li?u h?p l?.
+            Cập nhật dịch vụ và thông tin tiếp nhận theo luồng mới. Hệ thống chỉ lưu khi toàn bộ dữ liệu hợp lệ.
           </p>
         </div>
       </div>
@@ -1100,9 +1100,9 @@ export default function ServiceOrderEditPage() {
       <div className="reception-appt-topbar">
         <div className="reception-appt-topbar-copy">
           <p className="reception-appt-topbar-kicker">SERVICE ORDER</p>
-          <h3 className="reception-appt-topbar-title">C?p nh?t th�ng tin ti?p nh?n d?ch v?</h3>
+          <h3 className="reception-appt-topbar-title">Cập nhật thông tin tiếp nhận dịch vụ</h3>
           <p className="reception-appt-topbar-note">
-            Lu?ng luu theo co ch? all-or-nothing: n?u c� l?i ? b?t k? bu?c n�o, h? th?ng s? kh�ng ghi d? li?u xu?ng co s? d? li?u.
+            Luồng lưu theo cơ chế all-or-nothing: nếu có lỗi ở bất kỳ bước nào, hệ thống sẽ không ghi dữ liệu xuống cơ sở dữ liệu.
           </p>
         </div>
       </div>
@@ -1121,13 +1121,13 @@ export default function ServiceOrderEditPage() {
 
       {editCapability?.isOverrideActive ? (
         <div className="validation-summary" role="status">
-          {`�ang m? kh�a t�m th?i d?n: ${overrideUntilText}`}
+          {`Đang mở khóa tạm thời đến: ${overrideUntilText}`}
         </div>
       ) : null}
 
       {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
         <div className="validation-summary" role="alert">
-          <strong>Vui l?ng x? l? c?c l?i sau:</strong>
+          <strong>Vui lòng xử lý các lỗi sau:</strong>
           <ul>
             {Object.values(fieldErrors).map((message, index) => (
               <li key={`${message}-${index}`}>{message}</li>
@@ -1145,17 +1145,17 @@ export default function ServiceOrderEditPage() {
       {isEditLocked ? (
         <section className="reception-appt-section" aria-live="polite">
           <div className="reception-appt-section-head">
-            <h4 className="reception-appt-section-title">Y�u c?u m? kh�a ch?nh s?a</h4>
+            <h4 className="reception-appt-section-title">Yêu cầu mở khóa chỉnh sửa</h4>
           </div>
           <div className="form-group">
-            <label htmlFor="service-order-edit-request-reason">L� do y�u c?u s?a</label>
+            <label htmlFor="service-order-edit-request-reason">Lý do yêu cầu sửa</label>
             <textarea
               id="service-order-edit-request-reason"
               rows={3}
               className="input-field"
               value={requestEditReason}
               onChange={(event) => setRequestEditReason(event.target.value)}
-              placeholder="Nh?p l� do d? qu?n l� ph� duy?t m? kh�a"
+              placeholder="Nhập lý do để quản lý phê duyệt mở khóa"
             />
           </div>
           <div className="form-footer" style={{ marginTop: 12 }}>
@@ -1165,7 +1165,7 @@ export default function ServiceOrderEditPage() {
               onClick={handleRequestEdit}
               disabled={requestingEdit || hasPendingRequest}
             >
-              {requestingEdit ? "�ang g?i y�u c?u..." : hasPendingRequest ? "�ang c� y�u c?u ch? duy?t" : "G?i y�u c?u s?a"}
+              {requestingEdit ? "Đang gửi yêu cầu..." : hasPendingRequest ? "Đang có yêu cầu chờ duyệt" : "Gửi yêu cầu sửa"}
             </button>
           </div>
         </section>
@@ -1173,12 +1173,12 @@ export default function ServiceOrderEditPage() {
 
       <section className="reception-appt-section" aria-live="polite">
         <div className="reception-appt-section-head">
-          <h4 className="reception-appt-section-title">L?ch s? y�u c?u m? kh�a</h4>
+          <h4 className="reception-appt-section-title">Lịch sử yêu cầu mở khóa</h4>
         </div>
         {loadingEditRequests ? (
-          <p className="reception-muted-note">�ang t?i y�u c?u s?a...</p>
+          <p className="reception-muted-note">Đang tải yêu cầu sửa...</p>
         ) : editRequests.length === 0 ? (
-          <p className="reception-muted-note">Chua c� y�u c?u n�o.</p>
+          <p className="reception-muted-note">Chưa có yêu cầu nào.</p>
         ) : (
           <div className="reception-plan-preview-list">
             {editRequests.map((request) => {
@@ -1191,18 +1191,18 @@ export default function ServiceOrderEditPage() {
               return (
                 <article key={request.requestId} className="reception-plan-preview-item">
                   <div className="reception-plan-preview-head">
-                    <strong>{`Y�u c?u #${request.requestId}`}</strong>
+                    <strong>{`Yêu cầu #${request.requestId}`}</strong>
                     <span style={{ color: getRequestStatusColor(status), fontWeight: 700 }}>
                       {getRequestStatusLabel(status)}
                     </span>
                   </div>
-                  <p>{`Ph?m vi: ${request.section || "WORKSHOP"}`}</p>
-                  <p>{`L� do: ${request.reason || "Kh�ng c� l� do"}`}</p>
+                  <p>{`Phạm vi: ${request.section || "WORKSHOP"}`}</p>
+                  <p>{`Lý do: ${request.reason || "Không có lý do"}`}</p>
                   <div className="reception-plan-preview-meta">
-                    <span>{`G?i l�c: ${formatDateTimeValue(request.requestedAtUtc)}`}</span>
-                    <span>{`X? l� l�c: ${formatDateTimeValue(request.decidedAtUtc)}`}</span>
+                    <span>{`Gửi lúc: ${formatDateTimeValue(request.requestedAtUtc)}`}</span>
+                    <span>{`Xử lý lúc: ${formatDateTimeValue(request.decidedAtUtc)}`}</span>
                   </div>
-                  {request.decisionNote ? <p>{`Ghi ch� x? l�: ${request.decisionNote}`}</p> : null}
+                  {request.decisionNote ? <p>{`Ghi chú xử lý: ${request.decisionNote}`}</p> : null}
 
                   {canApprove && isPending ? (
                     <div style={{ marginTop: 12 }}>
@@ -1211,7 +1211,7 @@ export default function ServiceOrderEditPage() {
                         className="input-field"
                         value={note}
                         onChange={(event) => handleDecisionNoteChange(request.requestId, event.target.value)}
-                        placeholder="Ghi ch� ph� duy?t/t? ch?i..."
+                        placeholder="Ghi chú phê duyệt/từ chối..."
                       />
                       <div className="form-footer" style={{ marginTop: 10 }}>
                         <button
@@ -1220,7 +1220,7 @@ export default function ServiceOrderEditPage() {
                           onClick={() => handleDecideRequest(request, false)}
                           disabled={deciding}
                         >
-                          T? ch?i
+                          Từ chối
                         </button>
                         <button
                           type="button"
@@ -1228,7 +1228,7 @@ export default function ServiceOrderEditPage() {
                           onClick={() => handleDecideRequest(request, true)}
                           disabled={deciding}
                         >
-                          {deciding ? "�ang x? l�..." : "Duy?t"}
+                          {deciding ? "Đang xử lý..." : "Duyệt"}
                         </button>
                       </div>
                     </div>
@@ -1249,13 +1249,13 @@ export default function ServiceOrderEditPage() {
             <div className="reception-appt-left-column">
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BU?C 1</span>
+                  <span className="reception-step-badge">BƯỚC 1</span>
                 </div>
-                <h4 className="reception-appt-section-title">Th?ng tin kh?ch h?ng v? xe</h4>
+                <h4 className="reception-appt-section-title">Thông tin khách hàng và xe</h4>
 
                 <div className="reception-customer-selected-card">
                   <div className="reception-customer-selected-main">
-                    <small className="reception-customer-selected-tag">KH�CH H�NG</small>
+                    <small className="reception-customer-selected-tag">KHÁCH HÀNG</small>
                     <strong>{customerDisplay.fullName}</strong>
                     <span className="reception-customer-selected-contact">{customerDisplay.phone}</span>
                   </div>
@@ -1263,21 +1263,21 @@ export default function ServiceOrderEditPage() {
 
                 <div className="reception-customer-selected-card" style={{ marginTop: 10 }}>
                   <div className="reception-customer-selected-main">
-                    <small className="reception-customer-selected-tag">XE TI?P NH?N</small>
+                    <small className="reception-customer-selected-tag">XE TIẾP NHẬN</small>
                     <strong>{vehicleDisplay.plate}</strong>
                     <span className="reception-customer-selected-contact">{vehicleDisplay.descriptor}</span>
                   </div>
                 </div>
 
                 <div className="reception-plan-preview">
-                  <h5 className="reception-plan-preview-title">Th�ng tin l?nh hi?n t?i</h5>
+                  <h5 className="reception-plan-preview-title">Thông tin lệnh hiện tại</h5>
                   <div className="reception-plan-preview-list">
                     <article className="reception-plan-preview-item">
                       <div className="reception-plan-preview-head">
-                        <strong>M� l?nh</strong>
+                        <strong>Mã lệnh</strong>
                         <span>{order?.code || "--"}</span>
                       </div>
-                      <p>{`Tr?ng th?i: ${String(order?.status || order?.Status || "--")}`}</p>
+                      <p>{`Trạng thái: ${String(order?.status || order?.Status || "--")}`}</p>
                       <div className="reception-plan-preview-meta">
                         <span>{`Check-in: ${formatDateTimeValue(formData.checkInTime)}`}</span>
                       </div>
@@ -1288,13 +1288,13 @@ export default function ServiceOrderEditPage() {
 
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BU?C 2</span>
+                  <span className="reception-step-badge">BƯỚC 2</span>
                 </div>
-                <h4 className="reception-appt-section-title">D?ch v? y�u c?u</h4>
+                <h4 className="reception-appt-section-title">Dịch vụ yêu cầu</h4>
 
                 <div className="reception-service-layout">
                   <div className="reception-service-type-col">
-                    <h5 className="reception-service-col-title">L?c theo lo?i d?ch v?</h5>
+                    <h5 className="reception-service-col-title">Lọc theo loại dịch vụ</h5>
                     <div className="reception-category-grid">
                       {visibleCategoryOptions.map((category) => (
                         <button
@@ -1312,10 +1312,10 @@ export default function ServiceOrderEditPage() {
 
                   <div className="reception-service-detail-col">
                     <div className="form-group reception-service-search">
-                      <label>T�m d?ch v?</label>
+                      <label>Tìm dịch vụ</label>
                       <input
                         type="text"
-                        placeholder="T�m theo t�n d?ch v?..."
+                        placeholder="Tìm theo tên dịch vụ..."
                         value={serviceSearch}
                         onChange={(event) => setServiceSearch(event.target.value)}
                       />
@@ -1324,7 +1324,7 @@ export default function ServiceOrderEditPage() {
                     {toNumberList(selectedCategoryIds).length > 0 ? (
                       <div className="reception-service-list">
                         {filteredServices.length === 0 ? (
-                          <div className="reception-muted-note">Kh�ng t�m th?y d?ch v? ph� h?p theo b? l?c hi?n t?i.</div>
+                          <div className="reception-muted-note">Không tìm thấy dịch vụ phù hợp theo bộ lọc hiện tại.</div>
                         ) : (
                           filteredServices.map((service) => {
                             const selected = toNumberList(formData.serviceIds).includes(service.id);
@@ -1337,7 +1337,7 @@ export default function ServiceOrderEditPage() {
                               >
                                 <div className="reception-service-card-main">
                                   <strong>{service.name}</strong>
-                                  <small>{service.minutes > 0 ? `${service.minutes} ph�t` : "Chua c� th?i lu?ng chu?n"}</small>
+                                  <small>{service.minutes > 0 ? `${service.minutes} phút` : "Chưa có thời lượng chuẩn"}</small>
                                 </div>
                                 <span>{formatCurrency(service.price)}</span>
                               </button>
@@ -1346,7 +1346,7 @@ export default function ServiceOrderEditPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="reception-muted-note">H�y ch?n �t nh?t m?t lo?i d?ch v? tru?c khi ch?n d?ch v? c? th?.</div>
+                      <div className="reception-muted-note">Hãy chọn ít nhất một loại dịch vụ trước khi chọn dịch vụ cụ thể.</div>
                     )}
 
                   </div>
@@ -1355,22 +1355,22 @@ export default function ServiceOrderEditPage() {
                 {showError("serviceIds") ? <div className="field-error">{fieldErrors.serviceIds}</div> : null}
 
                 <div className="reception-plan-preview" style={{ marginTop: 14 }}>
-                  <h5 className="reception-plan-preview-title">D?ch v? ph?t sinh (b? sung sau SO g?c)</h5>
+                  <h5 className="reception-plan-preview-title">Dịch vụ phát sinh (bổ sung sau SO gốc)</h5>
                   <div className="reception-plan-preview-list">
                     {supplementaryServiceDetails.length === 0 ? (
                       <article className="reception-plan-preview-item">
-                        <p>Chua c? d?ch v? ph?t sinh.</p>
+                        <p>Chưa có dịch vụ phát sinh.</p>
                       </article>
                     ) : (
                       supplementaryServiceDetails.map((detail) => (
                         <article key={`supplementary-${detail.id}`} className="reception-plan-preview-item">
                           <div className="reception-plan-preview-head">
-                            <strong>{detail.itemName || `D?ch v? #${detail.standardServiceId || detail.itemId || detail.id}`}</strong>
+                            <strong>{detail.itemName || `Dịch vụ #${detail.standardServiceId || detail.itemId || detail.id}`}</strong>
                             <span>{formatCurrency(detail.unitPriceAtTime)}</span>
                           </div>
-                          <p>{`Ngu?n: ${getSupplementarySourceLabel(detail.serviceSource)}`}</p>
-                          <p>{`Tr?ng th?i: ${detail.status || "APPROVED"}`}</p>
-                          {detail.note ? <p>{`Ghi ch�: ${detail.note}`}</p> : null}
+                          <p>{`Nguồn: ${getSupplementarySourceLabel(detail.serviceSource)}`}</p>
+                          <p>{`Trạng thái: ${detail.status || "APPROVED"}`}</p>
+                          {detail.note ? <p>{`Ghi chú: ${detail.note}`}</p> : null}
                         </article>
                       ))
                     )}
@@ -1378,13 +1378,13 @@ export default function ServiceOrderEditPage() {
 
                   <div style={{ marginTop: 12 }}>
                     <p className="reception-muted-note" style={{ marginBottom: 8 }}>
-                      {`D?ch v? g?c hi?n t?i: ${initialServiceDetails.length} h?ng m?c.`}
+                      {`Dịch vụ gốc hiện tại: ${initialServiceDetails.length} hạng mục.`}
                     </p>
                     <p className="reception-muted-note" style={{ marginBottom: 8 }}>
-                      B?t bu?c t?o b?o gi? b? sung (Quotation #2) cho m?i d?ch v? ph?t sinh.
+                      Bắt buộc tạo báo giá bổ sung (Quotation #2) cho mọi dịch vụ phát sinh.
                     </p>
                     {isSupplementaryLocked ? (
-                      <div className="field-error">SO dang b? kh?a theo m?c v?n h?nh, kh?ng th? t?o b?o gi? b? sung.</div>
+                      <div className="field-error">SO đang bị khóa theo mốc vận hành, không thể tạo báo giá bổ sung.</div>
                     ) : null}
                   </div>
                   <div className="form-footer" style={{ marginTop: 8 }}>
@@ -1394,7 +1394,7 @@ export default function ServiceOrderEditPage() {
                       disabled={saving || isSupplementaryLocked}
                       onClick={() => navigate(`/workshop/reception/orders/${orderId}/quote`)}
                     >
-                      M? Quotation #2
+                      Mở Quotation #2
                     </button>
                   </div>
                 </div>
@@ -1426,25 +1426,25 @@ export default function ServiceOrderEditPage() {
             <div className="reception-appt-right-column">
               <section className="reception-appt-section">
                 <div className="reception-appt-step-head">
-                  <span className="reception-step-badge">BU?C 3</span>
+                  <span className="reception-step-badge">BƯỚC 3</span>
                 </div>
-                <h4 className="reception-appt-section-title">Th�ng tin nghi?p v?</h4>
+                <h4 className="reception-appt-section-title">Thông tin nghiệp vụ</h4>
 
                 <div className="form-group">
-                  <label>C? v?n d?ch v? *</label>
+                  <label>Cố vấn dịch vụ *</label>
                   <select
                     name="serviceAdvisorId"
                     className={showError("serviceAdvisorId") ? "input-invalid" : ""}
                     value={formData.serviceAdvisorId}
                     onChange={handleChange}
                   >
-                    <option value="">-- Ch?n c? v?n --</option>
+                    <option value="">-- Chọn cố vấn --</option>
                     {staff.map((item) => {
                       const staffId = Number(readField(item, ["id", "Id"], 0));
                       const staffName = String(readField(item, ["fullName", "FullName"], "") || "").trim();
                       return (
                         <option key={staffId} value={staffId}>
-                          {staffName || `Nh?n s? #${staffId}`}
+                          {staffName || `Nhân sự #${staffId}`}
                         </option>
                       );
                     })}
@@ -1453,16 +1453,16 @@ export default function ServiceOrderEditPage() {
                 </div>
 
                 <div className="form-group">
-                  <label>X? l� ph? t�ng cu</label>
+                  <label>Xử lý phụ tùng cũ</label>
                   <select name="oldPartsReturnOption" value={formData.oldPartsReturnOption} onChange={handleChange}>
-                    <option value="DISPOSE_ALL">Garage t? thanh l�/h?y</option>
-                    <option value="RETURN_ALL">Tr? l?i cho kh?ch h?ng</option>
-                    <option value="CUSTOM">Cho kh?ch ki?m tra r?i quy?t d?nh</option>
+                    <option value="DISPOSE_ALL">Garage tự thanh lý/hủy</option>
+                    <option value="RETURN_ALL">Trả lại cho khách hàng</option>
+                    <option value="CUSTOM">Cho khách kiểm tra rồi quyết định</option>
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label>S? ti?n c?c (VN�)</label>
+                  <label>Số tiền cọc (VNĐ)</label>
                   <input
                     type="number"
                     min="0"
@@ -1476,13 +1476,13 @@ export default function ServiceOrderEditPage() {
                 </div>
 
                 <div className="form-group">
-                  <label>Ghi ch�</label>
+                  <label>Ghi chú</label>
                   <div className="reception-note-editor">
                     <textarea
                       rows={3}
                       className="reception-note-input"
                       value={customerNote}
-                      placeholder="Nh?p ghi ch�..."
+                      placeholder="Nhập ghi chú..."
                       onChange={(event) => setCustomerNote(event.target.value)}
                     />
                   </div>
@@ -1490,14 +1490,14 @@ export default function ServiceOrderEditPage() {
 
                 <div className="timeline-grid timeline-grid-vertical">
                   <div className="form-group">
-                    <label>Th?i di?m xe v�o xu?ng *</label>
+                    <label>Thời điểm xe vào xưởng *</label>
                     <p className={`slot-flow-note ${bookingFlow === BOOKING_FLOW.FLEXIBLE ? "checkin" : "repair"}`}>
                       {slotSelectionGuide}
                     </p>
                     <DateTimePicker
                       value={formData.checkInTime}
                       onChange={(value) => handleFieldValueChange("checkInTime", value)}
-                      placeholder="Ch?n ng�y v� gi?..."
+                      placeholder="Chọn ngày và giờ..."
                       minDate={pickerMinDate}
                       onOpenRequest={() => {
                         if (checkInSelectionGuardMessage) {
@@ -1511,22 +1511,22 @@ export default function ServiceOrderEditPage() {
                   </div>
 
                   <div className="form-group">
-                    <label>D? ki?n ho�n th�nh</label>
+                    <label>Dự kiến hoàn thành</label>
                     <DateTimePicker
                       value={formData.estimatedHandover || suggestedFinish.finishIso}
                       onChange={(value) => handleFieldValueChange("estimatedHandover", value)}
-                      placeholder="Ch?n ng�y gi? d? ki?n..."
+                      placeholder="Chọn ngày giờ dự kiến..."
                       minDate={pickerMinDate}
                     />
                     {showError("estimatedHandover") ? <div className="field-error">{fieldErrors.estimatedHandover}</div> : null}
                   </div>
 
                   <div className="form-group">
-                    <label>Ng�y gi? cam k?t tr? xe</label>
+                    <label>Ngày giờ cam kết trả xe</label>
                     <DateTimePicker
                       value={formData.promisedHandoverTime}
                       onChange={(value) => handleFieldValueChange("promisedHandoverTime", value)}
-                      placeholder="Ch?n ng�y gi? cam k?t..."
+                      placeholder="Chọn ngày giờ cam kết..."
                       minDate={pickerMinDate}
                     />
                     {showError("promisedHandoverTime") ? <div className="field-error">{fieldErrors.promisedHandoverTime}</div> : null}
@@ -1535,22 +1535,22 @@ export default function ServiceOrderEditPage() {
 
                 <div className="reception-summary-inline" role="status" aria-live="polite">
                   <div className="reception-summary-inline-row">
-                    <span>T?ng s? d?ch v?</span>
+                    <span>Tổng số dịch vụ</span>
                     <strong>{selectedServices.length}</strong>
                   </div>
                   <div className="reception-plan-summary-block">
-                    <p className="reception-plan-summary-block-label">D?CH V? CH?N</p>
+                    <p className="reception-plan-summary-block-label">DỊCH VỤ ĐÃ CHỌN</p>
                     <p className="reception-plan-summary-text reception-plan-summary-text-bulleted">
                       {serviceGroupsByCategory.length > 0
                         ? serviceGroupsByCategory
                           .map((group) => `- ${group.categoryName}\n  ${(group.serviceNames || []).map((name) => `+ ${name}`).join("\n  ")}`)
                           .join("\n")
-                        : "Chua c� d?ch v?"}
+                        : "Chưa có dịch vụ"}
                     </p>
                   </div>
                   <div className="reception-summary-inline-row">
-                    <span>T?ng th?i lu?ng</span>
-                    <strong>{`${totalMinutes} ph�t`}</strong>
+                    <span>Tổng thời lượng</span>
+                    <strong>{`${totalMinutes} phút`}</strong>
                   </div>
                   <div className="reception-summary-inline-row">
                     <span>{SERVICE_PRICE_LABEL}</span>
@@ -1558,24 +1558,24 @@ export default function ServiceOrderEditPage() {
                   </div>
                   <p className="reception-plan-summary-warning reception-summary-inline-warning">{`* ${SERVICE_PRICE_DISCLAIMER}`}</p>
                   <div className="reception-summary-inline-row">
-                    <span>Th?i gian d? ki?n ho�n t?t to�n b? xe</span>
+                    <span>Thời gian dự kiến hoàn tất toàn bộ xe</span>
                     <strong>{formatDateTimeValue(formData.estimatedHandover || suggestedFinish.finishIso)}</strong>
                   </div>
                   {isInsuranceOrderEnabled ? (
                     <>
                       <div className="reception-summary-inline-row">
-                        <span>B?o hi?m d? ki?n tr?</span>
+                        <span>Bảo hiểm dự kiến trả</span>
                         <strong>{formatCurrency(insuranceDraftBreakdown.insuranceRequestedAmount)}</strong>
                       </div>
                       <div className="reception-summary-inline-row">
-                        <span>Kh?ch d? ki?n tr?</span>
+                        <span>Khách dự kiến trả</span>
                         <strong>{formatCurrency(insuranceDraftBreakdown.customerPayAmount)}</strong>
                       </div>
                     </>
                   ) : null}
                   <div className="reception-summary-inline-row">
-                    <span>Lu?ng ti?p nh?n</span>
-                    <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh ho?t" : "Khung gi? s?a ch?a"}</strong>
+                    <span>Luồng tiếp nhận</span>
+                    <strong>{bookingFlow === BOOKING_FLOW.FLEXIBLE ? "Check-in linh hoạt" : "Khung giờ sửa chữa"}</strong>
                   </div>
                   {completionWarningText ? (
                     <p className="reception-plan-summary-warning reception-summary-inline-warning">
@@ -1590,15 +1590,13 @@ export default function ServiceOrderEditPage() {
 
         <div className="form-footer">
           <button type="button" className="btn-secondary-outline" onClick={() => navigate(-1)}>
-            H?y v� quay l?i
+            Hủy và quay lại
           </button>
           <button type="submit" className="btn-primary-large" disabled={saving || isEditLocked}>
-            {saving ? "�ang c?p nh?t..." : "Luu thay d?i"}
+            {saving ? "Đang cập nhật..." : "Lưu thay đổi"}
           </button>
         </div>
       </form>
     </div>
   );
 }
-
-

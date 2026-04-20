@@ -1497,10 +1497,10 @@ export default function PayrollPage() {
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
-          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chua có"}</Badge>
-          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chua có"}</Badge>
+          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Ch?a có"}</Badge>
+          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Ch?a có"}</Badge>
+          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Ch?a có"}</Badge>
+          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Ch?a có"}</Badge>
           <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
         </Flex>
       </Card>

@@ -99,9 +99,9 @@ namespace MyGarage.Services
             int bufferMinutes,
             int estimatedMinutes)
         {
-            return $"T\u1ED5ng th\u1EDDi gian d\u1EF1 ki\u1EBFn {estimatedMinutes} ph\u00FAt " +
-                   $"(s\u1EEDa ch\u1EEFa {serviceMinutes}p + ti\u1EBFp nh\u1EADn/ch\u1EE5p \u1EA3nh {setupMinutes}p + buffer {bufferMinutes}p). " +
-                   "Th\u1EDDi gian ho\u00E0n t\u1EA5t th\u1EF1c t\u1EBF s\u1EBD \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt sau khi k\u1EF9 thu\u1EADt vi\u00EAn ho\u00E0n t\u1EA5t b\u01B0\u1EDBc ki\u1EC3m tra ban \u0111\u1EA7u.";
+            return $"Tổng thời gian dự kiến {estimatedMinutes} phút " +
+                   $"(sửa chữa {serviceMinutes}p + tiếp nhận/chụp ảnh {setupMinutes}p + buffer {bufferMinutes}p). " +
+                   "Thời gian hoàn tất thực tế sẽ được cập nhật sau khi kỹ thuật viên hoàn tất bước kiểm tra ban đầu.";
         }
 
         private async Task<List<StandardService>> LoadRequestedServicesAsync(string? requestedServiceIds)

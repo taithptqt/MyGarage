@@ -108,7 +108,7 @@ export default function PayrollRunPage() {
         <div className="payroll-header">
           <div>
             <h1 className="payroll-title">?? Bảng luong {activeRun.period}</h1>
-            <p className="payroll-subtitle">{isEditing ? "?ang xem b?n nh?p (Chua luu)" : "Chi ti?t bảng luong"}</p>
+            <p className="payroll-subtitle">{isEditing ? "?ang xem b?n nh?p (Ch?a luu)" : "Chi ti?t bảng luong"}</p>
           </div>
           <button className="payroll-btn payroll-btn-ghost" onClick={() => setActiveRun(null)}>?? Quay l?i</button>
         </div>
@@ -122,7 +122,7 @@ export default function PayrollRunPage() {
                 <th className="t-right">Hoa h?ng</th>
                 <th className="t-right">Luong OT</th>
                 <th className="t-right">Kh?u tr? (-)</th>
-                <th className="t-right">Thu?ng (+)</th>
+                <th className="t-right">Th??ng (+)</th>
                 <th className="t-right">Ph?t (-)</th>
                 <th className="t-right">Th?c l�nh</th>
               </tr>
@@ -178,7 +178,7 @@ export default function PayrollRunPage() {
     <div className="payroll-page">
       <div className="payroll-header">
         <div>
-          <h1 className="payroll-title">?? Quản lý luong thu?ng (Payroll)</h1>
+          <h1 className="payroll-title">?? Quản lý luong th??ng (Payroll)</h1>
           <p className="payroll-subtitle">T?nh to?n bảng luong h?ng th?ng, duy?t luong v? tr? luong.</p>
         </div>
         <div className="payroll-actions">
@@ -191,7 +191,7 @@ export default function PayrollRunPage() {
 
       <div className="payroll-board">
         {loading ? <div className="payroll-empty">Đang t?i l?ch s?...</div> : 
-         runs.length === 0 ? <div className="payroll-empty">Chua c� bảng luong n�o du?c t?o.</div> : (
+         runs.length === 0 ? <div className="payroll-empty">Ch?a c� bảng luong n�o ??c t?o.</div> : (
            <table className="payroll-table">
              <thead>
                <tr>

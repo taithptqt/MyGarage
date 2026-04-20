@@ -120,11 +120,11 @@ export function notificationTypeLabel(derivedType) {
     case "maintenance":
       return "Bảo dưỡng";
     case "survey":
-      return "Kh?o s�t";
+      return "Khảo sát";
     case "insurance":
       return "Bảo hiểm";
     case "service_status":
-      return "Trạng thái s?a ch?a";
+      return "Trạng thái sửa chữa";
     default:
       return "Th�ng b�o";
   }

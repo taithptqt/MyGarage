@@ -304,7 +304,7 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
       </div>
 
       <div className="form-group">
-        <label>Ph�n kh�c xe ph� h?p (c�ch nhau bảng d?u ph?y)</label>
+        <label>Phân khúc xe phù hợp (cách nhau bằng dấu phẩy)</label>
         <input
           name="supportedSegmentsText"
           value={form.supportedSegmentsText || ""}
@@ -580,7 +580,7 @@ export default function BayManagementPage({ section }) {
         await loadSelectedBayDetails(options.reloadBayId || selectedBayId);
       }
     } catch (err) {
-      const message = getFriendlyErrorMessage(err, "Không th? th?c hi?n thao t�c.");
+      const message = getFriendlyErrorMessage(err, "Không thể thực hiện thao tác.");
       if (options.asFormError) {
         setFormError(message);
       } else {
@@ -617,7 +617,7 @@ export default function BayManagementPage({ section }) {
         maxTonnage: item.maxTonnage ?? "",
         operationalStatus: item.operationalStatus || "EMPTY",
         isActive: !item.isLocked,
-        area: item.area || "Chua ph�n khu",
+        area: item.area || "Chưa phân khu",
         capacity: item.capacity || 1,
         supportedSegmentsText: (item.supportedSegments || []).join(", "),
       },
@@ -657,7 +657,7 @@ export default function BayManagementPage({ section }) {
     const bayId = Number(assignForm.bayId || selectedBayId);
     const vehicleId = Number(assignForm.vehicleId);
     if (!bayId || !vehicleId) {
-      setError("Cần chọn khoang v� xe d? g�n.");
+      setError("Cần chọn khoang và xe để gán.");
       return;
     }
 
@@ -750,7 +750,7 @@ export default function BayManagementPage({ section }) {
           value={filters.branchId}
           onChange={(event) => setFilters((prev) => ({ ...prev, branchId: event.target.value }))}
         >
-          <option value="">T?t c? chi nh�nh</option>
+          <option value="">Tất cả chi nhánh</option>
           {(lookups.branches || []).map((branch) => (
             <option key={branch.id} value={branch.id}>
               {branch.name}
@@ -774,7 +774,7 @@ export default function BayManagementPage({ section }) {
           value={filters.status}
           onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
         >
-          <option value="">T?t c? trạng thái</option>
+          <option value="">Tất cả trạng thái</option>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -893,7 +893,7 @@ export default function BayManagementPage({ section }) {
                                 className="bay-inline-select"
                                 value={item.operationalStatus}
                                 onClick={(event) => event.stopPropagation()}
-                                onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã c?p nh?t trạng thái khoang.").catch(() => { })}
+                                onChange={(event) => runMutation(() => bayApi.updateBayStatus(item.id, event.target.value), "Đã cập nhật trạng thái khoang.").catch(() => { })}
                               >
                                 {STATUS_OPTIONS.map((option) => (
                                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -984,7 +984,7 @@ export default function BayManagementPage({ section }) {
               </div>
 
               <div className="bay-panel">
-                <div className="bay-panel-head"><h3>G�n / di?u ph?i xe</h3></div>
+                <div className="bay-panel-head"><h3>Gán / điều phối xe</h3></div>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleAssignVehicle}>
                   <label>G�n xe v�o khoang</label>
@@ -996,13 +996,13 @@ export default function BayManagementPage({ section }) {
                       </option>
                     ))}
                   </select>
-                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={assignForm.serviceStatus} onChange={(event) => setAssignForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={assignForm.serviceStatus} onChange={(event) => setAssignForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <input className="search-input" placeholder="Ghi chú (tùy chọn)" value={assignForm.note} onChange={(event) => setAssignForm((prev) => ({ ...prev, note: event.target.value }))} />
                   <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>G�n xe</button>
                 </form>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleMoveVehicle}>
-                  <label>Điều ph?i xe gi?a c�c khoang</label>
+                  <label>Điều phối xe giữa các khoang</label>
                   <select className="search-input" value={moveForm.vehicleId} onChange={(event) => setMoveForm((prev) => ({ ...prev, vehicleId: event.target.value }))}>
                     <option value="">Chọn xe đang trong khoang</option>
                     {activeVehicles.map((vehicle) => (
@@ -1019,7 +1019,7 @@ export default function BayManagementPage({ section }) {
                       </option>
                     ))}
                   </select>
-                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={moveForm.serviceStatus} onChange={(event) => setMoveForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={moveForm.serviceStatus} onChange={(event) => setMoveForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>Điều phối</button>
                 </form>
 
@@ -1034,7 +1034,7 @@ export default function BayManagementPage({ section }) {
                     ))}
                   </select>
                   <input className="search-input" placeholder="Khu vực ưu tiên (tùy chọn)" value={suggestForm.preferredArea} onChange={(event) => setSuggestForm((prev) => ({ ...prev, preferredArea: event.target.value }))} />
-                  <input className="search-input" placeholder="Trạng thái s?a ch?a (t�y chọn)" value={suggestForm.serviceStatus} onChange={(event) => setSuggestForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
+                  <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={suggestForm.serviceStatus} onChange={(event) => setSuggestForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <button className="btn-ghost" type="submit">Lấy gợi ý</button>
                 </form>
 
@@ -1074,7 +1074,7 @@ export default function BayManagementPage({ section }) {
                       <th>Khu vực</th>
                       <th>Tần suất sử dụng</th>
                       <th>Tổng giờ sử dụng</th>
-                      <th>Chi?m l�u nh?t</th>
+                      <th>Chiếm lâu nhất</th>
                       <th>Lần dùng cuối</th>
                     </tr>
                   </thead>
@@ -1239,7 +1239,7 @@ export default function BayManagementPage({ section }) {
                   <thead>
                     <tr>
                       <th>Mức độ</th>
-                      <th>Lo?i cầnh b�o</th>
+                      <th>Loại cảnh báo</th>
                       <th>Khoang</th>
                       <th>Nội dung</th>
                       <th>Thời gian</th>
@@ -1251,7 +1251,7 @@ export default function BayManagementPage({ section }) {
                     ) : (
                       pagedAlertRows.map((item, idx) => (
                         <tr key={`${item.type}-${item.bayId}-${idx}`}>
-                          <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-danger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
+                          <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-?anger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
                           <td>{item.type}</td>
                           <td>{item.code} - {item.name}</td>
                           <td>{item.message}</td>

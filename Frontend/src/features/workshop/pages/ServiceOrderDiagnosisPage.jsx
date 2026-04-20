@@ -2037,7 +2037,7 @@ export default function ServiceOrderDiagnosisPage() {
                       const isMaterialExpanded = Boolean(expandedMaterialByService[rootKey]);
 
                       return (
-                        <Box key={root.id} p={3} border="1px solid #e9edf7" borderRadius="md" bg="gray.50" position="relative" overflow="visible">
+                        <Box key={root.id} position="relative" overflow="visible">
                           <RecommendationRow
                             mode="service"
                             item={root}
@@ -2069,7 +2069,7 @@ export default function ServiceOrderDiagnosisPage() {
                             }
                           />
                           {hasChildItems && isMaterialExpanded && (
-                            <VStack align="stretch" mt={3} spacing={2} pl={4} borderLeft="2px solid #d6e0f5">
+                            <VStack align="stretch" mt={2} spacing={2}>
                               {childItems.map((child, childIndex) => (
                                 <RecommendationRow
                                   key={child.id}
@@ -2121,7 +2121,6 @@ function RecommendationRow({
   displayNumber,
   canEdit,
   services,
-  serviceCategoryOptions,
   products,
   partCategories = [],
   onChange,
@@ -2137,43 +2136,40 @@ function RecommendationRow({
 }) {
   const isServiceMode = mode === "service";
   const canAddMaterial = Boolean(item.standardServiceId);
+
   const selectedService = isServiceMode
     ? (services || []).find((service) => String(extractServiceId(service) || "") === String(item.standardServiceId || ""))
     : null;
+
   const selectedServiceName = isServiceMode
-    ? (extractServiceName(selectedService) || (item.standardServiceId ? `Dá»‹ch vá»¥ #${item.standardServiceId}` : "ChÆ°a chá»n dá»‹ch vá»¥"))
+    ? (extractServiceName(selectedService) || (item.standardServiceId ? `Dịch vụ #${item.standardServiceId}` : "Chưa chọn dịch vụ"))
     : "";
-  const selectedServiceCategoryId = String(
-    item.serviceCategoryId ||
-      extractServiceCategoryId(selectedService) ||
-      ""
-  );
-  const selectedServiceCategoryName = isServiceMode
-    ? (
-      extractServiceCategoryName(selectedService) ||
-      (serviceCategoryOptions || []).find((category) => String(category.value) === selectedServiceCategoryId)?.label ||
-      "ChÆ°a phÃ¢n loáº¡i"
-    )
-    : "";
+
   const selectedProduct = !isServiceMode
     ? (products || []).find((product) => String(product?.id ?? product?.Id ?? "") === String(item.inventoryItemId || ""))
     : null;
+
   const selectedProductName = !isServiceMode
-    ? String(selectedProduct?.name ?? selectedProduct?.Name ?? "").trim() || "ChÆ°a chá»n váº­t tÆ°"
+    ? String(selectedProduct?.name ?? selectedProduct?.Name ?? "").trim() || "Chưa chọn vật tư"
     : "";
+
   const isQuantityInputEmpty = item.quantity === "";
   const parsedQuantity = Number(item.quantity);
   const itemQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1;
   const quantityInputValue = isQuantityInputEmpty ? "" : itemQuantity;
+
   const quantityWarningMessage = isServiceMode
-    ? (itemQuantity > 5 ? "Sá»‘ lÆ°á»£ng dá»‹ch vá»¥ vÆ°á»£t 5. Vui lÃ²ng kiá»ƒm tra láº¡i." : "")
-    : (itemQuantity > 20 ? "Sá»‘ lÆ°á»£ng phá»¥ tÃ¹ng vÆ°á»£t 20. Vui lÃ²ng kiá»ƒm tra láº¡i." : "");
+    ? (itemQuantity > 5 ? "Số lượng dịch vụ vượt 5. Vui lòng kiểm tra lại." : "")
+    : "";
+
   const serviceEvidenceUrls = isServiceMode ? normalizeImageUrls(item.evidenceMediaUrls) : [];
   const evidenceInputId = `diagnose-evidence-${item.id}`;
+
   const canToggleMaterials = isServiceMode && materialCount > 0 && typeof onToggleMaterials === "function";
   const toggleMaterialsTooltip = isMaterialExpanded
-    ? "Báº¥m vÃ o dÃ²ng dá»‹ch vá»¥ Ä‘á»ƒ áº©n danh sÃ¡ch phá»¥ tÃ¹ng."
-    : "Báº¥m vÃ o dÃ²ng dá»‹ch vá»¥ Ä‘á»ƒ xem danh sÃ¡ch phá»¥ tÃ¹ng.";
+    ? "Bấm vào dòng dịch vụ để ẩn danh sách phụ tùng."
+    : "Bấm vào dòng dịch vụ để xem danh sách phụ tùng.";
+
   const [materialPickerVisible, setMaterialPickerVisible] = useState(false);
   const [materialPickerCategoryId, setMaterialPickerCategoryId] = useState("");
   const [materialPickerKeyword, setMaterialPickerKeyword] = useState("");
@@ -2189,7 +2185,7 @@ function RecommendationRow({
     safePartCategories.forEach((category) => {
       const id = extractCategoryId(category);
       if (!id) return;
-      const name = extractCategoryName(category) || `Danh má»¥c ${id}`;
+      const name = extractCategoryName(category) || `Danh mục ${id}`;
       map.set(String(id), name);
     });
     return map;
@@ -2208,24 +2204,29 @@ function RecommendationRow({
   const materialCategoryOptions = useMemo(() => {
     const map = new Map();
     const allowedCategoryIdSet = new Set();
+
     safePartCategories.forEach((category) => {
       const categoryId = extractCategoryId(category);
       const parentCategoryId = extractCategoryParentId(category);
-      if (!categoryId) return;
-      if (!parentCategoryId) return;
+      if (!categoryId || !parentCategoryId) return;
       if (map.has(String(categoryId))) return;
-      const categoryName = extractCategoryName(category) || `Danh má»¥c ${categoryId}`;
+      const categoryName = extractCategoryName(category) || `Danh mục ${categoryId}`;
       allowedCategoryIdSet.add(String(categoryId));
       map.set(String(categoryId), { value: String(categoryId), label: categoryName });
     });
+
     safeProducts.forEach((product) => {
       const categoryId = extractProductCategoryId(product);
       if (!categoryId) return;
       if (!allowedCategoryIdSet.has(String(categoryId))) return;
       if (map.has(String(categoryId))) return;
-      const categoryName = partCategoryById.get(String(categoryId)) || extractProductCategoryName(product) || `Danh má»¥c ${categoryId}`;
+      const categoryName =
+        partCategoryById.get(String(categoryId)) ||
+        extractProductCategoryName(product) ||
+        `Danh mục ${categoryId}`;
       map.set(String(categoryId), { value: String(categoryId), label: categoryName });
     });
+
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
   }, [safePartCategories, safeProducts, partCategoryById]);
 
@@ -2235,16 +2236,19 @@ function RecommendationRow({
       .filter((product) => {
         const productId = String(toPositiveNumber(product?.id ?? product?.Id) || "");
         if (!productId) return false;
+
         const categoryId = String(extractProductCategoryId(product) || "");
         if (materialPickerCategoryId && categoryId !== String(materialPickerCategoryId)) return false;
+
         if (!keyword) return true;
+
         const productName = normalizeLookupText(extractProductName(product));
         const productCode = normalizeLookupText(String(product?.sku ?? product?.Sku ?? product?.code ?? product?.Code ?? ""));
         const categoryName = normalizeLookupText(partCategoryById.get(categoryId) || extractProductCategoryName(product));
         return productName.includes(keyword) || productCode.includes(keyword) || categoryName.includes(keyword);
       })
       .sort((a, b) => extractProductName(a).localeCompare(extractProductName(b), "vi"));
-  }, [safeProducts, existingMaterialInventoryIdSet, materialPickerCategoryId, materialPickerKeyword, partCategoryById]);
+  }, [safeProducts, materialPickerCategoryId, materialPickerKeyword, partCategoryById]);
 
   useEffect(() => {
     if (!materialPickerOpen) return undefined;
@@ -2287,18 +2291,14 @@ function RecommendationRow({
     }
     setMaterialPickerVisible(true);
     setMaterialPickerOpen(false);
-    if (!isMaterialExpanded) {
-      onToggleMaterials?.();
-    }
+    if (!isMaterialExpanded) onToggleMaterials?.();
   };
 
   const selectMaterialFromPicker = (product) => {
     const productId = toPositiveNumber(product?.id ?? product?.Id);
     if (!productId) return;
     onAddMaterial?.(item.id, productId);
-    if (!isMaterialExpanded) {
-      onToggleMaterials?.();
-    }
+    if (!isMaterialExpanded) onToggleMaterials?.();
     setMaterialPickerOpen(true);
     setMaterialPickerKeyword("");
   };
@@ -2306,35 +2306,38 @@ function RecommendationRow({
   const toggleMaterialFromPicker = (product) => {
     const productId = toPositiveNumber(product?.id ?? product?.Id);
     if (!productId) return;
+
     const existedItem = safeMaterialItems.find(
       (material) => toPositiveNumber(material?.inventoryItemId ?? material?.InventoryItemId) === productId
     );
+
     if (existedItem) {
       onRemove?.(existedItem);
       setMaterialPickerOpen(true);
       return;
     }
+
     selectMaterialFromPicker(product);
   };
 
   return (
     <Stack
-      spacing={isServiceMode ? { base: 1, md: 1 } : 1}
-      p={{ base: 2, md: 1.5 }}
+      spacing={isServiceMode ? 1 : 1}
+      p={{ base: 2.5, md: 2 }}
       position="relative"
       overflow="visible"
       zIndex={isServiceMode && materialPickerOpen ? 60 : "auto"}
-      border={isServiceMode ? "1px solid #8fb3ff" : "1px solid #e3b97f"}
-      borderRadius="14px"
-      bg={isServiceMode ? "#f6f9ff" : "linear-gradient(180deg, #fffaf2 0%, #fff7ee 100%)"}
-      boxShadow={isServiceMode ? "0 2px 8px rgba(42, 67, 122, 0.06)" : "0 2px 8px rgba(138, 90, 31, 0.05)"}
+      border={isServiceMode ? "1px solid #c9daf8" : "1px solid #eadfcf"}
+      borderRadius="12px"
+      bg={isServiceMode ? "#f8fbff" : "#fffaf5"}
+      boxShadow="0 1px 4px rgba(42, 67, 122, 0.08)"
       cursor={canToggleMaterials ? "pointer" : "default"}
       transition="all .18s ease"
       _hover={
         canToggleMaterials
           ? {
-              borderColor: "#6f9cff",
-              boxShadow: "0 6px 16px rgba(42, 67, 122, 0.12)",
+              borderColor: "#93b6ff",
+              boxShadow: "0 6px 14px rgba(42, 67, 122, 0.12)",
             }
           : undefined
       }
@@ -2350,15 +2353,16 @@ function RecommendationRow({
           {canToggleMaterials ? (
             <Tooltip hasArrow label={toggleMaterialsTooltip} placement="top-start">
               <Text fontWeight="800" fontSize={{ base: "lg", md: "md" }} color={isServiceMode ? "#2b3674" : "#8a5a1f"}>
-                {isServiceMode ? `Dá»‹ch vá»¥ #${displayNumber ?? item.id}` : `#${displayNumber ?? item.id}`}
+                {`#${displayNumber ?? item.id}`}
               </Text>
             </Tooltip>
           ) : (
             <Text fontWeight="800" fontSize={{ base: "lg", md: "md" }} color={isServiceMode ? "#2b3674" : "#8a5a1f"}>
-              {isServiceMode ? `Dá»‹ch vá»¥ #${displayNumber ?? item.id}` : `#${displayNumber ?? item.id}`}
+              {`#${displayNumber ?? item.id}`}
             </Text>
           )}
         </HStack>
+
         <HStack spacing={2} align="center" position="relative" zIndex={3} ml="auto">
           {canEdit && (
             <Button
@@ -2371,31 +2375,22 @@ function RecommendationRow({
               zIndex={3}
               onClick={() => onRemove(item)}
             >
-              XÃ³a
+              Xóa
             </Button>
           )}
         </HStack>
       </HStack>
 
       {isServiceMode && (
-        <Grid templateColumns={{ base: "1fr", xl: "minmax(0, 1fr) 500px" }} gap={{ base: 1, md: 1 }} alignItems="center">
+        <Grid templateColumns={{ base: "1fr", xl: "minmax(0, 1fr) 520px" }} gap={{ base: 2, md: 2 }} alignItems="center">
           <Box>
-            <Text fontSize="11px" fontWeight="700" color="#8ea1cc" mb={0.5}>
-              Loáº¡i dá»‹ch vá»¥: {selectedServiceCategoryName}
-            </Text>
-            <Text fontSize={{ base: "lg", md: "md" }} fontWeight="800" color="#2b3674" lineHeight="1.2">
+            <Text fontSize={{ base: "lg", md: "md" }} fontWeight="800" color="#2b3674" lineHeight="1.2" mt={1}>
               {selectedServiceName}
             </Text>
           </Box>
 
-          <HStack
-            align="center"
-            spacing={1}
-            maxW={{ base: "100%", xl: "500px" }}
-            justify="flex-start"
-            ml={{ base: 0, xl: "-36px" }}
-          >
-            <Box p={{ base: 1.5, md: 1.5 }} borderRadius="8px" border="1px solid #9fc0ff" bg="#f8fbff" w={{ base: "100%", xl: "124px" }} minW={{ base: "100%", xl: "124px" }}>
+          <HStack align="center" spacing={1} maxW={{ base: "100%", xl: "520px" }} justify="flex-start" ml={0}>
+            <Box p={1.5} borderRadius="8px" border="1px solid #9fc0ff" bg="#f8fbff" w={{ base: "100%", xl: "126px" }} minW={{ base: "100%", xl: "126px" }}>
               <Input
                 id={evidenceInputId}
                 type="file"
@@ -2433,31 +2428,22 @@ function RecommendationRow({
                 _hover={canEdit ? { borderColor: "#5b8fff", bg: "linear-gradient(180deg, #ffffff 0%, #e5efff 100%)" } : undefined}
                 data-no-row-toggle="true"
               >
-                + Táº£i áº£nh
+                + Tải ảnh
               </Box>
               <Text mt={0.5} fontSize="11px" fontWeight="700" color="#e45b5b" lineHeight="1.2" textAlign="center">
-                * áº¢nh báº±ng chá»©ng
+                * Ảnh bằng chứng
               </Text>
             </Box>
 
-            <HStack
-              spacing={1}
-              overflowX="visible"
-              maxW="100%"
-              flex="1"
-              justify="flex-start"
-              pt={0}
-              flexWrap="wrap"
-              rowGap={1}
-            >
+            <HStack spacing={1} overflowX="visible" maxW="100%" flex="1" justify="flex-start" pt={0} flexWrap="wrap" rowGap={1}>
               {serviceEvidenceUrls.map((url, index) => (
                 <Box key={`${item.id}-evidence-${index}`} position="relative" flex="0 0 auto">
                   <Box
                     as="img"
                     src={url}
                     alt={`evidence-${index + 1}`}
-                    w="68px"
-                    h="68px"
+                    w="82px"
+                    h="82px"
                     objectFit="cover"
                     borderRadius="10px"
                     border="1px solid #9fc0ff"
@@ -2493,24 +2479,14 @@ function RecommendationRow({
       {isServiceMode && (
         <Box mt={{ base: 1, md: 0.5 }} data-no-row-toggle="true">
           <Grid
-            templateColumns={{ base: "1fr", lg: "minmax(220px, 360px) minmax(200px, 320px) auto" }}
-            gap={{ base: 1.5, md: 5 }}
+            templateColumns={{ base: "1fr", lg: "minmax(220px, 1fr) minmax(220px, 1fr) auto" }}
+            gap={{ base: 1.5, md: 3 }}
             alignItems="end"
-            justifyContent="start"
+            justifyContent="stretch"
           >
-            <Box
-              position="relative"
-              w={{ base: "100%", lg: "300px" }}
-              maxW={{ base: "100%", lg: "300px" }}
-              ml={{ base: 0, lg: 4 }}
-            >
-              <Text
-                fontSize={{ base: "md", md: "sm" }}
-                fontWeight="700"
-                color="#7f8fb2"
-                mb={1}
-              >
-                Sá»‘ lÆ°á»£ng
+            <Box position="relative" w="100%" maxW="100%" ml={0}>
+              <Text fontSize={{ base: "md", md: "sm" }} fontWeight="700" color="#7f8fb2" mb={1}>
+                Số lượng
               </Text>
               <NumberInput
                 size="sm"
@@ -2592,14 +2568,9 @@ function RecommendationRow({
               ) : null}
             </Box>
 
-            <Box w={{ base: "100%", lg: "320px" }} maxW={{ base: "100%", lg: "320px" }}>
-              <Text
-                fontSize={{ base: "md", md: "sm" }}
-                fontWeight="700"
-                color="#7f8fb2"
-                mb={1}
-              >
-                Äá»™ cáº§n thiáº¿t
+            <Box w="100%" maxW="100%">
+              <Text fontSize={{ base: "md", md: "sm" }} fontWeight="700" color="#7f8fb2" mb={1}>
+                Độ ưu tiên
               </Text>
               <Box display="flex" alignItems="center">
                 <DiagnosisDropdown
@@ -2609,9 +2580,9 @@ function RecommendationRow({
                   onChange={(value) => onChange(item.id, { urgency: value })}
                   fullWidth
                 >
-                  <option value="CRITICAL">Kháº©n cáº¥p</option>
-                  <option value="RECOMMENDED">NÃªn lÃ m</option>
-                  <option value="OPTIONAL">KhÃ´ng báº¯t buá»™c</option>
+                  <option value="CRITICAL">Khẩn cấp</option>
+                  <option value="RECOMMENDED">Khuyến nghị</option>
+                  <option value="OPTIONAL">Tùy chọn</option>
                 </DiagnosisDropdown>
               </Box>
             </Box>
@@ -2653,19 +2624,20 @@ function RecommendationRow({
                   disabled={!canAddMaterial}
                   data-no-row-toggle="true"
                 >
-                  + ThÃªm váº­t tÆ°
+                  + Thêm phụ tùng
                 </Box>
               </Box>
             )}
           </Grid>
+
           <Box pt={0.75} mt={0.75} borderTop="1px dashed #9fc0ff">
             <Text fontSize={{ base: "xs", md: "11px" }} fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#6f83b3" mb={1.5}>
-              LÃ½ do
+              Ghi chú kỹ thuật
             </Text>
             <Textarea
               size="sm"
               minH={{ base: "48px", md: "42px" }}
-              placeholder="Nháº­p lÃ½ do chá»n dá»‹ch vá»¥ nÃ y..."
+              placeholder="Nhập ghi chú kỹ thuật..."
               value={item.technicianNotes || ""}
               isDisabled={!canEdit}
               onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
@@ -2675,6 +2647,7 @@ function RecommendationRow({
               _focus={{ borderColor: "#7aa6ff", boxShadow: "0 0 0 1px #7aa6ff" }}
             />
           </Box>
+
           {materialPickerVisible ? (
             <Box
               ref={materialPickerRef}
@@ -2689,7 +2662,7 @@ function RecommendationRow({
             >
               <HStack spacing={1.5} align="end" flexWrap="nowrap" w="100%">
                 <DiagnosisDropdown
-                  label="Loáº¡i váº­t tÆ°"
+                  label="Loại phụ tùng"
                   labelFontSize="xs"
                   labelColor="#5c6b8a"
                   minW="250px"
@@ -2699,7 +2672,7 @@ function RecommendationRow({
                   onChange={(value) => setMaterialPickerCategoryId(value || "")}
                   isDisabled={!canEdit}
                 >
-                  <option value="">-- Táº¥t cáº£ loáº¡i váº­t tÆ° --</option>
+                  <option value="">-- Tất cả loại phụ tùng --</option>
                   {materialCategoryOptions.map((category) => (
                     <option key={category.value} value={category.value}>
                       {category.label}
@@ -2709,7 +2682,7 @@ function RecommendationRow({
 
                 <Box flex="1 1 auto" minW="0">
                   <Text fontSize="xs" fontWeight="600" color="#5c6b8a" mb={2}>
-                    TÃ¬m váº­t tÆ°
+                    Tìm phụ tùng
                   </Text>
                   <Box position="relative">
                     <Input
@@ -2722,8 +2695,8 @@ function RecommendationRow({
                       onFocus={() => setMaterialPickerOpen(true)}
                       placeholder={
                         materialPickerCategoryId
-                          ? "Nháº­p tÃªn váº­t tÆ° trong loáº¡i Ä‘Ã£ chá»n..."
-                          : "Nháº­p tÃªn váº­t tÆ° Ä‘á»ƒ tÃ¬m trÃªn toÃ n bá»™ danh sÃ¡ch..."
+                          ? "Nhập tên phụ tùng trong loại đã chọn..."
+                          : "Nhập tên phụ tùng để tìm trên toàn bộ danh sách..."
                       }
                       isDisabled={!canEdit}
                       bg="white"
@@ -2746,13 +2719,13 @@ function RecommendationRow({
                       >
                         {filteredMaterialProducts.length === 0 ? (
                           <Text px={3} py={2} fontSize="sm" color="#7f8fb2">
-                            KhÃ´ng cÃ³ váº­t tÆ° phÃ¹ há»£p.
+                            Không có phụ tùng phù hợp.
                           </Text>
                         ) : (
                           filteredMaterialProducts.map((product) => {
                             const productId = String(toPositiveNumber(product?.id ?? product?.Id) || "");
                             const existed = existingMaterialInventoryIdSet.has(productId);
-                            const productName = extractProductName(product) || `Váº­t tÆ° #${productId}`;
+                            const productName = extractProductName(product) || `Phụ tùng #${productId}`;
                             const categoryName = extractProductCategoryName(product);
                             return (
                               <Box
@@ -2795,7 +2768,7 @@ function RecommendationRow({
       {!isServiceMode && (
         <Stack spacing={0.5}>
           <Grid
-            templateColumns={{ base: "1fr", lg: "minmax(260px, 1fr) 150px 210px" }}
+            templateColumns={{ base: "1fr", lg: "minmax(260px, 1fr) 220px" }}
             gap={2}
             alignItems="start"
           >
@@ -2804,12 +2777,12 @@ function RecommendationRow({
                 {selectedProductName}
               </Text>
               <Box mt={2}>
-                <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1}>Ghi chÃº ká»¹ thuáº­t</Text>
+                <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1}>Ghi chú kỹ thuật</Text>
                 <Textarea
                   size="sm"
                   maxW={{ base: "100%", lg: "420px" }}
                   minH="68px"
-                  placeholder="Ghi chÃº cho váº­t tÆ° nÃ y..."
+                  placeholder="Ghi chú cho phụ tùng này..."
                   value={item.technicianNotes || ""}
                   isDisabled={!canEdit}
                   onChange={(e) => onChange(item.id, { technicianNotes: e.target.value })}
@@ -2819,86 +2792,8 @@ function RecommendationRow({
                 />
               </Box>
             </Box>
-            <Box w="150px" maxW="150px" justifySelf={{ base: "stretch", lg: "end" }} position="relative">
-              <Box p={2} bg="rgba(255,255,255,0.55)" border="1px solid #f1dec1" borderRadius="10px">
-                <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Sá»‘ lÆ°á»£ng</Text>
-                <NumberInput
-                  size="sm"
-                  min={1}
-                  value={quantityInputValue}
-                  isDisabled={!canEdit}
-                  onChange={(valueString, valueNumber) => {
-                    if (valueString === "") {
-                      onChange(item.id, { quantity: "" });
-                      return;
-                    }
-                    onChange(item.id, { quantity: Number.isFinite(valueNumber) && valueNumber > 0 ? valueNumber : 1 });
-                  }}
-                  keepWithinRange
-                  clampValueOnBlur
-                  w="100%"
-                >
-                  <HStack spacing={1} w="100%">
-                    <Button
-                      size="sm"
-                      minW="30px"
-                      h="32px"
-                      px={0}
-                      borderRadius="10px"
-                      variant="outline"
-                      borderColor="#e7d5b6"
-                      color="#7f4f1f"
-                      isDisabled={!canEdit || isQuantityInputEmpty || itemQuantity <= 1}
-                      onClick={() => onChange(item.id, { quantity: Math.max(1, itemQuantity - 1) })}
-                    >
-                      -
-                    </Button>
-                  <NumberInputField
-                    bg="rgba(255,255,255,0.92)"
-                    borderColor={quantityWarningMessage ? "#f4b400" : "#e7d5b6"}
-                    borderRadius="10px"
-                    textAlign="center"
-                    _focus={{ borderColor: "#d4a15a", boxShadow: "0 0 0 1px #d4a15a" }}
-                    onBlur={() => {
-                      if (item.quantity === "" || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
-                        onChange(item.id, { quantity: 1 });
-                      }
-                    }}
-                  />
-                    <Button
-                      size="sm"
-                      minW="30px"
-                      h="32px"
-                      px={0}
-                      borderRadius="10px"
-                      variant="outline"
-                      borderColor="#e7d5b6"
-                      color="#7f4f1f"
-                      isDisabled={!canEdit}
-                      onClick={() => onChange(item.id, { quantity: (isQuantityInputEmpty ? 0 : itemQuantity) + 1 })}
-                    >
-                      +
-                    </Button>
-                  </HStack>
-                </NumberInput>
-              </Box>
-              {quantityWarningMessage ? (
-                <Text
-                  position="absolute"
-                  top="calc(100% + 4px)"
-                  left="0"
-                  fontSize="12px"
-                  fontWeight="600"
-                  color="#dc2626"
-                  lineHeight="1.3"
-                  zIndex={2}
-                >
-                  {quantityWarningMessage}
-                </Text>
-              ) : null}
-            </Box>
-            <Box p={2} bg="rgba(255,255,255,0.55)" border="1px solid #f1dec1" borderRadius="10px" w="210px" maxW="210px" justifySelf={{ base: "stretch", lg: "end" }}>
-              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Äá»™ cáº§n thiáº¿t</Text>
+            <Box p={2} bg="rgba(255,255,255,0.55)" border="1px solid #f1dec1" borderRadius="10px" w={{ base: "100%", lg: "220px" }} maxW={{ base: "100%", lg: "220px" }} justifySelf={{ base: "stretch", lg: "end" }}>
+              <Text fontSize="11px" fontWeight="700" textTransform="uppercase" letterSpacing="0.02em" color="#b07a2f" mb={1.5}>Độ ưu tiên</Text>
               <DiagnosisDropdown
                 minW="100%"
                 value={item.urgency || "RECOMMENDED"}
@@ -2906,9 +2801,9 @@ function RecommendationRow({
                 onChange={(value) => onChange(item.id, { urgency: value })}
                 fullWidth
               >
-                <option value="CRITICAL">Kháº©n cáº¥p</option>
-                <option value="RECOMMENDED">NÃªn lÃ m</option>
-                <option value="OPTIONAL">KhÃ´ng báº¯t buá»™c</option>
+                <option value="CRITICAL">Khẩn cấp</option>
+                <option value="RECOMMENDED">Khuyến nghị</option>
+                <option value="OPTIONAL">Tùy chọn</option>
               </DiagnosisDropdown>
             </Box>
           </Grid>
@@ -2917,8 +2812,4 @@ function RecommendationRow({
     </Stack>
   );
 }
-
-
-
-
 

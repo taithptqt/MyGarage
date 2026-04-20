@@ -73,56 +73,81 @@ namespace MyGarage.Services
         }
 
         private static string? ResolveDispatchBucket(
+            string? diagnosisStatus,
             string? workflowStatus,
-            string? queueState,
-            string? queueColor,
-            string? viewMode)
+            string? viewMode,
+            bool hasAssignedTeamId,
+            bool hasTechnicianId,
+            int pendingMinutes)
         {
             static bool EqualsCode(string? source, string code) =>
                 string.Equals(source?.Trim(), code, StringComparison.OrdinalIgnoreCase);
 
             var mode = (viewMode ?? string.Empty).Trim().ToUpperInvariant();
+            var normalizedDiagnosisStatus = (diagnosisStatus ?? string.Empty).Trim().ToUpperInvariant();
+            var normalizedWorkflowStatus = (workflowStatus ?? string.Empty).Trim().ToUpperInvariant();
 
-            if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.CANCELED)) ||
-                EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.FOREMAN_APPROVED_LOCKED)))
+            if (EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.CANCELED)))
             {
                 return null;
             }
 
-            if (EqualsCode(mode, "TEAM_LEADER"))
+            // Lich su cua to truong.
+            if (EqualsCode(mode, "TEAM_LEADER") &&
+                (EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.TL_APPROVED)) ||
+                 EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.TL_REJECTED_REDIAGNOSE))))
             {
-                if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.SUBMITTED)))
-                {
-                    return "APPROVAL_BUCKET";
-                }
-            }
-            else if (EqualsCode(mode, "FOREMAN") || EqualsCode(mode, "MANAGER"))
-            {
-                if (EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.TL_APPROVED)) ||
-                    EqualsCode(workflowStatus, nameof(DiagnosisWorkflowStatusCode.ESCALATED_TO_FOREMAN)))
-                {
-                    return "APPROVAL_BUCKET";
-                }
+                return null;
             }
 
-            if (EqualsCode(queueState, "ALERT") || EqualsCode(queueColor, "RED"))
+            // Lich su cua quan doc.
+            if ((EqualsCode(mode, "FOREMAN") || EqualsCode(mode, "MANAGER")) &&
+                (EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.FOREMAN_APPROVED_LOCKED)) ||
+                 EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.FOREMAN_REJECTED_REDIAGNOSE))))
             {
-                return "RED";
+                return null;
             }
-            if (EqualsCode(queueState, "IN_PROGRESS") || EqualsCode(queueColor, "YELLOW"))
+
+            // Can duyet: diagnosis COMPLETED + workflow SUBMITTED.
+            if (EqualsCode(normalizedDiagnosisStatus, DiagnosisStatusCompleted) &&
+                EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.SUBMITTED)))
+            {
+                return "APPROVAL_BUCKET";
+            }
+
+            // Can duyet cua quan doc/manager: to truong da duyet hoac da day len quan doc.
+            if ((EqualsCode(mode, "FOREMAN") || EqualsCode(mode, "MANAGER")) &&
+                EqualsCode(normalizedDiagnosisStatus, DiagnosisStatusCompleted) &&
+                (EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.TL_APPROVED)) ||
+                 EqualsCode(normalizedWorkflowStatus, nameof(DiagnosisWorkflowStatusCode.ESCALATED_TO_FOREMAN))))
+            {
+                return "APPROVAL_BUCKET";
+            }
+
+            // Dang chan doan: ASSIGNED va da co tho.
+            if (EqualsCode(normalizedDiagnosisStatus, DiagnosisStatusAssigned) && hasTechnicianId)
             {
                 return "YELLOW";
             }
-            if (EqualsCode(queueState, "DIAGNOSED") || EqualsCode(queueColor, "GREEN"))
+
+            // Moi tiep nhan / Can can thiep: PENDING, co to, chua co tho.
+            if (EqualsCode(normalizedDiagnosisStatus, DiagnosisStatusPending) && hasAssignedTeamId && !hasTechnicianId)
             {
-                return "GREEN";
-            }
-            if (EqualsCode(queueState, "NEW") || EqualsCode(queueColor, "WHITE"))
-            {
+                if (pendingMinutes >= UnclaimedEscalationMinutes)
+                {
+                    return "RED";
+                }
+
                 return "WHITE";
             }
 
-            return "WHITE";
+            // Trang thai khong nam trong dashboard dieu phoi hien tai se dua ve lich su/bo qua.
+            if (EqualsCode(normalizedDiagnosisStatus, DiagnosisStatusCompleted))
+            {
+                return null;
+            }
+
+            return null;
         }
 
         public async Task<IReadOnlyList<Diagnosis>> GetAllFilteredAsync(long? serviceOrderId, bool requestOnly, long? teamId = null)
@@ -706,7 +731,13 @@ namespace MyGarage.Services
                         hasPendingTeamLeaderApproval,
                         teamLeaderApprovalStatus,
                         finalApprovalStatus);
-                    var dispatchBucket = ResolveDispatchBucket(workflowStatus, queueState, queueColor, viewMode);
+                    var dispatchBucket = ResolveDispatchBucket(
+                        latest.Status,
+                        workflowStatus,
+                        viewMode,
+                        primaryTeamId.HasValue && primaryTeamId.Value > 0,
+                        technicianId > 0,
+                        Math.Max(0, pendingMinutes));
                     if (string.IsNullOrWhiteSpace(dispatchBucket))
                     {
                         return null;

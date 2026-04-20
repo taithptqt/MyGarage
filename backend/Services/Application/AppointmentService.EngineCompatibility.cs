@@ -46,7 +46,7 @@ namespace MyGarage.Services
             }
 
             throw new InvalidOperationException(
-                $"\u0044\u1ECBch v\u1EE5 kh\u00F4ng ph\u00F9 h\u1EE3p v\u1EDBi lo\u1EA1i \u0111\u1ED9ng c\u01A1 c\u1EE7a d\u00F2ng xe \u0111\u00E3 ch\u1ECDn: {string.Join(", ", incompatibleServices)}.");
+                $"Dịch vụ không phù hợp với loại động cơ của dòng xe đã chọn: {string.Join(", ", incompatibleServices)}.");
         }
     }
 }

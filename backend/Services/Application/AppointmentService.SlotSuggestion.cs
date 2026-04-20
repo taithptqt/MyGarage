@@ -24,7 +24,7 @@ namespace MyGarage.Services
 
             if (branchId <= 0)
             {
-                throw new InvalidOperationException("Chi nh\u00E1nh kh\u00F4ng h\u1EE3p l\u1EC7.");
+                throw new InvalidOperationException("Chi nhánh không hợp lệ.");
             }
 
             var baselineCheckInAt = requestedCheckInAt < _clock.LocalNow
@@ -46,7 +46,7 @@ namespace MyGarage.Services
                     RequestedCheckInAt = baselineCheckInAt,
                     RequestedServiceIds = requestedServiceIds,
                     RequestedPackageIds = requestedPackageIds,
-                    Message = "Ch\u01B0a x\u00E1c \u0111\u1ECBnh \u0111\u01B0\u1EE3c d\u1ECBch v\u1EE5 \u0111\u1EC3 g\u1EE3i \u00FD khung gi\u1EDD."
+                    Message = "Chưa xác định được dịch vụ để gợi ý khung giờ."
                 };
             }
             var resolvedFlow = await ResolveFlowAsync(bookingFlow, effectiveRequestedServiceIds, effectiveRequestedPackageIds);
@@ -127,7 +127,7 @@ namespace MyGarage.Services
                     SetupMinutes = breakdown.SetupMinutes,
                     BufferMinutes = breakdown.BufferMinutes,
                     EstimatedDurationMinutes = breakdown.TotalMinutes,
-                    Message = "Kh\u00F4ng t\u00ECm th\u1EA5y khung gi\u1EDD tr\u1ED1ng ph\u00F9 h\u1EE3p trong kho\u1EA3ng t\u00ECm ki\u1EBFm hi\u1EC7n t\u1EA1i."
+                    Message = "Không tìm thấy khung giờ trống phù hợp trong khoảng tìm kiếm hiện tại."
                 };
             }
 
@@ -135,8 +135,8 @@ namespace MyGarage.Services
             var isExactOrEarlier = deltaMinutes <= 0;
 
             var message = isExactOrEarlier
-                ? "Khung gi\u1EDD xe v\u00E0o x\u01B0\u1EDFng \u0111ang kh\u1EA3 d\u1EE5ng ngay."
-                : $"Khung gi\u1EDD ph\u00F9 h\u1EE3p g\u1EA7n nh\u1EA5t l\u1EC7ch {deltaMinutes} ph\u00FAt so v\u1EDBi gi\u1EDD nh\u1EADp.";
+                ? "Khung giờ xe vào xưởng đang khả dụng ngay."
+                : $"Khung giờ phù hợp gần nhất lệch {deltaMinutes} phút so với giờ nhập.";
 
             return new NearestSlotSuggestionResponseDto
             {

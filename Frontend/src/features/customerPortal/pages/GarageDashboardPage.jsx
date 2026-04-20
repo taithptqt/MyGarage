@@ -31,7 +31,7 @@ export default function GarageDashboardPage() {
         const nextData = await getCustomerDashboard();
         if (!cancelled) setData(nextData);
       } catch (e) {
-        if (!cancelled) setError(e?.message || "Không t?i du?c dữ liệu.");
+        if (!cancelled) setError(e?.message || "Không t?i ??c dữ liệu.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -47,8 +47,8 @@ export default function GarageDashboardPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Xe dang theo d�i", value: tracks.length },
-      { label: "L?ch h?n s?p t?i", value: appointments.length },
+      { label: "Xe đang theo dõi", value: tracks.length },
+      { label: "Lịch hẹn sắp tới", value: appointments.length },
       { label: "L?n hoàn tất g?n nh?t", value: last?.orderCode || "�" },
     ],
     [appointments.length, last?.orderCode, tracks.length]
@@ -59,25 +59,25 @@ export default function GarageDashboardPage() {
     if (appointments.length) {
       const nextAppointment = appointments[0];
       return {
-        title: "Chua c� xe dang ? xu?ng",
-        body: `L?ch h?n g?n nh?t c?a b?n l� ${fmtDt(nextAppointment.startTime)} t?i ${
-          nextAppointment.branchName || "chi nh?nh d? chọn"
+        title: "Chưa có xe đang ở xưởng",
+        body: `Lịch hẹn gần nhất của bạn là ${fmtDt(nextAppointment.startTime)} tại ${
+          nextAppointment.branchName || "chi nhánh đã chọn"
         }.`,
       };
     }
 
     if (last) {
       return {
-        title: "Không c� l?nh s?a ch?a dang active",
-        body: `L?n hoàn tất g?n nh?t l� ${last.orderCode || "don g?n nh?t"} ${
+        title: "Không có lệnh sửa chữa đang active",
+        body: `Lần hoàn tất gần nhất là ${last.orderCode || "đơn gần nhất"} ${
           last.completedAt ? `v�o ${fmtDt(last.completedAt)}` : ""
         }.`,
       };
     }
 
     return {
-      title: "Garage dang s?n s�ng cho xe c?a b?n",
-      body: "Khi c? l?nh s?a ch?a ho?c l?ch h?n s?p t?i, to?n b? ti?n tr?nh s? hi?n ? d?y theo thời gian th?c.",
+      title: "Garage đang sẵn sàng cho xe của bạn",
+      body: "Khi có lệnh sửa chữa hoặc lịch hẹn sắp tới, toàn bộ tiến trình sẽ hiện ở đây theo thời gian thực.",
     };
   }, [appointments, last, tracks.length]);
 
@@ -88,22 +88,22 @@ export default function GarageDashboardPage() {
         <div className="cp-inner">
           <section className="cp-card cp-card--highlight cp-dashboard-hero">
             <div className="cp-dashboard-hero-copy">
-              <p className="cp-eyebrow">Garage c?a t�i</p>
-              <h1 className="cp-title">Theo d�i xe dang s?a</h1>
+              <p className="cp-eyebrow">Garage của tôi</p>
+              <h1 className="cp-title">Theo dõi xe đang sửa</h1>
               <p className="cp-desc">
-                Xem xe dang ? giai do?n n?o, du?c x? l? t?i d?u, ai dang ph? tr?ch v? khi n?o
-                d? ki?n b�n giao.
+                Xem xe đang ở giai đoạn nào, được xử lý tại đâu, ai đang phụ trách và khi nào
+                dự kiến bàn giao.
               </p>
 
               <div className="cp-dashboard-actions">
                 <Link className="cp-btn" to="/my-vehicles">
-                  Đội xe c?a t�i
+                  Đội xe của tôi
                 </Link>
                 <Link className="cp-btn cp-btn-ghost" to="/my-notifications">
-                  Th?ng b?o
+                  Thông báo
                 </Link>
                 <Link className="cp-btn cp-btn-ghost" to="/my-appointments">
-                  L?ch h?n
+                  Lịch hẹn
                 </Link>
               </div>
             </div>
@@ -127,10 +127,10 @@ export default function GarageDashboardPage() {
               <p className="cp-muted">{fallbackSummary.body}</p>
               <div className="cp-dashboard-actions">
                 <Link className="cp-btn" to="/my-appointments">
-                  Xem l?ch h?n
+                  Xem lịch hẹn
                 </Link>
                 <Link className="cp-btn cp-btn-ghost" to="/my-vehicles">
-                  Xem d?i xe
+                  Xem đội xe
                 </Link>
               </div>
             </section>
@@ -156,20 +156,20 @@ export default function GarageDashboardPage() {
                     <div className="cp-track-overview">
                       <div className="cp-track-head">
                         <div>
-                          <h2 className="cp-track-plate">{track.licensePlate || "Xe c?a b?n"}</h2>
-                          <p className="cp-track-model">{track.modelLabel || "Đang c?p nh?t model"}</p>
+                          <h2 className="cp-track-plate">{track.licensePlate || "Xe của bạn"}</h2>
+                          <p className="cp-track-model">{track.modelLabel || "Đang cập nhật model"}</p>
                         </div>
 
                         <div className="cp-track-statusbox">
                           <span className="cp-stage-pill">{track.customerStageLabel}</span>
                           <strong className="cp-track-ordercode">{track.orderCode || "�"}</strong>
                           <span className="cp-muted cp-track-statusraw">
-                            Tr?ng th?i hệ thống: {track.lifecycleStatus || "?"}
+                            Trạng thái hệ thống: {track.lifecycleStatus || "—"}
                           </span>
                         </div>
                       </div>
 
-                      <div className="cp-timeline" aria-label="Ti?n tr�nh s?a ch?a">
+                      <div className="cp-timeline" aria-label="Tiến trình sửa chữa">
                         {(track.timeline || []).map((step, index) => (
                           <div
                             key={`${track.serviceOrderId}-${step.code}-${index}`}
@@ -184,11 +184,11 @@ export default function GarageDashboardPage() {
 
                       <dl className="cp-track-meta">
                         <div className="cp-track-meta-card">
-                          <dt>Chi nh?nh x? l?</dt>
+                          <dt>Chi nhánh xử lý</dt>
                           <dd>{track.branchName || "�"}</dd>
                         </div>
                         <div className="cp-track-meta-card">
-                          <dt>Ngu?i ph? tr?ch</dt>
+                          <dt>Người phụ trách</dt>
                           <dd>
                             {hasActiveTechnician ? (
                               <span className="cp-person-list">
@@ -204,11 +204,11 @@ export default function GarageDashboardPage() {
                           </dd>
                         </div>
                         <div className="cp-track-meta-card">
-                          <dt>C? v?n dịch vụ</dt>
+                          <dt>Cố vấn dịch vụ</dt>
                           <dd>{track.serviceAdvisorName || "�"}</dd>
                         </div>
                         <div className="cp-track-meta-card">
-                          <dt>Bay / khu v?c</dt>
+                          <dt>Bay / khu vực</dt>
                           <dd>
                             {track.bayCode || track.bayName
                               ? [track.bayCode, track.bayName].filter(Boolean).join(" � ")
@@ -216,7 +216,7 @@ export default function GarageDashboardPage() {
                           </dd>
                         </div>
                         <div className="cp-track-meta-card">
-                          <dt>D? ki?n b�n giao</dt>
+                          <dt>Dự kiến bàn giao</dt>
                           <dd>{fmtDt(track.estimatedHandover || track.promisedHandoverTime)}</dd>
                         </div>
                       </dl>
@@ -226,10 +226,10 @@ export default function GarageDashboardPage() {
                           className="cp-btn"
                           to={`/my-vehicles/${track.vehicleId}?tab=history&serviceOrderId=${track.serviceOrderId}`}
                         >
-                          Xem l?ch s? l?nh n�y
+                          Xem lịch sử lệnh này
                         </Link>
                         <Link className="cp-btn cp-btn-ghost" to={`/my-vehicles/${track.vehicleId}`}>
-                          Chi ti?t xe
+                          Chi tiết xe
                         </Link>
                       </div>
                     </div>
@@ -242,11 +242,11 @@ export default function GarageDashboardPage() {
             <section className="cp-section">
               <div className="cp-section-head">
                 <div>
-                  <p className="cp-eyebrow">L?ch h?n</p>
-                  <h2 className="cp-section-title">L?ch h?n s?p t?i</h2>
+                  <p className="cp-eyebrow">Lịch hẹn</p>
+                  <h2 className="cp-section-title">Lịch hẹn sắp tới</h2>
                 </div>
                 <Link className="cp-btn cp-btn-ghost" to="/my-appointments">
-                  Xem t?t c?
+                  Xem tất cả
                 </Link>
               </div>
 
@@ -255,7 +255,7 @@ export default function GarageDashboardPage() {
                   <article key={appointment.id} className="cp-card cp-card--secondary cp-appt-card">
                     <strong className="cp-appt-branch">{appointment.branchName || "Chi nhánh"}</strong>
                     <p className="cp-muted">{fmtDt(appointment.startTime)}</p>
-                    <p className="cp-appt-plate">Bi?n s?: {appointment.vehiclePlate || "�"}</p>
+                    <p className="cp-appt-plate">Biển số: {appointment.vehiclePlate || "—"}</p>
                     <span className="cp-chip cp-chip--soft">{appointment.status || "�"}</span>
                   </article>
                 ))}
@@ -267,8 +267,8 @@ export default function GarageDashboardPage() {
             <section className="cp-section">
               <div className="cp-section-head">
                 <div>
-                  <p className="cp-eyebrow">Hoàn tất g?n nh?t</p>
-                  <h2 className="cp-section-title">L?n s?a ch?a g?n nh?t</h2>
+                  <p className="cp-eyebrow">Hoàn tất gần nhất</p>
+                  <h2 className="cp-section-title">Lần sửa chữa gần nhất</h2>
                 </div>
               </div>
               <article className="cp-card cp-card--secondary cp-last-service-card">
@@ -280,7 +280,7 @@ export default function GarageDashboardPage() {
                 </div>
                 {last.vehicleId ? (
                   <Link className="cp-btn cp-btn-ghost" to={`/my-vehicles/${last.vehicleId}`}>
-                    M? chi ti?t xe
+                    Mở chi tiết xe
                   </Link>
                 ) : null}
               </article>

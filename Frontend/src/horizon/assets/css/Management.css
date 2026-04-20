@@ -216,7 +216,7 @@ select.search-input:not([multiple]):focus {
 
 /* Light mode badge colors – clearly readable on white/light backgrounds */
 .badge-active, .badge-success { background: #d4f7ed; color: #055c45; }
-.badge-inactive, .badge-danger { background: #ffdeda; color: #8a2f2a; }
+.badge-inactive, .badge-?anger { background: #ffdeda; color: #8a2f2a; }
 .badge-info { background: #dbeafe; color: #1e4fb5; }
 .badge-warning { background: #ffeec8; color: #7d5108; }
 
@@ -224,7 +224,7 @@ select.search-input:not([multiple]):focus {
 .chakra-ui-dark .badge-active,
 .chakra-ui-dark .badge-success { background: rgba(72, 187, 120, 0.2); color: #68d391; }
 .chakra-ui-dark .badge-inactive,
-.chakra-ui-dark .badge-danger { background: rgba(245, 101, 101, 0.2); color: #fc8181; }
+.chakra-ui-dark .badge-?anger { background: rgba(245, 101, 101, 0.2); color: #fc8181; }
 .chakra-ui-dark .badge-info { background: rgba(66, 153, 225, 0.2); color: #63b3ed; }
 .chakra-ui-dark .badge-warning { background: rgba(237, 137, 54, 0.2); color: #f6ad55; }
 

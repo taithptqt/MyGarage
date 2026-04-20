@@ -6,7 +6,7 @@
 
 export const INSURANCE_CLAIM_MODE_OPTIONS = [
   { value: "LINKED", label: "Gara liên kết / bảo lãnh" },
-  { value: "SELF_PAY", label: "Kh�ch t? t�c, gara h? tr? h? so" },
+  { value: "SELF_PAY", label: "Khách tự túc, gara hỗ trợ hồ sơ" },
   { value: "ADVISOR", label: "Chưa rõ, cần tư vấn" },
 ];
 
@@ -61,8 +61,8 @@ function normalizeInsuranceFormMode(options) {
 
 function buildInsuranceIntakeNote(mode) {
   return mode === INSURANCE_FORM_MODE.BOOKING
-    ? "M?c mi?n thu?ng v� h�nh th?c x? l� s? du?c c? v?n x�c nh?n khi ti?p nh?n xe."
-    : "Thông tin b?o hi?m d� d? d? l? t�n ch?t ti?p nh?n v� tu v?n.";
+    ? "M?c mi?n th??ng v� h�nh th?c x? l� s? ??c c? v?n x�c nh?n khi ti?p nh?n xe."
+    : "Thông tin bảo hiểm đã đủ để lễ tân chốt tiếp nhận và tư vấn.";
 }
 
 function formatImageCount(count, singularLabel) {

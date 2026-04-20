@@ -103,8 +103,7 @@ public sealed class CustomerPortalService : ICustomerPortalService
                 .Where(d => orderIds.Contains(d.ServiceOrderId))
                 .Where(d =>
                     d.Status != null &&
-                    string.Equals(d.Status, nameof(ServiceOrderDetailStatusCode.WAITING_PARTS),
-                        StringComparison.OrdinalIgnoreCase))
+                    d.Status.ToUpper() == nameof(ServiceOrderDetailStatusCode.WAITING_PARTS))
                 .Select(d => d.ServiceOrderId)
                 .Distinct()
                 .ToListAsync(cancellationToken)).ToHashSet();
@@ -954,5 +953,4 @@ public sealed class CustomerPortalService : ICustomerPortalService
         }
     }
 }
-
 

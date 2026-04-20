@@ -13,6 +13,7 @@ using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
+using MyGarage.Models;
 
 namespace MyGarage.Controllers;
 
@@ -646,7 +647,7 @@ public class QuotationController : ControllerBase
                     CustomerPaid = x.CustomerCoveredAmount ?? x.FinalAmount,
                     TaxRate = x.TaxRate,
                     TaxAmount = x.TaxAmount,
-                    TaxableBase = Math.Max(0m, x.SubTotal - x.DiscountValue),
+                    TaxableBase = Math.Max(0m, x.SubTotal - ResolveQuotationDetailDiscountValue(x)),
                     IsMandatory = x.IsMandatory,
                     IsService = string.Equals(x.ItemType, "SERVICE", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(x.ItemType, "LABOR", StringComparison.OrdinalIgnoreCase),
@@ -1160,6 +1161,18 @@ public class QuotationController : ControllerBase
         }
 
         return "Cái";
+    }
+
+    private static decimal ResolveQuotationDetailDiscountValue(QuotationDetail detail)
+    {
+        if (detail == null)
+        {
+            return 0m;
+        }
+
+#pragma warning disable CS0618
+        return detail.DiscountValue < 0m ? 0m : detail.DiscountValue;
+#pragma warning restore CS0618
     }
 
     private static bool IsSupplementaryServiceSource(string? serviceSource)

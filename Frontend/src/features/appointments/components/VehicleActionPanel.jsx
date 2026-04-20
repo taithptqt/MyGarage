@@ -6,7 +6,7 @@ import { VIETNAM_VIN_PATTERN, VIETNAM_VIN_TITLE } from "@shared/utils/vinValidat
 function splitVehicleDisplayLabel(label) {
   const normalized = String(label || "").trim();
   if (!normalized) {
-    return { plate: "Không bi?n s?", descriptor: "" };
+    return { plate: "Không biển số", descriptor: "" };
   }
 
   const parts = normalized.split(" - ");
@@ -146,28 +146,28 @@ export default function VehicleActionPanel({
     <section className="vehicle-action-panel">
       <div className="vehicle-action-head">
         <h4>Danh sách xe</h4>
-        <p>Chọn nhi?u xe d? luu qua popup ho?c th?m xe m?i ngay t?i d?y.</p>
+        <p>Chọn nhiều xe đã lưu qua popup hoặc thêm xe mới ngay tại đây.</p>
       </div>
 
       <div className="vehicle-action-toolbar">
         <button type="button" className="ghost-btn" onClick={handleOpenSavedVehicles} disabled={!hasLinkedVehicles}>
-          Chọn xe d� luu l?i
+          Chọn xe đã lưu lại
         </button>
         {!isNewVehicleFormVisible ? (
           <button type="button" className="ghost-btn" onClick={handleOpenNewVehicle}>
-            Th�m xe m?i
+            Thêm xe mới
           </button>
         ) : null}
       </div>
-      {!hasLinkedVehicles ? <p className="booking-empty">Kh?ch h?ng chua c? xe d? luu, vui l?ng th?m xe m?i.</p> : null}
+      {!hasLinkedVehicles ? <p className="booking-empty">Khách hàng chưa có xe đã lưu, vui lòng thêm xe mới.</p> : null}
 
       {isOpen ? (
         <div className="vehicle-popup-backdrop" onClick={() => setIsOpen(false)}>
           <div ref={savedVehiclePopupRef} className="vehicle-popup-card" onClick={(event) => event.stopPropagation()}>
             <div className="vehicle-popup-head">
               <div className="vehicle-popup-head-text">
-                <h5>Chọn xe d� luu l?i</h5>
-                <p>Ch? hi?n th? c?c xe chua chọn.</p>
+                <h5>Chọn xe đã lưu lại</h5>
+                <p>Chỉ hiển thị các xe chưa chọn.</p>
               </div>
               <button type="button" className="vehicle-popup-close-btn" onClick={handleCloseSavedVehicles}>
                 Đồng
@@ -175,10 +175,10 @@ export default function VehicleActionPanel({
             </div>
             <div className="vehicle-popup-list">
               {(linkedVehicles || []).length === 0 ? (
-                <p className="booking-empty">Chua c� xe d� luu d? chọn.</p>
+                <p className="booking-empty">Chưa có xe đã lưu để chọn.</p>
               ) : selectableLinkedVehicles.length === 0 ? (
                 <p className="booking-empty">
-                  B?n d? chọn h?t xe d? luu. X?a xe kh?i danh s?ch b?n du?i d? chọn l?i.
+                  Bạn đã chọn hết xe đã lưu. Xóa xe khỏi danh sách bên dưới để chọn lại.
                 </p>
               ) : (
                 selectableLinkedVehicles.map((vehicle) => {
@@ -197,9 +197,9 @@ export default function VehicleActionPanel({
                       </span>
                       <div className="vehicle-popup-item-content">
                         <strong>{plate}</strong>
-                        <small>{descriptor || "Nh?n d? th�m xe v�o l?ch h?n"}</small>
+                        <small>{descriptor || "Nhấn để thêm xe vào lịch hẹn"}</small>
                       </div>
-                      <span className="vehicle-popup-item-action">Th�m xe</span>
+                      <span className="vehicle-popup-item-action">Thêm xe</span>
                     </button>
                   );
                 })
@@ -214,7 +214,7 @@ export default function VehicleActionPanel({
           <div className="form-grid step4-form-grid vehicle-new-form-grid">
             <label className="vehicle-new-field vehicle-new-field-plate">
               <span className="vehicle-new-label">
-                Bi?n s? xe m?i <em>*</em>
+                Biển số xe mới <em>*</em>
               </span>
               <input
                 type="text"
@@ -228,7 +228,7 @@ export default function VehicleActionPanel({
             </label>
             <label className="vehicle-new-field vehicle-new-field-brand">
               <span className="vehicle-new-label">
-                H�ng xe <em>*</em>
+                Hãng xe <em>*</em>
               </span>
               <select
                 value={draftVehicle.brandId}
@@ -237,7 +237,7 @@ export default function VehicleActionPanel({
                   onDraftChange("modelId", "");
                 }}
               >
-                <option value="">-- Chọn h�ng --</option>
+                <option value="">-- Chọn hãng --</option>
                 {(brands || []).map((brand) => (
                   <option key={extractField(brand, ["id", "Id"])} value={extractField(brand, ["id", "Id"])}>
                     {extractField(brand, ["name", "Name"], "")}
@@ -247,14 +247,14 @@ export default function VehicleActionPanel({
             </label>
             <label className="vehicle-new-field vehicle-new-field-model">
               <span className="vehicle-new-label">
-                D�ng xe <em>*</em>
+                Dòng xe <em>*</em>
               </span>
               <select
                 value={draftVehicle.modelId}
                 disabled={!draftVehicle.brandId}
                 onChange={(e) => onDraftChange("modelId", e.target.value)}
               >
-                <option value="">-- Chọn d�ng xe --</option>
+                <option value="">-- Chọn dòng xe --</option>
                 {modelOptions.map((model) => (
                   <option key={extractField(model, ["id", "Id"])} value={extractField(model, ["id", "Id"])}>
                     {extractField(model, ["modelName", "ModelName"], "")}
@@ -264,7 +264,7 @@ export default function VehicleActionPanel({
             </label>
             <div className="vehicle-new-row-bottom">
               <label className="vehicle-new-field vehicle-new-field-color">
-                M�u s?c (t�y chọn)
+                Màu sắc (tùy chọn)
                 <input
                   type="text"
                   value={draftVehicle.color || ""}
@@ -273,7 +273,7 @@ export default function VehicleActionPanel({
               </label>
               <label className="vehicle-new-field vehicle-new-field-year">
                 <span className="vehicle-new-label">
-                  Nam s?n xu?t <em>*</em>
+                  Năm sản xuất <em>*</em>
                 </span>
                 <select
                   value={draftVehicle.manufactureYear || ""}
@@ -288,7 +288,7 @@ export default function VehicleActionPanel({
                 </select>
               </label>
               <label className="vehicle-new-field vehicle-new-field-vin">
-                <span className="vehicle-new-label">VIN (t�y chọn)</span>
+                <span className="vehicle-new-label">VIN (tùy chọn)</span>
                 <input
                   type="text"
                   value={draftVehicle.vin}
@@ -304,10 +304,10 @@ export default function VehicleActionPanel({
 
           <div className="vehicle-action-toolbar">
             <button type="button" className="vehicle-add-btn" onClick={handleSubmitNewVehicle}>
-              Th�m xe m?i
+              Thêm xe mới
             </button>
             <button type="button" className="ghost-btn" onClick={handleCancelNewVehicle}>
-              H?y
+              Hủy
             </button>
           </div>
         </>
@@ -333,7 +333,7 @@ export default function VehicleActionPanel({
                   </span>
                 </button>
                 <button type="button" onClick={(event) => handleRemoveVehicle(event, vehicle.key)}>
-                  X�a
+                  Xóa
                 </button>
               </article>
             );
@@ -343,5 +343,4 @@ export default function VehicleActionPanel({
     </section>
   );
 }
-
 

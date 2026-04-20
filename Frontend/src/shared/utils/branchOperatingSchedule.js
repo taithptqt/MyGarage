@@ -55,7 +55,7 @@ export function getBranchClosedMessage(dateValue) {
   ) {
     return "Gara không hoạt động vào hôm nay, vui lòng quay lại vào hôm sau.";
   }
-  return "Gara không ho?t d?ng v�o ngày n�y, vui l�ng chọn ngày kh�c.";
+  return "Gara không ho?t ??ng v�o ngày n�y, vui l�ng chọn ngày kh�c.";
 }
 
 

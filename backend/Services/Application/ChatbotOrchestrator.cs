@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -432,7 +432,7 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
 
         var assistantReply = shouldHandoff
             ? handoffResult?.AssistantReply
-              ?? "Mình dã ghi nh?n yêu c?u g?p tu v?n viên. Hi?n k?t n?i chuy?n ti?p dang gián do?n, b?n vui lòng th? l?i sau ít phút."
+              ?? "Mình đã ghi nhận yêu cầu gặp tư vấn viên. Hiện kết nối chuyển tiếp đang gián đoạn, bạn vui lòng thử lại sau ít phút."
             : BuildAssistantReply(
                 guardrail,
                 detection,
@@ -590,23 +590,23 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
 
         if (guardrail.IsRejected)
         {
-            return guardrail.RejectionMessage ?? "Yêu c?u không h?p l?.";
+            return guardrail.RejectionMessage ?? "Yêu cầu không hợp lệ.";
         }
 
         if (detection.IsLowConfidence || intent == nameof(ChatbotIntentType.UNKNOWN))
         {
-            return "Mình h? tr? trong ph?m vi garage: tu v?n l?i xe, báo giá, d?t l?ch, don d?ch v?, ph? tùng và b?o hành. B?n mô t? tình tr?ng xe ho?c nhu c?u c? th? nhé.";
+            return "Mình hỗ trợ trong phạm vi garage: tư vấn lỗi xe, báo giá, đặt lịch, đơn dịch vụ, phụ tùng và bảo hành. Bạn mô tả tình trạng xe hoặc nhu cầu cụ thể nhé.";
         }
 
         return intent switch
         {
-            nameof(ChatbotIntentType.CONSULTATION) => "Mình dã hi?u b?n c?n tu v?n. Mình s? h?i nhanh vài thông tin xe d? dua khuy?n ngh? phù h?p.",
-            nameof(ChatbotIntentType.INQUIRY) => "Mình dã ghi nh?n câu h?i c?a b?n. Mình s? cung c?p thông tin chi ti?t theo yêu c?u.",
-            nameof(ChatbotIntentType.PURCHASE) => "Mình dã ghi nh?n nhu c?u mua hàng/ph? tùng. Mình s? xác nh?n s?n ph?m và báo giá phù h?p.",
-            nameof(ChatbotIntentType.SERVICE_ORDER) => "Mình dã nh?n yêu c?u liên quan don d?ch v?. Mình s? tra c?u tr?ng thái và thông tin liên quan.",
-            nameof(ChatbotIntentType.BOOKING) => "Mình dã ghi nh?n yêu c?u d?t l?ch. Mình s? ti?p t?c thu th?p thông tin d? d? xu?t khung gi?.",
-            nameof(ChatbotIntentType.HANDOFF) => "Mình dã nh?n thông tin. B?n vui lòng cung c?p thêm chi ti?t d? mình h? tr? chính xác hon.",
-            _ => "Mình dã nh?n thông tin. B?n vui lòng cung c?p thêm chi ti?t d? mình h? tr? chính xác hon."
+            nameof(ChatbotIntentType.CONSULTATION) => "Mình đã hiểu bạn cần tư vấn. Mình sẽ hỏi nhanh vài thông tin xe để đưa khuyến nghị phù hợp.",
+            nameof(ChatbotIntentType.INQUIRY) => "Mình đã ghi nhận câu hỏi của bạn. Mình sẽ cung cấp thông tin chi tiết theo yêu cầu.",
+            nameof(ChatbotIntentType.PURCHASE) => "Mình đã ghi nhận nhu cầu mua hàng/phụ tùng. Mình sẽ xác nhận sản phẩm và báo giá phù hợp.",
+            nameof(ChatbotIntentType.SERVICE_ORDER) => "Mình đã nhận yêu cầu liên quan đơn dịch vụ. Mình sẽ tra cứu trạng thái và thông tin liên quan.",
+            nameof(ChatbotIntentType.BOOKING) => "Mình đã ghi nhận yêu cầu đặt lịch. Mình sẽ tiếp tục thu thập thông tin để đề xuất khung giờ.",
+            nameof(ChatbotIntentType.HANDOFF) => "Mình đã nhận thông tin. Bạn vui lòng cung cấp thêm chi tiết để mình hỗ trợ chính xác hơn.",
+            _ => "Mình đã nhận thông tin. Bạn vui lòng cung cấp thêm chi tiết để mình hỗ trợ chính xác hơn."
         };
     }
 
@@ -709,7 +709,7 @@ public class ChatbotOrchestrator : IChatbotOrchestrator
             return null;
         }
 
-        return "Xin chào b?n, b?n dã d?n v?i MyGarage. Mình có th? h? tr? các nhu c?u trong garage nhu tu v?n b?o du?ng/s?a ch?a, báo giá, d?t l?ch, ki?m tra don d?ch v?, ph? tùng và b?o hành. B?n c?n h? tr? gì hôm nay?";
+        return "Xin chào bạn, bạn đã đến với MyGarage. Mình có thể hỗ trợ các nhu cầu trong garage như tư vấn bảo dưỡng/sửa chữa, báo giá, đặt lịch, kiểm tra đơn dịch vụ, phụ tùng và bảo hành. Bạn cần hỗ trợ gì hôm nay?";
     }
 
     private IReadOnlyList<ChatbotToolDefinition> GetLlmToolDefinitionsForIntent(string intent)

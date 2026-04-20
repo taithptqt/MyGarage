@@ -19,7 +19,7 @@ const ERRORS = {
   missingGuestModel: "Vui lòng chọn dòng xe cho khách vãng lai.",
   invalidCustomer: "Khách hàng không hợp lệ.",
   missingNewVehicleModel: "Vui lòng chọn dòng xe mới.",
-  missingVehicle: "Vui lòng chọn xe c?a khách.",
+  missingVehicle: "Vui lòng chọn xe của khách.",
   vehicleNotFound: "Không tìm thấy xe đã chọn.",
   invalidPackage: "Vui lòng chọn lại gói dịch vụ trước khi đặt lịch.",
 };

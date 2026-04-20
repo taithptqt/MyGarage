@@ -31,7 +31,7 @@ export default function StockAlertPage() {
       });
       setAlerts(res?.items ?? res ?? []);
     } catch (err) {
-      setError("Kh?ng th? t?i th?ng b?o kho.");
+      setError("Không thể tải thông báo kho.");
     } finally {
       setLoading(false);
     }
@@ -76,8 +76,8 @@ export default function StockAlertPage() {
     <div className="stka-page">
       <div className="stka-header">
         <div>
-          <h1 className="stka-title">?? Cầnh b?o T?n kho</h1>
-          <p className="stka-subtitle">Tr? tu? th?ng minh cầnh b?o t? d?ng c?c m?t h?ng cần nh?p b? sung.</p>
+          <h1 className="stka-title">⚠️ Cảnh báo Tồn kho</h1>
+          <p className="stka-subtitle">Trí tuệ thông minh cảnh báo tự động các mặt hàng cần nhập bổ sung.</p>
         </div>
         <button className="stka-btn stka-btn-primary" onClick={() => navigate("/inventory/purchase-orders/new")}>
           + L?p Đơn Đặt H�ng (PO)
@@ -119,10 +119,10 @@ export default function StockAlertPage() {
 
       <div className="stka-board">
         {loading ? (
-          <div className="stka-loading">?ang t?i cầnh b?o...</div>
+          <div className="stka-loading">Đang tải cảnh báo...</div>
         ) : currentList.length === 0 ? (
           <div className="stka-empty">
-            <span className="stka-empty-icon">?</span>
+            <span className="stka-empty-icon">✅</span>
             <p>Kh?ng c? cầnh b?o n?o trong m?c n?y.</p>
           </div>
         ) : (
@@ -132,8 +132,8 @@ export default function StockAlertPage() {
                 <tr>
                   <th>M� phụ tùng</th>
                   <th>T�n phụ tùng</th>
-                  <th className="t-right">T?n hi?n t?i</th>
-                  <th className="t-right">M?c t?i thi?u</th>
+                  <th className="t-right">Tồn hiện tại</th>
+                  <th className="t-right">Mức tối thiểu</th>
                   <th>Ng?y cầnh b?o</th>
                   <th>H�nh d?ng</th>
                 </tr>
@@ -159,7 +159,7 @@ export default function StockAlertPage() {
                             + T?o PO
                           </button>
                         ) : (
-                          <span className="stka-status badge-blue">Đang v? kho</span>
+                          <span className="stka-status badge-blue">Đang về kho</span>
                         )}
                       </td>
                     </tr>

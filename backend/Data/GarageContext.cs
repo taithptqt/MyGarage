@@ -2206,9 +2206,11 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.SubTotalAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning disable CS0618
             entity.Property(e => e.TotalDiscount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning restore CS0618
             entity.Property(e => e.TaxAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -2310,10 +2312,12 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.UnitPriceAtTime).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CostPriceAtTime).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.SubTotal).HasColumnType("decimal(18, 2)");
+#pragma warning disable CS0618
             entity.Property(e => e.DiscountPercentage).HasColumnType("decimal(7, 4)");
             entity.Property(e => e.DiscountValue)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning restore CS0618
             entity.Property(e => e.TaxRate).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.TaxAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
@@ -2789,9 +2793,11 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.TotalDepositedAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning disable CS0618
             entity.Property(e => e.TotalDiscount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning restore CS0618
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(getdate())");
 
             entity.ToTable("ServiceOrders", tb =>
@@ -2866,9 +2872,11 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.Property(e => e.DiscountAllocatedAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning disable CS0618
             entity.Property(e => e.DiscountValue)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+#pragma warning restore CS0618
             entity.Property(e => e.EstimatedMinutes);
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.GarageAbsorbedAmount)

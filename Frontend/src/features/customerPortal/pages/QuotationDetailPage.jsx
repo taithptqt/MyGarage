@@ -1,4 +1,4 @@
-﻿import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -190,7 +190,7 @@ export default function QuotationDetailPage() {
         const nextData = await getQuotationById(numericQuotationId);
         if (!cancelled) setQuotation(nextData || null);
       } catch (e) {
-        if (!cancelled) setError(e?.message || "Không t?i du?c b�o gi�.");
+        if (!cancelled) setError(e?.message || "Không t?i ??c b�o gi�.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -402,7 +402,7 @@ export default function QuotationDetailPage() {
 
   const handleCustomerDecision = async (approved) => {
     if (!numericQuotationId || !currentUserId) {
-      setError("Không x�c d?nh du?c t�i kho?n khách hàng d? x�c nh?n b�o gi�.");
+      setError("Không x�c d?nh ??c t�i kho?n khách hàng d? x�c nh?n b�o gi�.");
       return;
     }
 
@@ -417,7 +417,7 @@ export default function QuotationDetailPage() {
       });
       setQuotation(updated || quotation);
       setMessage(approved
-        ? "B?n d� duy?t b�o gi� th�nh c�ng. Xu?ng s? b?t d?u tri?n khai c�ng vi?c."
+        ? "B?n d� duy?t b�o gi� th�nh c�ng. Xu?ng s? b?t ??u tri?n khai c�ng vi?c."
         : "B?n d� t? ch?i b�o gi�. C? v?n dịch vụ s? li�n h? d? tu v?n phuong �n kh�c.");
     } catch (e) {
       setError(e?.message || "Không th? c?p nh?t quy?t d?nh b�o gi�.");
@@ -436,7 +436,7 @@ export default function QuotationDetailPage() {
               <p className="cp-eyebrow">Garage của tôi</p>
               <h1 className="cp-title">Xem b�o gi� dịch vụ</h1>
               <p className="cp-desc">
-                Chi ti?t h?ng m?c s?a ch?a, ph?n b?o hi?m h? tr? v� ph?n khách hàng cần thanh to�n du?c hi?n th? r� r�ng.
+                Chi ti?t h?ng m?c s?a ch?a, ph?n b?o hi?m h? tr? v� ph?n khách hàng cần thanh to�n ??c hi?n th? r� r�ng.
               </p>
             </div>
             <div className="cp-quote-hero-actions">
@@ -465,7 +465,7 @@ export default function QuotationDetailPage() {
                   <div className="cp-quote-meta-item"><dt>Lo?i b�o gi�</dt><dd>{readNonEmpty(quotation.quotationType)}</dd></div>
                   <div className="cp-quote-meta-item"><dt>Phiên bản</dt><dd>{readNonEmpty(quotation.versionNo)}</dd></div>
                   <div className="cp-quote-meta-item"><dt>Hiệu lực đến</dt><dd>{formatDate(quotation.validUntil)}</dd></div>
-                  <div className="cp-quote-meta-item"><dt>�p d?ng v�o phi?u</dt><dd>{quotation.isAppliedToServiceOrder ? "Đã �p d?ng" : "Chua �p d?ng"}</dd></div>
+                  <div className="cp-quote-meta-item"><dt>�p d?ng v�o phi?u</dt><dd>{quotation.isAppliedToServiceOrder ? "Đã �p d?ng" : "Ch?a �p d?ng"}</dd></div>
                   <div className="cp-quote-meta-item"><dt>Th?i di?m �p d?ng</dt><dd>{formatDate(quotation.appliedAt)}</dd></div>
                 </div>
 
@@ -506,7 +506,7 @@ export default function QuotationDetailPage() {
                 <div className="summary-details">
                   <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
 
-                  <div className="summary-subtitle">Ph�n t�ch gi� tr? (Chua VAT):</div>
+                  <div className="summary-subtitle">Ph�n t�ch gi� tr? (Ch?a VAT):</div>
                   <div className="summary-line">
                     <span className="summary-line-label">
                       <span className="summary-marker marker-labor" />

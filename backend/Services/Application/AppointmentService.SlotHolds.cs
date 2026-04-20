@@ -18,7 +18,7 @@ namespace MyGarage.Services
         public async Task<SlotHoldResponseDto> CreateSlotHoldAsync(SlotHoldRequestDto dto)
         {
             if (dto.BranchId <= 0)
-                throw new InvalidOperationException("Chi nh\u00E1nh kh\u00F4ng h\u1EE3p l\u1EC7.");
+                throw new InvalidOperationException("Chi nhánh không hợp lệ.");
 
             var opHour = await _context.BranchOperatingHours
                 .AsNoTracking()
@@ -42,7 +42,7 @@ namespace MyGarage.Services
             }
 
             if (holdEndTime <= dto.StartTime)
-                throw new InvalidOperationException("Khung gi\u1EDD gi\u1EEF ch\u1ED7 kh\u00F4ng h\u1EE3p l\u1EC7.");
+                throw new InvalidOperationException("Khung giờ giữ chỗ không hợp lệ.");
 
             var hold = _slotHoldService.CreateHold(
                 dto.BranchId,
@@ -106,7 +106,7 @@ namespace MyGarage.Services
 
             if (!_slotHoldService.TryGetActiveHold(dto.SlotHoldToken, out var hold) || hold == null)
             {
-                throw new InvalidOperationException("Gi\u1EEF ch\u1ED7 \u0111\u00E3 h\u1EBFt h\u1EA1n. Vui l\u00F2ng ch\u1ECDn l\u1EA1i khung gi\u1EDD.");
+                throw new InvalidOperationException("Giữ chỗ đã hết hạn. Vui lòng chọn lại khung giờ.");
             }
 
             var expectedFlow = flow == BookingFlowType.Flexible ? AppointmentBookingFlows.Flexible : AppointmentBookingFlows.Fixed;
@@ -114,7 +114,7 @@ namespace MyGarage.Services
                 !string.Equals(hold.BookingFlow, expectedFlow, StringComparison.OrdinalIgnoreCase) ||
                 hold.StartTime != requestedStartAt)
             {
-                throw new InvalidOperationException("Th\u00F4ng tin gi\u1EEF ch\u1ED7 kh\u00F4ng kh\u1EDBp v\u1EDBi l\u1ECBch \u0111ang \u0111\u1EB7t.");
+                throw new InvalidOperationException("Thông tin giữ chỗ không khớp với lịch đang đặt.");
             }
 
             // Với đặt lịch nhóm song song, mỗi xe có thể có thời lượng dịch vụ khác nhau.

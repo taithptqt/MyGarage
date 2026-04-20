@@ -14,16 +14,16 @@ import "./AuthPage.css";
 
 const AUTH_HIGHLIGHTS = [
   {
-    title: "�?t l?ch nhanh ch�ng",
-    description: "Ch? d?ng ch?n d?ch v?, chi nh?nh v? khung gi? ph? h?p ch? trong v?i ph?t.",
+    title: "Đặt lịch nhanh chóng",
+    description: "Chỉ cần chọn dịch vụ, chi nhánh và khung giờ phù hợp chỉ trong vài phút.",
   },
   {
-    title: "Theo d�i minh b?ch",
-    description: "C?p nh?t ti?n d? x? l� xe theo t?ng c�ng do?n ngay tr�n h? th?ng.",
+    title: "Theo dõi minh bạch",
+    description: "Cập nhật tiến độ xử lý xe theo từng công đoạn ngay trên hệ thống.",
   },
   {
-    title: "D? li?u t?p trung",
-    description: "Luu tr? l?ch s? s?a ch?a v? th�ng tin xe d? tu v?n ch?nh x?c hon m?i l?n quay l?i.",
+    title: "Dữ liệu tập trung",
+    description: "Lưu trữ lịch sử sửa chữa và thông tin xe để tư vấn chính xác hơn mỗi lần quay lại.",
   },
 ];
 
@@ -98,7 +98,7 @@ function AuthPage() {
   const isStaffPhoneRequest = pendingGoogleRole === GOOGLE_PHONE_ROLE.STAFF;
 
   useEffect(() => {
-    document.title = mode === "login" ? "�ang nh?p | MyGarage" : "�ang k� | MyGarage";
+    document.title = mode === "login" ? "Đăng nhập | MyGarage" : "Đăng ký | MyGarage";
   }, [mode]);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ function AuthPage() {
     setResult(null);
 
     if (!isLoginValid) {
-      setError("Th�ng tin dang nh?p chua h?p l?.");
+      setError("Thông tin đăng nhập chưa hợp lệ.");
       return;
     }
 
@@ -178,7 +178,7 @@ function AuthPage() {
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
-      setError(apiError?.message || "�ang nh?p th?t b?i.");
+      setError(apiError?.message || "Đăng nhập thất bại.");
     } finally {
       setLoading(false);
     }
@@ -190,7 +190,7 @@ function AuthPage() {
     setResult(null);
 
     if (!isRegisterValid) {
-      setError("Th�ng tin dang k� chua h?p l?.");
+      setError("Thông tin đăng ký chưa hợp lệ.");
       return;
     }
 
@@ -207,7 +207,7 @@ function AuthPage() {
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
-      setError(apiError?.message || "�ang k� th?t b?i.");
+      setError(apiError?.message || "Đăng ký thất bại.");
     } finally {
       setLoading(false);
     }
@@ -233,7 +233,7 @@ function AuthPage() {
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
-      const msg = apiError?.message || "�ang nh?p Google th?t b?i.";
+      const msg = apiError?.message || "Đăng nhập Google thất bại.";
       const normalizedMessage = String(msg).toUpperCase();
       if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
         setNeedGooglePhone(true);
@@ -257,7 +257,7 @@ function AuthPage() {
     if (event) event.preventDefault();
     if (!googlePhone.trim() || !pendingGoogleToken) return;
     if (!isValidVietnamesePhone(googlePhone.trim())) {
-      setError("S? di?n tho?i kh�ng d�ng d?nh d?ng (0xxxxxxxxx ho?c +84xxxxxxxxx).");
+      setError("Số điện thoại không đúng định dạng (0xxxxxxxxx hoặc +84xxxxxxxxx).");
       return;
     }
 
@@ -277,7 +277,7 @@ function AuthPage() {
       setResult(data);
       redirectAfterAuth(data);
     } catch (apiError) {
-      const msg = apiError?.message || "Li�n k?t s? di?n tho?i th?t b?i.";
+      const msg = apiError?.message || "Liên kết số điện thoại thất bại.";
       const normalizedMessage = String(msg).toUpperCase();
       if (normalizedMessage.includes(PHONE_REQUEST_CODE)) {
         setNeedGooglePhone(true);
@@ -310,8 +310,8 @@ function AuthPage() {
       <main className="page">
         <div className="auth-shell">
           <section className="card">
-            <h1>�ang ki?m tra phi�n dang nh?p...</h1>
-            <p className="subtitle">MyGarage dang d?ng b? tr?ng th�i t?i kho?n c?a b?n.</p>
+            <h1>Đang kiểm tra phiên đăng nhập...</h1>
+            <p className="subtitle">MyGarage đang đồng bộ trạng thái tài khoản của bạn.</p>
           </section>
         </div>
       </main>
@@ -328,15 +328,15 @@ function AuthPage() {
       <div className="auth-scene" aria-hidden="true">
         <div className="auth-floating-tag auth-floating-tag--left">
           <span>15.000+</span>
-          <p>Lu?t xe du?c ph?c v? m?i nam</p>
+          <p>Lượt xe được phục vụ mỗi năm</p>
         </div>
         <div className="auth-floating-tag auth-floating-tag--right">
           <span>4.9 / 5</span>
-          <p>��nh gi? trung b?nh t? kh�ch h�ng</p>
+          <p>Đánh giá trung bình từ khách hàng</p>
         </div>
         <div className="auth-floating-tag auth-floating-tag--bottom">
           <span>30+</span>
-          <p>K? thu?t vi�n nhi?u kinh nghi?m</p>
+          <p>Kỹ thuật viên nhiều kinh nghiệm</p>
         </div>
       </div>
 
@@ -345,12 +345,12 @@ function AuthPage() {
           <div className="auth-showcase-content">
             <p className="auth-showcase-kicker">MYGARAGE PREMIUM CARE</p>
             <h2>
-              N?n t?ng d?t l?ch v� theo d�i d?ch v? xe
-              theo chu?n gara chuy�n nghi?p
+              Nền tảng đặt lịch và theo dõi dịch vụ xe
+              theo chuẩn gara chuyên nghiệp
             </h2>
             <p>
-              �ang nh?p d? qu?n l� l?ch h?n, l?ch s? s?a ch?a v� nh?n
-              g?i � d?ch v? ph� h?p theo t�nh tr?ng xe c?a b?n.
+              Đăng nhập để quản lý lịch hẹn, lịch sử sửa chữa và nhận
+              gợi ý dịch vụ phù hợp theo tình trạng xe của bạn.
             </p>
 
             <div className="auth-showcase-features">
@@ -366,8 +366,8 @@ function AuthPage() {
         </section>
 
         <section className="card">
-          <h1>{mode === "login" ? "�ang nh?p" : "�ang k�"}</h1>
-          <p className="subtitle">M?t t�i kho?n s? d?ng t?t c? d?ch v? c?a MyGarage</p>
+          <h1>{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
+          <p className="subtitle">Một tài khoản sử dụng tất cả dịch vụ của MyGarage</p>
 
           {mode === "login" ? (
             <LoginForm
@@ -391,30 +391,30 @@ function AuthPage() {
 
           {locationDenied && !error && (
             <div className="location-hint">
-              M?o: B?t v? tr� d? h? th?ng uu ti?n g?i ? chi nh?nh g?n nh?t.
+              Mẹo: Bật vị trí để hệ thống ưu tiên gợi ý chi nhánh gần nhất.
             </div>
           )}
 
           <div className="footer-switcher">
             {mode === "login" ? (
               <>
-                B?n chua c� t�i kho?n,
+                Bạn chưa có tài khoản,
                 <span className="switcher-link" onClick={() => { setMode("register"); setError(""); }}>
-                  �ang k� ngay
+                  đăng ký ngay
                 </span>
               </>
             ) : (
               <>
-                B?n d� c� t�i kho?n?
+                Bạn đã có tài khoản?
                 <span className="switcher-link" onClick={() => { setMode("login"); setError(""); }}>
-                  �ang nh?p ngay
+                  đăng nhập ngay
                 </span>
               </>
             )}
           </div>
 
           <div className="divider">
-            <span>Ho?c dang nh?p v?i</span>
+            <span>Hoặc đăng nhập với</span>
           </div>
 
           <div className="google-login-btn-container">
@@ -428,15 +428,15 @@ function AuthPage() {
       {needGooglePhone && (
         <div className="phone-modal-backdrop" onClick={closeGooglePhoneModal}>
           <div className="phone-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{isStaffPhoneRequest ? "C?p nh?t s? di?n tho?i nh�n vi�n" : "Li?n k?t s? di?n tho?i"}</h3>
+            <h3>{isStaffPhoneRequest ? "Cập nhật số điện thoại nhân viên" : "Liên kết số điện thoại"}</h3>
             <p>
               {isStaffPhoneRequest
-                ? "T?i kho?n nh�n vi�n c?a b?n chua c? s? di?n tho?i. Vui l?ng nh?p d? ho�n t?t dang nh?p Google."
-                : "Ch�o m?ng! Vui l�ng nh?p s? di?n tho?i d? ch�ng t�i t�m l?ch s? s?a xe c?a b?n."}
+                ? "Tài khoản nhân viên của bạn chưa có số điện thoại. Vui lòng nhập để hoàn tất đăng nhập Google."
+                : "Chào mừng! Vui lòng nhập số điện thoại để chúng tôi tìm lịch sử sửa xe của bạn."}
             </p>
             <form onSubmit={handleGooglePhoneConfirm} className="form">
               <label htmlFor="google-phone">
-                {isStaffPhoneRequest ? "S? di?n tho?i nh�n vi�n" : "S? di?n tho?i"}
+                {isStaffPhoneRequest ? "Số điện thoại nhân viên" : "Số điện thoại"}
               </label>
               <input
                 id="google-phone"
@@ -445,16 +445,16 @@ function AuthPage() {
                 onChange={(e) => setGooglePhone(e.target.value)}
                 placeholder="0900000000"
                 pattern="^(0[0-9]{9}|\+84[0-9]{9})$"
-                title="S? di?n tho?i h?p l?: 0xxxxxxxxx ho?c +84xxxxxxxxx"
+                title="Số điện thoại hợp lệ: 0xxxxxxxxx hoặc +84xxxxxxxxx"
                 required
                 autoFocus
               />
               <div className="phone-modal-actions">
                 <button type="button" className="btn-cancel" onClick={closeGooglePhoneModal} disabled={loading}>
-                  H?y
+                  Hủy
                 </button>
                 <button type="submit" disabled={loading || !googlePhone.trim()}>
-                  {loading ? "�ang x? l?..." : isStaffPhoneRequest ? "C?p nh?t" : "X�c nh?n"}
+                  {loading ? "Đang xử lý..." : isStaffPhoneRequest ? "Cập nhật" : "Xác nhận"}
                 </button>
               </div>
             </form>
@@ -468,5 +468,3 @@ function AuthPage() {
 }
 
 export default AuthPage;
-
-

@@ -221,7 +221,7 @@ export default function AdminSalaryPage() {
 
     const staffId = toId(profileForm.staffId);
     if (!staffId) {
-      setError("Vui l�ng chọn nh�n s?.");
+      setError("Vui lòng chọn nhân sự.");
       return;
     }
 
@@ -251,10 +251,10 @@ export default function AdminSalaryPage() {
 
       if (editingProfileId) {
         await updateSalaryProfile(editingProfileId, payload);
-        toast({ status: "success", title: "Đã c?p nh?t bảng luong nh�n s?." });
+        toast({ status: "success", title: "Đã cập nhật bảng lương nhân sự." });
       } else {
         await createSalaryProfile(payload);
-        toast({ status: "success", title: "Đã t?o bảng luong nh�n s?." });
+        toast({ status: "success", title: "Đã tạo bảng lương nhân sự." });
       }
 
       resetProfileForm();
@@ -275,7 +275,7 @@ export default function AdminSalaryPage() {
     setError("");
     try {
       await deleteSalaryProfile(profileId);
-      toast({ status: "success", title: "Đã x�a bảng luong nh�n s?." });
+      toast({ status: "success", title: "Đã xóa bảng lương nhân sự." });
       if (editingProfileId === profileId) {
         resetProfileForm();
       }
@@ -369,13 +369,13 @@ export default function AdminSalaryPage() {
 
           <SimpleGrid columns={1} gap="10px">
             <FormControl>
-              <FormLabel fontSize="xs" mb="4px">Nh�n s?</FormLabel>
+              <FormLabel fontSize="xs" mb="4px">Nhân sự</FormLabel>
               <Select
                 value={profileForm.staffId}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, staffId: e.target.value }))}
                 isDisabled={!isAdminStaff}
               >
-                <option value="">Chọn nh�n s?</option>
+                <option value="">Chọn nhân sự</option>
                 {scopedStaffs.map((staff) => {
                   const id = toId(pick(staff, "id", "Id"));
                   if (!id) return null;
@@ -523,7 +523,7 @@ export default function AdminSalaryPage() {
 
       <Card p="20px">
         <Flex justify="space-between" align="center" mb="10px" wrap="wrap" gap="10px">
-          <Text color={textColor} fontWeight="700">Yêu cầu t?o luong t? k? to�n</Text>
+          <Text color={textColor} fontWeight="700">Yêu cầu tạo lương từ kế toán</Text>
           <Select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} maxW="200px">
             <option value="PENDING">PENDING</option>
             <option value="APPROVED">APPROVED</option>

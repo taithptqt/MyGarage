@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "../../admin/components/AdminModals";
 import { useSearch } from "@context/SearchContext";
 import { useBranch } from "../../../context/BranchContext";
@@ -776,7 +776,7 @@ export default function VehicleManagementPage({ section }) {
                   {selectedVehicle ? `Xe: ${selectedVehicle.vehicleCode} - ${selectedVehicle.licensePlate}` : "Chưa chọn xe"}
                 </p>
                 {statusHistoryItems.length === 0 ? (
-                  <div className="empty-state"><p>Chua c� l?ch s? trạng thái.</p></div>
+                  <div className="empty-state"><p>Ch?a c� l?ch s? trạng thái.</p></div>
                 ) : (
                   <div className="vehicle-status-timeline">
                     {statusHistoryItems.slice(0, 20).map((event, idx) => (
@@ -1000,7 +1000,7 @@ export default function VehicleManagementPage({ section }) {
                     </tbody>
                   </table>
                   <div className="alert alert-error" style={{ marginTop: '16px', margin: '16px 0 0 0' }}>
-                    Cầnh b�o nh�n s? b? qu� t?i n?u dang x? l� > 5 xe.
+                    Cầnh b�o nh�n s? b? qu� t?i n?u ?ang x? l� > 5 xe.
                   </div>
                 </div>
               </div>

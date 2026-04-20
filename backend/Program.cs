@@ -93,6 +93,7 @@ builder.Services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
 builder.Services.AddScoped<IServiceOrderCustomerLifecycleNotifier, ServiceOrderCustomerLifecycleNotifier>();
 builder.Services.AddScoped<IMaintenanceReminderService, MaintenanceReminderService>();
 builder.Services.AddScoped<IServiceOrderService, ServiceOrderService>();
+builder.Services.AddScoped<ITechnicianProductivityService, TechnicianProductivityService>();
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 builder.Services.AddScoped<IQuotationWorkflowService, QuotationWorkflowService>();
 

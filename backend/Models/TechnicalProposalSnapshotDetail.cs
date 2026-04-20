@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace MyGarage.Models;
 
@@ -8,7 +8,6 @@ public partial class TechnicalProposalSnapshotDetail
 
     public long SnapshotId { get; set; }
 
-    public long DiagnosisRecommendationId { get; set; }
 
     public string ItemType { get; set; } = null!;
 

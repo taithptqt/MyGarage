@@ -8,6 +8,8 @@ public partial class QuotationDiscount
 
     public long QuotationId { get; set; }
 
+    public long? QuotationDetailId { get; set; }
+
     public string DiscountType { get; set; } = null!;
 
     public long? CustomerTierId { get; set; }
@@ -33,6 +35,8 @@ public partial class QuotationDiscount
     public virtual CustomerTier? CustomerTier { get; set; }
 
     public virtual Quotation Quotation { get; set; } = null!;
+
+    public virtual QuotationDetail? QuotationDetail { get; set; }
 
     public virtual Voucher? Voucher { get; set; }
 }

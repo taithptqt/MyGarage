@@ -127,7 +127,7 @@ function getAttachmentMetaText(attachment) {
     return sizeText;
   }
 
-  return "T?p d? t?i xu?ng";
+  return "Tap de tai xuong";
 }
 
 function formatOrderCardDate(value) {
@@ -166,9 +166,9 @@ function MessengerOrderCard({ orderCard, onClick }) {
       type="button"
       className="messenger-order-card"
       onClick={() => onClick(orderCard)}
-      title="M? chi ti?t don h�ng"
+      title="Mo chi tiet don hang"
     >
-      <div className="messenger-order-card-head">B?n dang h?i thông tin v? don h�ng sau:</div>
+      <div className="messenger-order-card-head">Ban dang hoi thong tin ve don hang sau:</div>
       <div className="messenger-order-card-body">
         <div className="messenger-order-card-thumb">
           {thumbSrc ? (
@@ -193,7 +193,7 @@ function MessengerOrderCard({ orderCard, onClick }) {
           <strong>{orderCard.title}</strong>
           <p>{orderCard.subtitle}</p>
           <div className="messenger-order-card-line">
-            <span className="messenger-order-card-status">{orderCard.statusLabel || "Đang x? l�"}</span>
+            <span className="messenger-order-card-status">{orderCard.statusLabel || "Dang xu ly"}</span>
             {amountText ? <span className="messenger-order-card-amount">{amountText}</span> : null}
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function CustomerMessengerWidget() {
       }
     } catch (err) {
       if (!silent) {
-      setError(err.message || "Không t?i du?c h?i tho?i chat.");
+      setError(err.message || "Không t?i ??c h?i tho?i chat.");
       }
     } finally {
       if (!silent) {
@@ -354,7 +354,7 @@ export default function CustomerMessengerWidget() {
       }
     } catch (err) {
       if (!silent) {
-      setError(err.message || "Không t?i du?c tin nh?n.");
+      setError(err.message || "Không t?i ??c tin nh?n.");
       }
     } finally {
       if (!silent) {
@@ -373,7 +373,7 @@ export default function CustomerMessengerWidget() {
       const items = getItems(data).map((item) => getOrderCardFromMessage({ orderCard: item })).filter(Boolean);
       setConversationOrders(items);
     } catch (err) {
-      setOrderPickerError(err.message || "Kh?ng t?i du?c danh s?ch don h?ng.");
+      setOrderPickerError(err.message || "Khong tai duoc danh sach don hang.");
       setConversationOrders([]);
     } finally {
       setLoadingOrders(false);
@@ -485,7 +485,7 @@ export default function CustomerMessengerWidget() {
       }
       await loadMessages(conversationId, { silent: true });
     } catch (err) {
-      setError(err.message || "G?i tin nh?n th?t b?i.");
+      setError(err.message || "Gui tin nhan that bai.");
     } finally {
       setSending(false);
     }
@@ -495,7 +495,7 @@ export default function CustomerMessengerWidget() {
     if (!conversationId) return;
     const payload = buildOrderCardMessagePayload(orderCard);
     if (!payload) {
-      setOrderPickerError("Không t?o du?c n?i dung don h�ng.");
+      setOrderPickerError("Khong tao duoc noi dung don hang.");
       return;
     }
 
@@ -507,7 +507,7 @@ export default function CustomerMessengerWidget() {
       setOrderPickerOpen(false);
       await loadMessages(conversationId, { silent: true });
     } catch (err) {
-      setOrderPickerError(err.message || "G?i don h�ng th?t b?i.");
+      setOrderPickerError(err.message || "Gui don hang that bai.");
     } finally {
       setSending(false);
     }
@@ -546,28 +546,28 @@ export default function CustomerMessengerWidget() {
     const onlyFiles = pickerType === "file";
     for (const file of picked) {
       if (!isSupportedAttachmentFile(file)) {
-        setError(`T?p ${file.name} không du?c h? tr?.`);
+        setError(`Tep ${file.name} khong duoc ho tro.`);
         continue;
       }
 
       const fileIsImage = isImageFile(file);
       if (onlyImages && !fileIsImage) {
-        setError("N�t ?nh ch? nh?n t?p ?nh.");
+        setError("Nut anh chi nhan tep anh.");
         continue;
       }
 
       if (onlyFiles && fileIsImage) {
-        setError("N�t file ch? nh?n t�i li?u.");
+        setError("Nut file chi nhan tai lieu.");
         continue;
       }
 
       if (file.size > CHAT_MAX_ATTACHMENT_SIZE_BYTES) {
-        setError(`T?p ${file.name} vu?t qu? ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
+        setError(`Tep ${file.name} vuot qua ${CHAT_MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024)}MB.`);
         continue;
       }
 
       if (next.length >= CHAT_MAX_ATTACHMENT_COUNT) {
-        setError(`T?i da ${CHAT_MAX_ATTACHMENT_COUNT} t?p m?i l?n g?i.`);
+        setError(`Toi da ${CHAT_MAX_ATTACHMENT_COUNT} tep moi lan gui.`);
         break;
       }
 
@@ -604,8 +604,8 @@ export default function CustomerMessengerWidget() {
             <div className="messenger-header-profile">
               <span className="messenger-header-avatar">LT</span>
               <div>
-                <strong>L? t?n MyGarage</strong>
-                <small>Đang ho?t d?ng</small>
+                <strong>Lễ tân MyGarage</strong>
+                <small>Đang hoạt động</small>
               </div>
             </div>
 
@@ -614,8 +614,8 @@ export default function CustomerMessengerWidget() {
                 type="button"
                 className="messenger-icon-btn messenger-icon-btn-minimize"
                 onClick={() => setIsOpen(false)}
-                aria-label="Thu nh? khung chat"
-                title="Thu nh?"
+                aria-label="Thu nho khung chat"
+                title="Thu nhỏ"
               >
                 <Minus size={20} strokeWidth={2.6} />
               </button>
@@ -626,10 +626,10 @@ export default function CustomerMessengerWidget() {
 
           <div ref={messageListRef} className="messenger-message-list">
             {loadingConversation || loadingMessages ? (
-              <p className="messenger-empty">Đang t?i...</p>
+              <p className="messenger-empty">Dang tai...</p>
             ) : null}
             {!loadingConversation && !loadingMessages && messages.length === 0 ? (
-              <p className="messenger-empty">Xin ch?o, d? l?i l?i nh?n v? l? t?n s? ph?n h?i ngay.</p>
+              <p className="messenger-empty">Xin chào, để lại lời nhắn và lễ tân sẽ phản hồi ngay.</p>
             ) : null}
 
             {messages.map((message, index) => {
@@ -728,7 +728,7 @@ export default function CustomerMessengerWidget() {
                       <FileText size={16} />
                       <div>
                         <strong>{item.file.name}</strong>
-                        <small>{formatAttachmentSize(item.file.size) || "t?p"}</small>
+                        <small>{formatAttachmentSize(item.file.size) || "tep"}</small>
                       </div>
                     </div>
                   )}
@@ -736,7 +736,7 @@ export default function CustomerMessengerWidget() {
                     type="button"
                     className="messenger-preview-remove-btn"
                     onClick={() => removeSelectedFile(item.id)}
-                    aria-label="X�a ?nh"
+                    aria-label="Xoa anh"
                   >
                     <X size={12} />
                   </button>
@@ -748,12 +748,12 @@ export default function CustomerMessengerWidget() {
           {orderPickerOpen ? (
             <div className="messenger-order-picker">
               <div className="messenger-order-picker-head">
-                <strong>Chọn don h�ng d? g?i</strong>
+                <strong>Chon don hang de gui</strong>
                 <button
                   type="button"
                   className="messenger-icon-btn"
                   onClick={() => setOrderPickerOpen(false)}
-                  aria-label="??ng danh s?ch don h?ng"
+                  aria-label="Dong danh sach don hang"
                 >
                   <X size={12} />
                 </button>
@@ -761,7 +761,7 @@ export default function CustomerMessengerWidget() {
               {orderPickerError ? <div className="messenger-error">{orderPickerError}</div> : null}
               {loadingOrders ? <p className="messenger-empty">Đang t?i don h�ng...</p> : null}
               {!loadingOrders && conversationOrders.length === 0 ? (
-                <p className="messenger-empty">Không c� don h�ng n�o ph� h?p d? g?i.</p>
+                <p className="messenger-empty">Khong co don hang nao phu hop de gui.</p>
               ) : null}
               {!loadingOrders && conversationOrders.length > 0 ? (
                 <div className="messenger-order-picker-list">
@@ -811,7 +811,7 @@ export default function CustomerMessengerWidget() {
               className="messenger-attach-btn image"
               onClick={() => imageInputRef.current?.click()}
               disabled={!conversationId || sending}
-              aria-label="Chọn ?nh"
+              aria-label="Chon anh"
             >
               <ImagePlus size={16} />
             </button>
@@ -820,7 +820,7 @@ export default function CustomerMessengerWidget() {
               className="messenger-attach-btn file"
               onClick={() => fileInputRef.current?.click()}
               disabled={!conversationId || sending}
-              aria-label="Chọn t?p d�nh k�m"
+              aria-label="Chon tep dinh kem"
             >
               <Paperclip size={16} />
             </button>
@@ -829,7 +829,7 @@ export default function CustomerMessengerWidget() {
               className="messenger-attach-btn order"
               onClick={toggleOrderPicker}
               disabled={!conversationId || sending}
-              aria-label="G?i th? don h�ng"
+              aria-label="Gui the don hang"
             >
               <ShoppingBag size={16} />
             </button>
@@ -845,7 +845,7 @@ export default function CustomerMessengerWidget() {
               type="submit"
               className="messenger-send-btn"
               disabled={!conversationId || sending || (!composeText.trim() && selectedFiles.length === 0)}
-              aria-label="G?i tin nh?n"
+              aria-label="Gui tin nhan"
             >
               <SendHorizontal size={16} />
             </button>
@@ -862,20 +862,20 @@ export default function CustomerMessengerWidget() {
                 type="button"
                 className="messenger-icon-btn"
                 onClick={() => setOrderPreview(null)}
-                aria-label="Đồng chi ti?t don h�ng"
+                aria-label="Dong chi tiet don hang"
               >
                 <X size={12} />
               </button>
             </header>
             <p>{orderPreview.subtitle}</p>
             <div className="messenger-order-modal-grid">
-              <span>Lo?i</span>
+              <span>Loai</span>
               <strong>{getOrderTypeLabel(orderPreview.orderType)}</strong>
               <span>M� don</span>
               <strong>{orderPreview.orderCode}</strong>
-              <span>Tr?ng th?i</span>
+              <span>Trang thai</span>
               <strong>{orderPreview.statusLabel}</strong>
-              <span>Tổng ti?n</span>
+              <span>Tong tien</span>
               <strong>{formatOrderAmount(orderPreview.totalAmount) || "--"}</strong>
               <span>Chi nhánh</span>
               <strong>{orderPreview.branchName || "--"}</strong>
@@ -891,7 +891,7 @@ export default function CustomerMessengerWidget() {
                   navigate(target);
                 }}
               >
-                M? trang chi ti?t
+                Mo trang chi tiet
               </button>
             ) : null}
           </div>
@@ -902,7 +902,7 @@ export default function CustomerMessengerWidget() {
         type="button"
         className="messenger-floating-btn"
         onClick={() => setIsOpen(true)}
-        aria-label="M? chat v?i l? t?n"
+        aria-label="Mở chat với lễ tân"
       >
         <MessengerBadgeIcon className="messenger-floating-icon" aria-hidden="true" />
       </button>

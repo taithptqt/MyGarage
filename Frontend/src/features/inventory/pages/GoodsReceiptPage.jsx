@@ -40,7 +40,7 @@ export default function GoodsReceiptPage() {
       const res = await request({ url: "/api/goods-receipts", method: "GET", params: { branchId: user?.branchId } });
       setGrns(res?.items ?? res ?? []);
     } catch (e) {
-      setListError("Kh?ng th? t?i danh s?ch phi?u nh?p.");
+      setListError("Không thể tải danh sách phiếu nhập.");
     } finally {
       setLoadingList(false);
     }
@@ -121,7 +121,7 @@ export default function GoodsReceiptPage() {
     return (
       <div className="grn-page">
         <div className="grn-header">
-          <h1 className="grn-title">?? T?o Phi?u Nh?p Kho (GRN)</h1>
+          <h1 className="grn-title">📥 Tạo Phiếu Nhập Kho (GRN)</h1>
           <button className="grn-btn grn-btn-ghost" onClick={() => setSearchParams(new URLSearchParams())}>🔙 Xem danh sách</button>
         </div>
 
@@ -130,32 +130,32 @@ export default function GoodsReceiptPage() {
           
           <div className="grn-grid">
             <div className="grn-form-group">
-              <label>Đơn Đặt H�ng (PO) d� duy?t</label>
+              <label>Đơn Đặt Hàng (PO) đã duyệt</label>
               <select value={form.purchaseOrderId} onChange={e => setForm(f => ({ ...f, purchaseOrderId: e.target.value }))} required>
-                <option value="">-- Chọn don d?t h�ng --</option>
+                <option value="">-- Chọn đơn đặt hàng --</option>
                 {approvedPos.map(p => <option key={p.id} value={p.id}>#{p.code || p.id} - {p.supplierName || p.supplier?.name}</option>)}
               </select>
             </div>
             <div className="grn-form-group span-2">
-              <label>Ghi ch� nh?p kho</label>
-              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nh?p ghi ch� t�nh tr?ng h�ng, h�a don..." />
+              <label>Ghi chú nhập kho</label>
+              <input type="text" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nhập ghi chú tình trạng hàng, hóa đơn..." />
             </div>
           </div>
 
           {selectedPo && (
             <div className="grn-po-info">
-              <span>Đang nh?p cho <strong>#{selectedPo.code || selectedPo.id}</strong></span>
+              <span>Đang nhập cho <strong>#{selectedPo.code || selectedPo.id}</strong></span>
               <span>NCC: <strong>{selectedPo.supplierName || selectedPo.supplier?.name}</strong></span>
             </div>
           )}
 
-          <h3 className="grn-section-title">Chi ti?t h�ng h�a nh?p kho</h3>
+          <h3 className="grn-section-title">Chi tiết hàng hóa nhập kho</h3>
           {form.items.length === 0 ? (
-            <div className="grn-empty-list">Vui l�ng chọn PO d? hi?n th? h�ng h�a</div>
+            <div className="grn-empty-list">Vui lòng chọn PO để hiển thị hàng hóa</div>
           ) : (
             <div className="grn-items">
               <div className="grn-items-header">
-                <span>S?n ph?m</span><span>SL Đặt</span><span>SL Th?c Nh?n</span>
+                <span>Sản phẩm</span><span>SL Đặt</span><span>SL Thực Nhận</span>
               </div>
               {form.items.map((item, idx) => {
                 const isOver = item.receivedQty > item.orderedQty;
@@ -171,7 +171,7 @@ export default function GoodsReceiptPage() {
                         onChange={e => updateItem(idx, Number(e.target.value))} 
                         required 
                       />
-                      {isOver && <div className="grn-warn-text">?? Nh?n l? SL d?t</div>}
+                      {isOver && <div className="grn-warn-text">⚠️ Nhận lố SL đặt</div>}
                     </div>
                   </div>
                 )
@@ -194,24 +194,24 @@ export default function GoodsReceiptPage() {
     <div className="grn-page">
       <div className="grn-header">
         <div>
-          <h1 className="grn-title">?? Phi?u Nh?p Kho (GRN)</h1>
-          <p className="grn-subtitle">L?ch s? nh?n h?ng h?a nh?p v?o kho chi nh?nh.</p>
+          <h1 className="grn-title">📦 Phiếu Nhập Kho (GRN)</h1>
+          <p className="grn-subtitle">Lịch sử nhận hàng hóa nhập vào kho chi nhánh.</p>
         </div>
         <button className="grn-btn grn-btn-primary" onClick={() => setSearchParams(new URLSearchParams({ action: "new" }))}>
-          + Nh?p kho t? PO
+          + Nhập kho từ PO
         </button>
       </div>
 
       <div className="grn-board">
         {loadingList ? <div className="grn-loading">Đang t?i...</div> : 
-         grns.length === 0 ? <div className="grn-empty">Chua c� dữ liệu phi?u nh?p.</div> : (
+         grns.length === 0 ? <div className="grn-empty">Ch?a c� dữ liệu phi?u nh?p.</div> : (
            <table className="grn-table">
              <thead>
                <tr>
-                 <th>M� Phi?u Nh?p</th>
-                 <th>Ngày Nh?p</th>
+                 <th>Mã Phiếu Nhập</th>
+                 <th>Ngày Nhập</th>
                  <th>M� PO</th>
-                 <th>Ngu?i Nh?n</th>
+                 <th>Người Nhận</th>
                </tr>
              </thead>
              <tbody>

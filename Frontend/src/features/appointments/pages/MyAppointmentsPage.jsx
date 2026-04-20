@@ -27,7 +27,7 @@ function AppointmentCard({ item, cancelling, openCancelPopup, inGroup = false })
     <article className={`my-appt-card ${inGroup ? "my-appt-card-in-group" : ""}`}>
       <div className="my-appt-card-main">
         <div className="my-appt-card-head">
-          <h3>{item.branchName || "Chi nh�nh chua x�c d?nh"}</h3>
+          <h3>{item.branchName || "Chi nhánh chưa xác định"}</h3>
           <span className={`my-appt-status ${status.tone}`}>{status.label}</span>
         </div>
         <div className="my-appt-card-grid">
@@ -117,6 +117,10 @@ export default function MyAppointmentsPage() {
     setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
   }, [searchParams]);
 
+  useEffect(() => {
+    document.title = "Lịch hẹn của tôi | MyGarage";
+  }, []);
+
   const handleChangeTab = (nextTab) => {
     setActiveTab(nextTab);
     const nextParams = new URLSearchParams(searchParams);
@@ -149,10 +153,10 @@ export default function MyAppointmentsPage() {
         <section className="my-appt-content">
           <header className="my-appt-head">
             <div>
-              <p className="my-appt-eyebrow">Trung t�m l?ch h?n</p>
+              <p className="my-appt-eyebrow">Trung tâm lịch hẹn</p>
               <h1>Lịch hẹn của tôi</h1>
               <p className="my-appt-description">
-                Theo d�i trạng thái l?ch h?n, thông tin xe v� khung gi? x? l� trong m?t m�n h�nh.
+                Theo dõi trạng thái lịch hẹn, thông tin xe và khung giờ xử lý trong một màn hình.
               </p>
             </div>
             <Link to="/booking/form" className="my-appt-primary-btn">
@@ -170,7 +174,7 @@ export default function MyAppointmentsPage() {
               <strong>{stats.upcoming}</strong>
             </article>
             <article className="my-appt-stat-card">
-              <span>Đã x�c nh?n</span>
+              <span>Đã xác nhận</span>
               <strong>{stats.confirmed}</strong>
             </article>
             <article className="my-appt-stat-card">
@@ -214,8 +218,8 @@ export default function MyAppointmentsPage() {
               className="my-appt-search"
               placeholder={
                 isGroupTab
-                  ? "T�m theo m� nh�m, chi nh�nh, bi?n s?, dịch vụ..."
-                  : "T�m theo chi nh�nh, bi?n s?, dịch vụ..."
+                  ? "Tìm theo mã nhóm, chi nhánh, biển số, dịch vụ..."
+                  : "Tìm theo chi nhánh, biển số, dịch vụ..."
               }
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
@@ -303,7 +307,7 @@ export default function MyAppointmentsPage() {
       {cancelTarget && (
         <div className="cancel-overlay" onClick={closeCancelPopup}>
           <div className="cancel-popup" onClick={(event) => event.stopPropagation()}>
-            <h3>Xác nhận h?y l?ch h?n</h3>
+            <h3>Xác nhận hủy lịch hẹn</h3>
             <p className="my-appt-cancel-desc">
               Bạn có chắc muốn hủy lịch tại <strong>{cancelTarget.branchName}</strong> vào{" "}
               <strong>{formatDate(cancelTarget.startTime)}</strong>,{" "}
@@ -314,7 +318,7 @@ export default function MyAppointmentsPage() {
               <textarea
                 id="cancel-reason"
                 className="cancel-reason-input"
-                placeholder="V� d?: thay d?i k? ho?ch c� nh�n"
+                placeholder="Ví dụ: thay đổi kế hoạch cá nhân"
                 value={cancelReason}
                 onChange={(event) => setCancelReason(event.target.value)}
                 rows={3}
@@ -326,7 +330,7 @@ export default function MyAppointmentsPage() {
                 Quay lại
               </button>
               <button type="button" className="btn-popup-danger" onClick={handleConfirmCancel} disabled={cancelling}>
-                {cancelling ? "Đang h?y..." : "Xác nhận h?y"}
+                {cancelling ? "Đang hủy..." : "Xác nhận hủy"}
               </button>
             </div>
           </div>
@@ -335,5 +339,4 @@ export default function MyAppointmentsPage() {
     </div>
   );
 }
-
 

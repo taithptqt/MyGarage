@@ -89,7 +89,7 @@ export default function CustomerChatPage() {
           null;
         setSelectedConversationId(wantedId);
       } catch (err) {
-      setError(err.message || "Không t?i du?c danh sách h?i tho?i.");
+      setError(err.message || "Không t?i ??c danh sách h?i tho?i.");
       } finally {
         setLoadingConversations(false);
       }

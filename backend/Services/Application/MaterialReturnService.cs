@@ -32,7 +32,10 @@ namespace MyGarage.Services
 
         public async Task<MaterialReturn> ProcessReturnAsync(MaterialReturnCreateDto dto)
         {
-            if (dto.ReturnedQuantity <= 0)
+            ArgumentNullException.ThrowIfNull(dto);
+
+            var returnedQuantity = dto.ReturnedQuantity ?? 0m;
+            if (returnedQuantity <= 0)
                 throw new InvalidOperationException("Số lượng trả phải lớn hơn 0.");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -60,7 +63,7 @@ namespace MyGarage.Services
                     ServiceOrderId = detail.ServiceOrderDetail?.ServiceOrderId ?? dto.ServiceOrderId,
                     MaterialRequestDetailId = dto.MaterialRequestDetailId,
                     ProductId = detail.ProductId,
-                    ReturnedQuantity = dto.ReturnedQuantity.Value,
+                    ReturnedQuantity = returnedQuantity,
                     ItemCondition = dto.ItemCondition ?? "GOOD",
                     ReturnedByStaffId = dto.ReturnedByStaffId,
                     ReceivedByStaffId = dto.ReceivedByStaffId,
@@ -112,7 +115,7 @@ namespace MyGarage.Services
                         if (sod.IssuedQuantity < 0) sod.IssuedQuantity = 0;
                         
                         // Cập nhật SubTotal và FinalAmount nếu cần
-                        sod.Quantity = sod.IssuedQuantity.Value; 
+                        sod.Quantity = sod.IssuedQuantity ?? 0m;
                         sod.SubTotal = sod.Quantity * sod.UnitPriceAtTime;
                         sod.TaxAmount = sod.SubTotal * (sod.TaxRate / 100m);
                         sod.FinalAmount = sod.SubTotal + sod.TaxAmount;
