@@ -115,7 +115,7 @@ namespace MyGarage.Services
             };
 
             _context.Appointments.Add(appointment);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             await PersistAppointmentInsuranceAssetsAsync(appointment, dto);
 

@@ -29,16 +29,13 @@ namespace MyGarage.Services
 
         private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
             }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }
-
 

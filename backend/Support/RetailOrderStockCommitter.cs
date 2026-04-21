@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 
@@ -33,7 +34,7 @@ public static class RetailOrderStockCommitter
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+            await using var tx = await TryBeginTransactionAsync(db, cancellationToken);
             try
             {
                 var existingOutByProduct = await db.StockTransactions
@@ -60,7 +61,10 @@ public static class RetailOrderStockCommitter
 
                 if (targetProductIds.Count == 0)
                 {
-                    await tx.CommitAsync(cancellationToken);
+                    if (tx != null)
+                    {
+                        await tx.CommitAsync(cancellationToken);
+                    }
                     return;
                 }
 
@@ -113,14 +117,32 @@ public static class RetailOrderStockCommitter
                 }
 
                 await db.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
+                if (tx != null)
+                {
+                    await tx.CommitAsync(cancellationToken);
+                }
             }
             catch
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx != null)
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                }
                 throw;
             }
         });
+    }
+
+    private static async Task<IDbContextTransaction?> TryBeginTransactionAsync(
+        IGarageContext db,
+        CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await db.Database.BeginTransactionAsync(cancellationToken);
     }
 
     private static List<Inventory> SelectWarehouseCandidates(IEnumerable<Inventory> rows)

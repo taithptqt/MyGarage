@@ -2,6 +2,7 @@ using MyGarage.Models;
 using MyGarage.Interfaces;
 using MyGarage.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Common;
 using MyGarage.Enums;
 using MyGarage.DTOs.Requests;
@@ -22,8 +23,7 @@ namespace MyGarage.Services
             var inspection = await _context.QcInspections.FirstOrDefaultAsync(x => x.Id == id);
             if (inspection == null) return false;
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            await ExecuteInTransactionAsync(async () =>
             {
                 inspection.Status = nameof(QcInspectionStatusCode.PASS);
                 inspection.InspectedAt = VietnamTime.Now;
@@ -44,14 +44,9 @@ namespace MyGarage.Services
                 }
 
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            });
+
+            return true;
         }
 
         public async Task<bool> FailAsync(long id, QcFailRequestDto request)
@@ -59,8 +54,7 @@ namespace MyGarage.Services
             var inspection = await _context.QcInspections.FirstOrDefaultAsync(x => x.Id == id);
             if (inspection == null) return false;
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            await ExecuteInTransactionAsync(async () =>
             {
                 inspection.Status = nameof(QcInspectionStatusCode.FAIL);
                 inspection.InspectedAt = VietnamTime.Now;
@@ -80,14 +74,33 @@ namespace MyGarage.Services
                 }
 
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return true;
-            }
-            catch
+            });
+
+            return true;
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                await transaction.RollbackAsync();
-                throw;
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
             }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

@@ -641,19 +641,17 @@ public sealed class CustomerAutomationJobProcessor : ICustomerAutomationJobProce
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            if (_context.Database.IsRelational())
-            {
-                return await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-            }
-
-            return await _context.Database.BeginTransactionAsync(cancellationToken);
-        }
-        catch (InvalidOperationException)
+        if (_context.Database.CurrentTransaction != null)
         {
             return null;
         }
+
+        if (_context.Database.IsRelational())
+        {
+            return await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        }
+
+        return await _context.Database.BeginTransactionAsync(cancellationToken);
     }
 
     private static string BuildMaintenanceNotificationKey(long customerId, long vehicleId, string dedupeToken)

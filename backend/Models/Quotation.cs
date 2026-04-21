@@ -44,8 +44,6 @@ public partial class Quotation
 
     public long? ServiceAdvisorId { get; set; }
 
-    public long? SourceSnapshotId { get; set; }
-
     public long? ApprovedBy { get; set; }
 
     public DateTime? ApprovedAt { get; set; }
@@ -110,8 +108,6 @@ public partial class Quotation
     public virtual Staff? UpdatedByNavigation { get; set; }
 
     public virtual ICollection<QuotationDetail> QuotationDetails { get; set; } = new List<QuotationDetail>();
-
-    public virtual TechnicalProposalSnapshot? SourceSnapshot { get; set; }
 
     public virtual ICollection<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; } = new List<MandatoryOverrideRequest>();
 

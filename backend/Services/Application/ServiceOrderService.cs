@@ -444,7 +444,7 @@ namespace MyGarage.Services
                 order.FinalAmount = subTotal + taxAmount - ResolveServiceOrderTotalDiscountAmount(order);
 
                 _customerLifecycleNotifier.EnqueueAfterStatusChange(order, previousLifecycleStatus);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 await TryCreateServiceAdvisorCommissionOnClosureAsync(order, previousLifecycleStatus, actorStaffId);
                 await TryScheduleMaintenanceReminderAsync(order, previousLifecycleStatus, actorStaffId);
                 await ReplaceServiceOrderInsuranceAssetsAsync(
@@ -487,7 +487,7 @@ namespace MyGarage.Services
                 UpdatedAt = now
             });
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task<ServiceOrder> PrepareWorkshopOrderEntityAsync(
@@ -692,7 +692,7 @@ namespace MyGarage.Services
                 {
                     existing.UpdatedAt = VietnamTime.Now;
                     existing.UpdatedBy = actorStaffId;
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
 
                 return existing.Id;
@@ -713,7 +713,7 @@ namespace MyGarage.Services
             };
 
             _context.Customers.Add(created);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return created.Id;
         }
 
@@ -780,7 +780,7 @@ namespace MyGarage.Services
                 {
                     existing.UpdatedAt = VietnamTime.Now;
                     existing.UpdatedBy = actorStaffId;
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
 
                 return existing.Id;
@@ -802,7 +802,7 @@ namespace MyGarage.Services
             };
 
             _context.Vehicles.Add(created);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return created.Id;
         }
 
@@ -825,7 +825,7 @@ namespace MyGarage.Services
                     CreatedBy = actorStaffId,
                     UpdatedBy = actorStaffId
                 });
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return;
             }
 
@@ -848,7 +848,7 @@ namespace MyGarage.Services
             {
                 existing.UpdatedAt = VietnamTime.Now;
                 existing.UpdatedBy = actorStaffId;
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
 
@@ -1012,7 +1012,7 @@ namespace MyGarage.Services
             serviceOrder.UpdatedAt = now;
             serviceOrder.UpdatedBy = actorStaffId;
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private void ApplyWorkshopServiceDetailValues(
@@ -1250,7 +1250,7 @@ namespace MyGarage.Services
                 UpdatedBy = actorUserId
             });
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private static bool ShouldCreateMaintenanceReminder(string? previousStatus, string? currentStatus)
@@ -1338,17 +1338,9 @@ namespace MyGarage.Services
                 return 0m;
             }
 
-            var relationalDiscount = (order.ServiceOrderDiscounts ?? new List<ServiceOrderDiscount>())
+            return (order.ServiceOrderDiscounts ?? new List<ServiceOrderDiscount>())
                 .Where(x => x != null)
                 .Sum(x => x.AppliedAmount > 0m ? x.AppliedAmount : Math.Max(0m, x.DiscountValue));
-            if (relationalDiscount > 0m)
-            {
-                return relationalDiscount;
-            }
-
-#pragma warning disable CS0618
-            return Math.Max(0m, order.TotalDiscount ?? 0m);
-#pragma warning restore CS0618
         }
 
         private static decimal CalculateCommissionAmount(decimal baseAmount, string commissionType, decimal commissionValue)
@@ -1684,7 +1676,7 @@ namespace MyGarage.Services
                 throw new InvalidOperationException(readiness?.BlockingReason ?? "Không thể bàn giao xe vào lúc này.");
             }
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await TryBeginTransactionAsync();
             try
             {
                 order.Status = nameof(ServiceOrderLifecycleStatus.CLOSED);
@@ -1695,8 +1687,11 @@ namespace MyGarage.Services
                 // Create a log or history record if available in the system
                 // For now, we update the core order status to CLOSED
 
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await SaveChangesInTransactionAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
                 
                 _customerLifecycleNotifier.EnqueueAfterStatusChange(order, nameof(ServiceOrderLifecycleStatus.READY));
                 
@@ -1704,21 +1699,43 @@ namespace MyGarage.Services
             }
             catch
             {
-                await transaction.RollbackAsync();
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 throw;
             }
         }
 
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
         private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
             }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

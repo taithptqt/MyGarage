@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests.Execution;
 using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Exceptions;
@@ -70,7 +71,7 @@ namespace MyGarage.Services
             bay.CurrentOccupiedVehicleId = model.VehicleId;
             bay.LastStatusChangedAt = now;
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             await BroadcastBayTimelineUpdatedAsync(bay.BranchId);
 
             var result = await _context.BayAllocations.AsNoTracking()
@@ -119,7 +120,7 @@ namespace MyGarage.Services
             bay.CurrentOccupiedVehicleId = null;
             bay.LastStatusChangedAt = now;
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             await BroadcastBayTimelineUpdatedAsync(bay.BranchId);
 
             var result = await _context.BayAllocations.AsNoTracking()
@@ -215,6 +216,38 @@ namespace MyGarage.Services
                     branchId,
                     changedAt = VietnamTime.Now
                 });
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

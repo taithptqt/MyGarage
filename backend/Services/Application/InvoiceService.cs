@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Enums;
 using MyGarage.DTOs.Responses;
 using MyGarage.Models;
@@ -86,7 +87,7 @@ namespace MyGarage.Services
                 }
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return result;
         }
 
@@ -131,7 +132,7 @@ namespace MyGarage.Services
                 };
 
                 _context.Invoices.Add(invoice);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
             else
             {
@@ -147,7 +148,7 @@ namespace MyGarage.Services
             }
 
             await PopulateServiceOrderInvoiceDetailsAsync(invoice, serviceOrder.ServiceOrderDetails.ToList());
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return invoice;
         }
 
@@ -191,7 +192,7 @@ namespace MyGarage.Services
                 };
 
                 _context.Invoices.Add(invoice);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
             else
             {
@@ -206,7 +207,7 @@ namespace MyGarage.Services
             }
 
             await PopulateRetailOrderInvoiceDetailsAsync(invoice, retailOrder.RetailOrderItems.ToList());
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return invoice;
         }
 
@@ -244,7 +245,7 @@ namespace MyGarage.Services
             if (missingDetails.Count > 0)
             {
                 _context.InvoiceDetails.AddRange(missingDetails);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
 
@@ -281,7 +282,7 @@ namespace MyGarage.Services
             if (invoiceDetails.Count > 0)
             {
                 _context.InvoiceDetails.AddRange(invoiceDetails);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
 
@@ -330,6 +331,38 @@ namespace MyGarage.Services
                 "LABOR" or "SERVICE" => "LABOR",
                 _ => hasStandardService ? "LABOR" : "PART"
             };
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

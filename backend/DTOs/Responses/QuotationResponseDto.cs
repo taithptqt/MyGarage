@@ -11,7 +11,6 @@ public sealed class QuotationResponseDto
     public long ServiceOrderId { get; set; }
     public long? DiagnosisId { get; set; }
     public long? DiagnosisAssignmentId { get; set; }
-    public long? SourceSnapshotId { get; set; }
     public string? Title { get; set; }
     public string QuotationType { get; set; } = null!;
     public int VersionNo { get; set; }

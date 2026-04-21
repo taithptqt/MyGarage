@@ -933,7 +933,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                         IsDeleted = false
                     };
                     _context.Vehicles.Add(vehicle);
-                    await _context.SaveChangesAsync(ct);
+                await SaveChangesInTransactionAsync(ct);
                 }
 
                 var linked = await _context.CustomerVehicles.AnyAsync(cv => cv.CustomerId == customerId && cv.VehicleId == vehicle.Id && cv.IsDeleted != true, ct);
@@ -949,7 +949,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                         CreatedBy = customerId,
                         IsDeleted = false
                     });
-                    await _context.SaveChangesAsync(ct);
+                await SaveChangesInTransactionAsync(ct);
                 }
 
                 if (tx is not null)
@@ -1121,13 +1121,13 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
             ActionPayload = JsonSerializer.Serialize(payload),
             CreatedAt = _clock.UtcNow
         });
-        await _context.SaveChangesAsync(ct);
+            await SaveChangesInTransactionAsync(ct);
     }
 
     private async Task LogAction(long sessionId, ChatbotActionStatus status, string actionType, string? errorCode, string? errorMessage, ChatbotBookingResultDto? payload, CancellationToken ct)
     {
         _context.ChatbotActionLogs.Add(new ChatbotActionLog { SessionId = sessionId, ActionType = actionType, Status = status.ToString().ToUpperInvariant(), ErrorCode = errorCode, ErrorMessage = errorMessage, ActionPayload = payload is null ? null : JsonSerializer.Serialize(payload), CreatedAt = _clock.UtcNow });
-        await _context.SaveChangesAsync(ct);
+                await SaveChangesInTransactionAsync(ct);
     }
 
     private async Task LogVoucherActionAsync(long sessionId, ChatbotVoucherResolutionDto? voucher, CancellationToken ct)
@@ -1150,7 +1150,7 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
                 }),
             CreatedAt = _clock.UtcNow
         });
-        await _context.SaveChangesAsync(ct);
+            await SaveChangesInTransactionAsync(ct);
     }
 
     private async Task<ChatbotVoucherResolutionDto?> ResolveVoucherSuggestionAsync(Customer customer, BookingState state, CancellationToken ct)
@@ -2611,16 +2611,36 @@ public class ChatbotBookingWorkflowService : IChatbotBookingWorkflowService
     }
 
     private enum BookingStep { IdentifyOrCreateVehicle = 0, SelectServices = 1, SelectBranch = 2, ComputeAvailableSlots = 3, FinalizeBooking = 4, Completed = 5 }
+    private async Task SaveChangesInTransactionAsync(CancellationToken cancellationToken)
+    {
+        await ExecuteInTransactionAsync(async () =>
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }, cancellationToken);
+    }
+
+    private async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken cancellationToken)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
+            await action();
+            if (tx != null)
+            {
+                await tx.CommitAsync(cancellationToken);
+            }
+        });
+    }
+
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            return await _context.Database.BeginTransactionAsync(cancellationToken);
-        }
-        catch (InvalidOperationException)
+        if (_context.Database.CurrentTransaction != null)
         {
             return null;
         }
+
+        return await _context.Database.BeginTransactionAsync(cancellationToken);
     }
 }
 

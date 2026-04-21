@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyGarage.DTOs.Requests;
 
@@ -34,6 +35,10 @@ public sealed class QuotationCreateRequestDto
 public sealed class QuotationCreateItemDto
 {
     public long? SourceQuotationDetailId { get; set; }
+    public long? DiagnosisRecommendationId { get; set; }
+
+    [JsonPropertyName("diagnoseRecommendationId")]
+    public long? DiagnoseRecommendationId { get; set; }
 
     [Required]
     [StringLength(50)]

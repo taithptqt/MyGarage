@@ -74,11 +74,108 @@ const apiClient = axios.create({
   }
 });
 
+const UNSAFE_HTTP_METHODS = new Set(["post", "put", "patch", "delete"]);
+const INFLIGHT_REQUESTS = new Map();
+const REQUEST_COOLDOWN = new Map();
+const REQUEST_COOLDOWN_MS = 800;
+
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+function stableSerialize(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+
+  if (typeof FormData !== "undefined" && value instanceof FormData) {
+    const pairs = [];
+    value.forEach((entryValue, entryKey) => {
+      if (typeof entryValue === "string") {
+        pairs.push([entryKey, entryValue]);
+        return;
+      }
+
+      const fileName = entryValue?.name || "blob";
+      const fileSize = Number(entryValue?.size || 0);
+      pairs.push([entryKey, `${fileName}:${fileSize}`]);
+    });
+    pairs.sort(([a], [b]) => String(a).localeCompare(String(b)));
+    return JSON.stringify(pairs);
+  }
+
+  if (isPlainObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeMethod(method) {
+  return String(method || "get").trim().toLowerCase();
+}
+
+function normalizeUrl(config) {
+  const base = String(config?.baseURL || API_BASE_URL || "").replace(/\/$/, "");
+  const path = String(config?.url || "").trim();
+  if (!path) return base;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (!base) return path;
+  return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+function getRequestFingerprint(config) {
+  const method = normalizeMethod(config?.method);
+  const url = normalizeUrl(config);
+  const params = stableSerialize(config?.params);
+  const data = stableSerialize(config?.data);
+  return `${method}|${url}|${params}|${data}`;
+}
+
+function pruneCooldown(now = Date.now()) {
+  for (const [fingerprint, expiry] of REQUEST_COOLDOWN.entries()) {
+    if (!expiry || expiry <= now) REQUEST_COOLDOWN.delete(fingerprint);
+  }
+}
+
+function markRequestDone(fingerprint) {
+  if (!fingerprint) return;
+  INFLIGHT_REQUESTS.delete(fingerprint);
+  REQUEST_COOLDOWN.set(fingerprint, Date.now() + REQUEST_COOLDOWN_MS);
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  const method = normalizeMethod(config.method);
+  if (UNSAFE_HTTP_METHODS.has(method)) {
+    const fingerprint = getRequestFingerprint(config);
+    const now = Date.now();
+    pruneCooldown(now);
+
+    if (INFLIGHT_REQUESTS.has(fingerprint)) {
+      return Promise.reject(new Error("Yeu cau dang duoc xu ly. Vui long cho."));
+    }
+
+    const cooldownUntil = REQUEST_COOLDOWN.get(fingerprint) || 0;
+    if (cooldownUntil > now) {
+      return Promise.reject(new Error("Thao tac trung lap qua nhanh. Vui long thu lai sau."));
+    }
+
+    INFLIGHT_REQUESTS.set(fingerprint, now);
+    config.__spamFingerprint = fingerprint;
+  }
+
   // FormData cần boundary tự sinh; header json mặc định làm ASP.NET không bind IFormFile → 400
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
     if (config.headers && typeof config.headers.delete === "function") {
@@ -91,8 +188,12 @@ apiClient.interceptors.request.use((config) => {
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    markRequestDone(response?.config?.__spamFingerprint);
+    return response;
+  },
   (error) => {
+    markRequestDone(error?.config?.__spamFingerprint);
     if (error.response?.status === 401) {
       localStorage.removeItem("mygarage_token");
       localStorage.removeItem("mygarage_user");
@@ -138,4 +239,3 @@ export async function requestSafe(config) {
     };
   }
 }
-

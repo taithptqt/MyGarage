@@ -466,7 +466,7 @@ namespace MyGarage.Controllers
                     FileUrl = uploaded.Url,
                     Status = AppointmentInsuranceUploadStatuses.Staged
                 });
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
 
                 return Ok(new
                 {
@@ -801,14 +801,26 @@ namespace MyGarage.Controllers
         }
         private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
             }
+
+            return await _context.Database.BeginTransactionAsync();
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await TryBeginTransactionAsync();
+                await _context.SaveChangesAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
+            });
         }
     }
 }

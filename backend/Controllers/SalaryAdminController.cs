@@ -627,15 +627,11 @@ public class SalaryAdminController : ControllerBase
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
     {
-        try
-        {
-            return await _db.Database.BeginTransactionAsync();
-        }
-        catch (InvalidOperationException)
+        if (_db.Database.CurrentTransaction != null)
         {
             return null;
         }
+
+        return await _db.Database.BeginTransactionAsync();
     }
 }
-
-

@@ -4,6 +4,7 @@ using MyGarage.DTOs.Requests;
 using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Collections.Generic;
 
@@ -56,64 +57,82 @@ namespace MyGarage.Services
                 throw new InvalidOperationException($"Không tìm thấy kho hoạt động cho chi nhánh id: {quotation.ServiceOrder.ExecuteBranchId}");
             }
 
-            var request = new MaterialRequest
+            await using var transaction = await TryBeginTransactionAsync();
+            try
             {
-                ServiceOrderId = quotation.ServiceOrderId,
-                RequestDate = VietnamTime.Now,
-                Status = "PENDING",
-                TechnicianId = actorId,
-                Note = $"Tự động tạo từ báo giá {quotation.Code}",
-                CreatedAt = VietnamTime.Now
-            };
-
-            await _repository.AddAsync(request);
-
-            foreach (var item in partItems)
-            {
-                var productId = item.ItemId!.Value;
-                var requestedQty = item.Quantity;
-                string? statusNote = null;
-
-                var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(productId, warehouse.Id);
-                
-                if (inventory != null)
+                var request = new MaterialRequest
                 {
-                    decimal currentReserved = inventory.ReservedQuantity ?? 0m;
-                    decimal available = inventory.Quantity - currentReserved;
+                    ServiceOrderId = quotation.ServiceOrderId,
+                    RequestDate = VietnamTime.Now,
+                    Status = "PENDING",
+                    TechnicianId = actorId,
+                    Note = $"Tự động tạo từ báo giá {quotation.Code}",
+                    CreatedAt = VietnamTime.Now
+                };
 
-                    if (available < requestedQty)
+                await _repository.AddAsync(request);
+
+                foreach (var item in partItems)
+                {
+                    var productId = item.ItemId!.Value;
+                    var requestedQty = item.Quantity;
+                    string? statusNote = null;
+
+                    var inventory = await _inventoryRepository.GetByProductAndWarehouseAsync(productId, warehouse.Id);
+
+                    if (inventory != null)
                     {
-                        statusNote = $"Thiếu hàng (Hiện có: {available:N0}, Yêu cầu: {requestedQty:N0})";
+                        decimal currentReserved = inventory.ReservedQuantity ?? 0m;
+                        decimal available = inventory.Quantity - currentReserved;
+
+                        if (available < requestedQty)
+                        {
+                            statusNote = $"Thiếu hàng (Hiện có: {available:N0}, Yêu cầu: {requestedQty:N0})";
+                        }
+
+                        inventory.ReservedQuantity = currentReserved + requestedQty;
+                        await _inventoryRepository.UpdateAsync(inventory.Id, inventory);
+                    }
+                    else
+                    {
+                        statusNote = "Vật tư chưa có trong kho này";
                     }
 
-                    inventory.ReservedQuantity = currentReserved + requestedQty;
-                    await _inventoryRepository.UpdateAsync(inventory.Id, inventory);
-                }
-                else
-                {
-                    statusNote = "Vật tư chưa có trong kho này";
+                    var detail = new MaterialRequestDetail
+                    {
+                        RequestId = request.Id,
+                        ProductId = productId,
+                        WarehouseId = warehouse.Id,
+                        RequestedQuantity = requestedQty,
+                        Status = "PENDING",
+                        Note = statusNote,
+                        CreatedAt = VietnamTime.Now,
+                        CreatedBy = actorId
+                    };
+                    await _detailRepository.AddAsync(detail);
                 }
 
-                var detail = new MaterialRequestDetail
+                if (transaction != null)
                 {
-                    RequestId = request.Id,
-                    ProductId = productId,
-                    WarehouseId = warehouse.Id,
-                    RequestedQuantity = requestedQty,
-                    Status = "PENDING",
-                    Note = statusNote,
-                    CreatedAt = VietnamTime.Now,
-                    CreatedBy = actorId
-                };
-                await _detailRepository.AddAsync(detail);
+                    await transaction.CommitAsync();
+                }
+
+                return request;
             }
+            catch
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
 
-            return request;
+                throw;
+            }
         }
 
         public async Task<MaterialRequest> IssuePartsAsync(MaterialRequestIssuanceDto request)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await TryBeginTransactionAsync();
             try
             {
                 var materialRequest = await _context.MaterialRequests
@@ -178,15 +197,30 @@ namespace MyGarage.Services
                 materialRequest.Status = allIssued ? "ISSUED" : "PARTIALLY_ISSUED";
                 await _repository.UpdateAsync(materialRequest.Id, materialRequest);
 
-                await transaction.CommitAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
                 return materialRequest;
             }
             catch (Exception)
             {
-                await transaction.RollbackAsync();
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 throw;
             }
         }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
+        }
     }
 }
-

@@ -149,7 +149,7 @@ namespace MyGarage.Services
             if (hasStatusChanges || hasAuxiliaryChanges)
             {
                 await IncrementNoShowCountsAsync(customerNoShowDeltas);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 foreach (var groupId in groupIds)
                 {
                     await _groupSessionService.SyncCountersAsync(groupId);
@@ -482,4 +482,3 @@ namespace MyGarage.Services
         }
     }
 }
-

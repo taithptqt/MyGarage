@@ -24,3 +24,14 @@ These rules are non-negotiable for all JSX/UI updates in this repository.
 - No accidental encoding escapes or broken Vietnamese diacritics.
 - No mixed concern between layout and content logic.
 
+## 4) Execution Discipline (Mandatory)
+
+- Read `AGENTS.md` before making any code change.
+- Re-read `AGENTS.md` every 5 minutes while actively working.
+- Do not change anything outside the exact user request.
+- Never run `git clone`, `git pull`, or any equivalent auto-sync/auto-fetch action during autonomous execution unless explicitly requested by the user in that turn.
+
+## 5) Domain Invariants
+
+- Diagnosis recommendations must flow through Quotations; direct links to SO are strictly prohibited.
+- Relational discounts are the single source of truth; legacy `TotalDiscount` columns must not be used as business source.

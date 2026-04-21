@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,7 +43,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await TryBeginTransactionAsync();
                 try
                 {
                     var actorStaffId = await _groupSessionService.ResolveStaffActorIdAsync(actorUserId);
@@ -81,7 +81,10 @@ namespace MyGarage.Services
                     if (groupSessionId.HasValue)
                         await _groupSessionService.SyncCountersAsync(groupSessionId.Value, actorStaffId);
 
-                    await transaction.CommitAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.CommitAsync();
+                    }
 
                     var primary = createdAppointments[0];
                     var customer = await _context.Customers
@@ -107,7 +110,10 @@ namespace MyGarage.Services
                 }
                 catch
                 {
-                    await transaction.RollbackAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync();
+                    }
                     throw;
                 }
             });
@@ -145,14 +151,14 @@ namespace MyGarage.Services
                 if (!string.Equals(NormalizeReceptionPhone(existing.Phone), phone, StringComparison.Ordinal)) { existing.Phone = phone; changed = true; }
                 if (existing.IsActive == false) { existing.IsActive = true; changed = true; }
                 if (existing.IsDeleted == true) { existing.IsDeleted = false; existing.DeletedAt = null; existing.DeletedBy = null; changed = true; }
-                if (changed) { existing.UpdatedAt = _clock.UtcNow; existing.UpdatedBy = actorStaffId; await _context.SaveChangesAsync(); }
+                if (changed) { existing.UpdatedAt = _clock.UtcNow; existing.UpdatedBy = actorStaffId; await SaveChangesInTransactionAsync(); }
                 return existing.Id;
             }
 
             var now = _clock.UtcNow;
             var created = new Customer { FullName = guestName, Phone = phone, Type = "GUEST", IsActive = true, IsDeleted = false, CreatedAt = now, UpdatedAt = now, CreatedBy = actorStaffId, UpdatedBy = actorStaffId };
             _context.Customers.Add(created);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return created.Id;
         }
 
@@ -211,4 +217,3 @@ namespace MyGarage.Services
         private static string? NormalizeReceptionPlate(string? raw) { var value = NormalizeReceptionText(raw); return string.IsNullOrWhiteSpace(value) ? null : value.ToUpperInvariant(); }
     }
 }
-

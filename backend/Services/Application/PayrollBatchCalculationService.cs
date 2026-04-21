@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Data;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
@@ -126,7 +127,7 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
         var strategy = _db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync<PayrollBatchCalculationResult>(async () =>
         {
-            await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
             try
             {
                 var runResolution = await ResolveOrCreateDraftPayrollRunAsync(
@@ -151,7 +152,10 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                     runResolution.Run.Status = PayrollRunStatusCalculated;
                     runResolution.Run.UpdatedAt = now;
                     await _db.SaveChangesAsync(cancellationToken);
-                    await tx.CommitAsync(cancellationToken);
+                    if (tx != null)
+                    {
+                        await tx.CommitAsync(cancellationToken);
+                    }
 
                     return new PayrollBatchCalculationResult
                     {
@@ -368,7 +372,10 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
                         cancellationToken);
                 }
 
-                await tx.CommitAsync(cancellationToken);
+                if (tx != null)
+                {
+                    await tx.CommitAsync(cancellationToken);
+                }
 
                 return new PayrollBatchCalculationResult
                 {
@@ -395,10 +402,23 @@ public sealed class PayrollBatchCalculationService : IPayrollBatchCalculationSer
             }
             catch
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx != null)
+                {
+                    await tx.RollbackAsync(cancellationToken);
+                }
                 throw;
             }
         });
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _db.Database.BeginTransactionAsync(cancellationToken);
     }
 
     private async Task<PayrollPeriod> ResolvePayrollPeriodAsync(PayrollBatchCalculationCommand command, CancellationToken cancellationToken)

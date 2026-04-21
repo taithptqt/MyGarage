@@ -41,8 +41,6 @@ public partial class Diagnosis
 
     public virtual ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
 
-    public virtual ICollection<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; set; } = new List<TechnicalProposalSnapshot>();
-
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
 
     public virtual Staff? UpdatedByNavigation { get; set; }

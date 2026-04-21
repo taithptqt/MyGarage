@@ -48,7 +48,7 @@ namespace MyGarage.Services
                 {
                     existing.UpdatedAt = _clock.UtcNow;
                     existing.UpdatedBy = actorStaffId;
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
 
                 return existing.Id;
@@ -65,7 +65,7 @@ namespace MyGarage.Services
                 CreatedAt = _clock.UtcNow
             };
             _context.Vehicles.Add(newVehicle);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return newVehicle.Id;
         }
 
@@ -87,14 +87,14 @@ namespace MyGarage.Services
                     CreatedBy = actorStaffId,
                     CreatedAt = _clock.UtcNow
                 });
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return;
             }
 
             if (link.CreatedBy == null)
             {
                 link.CreatedBy = actorStaffId;
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Constants;
 using MyGarage.DTOs.Requests;
 using MyGarage.Enums;
@@ -199,7 +200,7 @@ namespace MyGarage.Services
             }
 
             _context.WorkSlots.Add(primarySlot);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             WorkSlot partReservationSlot = primarySlot;
             if (flow == BookingFlowType.Flexible && !isDiagnoseOnly)
@@ -218,7 +219,7 @@ namespace MyGarage.Services
                 if (preallocatedSlots.Count > 0)
                 {
                     _context.WorkSlots.AddRange(preallocatedSlots);
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                     partReservationSlot = preallocatedSlots[0];
                 }
             }
@@ -226,7 +227,7 @@ namespace MyGarage.Services
             if (partAvailability.HasShortage)
             {
                 MarkWorkSlotAsPartsPending(partReservationSlot, partAvailability.Shortages);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return;
             }
 
@@ -243,7 +244,7 @@ namespace MyGarage.Services
             catch (InvalidOperationException ex) when (IsInventoryShortageException(ex))
             {
                 MarkWorkSlotAsPartsPending(partReservationSlot, ex.Message);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
 
@@ -350,7 +351,7 @@ namespace MyGarage.Services
                 });
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task ReserveInventoryQuantityAsync(long branchId, long productId, decimal requiredQuantity)
@@ -518,7 +519,7 @@ namespace MyGarage.Services
             {
                 if (workSlots.Count > 0)
                 {
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
 
                 return;
@@ -544,7 +545,7 @@ namespace MyGarage.Services
                 reservation.UpdateBy = actorStaffId;
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task ReleaseInventoryQuantityAsync(long branchId, long productId, decimal quantityToRelease)
@@ -623,9 +624,40 @@ namespace MyGarage.Services
                 }
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }
-
 

@@ -54,7 +54,7 @@ namespace MyGarage.Services
                     slot.EndTime = now;
                 }
                 slot.Status = nameof(WorkSlotStatus.COMPLETED);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
 
                 response.IsSuccessful = true;
                 response.NewEndTime = slot.EndTime;
@@ -104,7 +104,7 @@ namespace MyGarage.Services
                         slot.EndTime = effectiveEnd;
                         slot.ActualReleaseTime = null;
                         slot.Notes = AppendWorkSlotTag(slot.Notes, $"MUON_DVN:{now:yyyyMMddHHmm}");
-                        await _context.SaveChangesAsync();
+                        await SaveChangesInTransactionAsync();
 
                         response.IsSuccessful = true;
                         response.HasCollision = false;
@@ -121,7 +121,7 @@ namespace MyGarage.Services
 
             slot.EndTime = effectiveEnd;
             slot.ActualReleaseTime = null;
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             response.IsSuccessful = true;
             response.NewEndTime = slot.EndTime;
@@ -416,7 +416,7 @@ namespace MyGarage.Services
             {
                 var lockSlot = BuildOvernightLockSlot(sourceSlot, nextMorning, lockMinutes);
                 _context.WorkSlots.Add(lockSlot);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return lockSlot;
             }
 
@@ -431,7 +431,7 @@ namespace MyGarage.Services
             existingLock.ServiceOrderId = sourceSlot.ServiceOrderId;
             existingLock.IsAdditional = sourceSlot.IsAdditional;
             existingLock.SequenceOrder = sourceSlot.SequenceOrder > 0 ? sourceSlot.SequenceOrder : 3;
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return existingLock;
         }
 

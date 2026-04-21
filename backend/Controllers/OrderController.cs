@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using MyGarage.Enums;
@@ -42,6 +43,44 @@ public class OrderController(
     private readonly IOrderStore _orderStore = orderStore;
     private readonly IOrderTransactionStore _orderTransactionStore = orderTransactionStore;
     private readonly IOrderInvoiceStore _orderInvoiceStore = orderInvoiceStore;
+
+    private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            try
+            {
+                var result = await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+
+                return result;
+            }
+            catch
+            {
+                if (tx != null)
+                {
+                    await tx.RollbackAsync();
+                }
+
+                throw;
+            }
+        });
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _db.Database.BeginTransactionAsync();
+    }
 
     private static long GenerateOrderCode()
     {
@@ -90,9 +129,13 @@ public class OrderController(
             return;
         }
 
-        retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
-        retailOrder.UpdatedAt = VietnamTime.Now;
-        await _db.SaveChangesAsync();
+        await ExecuteInTransactionAsync(async () =>
+        {
+            retailOrder.Status = isPaid ? RetailOrderStatusConfirmed : RetailOrderStatusDraft;
+            retailOrder.UpdatedAt = VietnamTime.Now;
+            await _db.SaveChangesAsync();
+            return 0;
+        });
 
         if (isPaid)
         {
@@ -157,9 +200,12 @@ public class OrderController(
             UpdatedAt = now
         };
 
-        _db.PaymentMethods.Add(method);
-        await _db.SaveChangesAsync();
-        return method.Id;
+        return await ExecuteInTransactionAsync(async () =>
+        {
+            _db.PaymentMethods.Add(method);
+            await _db.SaveChangesAsync();
+            return method.Id;
+        });
     }
 
     private async Task<long?> ResolveInvoiceIdAsync(OrderCreateRequest request)
@@ -435,9 +481,13 @@ public class OrderController(
 
             try
             {
-                _db.Payments.Add(payment);
-                await _db.SaveChangesAsync();
-                order.PaymentRecordId = payment.Id;
+                await ExecuteInTransactionAsync(async () =>
+                {
+                    _db.Payments.Add(payment);
+                    await _db.SaveChangesAsync();
+                    order.PaymentRecordId = payment.Id;
+                    return 0;
+                });
             }
             catch (DbUpdateException ex) when (IsInflowRequiresInvoiceConstraintViolation(ex))
             {

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests.Auth;
 using MyGarage.DTOs.Responses.Auth;
 using MyGarage.Models;
@@ -84,7 +85,7 @@ namespace MyGarage.Services
                         {
                             staff.UpdatedAt = nowUtc;
                             _context.Staffs.Update(staff);
-                            await _context.SaveChangesAsync();
+                            await SaveChangesInTransactionAsync();
                         }
 
                         throw new UnauthorizedAccessException($"{PhoneRequestCode}:STAFF");
@@ -99,7 +100,7 @@ namespace MyGarage.Services
                 {
                     staff.UpdatedAt = nowUtc;
                     _context.Staffs.Update(staff);
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
 
                 var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
@@ -140,14 +141,14 @@ namespace MyGarage.Services
                 };
 
                 _context.Customers.Add(customer);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
             else if (!string.Equals(customer.GoogleId, googleId, StringComparison.Ordinal))
             {
                 customer.GoogleId = googleId;
                 customer.UpdatedAt = DateTime.UtcNow;
                 _context.Customers.Update(customer);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
 
             ValidateCustomerAccountForLogin(customer);
@@ -169,7 +170,7 @@ namespace MyGarage.Services
             AssignPreferredBranchToCustomer(customer, nearestBranchId);
             customer.SecurityStamp = GetOrCreateSecurityStamp(customer.SecurityStamp);
             _context.Customers.Update(customer);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return GenerateToken(
                 customer.Id.ToString(),
                 customer.FullName ?? "",
@@ -213,6 +214,37 @@ namespace MyGarage.Services
             {
                 throw new InvalidOperationException("Số điện thoại đã được sử dụng bởi tài khoản nhân viên khác.");
             }
+        }
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

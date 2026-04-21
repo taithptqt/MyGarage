@@ -141,7 +141,7 @@ namespace MyGarage.Services
                 serviceOrder.FinalAmount = 0m;
                 serviceOrder.UpdatedAt = now;
                 serviceOrder.UpdatedBy = actorStaffId;
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return;
             }
 
@@ -170,7 +170,7 @@ namespace MyGarage.Services
                 serviceOrder.FinalAmount = 0m;
                 serviceOrder.UpdatedAt = now;
                 serviceOrder.UpdatedBy = actorStaffId;
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 return;
             }
 
@@ -229,7 +229,7 @@ namespace MyGarage.Services
             serviceOrder.FinalAmount = totalSubAmount + totalTaxAmount - ResolveServiceOrderTotalDiscountAmount(serviceOrder);
             serviceOrder.UpdatedAt = now;
             serviceOrder.UpdatedBy = actorStaffId;
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private static decimal ResolveServiceOrderTotalDiscountAmount(ServiceOrder serviceOrder)
@@ -239,17 +239,9 @@ namespace MyGarage.Services
                 return 0m;
             }
 
-            var relationalDiscount = (serviceOrder.ServiceOrderDiscounts ?? new List<ServiceOrderDiscount>())
+            return (serviceOrder.ServiceOrderDiscounts ?? new List<ServiceOrderDiscount>())
                 .Where(x => x != null)
                 .Sum(x => x.AppliedAmount > 0m ? x.AppliedAmount : Math.Max(0m, x.DiscountValue));
-            if (relationalDiscount > 0m)
-            {
-                return relationalDiscount;
-            }
-
-#pragma warning disable CS0618
-            return Math.Max(0m, serviceOrder.TotalDiscount ?? 0m);
-#pragma warning restore CS0618
         }
 
         private static decimal CalculateTaxAmount(decimal amount, decimal taxRate)

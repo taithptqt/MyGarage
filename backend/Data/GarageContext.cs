@@ -157,10 +157,6 @@ public partial class GarageContext : DbContext, IGarageContext
 
     public virtual DbSet<QuotationAccessLink> QuotationAccessLinks { get; set; }
 
-    public virtual DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; set; }
-
-    public virtual DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; set; }
-
     public virtual DbSet<MandatoryOverrideRequest> MandatoryOverrideRequests { get; set; }
 
     public virtual DbSet<RetailOrder> RetailOrders { get; set; }
@@ -2290,6 +2286,7 @@ public partial class GarageContext : DbContext, IGarageContext
             entity.HasIndex(e => new { e.QuotationId, e.ApprovalStatus }, "IX_QuotationDetails_QuotationId_ApprovalStatus");
 
             entity.HasIndex(e => e.SourceQuotationDetailId, "IX_QuotationDetails_SourceQuotationDetailId");
+            entity.HasIndex(e => e.DiagnosisRecommendationId, "IX_QuotationDetails_DiagnosisRecommendationId");
 
             entity.Property(e => e.ItemType)
                 .HasMaxLength(50)
@@ -2342,6 +2339,10 @@ public partial class GarageContext : DbContext, IGarageContext
                 .WithMany()
                 .HasForeignKey(d => d.SourceQuotationDetailId)
                 .HasConstraintName("FK_QuotationDetails_SourceQuotationDetail");
+
+            entity.HasOne(d => d.DiagnosisRecommendation).WithMany()
+                .HasForeignKey(d => d.DiagnosisRecommendationId)
+                .HasConstraintName("FK_QuotationDetails_DiagnosisRecommendations");
 
             entity.HasOne(d => d.InsuranceCompany).WithMany()
                 .HasForeignKey(d => d.InsuranceCompanyId)
@@ -2862,6 +2863,7 @@ public partial class GarageContext : DbContext, IGarageContext
         modelBuilder.Entity<ServiceOrderDetail>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__ServiceO__3214EC07F58DFBE0");
+            entity.Ignore("DiagnosisRecommendationId");
 
             entity.Property(e => e.BuyoutCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CostPriceAtTime).HasColumnType("decimal(18, 2)");

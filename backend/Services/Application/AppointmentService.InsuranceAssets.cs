@@ -50,7 +50,7 @@ namespace MyGarage.Services
             }));
 
             _context.AppointmentInsuranceAssets.AddRange(rows);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             await MarkInsuranceUploadsAttachedAsync(appointment.Id, cardUrls.Concat(damageUrls));
         }
 
@@ -89,7 +89,7 @@ namespace MyGarage.Services
             });
 
             _context.AppointmentInsuranceAssets.AddRange(copiedRows);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task CopyAppointmentInsuranceAssetsToServiceOrderAsync(long appointmentId, long serviceOrderId)
@@ -127,7 +127,7 @@ namespace MyGarage.Services
             });
 
             _context.ServiceOrderInsuranceAssets.AddRange(copiedRows);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task MarkInsuranceUploadsAttachedAsync(long appointmentId, IEnumerable<string> fileUrls)
@@ -162,7 +162,7 @@ namespace MyGarage.Services
                 upload.UpdatedAt = _clock.UtcNow;
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private static List<string> SanitizeInsuranceAssetUrls(IEnumerable<string>? urls, int maxCount)

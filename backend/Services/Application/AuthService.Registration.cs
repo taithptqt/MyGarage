@@ -34,14 +34,14 @@ namespace MyGarage.Services
             };
 
             _context.Customers.Add(customer);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var nearestBranchId = await ResolveNearestBranchIdAsync(request.Lat, request.Lng, request.City);
             var nearestBranchName = await GetBranchNameAsync(nearestBranchId);
             AssignPreferredBranchToCustomer(customer, nearestBranchId);
             AssignCityToCustomer(customer, request.City);
             _context.Customers.Update(customer);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             return GenerateToken(
                 customer.Id.ToString(),

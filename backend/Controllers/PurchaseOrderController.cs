@@ -156,7 +156,7 @@ namespace MyGarage.Controllers
                         CreatedAt = now
                     };
                     _context.GoodsReceiptNotes.Add(grn);
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
 
                     foreach (var incoming in request.Items.Where(x => x != null))
                     {
@@ -278,7 +278,7 @@ namespace MyGarage.Controllers
                         ? nameof(PurchaseOrderStatusCode.COMPLETED)
                         : nameof(PurchaseOrderStatusCode.PARTIAL_RECEIVED);
 
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
 
                     if (affectedProductIds.Count > 0)
                     {
@@ -785,20 +785,29 @@ namespace MyGarage.Controllers
         }
         private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
             }
+
+            return await _context.Database.BeginTransactionAsync();
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await TryBeginTransactionAsync();
+                await _context.SaveChangesAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
+            });
         }
     }
 }
-
-
-
 
 
 

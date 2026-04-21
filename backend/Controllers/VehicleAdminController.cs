@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -59,6 +60,26 @@ public class VehicleAdminController : ControllerBase
     {
         _context = context;
         _environment = environment;
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _context.Database.BeginTransactionAsync();
+    }
+
+    private async Task SaveChangesInTransactionAsync()
+    {
+        await using var tx = await TryBeginTransactionAsync();
+        await _context.SaveChangesAsync();
+        if (tx != null)
+        {
+            await tx.CommitAsync();
+        }
     }
 
     [HttpGet("lookups")]
@@ -627,7 +648,7 @@ public class VehicleAdminController : ControllerBase
         };
 
         _context.Vehicles.Add(vehicle);
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         var settings = await ReadSettingsAsync();
         var metadata = ResolveVehicleMetadata(settings, vehicle.Id);
@@ -645,7 +666,7 @@ public class VehicleAdminController : ControllerBase
         }
 
         AppendVehicleAudit(settings, vehicle.Id, "CREATE_VEHICLE", "Create vehicle by admin", userId, ResolveCurrentUserDisplayName(), now);
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new
@@ -726,7 +747,7 @@ public class VehicleAdminController : ControllerBase
         }
 
         AppendVehicleAudit(settings, id, "UPDATE_VEHICLE", "Update vehicle info", userId, ResolveCurrentUserDisplayName(), now);
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle updated successfully." });
@@ -793,7 +814,7 @@ public class VehicleAdminController : ControllerBase
         metadata.UpdatedAt = now;
         AppendVehicleAudit(settings, id, "HIDE_VEHICLE", "Hide vehicle", userId, ResolveCurrentUserDisplayName(), now);
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle hidden successfully." });
@@ -842,7 +863,7 @@ public class VehicleAdminController : ControllerBase
         var settings = await ReadSettingsAsync();
         AppendVehicleAudit(settings, id, "CHANGE_OWNER", request.CustomerId.HasValue ? $"Change owner to customer #{request.CustomerId.Value}" : "Clear owner", userId, ResolveCurrentUserDisplayName(), now);
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle owner updated." });
@@ -938,7 +959,7 @@ public class VehicleAdminController : ControllerBase
 
         AppendVehicleAudit(settings, id, "ASSIGN_BAY", $"Assign to bay #{request.BayId}", userId, actorName, now);
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteBaySettingsAsync(baySettings);
         await WriteSettingsAsync(settings);
 
@@ -1018,7 +1039,7 @@ public class VehicleAdminController : ControllerBase
 
         AppendVehicleAudit(settings, id, "MOVE_BAY", $"Move vehicle to bay #{request.ToBayId}", userId, actorName, now);
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteBaySettingsAsync(baySettings);
         await WriteSettingsAsync(settings);
 
@@ -1071,7 +1092,7 @@ public class VehicleAdminController : ControllerBase
         var settings = await ReadSettingsAsync();
         AppendVehicleAudit(settings, id, "REMOVE_BAY", "Remove vehicle from bay", ResolveCurrentUserId(), ResolveCurrentUserDisplayName(), now);
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteBaySettingsAsync(baySettings);
         await WriteSettingsAsync(settings);
 
@@ -2128,7 +2149,4 @@ public class VehicleAdminController : ControllerBase
         public static AssignBayResult Fail(string message) => new() { Success = false, Message = message };
     }
 }
-
-
-
 

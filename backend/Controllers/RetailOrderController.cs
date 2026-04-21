@@ -261,7 +261,7 @@ namespace MyGarage.Controllers
                 try
                 {
                     _db.RetailOrders.Add(retailOrder);
-                    await _db.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
 
                     foreach (var item in retailOrderItems)
                     {
@@ -269,7 +269,7 @@ namespace MyGarage.Controllers
                     }
 
                     _db.RetailOrderItems.AddRange(retailOrderItems);
-                    await _db.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
 
                     if (transaction != null) await transaction.CommitAsync();
 
@@ -316,6 +316,11 @@ namespace MyGarage.Controllers
         }
         private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
         {
+            if (_db.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
             try
             {
                 return await _db.Database.BeginTransactionAsync();
@@ -329,10 +334,18 @@ namespace MyGarage.Controllers
                 throw;
             }
         }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            await _db.SaveChangesAsync();
+            if (tx != null)
+            {
+                await tx.CommitAsync();
+            }
+        }
     }
 }
-
-
 
 
 

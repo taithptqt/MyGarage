@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using MyGarage.DTOs.Requests;
 using MyGarage.DTOs.Responses;
@@ -571,7 +572,7 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.AddRange(items);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             // Rebind assignment state after IDs are generated to avoid losing auto-assigned team/bay
             // when building the first DiagnosisAssignment log.
@@ -587,7 +588,7 @@ namespace MyGarage.Services
                     oldStatus: null,
                     createdBy: diagnosis.UpdatedBy,
                     note: "Created diagnosis ticket")));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return items;
         }
 
@@ -634,7 +635,7 @@ namespace MyGarage.Services
             serviceOrder.Status = status;
             serviceOrder.UpdatedAt = VietnamTime.Now;
             _context.ServiceOrders.Update(serviceOrder);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task<IReadOnlyList<Diagnosis>> GetActiveDiagnosesAsync(long serviceOrderId)
@@ -953,7 +954,7 @@ namespace MyGarage.Services
                 _context.WorkSlots.Update(existingSlot);
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return existingSlot;
         }
 
@@ -1470,7 +1471,7 @@ namespace MyGarage.Services
                     oldStatus: statusBeforeByDiagnosisId.TryGetValue(diagnosis.Id, out var previousStatus) ? previousStatus : null,
                     createdBy: technicianId,
                     note: managerOverride ? "Assigned by manager override" : "Assigned diagnosis")));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task StartDiagnosesAsync(IEnumerable<Diagnosis> diagnoses, long technicianId, long? bayId)
@@ -1538,7 +1539,7 @@ namespace MyGarage.Services
                     oldStatus: statusBeforeByDiagnosisId.TryGetValue(diagnosis.Id, out var previousStatus) ? previousStatus : null,
                     createdBy: technicianId,
                     note: "Lead technician accepted diagnosis")));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task<DiagnosisDispatchSuggestionDto> BuildDispatchSuggestionAsync(long serviceOrderId, long teamId)
@@ -1973,7 +1974,7 @@ namespace MyGarage.Services
             }
 
             _context.Diagnoses.UpdateRange(list);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var supportLogs = new List<DiagnosisAssignment>();
             supportLogs.AddRange(list.Select(diagnosis =>
@@ -1993,7 +1994,7 @@ namespace MyGarage.Services
                     note: "Created supporting-team diagnosis clone")));
 
             AppendDiagnosisAssignments(supportLogs);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task AssignSupportingTeamSelectionAsync(
@@ -2101,7 +2102,7 @@ namespace MyGarage.Services
                     oldStatus: diagnosis.Status,
                     createdBy: teamLeaderId,
                     note: note)));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task RequestCancellationAsync(IEnumerable<Diagnosis> diagnoses, long requestedByStaffId, string reason)
@@ -2144,7 +2145,7 @@ namespace MyGarage.Services
                     createdBy: requestedByStaffId,
                     note: GetCancellationDecisionNote(diagnosis),
                     cancelReason: reason)));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task ApplyCancellationDecisionAsync(ServiceOrder serviceOrder, IEnumerable<Diagnosis> diagnoses, bool approve, long managerId, string? note)
@@ -2209,7 +2210,7 @@ namespace MyGarage.Services
                     createdBy: managerId,
                     note: GetCancellationDecisionNote(diagnosis),
                     cancelReason: GetCancellationReason(diagnosis))));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task ApproveTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? note)
@@ -2251,7 +2252,7 @@ namespace MyGarage.Services
                     oldStatus: oldStatusByDiagnosisId.TryGetValue(diagnosis.Id, out var oldStatus) ? oldStatus : diagnosis.Status,
                     createdBy: teamLeaderId,
                     note: GetForemanNote(diagnosis))));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task RejectTechnicalAsync(IEnumerable<Diagnosis> diagnoses, long teamLeaderId, string? reason)
@@ -2290,7 +2291,7 @@ namespace MyGarage.Services
                     note: GetForemanRejectReason(diagnosis)))
                 .ToList();
             AppendDiagnosisAssignments(rejectedLogs);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task ApproveFinalAsync(IEnumerable<Diagnosis> diagnoses, long approverId, string? note, bool bypassTeamLeader = false, string? bypassAuditNote = null)
@@ -2347,7 +2348,7 @@ namespace MyGarage.Services
                     note: bypassTeamLeader
                         ? (string.IsNullOrWhiteSpace(bypassAuditNote) ? GetTeamLeaderNote(diagnosis) : bypassAuditNote)
                         : GetTeamLeaderNote(diagnosis))));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task RejectFinalAsync(IEnumerable<Diagnosis> diagnoses, long foremanId, string? note)
@@ -2380,7 +2381,7 @@ namespace MyGarage.Services
                     note: GetForemanRejectReason(diagnosis)))
                 .ToList();
             AppendDiagnosisAssignments(rejectedLogs);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task CreateRediagnosisVersionsAsync(
@@ -2441,7 +2442,7 @@ namespace MyGarage.Services
 
             _context.Diagnoses.UpdateRange(diagnoses);
             AppendDiagnosisAssignments(rediagnoseLogs);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var activeLogsByDiagnosisId = rediagnoseLogs
                 .Where(x => x.Id > 0)
@@ -2468,7 +2469,7 @@ namespace MyGarage.Services
                     now: now);
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task<int> CloneRejectedDiagnosesVersionAsync(IEnumerable<Diagnosis> diagnoses, long actorId, string? note = null)
@@ -2589,7 +2590,7 @@ namespace MyGarage.Services
                 };
 
                 _context.DiagnosisRecommendations.Add(clone);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
                 idMap[row.Id] = clone.Id;
             }
 
@@ -2707,7 +2708,7 @@ namespace MyGarage.Services
                     createdBy: actorStaffId,
                     note: "[RECALL_REQUEUED] Re-queued after receptionist recall")));
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return list;
         }
 
@@ -2744,7 +2745,7 @@ namespace MyGarage.Services
                     createdBy: diagnosis.UpdatedBy,
                     note: "Canceled because customer picked up vehicle",
                     cancelReason: GetCancellationReason(diagnosis))));
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task<Diagnosis?> GetDiagnosisEntityAsync(long id)
@@ -2781,7 +2782,7 @@ namespace MyGarage.Services
                     createdBy: diagnosis.UpdatedBy,
                     note: "Diagnosis completed")
             });
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var allStatuses = await _context.Diagnoses
                 .Where(x => x.ServiceOrderId == diagnosis.ServiceOrderId)
@@ -2819,7 +2820,7 @@ namespace MyGarage.Services
                 }
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         public async Task<bool> AreAllDiagnosesCompletedAsync(long serviceOrderId)
@@ -2885,6 +2886,37 @@ namespace MyGarage.Services
 
             var minutes = (now - assignedAt.Value).TotalMinutes;
             return minutes >= 0 && minutes <= GoldenCancelWindowMinutes;
+        }
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -46,7 +47,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         payment.Amount = amountPaid;
         payment.Status = normalizedStatus;
         payment.UpdatedAt = VietnamTime.Now;
-        await _db.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         await UpdateRelatedDocumentsAsync(payment);
 
@@ -135,7 +136,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
             }
         }
 
-        await _db.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
     }
 
     public async Task EnsureInvoiceLinkedAsync(Payment payment)
@@ -178,7 +179,7 @@ public class PaymentConfirmationService : IPaymentConfirmationService
         if (changed)
         {
             payment.UpdatedAt = VietnamTime.Now;
-            await _db.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
     }
 
@@ -602,7 +603,35 @@ public class PaymentConfirmationService : IPaymentConfirmationService
     {
         return $"{value:N0} VND";
     }
+    private async Task SaveChangesInTransactionAsync()
+    {
+        await ExecuteInTransactionAsync(async () =>
+        {
+            await _db.SaveChangesAsync();
+        });
+    }
+
+    private async Task ExecuteInTransactionAsync(Func<Task> action)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            await action();
+            if (tx != null)
+            {
+                await tx.CommitAsync();
+            }
+        });
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _db.Database.BeginTransactionAsync();
+    }
 }
-
-
-

@@ -1,6 +1,7 @@
 using MyGarage.Models;
 using MyGarage.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Data;
 using MyGarage.DTOs.Requests;
 using MyGarage.Common;
@@ -38,7 +39,7 @@ namespace MyGarage.Services
             if (returnedQuantity <= 0)
                 throw new InvalidOperationException("Số lượng trả phải lớn hơn 0.");
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await TryBeginTransactionAsync();
             try
             {
                 // 1. Lấy thông tin MaterialRequestDetail
@@ -140,14 +141,30 @@ namespace MyGarage.Services
                     CreatedBy = materialReturn.ReturnedByStaffId
                 });
 
-                await transaction.CommitAsync();
+                if (transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
                 return materialReturn;
             }
             catch (Exception)
             {
-                await transaction.RollbackAsync();
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 throw;
             }
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

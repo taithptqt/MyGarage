@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests.Execution;
 using MyGarage.DTOs.Responses.Execution;
 using MyGarage.Exceptions;
@@ -57,7 +58,7 @@ namespace MyGarage.Services
             };
 
             _context.ConsumableReturnBundles.Add(bundle);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var productIds = request.Items.Select(x => x.ProductId).Distinct().ToList();
             var products = await _context.Products.AsNoTracking()
@@ -134,7 +135,7 @@ namespace MyGarage.Services
                 }
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var createdItems = await _context.ConsumableReturnBundleItems.AsNoTracking()
                 .Where(x => x.BundleId == bundle.Id)
@@ -173,6 +174,38 @@ namespace MyGarage.Services
             }
 
             return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

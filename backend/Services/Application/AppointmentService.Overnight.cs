@@ -39,7 +39,7 @@ namespace MyGarage.Services
                 var lockMinutes = ResolveOvernightLockMinutes(source, closingTime, slotStepMinutes);
                 var lockSlot = BuildOvernightLockSlot(source, nextMorning, lockMinutes);
                 _context.WorkSlots.Add(lockSlot);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
 
                 result.LockedSlots.Add(new OvernightLockedSlotDto
                 {
@@ -78,7 +78,7 @@ namespace MyGarage.Services
 
             if (affected.Count > 0)
             {
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
 
             return affected.Count;

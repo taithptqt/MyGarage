@@ -52,7 +52,7 @@ namespace MyGarage.Services
             }));
 
             _context.ServiceOrderInsuranceAssets.AddRange(rows);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             await MarkServiceOrderInsuranceUploadsAttachedAsync(serviceOrderId, cardUrls.Concat(damageUrls));
         }
 
@@ -72,7 +72,7 @@ namespace MyGarage.Services
             if (existingRows.Count > 0)
             {
                 _context.ServiceOrderInsuranceAssets.RemoveRange(existingRows);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
 
             await PersistServiceOrderInsuranceAssetsAsync(
@@ -115,7 +115,7 @@ namespace MyGarage.Services
                 upload.UpdatedAt = _clock.UtcNow;
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private static List<string> SanitizeServiceOrderInsuranceAssetUrls(

@@ -96,7 +96,7 @@ namespace MyGarage.Services
 
             if (sentCount > 0)
             {
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
 
             return sentCount;
@@ -137,4 +137,3 @@ namespace MyGarage.Services
         }
     }
 }
-

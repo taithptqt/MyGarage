@@ -220,7 +220,7 @@ namespace MyGarage.Controllers
                         }
                     }
 
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                     if (tx != null) await tx.CommitAsync();
 
                     return Ok(new
@@ -240,20 +240,25 @@ namespace MyGarage.Controllers
         }
         private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            await _context.SaveChangesAsync();
+            if (tx != null)
+            {
+                await tx.CommitAsync();
             }
         }
     }
 }
-
-
-
 
 
 

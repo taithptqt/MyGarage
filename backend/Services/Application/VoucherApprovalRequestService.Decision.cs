@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests;
 using MyGarage.Models;
 
@@ -22,7 +23,7 @@ namespace MyGarage.Services
                 request.RequestPayload = AppendDecisionNote(request.RequestPayload, "APPROVE_NOTE", decision.Note);
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return await _voucherApprovalRequestRepository.GetDetailedByIdAsync(id);
         }
 
@@ -36,7 +37,7 @@ namespace MyGarage.Services
             request.RejectReason = string.IsNullOrWhiteSpace(decision.Reason) ? decision.Note : decision.Reason;
             request.UpdatedAt = VietnamTime.Now;
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return await _voucherApprovalRequestRepository.GetDetailedByIdAsync(id);
         }
 
@@ -58,6 +59,38 @@ namespace MyGarage.Services
             var sanitizedNote = note.Replace("|", "/").Trim();
             var entry = $"{key}:{sanitizedNote}";
             return string.IsNullOrWhiteSpace(payload) ? entry : $"{payload} | {entry}";
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await ExecuteInTransactionAsync(async () =>
+            {
+                await _context.SaveChangesAsync();
+            });
+        }
+
+        private async Task ExecuteInTransactionAsync(Func<Task> action)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await TryBeginTransactionAsync();
+                await action();
+                if (tx != null)
+                {
+                    await tx.CommitAsync();
+                }
+            });
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction != null)
+            {
+                return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

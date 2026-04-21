@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using MyGarage.Options;
+using MyGarage.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -378,6 +379,7 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAuthCredentialRecoveryValidator, AuthCredentialRecoveryValidator>();
 builder.Services.AddScoped<IAuthSecurityStampValidator, AuthSecurityStampValidator>();
 builder.Services.AddSingleton<IAuthRateLimitHook, InMemoryAuthRateLimitHook>();
+builder.Services.AddSingleton<IWriteRequestSpamGuard, InMemoryWriteRequestSpamGuard>();
 builder.Services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 builder.Services.AddHttpClient();
 
@@ -552,6 +554,7 @@ if (hasFrontendBuild && frontendFileProvider is not null)
 
 app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();
+app.UseMiddleware<WriteRequestSpamGuardMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

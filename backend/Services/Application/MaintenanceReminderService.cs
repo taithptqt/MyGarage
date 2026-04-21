@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.DTOs.Requests;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -97,7 +98,7 @@ public sealed class MaintenanceReminderService : IMaintenanceReminderService
         };
 
         _context.MaintenanceReminders.Add(entity);
-        await _context.SaveChangesAsync(cancellationToken);
+        await SaveChangesInTransactionAsync(cancellationToken);
 
         return BuildReminderPayload(entity);
     }
@@ -194,7 +195,7 @@ public sealed class MaintenanceReminderService : IMaintenanceReminderService
             created.Add(reminder);
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await SaveChangesInTransactionAsync(cancellationToken);
 
         return new
         {
@@ -301,7 +302,7 @@ public sealed class MaintenanceReminderService : IMaintenanceReminderService
             sent++;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await SaveChangesInTransactionAsync(cancellationToken);
 
         return new
         {
@@ -340,8 +341,40 @@ public sealed class MaintenanceReminderService : IMaintenanceReminderService
             entity.SentAt = _clock.LocalNow;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await SaveChangesInTransactionAsync(cancellationToken);
         return BuildReminderPayload(entity);
+    }
+
+    private async Task SaveChangesInTransactionAsync(CancellationToken cancellationToken)
+    {
+        await ExecuteInTransactionAsync(async () =>
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }, cancellationToken);
+    }
+
+    private async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken cancellationToken)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync(cancellationToken);
+            await action();
+            if (tx != null)
+            {
+                await tx.CommitAsync(cancellationToken);
+            }
+        });
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _context.Database.BeginTransactionAsync(cancellationToken);
     }
 
     private static string BuildReminderContent(MaintenanceReminder reminder)

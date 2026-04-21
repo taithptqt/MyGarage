@@ -348,6 +348,17 @@ export default function ServiceOrderQuotePage() {
   const autoCreateTriedRef = useRef(false);
   const tabSelectionLockedRef = useRef(false);
   const quotationImportInputRef = useRef(null);
+  const savingActionLockRef = useRef(false);
+
+  const runOnceGuarded = useCallback(async (action) => {
+    if (savingActionLockRef.current || loading || saving) return;
+    savingActionLockRef.current = true;
+    try {
+      await action();
+    } finally {
+      savingActionLockRef.current = false;
+    }
+  }, [loading, saving]);
 
   const customerById = useMemo(() => {
     const map = new Map();
@@ -1215,8 +1226,8 @@ export default function ServiceOrderQuotePage() {
     if (!staffId) return;
 
     autoCreateTriedRef.current = true;
-    void handleCreateDraftQuotation();
-  }, [loading, saving, quotations, recommendations, serviceOrderDetails, staffId, handleCreateDraftQuotation]);
+    void runOnceGuarded(handleCreateDraftQuotation);
+  }, [loading, saving, quotations, recommendations, serviceOrderDetails, staffId, handleCreateDraftQuotation, runOnceGuarded]);
 
   const handleSubmitQuotation = useCallback(async () => {
     const quoteId = Number(readField(activeQuotation, "id", "Id"));
@@ -2361,7 +2372,7 @@ export default function ServiceOrderQuotePage() {
               <h3>Lịch sử phiên bản</h3>
               <div className="version-list">
                 {quotations.length === 0 ? (
-                  <button type="button" className="btn-quota btn-quota-primary" onClick={handleCreateDraftQuotation} disabled={saving || !staffId}>
+                  <button type="button" className="btn-quota btn-quota-primary" onClick={() => { void runOnceGuarded(handleCreateDraftQuotation); }} disabled={saving || !staffId}>
                     <Plus size={18} /> Tạo báo giá V1
                   </button>
                 ) : (
@@ -2424,14 +2435,14 @@ export default function ServiceOrderQuotePage() {
                     type="file"
                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     style={{ display: "none" }}
-                    onChange={handleImportQuotationExcel}
+                    onChange={(event) => { void runOnceGuarded(() => handleImportQuotationExcel(event)); }}
                     disabled={isImportExcelDisabled}
                   />
                   <div className="action-group" style={{ marginBottom: 12 }}>
                     <button
                       type="button"
                       className="btn-quota btn-quota-outline excel-action-btn excel-export-btn"
-                      onClick={handleExportQuotationExcel}
+                      onClick={() => { void runOnceGuarded(handleExportQuotationExcel); }}
                       disabled={isExportExcelDisabled}
                       title={isExportExcelDisabled ? exportExcelDisabledReason : EXCEL_UI_TEXT.exportTitle}
                     >
@@ -2449,12 +2460,12 @@ export default function ServiceOrderQuotePage() {
                     <button
                       type="button"
                       className="btn-quota btn-quota-primary"
-                      onClick={handleSubmitQuotation}
+                      onClick={() => { void runOnceGuarded(handleSubmitQuotation); }}
                       disabled={saving || !canSubmit}
                     >
                       <ShieldCheck size={16} /> Trình duyệt nội bộ
                     </button>
-                    <button type="button" className="btn-quota btn-quota-outline" onClick={handleSaveSplitBilling} disabled={saving || !canEditSplitBilling}>
+                    <button type="button" className="btn-quota btn-quota-outline" onClick={() => { void runOnceGuarded(handleSaveSplitBilling); }} disabled={saving || !canEditSplitBilling}>
                       <Save size={16} /> Lưu tách bill
                     </button>
                   </div>
@@ -2525,7 +2536,7 @@ export default function ServiceOrderQuotePage() {
                       <button
                         type="button"
                         className="btn-quota btn-quota-outline"
-                        onClick={handleSaveQuotationDiscounts}
+                        onClick={() => { void runOnceGuarded(handleSaveQuotationDiscounts); }}
                         disabled={!canEditQuotationDiscount || saving || discountSaving}
                       >
                         <Save size={16} /> Lưu giảm giá
@@ -2601,7 +2612,7 @@ export default function ServiceOrderQuotePage() {
                           />
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
-                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleConfirmInsuranceApproval} disabled={saving || !canConfirmInsuranceApproved || !allUrlsValid}>
+                          <button type="button" className="btn-quota btn-quota-primary" onClick={() => { void runOnceGuarded(handleConfirmInsuranceApproval); }} disabled={saving || !canConfirmInsuranceApproved || !allUrlsValid}>
                             <Check size={16} /> Xác nhận bảo hiểm duyệt
                           </button>
                         </div>
@@ -2622,7 +2633,7 @@ export default function ServiceOrderQuotePage() {
                           {mailSentNotice && <div className="reception-quote-success" style={{ marginTop: 8 }}><Check size={14} /> {mailSentNotice}</div>}
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 16 }}>
-                          <button type="button" className="btn-quota btn-quota-primary" onClick={handleSendQuotationToCustomer} disabled={saving || !canSendToCustomer}>
+                          <button type="button" className="btn-quota btn-quota-primary" onClick={() => { void runOnceGuarded(handleSendQuotationToCustomer); }} disabled={saving || !canSendToCustomer}>
                             <Mail size={16} /> Gửi báo giá cho khách
                           </button>
                         </div>
@@ -2649,7 +2660,7 @@ export default function ServiceOrderQuotePage() {
                           </div>
                         </div>
                         <div className="action-group-tabbed" style={{ marginTop: 24 }}>
-                          <button type="button" className="btn-quota btn-quota-outline" onClick={handleCloneQuotation} disabled={saving || !canClone || !hasCloneReason}>
+                          <button type="button" className="btn-quota btn-quota-outline" onClick={() => { void runOnceGuarded(handleCloneQuotation); }} disabled={saving || !canClone || !hasCloneReason}>
                             <Plus size={16} /> Tạo bản mới (Sao chép)
                           </button>
                         </div>
@@ -2829,7 +2840,7 @@ export default function ServiceOrderQuotePage() {
 
               <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
                 <button type="button" className="btn-quota btn-quota-outline" onClick={() => setShowCancelModal(false)}>Hủy bỏ</button>
-                <button type="button" className="btn-quota btn-quota-primary" style={{ background: "var(--quota-danger)", color: "white" }} onClick={handleCancelAll}>Xác nhận hủy</button>
+                <button type="button" className="btn-quota btn-quota-primary" style={{ background: "var(--quota-danger)", color: "white" }} onClick={() => { void runOnceGuarded(handleCancelAll); }}>Xác nhận hủy</button>
               </div>
             </div>
           </div>
@@ -2838,6 +2849,5 @@ export default function ServiceOrderQuotePage() {
     </div>
   );
 }
-
 
 

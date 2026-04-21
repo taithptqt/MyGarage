@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MyGarage.Enums;
 using MyGarage.Interfaces;
 using MyGarage.Models;
@@ -40,6 +41,26 @@ public class BayAdminController : ControllerBase
     {
         _context = context;
         _environment = environment;
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _context.Database.BeginTransactionAsync();
+    }
+
+    private async Task SaveChangesInTransactionAsync()
+    {
+        await using var tx = await TryBeginTransactionAsync();
+        await _context.SaveChangesAsync();
+        if (tx != null)
+        {
+            await tx.CommitAsync();
+        }
     }
 
     [HttpGet("lookups")]
@@ -764,7 +785,7 @@ public class BayAdminController : ControllerBase
         };
 
         _context.Bays.Add(bay);
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         var settings = await ReadSettingsAsync();
         settings.BayMetadata[bay.Id] = new BayMetadata
@@ -852,7 +873,7 @@ public class BayAdminController : ControllerBase
             SupportedSegments = NormalizeSegments(request.SupportedSegments)
         };
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new
@@ -881,7 +902,7 @@ public class BayAdminController : ControllerBase
         bay.UpdatedAt = now;
         bay.UpdatedBy = userId;
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         return Ok(new { message = "Bay hidden successfully." });
     }
@@ -897,7 +918,7 @@ public class BayAdminController : ControllerBase
         bay.LastStatusChangedAt = VietnamTime.Now;
         bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         return Ok(new { message = "Bay locked successfully." });
     }
@@ -913,7 +934,7 @@ public class BayAdminController : ControllerBase
         bay.LastStatusChangedAt = VietnamTime.Now;
         bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         return Ok(new { message = "Bay unlocked successfully." });
     }
@@ -957,7 +978,7 @@ public class BayAdminController : ControllerBase
         }
         bay.UpdatedAt = VietnamTime.Now;
         bay.UpdatedBy = ResolveCurrentUserId();
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
 
         return Ok(new { message = "Bay status updated successfully." });
     }
@@ -1043,7 +1064,7 @@ public class BayAdminController : ControllerBase
         bay.UpdatedAt = now;
         bay.UpdatedBy = ResolveCurrentUserId();
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle assigned to bay successfully." });
@@ -1108,7 +1129,7 @@ public class BayAdminController : ControllerBase
         bay.UpdatedAt = now;
         bay.UpdatedBy = ResolveCurrentUserId();
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle removed from bay successfully." });
@@ -1243,7 +1264,7 @@ public class BayAdminController : ControllerBase
         toBay.UpdatedAt = now;
         toBay.UpdatedBy = userId;
 
-        await _context.SaveChangesAsync();
+        await SaveChangesInTransactionAsync();
         await WriteSettingsAsync(settings);
 
         return Ok(new { message = "Vehicle moved successfully." });
@@ -1956,4 +1977,3 @@ public class BayAdminController : ControllerBase
         public string? Segment { get; set; }
     }
 }
-

@@ -13,6 +13,8 @@ public partial class QuotationDetail
 
     public long? SourceQuotationDetailId { get; set; }
 
+    public long? DiagnosisRecommendationId { get; set; }
+
     public string ItemType { get; set; } = null!;
 
     public long? ItemId { get; set; }
@@ -82,6 +84,8 @@ public partial class QuotationDetail
     public virtual Quotation Quotation { get; set; } = null!;
 
     public virtual ServiceOrder ServiceOrder { get; set; } = null!;
+
+    public virtual DiagnosisRecommendation? DiagnosisRecommendation { get; set; }
 
     public virtual InsuranceCompany? InsuranceCompany { get; set; }
 

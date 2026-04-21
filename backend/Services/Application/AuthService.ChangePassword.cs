@@ -22,7 +22,7 @@ namespace MyGarage.Services
                 customer.SecurityStamp = CreateSecurityStamp();
                 ResetCustomerLockout(customer);
                 _context.Customers.Update(customer);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
             else if (role == "Staff")
             {
@@ -38,7 +38,7 @@ namespace MyGarage.Services
                 staff.SecurityStamp = CreateSecurityStamp();
                 ResetStaffLockout(staff);
                 _context.Staffs.Update(staff);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
         }
     }

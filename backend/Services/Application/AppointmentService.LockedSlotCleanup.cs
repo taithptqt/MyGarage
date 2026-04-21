@@ -70,9 +70,8 @@ namespace MyGarage.Services
                 reservation.UpdateBy = null;
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
             return expiredSlots.Count;
         }
     }
 }
-

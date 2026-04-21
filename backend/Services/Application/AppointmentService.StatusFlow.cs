@@ -33,7 +33,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await TryBeginTransactionAsync();
                 try
                 {
                     await ReleaseBookingReservationArtifactsAsync(
@@ -46,12 +46,18 @@ namespace MyGarage.Services
                     appointment.CancelReason = effectiveReason;
                     var updated = await PersistStatusChangeAsync(id, appointment, actorStaffId);
 
-                    await transaction.CommitAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.CommitAsync();
+                    }
                     return updated;
                 }
                 catch
                 {
-                    await transaction.RollbackAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync();
+                    }
                     throw;
                 }
             });
@@ -68,7 +74,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await TryBeginTransactionAsync();
                 try
                 {
                     await ApplyArrivalStatusAsync(appointment, arriveTime);
@@ -78,12 +84,18 @@ namespace MyGarage.Services
                         await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
                     }
 
-                    await transaction.CommitAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.CommitAsync();
+                    }
                     return updated;
                 }
                 catch
                 {
-                    await transaction.RollbackAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync();
+                    }
                     throw;
                 }
             });
@@ -100,7 +112,7 @@ namespace MyGarage.Services
             var strategy = _context.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await TryBeginTransactionAsync();
                 try
                 {
                     await ApplyArrivalStatusAsync(appointment, arriveTime);
@@ -110,12 +122,18 @@ namespace MyGarage.Services
                         await EnsureServiceOrderExistsForArrivedAppointmentAsync(updated, arriveTime, actorStaffId);
                     }
 
-                    await transaction.CommitAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.CommitAsync();
+                    }
                     return updated;
                 }
                 catch
                 {
-                    await transaction.RollbackAsync();
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync();
+                    }
                     throw;
                 }
             });
@@ -223,7 +241,7 @@ namespace MyGarage.Services
                 if (cleared)
                 {
                     ApplyUpdateAudit(appointment, actorStaffId);
-                    await _context.SaveChangesAsync();
+                    await SaveChangesInTransactionAsync();
                 }
                 return;
             }
@@ -251,7 +269,7 @@ namespace MyGarage.Services
 
             appointment.CustomerNotes = AppendNoteMarker(appointment.CustomerNotes, "PARTS_CONFIRMATION_BLOCKED");
             ApplyUpdateAudit(appointment, actorStaffId);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             throw new InvalidOperationException(
                 "Không thể xác nhận lịch vì phụ tùng giữ chỗ hiện không đủ. Lễ tân vui lòng liên hệ khách để xác nhận thời gian xử lý.");

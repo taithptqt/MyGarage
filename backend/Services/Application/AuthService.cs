@@ -76,7 +76,7 @@ namespace MyGarage.Services
                 }
 
                 _context.Customers.Update(customer);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
 
                 return GenerateToken(
                     customer.Id.ToString(),
@@ -112,7 +112,7 @@ namespace MyGarage.Services
                 }
 
                 _context.Staffs.Update(staff);
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
             }
 
             var (roleCode, roleName) = await GetStaffRoleInfoAsync(staff.RoleId);
@@ -133,5 +133,4 @@ namespace MyGarage.Services
 
     }
 }
-
 

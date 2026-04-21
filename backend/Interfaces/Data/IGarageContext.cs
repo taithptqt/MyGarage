@@ -81,8 +81,6 @@ namespace MyGarage.Interfaces
         DbSet<QuotationDiscount> QuotationDiscounts { get; }
         DbSet<QuotationApprovalAction> QuotationApprovalActions { get; }
         DbSet<QuotationAccessLink> QuotationAccessLinks { get; }
-        DbSet<TechnicalProposalSnapshot> TechnicalProposalSnapshots { get; }
-        DbSet<TechnicalProposalSnapshotDetail> TechnicalProposalSnapshotDetails { get; }
         DbSet<MandatoryOverrideRequest> MandatoryOverrideRequests { get; }
         DbSet<BayAllocation> BayAllocations { get; }
         DbSet<BayStatusLog> BayStatusLogs { get; }

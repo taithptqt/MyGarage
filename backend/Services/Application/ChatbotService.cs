@@ -437,14 +437,12 @@ public class ChatbotService : IChatbotService
 
     private async Task<IDbContextTransaction?> TryBeginTransactionAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            return await _context.Database.BeginTransactionAsync(cancellationToken);
-        }
-        catch (InvalidOperationException)
+        if (_context.Database.CurrentTransaction != null)
         {
             return null;
         }
+
+        return await _context.Database.BeginTransactionAsync(cancellationToken);
     }
 
     private async Task EnsureCustomerIsActiveAsync(long customerId, CancellationToken cancellationToken)

@@ -5536,9 +5536,6 @@ namespace MyGarage.Migrations
                     b.Property<long>("ServiceOrderId")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("SourceSnapshotId")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime?>("SplitBillingReadyAt")
                         .HasColumnType("datetime2");
 
@@ -5616,8 +5613,6 @@ namespace MyGarage.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("ServiceAdvisorId");
-
-                    b.HasIndex("SourceSnapshotId");
 
                     b.HasIndex("UpdatedBy");
 
@@ -5822,6 +5817,9 @@ namespace MyGarage.Migrations
                     b.Property<long?>("CreatedBy")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("DiagnosisRecommendationId")
+                        .HasColumnType("bigint");
+
                     b.Property<decimal?>("CustomerCoveredAmount")
                         .HasColumnType("decimal(18, 2)");
 
@@ -5933,6 +5931,8 @@ namespace MyGarage.Migrations
                     b.HasIndex("CanceledBy");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("DiagnosisRecommendationId", "IX_QuotationDetails_DiagnosisRecommendationId");
 
                     b.HasIndex("InsuranceCompanyId");
 
@@ -8441,93 +8441,6 @@ namespace MyGarage.Migrations
                         .HasFilter("[Code] IS NOT NULL");
 
                     b.ToTable("Teams", (string)null);
-                });
-
-            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("DiagnosisId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("LockedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("LockedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("ServiceOrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("VersionNo")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DiagnosisId");
-
-                    b.HasIndex("ServiceOrderId");
-
-                    b.ToTable("TechnicalProposalSnapshots");
-                });
-
-            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshotDetail", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("DiagnosisRecommendationId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsMandatory")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ItemId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ItemName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ItemType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<long>("SnapshotId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("TechnicianNotes")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SnapshotId");
-
-                    b.ToTable("TechnicalProposalSnapshotDetails");
                 });
 
             modelBuilder.Entity("MyGarage.Models.TimesheetEntry", b =>
@@ -12050,10 +11963,6 @@ namespace MyGarage.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_Quotations_ServiceOrders");
 
-                    b.HasOne("MyGarage.Models.TechnicalProposalSnapshot", "SourceSnapshot")
-                        .WithMany()
-                        .HasForeignKey("SourceSnapshotId");
-
                     b.HasOne("MyGarage.Models.Staff", "UpdatedByNavigation")
                         .WithMany("QuotationUpdatedByNavigations")
                         .HasForeignKey("UpdatedBy")
@@ -12072,8 +11981,6 @@ namespace MyGarage.Migrations
                     b.Navigation("ServiceAdvisor");
 
                     b.Navigation("ServiceOrder");
-
-                    b.Navigation("SourceSnapshot");
 
                     b.Navigation("UpdatedByNavigation");
                 });
@@ -12119,6 +12026,11 @@ namespace MyGarage.Migrations
                         .HasForeignKey("CreatedBy")
                         .HasConstraintName("FK_QuotationDetails_CreatedBy");
 
+                    b.HasOne("MyGarage.Models.DiagnosisRecommendation", "DiagnosisRecommendation")
+                        .WithMany()
+                        .HasForeignKey("DiagnosisRecommendationId")
+                        .HasConstraintName("FK_QuotationDetails_DiagnosisRecommendations");
+
                     b.HasOne("MyGarage.Models.InsuranceCompany", "InsuranceCompany")
                         .WithMany()
                         .HasForeignKey("InsuranceCompanyId")
@@ -12152,6 +12064,8 @@ namespace MyGarage.Migrations
                     b.Navigation("CanceledByNavigation");
 
                     b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("DiagnosisRecommendation");
 
                     b.Navigation("InsuranceCompany");
 
@@ -13098,36 +13012,6 @@ namespace MyGarage.Migrations
                     b.Navigation("Leader");
                 });
 
-            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
-                {
-                    b.HasOne("MyGarage.Models.Diagnosis", "Diagnosis")
-                        .WithMany("TechnicalProposalSnapshots")
-                        .HasForeignKey("DiagnosisId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MyGarage.Models.ServiceOrder", "ServiceOrder")
-                        .WithMany("TechnicalProposalSnapshots")
-                        .HasForeignKey("ServiceOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Diagnosis");
-
-                    b.Navigation("ServiceOrder");
-                });
-
-            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshotDetail", b =>
-                {
-                    b.HasOne("MyGarage.Models.TechnicalProposalSnapshot", "Snapshot")
-                        .WithMany("TechnicalProposalSnapshotDetails")
-                        .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Snapshot");
-                });
-
             modelBuilder.Entity("MyGarage.Models.TimesheetEntry", b =>
                 {
                     b.HasOne("MyGarage.Models.Staff", "ApprovedByStaff")
@@ -13849,7 +13733,6 @@ namespace MyGarage.Migrations
 
                     b.Navigation("Quotations");
 
-                    b.Navigation("TechnicalProposalSnapshots");
                 });
 
             modelBuilder.Entity("MyGarage.Models.DiagnosisAssignment", b =>
@@ -14118,8 +14001,6 @@ namespace MyGarage.Migrations
                     b.Navigation("ServiceOrderSnapshots");
 
                     b.Navigation("ServiceRefunds");
-
-                    b.Navigation("TechnicalProposalSnapshots");
 
                     b.Navigation("VehicleConditionLogs");
 
@@ -14568,11 +14449,6 @@ namespace MyGarage.Migrations
             modelBuilder.Entity("MyGarage.Models.Team", b =>
                 {
                     b.Navigation("Staff");
-                });
-
-            modelBuilder.Entity("MyGarage.Models.TechnicalProposalSnapshot", b =>
-                {
-                    b.Navigation("TechnicalProposalSnapshotDetails");
                 });
 
             modelBuilder.Entity("MyGarage.Models.Vehicle", b =>

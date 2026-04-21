@@ -43,7 +43,7 @@ namespace MyGarage.Services
             };
 
             _context.PasswordResetTokens.Add(token);
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
 
             var resetUrl = BuildPasswordResetUrl(rawToken);
             var emailBody =
@@ -118,7 +118,7 @@ namespace MyGarage.Services
             }
 
             token.UsedAt = now;
-            await _context.SaveChangesAsync();
+            await SaveChangesInTransactionAsync();
         }
 
         private async Task<PasswordRecoveryTarget?> ResolvePasswordRecoveryTargetAsync(string normalizedEmail)

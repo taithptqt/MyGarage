@@ -506,7 +506,7 @@ namespace MyGarage.Controllers
                     FileUrl = uploaded.Url,
                     Status = ServiceOrderInsuranceUploadStatuses.Staged
                 });
-                await _context.SaveChangesAsync();
+                await SaveChangesInTransactionAsync();
 
                 return Ok(new
                 {
@@ -582,13 +582,24 @@ namespace MyGarage.Controllers
                         .FirstOrDefault()
                 })
                 .ToDictionaryAsync(item => item.ServiceOrderId, item => item.InsuranceCompanyId);
+            var discountByOrderId = await _context.ServiceOrderDiscounts
+                .AsNoTracking()
+                .Where(discount => orderIds.Contains(discount.ServiceOrderId))
+                .GroupBy(discount => discount.ServiceOrderId)
+                .Select(group => new
+                {
+                    ServiceOrderId = group.Key,
+                    TotalDiscount = group.Sum(discount => discount.AppliedAmount > 0m ? discount.AppliedAmount : (discount.DiscountValue < 0m ? 0m : discount.DiscountValue))
+                })
+                .ToDictionaryAsync(item => item.ServiceOrderId, item => item.TotalDiscount);
 
             return serviceOrders
                 .Select(item => MapServiceOrderResponse(
                     item,
                     vehicleById.TryGetValue(item.VehicleId, out var vehicle) ? vehicle : null,
                     assetsByOrderId.TryGetValue(item.Id, out var assets) ? assets : null,
-                    insuranceCompanyByOrderId.TryGetValue(item.Id, out var insuranceCompanyId) ? insuranceCompanyId : null))
+                    insuranceCompanyByOrderId.TryGetValue(item.Id, out var insuranceCompanyId) ? insuranceCompanyId : null,
+                    discountByOrderId.TryGetValue(item.Id, out var totalDiscount) ? totalDiscount : 0m))
                 .ToList();
         }
 
@@ -610,6 +621,10 @@ namespace MyGarage.Controllers
                 .OrderBy(detail => detail.Id)
                 .Select(detail => detail.InsuranceCompanyId)
                 .FirstOrDefaultAsync();
+            var totalDiscount = await _context.ServiceOrderDiscounts
+                .AsNoTracking()
+                .Where(discount => discount.ServiceOrderId == item.Id)
+                .SumAsync(discount => (decimal?)(discount.AppliedAmount > 0m ? discount.AppliedAmount : (discount.DiscountValue < 0m ? 0m : discount.DiscountValue))) ?? 0m;
             var vehicle = await _context.Vehicles
                 .AsNoTracking()
                 .Where(v => v.Id == item.VehicleId)
@@ -626,14 +641,15 @@ namespace MyGarage.Controllers
                 })
                 .FirstOrDefaultAsync();
 
-            return MapServiceOrderResponse(item, vehicle, assets, insuranceCompanyId);
+            return MapServiceOrderResponse(item, vehicle, assets, insuranceCompanyId, totalDiscount);
         }
 
         private ServiceOrderResponseDto MapServiceOrderResponse(
             ServiceOrder item,
             ServiceOrderVehicleSnapshot? vehicle,
             IReadOnlyCollection<ServiceOrderInsuranceAsset>? assets,
-            long? insuranceCompanyId)
+            long? insuranceCompanyId,
+            decimal totalDiscount)
         {
             var dto = _mapper.Map<ServiceOrderResponseDto>(item);
             dto.VehicleLicensePlate = vehicle?.LicensePlate;
@@ -642,6 +658,7 @@ namespace MyGarage.Controllers
             dto.VehicleBrandId = vehicle?.BrandId;
             dto.VehicleBrandName = vehicle?.BrandName;
             dto.InsuranceCompanyId = insuranceCompanyId > 0 ? insuranceCompanyId : null;
+            dto.TotalDiscount = totalDiscount;
             dto.InsuranceCardImageUrls = assets?
                 .Where(asset => string.Equals(asset.AssetType, AppointmentInsuranceAssetTypes.Card, StringComparison.OrdinalIgnoreCase))
                 .Select(asset => asset.FileUrl)
@@ -936,13 +953,21 @@ namespace MyGarage.Controllers
 
         private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
         {
-            try
-            {
-                return await _context.Database.BeginTransactionAsync();
-            }
-            catch (InvalidOperationException)
+            if (_context.Database.CurrentTransaction != null)
             {
                 return null;
+            }
+
+            return await _context.Database.BeginTransactionAsync();
+        }
+
+        private async Task SaveChangesInTransactionAsync()
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            await _context.SaveChangesAsync();
+            if (tx != null)
+            {
+                await tx.CommitAsync();
             }
         }
     }
