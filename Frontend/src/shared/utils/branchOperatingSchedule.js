@@ -1,4 +1,4 @@
-﻿function readField(source, keys, fallback = null) {
+function readField(source, keys, fallback = null) {
   for (const key of keys) {
     if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
   }
@@ -55,7 +55,7 @@ export function getBranchClosedMessage(dateValue) {
   ) {
     return "Gara không hoạt động vào hôm nay, vui lòng quay lại vào hôm sau.";
   }
-  return "Gara không ho?t ??ng v�o ngày n�y, vui l�ng chọn ngày kh�c.";
+  return "Gara không hoạt động vào ngày này, vui lòng chọn ngày khác.";
 }
 
 

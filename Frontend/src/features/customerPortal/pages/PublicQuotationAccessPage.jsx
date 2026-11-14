@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { getStatusLabelVi } from "@shared/core/utils/statusLabelUtils";
@@ -78,7 +78,7 @@ function formatCountdown(seconds) {
 
 const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng.";
 const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng.";
-const SERVICE_ROW_TOOLTIP_STATIC = "D�ng dịch vụ ch�nh trong b�o gi�.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
 
 export default function PublicQuotationAccessPage() {
   const { token } = useParams();
@@ -95,6 +95,8 @@ export default function PublicQuotationAccessPage() {
   const [pendingDecision, setPendingDecision] = useState(null);
   const [quotation, setQuotation] = useState(null);
   const [collapsedPartGroups, setCollapsedPartGroups] = useState({});
+  const isAutoSubmittingOtpRef = useRef(false);
+  const lastAutoSubmittedOtpRef = useRef("");
 
   const loadQuotation = useCallback(async () => {
     if (!token) return;
@@ -104,7 +106,7 @@ export default function PublicQuotationAccessPage() {
       const data = await serviceOrderApi.getQuotationByPublicToken(token);
       setQuotation(data || null);
     } catch (err) {
-      setError(err?.message || "Không th? t?i b�o gi�.");
+      setError(err?.message || "Không thể tải báo giá.");
     } finally {
       setLoading(false);
     }
@@ -384,11 +386,11 @@ export default function PublicQuotationAccessPage() {
     </div>
   );
 
-  async function submitDecision(approved, otpOverride = null) {
+  const submitDecision = useCallback(async (approved, otpOverride = null) => {
     if (!token) return;
     const normalizedOtp = String(otpOverride ?? otpCode ?? "").trim();
     if (!/^\d{6}$/.test(normalizedOtp)) {
-      setError("Vui l�ng nh?p d�ng m� OTP g?m 6 s? tru?c khi x�c nh?n.");
+      setError("Vui lòng nhập đúng mã OTP gồm 6 số trước khi xác nhận.");
       return;
     }
 
@@ -402,7 +404,7 @@ export default function PublicQuotationAccessPage() {
         otpCode: normalizedOtp,
       };
       await serviceOrderApi.applyQuotationPublicDecision(token, payload);
-      setMessage(approved ? "B?n d� x�c nh?n duy?t b�o gi� th�nh c�ng." : "B?n d� t? ch?i b�o gi�.");
+      setMessage(approved ? "Bạn đã xác nhận duyệt báo giá thành công." : "Bạn đã từ chối báo giá.");
       setPendingDecision(null);
       setOtpCode("");
       setOtpSentAt(null);
@@ -413,8 +415,9 @@ export default function PublicQuotationAccessPage() {
       setError(err?.message || "Không thể ghi nhận quyết định.");
     } finally {
       setSaving(false);
+      isAutoSubmittingOtpRef.current = false;
     }
-  }
+  }, [loadQuotation, note, otpCode, token]);
 
   async function startOtpFlow(approved) {
     if (!token) return;
@@ -423,6 +426,8 @@ export default function PublicQuotationAccessPage() {
 
     setPendingDecision(approved);
     setOtpCode("");
+    lastAutoSubmittedOtpRef.current = "";
+    isAutoSubmittingOtpRef.current = false;
     setSendingOtp(true);
     setError("");
     setMessage("");
@@ -439,7 +444,7 @@ export default function PublicQuotationAccessPage() {
       setOtpExpiresAt(resolvedExpiresAt);
       setOtpRemainingSeconds(Math.max(0, Math.ceil((resolvedExpiresAt.getTime() - Date.now()) / 1000)));
       const masked = data?.maskedEmail ? ` (${data.maskedEmail})` : "";
-      setMessage(`M� OTP d� ??c g?i${masked}. Vui l�ng nh?p m� d? ${approved ? "duy?t" : "t? ch?i"} b�o gi�.`);
+      setMessage(`Mã OTP đã được gửi${masked}. Vui lòng nhập mã để ${approved ? "duyệt" : "từ chối"} báo giá.`);
       setTimeout(() => {
         const wrap = document.querySelector(".quote-portal-otp-wrap");
         if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -470,8 +475,21 @@ export default function PublicQuotationAccessPage() {
     return () => clearInterval(timerId);
   }, [isOtpStepVisible, otpExpiresAt]);
 
+  useEffect(() => {
+    if (pendingDecision === null) return;
+    if (sendingOtp || saving) return;
+    if (otpRemainingSeconds <= 0) return;
+    if (!/^\d{6}$/.test(otpCode)) return;
+    if (isAutoSubmittingOtpRef.current) return;
+    if (lastAutoSubmittedOtpRef.current === otpCode) return;
+
+    isAutoSubmittingOtpRef.current = true;
+    lastAutoSubmittedOtpRef.current = otpCode;
+    void submitDecision(pendingDecision, otpCode);
+  }, [otpCode, otpRemainingSeconds, pendingDecision, saving, sendingOtp, submitDecision]);
+
   if (loading) {
-    return <div className="quote-portal-loading">Đang t?i b�o gi�...</div>;
+    return <div className="quote-portal-loading">Đang tải báo giá...</div>;
   }
 
   if (!quotation) {
@@ -479,13 +497,13 @@ export default function PublicQuotationAccessPage() {
       <div className="quote-portal">
         <div className="quote-portal-shell">
           <section className="quote-portal-card quote-portal-empty-state">
-            <h2>Không th? truy c?p b�o gi�</h2>
+            <h2>Không thể truy cập báo giá</h2>
             <p className="quote-portal-empty-hint">
-              {error || "Không t�m th?y b�o gi� c�ng khai tuong ?ng v?i li�n k?t n�y."}
+              {error || "Không tìm thấy báo giá công khai tương ứng với liên kết này."}
             </p>
             {isExpiredLink ? (
               <p className="quote-portal-alert quote-portal-alert-expired">
-                Li�n k?t b�o gi� d� h?t h?n ho?c không c�n hi?u l?c. Vui l�ng li�n h? c? v?n dịch vụ d? ??c c?p li�n k?t m?i.
+                Liên kết báo giá đã hết hạn hoặc không còn hiệu lực. Vui lòng liên hệ cố vấn dịch vụ để được cấp liên kết mới.
               </p>
             ) : null}
           </section>
@@ -499,10 +517,10 @@ export default function PublicQuotationAccessPage() {
       <div className="quote-portal-shell">
         <header className="quote-portal-header">
           <div>
-            <p className="quote-portal-eyebrow">MyGarage - Cầng duy?t b�o gi�</p>
-            <h1>B�o gi� s?a ch?a xe {quotation.vehicleLicensePlate || "-"}</h1>
+            <p className="quote-portal-eyebrow">MyGarage - Cổng duyệt báo giá</p>
+            <h1>Báo giá sửa chữa xe {quotation.vehicleLicensePlate || "-"}</h1>
             <p className="quote-portal-subtitle">
-              K�nh ch�o <strong>{quotation.customerName || "Qu� kh�ch"}</strong>, vui l�ng xem chi ti?t v� chọn phuong �n x? l� ph� h?p.
+              Kính chào <strong>{quotation.customerName || "Quý khách"}</strong>, vui lòng xem chi tiết và chọn phương án xử lý phù hợp.
             </p>
           </div>
           <div className="quote-portal-status">
@@ -518,15 +536,15 @@ export default function PublicQuotationAccessPage() {
           <div className="premium-table-wrapper quote-detail-wrapper">
             {renderGroupedTableSection(
               "initial",
-              "Dịch vụ kh�ch chọn ban d?u",
+              "Dịch vụ khách chọn ban đầu",
               groupedRowsByServiceType.initialGroups,
               "Không có dịch vụ ban đầu.",
             )}
             {renderGroupedTableSection(
               "supplementary",
-              "Dịch vụ ph�t sinh (d� duy?t b�o gi� b? sung)",
+              "Dịch vụ phát sinh (đã duyệt báo giá bổ sung)",
               groupedRowsByServiceType.supplementaryGroups,
-              "Chua c� dịch vụ ph�t sinh.",
+              "Chưa có dịch vụ phát sinh.",
               "quote-detail-section-supplementary",
             )}
           </div>
@@ -536,11 +554,11 @@ export default function PublicQuotationAccessPage() {
           <div className="summary-details">
             <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
 
-            <div className="summary-subtitle">Ph�n t�ch gi� tr? (Ch?a VAT):</div>
+            <div className="summary-subtitle">Phân tích giá trị (Chưa VAT):</div>
             <div className="summary-line">
               <span className="summary-line-label">
                 <span className="summary-marker marker-labor" />
-                Tổng chi ph� Nh�n c�ng
+                Tổng chi phí Nhân công
               </span>
               <span className="summary-line-dots" />
               <span className="summary-line-value">{formatMoney(paymentSummary.totalLabor)}</span>
@@ -559,7 +577,7 @@ export default function PublicQuotationAccessPage() {
               <span className="summary-line-value">{formatMoney(paymentSummary.beforeVat)}</span>
             </div>
 
-            <div className="summary-subtitle">Thu? Gi� tr? gia tang (VAT):</div>
+            <div className="summary-subtitle">Thuế Giá trị gia tăng (VAT):</div>
             {paymentSummary.vatGroups.length > 0
               ? paymentSummary.vatGroups.map((group) => (
                 <div key={`vat-${group.taxRate}`} className="summary-line">
@@ -588,7 +606,7 @@ export default function PublicQuotationAccessPage() {
             </div>
 
             <div className="summary-divider" />
-            <div className="summary-subtitle">Ph�n b? thanh to�n:</div>
+            <div className="summary-subtitle">Phân bổ thanh toán:</div>
             <div className="summary-line">
               <span className="summary-line-label">
                 <span className="summary-marker marker-insurance" />
@@ -641,9 +659,6 @@ export default function PublicQuotationAccessPage() {
                 onChange={(e) => {
                   const nextOtp = (e.target.value || "").replace(/\D/g, "").slice(0, 6);
                   setOtpCode(nextOtp);
-                  if (nextOtp.length === 6 && pendingDecision !== null && !saving && !sendingOtp && otpRemainingSeconds > 0) {
-                    void submitDecision(pendingDecision, nextOtp);
-                  }
                 }}
                 placeholder="Nhập OTP 6 số"
                 disabled={saving}
@@ -664,7 +679,7 @@ export default function PublicQuotationAccessPage() {
                 <span className="quote-portal-otp-hint">
                   OTP đã gửi lúc {otpSentAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}.{" "}
                   {otpRemainingSeconds > 0
-                    ? `C�n hi?u l?c ${formatCountdown(otpRemainingSeconds)}. Nh?p d? 6 s? d? x�c nh?n t? d?ng.`
+                    ? `Còn hiệu lực ${formatCountdown(otpRemainingSeconds)}. Nhập đủ 6 số để xác nhận tự động.`
                     : "OTP đã hết hạn. Vui lòng bấm Gửi lại OTP."}
                 </span>
               ) : null}
@@ -701,7 +716,7 @@ export default function PublicQuotationAccessPage() {
         <div className="floating-bottom-bar">
           <div className="floating-bar-content">
             <div className="floating-bar-left">
-              <span className="floating-bar-label">Tổng thanh to�n</span>
+              <span className="floating-bar-label">Tổng thanh toán</span>
               <span className="floating-bar-value">{formatMoney(paymentSummary.customerPayable)}</span>
             </div>
             <div className="floating-bar-right">

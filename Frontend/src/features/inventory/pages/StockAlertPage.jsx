@@ -69,7 +69,7 @@ export default function StockAlertPage() {
 
   const handleCreatePo = (item) => {
     // Navigate to PO page and pre-fill productId
-    navigate(`/inventory/purchase-orders/new?productId=${item.productId || item.ProductId}`);
+    navigate(`/workshop/inventory/purchase-orders/new?productId=${item.productId || item.ProductId}`);
   };
 
   return (
@@ -79,8 +79,8 @@ export default function StockAlertPage() {
           <h1 className="stka-title">⚠️ Cảnh báo Tồn kho</h1>
           <p className="stka-subtitle">Trí tuệ thông minh cảnh báo tự động các mặt hàng cần nhập bổ sung.</p>
         </div>
-        <button className="stka-btn stka-btn-primary" onClick={() => navigate("/inventory/purchase-orders/new")}>
-          + L?p Đơn Đặt H�ng (PO)
+        <button className="stka-btn stka-btn-primary" onClick={() => navigate("/workshop/inventory/purchase-orders/new")}>
+          + Lập Đơn Đặt Hàng (PO)
         </button>
       </div>
 
@@ -89,7 +89,7 @@ export default function StockAlertPage() {
         <div className="stka-global-banner">
           <div className="stka-banner-icon">🚨</div>
           <div className="stka-banner-text">
-            <strong>Cầnh b?o kh?n c?p:</strong> ?ang c? {processedAlerts.OUT_OF_STOCK.length} m?t h?ng d? h?t ho?n to?n trong kho. Cần l?n PO nh?p ngay l?p t?c!
+            <strong>Cảnh báo khẩn cấp:</strong> Đang có {processedAlerts.OUT_OF_STOCK.length} mặt hàng đã hết hoàn toàn trong kho. Cần lên PO nhập ngay lập tức!
           </div>
         </div>
       )}
@@ -101,19 +101,19 @@ export default function StockAlertPage() {
           className={`stka-tab ${activeTab === "OUT_OF_STOCK" ? "active" : ""}`}
           onClick={() => setActiveTab("OUT_OF_STOCK")}
         >
-          ?? H?t h�ng ({processedAlerts.OUT_OF_STOCK.length})
+          🚨 Hết hàng ({processedAlerts.OUT_OF_STOCK.length})
         </button>
         <button 
           className={`stka-tab ${activeTab === "LOW_STOCK" ? "active" : ""}`}
           onClick={() => setActiveTab("LOW_STOCK")}
         >
-          ?? S?p h?t ({processedAlerts.LOW_STOCK.length})
+          ⚠️ Sắp hết ({processedAlerts.LOW_STOCK.length})
         </button>
         <button 
           className={`stka-tab ${activeTab === "ON_ORDER" ? "active" : ""}`}
           onClick={() => setActiveTab("ON_ORDER")}
         >
-          ?? Đang d?t ({processedAlerts.ON_ORDER.length})
+          📦 Đang đặt ({processedAlerts.ON_ORDER.length})
         </button>
       </div>
 
@@ -123,19 +123,19 @@ export default function StockAlertPage() {
         ) : currentList.length === 0 ? (
           <div className="stka-empty">
             <span className="stka-empty-icon">✅</span>
-            <p>Kh?ng c? cầnh b?o n?o trong m?c n?y.</p>
+            <p>Không có cảnh báo nào trong mục này.</p>
           </div>
         ) : (
           <div className="stka-table-wrap">
             <table className="stka-table">
               <thead>
                 <tr>
-                  <th>M� phụ tùng</th>
-                  <th>T�n phụ tùng</th>
+                  <th>Mã phụ tùng</th>
+                  <th>Tên phụ tùng</th>
                   <th className="t-right">Tồn hiện tại</th>
                   <th className="t-right">Mức tối thiểu</th>
-                  <th>Ng?y cầnh b?o</th>
-                  <th>H�nh d?ng</th>
+                  <th>Ngày cảnh báo</th>
+                <th>Hành động</th>
                 </tr>
               </thead>
               <tbody>
@@ -156,7 +156,7 @@ export default function StockAlertPage() {
                       <td>
                         {activeTab !== "ON_ORDER" ? (
                           <button className="stka-btn stka-btn-ghost btn-sm" onClick={() => handleCreatePo(it)}>
-                            + T?o PO
+                            + Tạo PO
                           </button>
                         ) : (
                           <span className="stka-status badge-blue">Đang về kho</span>

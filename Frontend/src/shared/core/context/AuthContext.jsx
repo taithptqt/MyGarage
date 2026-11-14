@@ -5,7 +5,6 @@ import { ensureAuthorizedRole, mapAuthUserPayload } from "@features/auth/utils/a
 import {
   clearAuthStorage,
   persistAuthUser,
-  readAuthToken,
   readAuthUser,
 } from "@features/auth/utils/authStorage";
 
@@ -18,10 +17,9 @@ export const AuthProvider = ({ children }) => {
 
   const hydrateProfileAfterAuth = async (baseUser) => {
     try {
-      const token = baseUser?.token || readAuthToken();
       const { ok, data } = await authApi.getProfile();
       if (ok && data) {
-        const updatedUser = mapAuthUserPayload(data, token);
+        const updatedUser = mapAuthUserPayload(data);
         ensureAuthorizedRole(updatedUser);
         setUser(updatedUser);
         persistAuthUser(updatedUser);
@@ -33,7 +31,8 @@ export const AuthProvider = ({ children }) => {
     return baseUser;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await authApi.logout().catch(() => {});
     clearAuthStorage();
     setUser(null);
     navigate("/login");
@@ -41,23 +40,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = readAuthToken();
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
       try {
-        const { ok, data } = await authApi.getProfile();
-        if (ok && data) {
-          const updatedUser = mapAuthUserPayload(data, token);
+        const { ok, status, data } = await authApi.getSession();
+        if (ok && status === 200 && data && (data.roleCode || data.RoleCode)) {
+          const updatedUser = mapAuthUserPayload(data);
           ensureAuthorizedRole(updatedUser);
           setUser(updatedUser);
           persistAuthUser(updatedUser);
-        } else if (!ok && data?.status === 401) {
-          logout();
-          return;
+        } else if (status === 204 || status === 401 || (!ok && status)) {
+          clearAuthStorage();
+          setUser(null);
         }
       } catch (error) {
         console.error("Auth initialization failed:", error);

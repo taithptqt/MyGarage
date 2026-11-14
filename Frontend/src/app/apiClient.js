@@ -1,4 +1,5 @@
 ﻿import axios from "axios";
+import { collectPages } from "./collectPages";
 
 function resolveApiBaseUrl() {
   const configured = (import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -57,6 +58,7 @@ function extractErrorMessage(error) {
 function isPublicAuthRequestUrl(requestUrl) {
   const normalizedUrl = String(requestUrl || "").toLowerCase();
   return [
+    "/api/auth/session",
     "/api/auth/sessions",
     "/api/auth/accounts",
     "/api/auth/external-sessions/google",
@@ -69,6 +71,7 @@ function isPublicAuthRequestUrl(requestUrl) {
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL || undefined,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json"
   }
@@ -152,13 +155,13 @@ function markRequestDone(fingerprint) {
 }
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
   const method = normalizeMethod(config.method);
-  if (UNSAFE_HTTP_METHODS.has(method)) {
+  const isFormDataRequest =
+    typeof FormData !== "undefined" && config.data instanceof FormData;
+
+  // Do not dedupe multipart uploads on client side; file uploads can legitimately
+  // have similar metadata and should be guarded by server-side checks.
+  if (UNSAFE_HTTP_METHODS.has(method) && !isFormDataRequest) {
     const fingerprint = getRequestFingerprint(config);
     const now = Date.now();
     pruneCooldown(now);
@@ -177,7 +180,7 @@ apiClient.interceptors.request.use((config) => {
   }
 
   // FormData cần boundary tự sinh; header json mặc định làm ASP.NET không bind IFormFile → 400
-  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+  if (isFormDataRequest) {
     if (config.headers && typeof config.headers.delete === "function") {
       config.headers.delete("Content-Type");
     } else {
@@ -197,6 +200,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem("mygarage_token");
       localStorage.removeItem("mygarage_user");
+      localStorage.removeItem("mygarage_last_active_at");
       localStorage.removeItem("token");
       
       if (typeof window !== "undefined") {
@@ -216,16 +220,21 @@ apiClient.interceptors.response.use(
 export async function request(config) {
   try {
     const response = await apiClient.request(config);
-    return response.data;
+    return await collectPages(config, response, (nextConfig) => apiClient.request(nextConfig));
   } catch (error) {
-    throw new Error(extractErrorMessage(error));
+    const wrapped = new Error(extractErrorMessage(error));
+    wrapped.response = error?.response;
+    wrapped.status = error?.response?.status;
+    wrapped.data = error?.response?.data;
+    throw wrapped;
   }
 }
 
 export async function requestSafe(config) {
   try {
     const response = await apiClient.request(config);
-    return { ok: true, status: response.status, data: response.data };
+    const data = await collectPages(config, response, (nextConfig) => apiClient.request(nextConfig));
+    return { ok: true, status: response.status, data, headers: response.headers };
   } catch (error) {
     const status = error?.response?.status;
     const data = error?.response?.data;

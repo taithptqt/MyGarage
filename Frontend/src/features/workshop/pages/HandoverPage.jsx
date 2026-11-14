@@ -102,7 +102,7 @@ export default function HandoverPage() {
       } else {
         /* fallback: derive readiness from order fields */
         setReadiness({
-          qcPassed:    ["PASSED","QC_PASSED"].includes(String(raw?.qcStatus ?? raw?.QcStatus ?? "").toUpperCase()),
+          qcPassed:    ["PASSED","QC_PASSED","PASS"].includes(String(raw?.qcStatus ?? raw?.QcStatus ?? raw?.qcstatus ?? "").toUpperCase()),
           paymentDone: ["PAID"].includes(String(raw?.paymentStatus ?? raw?.PaymentStatus ?? "").toUpperCase()),
           invoiceReady: !!(raw?.invoiceNumber ?? raw?.InvoiceNumber),
           bayReleased:  false,
@@ -124,9 +124,9 @@ export default function HandoverPage() {
 
   /* -- validation -- */
   const allChecked = Object.values(checks).every(Boolean);
-  const qcOk      = readiness?.qcPassed ?? readiness?.QcPassed ?? false;
-  const payOk     = readiness?.paymentDone ?? readiness?.PaymentDone ?? false;
-  const canHandover = qcOk && payOk && allChecked && receiverName.trim();
+  const qcOk      = readiness?.qcPassed ?? readiness?.QcPassed ?? readiness?.isQcPassed ?? readiness?.IsQcPassed ?? false;
+  const payOk     = readiness?.paymentDone ?? readiness?.PaymentDone ?? readiness?.isPaid ?? readiness?.IsPaid ?? false;
+  const canHandover = (readiness?.canHandover ?? readiness?.CanHandover ?? (qcOk && payOk)) && allChecked && receiverName.trim();
 
   /* -- submit -- */
   const handleHandover = async () => {
@@ -139,6 +139,7 @@ export default function HandoverPage() {
         url: `/api/service-orders/${orderId}/handover`,
         method: "POST",
         data: {
+          staffId:       user?.id ?? user?.staffId,
           handedOverBy:  user?.id ?? user?.staffId,
           receiverName:  receiverName.trim(),
           receiverPhone: receiverPhone.trim() || null,

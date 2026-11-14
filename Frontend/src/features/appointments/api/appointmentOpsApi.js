@@ -112,3 +112,7 @@ export async function lockOvernightSlots(branchId, businessDate) {
     data: businessDate ? { businessDate } : {},
   });
 }
+
+export async function getReceptionAppointmentPage(params) {
+  return request({ url: "/api/appointments/reception-list", method: "GET", params });
+}

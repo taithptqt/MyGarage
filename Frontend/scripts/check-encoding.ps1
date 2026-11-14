@@ -17,7 +17,8 @@ $files = Get-ChildItem -Path $rootPath -Recurse -File -Include $extensions |
     Where-Object { $_.FullName -notmatch $excludeDirPattern }
 
 $patterns = @(
-    "ï¿½",
+    "\uFFFD",
+    "\?anger",
     "Ã[¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿]",
     "Ä‘",
     "Æ°",

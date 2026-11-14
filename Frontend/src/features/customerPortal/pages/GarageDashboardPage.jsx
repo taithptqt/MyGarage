@@ -7,7 +7,7 @@ import "./CustomerPortalShell.css";
 import "./GarageDashboardPage.css";
 
 function fmtDt(v) {
-  if (!v) return "�";
+  if (!v) return "—";
   try {
     return new Date(v).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" });
   } catch {
@@ -31,7 +31,7 @@ export default function GarageDashboardPage() {
         const nextData = await getCustomerDashboard();
         if (!cancelled) setData(nextData);
       } catch (e) {
-        if (!cancelled) setError(e?.message || "Không t?i ??c dữ liệu.");
+        if (!cancelled) setError(e?.message || "Không tải được dữ liệu.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -49,7 +49,7 @@ export default function GarageDashboardPage() {
     () => [
       { label: "Xe đang theo dõi", value: tracks.length },
       { label: "Lịch hẹn sắp tới", value: appointments.length },
-      { label: "L?n hoàn tất g?n nh?t", value: last?.orderCode || "�" },
+      { label: "Lần hoàn tất gần nhất", value: last?.orderCode || "—" },
     ],
     [appointments.length, last?.orderCode, tracks.length]
   );
@@ -70,7 +70,7 @@ export default function GarageDashboardPage() {
       return {
         title: "Không có lệnh sửa chữa đang active",
         body: `Lần hoàn tất gần nhất là ${last.orderCode || "đơn gần nhất"} ${
-          last.completedAt ? `v�o ${fmtDt(last.completedAt)}` : ""
+          last.completedAt ? `vào ${fmtDt(last.completedAt)}` : ""
         }.`,
       };
     }
@@ -119,7 +119,7 @@ export default function GarageDashboardPage() {
           </section>
 
           {error ? <div className="cp-error">{error}</div> : null}
-          {loading ? <p className="cp-muted">Đang t?i�</p> : null}
+          {loading ? <p className="cp-muted">Đang tải…</p> : null}
 
           {!loading && !tracks.length && fallbackSummary ? (
             <section className="cp-card cp-empty-state cp-dashboard-empty">
@@ -162,7 +162,7 @@ export default function GarageDashboardPage() {
 
                         <div className="cp-track-statusbox">
                           <span className="cp-stage-pill">{track.customerStageLabel}</span>
-                          <strong className="cp-track-ordercode">{track.orderCode || "�"}</strong>
+                          <strong className="cp-track-ordercode">{track.orderCode || "—"}</strong>
                           <span className="cp-muted cp-track-statusraw">
                             Trạng thái hệ thống: {track.lifecycleStatus || "—"}
                           </span>
@@ -185,7 +185,7 @@ export default function GarageDashboardPage() {
                       <dl className="cp-track-meta">
                         <div className="cp-track-meta-card">
                           <dt>Chi nhánh xử lý</dt>
-                          <dd>{track.branchName || "�"}</dd>
+                          <dd>{track.branchName || "—"}</dd>
                         </div>
                         <div className="cp-track-meta-card">
                           <dt>Người phụ trách</dt>
@@ -199,20 +199,20 @@ export default function GarageDashboardPage() {
                                 ))}
                               </span>
                             ) : (
-                              track.serviceAdvisorName || "�"
+                              track.serviceAdvisorName || "—"
                             )}
                           </dd>
                         </div>
                         <div className="cp-track-meta-card">
                           <dt>Cố vấn dịch vụ</dt>
-                          <dd>{track.serviceAdvisorName || "�"}</dd>
+                          <dd>{track.serviceAdvisorName || "—"}</dd>
                         </div>
                         <div className="cp-track-meta-card">
                           <dt>Bay / khu vực</dt>
                           <dd>
                             {track.bayCode || track.bayName
-                              ? [track.bayCode, track.bayName].filter(Boolean).join(" � ")
-                              : "�"}
+                              ? [track.bayCode, track.bayName].filter(Boolean).join(" · ")
+                              : "—"}
                           </dd>
                         </div>
                         <div className="cp-track-meta-card">
@@ -256,7 +256,7 @@ export default function GarageDashboardPage() {
                     <strong className="cp-appt-branch">{appointment.branchName || "Chi nhánh"}</strong>
                     <p className="cp-muted">{fmtDt(appointment.startTime)}</p>
                     <p className="cp-appt-plate">Biển số: {appointment.vehiclePlate || "—"}</p>
-                    <span className="cp-chip cp-chip--soft">{appointment.status || "�"}</span>
+                    <span className="cp-chip cp-chip--soft">{appointment.status || "—"}</span>
                   </article>
                 ))}
               </div>
@@ -275,7 +275,7 @@ export default function GarageDashboardPage() {
                 <div>
                   <strong className="cp-last-service-code">{last.orderCode}</strong>
                   <p className="cp-muted">
-                    {last.licensePlate || "�"} � {fmtDt(last.completedAt)} � {last.branchName || "�"}
+                    {last.licensePlate || "—"} · {fmtDt(last.completedAt)} · {last.branchName || "—"}
                   </p>
                 </div>
                 {last.vehicleId ? (

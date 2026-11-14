@@ -5,6 +5,7 @@ import {
   Button,
   Flex,
   Input,
+  Select,
   SimpleGrid,
   Spinner,
   Table,
@@ -18,6 +19,7 @@ import {
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
+import TablePagination from "@shared/components/TablePagination";
 import {
   exportAccountingDashboardV2Csv,
   getAccountingDashboardV2
@@ -60,8 +62,16 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [fromDate, setFromDate] = useState(toIsoDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [toDate, setToDate] = useState(toIsoDate(new Date()));
+  const [historyLimit, setHistoryLimit] = useState(30);
   const [dashboard, setDashboard] = useState(null);
   const [exporting, setExporting] = useState(false);
+
+  const [paymentPage, setPaymentPage] = useState(1);
+  const [paymentPageSize, setPaymentPageSize] = useState(10);
+  const [refundPage, setRefundPage] = useState(1);
+  const [refundPageSize, setRefundPageSize] = useState(10);
+  const [approvalPage, setApprovalPage] = useState(1);
+  const [approvalPageSize, setApprovalPageSize] = useState(10);
 
   async function loadDashboard() {
     setLoading(true);
@@ -70,9 +80,12 @@ export default function DashboardPage() {
       const payload = await getAccountingDashboardV2({
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
-        historyLimit: 200
+        historyLimit
       });
       setDashboard(payload || null);
+      setPaymentPage(1);
+      setRefundPage(1);
+      setApprovalPage(1);
     } catch (err) {
       setError(err?.message || "Không tải được dashboard kế toán.");
     } finally {
@@ -82,7 +95,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [historyLimit]);
 
   const summary = dashboard?.summary || {};
   const agingBuckets = Array.isArray(dashboard?.agingBuckets) ? dashboard.agingBuckets : [];
@@ -91,6 +104,33 @@ export default function DashboardPage() {
   const paymentHistory = Array.isArray(dashboard?.paymentHistory) ? dashboard.paymentHistory : [];
   const refundTrail = Array.isArray(dashboard?.refundTrail) ? dashboard.refundTrail : [];
   const approvalTrail = Array.isArray(dashboard?.approvalTrail) ? dashboard.approvalTrail : [];
+
+  const pagedPaymentHistory = useMemo(() => {
+    if (!paymentHistory.length) return [];
+    const start = (paymentPage - 1) * paymentPageSize;
+    const end = Math.min(start + paymentPageSize, paymentHistory.length);
+    const rows = [];
+    for (let i = start; i < end; i++) rows.push(paymentHistory[i]);
+    return rows;
+  }, [paymentHistory, paymentPage, paymentPageSize]);
+
+  const pagedRefundTrail = useMemo(() => {
+    if (!refundTrail.length) return [];
+    const start = (refundPage - 1) * refundPageSize;
+    const end = Math.min(start + refundPageSize, refundTrail.length);
+    const rows = [];
+    for (let i = start; i < end; i++) rows.push(refundTrail[i]);
+    return rows;
+  }, [refundTrail, refundPage, refundPageSize]);
+
+  const pagedApprovalTrail = useMemo(() => {
+    if (!approvalTrail.length) return [];
+    const start = (approvalPage - 1) * approvalPageSize;
+    const end = Math.min(start + approvalPageSize, approvalTrail.length);
+    const rows = [];
+    for (let i = start; i < end; i++) rows.push(approvalTrail[i]);
+    return rows;
+  }, [approvalTrail, approvalPage, approvalPageSize]);
 
   const warningRows = useMemo(() => {
     const rows = [];
@@ -166,6 +206,13 @@ export default function DashboardPage() {
           <Flex gap='8px' align='center' wrap='wrap'>
             <Input size='sm' type='date' value={fromDate} onChange={(e) => setFromDate(e.target.value)} maxW='170px' />
             <Input size='sm' type='date' value={toDate} onChange={(e) => setToDate(e.target.value)} maxW='170px' />
+            <Select size='sm' value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} maxW='130px' aria-label='Giới hạn bản ghi'>
+              <option value={10}>10 bản ghi</option>
+              <option value={20}>20 bản ghi</option>
+              <option value={30}>30 bản ghi</option>
+              <option value={50}>50 bản ghi</option>
+              <option value={100}>100 bản ghi</option>
+            </Select>
             <Button size='sm' variant='outline' onClick={loadDashboard}>Làm mới</Button>
             <Button size='sm' colorScheme='blue' onClick={handleExportCsv} isLoading={exporting}>Xuất CSV</Button>
           </Flex>
@@ -288,19 +335,19 @@ export default function DashboardPage() {
 
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap='20px'>
         <Card p='20px' bg={panelBg}>
-          <Text color={textColor} fontWeight='700' mb='12px'>Payment history</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Lịch sử thanh toán</Text>
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>
                 <Tr>
                   <Th>Txn</Th>
-                  <Th>Type</Th>
-                  <Th>Status</Th>
-                  <Th isNumeric>Amount</Th>
+                  <Th>Loại</Th>
+                  <Th>Trạng thái</Th>
+                  <Th isNumeric>Số tiền</Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {paymentHistory.slice(0, 30).map((item) => (
+                {pagedPaymentHistory.map((item) => (
                   <Tr key={String(fieldOf(item, "id"))}>
                     <Td color={textColorSecondary}>#{fieldOf(item, "id")}</Td>
                     <Td color={textColor}>{fieldOf(item, "type") || "--"}</Td>
@@ -311,22 +358,32 @@ export default function DashboardPage() {
               </Tbody>
             </Table>
           </Box>
+          <TablePagination
+            totalItems={paymentHistory.length}
+            currentPage={paymentPage}
+            pageSize={paymentPageSize}
+            onPageChange={setPaymentPage}
+            onPageSizeChange={(size) => {
+              setPaymentPageSize(size);
+              setPaymentPage(1);
+            }}
+          />
         </Card>
 
         <Card p='20px' bg={panelBg}>
-          <Text color={textColor} fontWeight='700' mb='12px'>Refund trail</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Truy vết hoàn tiền</Text>
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>
                 <Tr>
                   <Th>ID</Th>
-                  <Th>Type</Th>
-                  <Th>Status</Th>
-                  <Th isNumeric>Amount</Th>
+                  <Th>Loại</Th>
+                  <Th>Trạng thái</Th>
+                  <Th isNumeric>Số tiền</Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {refundTrail.slice(0, 30).map((item) => (
+                {pagedRefundTrail.map((item) => (
                   <Tr key={String(fieldOf(item, "id"))}>
                     <Td color={textColorSecondary}>#{fieldOf(item, "id")}</Td>
                     <Td color={textColor}>{fieldOf(item, "type") || "--"}</Td>
@@ -337,22 +394,32 @@ export default function DashboardPage() {
               </Tbody>
             </Table>
           </Box>
+          <TablePagination
+            totalItems={refundTrail.length}
+            currentPage={refundPage}
+            pageSize={refundPageSize}
+            onPageChange={setRefundPage}
+            onPageSizeChange={(size) => {
+              setRefundPageSize(size);
+              setRefundPage(1);
+            }}
+          />
         </Card>
 
         <Card p='20px' bg={panelBg}>
-          <Text color={textColor} fontWeight='700' mb='12px'>Approval trail</Text>
+          <Text color={textColor} fontWeight='700' mb='12px'>Truy vết phê duyệt</Text>
           <Box maxH='300px' overflowY='auto'>
             <Table size='sm'>
               <Thead>
                 <Tr>
                   <Th>ID</Th>
-                  <Th>Request</Th>
-                  <Th>Status</Th>
-                  <Th>Updated</Th>
+                  <Th>Yêu cầu</Th>
+                  <Th>Trạng thái</Th>
+                  <Th>Cập nhật</Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {approvalTrail.slice(0, 30).map((item) => (
+                {pagedApprovalTrail.map((item) => (
                   <Tr key={String(fieldOf(item, "id"))}>
                     <Td color={textColorSecondary}>#{fieldOf(item, "id")}</Td>
                     <Td color={textColor}>{fieldOf(item, "requestType") || "--"}</Td>
@@ -367,9 +434,18 @@ export default function DashboardPage() {
               </Tbody>
             </Table>
           </Box>
+          <TablePagination
+            totalItems={approvalTrail.length}
+            currentPage={approvalPage}
+            pageSize={approvalPageSize}
+            onPageChange={setApprovalPage}
+            onPageSizeChange={(size) => {
+              setApprovalPageSize(size);
+              setApprovalPage(1);
+            }}
+          />
         </Card>
       </SimpleGrid>
     </Box>
   );
 }
-

@@ -114,7 +114,7 @@ export default function ProfileDialog({ onClose }) {
   }, [userId, isStaffRole, user]);
 
   const displayName = useMemo(() => {
-    const name = String(formData.fullName || user?.fullName || user?.FullName || "Ngu?i d�ng").trim();
+    const name = String(formData.fullName || user?.fullName || user?.FullName || "Người dùng").trim();
     return name || "Người dùng";
   }, [formData.fullName, user?.fullName, user?.FullName]);
 
@@ -180,7 +180,7 @@ export default function ProfileDialog({ onClose }) {
       localStorage.setItem("mygarage_user", JSON.stringify(nextUser));
       setSuccess("Cập nhật ảnh đại diện thành công.");
     } catch (e) {
-      setError(e?.message || "Kh�ng th? c?p nh?t ?nh d?i di?n.");
+      setError(e?.message || "Không thể cập nhật ảnh đại diện.");
     } finally {
       URL.revokeObjectURL(localPreviewUrl);
       setUploadingAvatar(false);
@@ -243,7 +243,7 @@ export default function ProfileDialog({ onClose }) {
       }, 2000);
       setSuccess("Lưu hồ sơ thành công.");
     } catch (e) {
-      setError(e?.message || "Kh�ng th? luu h? s?.");
+      setError(e?.message || "Không thể lưu hồ sơ.");
     } finally {
       setSaving(false);
     }
@@ -290,7 +290,7 @@ export default function ProfileDialog({ onClose }) {
     });
 
     if (!ok) {
-      setPasswordError(data?.message || "Kh�ng th? d?i m?t kh?u.");
+      setPasswordError(data?.message || "Không thể đổi mật khẩu.");
       setChangingPassword(false);
       return;
     }
@@ -328,10 +328,10 @@ export default function ProfileDialog({ onClose }) {
               </div>
               <div className="profile-dialog-title-wrap">
                 <h2>{displayName}</h2>
-                <p>{user?.role || roleCode || "Kh�ch h�ng"}</p>
+                <p>{user?.role || roleCode || "Khách hàng"}</p>
               </div>
             </div>
-            <button type="button" className="profile-dialog-close" onClick={onClose} aria-label="��ng">
+            <button type="button" className="profile-dialog-close" onClick={onClose} aria-label="Đóng">
               x
             </button>
           </header>
@@ -375,15 +375,15 @@ export default function ProfileDialog({ onClose }) {
                     <input name="citizenId" value={formData.citizenId} onChange={onChange} placeholder="Chưa cập nhật" />
                   </label>
                   <label>
-                    Ng�y sinh
+                    Ngày sinh
                     <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={onChange} />
                   </label>
                 </>
               ) : null}
 
               <label>
-                {isStaffRole ? "Chi nh?nh" : "Chi nh?nh uu ti?n"}
-                <input value={user?.branchName || "Ch?a x?c d?nh"} disabled />
+                {isStaffRole ? "Chi nhánh" : "Chi nhánh ưu tiên"}
+                <input value={user?.branchName || "Chưa xác định"} disabled />
               </label>
 
               <div className="profile-dialog-actions">
@@ -391,7 +391,7 @@ export default function ProfileDialog({ onClose }) {
                   Hủy
                 </button>
                 <button type="submit" disabled={saving || uploadingAvatar || loadingProfile}>
-                  {loadingProfile ? "�ang t?i..." : saving ? "�ang luu..." : "Luu h? s?"}
+                  {loadingProfile ? "Đang tải..." : saving ? "Đang lưu..." : "Lưu hồ sơ"}
                 </button>
               </div>
             </form>
@@ -456,10 +456,10 @@ export default function ProfileDialog({ onClose }) {
                   }
                   disabled={changingPassword}
                 >
-                  X�a nhanh
+                  Xóa nhanh
                 </button>
                 <button type="submit" disabled={changingPassword}>
-                  {changingPassword ? "�ang d?i..." : "�?i m?t kh?u"}
+                  {changingPassword ? "Đang đổi..." : "Đổi mật khẩu"}
                 </button>
               </div>
             </form>

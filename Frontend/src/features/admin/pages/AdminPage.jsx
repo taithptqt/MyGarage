@@ -3,7 +3,7 @@ import { useAuth } from "@shared/core/context/AuthContext";
 import {
   createStaff,
   getAllRoles,
-  getAllStaff,
+  getStaffPage,
   updateStaff
 } from "@features/admin/api/staffApi";
 import {
@@ -11,9 +11,7 @@ import {
   createCustomer,
   createVehicle,
   getAllCustomerTiers,
-  getAllCustomerVehicles,
-  getAllCustomers,
-  getAllVehicles,
+  getCustomerPage,
   updateVehicle,
   updateCustomerVehicle,
   updateCustomer
@@ -24,6 +22,8 @@ import {
   deleteVehicleBrand,
   deleteVehicleModel,
   getAllVehicleBrands,
+  getVehicleBrandPage,
+  getVehicleModelPage,
   getAllVehicleModels,
   updateVehicleBrand,
   updateVehicleModel
@@ -32,22 +32,22 @@ import {
   createStandardService,
   deleteStandardService,
   getAllServiceCategories,
-  getAllStandardServices,
+  getStandardServicePage,
   updateStandardService
 } from "@features/admin/api/serviceApi";
 import {
   createBranch,
   getAllBranches,
+  getBranchPage,
   updateBranch
 } from "@features/admin/api/branchApi";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "@shared/core/context/SearchContext";
 import { useBranch } from "@shared/core/context/BranchContext";
 import { VIETNAM_PHONE_PATTERN, isOptionalEmailValid, isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import { VIETNAM_LICENSE_PLATE_PATTERN, VIETNAM_LICENSE_PLATE_TITLE, isValidVietnameseLicensePlate } from "@shared/utils/licensePlateValidation";
 import { formatLicensePlateByFieldName } from "@shared/utils/licensePlateInputFormatter";
 import {
-  filterPackageManagedStandardServices,
   getPackageManagedStandardServiceMessage,
   isPackageManagedStandardServiceCode,
   normalizeStandardServiceCode,
@@ -860,7 +860,8 @@ function blobToDataUrl(blob) {
 }
 
 export default function AdminPage({ embedded = false, initialSection = "staff" }) {
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const navigate = useNavigate();
   const {
     selectedBranchId,
     selectedBranch,
@@ -870,15 +871,48 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   const [section, setSection] = useState(initialSection);
   const [branches, setBranches] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [staffTotal, setStaffTotal] = useState(0);
+  const [staffStats, setStaffStats] = useState({ totalStaff: 0, activeStaff: 0, rolesUsed: 0 });
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState("");
+  const staffLoadSequence = useRef(0);
   const [customers, setCustomers] = useState([]);
+  const [customerTotal, setCustomerTotal] = useState(0);
+  const [customerStats, setCustomerStats] = useState({ totalCustomers: 0, activeCustomers: 0 });
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [customerError, setCustomerError] = useState("");
+  const customerLoadSequence = useRef(0);
   const [customerTiers, setCustomerTiers] = useState([]);
-  const [customerVehicles, setCustomerVehicles] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
   const [roles, setRoles] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [brandRows, setBrandRows] = useState([]);
+  const referenceLoadSequence = useRef(0);
+  const [brandTotal, setBrandTotal] = useState(0);
+  const [brandStats, setBrandStats] = useState({ totalBrands: 0, activeBrands: 0, inactiveBrands: 0 });
+  const [brandLoading, setBrandLoading] = useState(false);
+  const [brandError, setBrandError] = useState("");
+  const brandLoadSequence = useRef(0);
   const [models, setModels] = useState([]);
+  const [branchRows, setBranchRows] = useState([]);
+  const [branchTotal, setBranchTotal] = useState(0);
+  const [branchStats, setBranchStats] = useState({ totalBranches: 0, activeBranches: 0 });
+  const [branchLoading, setBranchLoading] = useState(false);
+  const [branchError, setBranchError] = useState("");
+  const branchLoadSequence = useRef(0);
+  const [modelRows, setModelRows] = useState([]);
+  const [modelTotal, setModelTotal] = useState(0);
+  const [modelStats, setModelStats] = useState({ totalModels: 0, brandCount: 0, activeModels: 0 });
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState("");
+  const modelLoadSequence = useRef(0);
+  const [serviceRows, setServiceRows] = useState([]);
+  const [serviceTotal, setServiceTotal] = useState(0);
+  const [serviceStats, setServiceStats] = useState({ totalServices: 0, activeServices: 0 });
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [serviceError, setServiceError] = useState("");
+  const serviceLoadSequence = useRef(0);
+
   const [serviceCategories, setServiceCategories] = useState([]);
-  const [services, setServices] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -886,9 +920,15 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   const [formError, setFormError] = useState("");
 
   const { searchQuery } = useSearch();
+  const [staffSearch, setStaffSearch] = useState("");
   const [modal, setModal] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStaffSearch(searchQuery), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     setSection(initialSection || "staff");
@@ -902,68 +942,147 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
   }, [globalBranches]);
 
   const fetchBranches = useCallback(async () => setBranches((await getAllBranches()) || []), []);
-  const fetchStaff = useCallback(
-    async () => setStaff((await getAllStaff(selectedBranchId)) || []),
-    [selectedBranchId]
-  );
-  const fetchCustomers = useCallback(
-    async () => setCustomers((await getAllCustomers(selectedBranchId)) || []),
-    [selectedBranchId]
-  );
+  const fetchStaff = useCallback(async () => {
+    const sequence = ++staffLoadSequence.current;
+    setStaffLoading(true);
+    setStaffError("");
+    try {
+      const result = await getStaffPage({ branchId: selectedBranchId || undefined, search: staffSearch || undefined, page, pageSize });
+      if (sequence !== staffLoadSequence.current) return;
+      setStaff(Array.isArray(result?.items) ? result.items : []);
+      setStaffTotal(Number(result?.total) || 0);
+      setStaffStats({ totalStaff: result?.totalStaff || 0, activeStaff: result?.activeStaff || 0, rolesUsed: result?.rolesUsed || 0 });
+    } catch (apiError) {
+      if (sequence === staffLoadSequence.current) setStaffError(apiError.message || "Failed to load admin data.");
+    } finally {
+      if (sequence === staffLoadSequence.current) setStaffLoading(false);
+    }
+  }, [selectedBranchId, staffSearch, page, pageSize]);
+  const fetchCustomers = useCallback(async () => {
+    const sequence = ++customerLoadSequence.current;
+    setCustomerLoading(true);
+    setCustomerError("");
+    try {
+      const result = await getCustomerPage({ branchId: selectedBranchId || undefined, search: staffSearch || undefined, page, pageSize });
+      if (sequence !== customerLoadSequence.current) return;
+      setCustomers((result?.items || []).map(({ customer, ...details }) => ({ ...customer, ...details })));
+      setCustomerTotal(Number(result?.total) || 0);
+      setCustomerStats({ totalCustomers: result?.totalCustomers || 0, activeCustomers: result?.activeCustomers || 0 });
+    } catch (apiError) {
+      if (sequence === customerLoadSequence.current) setCustomerError(apiError.message || "Failed to load admin data.");
+    } finally {
+      if (sequence === customerLoadSequence.current) setCustomerLoading(false);
+    }
+  }, [selectedBranchId, staffSearch, page, pageSize]);
   const fetchCustomerTiers = useCallback(async () => setCustomerTiers((await getAllCustomerTiers()) || []), []);
-  const fetchCustomerVehicles = useCallback(async () => setCustomerVehicles((await getAllCustomerVehicles()) || []), []);
-  const fetchVehicles = useCallback(async () => setVehicles((await getAllVehicles()) || []), []);
   const fetchRoles = useCallback(async () => setRoles((await getAllRoles()) || []), []);
   const fetchBrands = useCallback(async () => setBrands((await getAllVehicleBrands()) || []), []);
+  const fetchBrandPage = useCallback(async () => {
+    const sequence = ++brandLoadSequence.current;
+    setBrandLoading(true);
+    setBrandError("");
+    try {
+      const result = await getVehicleBrandPage({ search: staffSearch || undefined, page, pageSize });
+      if (sequence !== brandLoadSequence.current) return;
+      setBrandRows(Array.isArray(result?.items) ? result.items : []);
+      setBrandTotal(Number(result?.total) || 0);
+      setBrandStats({ totalBrands: result?.totalBrands || 0, activeBrands: result?.activeBrands || 0, inactiveBrands: result?.inactiveBrands || 0 });
+    } catch (apiError) {
+      if (sequence === brandLoadSequence.current) setBrandError(apiError.message || "Failed to load admin data.");
+    } finally {
+      if (sequence === brandLoadSequence.current) setBrandLoading(false);
+    }
+  }, [staffSearch, page, pageSize]);
   const fetchModels = useCallback(async () => setModels((await getAllVehicleModels()) || []), []);
   const fetchServiceCategories = useCallback(
     async () => setServiceCategories((await getAllServiceCategories()) || []),
     []
   );
-  const fetchServices = useCallback(
-    async () => setServices(filterPackageManagedStandardServices((await getAllStandardServices(selectedBranchId)) || [])),
-    [selectedBranchId]
-  );
+  const fetchBranchPage = useCallback(async () => {
+    const sequence = ++branchLoadSequence.current;
+    setBranchLoading(true); setBranchError("");
+    try {
+      const result = await getBranchPage({ search: staffSearch || undefined, page, pageSize });
+      if (sequence !== branchLoadSequence.current) return;
+      setBranchRows(Array.isArray(result?.items) ? result.items : []);
+      setBranchTotal(Number(result?.total) || 0);
+      setBranchStats({ totalBranches: result?.totalBranches || 0, activeBranches: result?.activeBranches || 0 });
+    } catch (apiError) {
+      if (sequence === branchLoadSequence.current) setBranchError(apiError.message || "Failed to load admin data.");
+    } finally { if (sequence === branchLoadSequence.current) setBranchLoading(false); }
+  }, [staffSearch, page, pageSize]);
+  const fetchModelPage = useCallback(async () => {
+    const sequence = ++modelLoadSequence.current;
+    setModelLoading(true); setModelError("");
+    try {
+      const result = await getVehicleModelPage({ search: staffSearch || undefined, page, pageSize });
+      if (sequence !== modelLoadSequence.current) return;
+      setModelRows(Array.isArray(result?.items) ? result.items : []);
+      setModelTotal(Number(result?.total) || 0);
+      setModelStats({ totalModels: result?.totalModels || 0, brandCount: result?.brandCount || 0, activeModels: result?.activeModels || 0 });
+    } catch (apiError) {
+      if (sequence === modelLoadSequence.current) setModelError(apiError.message || "Failed to load admin data.");
+    } finally { if (sequence === modelLoadSequence.current) setModelLoading(false); }
+  }, [staffSearch, page, pageSize]);
+  const fetchServicePage = useCallback(async () => {
+    const sequence = ++serviceLoadSequence.current;
+    setServiceLoading(true); setServiceError("");
+    try {
+      const result = await getStandardServicePage({ branchId: selectedBranchId || undefined, search: staffSearch || undefined, page, pageSize });
+      if (sequence !== serviceLoadSequence.current) return;
+      setServiceRows(Array.isArray(result?.items) ? result.items : []);
+      setServiceTotal(Number(result?.total) || 0);
+      setServiceStats({ totalServices: result?.totalServices || 0, activeServices: result?.activeServices || 0 });
+    } catch (apiError) {
+      if (sequence === serviceLoadSequence.current) setServiceError(apiError.message || "Failed to load admin data.");
+    } finally { if (sequence === serviceLoadSequence.current) setServiceLoading(false); }
+  }, [selectedBranchId, staffSearch, page, pageSize]);
 
   const fetchAll = useCallback(async () => {
+    const sequence = ++referenceLoadSequence.current;
     setLoading(true);
     setError("");
     try {
-      await Promise.all([
-        fetchBranches(),
-        fetchStaff(),
-        fetchCustomers(),
-        fetchCustomerTiers(),
-        fetchCustomerVehicles(),
-        fetchVehicles(),
-        fetchRoles(),
-        fetchBrands(),
-        fetchModels(),
-        fetchServiceCategories(),
-        fetchServices()
-      ]);
-    } catch (apiError) {
-      setError(apiError.message || "Failed to load admin data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    fetchBranches,
-    fetchBrands,
-    fetchCustomerTiers,
-    fetchCustomerVehicles,
-    fetchCustomers,
-    fetchModels,
-    fetchServiceCategories,
-    fetchRoles,
-    fetchStaff,
-    fetchVehicles,
-    fetchServices
-  ]);
+      if (section === "staff") await Promise.all([fetchBranches(), fetchRoles()]);
+      else if (section === "customers") await Promise.all([fetchBranches(), fetchCustomerTiers(), fetchBrands(), fetchModels()]);
+      else if (section === "models") await fetchBrands();
+      else if (section === "services") await fetchServiceCategories();
+    } catch (apiError) { if (sequence === referenceLoadSequence.current) setError(apiError.message || "Failed to load admin data."); }
+    finally { if (sequence === referenceLoadSequence.current) setLoading(false); }
+  }, [section, fetchBranches, fetchBrands, fetchCustomerTiers, fetchModels, fetchServiceCategories, fetchRoles]);
 
   useEffect(() => {
     if (isAuthenticated) fetchAll();
+    return () => { referenceLoadSequence.current += 1; };
   }, [fetchAll, isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && section === "staff") fetchStaff();
+    return () => { staffLoadSequence.current += 1; };
+  }, [fetchStaff, isAuthenticated, section]);
+
+  useEffect(() => {
+    if (isAuthenticated && section === "customers") fetchCustomers();
+    return () => { customerLoadSequence.current += 1; };
+  }, [fetchCustomers, isAuthenticated, section]);
+
+  useEffect(() => {
+    if (isAuthenticated && section === "brands") fetchBrandPage();
+    return () => { brandLoadSequence.current += 1; };
+  }, [fetchBrandPage, isAuthenticated, section]);
+
+  useEffect(() => {
+    if (isAuthenticated && section === "branches") fetchBranchPage();
+    return () => { branchLoadSequence.current += 1; };
+  }, [fetchBranchPage, isAuthenticated, section]);
+  useEffect(() => {
+    if (isAuthenticated && section === "models") fetchModelPage();
+    return () => { modelLoadSequence.current += 1; };
+  }, [fetchModelPage, isAuthenticated, section]);
+  useEffect(() => {
+    if (isAuthenticated && section === "services") fetchServicePage();
+    return () => { serviceLoadSequence.current += 1; };
+  }, [fetchServicePage, isAuthenticated, section]);
 
   // NOTE: early returns will come AFTER all hooks below
 
@@ -972,12 +1091,6 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     (roles || []).forEach((role) => map.set(role.id, role.roleName || role.roleCode || `Vai trò #${role.id}`));
     return map;
   }, [roles]);
-
-  const tierNameMap = useMemo(() => {
-    const map = new Map();
-    (customerTiers || []).forEach((tier) => map.set(tier.id, tier.tierName || `Tier #${tier.id}`));
-    return map;
-  }, [customerTiers]);
 
   const customerTierOptions = useMemo(() => {
     return (customerTiers || []).filter((tier) => tier?.isDeleted !== true);
@@ -1007,177 +1120,23 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     return map;
   }, [serviceCategories]);
 
-  const modelMap = useMemo(() => {
-    const map = new Map();
-    (models || []).forEach((model) => map.set(model.id, model));
-    return map;
-  }, [models]);
-
-  const vehicleMap = useMemo(() => {
-    const map = new Map();
-    (vehicles || []).forEach((vehicle) => map.set(vehicle.id, vehicle));
-    return map;
-  }, [vehicles]);
-
-  const primaryVehicleByCustomerId = useMemo(() => {
-    const map = new Map();
-    (customerVehicles || [])
-      .filter((item) => item?.isDeleted !== true)
-      .forEach((link) => {
-        const current = map.get(link.customerId);
-        if (!current || link.isCurrentOwner === true) {
-          map.set(link.customerId, link);
-        }
-      });
-    return map;
-  }, [customerVehicles]);
-
-  const enrichedCustomers = useMemo(() => {
-    return (customers || []).map((customer) => {
-      const customerVehicle = primaryVehicleByCustomerId.get(customer.id);
-      const vehicleId = customerVehicle?.vehicleId;
-      const vehicle = vehicleId ? vehicleMap.get(vehicleId) : null;
-      const modelId = vehicle?.modelId;
-      const model = modelId ? modelMap.get(modelId) : null;
-      const brandId = model?.brandId;
-      return {
-        ...customer,
-        tierName: (tierNameMap && tierNameMap.get ? tierNameMap.get(customer.tierId) : null) || "-",
-        brandId: brandId || null,
-        brandName: (brandId && brandNameMap && brandNameMap.get ? brandNameMap.get(brandId) : null) || "-",
-        modelId: model?.id || null,
-        modelName: model?.modelName || "-",
-        licensePlate: vehicle?.licensePlate || "-",
-        color: vehicle?.color || "",
-        manufactureYear: vehicle?.manufactureYear || "",
-        customerVehicleId: customerVehicle?.id || null,
-        vehicleId: vehicle?.id || null
-      };
-    });
-  }, [brandNameMap, customers, modelMap, primaryVehicleByCustomerId, tierNameMap, vehicleMap]);
-
-  const filteredStaff = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = staff || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      const roleName = roleNameMap.get(item.roleId) || "";
-      return (
-        (item.fullName || "").toLowerCase().includes(query) ||
-        (item.email || "").toLowerCase().includes(query) ||
-        (item.phone || "").toLowerCase().includes(query) ||
-        roleName.toLowerCase().includes(query)
-      );
-    });
-  }, [roleNameMap, searchQuery, staff]);
-
-  const filteredCustomers = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = enrichedCustomers || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      return (
-        (item.fullName || "").toLowerCase().includes(query) ||
-        (item.email || "").toLowerCase().includes(query) ||
-        (item.phone || "").toLowerCase().includes(query) ||
-        (item.tierName || "").toLowerCase().includes(query) ||
-        (item.licensePlate || "").toLowerCase().includes(query) ||
-        (item.brandName || "").toLowerCase().includes(query) ||
-        (item.modelName || "").toLowerCase().includes(query)
-      );
-    });
-  }, [enrichedCustomers, searchQuery]);
-
-  const filteredBrands = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = brands || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      return (
-        (item.code || "").toLowerCase().includes(query) ||
-        (item.name || "").toLowerCase().includes(query) ||
-        (item.countryOfOrigin || "").toLowerCase().includes(query)
-      );
-    });
-  }, [brands, searchQuery]);
-
-  const filteredModels = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = models || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      const brandName = brandNameMap.get(item.brandId) || "";
-      return (
-        (item.modelName || "").toLowerCase().includes(query) ||
-        (item.segment || "").toLowerCase().includes(query) ||
-        (item.fuelType || "").toLowerCase().includes(query) ||
-        brandName.toLowerCase().includes(query)
-      );
-    });
-  }, [brandNameMap, models, searchQuery]);
-
-  const filteredServices = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = services || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      const categoryName = serviceCategoryNameMap.get(item.categoryId) || "";
-      const statusText = item.isActive === true ? "active" : "inactive";
-      return (
-        (item.code || "").toLowerCase().includes(query) ||
-        (item.name || "").toLowerCase().includes(query) ||
-        categoryName.toLowerCase().includes(query) ||
-        statusText.includes(query)
-      );
-    });
-  }, [searchQuery, serviceCategoryNameMap, services]);
-
-  const filteredBranches = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const data = branches || [];
-    if (!query) return data;
-    return data.filter((item) => {
-      return (
-        (item.name || "").toLowerCase().includes(query) ||
-        (item.address || "").toLowerCase().includes(query) ||
-        (item.hotline || "").toLowerCase().includes(query) ||
-        (item.email || "").toLowerCase().includes(query)
-      );
-    });
-  }, [branches, searchQuery]);
-
-  // Early returns AFTER all hooks (required by React Rules of Hooks)
-  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Đang xác thực...</p></div>;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-
-  const visibleRows =
-    section === "branches"
-      ? filteredBranches
-      : section === "staff"
-      ? filteredStaff
-      : section === "customers"
-        ? filteredCustomers
-        : section === "brands"
-          ? filteredBrands
-          : section === "models"
-            ? filteredModels
-            : filteredServices;
-
-  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
-  const pagedRows = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return visibleRows.slice(start, start + pageSize);
-  }, [visibleRows, page, pageSize]);
+  const visibleRows = section === "branches" ? branchRows : section === "staff" ? staff : section === "customers" ? customers : section === "brands" ? brandRows : section === "models" ? modelRows : serviceRows;
+  const visibleTotal = section === "branches" ? branchTotal : section === "staff" ? staffTotal : section === "customers" ? customerTotal : section === "brands" ? brandTotal : section === "models" ? modelTotal : serviceTotal;
+  const totalPages = Math.max(1, Math.ceil(visibleTotal / pageSize));
+  const pagedRows = visibleRows;
 
   useEffect(() => {
     setPage(1);
-  }, [section, searchQuery, pageSize]);
+  }, [section, searchQuery, pageSize, selectedBranchId]);
 
   useEffect(() => {
     if (page > totalPages) {
       setPage(totalPages);
     }
   }, [page, totalPages]);
+
+  if (authLoading) return <div className="loading-state"><div className="spinner" /><p>Đang xác thực...</p></div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   const openModal = (entity, mode, item = null) => {
     setFormError("");
@@ -1189,8 +1148,8 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
     setModal(null);
   };
 
-  const handleLogout = () => {
-    clearAuth();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login", { replace: true });
   };
 
@@ -1205,7 +1164,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
 
   const reloadSectionData = async (entity) => {
     if (entity === "branch") {
-      await Promise.all([fetchBranches(), refreshGlobalBranches()]);
+      await Promise.all([fetchBranchPage(), refreshGlobalBranches()]);
       return;
     }
     if (entity === "staff") return Promise.all([fetchStaff(), fetchRoles()]);
@@ -1213,13 +1172,13 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
       return Promise.all([
         fetchCustomers(),
         fetchCustomerTiers(),
-        fetchCustomerVehicles(),
-        fetchVehicles()
+        fetchBrands(),
+        fetchModels()
       ]);
     }
-    if (entity === "brand") return Promise.all([fetchBrands(), fetchModels()]);
-    if (entity === "model") return fetchModels();
-    if (entity === "service") return Promise.all([fetchServices(), fetchServiceCategories()]);
+    if (entity === "brand") return fetchBrandPage();
+    if (entity === "model") return fetchModelPage();
+    if (entity === "service") return Promise.all([fetchServicePage(), fetchServiceCategories()]);
     return fetchModels();
   };
 
@@ -1322,8 +1281,9 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
           };
 
           const customerId = modal.mode === "create" ? savedCustomer?.id : modal.item.id;
-          const existingLink =
-            modal.mode === "edit" ? primaryVehicleByCustomerId.get(modal.item.id) : null;
+          const existingLink = modal.mode === "edit" && modal.item.customerVehicleId && modal.item.vehicleId
+            ? { id: modal.item.customerVehicleId, vehicleId: modal.item.vehicleId }
+            : null;
 
           if (existingLink) {
             await updateVehicle(existingLink.vehicleId, vehiclePayload);
@@ -1454,61 +1414,61 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         <div className="stats-bar">
           {section === "branches" && (
             <>
-              <div className="stat-card"><div className="stat-value">{branches.length}</div><div className="stat-label">Tổng chi nhánh</div></div>
-              <div className="stat-card"><div className="stat-value">{branches.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{branchStats.totalBranches}</div><div className="stat-label">Tổng chi nhánh</div></div>
+              <div className="stat-card"><div className="stat-value">{branchStats.activeBranches}</div><div className="stat-label">Đang hoạt động</div></div>
               <div className="stat-card"><div className="stat-value">{selectedBranch?.name || "-"}</div><div className="stat-label">Chi nhánh đã chọn</div></div>
             </>
           )}
 
           {section === "staff" && (
             <>
-              <div className="stat-card"><div className="stat-value">{staff.length}</div><div className="stat-label">Tổng nhân sự</div></div>
-              <div className="stat-card"><div className="stat-value">{staff.filter((item) => String(item.status || "").toLowerCase() === "active").length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(staff.filter((item) => item.roleId).map((item) => item.roleId)).size}</div><div className="stat-label">Số vai trò sử dụng</div></div>
+              <div className="stat-card"><div className="stat-value">{staffStats.totalStaff}</div><div className="stat-label">Tổng nhân sự</div></div>
+              <div className="stat-card"><div className="stat-value">{staffStats.activeStaff}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{staffStats.rolesUsed}</div><div className="stat-label">Số vai trò sử dụng</div></div>
             </>
           )}
 
           {section === "customers" && (
             <>
-              <div className="stat-card"><div className="stat-value">{customers.length}</div><div className="stat-label">Tổng khách hàng</div></div>
-              <div className="stat-card"><div className="stat-value">{customers.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{customerStats.totalCustomers}</div><div className="stat-label">Tổng khách hàng</div></div>
+              <div className="stat-card"><div className="stat-value">{customerStats.activeCustomers}</div><div className="stat-label">Đang hoạt động</div></div>
               <div className="stat-card"><div className="stat-value">{customerTierOptions.length}</div><div className="stat-label">Số hạng khách hàng</div></div>
             </>
           )}
 
           {section === "brands" && (
             <>
-              <div className="stat-card"><div className="stat-value">{brands.length}</div><div className="stat-label">Tổng hãng xe</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
-              <div className="stat-card"><div className="stat-value">{brands.filter((item) => item.isActive === false).length}</div><div className="stat-label">Ngừng hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{brandStats.totalBrands}</div><div className="stat-label">Tổng hãng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{brandStats.activeBrands}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{brandStats.inactiveBrands}</div><div className="stat-label">Ngừng hoạt động</div></div>
             </>
           )}
 
           {section === "models" && (
             <>
-              <div className="stat-card"><div className="stat-value">{models.length}</div><div className="stat-label">Tổng dòng xe</div></div>
-              <div className="stat-card"><div className="stat-value">{new Set(models.map((item) => item.brandId)).size}</div><div className="stat-label">Số hãng có dòng xe</div></div>
-              <div className="stat-card"><div className="stat-value">{models.filter((item) => !item.isDeleted).length}</div><div className="stat-label">Dòng xe đang dùng</div></div>
+              <div className="stat-card"><div className="stat-value">{modelStats.totalModels}</div><div className="stat-label">Tổng dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{modelStats.brandCount}</div><div className="stat-label">Số hãng có dòng xe</div></div>
+              <div className="stat-card"><div className="stat-value">{modelStats.activeModels}</div><div className="stat-label">Dòng xe đang dùng</div></div>
             </>
           )}
 
           {section === "services" && (
             <>
-              <div className="stat-card"><div className="stat-value">{services.length}</div><div className="stat-label">Tổng dịch vụ</div></div>
-              <div className="stat-card"><div className="stat-value">{services.filter((item) => item.isActive === true).length}</div><div className="stat-label">Đang hoạt động</div></div>
+              <div className="stat-card"><div className="stat-value">{serviceStats.totalServices}</div><div className="stat-label">Tổng dịch vụ</div></div>
+              <div className="stat-card"><div className="stat-value">{serviceStats.activeServices}</div><div className="stat-label">Đang hoạt động</div></div>
               <div className="stat-card"><div className="stat-value">{serviceCategoryOptions.length}</div><div className="stat-label">Số nhóm dịch vụ</div></div>
             </>
           )}
         </div>
 
         <div className="table-toolbar">
-          <span className="result-count">{visibleRows.length} kết quả</span>
+          <span className="result-count">{visibleTotal} kết quả</span>
         </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {(error || (section === "staff" && staffError) || (section === "customers" && customerError) || (section === "brands" && brandError) || (section === "branches" && branchError) || (section === "models" && modelError) || (section === "services" && serviceError)) && <div className="alert alert-error">{error || (section === "staff" ? staffError : section === "customers" ? customerError : section === "brands" ? brandError : section === "branches" ? branchError : section === "models" ? modelError : serviceError)}</div>}
 
         <div className="table-wrapper">
-          {loading ? (
+          {(loading || (section === "staff" && staffLoading) || (section === "customers" && customerLoading) || (section === "brands" && brandLoading) || (section === "branches" && branchLoading) || (section === "models" && modelLoading) || (section === "services" && serviceLoading)) ? (
             <div className="loading-state"><div className="spinner" /><p>Đang tải dữ liệu...</p></div>
           ) : visibleRows.length === 0 ? (
             <div className="empty-state"><p>Không có dữ liệu phù hợp.</p></div>
@@ -1665,7 +1625,7 @@ export default function AdminPage({ embedded = false, initialSection = "staff" }
         </div>
 
         <TablePagination
-          totalItems={visibleRows.length}
+          totalItems={visibleTotal}
           currentPage={page}
           pageSize={pageSize}
           onPageChange={setPage}

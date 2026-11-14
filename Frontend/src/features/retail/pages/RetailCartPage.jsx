@@ -13,6 +13,7 @@ import {
   getProductStockAvailability,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
+import { voucherApi } from "@features/voucher/api/voucherApi";
 import {
   clampQuantityToAvailable,
   formatVnd,
@@ -44,6 +45,26 @@ const BRANCH_SHORTCUT_ORDER = [
 const FULFILLMENT_METHOD = {
   PICKUP: "PICKUP",
   DELIVERY: "DELIVERY",
+};
+
+const VOUCHER_UI = {
+  LABEL: "Mã giảm giá / Voucher",
+  PLACEHOLDER: "Nhập mã voucher (VD: MYGARAGE10)",
+  APPLY_BTN: "Áp dụng",
+  VALIDATING_BTN: "Đang kiểm tra...",
+  REMOVE_BTN: "Gỡ bỏ",
+  EMPTY_CODE_ERROR: "Vui lòng nhập mã voucher giảm giá.",
+  EMPTY_CART_ERROR: "Vui lòng chọn ít nhất một sản phẩm trước khi áp dụng voucher.",
+  DEFAULT_ERROR: "Mã voucher không hợp lệ hoặc đã hết hạn.",
+  DISCOUNT_ROW_LABEL: (code) => `Giảm giá voucher (${code})`,
+  AFTER_DISCOUNT_LABEL: "Tạm tính sau giảm",
+  CONFIRM_DISCOUNT_LABEL: (code) => `Giảm giá voucher (${code})`,
+  APPLIED_SUCCESS: (code, amount) =>
+    amount > 0
+      ? `Áp dụng thành công mã ${code}: giảm ${formatVnd(amount)}.`
+      : `Áp dụng thành công mã ${code}.`,
+  RECORDED_INFO: (code) =>
+    `Mã ${code} đã được ghi nhận và sẽ được áp dụng khi tạo đơn.`,
 };
 
 function toSafeAmount(value) {
@@ -154,6 +175,10 @@ export default function RetailCartPage() {
   const [submitting, setSubmitting] = useState(false);
   const [payingOrder, setPayingOrder] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
+  const [voucherCodeInput, setVoucherCodeInput] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const [voucherValidating, setVoucherValidating] = useState(false);
+  const [voucherStatus, setVoucherStatus] = useState({ error: "", success: "" });
   const {
     cart,
     totalLineItems,
@@ -171,6 +196,11 @@ export default function RetailCartPage() {
     toggleSelectAllCartItems,
     updateCartQty,
   } = useRetailCart();
+
+  const voucherDiscount = appliedVoucher
+    ? Math.min(toSafeAmount(appliedVoucher.discountAmount), selectedSubtotal)
+    : 0;
+  const selectedSubtotalAfterDiscount = Math.max(0, selectedSubtotal - voucherDiscount);
 
   useEffect(() => {
     let ignore = false;
@@ -494,6 +524,84 @@ export default function RetailCartPage() {
     }
   }
 
+  async function handleApplyVoucher() {
+    const code = voucherCodeInput.trim().toUpperCase();
+    if (!code) {
+      setVoucherStatus({ error: VOUCHER_UI.EMPTY_CODE_ERROR, success: "" });
+      return;
+    }
+    if (!selectedItems.length) {
+      setVoucherStatus({ error: VOUCHER_UI.EMPTY_CART_ERROR, success: "" });
+      return;
+    }
+
+    setVoucherValidating(true);
+    setVoucherStatus({ error: "", success: "" });
+
+    try {
+      const response = await voucherApi.checkVoucher({
+        voucherCode: code,
+        branchId: branchId ? Number(branchId) : undefined,
+        eligibleAmount: selectedSubtotal,
+      });
+
+      if (response?.ok && response?.data) {
+        const data = response.data;
+        if (data.isEligible === false) {
+          setVoucherStatus({
+            error: data.reason || data.message || VOUCHER_UI.DEFAULT_ERROR,
+            success: "",
+          });
+          return;
+        }
+
+        const discountAmount = toSafeAmount(data.discountAmount || data.calculatedDiscount || 0);
+        setAppliedVoucher({
+          code,
+          discountAmount,
+          description: data.description || data.voucherName || `Mã ${code}`,
+        });
+        setVoucherStatus({
+          error: "",
+          success: VOUCHER_UI.APPLIED_SUCCESS(code, discountAmount),
+        });
+      } else if (response?.status === 400 && response?.data?.isEligible === false) {
+        setVoucherStatus({
+          error: response.data.reason || response.data.message || VOUCHER_UI.DEFAULT_ERROR,
+          success: "",
+        });
+      } else {
+        setAppliedVoucher({
+          code,
+          discountAmount: 0,
+          description: `Mã ${code}`,
+        });
+        setVoucherStatus({
+          error: "",
+          success: VOUCHER_UI.RECORDED_INFO(code),
+        });
+      }
+    } catch {
+      setAppliedVoucher({
+        code,
+        discountAmount: 0,
+        description: `Mã ${code}`,
+      });
+      setVoucherStatus({
+        error: "",
+        success: VOUCHER_UI.RECORDED_INFO(code),
+      });
+    } finally {
+      setVoucherValidating(false);
+    }
+  }
+
+  function handleRemoveVoucher() {
+    setAppliedVoucher(null);
+    setVoucherCodeInput("");
+    setVoucherStatus({ error: "", success: "" });
+  }
+
   async function performCheckout() {
     setBannerMessage("");
     setError("");
@@ -572,6 +680,7 @@ export default function RetailCartPage() {
           productId: Number(item.id),
           quantity: toPositiveInt(item.qty, 1),
         })),
+        ...(appliedVoucher?.code ? { voucherCode: appliedVoucher.code } : {}),
       };
 
       const createdOrder = await checkoutRetailOrder(payload);
@@ -599,6 +708,8 @@ export default function RetailCartPage() {
 
       removeSelectedItems();
       setNotes("");
+      const resolvedVoucherDiscount =
+        toSafeAmount(createdOrder?.voucherDiscountAmount) || voucherDiscount;
       setPendingOrder({
         id: retailOrderId,
         orderCode,
@@ -614,9 +725,14 @@ export default function RetailCartPage() {
           : "Chưa xác định",
         leadTimeDays,
         subTotal: subTotalAmount,
+        voucherDiscountAmount: resolvedVoucherDiscount,
+        appliedVoucherCode: appliedVoucher?.code || null,
         taxAmount,
         finalAmount,
       });
+      setAppliedVoucher(null);
+      setVoucherCodeInput("");
+      setVoucherStatus({ error: "", success: "" });
       setBannerMessage(`Đã tạo đơn ${orderCode} từ các sản phẩm đã chọn trong giỏ hàng.`);
     } catch (checkoutError) {
       setError(checkoutError?.message || "Không thể tạo đơn phụ tùng lúc này.");
@@ -973,9 +1089,67 @@ export default function RetailCartPage() {
                   <span>Tạm tính đã chọn</span>
                   <strong>{formatVnd(selectedSubtotal)}</strong>
                 </div>
+                {voucherDiscount > 0 ? (
+                  <div className="parts-shop-summary-row">
+                    <span>{VOUCHER_UI.DISCOUNT_ROW_LABEL(appliedVoucher?.code)}</span>
+                    <strong style={{ color: "var(--parts-emerald, #059669)" }}>
+                      -{formatVnd(voucherDiscount)}
+                    </strong>
+                  </div>
+                ) : null}
+                {voucherDiscount > 0 ? (
+                  <div className="parts-shop-summary-row">
+                    <span>{VOUCHER_UI.AFTER_DISCOUNT_LABEL}</span>
+                    <strong>{formatVnd(selectedSubtotalAfterDiscount)}</strong>
+                  </div>
+                ) : null}
               </div>
 
               <div className="retail-cart-form">
+                <div className="retail-cart-field retail-cart-voucher-field">
+                  <span>{VOUCHER_UI.LABEL}</span>
+                  <div className="retail-cart-voucher-input-group">
+                    <input
+                      type="text"
+                      value={voucherCodeInput}
+                      onChange={(event) => {
+                        setVoucherCodeInput(event.target.value.toUpperCase());
+                        if (voucherStatus.error) setVoucherStatus((prev) => ({ ...prev, error: "" }));
+                      }}
+                      placeholder={VOUCHER_UI.PLACEHOLDER}
+                      disabled={voucherValidating || Boolean(appliedVoucher)}
+                      className="retail-cart-voucher-input"
+                    />
+                    {appliedVoucher ? (
+                      <button
+                        type="button"
+                        className="parts-shop-btn parts-shop-btn-ghost retail-cart-voucher-btn"
+                        onClick={handleRemoveVoucher}
+                      >
+                        {VOUCHER_UI.REMOVE_BTN}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="parts-shop-btn parts-shop-btn-primary retail-cart-voucher-btn"
+                        onClick={handleApplyVoucher}
+                        disabled={voucherValidating || !voucherCodeInput.trim() || !selectedItems.length}
+                      >
+                        {voucherValidating ? VOUCHER_UI.VALIDATING_BTN : VOUCHER_UI.APPLY_BTN}
+                      </button>
+                    )}
+                  </div>
+                  {voucherStatus.error ? (
+                    <div className="retail-cart-voucher-msg is-error" role="alert">
+                      {voucherStatus.error}
+                    </div>
+                  ) : null}
+                  {voucherStatus.success ? (
+                    <div className="retail-cart-voucher-msg is-success">
+                      {voucherStatus.success}
+                    </div>
+                  ) : null}
+                </div>
                 <label className="retail-cart-field">
                   <span>Chi nhánh tiếp nhận</span>
                   <div className="retail-cart-branch-shortcuts" role="radiogroup" aria-label="Chi nhánh tiếp nhận">
@@ -1133,6 +1307,14 @@ export default function RetailCartPage() {
                 <span>Tạm tính</span>
                 <strong>{formatVnd(pendingOrder.subTotal)}</strong>
               </div>
+              {pendingOrder.voucherDiscountAmount > 0 ? (
+                <div className="parts-shop-modal-row">
+                  <span>{VOUCHER_UI.CONFIRM_DISCOUNT_LABEL(pendingOrder.appliedVoucherCode || "VOUCHER")}</span>
+                  <strong style={{ color: "var(--parts-emerald, #059669)" }}>
+                    -{formatVnd(pendingOrder.voucherDiscountAmount)}
+                  </strong>
+                </div>
+              ) : null}
               <div className="parts-shop-modal-row">
                 <span>Thuế VAT</span>
                 <strong>{formatVnd(pendingOrder.taxAmount)}</strong>

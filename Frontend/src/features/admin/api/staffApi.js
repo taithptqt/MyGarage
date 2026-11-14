@@ -8,6 +8,10 @@ export async function getAllStaff(branchId) {
   });
 }
 
+export async function getStaffPage(params) {
+  return request({ url: "/api/staffs/admin-list", method: "GET", params });
+}
+
 export async function getStaffById(id) {
   return request({ url: `/api/staffs/${id}`, method: "GET" });
 }

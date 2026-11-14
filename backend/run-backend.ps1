@@ -7,5 +7,5 @@ if ($ProcessId) {
     Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "Starting Backend with dotnet run..." -ForegroundColor Green
-dotnet run
+Write-Host "Starting Backend with dotnet run --project src/MyGarage.Api/MyGarage.Api.csproj..." -ForegroundColor Green
+dotnet run --project src/MyGarage.Api/MyGarage.Api.csproj

@@ -17,6 +17,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
+import TablePagination from "@shared/components/TablePagination";
 import { getAllStaff } from "../../../../../features/admin/api/staffApi";
 import { useBranch } from "../../../../../context/BranchContext";
 import {
@@ -108,6 +109,8 @@ export default function PayslipHistoryPage() {
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState("ALL");
   const [viewFilter, setViewFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     let mounted = true;
@@ -293,6 +296,11 @@ export default function PayslipHistoryPage() {
     });
   }, [historyRows, periodFilter, search, viewFilter]);
 
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, page, pageSize]);
+
   const summary = useMemo(() => {
     const total = historyRows.length;
     const viewed = historyRows.filter((row) => Boolean(row.viewedAt)).length;
@@ -366,7 +374,8 @@ export default function PayslipHistoryPage() {
         </Flex>
 
         {filteredRows.length ? (
-          <Table size='sm'>
+          <>
+            <Table size='sm'>
             <Thead>
               <Tr>
                 <Th>Mã phiếu</Th>
@@ -380,7 +389,7 @@ export default function PayslipHistoryPage() {
               </Tr>
             </Thead>
             <Tbody>
-              {filteredRows.slice(0, 80).map((row) => {
+              {pagedRows.map((row) => {
                 const isViewed = Boolean(row.viewedAt);
                 return (
                   <Tr key={row.id}>
@@ -414,7 +423,19 @@ export default function PayslipHistoryPage() {
               })}
             </Tbody>
           </Table>
-        ) : historyRows.length ? (
+          <TablePagination
+            totalItems={filteredRows.length}
+            currentPage={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            pageSizeOptions={[10, 20, 50, 80]}
+          />
+        </>
+      ) : historyRows.length ? (
           <Text color={textColorSecondary}>Không có phiếu lương phù hợp bộ lọc.</Text>
         ) : (
           <Text color={textColorSecondary}>Chưa có phiếu lương nào được phát hành.</Text>

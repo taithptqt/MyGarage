@@ -1,5 +1,7 @@
-﻿import { useState, useEffect, useCallback, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
+import { getPartsPage } from "@features/inventory/api/partsPageApi";
+import TablePagination from "@shared/components/TablePagination";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
 import { generateSlug } from "@shared/core/utils/stringUtils";
@@ -80,11 +82,11 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
   return (
     <form className="admin-form" onSubmit={handleSubmit}>
       <div className="form-group">
-        <label>T�n vật tư/phụ tùng *</label>
+        <label>Tên vật tư/phụ tùng *</label>
         <input name="name" value={form.name} onChange={handleChange} required />
       </div>
       <div className="form-group">
-        <label>M� vật tư (SKU) *</label>
+        <label>Mã vật tư (SKU) *</label>
         <input name="sku" value={form.sku} onChange={handleChange} required />
       </div>
       <div className="form-row">
@@ -109,7 +111,7 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>Thu? (%)</label>
+          <label>Thuế (%)</label>
           <input name="taxRate" type="number" value={form.taxRate} onChange={handleChange} />
         </div>
         <div className="form-group">
@@ -143,12 +145,12 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
       </div>
       <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
         <input name="isActive" type="checkbox" checked={form.isActive} onChange={handleChange} id="chk-active-part" />
-        <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>?ang kinh doanh</label>
+        <label htmlFor="chk-active-part" style={{ marginBottom: 0, cursor: 'pointer' }}>Đang kinh doanh</label>
       </div>
       <div className="form-actions">
         <button type="button" className="btn-ghost" onClick={onCancel}>Hủy</button>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "?ang luu?" : "Luu"}
+          {loading ? "Đang lưu..." : "Lưu"}
         </button>
       </div>
     </form>
@@ -158,70 +160,59 @@ function PartForm({ initial, categories, onSubmit, onCancel, loading }) {
 export default function PartsPage() {
   const { searchQuery } = useSearch();
   const [products, setProducts] = useState([]);
-  const [productImages, setProductImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [categoriesReady, setCategoriesReady] = useState(false);
+  const requestSequence = useRef(0);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
+  const selectedInitial = useMemo(() => selected ? { ...selected, imageUrl: selected.imageUrl || "" } : null, [selected]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setPage(1); setDebouncedSearch(searchQuery); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchData = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError("");
     try {
-      const [partsRes, catRes, imagesRes] = await Promise.all([
-        inventoryApi.getProducts(),
-        inventoryApi.getPartCategories(),
-        inventoryApi.getProductImages(),
-      ]);
-      setProducts(partsRes);
-      setCategories(catRes);
-      setProductImages(Array.isArray(imagesRes) ? imagesRes : []);
+      const response = await getPartsPage({ search: debouncedSearch || undefined, page, pageSize });
+      if (sequence !== requestSequence.current) return;
+      const count = Number(response?.total) || 0;
+      const lastPage = Math.max(1, Math.ceil(count / pageSize));
+      if (page > lastPage) { setPage(lastPage); return; }
+      setProducts((response?.items || []).map(({ item, categoryName, imageUrl }) => ({ ...item, categoryName, imageUrl })));
+      setTotal(count);
     } catch (err) {
-      setError("Không thể tải danh mục phụ tùng.");
+      if (sequence === requestSequence.current) { setError("Không thể tải danh mục phụ tùng."); setProducts([]); setTotal(0); }
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch, page, pageSize]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); return () => { requestSequence.current += 1; }; }, [fetchData]);
 
-  const imageByProductId = useMemo(() => {
-    const grouped = new Map();
-    (productImages || []).forEach((item) => {
-      const productId = item?.productId;
-      if (productId == null) return;
+  useEffect(() => {
+    if (modal !== "create" && modal !== "edit") return undefined;
+    let active = true;
+    setCategoriesReady(false);
+    inventoryApi.getPartCategories().then((rows) => {
+      if (active) { setCategories(Array.isArray(rows) ? rows : []); setCategoriesReady(true); }
+    }).catch((err) => { if (active) setFormError(err?.message || "Không thể tải danh mục phụ tùng."); });
+    return () => { active = false; };
+  }, [modal]);
 
-      const current = grouped.get(productId);
-      if (!current) {
-        grouped.set(productId, item);
-        return;
-      }
-
-      const currentMain = current?.isMain === true ? 1 : 0;
-      const incomingMain = item?.isMain === true ? 1 : 0;
-      if (incomingMain > currentMain) {
-        grouped.set(productId, item);
-        return;
-      }
-
-      const currentSort = Number.isFinite(Number(current?.sortOrder)) ? Number(current.sortOrder) : Number.MAX_SAFE_INTEGER;
-      const incomingSort = Number.isFinite(Number(item?.sortOrder)) ? Number(item.sortOrder) : Number.MAX_SAFE_INTEGER;
-      if (incomingSort < currentSort) {
-        grouped.set(productId, item);
-      }
-    });
-    return grouped;
-  }, [productImages]);
-
-  const query = String(searchQuery || "").trim().toLowerCase();
-  const filtered = (products || []).filter((p) =>
-    (p.name || "").toLowerCase().includes(query) ||
-    (p.sku || "").toLowerCase().includes(query)
-  );
+  const filtered = products;
 
   const closeModal = () => { setModal(null); setSelected(null); setFormError(""); };
 
@@ -267,13 +258,14 @@ export default function PartsPage() {
           <h1>Quản lý phụ tùng & vật tư</h1>
           <p className="header-sub">Danh mục các loại linh kiện, phụ kiện trong kho</p>
         </div>
-        <button className="btn-primary" onClick={() => setModal("create")}>+ Th�m vật tư</button>
+        <button className="btn-primary" onClick={() => setModal("create")}>+ Thêm vật tư</button>
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} kết quả</span>
+        <span className="result-count">{total} kết quả</span>
       </div>
 
+      {error && <div className="error">{error}</div>}
       <div className="table-wrapper">
         {loading ? (
             <div className="loading-state"><div className="spinner" /><p>Đang tải...</p></div>
@@ -281,11 +273,11 @@ export default function PartsPage() {
           <table className="admin-table">
             <thead>
                 <tr>
-                  <th>M?</th>
-                  <th>T�n vật tư</th>
-                  <th>?on v?</th>
+                  <th>Mã</th>
+                  <th>Tên vật tư</th>
+                  <th>Đơn vị</th>
                   <th>Giá vốn</th>
-                  <th>Gi? l?</th>
+                  <th>Giá lẻ</th>
                   <th>Giá dịch vụ</th>
                   <th>Bảo hành</th>
                   <th className="th-center">Danh mục</th>
@@ -303,16 +295,16 @@ export default function PartsPage() {
                   <td style={{ fontWeight: 600, color: '#60a5fa' }}>{p.retailPrice ? p.retailPrice.toLocaleString() : 0}d</td>
                   <td>{p.servicePrice ? p.servicePrice.toLocaleString() : 0}d</td>
                   <td>{p.warrantyMonths > 0 ? `${p.warrantyMonths} th` : "?"}</td>
-                  <td className="td-center">{categories.find(c => c.id === p.categoryId)?.categoryName || "?"}</td>
+                  <td className="td-center">{p.categoryName || "?"}</td>
                   <td className="td-center">
                     <span className={`badge ${p.isActive ? 'badge-active' : 'badge-inactive'}`}>
-                      {p.isActive ? "Kinh doanh" : "Ng?ng"}
+                      {p.isActive ? "Kinh doanh" : "Ngừng"}
                     </span>
                   </td>
                   <td>
                     <div className="row-actions">
-                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("edit"); }}>??</button>
-                      <button className="btn-icon" onClick={() => { setSelected(p); setModal("delete"); }}>??</button>
+                      <button className="btn-icon" title="Sửa" onClick={() => { setSelected(p); setModal("edit"); }}>✏️</button>
+                      <button className="btn-icon" title="Xóa" onClick={() => { setSelected(p); setModal("delete"); }}>🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -322,10 +314,14 @@ export default function PartsPage() {
         )}
       </div>
 
+      <TablePagination totalItems={total} currentPage={page} pageSize={pageSize}
+        pageSizeOptions={[10, 25, 50, 100]}
+        onPageChange={setPage} onPageSizeChange={(size) => { setPage(1); setPageSize(size); }} />
+
       {modal === "create" && (
         <Modal title="Thêm vật tư mới" onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
-          <PartForm initial={EMPTY_PART} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />
+          <PartForm initial={EMPTY_PART} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving || !categoriesReady} />
         </Modal>
       )}
 
@@ -333,21 +329,18 @@ export default function PartsPage() {
         <Modal title={`Sửa • ${selected.name}`} onClose={closeModal}>
           {formError && <div className="error">{formError}</div>}
           <PartForm
-            initial={{
-              ...selected,
-              imageUrl: imageByProductId.get(selected.id)?.imageUrl || "",
-            }}
+            initial={selectedInitial}
             categories={categories}
             onSubmit={handleEdit}
             onCancel={closeModal}
-            loading={saving}
+            loading={saving || !categoriesReady}
           />
         </Modal>
       )}
 
       {modal === "delete" && selected && (
         <Modal title="Xác nhận xóa" onClose={closeModal}>
-          <ConfirmDialog message={`X�a vật tư "${selected.name}"?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
+          <ConfirmDialog message={`Xóa vật tư "${selected.name}"?`} onConfirm={handleDelete} onCancel={closeModal} loading={saving} />
         </Modal>
       )}
     </div>

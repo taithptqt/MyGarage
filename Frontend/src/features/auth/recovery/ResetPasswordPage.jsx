@@ -24,7 +24,7 @@ function ResetPasswordPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!token.trim()) {
-      setError("Li�n k?t d?t l?i m?t kh?u không h?p l? ho?c thi?u m� x�c th?c.");
+      setError("Liên kết đặt lại mật khẩu không hợp lệ hoặc thiếu mã xác thực.");
       setSuccess("");
       return;
     }
@@ -36,7 +36,7 @@ function ResetPasswordPage() {
     }
 
     if (newPassword !== confirmPassword) {
-      setError("M?t kh?u x�c nh?n ch?a kh?p.");
+      setError("Mật khẩu xác nhận chưa khớp.");
       setSuccess("");
       return;
     }
@@ -75,11 +75,11 @@ function ResetPasswordPage() {
         </div>
         <div className="auth-floating-tag auth-floating-tag--right">
           <span>Chỉ lưu mã băm</span>
-          <p>Token ??c luu du?i d?ng hash v� không b? ghi log trong qu� tr�nh x? l�.</p>
+          <p>Token được lưu dưới dạng hash và không bị ghi log trong quá trình xử lý.</p>
         </div>
         <div className="auth-floating-tag auth-floating-tag--bottom">
           <span>Thu hồi</span>
-          <p>Đặt l?i th�nh c�ng s? v� hi?u h�a token cu v� c�c phi�n ?ang m?.</p>
+          <p>Đặt lại thành công sẽ vô hiệu hóa token cũ và các phiên đang mở.</p>
         </div>
       </div>
 

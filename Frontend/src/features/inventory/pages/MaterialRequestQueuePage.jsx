@@ -283,7 +283,7 @@ export default function MaterialRequestQueuePage() {
           <button className="mrq-btn mrq-btn-outline" onClick={() => fetchData()}>
             🔄 Làm mới
           </button>
-          <button className="mrq-btn mrq-btn-outline" onClick={() => navigate("/inventory/stock-history")}>
+          <button className="mrq-btn mrq-btn-outline" onClick={() => navigate("/workshop/inventory/history")}>
             📜 Lịch sử kho
           </button>
         </div>

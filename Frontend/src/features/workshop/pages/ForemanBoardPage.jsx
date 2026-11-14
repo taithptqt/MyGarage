@@ -287,7 +287,7 @@ export default function ForemanBoardPage() {
       setOrders(enriched);
       setLastRefresh(new Date());
     } catch (err) {
-      setError("Không thể t?i dữ liệu. Kiểm tra kết nối máy chủ.");
+      setError("Không thể tải dữ liệu. Kiểm tra kết nối máy chủ.");
       console.error(err);
     } finally {
       setLoading(false);

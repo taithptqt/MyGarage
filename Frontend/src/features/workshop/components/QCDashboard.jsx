@@ -184,7 +184,7 @@ export default function QCDashboard() {
 
       <style>{`
         .btn-success { background: #05cd99; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
-        .btn-?anger { background: #ee5d50; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
+        .btn-danger { background: #ee5d50; color: #fff; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; }
       `}</style>
     </div>
   );

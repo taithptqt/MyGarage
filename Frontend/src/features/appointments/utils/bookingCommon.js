@@ -112,9 +112,9 @@ export function resolveBookingItemIcon(item) {
     if (code.includes("HEAVY") || name.includes("tai nạn") || name.includes("tai nan")) return "💥";
     if (code.includes("LIENKET") || name.includes("liên kết") || name.includes("lien ket")) return "🤝";
     if (code.includes("TUTUC") || name.includes("tự túc") || name.includes("tu tuc")) return "🧾";
-    if (code.includes("FAST") || name.includes("xu?c x�t") || name.includes("xuoc xat")) return "??";
+    if (code.includes("FAST") || name.includes("xước xát") || name.includes("xuoc xat")) return "🎨";
     if (code.includes("ADVISOR") || name.includes("tư vấn") || name.includes("tu van")) return "💬";
-    return "ðŸ›¡ï¸";
+    return "🛡️";
   }
 
   return iconByIndex(extractField(item, ["id", "Id"], 0));

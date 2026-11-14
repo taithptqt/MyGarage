@@ -31,6 +31,7 @@ import {
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
+import TablePagination from "@shared/components/TablePagination";
 import { getAllStaff } from "../../../../../features/admin/api/staffApi";
 import { getInitialSalaryRequests } from "../../../../../features/admin/api/salaryAdminApi";
 import { useBranch } from "../../../../../context/BranchContext";
@@ -356,6 +357,10 @@ export default function PayrollPage() {
   });
   const [sendingInitialSalaryRequest, setSendingInitialSalaryRequest] = useState(false);
   const [initialSalaryDecisionRows, setInitialSalaryDecisionRows] = useState([]);
+  const [decisionPage, setDecisionPage] = useState(1);
+  const [decisionPageSize, setDecisionPageSize] = useState(20);
+  const [itemPage, setItemPage] = useState(1);
+  const [itemPageSize, setItemPageSize] = useState(20);
   const payrollDetailRequestSeqRef = useRef(0);
   const missingBaseSalaryRequestSeqRef = useRef(0);
   const initialSalaryRequestStatusRef = useRef(new Map());
@@ -644,6 +649,11 @@ export default function PayrollPage() {
     });
   }, [itemRows, runFilter, search]);
 
+  const pagedItems = useMemo(() => {
+    const start = (itemPage - 1) * itemPageSize;
+    return filteredItems.slice(start, start + itemPageSize);
+  }, [filteredItems, itemPage, itemPageSize]);
+
   const issuablePayslipCount = useMemo(
     () => filteredItems.filter((item) => item.canIssuePayslip && !item.hasPayslip).length,
     [filteredItems],
@@ -916,18 +926,18 @@ export default function PayrollPage() {
       if (!changedRows.length) return;
 
       changedRows.forEach(({ row, status }) => {
-        const staffName = pick(row, "staffName", "StaffName", "staff_name") || "nhan su";
+        const staffName = pick(row, "staffName", "StaffName", "staff_name") || "nhân sự";
         const rejectReason = pick(row, "rejectReason", "RejectReason", "reject_reason");
         if (status === "APPROVED") {
           toast({
             status: "success",
-            title: "Yeu cau luong da duoc Admin duyet",
+            title: "Yêu cầu lương đã được Admin duyệt",
             description: String(staffName),
           });
         } else {
           toast({
             status: "warning",
-            title: "Yeu cau luong bi Admin tu choi",
+            title: "Yêu cầu lương bị Admin từ chối",
             description: rejectReason ? `${staffName}: ${rejectReason}` : String(staffName),
           });
         }
@@ -944,6 +954,11 @@ export default function PayrollPage() {
     const rejected = initialSalaryDecisionRows.filter((row) => row.status === "REJECTED").length;
     return { approved, rejected };
   }, [initialSalaryDecisionRows]);
+
+  const pagedDecisionRows = useMemo(() => {
+    const start = (decisionPage - 1) * decisionPageSize;
+    return initialSalaryDecisionRows.slice(start, start + decisionPageSize);
+  }, [initialSalaryDecisionRows, decisionPage, decisionPageSize]);
 
   useEffect(() => {
     if (loading) return undefined;
@@ -1497,10 +1512,10 @@ export default function PayrollPage() {
 
       <Card p='16px' mb='20px'>
         <Flex wrap='wrap' gap='10px' align='center'>
-          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Ch?a có"}</Badge>
-          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Ch?a có"}</Badge>
-          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Ch?a có"}</Badge>
-          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Ch?a có"}</Badge>
+          <Badge colorScheme={periods.available ? "green" : "orange"}>API Kỳ lương: {periods.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={runs.available ? "green" : "orange"}>API Đợt lương: {runs.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={items.available ? "green" : "orange"}>API Dòng lương: {items.available ? "OK" : "Chưa có"}</Badge>
+          <Badge colorScheme={payslips.available ? "green" : "orange"}>API Phiếu lương: {payslips.available ? "OK" : "Chưa có"}</Badge>
           <Badge colorScheme='blue'>Nhân sự: {staffs.length}</Badge>
         </Flex>
       </Card>
@@ -1678,38 +1693,38 @@ export default function PayrollPage() {
       <Card p='20px' mb='20px'>
         <Flex justify='space-between' align='center' mb='10px' wrap='wrap' gap='8px'>
           <Text color={textColor} fontWeight='700'>
-            Ket qua duyet luong khoi tao
+            Kết quả duyệt lương khởi tạo
           </Text>
           <Flex align='center' gap='8px'>
-            <Badge colorScheme='green'>Duoc duyet: {initialSalaryDecisionSummary.approved}</Badge>
-            <Badge colorScheme='red'>Bi tu choi: {initialSalaryDecisionSummary.rejected}</Badge>
+            <Badge colorScheme='green'>Được duyệt: {initialSalaryDecisionSummary.approved}</Badge>
+            <Badge colorScheme='red'>Bị từ chối: {initialSalaryDecisionSummary.rejected}</Badge>
             <Button size='xs' variant='outline' onClick={pollInitialSalaryRequestUpdates}>
-              Tai lai
+              Tải lại
             </Button>
           </Flex>
         </Flex>
 
         {initialSalaryDecisionRows.length ? (
-          <Box maxH='320px' overflowY='auto' overflowX='auto'>
+          <Box overflowX='auto'>
             <Table size='sm'>
               <Thead>
                 <Tr>
-                  <Th>Nhan su</Th>
-                  <Th>Ket qua</Th>
-                  <Th>Admin xu ly</Th>
-                  <Th>Thoi gian</Th>
-                  <Th>Ghi chu</Th>
+                  <Th>Nhân sự</Th>
+                  <Th>Kết quả</Th>
+                  <Th>Admin xử lý</Th>
+                  <Th>Thời gian</Th>
+                  <Th>Ghi chú</Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {initialSalaryDecisionRows.slice(0, 100).map((row) => (
+                {pagedDecisionRows.map((row) => (
                   <Tr key={row.requestId}>
                     <Td color={textColor} fontWeight='600'>
                       {row.staffName}
                     </Td>
                     <Td>
                       <Badge colorScheme={row.status === "APPROVED" ? "green" : "red"}>
-                        {row.status === "APPROVED" ? "Da duyet" : "Tu choi"}
+                        {row.status === "APPROVED" ? "Đã duyệt" : "Từ chối"}
                       </Badge>
                     </Td>
                     <Td color={textColorSecondary}>{row.approverName || "--"}</Td>
@@ -1721,9 +1736,20 @@ export default function PayrollPage() {
                 ))}
               </Tbody>
             </Table>
+            <TablePagination
+              totalItems={initialSalaryDecisionRows.length}
+              currentPage={decisionPage}
+              pageSize={decisionPageSize}
+              onPageChange={setDecisionPage}
+              onPageSizeChange={(newSize) => {
+                setDecisionPageSize(newSize);
+                setDecisionPage(1);
+              }}
+              pageSizeOptions={[10, 20, 50, 100]}
+            />
           </Box>
         ) : (
-          <Text color={textColorSecondary}>Chua co ket qua duyet/tu choi.</Text>
+          <Text color={textColorSecondary}>Chưa có kết quả duyệt/từ chối.</Text>
         )}
       </Card>
 
@@ -1878,7 +1904,8 @@ export default function PayrollPage() {
         </Flex>
 
         {filteredItems.length ? (
-          <Table size='sm'>
+          <>
+            <Table size='sm'>
             <Thead>
               <Tr>
                 <Th>Nhân sự</Th>
@@ -1892,7 +1919,7 @@ export default function PayrollPage() {
               </Tr>
             </Thead>
             <Tbody>
-              {filteredItems.slice(0, 20).map((item) => (
+              {pagedItems.map((item) => (
                 <Tr key={item.id}>
                   <Td color={textColor} fontWeight='600'>
                     <Button
@@ -1945,7 +1972,19 @@ export default function PayrollPage() {
               ))}
             </Tbody>
           </Table>
-        ) : (
+          <TablePagination
+            totalItems={filteredItems.length}
+            currentPage={itemPage}
+            pageSize={itemPageSize}
+            onPageChange={setItemPage}
+            onPageSizeChange={(newSize) => {
+              setItemPageSize(newSize);
+              setItemPage(1);
+            }}
+            pageSizeOptions={[10, 20, 50]}
+          />
+        </>
+      ) : (
           <Text color={textColorSecondary}>Chưa có dòng lương phù hợp bộ lọc.</Text>
         )}
         <Text color={textColorSecondary} fontSize='xs' mt='10px'>

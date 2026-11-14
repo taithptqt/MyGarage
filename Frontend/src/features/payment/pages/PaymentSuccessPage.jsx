@@ -1,6 +1,23 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getPaymentStatus, syncOrder } from "@features/payment/api/payosApi";
+
+const PAYMENT_MESSAGES = {
+  completedRetail: "Thanh toán đơn phụ tùng đã được xác nhận thành công.",
+  completedDefault: "Thanh toán đã được xác nhận thành công.",
+  canceledOrFailed: "Giao dịch chưa thành công. Bạn có thể thử lại.",
+  unknown: "Không thể đối soát giao dịch lúc này.",
+  pending: "Giao dịch đang chờ xác nhận. Hệ thống sẽ tự động cập nhật.",
+  missingTxnCode: "Không tìm thấy mã giao dịch để đối soát.",
+  failedFetchStatus: "Không lấy được trạng thái thanh toán.",
+  verifyingInitial: "Đang xác nhận giao dịch với PayOS...",
+  redirectingRetail: "Đang chuyển đến danh sách đơn phụ tùng...",
+  pageTitle: "Kết quả thanh toán",
+  btnRetryCheck: "Kiểm tra lại",
+  btnViewRetailOrders: "Xem đơn phụ tùng",
+  btnNewTransaction: "Tạo giao dịch mới",
+  btnBackToPartShop: "Quay lại Part Shop"
+};
 
 function normalizeOrderStatus(order) {
   const rawStatus = String(order?.status || "").toUpperCase();
@@ -20,19 +37,19 @@ function normalizeOrderStatus(order) {
 function getMessageByStatus(status, isRetail) {
   if (status === "COMPLETED") {
     return isRetail
-      ? "Thanh to�n don phụ tùng d� ??c x�c nh?n th�nh c�ng."
-      : "Thanh toan da duoc xac nhan thanh cong.";
+      ? PAYMENT_MESSAGES.completedRetail
+      : PAYMENT_MESSAGES.completedDefault;
   }
 
   if (status === "CANCELED" || status === "FAILED") {
-    return "Giao dịch chưa thành công. Bạn có thể thử lại.";
+    return PAYMENT_MESSAGES.canceledOrFailed;
   }
 
   if (status === "UNKNOWN") {
-    return "Khong the doi soat giao dich luc nay.";
+    return PAYMENT_MESSAGES.unknown;
   }
 
-  return "Giao dich dang cho xac nhan. He thong se tu dong cap nhat.";
+  return PAYMENT_MESSAGES.pending;
 }
 
 function getStatusStyle(status) {
@@ -53,13 +70,16 @@ function getStatusStyle(status) {
 
 export default function PaymentSuccessPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const paymentId = useMemo(() => localStorage.getItem("payos_last_payment_id"), []);
-  const orderId = useMemo(() => localStorage.getItem("payos_last_order_id"), []);
+  const storedOrderId = useMemo(() => localStorage.getItem("payos_last_order_id"), []);
+  const queryOrderCode = searchParams.get("orderCode") || searchParams.get("orderId") || "";
+  const orderId = storedOrderId || queryOrderCode;
   const retailOrderId = useMemo(() => localStorage.getItem("payos_last_retail_order_id"), []);
   const retrySearch = useMemo(() => localStorage.getItem("payos_last_payment_search") || "", []);
 
   const [status, setStatus] = useState("PENDING");
-  const [message, setMessage] = useState("Dang xac nhan giao dich voi PayOS...");
+  const [message, setMessage] = useState(PAYMENT_MESSAGES.verifyingInitial);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -69,7 +89,8 @@ export default function PaymentSuccessPage() {
     ? `/my-retail-orders?orderId=${encodeURIComponent(retailOrderId)}`
     : "/my-retail-orders";
 
-  async function checkStatus() {
+  const checkStatus = useCallback(async () => {
+    setLoading(true);
     let orderBasedStatus = null;
 
     // Bước 1: Sync order với PayOS → trigger ApplyOutcomeAsync bên backend → gửi email
@@ -84,20 +105,20 @@ export default function PaymentSuccessPage() {
       }
     }
 
-    // N?u d� x�c d?nh ??c status t? order v� không c� paymentId (retail không c� payment record)
+    // Nếu đã xác định được status từ order và không có paymentId (retail không có payment record)
     if (!paymentId) {
       const current = orderBasedStatus || "UNKNOWN";
       setStatus(current);
       setMessage(
         orderBasedStatus
           ? getMessageByStatus(current, isRetailCheckout)
-          : "Khong tim thay ma giao dich de doi soat."
+          : PAYMENT_MESSAGES.missingTxnCode
       );
       setLoading(false);
       return current;
     }
 
-    // Bu?c 2: Ki?m tra trạng thái payment record
+    // Bước 2: Kiểm tra trạng thái payment record
     try {
       const result = await getPaymentStatus(paymentId);
       if (!result.ok) {
@@ -106,7 +127,7 @@ export default function PaymentSuccessPage() {
         setMessage(
           orderBasedStatus
             ? getMessageByStatus(fallbackStatus, isRetailCheckout)
-            : (result.data?.message || "Không l?y ??c trạng thái thanh to�n.")
+            : (result.data?.message || PAYMENT_MESSAGES.failedFetchStatus)
         );
         setLoading(false);
         return fallbackStatus;
@@ -124,7 +145,7 @@ export default function PaymentSuccessPage() {
       setLoading(false);
       return fallbackStatus;
     }
-  }
+  }, [isRetailCheckout, orderId, paymentId]);
 
   useEffect(() => {
     let timer;
@@ -154,7 +175,7 @@ export default function PaymentSuccessPage() {
       disposed = true;
       if (timer) clearTimeout(timer);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [checkStatus]);
 
   useEffect(() => {
     if (!isRetailCheckout || status !== "COMPLETED") return;
@@ -190,7 +211,7 @@ export default function PaymentSuccessPage() {
   return (
     <div>
       <h1 style={{ fontSize: 26, fontWeight: 700, color: "#111827", marginBottom: 14 }}>
-        K?t qu? thanh to�n
+        {PAYMENT_MESSAGES.pageTitle}
       </h1>
 
       <div className="booking-card" style={{ maxWidth: 760 }}>
@@ -216,7 +237,7 @@ export default function PaymentSuccessPage() {
 
         {redirecting ? (
           <p style={{ marginTop: 10, marginBottom: 0, color: "#1d4ed8", fontWeight: 600 }}>
-            Đang chuy?n d?n danh sách don phụ tùng...
+            {PAYMENT_MESSAGES.redirectingRetail}
           </p>
         ) : null}
 
@@ -227,7 +248,7 @@ export default function PaymentSuccessPage() {
             disabled={loading || redirecting}
             style={{ marginTop: 0, width: "auto" }}
           >
-            Kiểm tra lại
+            {PAYMENT_MESSAGES.btnRetryCheck}
           </button>
 
           <Link
@@ -235,7 +256,7 @@ export default function PaymentSuccessPage() {
             className="btn-book"
             style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0, width: "auto" }}
           >
-            {isRetailCheckout ? "Xem đơn phụ tùng" : "Tạo giao dịch mới"}
+            {isRetailCheckout ? PAYMENT_MESSAGES.btnViewRetailOrders : PAYMENT_MESSAGES.btnNewTransaction}
           </Link>
 
           {isRetailCheckout ? (
@@ -244,7 +265,7 @@ export default function PaymentSuccessPage() {
               className="btn-popup-secondary"
               style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
             >
-              Quay lại Part Shop
+              {PAYMENT_MESSAGES.btnBackToPartShop}
             </Link>
           ) : null}
         </div>
@@ -252,5 +273,3 @@ export default function PaymentSuccessPage() {
     </div>
   );
 }
-
-

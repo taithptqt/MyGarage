@@ -6,9 +6,9 @@ import RetailOrderStatusBadge from "@features/retail/components/RetailOrderStatu
 import { createPayosOrder, syncOrder } from "@features/payment/api/payosApi";
 import {
   getBranches,
-  getMyRetailOrders,
   getRetailOrderById,
 } from "@features/retail/api/retailApi";
+import { getMyRetailOrderPage } from "@features/retail/api/retailOrderPagingApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import {
   formatVnd,
@@ -18,6 +18,9 @@ import {
 } from "@features/retail/utils/retailFormat";
 import "./RetailShared.css";
 import "./MyRetailOrdersPage.css";
+
+const ORDER_PAGE_SIZE = 20;
+const PAGE_LABELS = { previous: "Trước", next: "Sau", page: "Trang" };
 
 function formatDateTime(value) {
   if (!value) return "Chưa có";
@@ -74,6 +77,10 @@ export default function MyRetailOrdersPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
+  const [page, setPage] = useState(1);
+  const [summary, setSummary] = useState({ total: 0, draftCount: 0, confirmedCount: 0, totalValue: 0 });
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const anchorOrderId = Number(searchParams.get("orderId")) || 0;
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -92,22 +99,19 @@ export default function MyRetailOrdersPage() {
 
       try {
         const [orderData, branchData] = await Promise.all([
-          getMyRetailOrders(),
+          getMyRetailOrderPage({ page, pageSize: ORDER_PAGE_SIZE, anchorId: anchorOrderId }),
           getBranches(),
         ]);
 
         if (ignore) return;
 
-        const nextOrders = Array.isArray(orderData)
-          ? [...orderData].sort(
-              (left, right) =>
-                new Date(right?.createdAt || 0).getTime() -
-                new Date(left?.createdAt || 0).getTime()
-            )
-          : [];
+        const nextOrders = Array.isArray(orderData?.items) ? orderData.items : [];
         const nextBranches = Array.isArray(branchData) ? branchData : [];
 
         setOrders(nextOrders);
+        setSummary({ total: Number(orderData?.total) || 0, draftCount: Number(orderData?.draftCount) || 0,
+          confirmedCount: Number(orderData?.confirmedCount) || 0, totalValue: Number(orderData?.totalValue) || 0 });
+        setPage(Number(orderData?.page) || 1);
         setBranches(nextBranches);
       } catch (loadError) {
         if (!ignore) {
@@ -127,7 +131,7 @@ export default function MyRetailOrdersPage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [page, refreshVersion, anchorOrderId]);
 
   const branchById = useMemo(
     () => new Map(branches.map((branch) => [String(branch.id), branch])),
@@ -135,24 +139,13 @@ export default function MyRetailOrdersPage() {
   );
 
   const orderStats = useMemo(() => {
-    const draftCount = orders.filter(
-      (order) => String(order?.status || "DRAFT").toUpperCase() === "DRAFT"
-    ).length;
-    const confirmedCount = orders.filter(
-      (order) => String(order?.status || "").toUpperCase() === "CONFIRMED"
-    ).length;
-    const totalValue = orders.reduce(
-      (sum, order) => sum + Number(order?.finalAmount || 0),
-      0
-    );
-
     return [
-      { value: `${orders.length}`, label: "đơn phụ tùng đã tạo" },
-      { value: `${draftCount}`, label: "đơn đang chờ thanh toán" },
-      { value: `${confirmedCount}`, label: "đơn đã xác nhận" },
-      { value: formatVnd(totalValue), label: "tổng giá trị hiển thị" },
+      { value: `${summary.total}`, label: "đơn phụ tùng đã tạo" },
+      { value: `${summary.draftCount}`, label: "đơn đang chờ thanh toán" },
+      { value: `${summary.confirmedCount}`, label: "đơn đã xác nhận" },
+      { value: formatVnd(summary.totalValue), label: "tổng giá trị hiển thị" },
     ];
-  }, [orders]);
+  }, [summary]);
 
   useEffect(() => {
     if (loading || orders.length === 0) return;
@@ -166,14 +159,17 @@ export default function MyRetailOrdersPage() {
     targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlightOrderId(targetOrderId);
 
-    const timer = window.setTimeout(() => setHighlightOrderId(null), 2200);
-
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("orderId");
     setSearchParams(nextParams, { replace: true });
 
-    return () => window.clearTimeout(timer);
   }, [loading, orders, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (highlightOrderId == null) return undefined;
+    const timer = window.setTimeout(() => setHighlightOrderId(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [highlightOrderId]);
 
   useEffect(() => {
     const queryOrderId = Number(searchParams.get("orderId") || 0);
@@ -199,23 +195,14 @@ export default function MyRetailOrdersPage() {
       const maxAttempts = 20;
       for (let attempt = 0; attempt < maxAttempts && !disposed; attempt += 1) {
         try {
-          const orderData = await getMyRetailOrders();
+          const targetOrder = await getRetailOrderById(targetOrderId);
           if (disposed) return;
-
-          const nextOrders = Array.isArray(orderData)
-            ? [...orderData].sort(
-                (left, right) =>
-                  new Date(right?.createdAt || 0).getTime() -
-                  new Date(left?.createdAt || 0).getTime()
-              )
-            : [];
-          setOrders(nextOrders);
-
-          const targetOrder = nextOrders.find((order) => Number(order?.id) === targetOrderId);
+          setOrders((previous) => previous.map((order) => Number(order?.id) === targetOrderId ? { ...order, ...targetOrder } : order));
           const normalizedStatus = String(targetOrder?.status || "").toUpperCase();
           if (normalizedStatus === "CONFIRMED") {
             localStorage.removeItem("payos_last_order_id");
             localStorage.removeItem("payos_last_retail_order_id");
+            setRefreshVersion((value) => value + 1);
             break;
           }
 
@@ -572,6 +559,15 @@ export default function MyRetailOrdersPage() {
                 );
               })}
             </div>
+          )}
+          {summary.total > ORDER_PAGE_SIZE && (
+            <nav className="parts-shop-pagination" aria-label={PAGE_LABELS.page}>
+              <button type="button" className="parts-shop-page-button" disabled={loading || page <= 1}
+                onClick={() => setPage((value) => value - 1)}>{PAGE_LABELS.previous}</button>
+              <span>{PAGE_LABELS.page} {page} / {Math.ceil(summary.total / ORDER_PAGE_SIZE)}</span>
+              <button type="button" className="parts-shop-page-button" disabled={loading || page * ORDER_PAGE_SIZE >= summary.total}
+                onClick={() => setPage((value) => value + 1)}>{PAGE_LABELS.next}</button>
+            </nav>
           )}
         </section>
       </div>

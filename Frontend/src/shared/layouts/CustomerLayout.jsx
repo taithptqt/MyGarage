@@ -44,7 +44,7 @@ export default function CustomerLayout({ children }) {
                 Xe của tôi
               </NavLink>
               <NavLink to="/my-notifications" className={({ isActive }) => isActive ? "active" : ""}>
-                Th�ng b�o
+                Thông báo
               </NavLink>
               <NavLink to="/my-appointments" className={({ isActive }) => isActive ? "active" : ""}>
                 Lịch hẹn

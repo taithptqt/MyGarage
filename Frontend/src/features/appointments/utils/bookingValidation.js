@@ -35,9 +35,9 @@ export function validateBookingStep(stepNumber, data) {
   }
 
   if (stepNumber === 4) {
-    if (!String(customerForm?.fullName || "").trim()) return "Vui l�ng nh?p h? t�n khách hàng.";
-    if (!String(customerForm?.phone || "").trim()) return "Vui l�ng nh?p s? di?n tho?i khách hàng.";
-    if (!isValidVietnamesePhone(customerForm?.phone)) return "S? di?n tho?i khách hàng không d�ng ??nh d?ng Vi?t Nam.";
+    if (!String(customerForm?.fullName || "").trim()) return "Vui lòng nhập họ tên khách hàng.";
+    if (!String(customerForm?.phone || "").trim()) return "Vui lòng nhập số điện thoại khách hàng.";
+    if (!isValidVietnamesePhone(customerForm?.phone)) return "Số điện thoại khách hàng không đúng định dạng Việt Nam.";
     if (!selectedDate) return "Vui lòng chọn ngày đặt lịch.";
     if (!selectedSlot) return "Vui lòng chọn khung giờ khả dụng.";
 

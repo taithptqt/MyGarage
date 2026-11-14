@@ -2334,7 +2334,7 @@
 }
 
 .reception-quote-action-row .btn-success,
-.reception-quote-action-row .btn-?anger {
+.reception-quote-action-row .btn-danger {
   border: 1px solid transparent;
   border-radius: 10px;
   min-height: 38px;
@@ -2349,14 +2349,14 @@
   color: #0f7b55;
 }
 
-.reception-quote-action-row .btn-?anger {
+.reception-quote-action-row .btn-danger {
   border-color: #f0b6be;
   background: #fff1f3;
   color: #b4233a;
 }
 
 .reception-quote-action-row .btn-success:disabled,
-.reception-quote-action-row .btn-?anger:disabled {
+.reception-quote-action-row .btn-danger:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -2527,7 +2527,7 @@
   .reception-quote-action-row .btn-primary,
   .reception-quote-action-row .toolbar-action-btn,
   .reception-quote-action-row .btn-success,
-  .reception-quote-action-row .btn-?anger {
+  .reception-quote-action-row .btn-danger {
     width: 100%;
   }
 
@@ -3499,7 +3499,7 @@
   border-color: #10b981;
 }
 
-.btn-action-?anger:hover {
+.btn-action-danger:hover {
   background: #fff1f2;
   border-color: #ef4444;
 }

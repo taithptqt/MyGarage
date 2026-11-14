@@ -55,15 +55,14 @@ export const serviceOrderApi = {
   sendQuotationToCustomer: (quotationId, data) =>
     request({ url: `/api/quotations/${quotationId}/send-to-customer`, method: "POST", data }),
   exportQuotationExcel: async (quotationId) => {
-    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
-    if (!token) {
-      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-    }
-
     const exportUrl = `${getApiBaseUrl()}/api/quotations/${quotationId}/export/excel`;
     const res = await fetch(exportUrl, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
     });
+
+    if (res.status === 401) {
+      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
 
     if (!res.ok) {
       let message = "Không thể xuất file Excel từ server.";
@@ -103,11 +102,6 @@ export const serviceOrderApi = {
     };
   },
   importQuotationExcel: async (quotationId, file, actorStaffId, note = "") => {
-    const token = localStorage.getItem("mygarage_token") || localStorage.getItem("token");
-    if (!token) {
-      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-    }
-
     if (!file) {
       throw new Error("Vui lòng chọn file Excel để nhập.");
     }
@@ -124,9 +118,13 @@ export const serviceOrderApi = {
 
     const res = await fetch(importUrl, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       body: formData,
     });
+
+    if (res.status === 401) {
+      throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
 
     if (!res.ok) {
       let message = "Không thể nhập file Excel từ server.";

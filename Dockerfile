@@ -1,5 +1,5 @@
 ## syntax=docker/dockerfile:1.7
-ARG DOTNET_VERSION=8.0
+ARG DOTNET_VERSION=10.0
 ARG NODE_VERSION=20-alpine
 ARG BUILD_CONFIGURATION=Release
 
@@ -22,14 +22,17 @@ RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS backend-restore
 WORKDIR /src/backend
-COPY backend/MyGarage.csproj ./
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet restore MyGarage.csproj
+COPY backend/src/MyGarage.Api/MyGarage.Api.csproj src/MyGarage.Api/
+COPY backend/src/MyGarage.Domain/MyGarage.Domain.csproj src/MyGarage.Domain/
+COPY backend/src/MyGarage.Application/MyGarage.Application.csproj src/MyGarage.Application/
+COPY backend/src/MyGarage.Infrastructure/MyGarage.Infrastructure.csproj src/MyGarage.Infrastructure/
+RUN --mount=type=cache,target=/root/.nuget/packages dotnet restore src/MyGarage.Api/MyGarage.Api.csproj
 
 FROM backend-restore AS backend-publish
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src/backend
 COPY backend/ ./
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish MyGarage.csproj -c ${BUILD_CONFIGURATION} -o /app/publish
+RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish src/MyGarage.Api/MyGarage.Api.csproj -c ${BUILD_CONFIGURATION} -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app

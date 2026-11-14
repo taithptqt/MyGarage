@@ -159,7 +159,7 @@ function resolveCurrentUserId(user) {
 
 const SERVICE_ROW_TOOLTIP_EXPAND = "Nhấn để xem phụ tùng thuộc dịch vụ này.";
 const SERVICE_ROW_TOOLTIP_COLLAPSE = "Nhấn để thu gọn phụ tùng thuộc dịch vụ này.";
-const SERVICE_ROW_TOOLTIP_STATIC = "D�ng dịch vụ ch�nh trong b�o gi�.";
+const SERVICE_ROW_TOOLTIP_STATIC = "Dòng dịch vụ chính trong báo giá.";
 
 export default function QuotationDetailPage() {
   const { quotationId } = useParams();
@@ -177,7 +177,7 @@ export default function QuotationDetailPage() {
   useEffect(() => {
     if (!Number.isFinite(numericQuotationId) || numericQuotationId <= 0) {
       setLoading(false);
-      setError("M� b�o gi� không h?p l?.");
+      setError("Mã báo giá không hợp lệ.");
       return;
     }
 
@@ -190,7 +190,7 @@ export default function QuotationDetailPage() {
         const nextData = await getQuotationById(numericQuotationId);
         if (!cancelled) setQuotation(nextData || null);
       } catch (e) {
-        if (!cancelled) setError(e?.message || "Không t?i ??c b�o gi�.");
+      if (!cancelled) setError(e?.message || "Không tải được báo giá.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -402,7 +402,7 @@ export default function QuotationDetailPage() {
 
   const handleCustomerDecision = async (approved) => {
     if (!numericQuotationId || !currentUserId) {
-      setError("Không x�c d?nh ??c t�i kho?n khách hàng d? x�c nh?n b�o gi�.");
+      setError("Không xác định được tài khoản khách hàng để xác nhận báo giá.");
       return;
     }
 
@@ -413,14 +413,14 @@ export default function QuotationDetailPage() {
       const updated = await applyCustomerQuotationDecision(numericQuotationId, {
         approved,
         customerId: currentUserId,
-        note: approved ? "Kh�ch x�c nh?n d?ng � b�o gi�" : "Kh�ch x�c nh?n t? ch?i b�o gi�",
+      note: approved ? "Khách xác nhận đồng ý báo giá" : "Khách xác nhận từ chối báo giá",
       });
       setQuotation(updated || quotation);
       setMessage(approved
-        ? "B?n d� duy?t b�o gi� th�nh c�ng. Xu?ng s? b?t ??u tri?n khai c�ng vi?c."
-        : "B?n d� t? ch?i b�o gi�. C? v?n dịch vụ s? li�n h? d? tu v?n phuong �n kh�c.");
+        ? "Bạn đã duyệt báo giá thành công. Xưởng sẽ bắt đầu triển khai công việc."
+        : "Bạn đã từ chối báo giá. Cố vấn dịch vụ sẽ liên hệ để tư vấn phương án khác.");
     } catch (e) {
-      setError(e?.message || "Không th? c?p nh?t quy?t d?nh b�o gi�.");
+      setError(e?.message || "Không thể cập nhật quyết định báo giá.");
     } finally {
       setSaving(false);
     }
@@ -434,13 +434,13 @@ export default function QuotationDetailPage() {
           <section className="cp-card cp-card--highlight cp-quote-hero">
             <div className="cp-quote-hero-copy">
               <p className="cp-eyebrow">Garage của tôi</p>
-              <h1 className="cp-title">Xem b�o gi� dịch vụ</h1>
+              <h1 className="cp-title">Xem báo giá dịch vụ</h1>
               <p className="cp-desc">
-                Chi ti?t h?ng m?c s?a ch?a, ph?n b?o hi?m h? tr? v� ph?n khách hàng cần thanh to�n ??c hi?n th? r� r�ng.
+          Chi tiết hạng mục sửa chữa, phần bảo hiểm hỗ trợ và phần khách hàng cần thanh toán được hiển thị rõ ràng.
               </p>
             </div>
             <div className="cp-quote-hero-actions">
-              <Link className="cp-btn cp-btn-ghost" to="/my-notifications">V? th�ng b�o</Link>
+              <Link className="cp-btn cp-btn-ghost" to="/my-notifications">Về thông báo</Link>
               <Link className="cp-btn" to="/my-garage-dashboard">Theo dõi xe</Link>
             </div>
           </section>
@@ -455,29 +455,29 @@ export default function QuotationDetailPage() {
                 <div className="cp-quote-summary-head">
                   <div>
                     <h2 className="cp-quote-code">{readNonEmpty(quotation.code, `#${numericQuotationId}`)}</h2>
-                    <p className="cp-muted cp-quote-title">{readNonEmpty(quotation.title, "B�o gi� dịch vụ")}</p>
+                    <p className="cp-muted cp-quote-title">{readNonEmpty(quotation.title, "Báo giá dịch vụ")}</p>
                   </div>
                   <span className={`cp-chip ${statusClassName(quotation.status)}`}>{readNonEmpty(quotation.status)}</span>
                 </div>
 
                 <div className="cp-quote-meta-grid">
                   <div className="cp-quote-meta-item"><dt>Mã phiếu dịch vụ</dt><dd>{readNonEmpty(quotation.serviceOrderId)}</dd></div>
-                  <div className="cp-quote-meta-item"><dt>Lo?i b�o gi�</dt><dd>{readNonEmpty(quotation.quotationType)}</dd></div>
+                  <div className="cp-quote-meta-item"><dt>Loại báo giá</dt><dd>{readNonEmpty(quotation.quotationType)}</dd></div>
                   <div className="cp-quote-meta-item"><dt>Phiên bản</dt><dd>{readNonEmpty(quotation.versionNo)}</dd></div>
                   <div className="cp-quote-meta-item"><dt>Hiệu lực đến</dt><dd>{formatDate(quotation.validUntil)}</dd></div>
-                  <div className="cp-quote-meta-item"><dt>�p d?ng v�o phi?u</dt><dd>{quotation.isAppliedToServiceOrder ? "Đã �p d?ng" : "Ch?a �p d?ng"}</dd></div>
-                  <div className="cp-quote-meta-item"><dt>Th?i di?m �p d?ng</dt><dd>{formatDate(quotation.appliedAt)}</dd></div>
+                  <div className="cp-quote-meta-item"><dt>Áp dụng vào phiếu</dt><dd>{quotation.isAppliedToServiceOrder ? "Đã áp dụng" : "Chưa áp dụng"}</dd></div>
+                <div className="cp-quote-meta-item"><dt>Thời điểm áp dụng</dt><dd>{formatDate(quotation.appliedAt)}</dd></div>
                 </div>
 
                 <div className="cp-quote-decision-row">
-                  <span>Trạng thái quy?t d?nh c?a kh�ch: <b>{readNonEmpty(quotation.customerDecisionStatus)}</b></span>
+                <span>Trạng thái quyết định của khách: <b>{readNonEmpty(quotation.customerDecisionStatus)}</b></span>
                   {canCustomerDecide ? (
                     <div className="cp-quote-decision-actions">
                       <button type="button" className="cp-btn" onClick={() => handleCustomerDecision(true)} disabled={saving}>
-                        Động � b�o gi�
+                Đồng ý báo giá
                       </button>
                       <button type="button" className="cp-btn cp-btn-danger" onClick={() => handleCustomerDecision(false)} disabled={saving}>
-                        T? ch?i b�o gi�
+                        Từ chối báo giá
                       </button>
                     </div>
                   ) : null}
@@ -488,15 +488,15 @@ export default function QuotationDetailPage() {
                 <div className="premium-table-wrapper quote-detail-wrapper">
                   {renderGroupedTableSection(
                     "initial",
-                    "Dịch vụ kh�ch chọn ban d?u",
+            "Dịch vụ khách chọn ban đầu",
                     groupedRowsByServiceType.initialGroups,
                     "Không có dịch vụ ban đầu.",
                   )}
                   {renderGroupedTableSection(
                     "supplementary",
-                    "Dịch vụ ph�t sinh (d� duy?t b�o gi� b? sung)",
+            "Dịch vụ phát sinh (đã duyệt báo giá bổ sung)",
                     groupedRowsByServiceType.supplementaryGroups,
-                    "Chua c� dịch vụ ph�t sinh.",
+            "Chưa có dịch vụ phát sinh.",
                     "quote-detail-section-supplementary",
                   )}
                 </div>
@@ -506,11 +506,11 @@ export default function QuotationDetailPage() {
                 <div className="summary-details">
                   <h3 className="summary-title">TỔNG KẾT CHI PHÍ SỬA CHỮA / QUOTATION SUMMARY</h3>
 
-                  <div className="summary-subtitle">Ph�n t�ch gi� tr? (Ch?a VAT):</div>
+            <div className="summary-subtitle">Phân tích giá trị (Chưa VAT):</div>
                   <div className="summary-line">
                     <span className="summary-line-label">
                       <span className="summary-marker marker-labor" />
-                      Tổng chi ph� Nh�n c�ng
+                Tổng chi phí Nhân công
                     </span>
                     <span className="summary-line-dots" />
                     <span className="summary-line-value">{formatMoney(paymentSummary.totalLabor)}</span>
@@ -529,7 +529,7 @@ export default function QuotationDetailPage() {
                     <span className="summary-line-value">{formatMoney(paymentSummary.beforeVat)}</span>
                   </div>
 
-                  <div className="summary-subtitle">Thu? Gi� tr? gia tang (VAT):</div>
+            <div className="summary-subtitle">Thuế Giá trị gia tăng (VAT):</div>
                   {paymentSummary.vatGroups.length > 0
                     ? paymentSummary.vatGroups.map((group) => (
                       <div key={`vat-${group.taxRate}`} className="summary-line">
@@ -558,7 +558,7 @@ export default function QuotationDetailPage() {
                   </div>
 
                   <div className="summary-divider" />
-                  <div className="summary-subtitle">Ph�n b? thanh to�n:</div>
+            <div className="summary-subtitle">Phân bổ thanh toán:</div>
                   <div className="summary-line">
                     <span className="summary-line-label">
                       <span className="summary-marker marker-insurance" />
@@ -590,7 +590,7 @@ export default function QuotationDetailPage() {
                 <div className="floating-bottom-bar">
                   <div className="floating-bar-content">
                     <div className="floating-bar-left">
-                      <span className="floating-bar-label">Tổng thanh to�n</span>
+            <span className="floating-bar-label">Tổng thanh toán</span>
                       <span className="floating-bar-value">{formatMoney(paymentSummary.customerPayable)}</span>
                     </div>
                     <div className="floating-bar-right">

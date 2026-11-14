@@ -1,6 +1,8 @@
 import { request } from "@app/apiClient";
 
 export const inventoryApi = {
+  getCatalogPage: (kind, page, pageSize) => request({ url: `/api/inventory-management/catalog/${kind}`, method: "GET", params: { page, pageSize } }),
+  exportCatalogProducts: () => request({ url: "/api/inventory-management/catalog/products/export", method: "GET", responseType: "blob" }),
   getPartCategories: () => request({ url: "/api/categories", method: "GET" }),
   createPartCategory: (data) => request({ url: "/api/categories", method: "POST", data }),
   updatePartCategory: (id, data) => request({ url: `/api/categories/${id}`, method: "PUT", data }),
@@ -56,7 +58,12 @@ export const inventoryApi = {
 
   getOverview: () => request({ url: "/api/inventory-management/dashboards/overview", method: "GET" }),
   getBranchSummary: () => request({ url: "/api/inventory-management/branch-summaries", method: "GET" }),
-  getWarehouseStructure: () => request({ url: "/api/inventory-management/warehouse-structures", method: "GET" }),
+  getWarehouseStructure: (params = {}, maybePageSize) => {
+    const query = typeof params === "number"
+      ? { page: params, pageSize: maybePageSize || 10 }
+      : (params || {});
+    return request({ url: "/api/inventory-management/warehouse-structures", method: "GET", params: query });
+  },
   getAlerts: () => request({ url: "/api/inventory-management/alert-items", method: "GET" }),
   getTransactions: (params = {}) => request({ url: "/api/inventory-management/stock-transactions", method: "GET", params }),
   getApprovals: (status) => request({ url: "/api/inventory-management/approval-requests", method: "GET", params: status ? { status } : {} }),
@@ -65,8 +72,11 @@ export const inventoryApi = {
   getAudits: (status) => request({ url: "/api/inventory-management/audit-requests", method: "GET", params: status ? { status } : {} }),
   approveAudit: (id, data = {}) => request({ url: `/api/inventory-management/audit-requests/${id}`, method: "PATCH", data: { ...data, decision: "APPROVE" } }),
   rejectAudit: (id, data = {}) => request({ url: `/api/inventory-management/audit-requests/${id}`, method: "PATCH", data: { ...data, decision: "REJECT" } }),
-  getReports: () => request({ url: "/api/inventory-management/analytics-reports", method: "GET" }),
-  getAuditLogs: (take = 300) => request({ url: "/api/inventory-management/audit-entries", method: "GET", params: { take } }),
+  getReports: (params = {}) => request({ url: "/api/inventory-management/analytics-reports", method: "GET", params }),
+  getAuditLogs: (take = 300) => {
+    const query = typeof take === "object" ? take : { take };
+    return request({ url: "/api/inventory-management/audit-entries", method: "GET", params: query });
+  },
   getSettings: () => request({ url: "/api/inventory-management/configuration", method: "GET" }),
   saveSettings: (data) => request({ url: "/api/inventory-management/configuration", method: "PUT", data }),
 };

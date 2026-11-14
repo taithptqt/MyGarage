@@ -14,8 +14,8 @@ export default function PaymentCancelPage() {
       <div className="booking-card" style={{ maxWidth: 720 }}>
         <p style={{ margin: 0, color: "#2d3748", lineHeight: 1.7 }}>
           {retailOrderId
-            ? "B?n d� h?y thanh to�n cho don phụ tùng tr�n PayOS. Đơn b�n l? v?n c� th? ??c ki?m tra l?i t? m�n h�nh don h�ng c?a b?n."
-            : "B?n d� h?y giao d?ch tr�n PayOS. N?u cần, b?n c� th? t?o l?i link thanh to�n."}
+            ? "Bạn đã hủy thanh toán cho đơn phụ tùng trên PayOS. Đơn bán lẻ vẫn có thể được kiểm tra lại từ màn hình đơn hàng của bạn."
+            : "Bạn đã hủy giao dịch trên PayOS. Nếu cần, bạn có thể tạo lại link thanh toán."}
         </p>
         <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 10 }}>
           <Link
@@ -23,7 +23,7 @@ export default function PaymentCancelPage() {
             className="btn-book"
             style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", marginTop: 0, width: "auto" }}
           >
-            Th? l?i thanh to�n
+            Thử lại thanh toán
           </Link>
           {retailOrderId ? (
             <>

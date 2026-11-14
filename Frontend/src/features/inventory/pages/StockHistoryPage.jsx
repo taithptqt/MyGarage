@@ -1,40 +1,59 @@
-﻿import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import { request } from "@app/apiClient";
 import "./StockHistory.css";
 
 function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ₫"; }
 function fmtDate(v) { return v ? new Date(v).toLocaleString("vi-VN") : "--"; }
+const PAGE_SIZE = 50;
+const PAGE_LABELS = { previous: "Trước", next: "Sau", page: "Trang" };
 
 export default function StockHistoryPage() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchCode, setSearchCode] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const sequence = useRef(0);
 
-  const loadHistory = async (code = "") => {
+  const loadHistory = useCallback(async () => {
+    const requestId = ++sequence.current;
     setLoading(true);
     setError("");
     try {
       const res = await request({ 
         url: "/api/inventory/history", 
         method: "GET",
-        params: { search: code } 
+        params: { search, page, pageSize: PAGE_SIZE }
       });
-      setHistory(res?.items ?? res ?? []);
+      if (requestId !== sequence.current) return;
+      const count = Number(res?.total) || 0;
+      const lastPage = Math.max(1, Math.ceil(count / PAGE_SIZE));
+      if (page > lastPage) { setPage(lastPage); return; }
+      setHistory(Array.isArray(res?.items) ? res.items : []);
+      setTotal(count);
     } catch (e) {
+      if (requestId !== sequence.current) return;
       setError("Không thể tải lịch sử kho.");
-      // dummy data if api doesn't exist
-      setHistory([
-        { id: 1, type: "IN", partCode: "PT-001", partName: "Lọc dầu động cơ", qty: 50, ref: "PO-2404-001", date: new Date().toISOString(), by: "Thủ kho A" },
-        { id: 2, type: "OUT", partCode: "PT-001", partName: "Lọc dầu động cơ", qty: -2, ref: "SO-10024", date: new Date(Date.now() - 3600000).toISOString(), by: "Thợ B" },
-        { id: 3, type: "OUT", partCode: "PT-002", partName: "M� phanh", qty: -1, ref: "SO-10025", date: new Date(Date.now() - 7200000).toISOString(), by: "Th? C" }
-      ]);
+      setHistory([]);
+      setTotal(0);
     } finally {
-      setLoading(false);
+      if (requestId === sequence.current) setLoading(false);
     }
-  };
+  }, [page, search]);
 
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => {
+    loadHistory();
+    return () => { sequence.current += 1; };
+  }, [loadHistory, revision]);
+
+  const applySearch = () => {
+    setPage(1);
+    setSearch(searchCode.trim());
+    if (page === 1 && searchCode.trim() === search) setRevision((value) => value + 1);
+  };
 
   return (
     <div className="sh-page">
@@ -49,9 +68,9 @@ export default function StockHistoryPage() {
             placeholder="Tìm theo mã PT hoặc chứng từ..." 
             value={searchCode}
             onChange={(e) => setSearchCode(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && loadHistory(searchCode)}
+            onKeyDown={(e) => e.key === 'Enter' && applySearch()}
           />
-          <button className="sh-btn-search" onClick={() => loadHistory(searchCode)}>🔍 Tra cứu</button>
+          <button className="sh-btn-search" onClick={applySearch}>🔍 Tra cứu</button>
         </div>
       </div>
 
@@ -78,7 +97,7 @@ export default function StockHistoryPage() {
                   <td className="font-semibold text-slate-700">{row.partCode}</td>
                   <td>{row.partName}</td>
                   <td>
-                    <span className={`sh-type t-${row.type.toLowerCase()}`}>
+                    <span className={`sh-type t-${String(row.type || "").toLowerCase()}`}>
                       {row.type === "IN" ? "Nhập kho" : row.type === "OUT" ? "Xuất kho" : row.type}
                     </span>
                   </td>
@@ -91,6 +110,13 @@ export default function StockHistoryPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {!error && total > PAGE_SIZE && (
+          <nav aria-label={PAGE_LABELS.page}>
+            <button type="button" className="sh-btn-search" disabled={loading || page <= 1} onClick={() => setPage((value) => value - 1)}>{PAGE_LABELS.previous}</button>
+            <span> {PAGE_LABELS.page} {page} / {Math.ceil(total / PAGE_SIZE)} </span>
+            <button type="button" className="sh-btn-search" disabled={loading || page * PAGE_SIZE >= total} onClick={() => setPage((value) => value + 1)}>{PAGE_LABELS.next}</button>
+          </nav>
         )}
       </div>
     </div>

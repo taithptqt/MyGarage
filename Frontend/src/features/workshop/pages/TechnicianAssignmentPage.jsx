@@ -15,17 +15,17 @@ function fmt(v) {
 
 const SPECIALTY_ICONS = {
   ENGINE:    "⚙️",  ELECTRICAL: "⚡", CHASSIS:   "🏗️",
-  PAINTING:  "ðŸŽ¨",  GENERAL:    "ðŸ”§", BODYWORK:  "ðŸš™",
+  PAINTING:  "🎨",  GENERAL:    "🔧", BODYWORK:  "🚙",
 };
 const SPECIALTY_VI = {
   ENGINE:    "Động cơ", ELECTRICAL: "Điện", CHASSIS:  "Gầm",
-  PAINTING:  "Son",     GENERAL:    "Tổng h?p", BODYWORK: "Thân vỏ",
+  PAINTING:  "Sơn",     GENERAL:    "Tổng hợp", BODYWORK: "Thân vỏ",
 };
 
 /* ─── sub-components ─── */
 function StaffSuggestionCard({ staff, selected, onToggle, splitRatio, onRatioChange, isFirst }) {
   const specialty = String(staff.specialty || staff.Specialty || "GENERAL").toUpperCase();
-  const icon = SPECIALTY_ICONS[specialty] || "ðŸ”§";
+  const icon = SPECIALTY_ICONS[specialty] || "🔧";
   const workload = Number(staff.currentWorkload ?? staff.CurrentWorkload ?? 0);
 
   return (
@@ -106,7 +106,7 @@ function ServiceItemRow({ item, assignments, availableStaff, onAssignChange }) {
         ) : (
           assigned.map((a, i) => (
             <span key={i} className={`ta-item-assignee ${a.role === "PRIMARY" ? "ta-assignee-primary" : "ta-assignee-assist"}`}>
-              {a.role === "PRIMARY" ? "ðŸŽ¯" : "ðŸ¤"} {a.staffName}
+              {a.role === "PRIMARY" ? "🎯" : "🤝"} {a.staffName}
               {a.splitRatio ? ` (${a.splitRatio}%)` : ""}
             </span>
           ))
@@ -423,8 +423,8 @@ export default function TechnicianAssignmentPage() {
 
           {!activeItemId && (
             <div className="ta-staff-placeholder">
-              <span>ðŸ‘†</span>
-              <p>Chọn m?t hạng mục d? b?t d?u phân công thợ</p>
+              <span>👆</span>
+              <p>Chọn một hạng mục để bắt đầu phân công thợ</p>
             </div>
           )}
         </div>

@@ -3290,7 +3290,7 @@ export default function DispatchOpsDashboard({
                       {selectedIncomingSupportAssignment && (
                         <Box border="1px solid" borderColor="orange.200" borderRadius="xl" p={3} bg="#fffdf5">
                           <Text fontWeight="700" color="orange.700" mb={2}>
-                            Xác nhận nhân sự hỗ trợ c?a t? ph?
+                            Xác nhận nhân sự hỗ trợ của tổ phụ
                           </Text>
 
                           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2.5}>
@@ -3322,7 +3322,7 @@ export default function DispatchOpsDashboard({
                             <Alert mt={2.5} status="success" borderRadius="lg" bg="green.50" border="1px solid" borderColor="green.100">
                               <AlertIcon color="green.500" />
                               <Text fontSize="sm" color="green.700">
-                                Đã xác nhận thợ h? tr?:{" "}
+                                Đã xác nhận thợ hỗ trợ:{" "}
                                 <strong>{selectedIncomingSupportAssignment.technicianName || "Đã chọn"}</strong>
                                 {selectedIncomingSupportAssignment.assistantTechnicianName
                                   ? `, phụ: ${selectedIncomingSupportAssignment.assistantTechnicianName}`
@@ -3391,7 +3391,7 @@ export default function DispatchOpsDashboard({
                             isLoading={saving}
                             isDisabled={!canLeaderSelectSupportTeam || !toPositiveNumber(leaderSupportResponseLeadTechnicianId)}
                           >
-                            {canLeaderSelectSupportTeam ? "Xác nhận thợ h? tr? c?a t? ph?" : "Đã xác nhận nhân sự hỗ trợ"}
+                            {canLeaderSelectSupportTeam ? "Xác nhận thợ hỗ trợ của tổ phụ" : "Đã xác nhận nhân sự hỗ trợ"}
                           </Button>
                         </Box>
                       )}

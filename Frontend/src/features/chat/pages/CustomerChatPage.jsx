@@ -9,7 +9,7 @@ import {
 import "./ChatPages.css";
 
 const CUSTOMER_STATUS_OPTIONS = [
-  { value: "", label: "Tat ca" },
+  { value: "", label: "Tất cả" },
   { value: "OPEN", label: "OPEN" },
   { value: "WAITING_FOR_STAFF", label: "WAITING_FOR_STAFF" },
   { value: "WAITING_FOR_CUSTOMER", label: "WAITING_FOR_CUSTOMER" },

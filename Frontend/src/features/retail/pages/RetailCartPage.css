@@ -358,7 +358,8 @@
 }
 
 .retail-cart-field select,
-.retail-cart-field textarea {
+.retail-cart-field textarea,
+.retail-cart-field input[type="text"] {
   width: 100%;
   border: 1px solid rgba(29, 42, 38, 0.14);
   border-radius: 14px;
@@ -381,10 +382,46 @@
 }
 
 .retail-cart-field select:focus,
-.retail-cart-field textarea:focus {
+.retail-cart-field textarea:focus,
+.retail-cart-field input[type="text"]:focus {
   border-color: rgba(197, 160, 89, 0.8);
   box-shadow: 0 0 0 4px rgba(197, 160, 89, 0.12);
   background: #ffffff;
+}
+
+.retail-cart-voucher-field {
+  padding-bottom: 4px;
+}
+
+.retail-cart-voucher-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.retail-cart-voucher-input-group input {
+  flex: 1;
+}
+
+.retail-cart-voucher-btn {
+  white-space: nowrap;
+  padding: 0 16px;
+  font-size: 0.88rem;
+}
+
+.retail-cart-voucher-msg {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.retail-cart-voucher-msg.is-error {
+  color: #dc2626;
+}
+
+.retail-cart-voucher-msg.is-success {
+  color: var(--parts-emerald, #059669);
 }
 
 .retail-cart-summary-note {

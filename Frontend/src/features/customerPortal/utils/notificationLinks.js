@@ -126,7 +126,7 @@ export function notificationTypeLabel(derivedType) {
     case "service_status":
       return "Trạng thái sửa chữa";
     default:
-      return "Th�ng b�o";
+      return "Thông báo";
   }
 }
 

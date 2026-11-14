@@ -422,7 +422,7 @@ export default function BayTimelinePage() {
       {/* -- header -- */}
       <div className="bt-header">
         <div className="bt-header-left">
-          <h1 className="bt-title">Timeline Khoang S?a Ch?a</h1>
+          <h1 className="bt-title">Timeline Khoang Sửa Chữa</h1>
           <p className="bt-subtitle">
             Quản lý phân bổ khoang theo thời gian thực{" "}
             <strong>Hôm nay - {new Date().toLocaleDateString("vi-VN")}</strong>

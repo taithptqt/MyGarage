@@ -25,6 +25,20 @@ export async function googleLogin(payload) {
   });
 }
 
+export async function getSession() {
+  return requestSafe({
+    url: AUTH_ROUTES.session,
+    method: "GET",
+  });
+}
+
+export async function logout() {
+  return requestSafe({
+    url: AUTH_ROUTES.logout,
+    method: "POST",
+  });
+}
+
 export async function forgotPassword(payload) {
   return requestSafe({
     url: AUTH_ROUTES.forgotPassword,

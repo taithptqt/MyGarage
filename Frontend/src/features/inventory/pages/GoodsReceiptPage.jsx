@@ -1,24 +1,33 @@
-﻿import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { request } from "@app/apiClient";
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
+import { goodsReceiptApi } from "../api/goodsReceiptApi";
+import { purchaseOrderApi } from "../api/purchaseOrderApi";
 import { useAuth } from "@shared/core/context/AuthContext";
 import "./GoodsReceipt.css";
 
-function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ?"; }
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_LABELS = { previous: "Trước", next: "Sau", page: "Trang" };
+
+function fmtCurrency(v) { return Number(v ?? 0).toLocaleString("vi-VN") + " ₫"; }
 function fmtDate(v) { return v ? new Date(v).toLocaleDateString("vi-VN") : "--"; }
 
 export default function GoodsReceiptPage() {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const isNew = searchParams.get("action") === "new" || searchParams.has("poId");
+  const isNew = location.pathname.endsWith("/new") || searchParams.get("action") === "new" || searchParams.has("poId");
   const defaultPoId = searchParams.get("poId") || "";
 
   // -- FOR LIST VIEW --
   const [grns, setGrns] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
   const [listError, setListError] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [total, setTotal] = useState(0);
+  const listSequence = useRef(0);
 
   // -- FOR FORM VIEW --
   const [approvedPos, setApprovedPos] = useState([]);
@@ -35,30 +44,53 @@ export default function GoodsReceiptPage() {
 
   const loadGrns = useCallback(async () => {
     if (isNew) return;
+    const sequence = ++listSequence.current;
     setLoadingList(true);
+    setListError("");
     try {
-      const res = await request({ url: "/api/goods-receipts", method: "GET", params: { branchId: user?.branchId } });
-      setGrns(res?.items ?? res ?? []);
+      const res = await goodsReceiptApi.getGoodsReceipts({
+        branchId: user?.branchId,
+        envelope: true,
+        page,
+        pageSize
+      });
+      if (sequence !== listSequence.current) return;
+      const count = Number(res?.total) || (Array.isArray(res?.items) ? res.items.length : Array.isArray(res) ? res.length : 0);
+      const lastPage = Math.max(1, Math.ceil(count / pageSize));
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
+      setGrns(Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : []);
+      setTotal(count);
     } catch (e) {
-      setListError("Không thể tải danh sách phiếu nhập.");
+      if (sequence === listSequence.current) {
+        setListError("Không thể tải danh sách phiếu nhập.");
+        setGrns([]);
+        setTotal(0);
+      }
     } finally {
-      setLoadingList(false);
+      if (sequence === listSequence.current) setLoadingList(false);
     }
-  }, [user, isNew]);
+  }, [user?.branchId, isNew, page, pageSize]);
 
   const loadPos = useCallback(async () => {
     if (!isNew) return;
     try {
-      const res = await request({ url: "/api/purchase-orders", method: "GET", params: { branchId: user?.branchId, status: "APPROVED" } });
+      const res = await purchaseOrderApi.getPurchaseOrders({
+        branchId: user?.branchId,
+        statusGroup: "APPROVED"
+      });
       setApprovedPos(res?.items ?? res ?? []);
     } catch (e) {
       console.error(e);
     }
-  }, [user, isNew]);
+  }, [user?.branchId, isNew]);
 
   useEffect(() => {
     if (!isNew) loadGrns();
     else loadPos();
+    return () => { listSequence.current += 1; };
   }, [isNew, loadGrns, loadPos]);
 
   // Load PO details when PO is selected
@@ -71,14 +103,21 @@ export default function GoodsReceiptPage() {
     setForm(f => ({
       ...f,
       supplierId: po.supplierId,
-      items: (po.items || []).map(i => ({
-        poItemId: i.id,
-        productId: i.productId,
-        productName: i.product?.name ?? "N/A",
-        orderedQty: i.qty,
-        receivedQty: i.qty, // default to receiving exactly as ordered
-        unitPrice: i.unitPrice
-      }))
+      items: (po.items || []).map(i => {
+        const remaining = Number(i.remainingQuantity ?? (i.qty != null ? Math.max(0, i.qty - (i.receivedQuantity ?? 0)) : (i.orderedQuantity ?? 0)));
+        const ordered = Number(i.orderedQuantity ?? i.qty ?? 0);
+        const alreadyReceived = Number(i.receivedQuantity ?? 0);
+        return {
+          poItemId: i.id || i.Id,
+          productId: i.productId || i.ProductId,
+          productName: i.product?.name ?? i.productName ?? "N/A",
+          orderedQty: ordered,
+          alreadyReceivedQty: alreadyReceived,
+          remainingQuantity: remaining,
+          receivedQty: remaining > 0 ? remaining : 0,
+          unitPrice: i.unitPrice ?? i.unitCost ?? 0
+        };
+      })
     }));
   }, [form.purchaseOrderId, approvedPos, isNew]);
 
@@ -89,7 +128,7 @@ export default function GoodsReceiptPage() {
   };
 
   const hasItemErrors = useMemo(() => {
-    return form.items.some(i => i.receivedQty < 0 || i.receivedQty > i.orderedQty * 1.5);
+    return form.items.some(i => i.receivedQty < 0 || i.receivedQty > ((i.remainingQuantity ?? i.orderedQty) * 1.5));
   }, [form.items]);
 
   const handleSubmit = async (e) => {
@@ -98,19 +137,22 @@ export default function GoodsReceiptPage() {
     setSaving(true);
     setFormError("");
     try {
-      await request({
-        url: "/api/goods-receipts",
-        method: "POST",
-        data: {
-          ...form,
-          branchId: user?.branchId,
-          receivedBy: user?.id,
-          items: form.items.filter(i => i.receivedQty > 0) // only receive items with qty > 0
-        }
+      await goodsReceiptApi.createGoodsReceipt({
+        ...form,
+        branchId: user?.branchId,
+        receivedBy: user?.id,
+        items: form.items
+          .filter(i => i.receivedQty > 0)
+          .map(i => ({
+            poItemId: i.poItemId,
+            productId: i.productId,
+            receivedQty: i.receivedQty,
+            unitPrice: i.unitPrice
+          }))
       });
-      setSearchParams(new URLSearchParams());
+      navigate("/workshop/inventory/goods-receipts");
     } catch (err) {
-      setFormError(err?.response?.data?.message || "L?i khi t?o phi?u nh?p kho.");
+      setFormError(err?.response?.data?.message || err?.message || "Lỗi khi tạo phiếu nhập kho.");
     } finally {
       setSaving(false);
     }
@@ -122,7 +164,7 @@ export default function GoodsReceiptPage() {
       <div className="grn-page">
         <div className="grn-header">
           <h1 className="grn-title">📥 Tạo Phiếu Nhập Kho (GRN)</h1>
-          <button className="grn-btn grn-btn-ghost" onClick={() => setSearchParams(new URLSearchParams())}>🔙 Xem danh sách</button>
+          <button className="grn-btn grn-btn-ghost" onClick={() => navigate("/workshop/inventory/goods-receipts")}>🔙 Xem danh sách</button>
         </div>
 
         <form className="grn-board" onSubmit={handleSubmit}>
@@ -133,7 +175,11 @@ export default function GoodsReceiptPage() {
               <label>Đơn Đặt Hàng (PO) đã duyệt</label>
               <select value={form.purchaseOrderId} onChange={e => setForm(f => ({ ...f, purchaseOrderId: e.target.value }))} required>
                 <option value="">-- Chọn đơn đặt hàng --</option>
-                {approvedPos.map(p => <option key={p.id} value={p.id}>#{p.code || p.id} - {p.supplierName || p.supplier?.name}</option>)}
+                {approvedPos.map(p => (
+                  <option key={p.id} value={p.id}>
+                    #{p.code || p.id} - {p.supplierName || p.supplier?.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="grn-form-group span-2">
@@ -155,33 +201,45 @@ export default function GoodsReceiptPage() {
           ) : (
             <div className="grn-items">
               <div className="grn-items-header">
-                <span>Sản phẩm</span><span>SL Đặt</span><span>SL Thực Nhận</span>
+                <span>Sản phẩm</span><span>SL Đặt / Còn lại</span><span>SL Thực Nhận</span>
               </div>
               {form.items.map((item, idx) => {
-                const isOver = item.receivedQty > item.orderedQty;
+                const maxExpected = item.remainingQuantity ?? item.orderedQty;
+                const isOver = item.receivedQty > maxExpected;
                 return (
                   <div className="grn-item-row" key={idx}>
                     <div className="font-semibold">{item.productName}</div>
-                    <div className="text-slate-500 font-mono">{item.orderedQty}</div>
+                    <div className="text-slate-500 font-mono text-sm">
+                      {item.orderedQty}
+                      {item.alreadyReceivedQty > 0 && (
+                        <span className="text-xs text-blue-600 block">
+                          (Đã nhận: {item.alreadyReceivedQty}, Còn: {item.remainingQuantity})
+                        </span>
+                      )}
+                    </div>
                     <div>
                       <input 
                         type="number" min="0" step="0.5" 
                         className={isOver ? "input-warn" : ""}
                         value={item.receivedQty} 
-                        onChange={e => updateItem(idx, Number(e.target.value))} 
+                        onChange={e => updateItemQty(idx, Number(e.target.value))} 
                         required 
                       />
-                      {isOver && <div className="grn-warn-text">⚠️ Nhận lố SL đặt</div>}
+                      {isOver && (
+                        <div className="grn-warn-text">
+                          ⚠️ Nhận lố SL còn lại ({maxExpected})
+                        </div>
+                      )}
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           )}
 
           <div className="grn-footer">
              <button type="submit" className="grn-btn grn-btn-primary" disabled={saving || form.items.length === 0 || hasItemErrors}>
-               {saving ? "? Đang ghi nh?n..." : "?? Ghi N?n Nh?p Kho"}
+               {saving ? "⏳ Đang ghi nhận..." : "📥 Ghi Nhận Nhập Kho"}
              </button>
           </div>
         </form>
@@ -197,20 +255,21 @@ export default function GoodsReceiptPage() {
           <h1 className="grn-title">📦 Phiếu Nhập Kho (GRN)</h1>
           <p className="grn-subtitle">Lịch sử nhận hàng hóa nhập vào kho chi nhánh.</p>
         </div>
-        <button className="grn-btn grn-btn-primary" onClick={() => setSearchParams(new URLSearchParams({ action: "new" }))}>
+        <button className="grn-btn grn-btn-primary" onClick={() => navigate("/workshop/inventory/goods-receipt/new")}>
           + Nhập kho từ PO
         </button>
       </div>
 
       <div className="grn-board">
-        {loadingList ? <div className="grn-loading">Đang t?i...</div> : 
-         grns.length === 0 ? <div className="grn-empty">Ch?a c� dữ liệu phi?u nh?p.</div> : (
+        {listError && <div className="grn-alert err">{listError}</div>}
+        {loadingList ? <div className="grn-loading">Đang tải...</div> : 
+         grns.length === 0 ? <div className="grn-empty">Chưa có dữ liệu phiếu nhập.</div> : (
            <table className="grn-table">
              <thead>
                <tr>
                  <th>Mã Phiếu Nhập</th>
                  <th>Ngày Nhập</th>
-                 <th>M� PO</th>
+                 <th>Mã PO</th>
                  <th>Người Nhận</th>
                </tr>
              </thead>
@@ -226,9 +285,46 @@ export default function GoodsReceiptPage() {
              </tbody>
            </table>
          )}
+        {!loadingList && (
+          <div className="grn-pagination flex items-center justify-between mt-4 text-sm text-slate-600">
+            <div>Tổng số: <strong>{total}</strong> phiếu nhập</div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1">
+                Hiển thị:
+                <select 
+                  value={pageSize} 
+                  onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                  className="border rounded px-2 py-1 bg-white text-slate-700"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                / trang
+              </label>
+              <nav aria-label={PAGE_LABELS.page} className="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  className="grn-btn grn-btn-ghost text-xs py-1 px-3" 
+                  disabled={page <= 1} 
+                  onClick={() => setPage(value => value - 1)}
+                >
+                  {PAGE_LABELS.previous}
+                </button>
+                <span> {PAGE_LABELS.page} {page} / {Math.max(1, Math.ceil(total / pageSize))} </span>
+                <button 
+                  type="button" 
+                  className="grn-btn grn-btn-ghost text-xs py-1 px-3" 
+                  disabled={page * pageSize >= total} 
+                  onClick={() => setPage(value => value + 1)}
+                >
+                  {PAGE_LABELS.next}
+                </button>
+              </nav>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-

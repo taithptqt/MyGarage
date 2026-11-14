@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@features/admin/components/AdminModals";
 import { voucherApi } from "@features/voucher/api/voucherApi";
+import { getVoucherPage, getRedemptionPage, getApprovalPage, getVoucherReportPage, getCampaignPage } from "@features/voucher/api/voucherPagingApi";
 import TablePagination from "@shared/components/TablePagination";
 import "../../admin/pages/AdminPage.css";
 import "./VoucherManagementPage.css";
@@ -53,10 +54,10 @@ const STATUS_LABEL = {
 };
 
 const SECTION_NEEDS = {
-  vouchers: new Set(["dashboard", "list", "campaigns", "conflicts", "reports", "settings"]),
-  campaigns: new Set(["campaigns"]),
-  redemptions: new Set(["dashboard", "reports", "redemptions"]),
-  approvals: new Set(["dashboard", "reports", "approvals"])
+  vouchers: new Set([]),
+  campaigns: new Set([]),
+  redemptions: new Set([]),
+  approvals: new Set([])
 };
 
 const up = (v) => String(v || "").trim().toUpperCase();
@@ -221,6 +222,52 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const [status, setStatus] = useState("ALL");
 
   const [vouchers, setVouchers] = useState([]);
+  const [voucherRows, setVoucherRows] = useState([]);
+  const [voucherTotal, setVoucherTotal] = useState(0);
+  const [voucherStatuses, setVoucherStatuses] = useState([]);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState("");
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const voucherLoadSequence = useRef(0);
+  const [redemptionRows, setRedemptionRows] = useState([]);
+  const [redemptionTotal, setRedemptionTotal] = useState(0);
+  const [redemptionLoading, setRedemptionLoading] = useState(false);
+  const [redemptionError, setRedemptionError] = useState("");
+  const redemptionSequence = useRef(0);
+  const [approvalRows, setApprovalRows] = useState([]);
+  const [approvalTotal, setApprovalTotal] = useState(0);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
+  const approvalSequence = useRef(0);
+  const [reportVouchers, setReportVouchers] = useState([]);
+  const [reportVoucherTotal, setReportVoucherTotal] = useState(0);
+  const [reportRedemptions, setReportRedemptions] = useState([]);
+  const [reportRedemptionTotal, setReportRedemptionTotal] = useState(0);
+  const [reportStats, setReportStats] = useState({ issued: 0, redeemed: 0, budgetLimit: 0, budgetUsed: 0, discount: 0 });
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const reportSequence = useRef(0);
+  const [campaignPageRows, setCampaignPageRows] = useState([]);
+  const [campaignTotal, setCampaignTotal] = useState(0);
+  const [campaignStatuses, setCampaignStatuses] = useState([]);
+  const [campaignStats, setCampaignStats] = useState({ totalCampaigns: 0, activeCampaigns: 0, totalRedeemed: 0, budgetWarningCount: 0 });
+  const [campaignWarnings, setCampaignWarnings] = useState([]);
+  const [campaignLoading, setCampaignLoading] = useState(false);
+  const [campaignError, setCampaignError] = useState("");
+  const campaignSequence = useRef(0);
+  const [campaignVoucherRows, setCampaignVoucherRows] = useState([]);
+  const [campaignVoucherTotal, setCampaignVoucherTotal] = useState(0);
+  const [campaignVoucherPage, setCampaignVoucherPage] = useState(1);
+  const [campaignVoucherPageSize, setCampaignVoucherPageSize] = useState(20);
+  const [campaignVoucherQuery, setCampaignVoucherQuery] = useState("");
+  const [campaignVoucherSearch, setCampaignVoucherSearch] = useState("");
+  const [campaignVoucherLoading, setCampaignVoucherLoading] = useState(false);
+  const [campaignVoucherError, setCampaignVoucherError] = useState("");
+  const campaignVoucherSequence = useRef(0);
+  const [campaignDetailLoading, setCampaignDetailLoading] = useState(false);
+  const campaignDetailSequence = useRef(0);
+  const [dashboardData, setDashboardData] = useState(null);
+  const dashboardSequence = useRef(0);
   const [campaigns, setCampaigns] = useState([]);
   const [redemptions, setRedemptions] = useState([]);
   const [approvals, setApprovals] = useState([]);
@@ -231,6 +278,13 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [campaignDetailPage, setCampaignDetailPage] = useState(1);
+  const [campaignDetailPageSize, setCampaignDetailPageSize] = useState(10);
+  const [campaignDetailVouchers, setCampaignDetailVouchers] = useState([]);
+  const [campaignDetailTotal, setCampaignDetailTotal] = useState(0);
+  const [campaignDetailPageLoading, setCampaignDetailPageLoading] = useState(false);
+  const [campaignDetailPageError, setCampaignDetailPageError] = useState("");
+  const campaignDetailPageSequence = useRef(0);
   const [approvalBy, setApprovalBy] = useState(String(uid() || ""));
   const [approvalNote, setApprovalNote] = useState("");
 
@@ -250,6 +304,14 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   const [confA, setConfA] = useState("");
   const [confB, setConfB] = useState("");
+  const [confQuery, setConfQuery] = useState("");
+  const [confSearch, setConfSearch] = useState("");
+  const [confPage, setConfPage] = useState(1);
+  const [confTotal, setConfTotal] = useState(0);
+  const [confPageSize, setConfPageSize] = useState(20);
+  const [confSelected, setConfSelected] = useState({});
+  const [confLoading, setConfLoading] = useState(false);
+  const confSequence = useRef(0);
   const [voucherPage, setVoucherPage] = useState(1);
   const [voucherPageSize, setVoucherPageSize] = useState(10);
   const [campaignPage, setCampaignPage] = useState(1);
@@ -263,21 +325,31 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const [reportRedemptionPage, setReportRedemptionPage] = useState(1);
   const [reportRedemptionPageSize, setReportRedemptionPageSize] = useState(10);
   async function load(targetSection = section) {
+    if (targetSection === "dashboard") {
+      const sequence = ++dashboardSequence.current;
+      try {
+        const result = await voucherApi.getDashboard();
+        if (sequence === dashboardSequence.current) { setDashboardData(result); setError(""); }
+      } catch (e) {
+        if (sequence === dashboardSequence.current) { setDashboardData(null); setError(e.message || "Không thể tải dữ liệu voucher."); }
+      }
+      return;
+    }
     const timeoutMs = 9000;
     const errors = [];
     const tasks = [];
 
-    if (SECTION_NEEDS.vouchers.has(targetSection)) {
-      tasks.push({ key: "vouchers", promise: withTimeout(voucherApi.getVouchers(), timeoutMs, "Hết thời gian tải danh sách voucher") });
+    if (targetSection !== "list" && SECTION_NEEDS.vouchers.has(targetSection)) {
+      tasks.push({ key: "vouchers", promise: withTimeout(getVoucherPage({ page: 1, pageSize: 20 }), timeoutMs, "Hết thời gian tải danh sách voucher") });
     }
     if (SECTION_NEEDS.campaigns.has(targetSection)) {
-      tasks.push({ key: "campaigns", promise: withTimeout(voucherApi.getCampaigns({ includeDeleted: false }), timeoutMs, "Hết thời gian tải danh sách chiến dịch") });
+      tasks.push({ key: "campaigns", promise: withTimeout(getCampaignPage({ page: 1, pageSize: 20, includeDeleted: false }), timeoutMs, "Hết thời gian tải danh sách chiến dịch") });
     }
     if (SECTION_NEEDS.redemptions.has(targetSection)) {
-      tasks.push({ key: "redemptions", promise: withTimeout(voucherApi.getRedemptions(), timeoutMs, "Hết thời gian tải lịch sử sử dụng") });
+      tasks.push({ key: "redemptions", promise: withTimeout(getRedemptionPage({ page: 1, pageSize: 20 }), timeoutMs, "Hết thời gian tải lịch sử sử dụng") });
     }
     if (SECTION_NEEDS.approvals.has(targetSection)) {
-      tasks.push({ key: "approvals", promise: withTimeout(voucherApi.getApprovalRequests(), timeoutMs, "Hết thời gian tải hàng chờ phê duyệt") });
+      tasks.push({ key: "approvals", promise: withTimeout(getApprovalPage({ page: 1, pageSize: 20 }), timeoutMs, "Hết thời gian tải hàng chờ phê duyệt") });
     }
 
     const results = await Promise.allSettled(tasks.map((x) => x.promise));
@@ -302,105 +374,204 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   useEffect(() => {
     let on = true;
+    setError("");
+    campaignDetailSequence.current += 1;
+    setCampaignDetailLoading(false);
     (async () => {
       setLoading(true);
-      await load(section);
+      if (section === "list") await loadVoucherPage(); else if (section !== "redemptions" && section !== "approvals" && section !== "reports" && section !== "campaigns") await load(section);
       if (on) setLoading(false);
     })();
     return () => {
       on = false;
+      dashboardSequence.current += 1;
     };
   }, [section]);
 
-  const statusOptions = useMemo(() => ["ALL", ...Array.from(new Set(vouchers.map((x) => up(x.status)).filter(Boolean)))], [vouchers]);
-  const filteredVouchers = useMemo(() => vouchers.filter((x) => {
-    if (status !== "ALL" && up(x.status) !== status) return false;
-    if (!q.trim()) return true;
-    return up(`${x.code} ${x.voucherName} ${x.type} ${x.description}`).includes(up(q));
-  }), [vouchers, status, q]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVoucherSearch(q.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
-  const issued = useMemo(() => vouchers.reduce((s, x) => s + num(x.issuedCount, num(x.usageLimit, 0)), 0), [vouchers]);
-  const redeemed = useMemo(() => vouchers.reduce((s, x) => s + num(x.redeemedCount, num(x.usedCount, 0)), 0), [vouchers]);
-  const discount = useMemo(() => redemptions.reduce((s, x) => s + num(x.discountAmount, 0), 0), [redemptions]);
-  const activeCount = useMemo(() => vouchers.filter((x) => up(x.status) === "ACTIVE" || x.isActive).length, [vouchers]);
-  const pendingApprovals = useMemo(() => approvals.filter((x) => up(x.status) === "PENDING").length, [approvals]);
-  const budgetLimit = useMemo(() => vouchers.reduce((s, x) => s + num(x.budgetLimit, 0), 0), [vouchers]);
-  const budgetUsed = useMemo(() => vouchers.reduce((s, x) => s + num(x.budgetUsed, 0), 0), [vouchers]);
+  const loadVoucherPage = useCallback(async () => {
+    const sequence = ++voucherLoadSequence.current;
+    setVoucherLoading(true);
+    setVoucherError("");
+    try {
+      const result = await getVoucherPage({ search: voucherSearch || undefined, status, page: voucherPage, pageSize: voucherPageSize });
+      if (sequence !== voucherLoadSequence.current) return;
+      setVoucherRows(rows(result?.items));
+      setVoucherTotal(Number(result?.total) || 0);
+      setVoucherStatuses(Array.isArray(result?.statuses) ? result.statuses.filter(Boolean) : []);
+    } catch (e) {
+      if (sequence === voucherLoadSequence.current) setVoucherError(e.message || "Hết thời gian tải danh sách voucher");
+    } finally {
+      if (sequence === voucherLoadSequence.current) setVoucherLoading(false);
+    }
+  }, [voucherSearch, status, voucherPage, voucherPageSize]);
 
-  const voucherRanking = useMemo(() => [...vouchers]
-    .map((x) => ({ ...x, issued: num(x.issuedCount, num(x.usageLimit, 0)), redeemed: num(x.redeemedCount, num(x.usedCount, 0)) }))
-    .sort((a, b) => b.redeemed - a.redeemed), [vouchers]);
-  const topVouchers = useMemo(() => voucherRanking.slice(0, 8), [voucherRanking]);
+  useEffect(() => {
+    if (section === "list") loadVoucherPage();
+    return () => { voucherLoadSequence.current += 1; };
+  }, [section, loadVoucherPage]);
 
-  const nearQuotaVouchers = useMemo(() => [...vouchers]
-    .map((x) => {
-      const totalIssued = num(x.issuedCount, num(x.usageLimit, 0));
-      const totalRedeemed = num(x.redeemedCount, num(x.usedCount, 0));
-      const ratio = totalIssued > 0 ? totalRedeemed / totalIssued : 0;
-      return { ...x, ratio };
-    })
-    .filter((x) => x.ratio >= 0.8)
-    .sort((a, b) => b.ratio - a.ratio)
-    .slice(0, 8), [vouchers]);
+  useEffect(() => {
+    if (section !== "list" || voucherLoading || voucherError) return;
+    const totalPages = Math.max(1, Math.ceil(voucherTotal / voucherPageSize));
+    if (voucherPage > totalPages) setVoucherPage(totalPages);
+  }, [section, voucherLoading, voucherError, voucherTotal, voucherPage, voucherPageSize]);
 
-  const campaignSelectableVouchers = useMemo(() => [...vouchers]
-    .filter((x) => x.isDeleted !== true)
-    .sort((a, b) => {
-      const aCode = `${a.code || ""}`.toUpperCase();
-      const bCode = `${b.code || ""}`.toUpperCase();
-      return aCode.localeCompare(bCode, "vi");
-    }), [vouchers]);
+  const loadRedemptionPage = useCallback(async () => {
+    const sequence = ++redemptionSequence.current;
+    setRedemptionLoading(true);
+    setRedemptionError("");
+    try {
+      const result = await getRedemptionPage({ search: voucherSearch || undefined, page: redemptionPage, pageSize: redemptionPageSize });
+      if (sequence !== redemptionSequence.current) return;
+      setRedemptionRows(rows(result?.items));
+      setRedemptionTotal(Number(result?.total) || 0);
+    } catch (e) {
+      if (sequence === redemptionSequence.current) { setRedemptionRows([]); setRedemptionTotal(0); setRedemptionError(e.message || "Hết thời gian tải lịch sử sử dụng"); }
+    } finally {
+      if (sequence === redemptionSequence.current) setRedemptionLoading(false);
+    }
+  }, [voucherSearch, redemptionPage, redemptionPageSize]);
 
-  const campaignRows = useMemo(() => campaigns.map((campaign) => {
-    const voucherList = Array.isArray(campaign.vouchers) ? campaign.vouchers : [];
-    const voucherCount = Number.isFinite(Number(campaign.voucherCount))
-      ? Number(campaign.voucherCount)
-      : voucherList.length;
-    const activeCountInCampaign = voucherList.filter((v) => up(v.status) === "ACTIVE" || v.isActive).length;
-    const redeemedByCampaign = vouchers
-      .filter((v) => Number(v.campaignId) === Number(campaign.id))
-      .reduce((sum, v) => sum + num(v.redeemedCount, num(v.usedCount, 0)), 0);
-    const budgetLimitValue = num(campaign.budgetLimit, 0);
-    const budgetUsedValue = num(campaign.budgetUsed, 0);
-    const usagePercentFallback = budgetLimitValue > 0 ? Math.round((budgetUsedValue / budgetLimitValue) * 10000) / 100 : 0;
-    const usagePercent = Number.isFinite(Number(campaign.budgetUsagePercent))
-      ? Number(campaign.budgetUsagePercent)
-      : usagePercentFallback;
-    const isNearBudgetLimit = campaign.isNearBudgetLimit ?? (budgetLimitValue > 0 && usagePercent >= 80 && usagePercent < 100);
-    const isBudgetExceeded = campaign.isBudgetExceeded ?? (budgetLimitValue > 0 && usagePercent >= 100);
+  const loadApprovalPage = useCallback(async () => {
+    const sequence = ++approvalSequence.current;
+    setApprovalLoading(true);
+    setApprovalError("");
+    try {
+      const result = await getApprovalPage({ search: voucherSearch || undefined, page: approvalPage, pageSize: approvalPageSize });
+      if (sequence !== approvalSequence.current) return;
+      setApprovalRows(rows(result?.items));
+      setApprovalTotal(Number(result?.total) || 0);
+    } catch (e) {
+      if (sequence === approvalSequence.current) { setApprovalRows([]); setApprovalTotal(0); setApprovalError(e.message || "Hết thời gian tải hàng chờ phê duyệt"); }
+    } finally {
+      if (sequence === approvalSequence.current) setApprovalLoading(false);
+    }
+  }, [voucherSearch, approvalPage, approvalPageSize]);
 
-    return {
-      ...campaign,
-      voucherCount,
-      activeVouchers: activeCountInCampaign,
-      redeemed: redeemedByCampaign,
-      budgetLimit: budgetLimitValue,
-      budgetUsed: budgetUsedValue,
-      budgetUsagePercent: usagePercent,
-      isNearBudgetLimit,
-      isBudgetExceeded
-    };
-  }), [campaigns, vouchers]);
+  useEffect(() => {
+    if (section === "redemptions") loadRedemptionPage();
+    return () => { redemptionSequence.current += 1; };
+  }, [section, loadRedemptionPage]);
+  useEffect(() => {
+    if (section === "approvals") loadApprovalPage();
+    return () => { approvalSequence.current += 1; };
+  }, [section, loadApprovalPage]);
+  useEffect(() => {
+    if (section !== "redemptions" || redemptionLoading || redemptionError) return;
+    const lastPage = Math.max(1, Math.ceil(redemptionTotal / redemptionPageSize));
+    if (redemptionPage > lastPage) setRedemptionPage(lastPage);
+  }, [section, redemptionLoading, redemptionError, redemptionTotal, redemptionPageSize, redemptionPage]);
+  useEffect(() => {
+    if (section !== "approvals" || approvalLoading || approvalError) return;
+    const lastPage = Math.max(1, Math.ceil(approvalTotal / approvalPageSize));
+    if (approvalPage > lastPage) setApprovalPage(lastPage);
+  }, [section, approvalLoading, approvalError, approvalTotal, approvalPageSize, approvalPage]);
 
-  const campaignStatusOptions = useMemo(
-    () => ["ALL", ...Array.from(new Set(campaignRows.map((x) => up(x.status)).filter(Boolean)))],
-    [campaignRows]
-  );
+  const loadReport = useCallback(async () => {
+    const sequence = ++reportSequence.current;
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const [voucherResult, redemptionResult] = await Promise.all([
+        getVoucherReportPage({ page: reportVoucherPage, pageSize: reportVoucherPageSize }),
+        getRedemptionPage({ sort: "discountDesc", page: reportRedemptionPage, pageSize: reportRedemptionPageSize }),
+      ]);
+      if (sequence !== reportSequence.current) return;
+      setReportVouchers(rows(voucherResult?.items).map((x) => ({ ...x, issued: num(x.issuedCount, num(x.usageLimit, 0)), redeemed: num(x.redeemedCount, num(x.usedCount, 0)) })));
+      setReportVoucherTotal(Number(voucherResult?.total) || 0);
+      setReportRedemptions(rows(redemptionResult?.items));
+      setReportRedemptionTotal(Number(redemptionResult?.total) || 0);
+      setReportStats({ issued: num(voucherResult?.issued, 0), redeemed: num(voucherResult?.redeemed, 0), budgetLimit: num(voucherResult?.budgetLimit, 0), budgetUsed: num(voucherResult?.budgetUsed, 0), discount: num(redemptionResult?.totalDiscount, 0) });
+    } catch (e) {
+      if (sequence === reportSequence.current) {
+        setReportVouchers([]); setReportVoucherTotal(0); setReportRedemptions([]); setReportRedemptionTotal(0);
+        setReportStats({ issued: 0, redeemed: 0, budgetLimit: 0, budgetUsed: 0, discount: 0 });
+        setReportError(e.message || "Không thể tải báo cáo voucher.");
+      }
+    } finally {
+      if (sequence === reportSequence.current) setReportLoading(false);
+    }
+  }, [reportVoucherPage, reportVoucherPageSize, reportRedemptionPage, reportRedemptionPageSize]);
+  useEffect(() => {
+    if (section === "reports") loadReport();
+    return () => { reportSequence.current += 1; };
+  }, [section, loadReport]);
+  useEffect(() => {
+    if (section !== "reports" || reportLoading || reportError) return;
+    const lastVoucherPage = Math.max(1, Math.ceil(reportVoucherTotal / reportVoucherPageSize));
+    const lastRedemptionPage = Math.max(1, Math.ceil(reportRedemptionTotal / reportRedemptionPageSize));
+    if (reportVoucherPage > lastVoucherPage) setReportVoucherPage(lastVoucherPage);
+    if (reportRedemptionPage > lastRedemptionPage) setReportRedemptionPage(lastRedemptionPage);
+  }, [section, reportLoading, reportError, reportVoucherTotal, reportVoucherPage, reportVoucherPageSize, reportRedemptionTotal, reportRedemptionPage, reportRedemptionPageSize]);
 
-  const filteredCampaignRows = useMemo(() => campaignRows.filter((x) => {
-    if (campaignFilterStatus !== "ALL" && up(x.status) !== campaignFilterStatus) return false;
-    return up(`${x.name} ${x.campaignCode} ${x.description} ${x.objective}`).includes(up(q));
-  }), [campaignRows, campaignFilterStatus, q]);
-  const budgetWarningCampaigns = useMemo(
-    () => campaignRows
-      .filter((x) => x.isNearBudgetLimit || x.isBudgetExceeded)
-      .sort((a, b) => num(b.budgetUsagePercent, 0) - num(a.budgetUsagePercent, 0)),
-    [campaignRows]
-  );
-  const filteredRedemptions = useMemo(() => redemptions.filter((x) => up(`${x.voucherCode} ${x.id} ${x.customerId}`).includes(up(q))), [redemptions, q]);
-  const filteredApprovals = useMemo(() => approvals.filter((x) => up(`${x.requestType} ${x.reason} ${x.id} ${x.voucherId}`).includes(up(q))), [approvals, q]);
-  const reportVoucherRows = useMemo(() => voucherRanking, [voucherRanking]);
-  const topDiscountRedemptions = useMemo(() => [...redemptions].sort((a, b) => num(b.discountAmount, 0) - num(a.discountAmount, 0)), [redemptions]);
+  const loadCampaignPage = useCallback(async () => {
+    const sequence = ++campaignSequence.current;
+    setCampaignLoading(true);
+    setCampaignError("");
+    try {
+      const result = await getCampaignPage({ search: voucherSearch || undefined, status: campaignFilterStatus, page: campaignPage, pageSize: campaignPageSize });
+      if (sequence !== campaignSequence.current) return;
+      setCampaignPageRows(rows(result?.items));
+      setCampaignTotal(Number(result?.total) || 0);
+      setCampaignStatuses(Array.isArray(result?.statuses) ? result.statuses.filter(Boolean) : []);
+      setCampaignStats(result?.stats || { totalCampaigns: 0, activeCampaigns: 0, totalRedeemed: 0, budgetWarningCount: 0 });
+      setCampaignWarnings(rows(result?.budgetWarnings));
+    } catch (e) {
+      if (sequence === campaignSequence.current) {
+        setCampaignPageRows([]); setCampaignTotal(0); setCampaignStatuses([]); setCampaignWarnings([]);
+        setCampaignStats({ totalCampaigns: 0, activeCampaigns: 0, totalRedeemed: 0, budgetWarningCount: 0 });
+        setCampaignError(e.message || "Không thể tải chiến dịch.");
+      }
+    } finally { if (sequence === campaignSequence.current) setCampaignLoading(false); }
+  }, [voucherSearch, campaignFilterStatus, campaignPage, campaignPageSize]);
+  useEffect(() => {
+    if (section === "campaigns") loadCampaignPage();
+    return () => { campaignSequence.current += 1; };
+  }, [section, loadCampaignPage]);
+  useEffect(() => {
+    if (section !== "campaigns" || campaignLoading || campaignError) return;
+    const lastPage = Math.max(1, Math.ceil(campaignTotal / campaignPageSize));
+    if (campaignPage > lastPage) setCampaignPage(lastPage);
+  }, [section, campaignLoading, campaignError, campaignTotal, campaignPage, campaignPageSize]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setCampaignVoucherSearch(campaignVoucherQuery.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [campaignVoucherQuery]);
+  useEffect(() => {
+    if (!campaignModalOpen) return undefined;
+    const sequence = ++campaignVoucherSequence.current;
+    setCampaignVoucherLoading(true);
+    setCampaignVoucherError("");
+    getVoucherPage({ search: campaignVoucherSearch || undefined, includeDeleted: false, page: campaignVoucherPage, pageSize: campaignVoucherPageSize })
+      .then((result) => {
+        if (sequence !== campaignVoucherSequence.current) return;
+        setCampaignVoucherRows(rows(result?.items));
+        setCampaignVoucherTotal(Number(result?.total) || 0);
+      }).catch((e) => {
+        if (sequence !== campaignVoucherSequence.current) return;
+        setCampaignVoucherRows([]); setCampaignVoucherTotal(0); setCampaignVoucherError(e.message || "Không thể tải danh sách voucher.");
+      }).finally(() => { if (sequence === campaignVoucherSequence.current) setCampaignVoucherLoading(false); });
+    return () => { campaignVoucherSequence.current += 1; };
+  }, [campaignModalOpen, campaignVoucherSearch, campaignVoucherPage, campaignVoucherPageSize]);
+
+  const statusOptions = ["ALL", ...voucherStatuses];
+  const issued = num(dashboardData?.issued);
+  const redeemed = num(dashboardData?.redeemed);
+  const discount = num(dashboardData?.totalDiscount);
+  const activeCount = num(dashboardData?.activeCount);
+  const pendingApprovals = num(dashboardData?.pendingApprovals);
+  const budgetLimit = num(dashboardData?.budgetLimit);
+  const budgetUsed = num(dashboardData?.budgetUsed);
+  const topVouchers = rows(dashboardData?.topVouchers).map((v) => ({ ...v, issued: num(v.issuedCount, num(v.usageLimit)), redeemed: num(v.redeemedCount, num(v.usedCount)) }));
+  const nearQuotaVouchers = rows(dashboardData?.nearQuotaVouchers);
+  const dashboardApprovals = rows(dashboardData?.approvalItems);
+
+  const campaignStatusOptions = ["ALL", ...campaignStatuses];
 
   const isDashboard = section === "dashboard";
   const isList = section === "list";
@@ -410,31 +581,6 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   const isApprovals = section === "approvals";
   const isReports = section === "reports";
   const isSettings = section === "settings";
-  const pagedVouchers = useMemo(
-    () => filteredVouchers.slice((voucherPage - 1) * voucherPageSize, voucherPage * voucherPageSize),
-    [filteredVouchers, voucherPage, voucherPageSize]
-  );
-  const pagedCampaigns = useMemo(
-    () => filteredCampaignRows.slice((campaignPage - 1) * campaignPageSize, campaignPage * campaignPageSize),
-    [filteredCampaignRows, campaignPage, campaignPageSize]
-  );
-  const pagedRedemptions = useMemo(
-    () => filteredRedemptions.slice((redemptionPage - 1) * redemptionPageSize, redemptionPage * redemptionPageSize),
-    [filteredRedemptions, redemptionPage, redemptionPageSize]
-  );
-  const pagedApprovals = useMemo(
-    () => filteredApprovals.slice((approvalPage - 1) * approvalPageSize, approvalPage * approvalPageSize),
-    [filteredApprovals, approvalPage, approvalPageSize]
-  );
-  const pagedReportVouchers = useMemo(
-    () => reportVoucherRows.slice((reportVoucherPage - 1) * reportVoucherPageSize, reportVoucherPage * reportVoucherPageSize),
-    [reportVoucherRows, reportVoucherPage, reportVoucherPageSize]
-  );
-  const pagedReportRedemptions = useMemo(
-    () => topDiscountRedemptions.slice((reportRedemptionPage - 1) * reportRedemptionPageSize, reportRedemptionPage * reportRedemptionPageSize),
-    [topDiscountRedemptions, reportRedemptionPage, reportRedemptionPageSize]
-  );
-
   useEffect(() => {
     setVoucherPage(1);
     setCampaignPage(1);
@@ -446,7 +592,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   const refresh = async () => {
     setBusy(true);
-    await load(section);
+    if (section === "list") await loadVoucherPage(); else if (section === "redemptions") await loadRedemptionPage(); else if (section === "approvals") await loadApprovalPage(); else if (section === "reports") await loadReport(); else if (section === "campaigns") await loadCampaignPage(); else await load(section);
     setBusy(false);
   };
   const openCreate = () => {
@@ -461,16 +607,53 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
   };
 
   const openCreateCampaign = () => {
+    campaignDetailSequence.current += 1;
+    setCampaignDetailLoading(false);
+    setCampaignVoucherQuery("");
+    setCampaignVoucherSearch("");
+    setCampaignVoucherPage(1);
     setCampaignMode("create");
     setCampaignForm(campaignDefault());
     setCampaignModalOpen(true);
   };
 
-  const openEditCampaign = (campaign) => {
-    setCampaignMode("edit");
-    setCampaignForm(mapCampaignForm(campaign));
-    setCampaignModalOpen(true);
+  const openEditCampaign = async (campaign) => {
+    const sequence = ++campaignDetailSequence.current;
+    setCampaignDetailLoading(true); setError("");
+    try {
+      const fullCampaign = await voucherApi.getCampaignById(campaign.id);
+      if (sequence !== campaignDetailSequence.current) return;
+      setCampaignVoucherQuery(""); setCampaignVoucherSearch(""); setCampaignVoucherPage(1);
+      setCampaignMode("edit"); setCampaignForm(mapCampaignForm(fullCampaign)); setCampaignModalOpen(true);
+    } catch (e) { if (sequence === campaignDetailSequence.current) setError(e.message || "Không thể tải chiến dịch."); }
+    finally { if (sequence === campaignDetailSequence.current) setCampaignDetailLoading(false); }
   };
+  const openCampaignDetail = async (campaign) => {
+    const sequence = ++campaignDetailSequence.current;
+    setCampaignDetailLoading(true); setError("");
+    try {
+      const details = await voucherApi.getCampaignSummary(campaign.id);
+      if (sequence === campaignDetailSequence.current) { setCampaignDetailVouchers([]); setCampaignDetailTotal(0); setCampaignDetailPage(1); setSelectedCampaign({ ...campaign, ...details }); }
+    } catch (e) { if (sequence === campaignDetailSequence.current) setError(e.message || "Không thể tải chiến dịch."); }
+    finally { if (sequence === campaignDetailSequence.current) setCampaignDetailLoading(false); }
+  };
+
+  useEffect(() => {
+    if (!selectedCampaign?.id) return undefined;
+    const sequence = ++campaignDetailPageSequence.current;
+    setCampaignDetailPageLoading(true); setCampaignDetailPageError("");
+    voucherApi.getCampaignVoucherPage(selectedCampaign.id, { page: campaignDetailPage, pageSize: campaignDetailPageSize })
+      .then((result) => { if (sequence === campaignDetailPageSequence.current) { setCampaignDetailVouchers(rows(result?.items)); setCampaignDetailTotal(Number(result?.total) || 0); } })
+      .catch((e) => { if (sequence === campaignDetailPageSequence.current) { setCampaignDetailVouchers([]); setCampaignDetailTotal(0); setCampaignDetailPageError(e.message || "Không thể tải danh sách voucher."); } })
+      .finally(() => { if (sequence === campaignDetailPageSequence.current) setCampaignDetailPageLoading(false); });
+    return () => { campaignDetailPageSequence.current += 1; };
+  }, [selectedCampaign?.id, campaignDetailPage, campaignDetailPageSize]);
+
+  useEffect(() => {
+    if (!selectedCampaign || campaignDetailPageLoading || campaignDetailPageError) return;
+    const lastPage = Math.max(1, Math.ceil(campaignDetailTotal / campaignDetailPageSize));
+    if (campaignDetailPage > lastPage) setCampaignDetailPage(lastPage);
+  }, [selectedCampaign, campaignDetailPageLoading, campaignDetailPageError, campaignDetailTotal, campaignDetailPageSize, campaignDetailPage]);
 
   const toggleCampaignVoucher = (voucherId) => {
     const id = Number(voucherId);
@@ -614,9 +797,34 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
     }
   }
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setConfSearch(confQuery.trim()); setConfPage(1); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [confQuery]);
+
+  useEffect(() => {
+    if (section !== "conflicts") return undefined;
+    const sequence = ++confSequence.current;
+    setConfLoading(true);
+    getVoucherPage({ search: confSearch || undefined, page: confPage, pageSize: confPageSize })
+      .then((result) => {
+        if (sequence !== confSequence.current) return;
+        setVouchers(rows(result?.items)); setConfTotal(Number(result?.total) || 0); setError("");
+      }).catch((e) => {
+        if (sequence === confSequence.current) { setVouchers([]); setConfTotal(0); setError(e.message || "Không thể tải danh sách voucher."); }
+      }).finally(() => { if (sequence === confSequence.current) setConfLoading(false); });
+    return () => { confSequence.current += 1; };
+  }, [section, confSearch, confPage, confPageSize]);
+
+  const selectConflict = (value, setter) => {
+    setter(value);
+    const item = vouchers.find((v) => String(v.id) === value) || confSelected[value];
+    if (item) setConfSelected((previous) => ({ ...previous, [value]: item }));
+  };
+  const conflictOptions = [...new Map([...vouchers, ...Object.values(confSelected)].map((v) => [String(v.id), v])).values()];
   const confResult = useMemo(() => {
-    const a = vouchers.find((x) => String(x.id) === String(confA));
-    const b = vouchers.find((x) => String(x.id) === String(confB));
+    const a = confSelected[confA];
+    const b = confSelected[confB];
     if (!a || !b || a.id === b.id) return [];
     const out = [];
     if (up(a.code) === up(b.code)) out.push("Trùng mã voucher: bắt buộc chọn.");
@@ -624,7 +832,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
     const overlap = new Date(a.startDate) <= new Date(b.endDate) && new Date(b.startDate) <= new Date(a.endDate);
     out.push(overlap ? "Trùng thời gian hiệu lực." : "Không trùng thời gian hiệu lực.");
     return out;
-  }, [confA, confB, vouchers]);
+  }, [confA, confB, confSelected]);
 
   if (loading) {
     return (
@@ -636,7 +844,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
 
   return (
     <div className="management-content voucher-admin-page">
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {(error || (isList && voucherError) || (isRedemptions && redemptionError) || (isApprovals && approvalError) || (isReports && reportError) || (isCampaigns && campaignError)) ? <div className="alert alert-error">{error || (isList ? voucherError : isRedemptions ? redemptionError : isApprovals ? approvalError : isReports ? reportError : campaignError)}</div> : null}
 
       {isDashboard ? (
         <>
@@ -650,7 +858,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
 
           <div className="table-toolbar voucher-toolbar">
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mơi bảng điều khiển"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới bảng điều khiển"}</button>
           </div>
 
           <div className="table-wrapper">
@@ -679,7 +887,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             </div>
             <div className="voucher-panel-card">
               <h3>Phê duyệt cần xử lý</h3>
-              {approvals.filter((x) => up(x.status) === "PENDING").slice(0, 6).map((x) => (
+              {dashboardApprovals.map((x) => (
                 <div key={x.id} className="voucher-subtext">#{x.id} - {x.requestType || "N/A"} - {x.riskLevel || "-"}</div>
               ))}
               {pendingApprovals === 0 ? <p className="voucher-subtext">Không có yêu cầu chờ duyệt</p> : null}
@@ -703,7 +911,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Mã</th><th>Tên voucher</th><th>Loại</th><th>Giá trị</th><th>Thời gian hiệu lực</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredVouchers.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : pagedVouchers.map((v) => (
+                {voucherLoading ? <tr><td colSpan={9}>Đang tải dữ liệu voucher...</td></tr> : voucherError ? null : voucherRows.length === 0 ? <tr><td colSpan={9}><EmptyState message="Không có voucher" /></td></tr> : voucherRows.map((v) => (
                   <tr key={v.id}>
                     <td className="td-id">#{v.id}</td><td>{v.code}</td><td>{v.voucherName}</td><td>{v.type}</td>
                     <td>{v.type === "PERCENT" ? `${v.value || 0}%` : money(v.value)}</td>
@@ -722,8 +930,8 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             </table>
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <TablePagination
-              totalItems={filteredVouchers.length}
+            {!voucherError && <TablePagination
+              totalItems={voucherTotal}
               currentPage={voucherPage}
               pageSize={voucherPageSize}
               onPageChange={setVoucherPage}
@@ -731,7 +939,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
                 setVoucherPageSize(size);
                 setVoucherPage(1);
               }}
-            />
+            />}
           </div>
         </>
       ) : null}
@@ -739,10 +947,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {isCampaigns ? (
         <>
           <div className="voucher-card-grid">
-            <div className="voucher-panel-card"><h3>Tổng chiến dịch</h3><p><strong>{campaignRows.length}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Chiến dịch đang hoạt động</h3><p><strong>{campaignRows.filter((x) => up(x.status) === "ACTIVE").length}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tổng lượt sử dụng</h3><p><strong>{campaignRows.reduce((s, x) => s + x.redeemed, 0)}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Cảnh báo ngân sách</h3><p><strong>{budgetWarningCampaigns.length}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng chiến dịch</h3><p><strong>{campaignStats.totalCampaigns}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Chiến dịch đang hoạt động</h3><p><strong>{campaignStats.activeCampaigns}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng lượt sử dụng</h3><p><strong>{campaignStats.totalRedeemed}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Cảnh báo ngân sách</h3><p><strong>{campaignStats.budgetWarningCount}</strong></p></div>
           </div>
           <div className="table-toolbar voucher-toolbar">
             <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm chiến dịch..." />
@@ -750,13 +958,13 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
               {campaignStatusOptions.map((x) => <option key={x} value={x}>{x === "ALL" ? "Tất cả trạng thái" : statusText(x)}</option>)}
             </select>
             <button className="btn-primary" onClick={openCreateCampaign}>+ Tạo chiến dịch</button>
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mới chiến dịch"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới chiến dịch"}</button>
           </div>
-          {budgetWarningCampaigns.length > 0 ? (
+          {campaignStats.budgetWarningCount > 0 ? (
             <div className="voucher-budget-warning-box">
-              <strong>{budgetWarningCampaigns.length} chiến dịch đang sắp hết hoặc vượt ngân sách:</strong>
+              <strong>{campaignStats.budgetWarningCount} chiến dịch đang sắp hết hoặc vượt ngân sách:</strong>
               <div className="voucher-budget-warning-list">
-                {budgetWarningCampaigns.slice(0, 6).map((c) => (
+                {campaignWarnings.map((c) => (
                   <span key={c.id} className="voucher-budget-warning-chip">
                     {c.name || c.campaignCode || `#${c.id}`}: {num(c.budgetUsagePercent, 0)}%
                   </span>
@@ -768,7 +976,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Mã chiến dịch</th><th>Tên chiến dịch</th><th>Thời gian</th><th>Voucher áp dụng</th><th>Đã sử dụng</th><th>Ngân sách đã dùng</th><th>Tỷ lệ ngân sách</th><th>Cảnh báo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredCampaignRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : pagedCampaigns.map((r) => (
+                {campaignLoading ? <tr><td colSpan={11}>Đang tải dữ liệu voucher...</td></tr> : campaignPageRows.length === 0 ? <tr><td colSpan={11}><EmptyState message="Không có chiến dịch phù hợp" /></td></tr> : campaignPageRows.map((r) => (
                   <tr key={r.id}>
                     <td className="td-id">#{r.id}</td>
                     <td>{r.campaignCode || "-"}</td>
@@ -785,8 +993,8 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
                     <td><span className={`badge ${STATUS_BADGE[up(r.status)] || "badge-inactive"}`}>{statusText(r.status)}</span></td>
                     <td>
                       <div className="row-actions voucher-actions-col">
-                        <button className="btn-icon" onClick={() => setSelectedCampaign(r)}>Chi tiết</button>
-                        <button className="btn-icon" onClick={() => openEditCampaign(r)}>Sửa</button>
+                        <button className="btn-icon" onClick={() => openCampaignDetail(r)} disabled={campaignDetailLoading}>Chi tiết</button>
+                        <button className="btn-icon" onClick={() => openEditCampaign(r)} disabled={campaignDetailLoading}>Sửa</button>
                         <button className="btn-icon" onClick={() => removeCampaign(r)}>Xóa</button>
                       </div>
                     </td>
@@ -797,7 +1005,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <TablePagination
-              totalItems={filteredCampaignRows.length}
+              totalItems={campaignTotal}
               currentPage={campaignPage}
               pageSize={campaignPageSize}
               onPageChange={setCampaignPage}
@@ -814,10 +1022,12 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           <div className="voucher-panel-card">
             <h3>So sánh voucher</h3>
             <p className="voucher-subtext">Chọn 2 voucher để kiểm tra xung đột cơ bản về mã, cộng dồn và thời gian.</p>
+            <input className="search-input" value={confQuery} onChange={(e) => setConfQuery(e.target.value)} placeholder="Tìm voucher..." />
             <div className="voucher-form-grid voucher-form-grid--2">
-              <select value={confA} onChange={(e) => setConfA(e.target.value)}><option value="">Voucher A</option>{vouchers.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
-              <select value={confB} onChange={(e) => setConfB(e.target.value)}><option value="">Voucher B</option>{vouchers.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
+              <select value={confA} onChange={(e) => selectConflict(e.target.value, setConfA)} disabled={confLoading}><option value="">Voucher A</option>{conflictOptions.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
+              <select value={confB} onChange={(e) => selectConflict(e.target.value, setConfB)} disabled={confLoading}><option value="">Voucher B</option>{conflictOptions.map((v) => <option key={v.id} value={v.id}>#{v.id} - {v.code}</option>)}</select>
             </div>
+            <TablePagination totalItems={confTotal} currentPage={confPage} pageSize={confPageSize} onPageChange={setConfPage} onPageSizeChange={(size) => { setConfPageSize(size); setConfPage(1); }} />
             <div className="voucher-finding-list">
               {confResult.length === 0 ? <div className="voucher-finding">Chưa có kết quả. Vui lòng chọn 2 voucher.</div> : confResult.map((x, i) => <div key={`${x}-${i}`} className="voucher-finding voucher-finding-warning">{x}</div>)}
             </div>
@@ -835,13 +1045,13 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
         <>
           <div className="table-toolbar voucher-toolbar">
             <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm lịch sử sử dụng..." />
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mơi lịch sử"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới lịch sử"}</button>
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
-                {filteredRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : pagedRedemptions.map((r) => (
+                {redemptionLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : redemptionRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có lịch sử sử dụng" /></td></tr> : redemptionRows.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td><span className={`badge ${STATUS_BADGE[up(r.redemptionStatus)] || "badge-inactive"}`}>{statusText(r.redemptionStatus)}</span></td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
                 ))}
               </tbody>
@@ -849,7 +1059,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <TablePagination
-              totalItems={filteredRedemptions.length}
+              totalItems={redemptionTotal}
               currentPage={redemptionPage}
               pageSize={redemptionPageSize}
               onPageChange={setRedemptionPage}
@@ -870,13 +1080,13 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div className="table-toolbar voucher-toolbar">
             <input className="search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm yêu cầu phê duyệt..." />
-            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mơi..." : "Làm mơi phê duyệt"}</button>
+            <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới phê duyệt"}</button>
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
               <thead><tr><th>ID</th><th>Loại yêu cầu</th><th>Voucher</th><th>Mức rủi ro</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
               <tbody>
-                {filteredApprovals.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : pagedApprovals.map((a) => (
+                {approvalLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : approvalRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có yêu cầu phê duyệt" /></td></tr> : approvalRows.map((a) => (
                   <tr key={a.id}><td>#{a.id}</td><td>{a.requestType}</td><td>{a.voucherId ? `#${a.voucherId}` : "-"}</td><td>{a.riskLevel || "-"}</td><td><span className={`badge ${STATUS_BADGE[up(a.status)] || "badge-inactive"}`}>{statusText(a.status)}</span></td><td>{up(a.status) === "PENDING" ? <div className="row-actions"><button className="btn-icon" onClick={() => decide(a, "approve")}>Duyệt</button><button className="btn-icon" onClick={() => decide(a, "reject")}>Từ chối</button></div> : "Đã xử lý"}</td></tr>
                 ))}
               </tbody>
@@ -884,7 +1094,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <TablePagination
-              totalItems={filteredApprovals.length}
+              totalItems={approvalTotal}
               currentPage={approvalPage}
               pageSize={approvalPageSize}
               onPageChange={setApprovalPage}
@@ -900,9 +1110,9 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
       {isReports ? (
         <>
           <div className="voucher-card-grid">
-            <div className="voucher-panel-card"><h3>Tỷ lệ sử dụng</h3><p><strong>{pct(redeemed, issued)}%</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tổng giá trị giảm</h3><p><strong>{money(discount)}</strong></p></div>
-            <div className="voucher-panel-card"><h3>Tỷ lệ dùng ngân sách</h3><p><strong>{pct(budgetUsed, budgetLimit)}%</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tỷ lệ sử dụng</h3><p><strong>{pct(reportStats.redeemed, reportStats.issued)}%</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tổng giá trị giảm</h3><p><strong>{money(reportStats.discount)}</strong></p></div>
+            <div className="voucher-panel-card"><h3>Tỷ lệ dùng ngân sách</h3><p><strong>{pct(reportStats.budgetUsed, reportStats.budgetLimit)}%</strong></p></div>
           </div>
           <div className="table-toolbar voucher-toolbar">
             <button className="btn-ghost" onClick={refresh} disabled={busy}>{busy ? "Đang làm mới..." : "Làm mới báo cáo"}</button>
@@ -911,7 +1121,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>Voucher</th><th>Mã</th><th>Đã phát hành</th><th>Đã sử dụng</th><th>Tỷ lệ</th><th>Ngân sách đã dùng</th></tr></thead>
               <tbody>
-                {reportVoucherRows.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : pagedReportVouchers.map((v) => (
+                {reportLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : reportVouchers.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu báo cáo voucher" /></td></tr> : reportVouchers.map((v) => (
                   <tr key={v.id}><td>{v.voucherName || "-"}</td><td>{v.code || "-"}</td><td>{v.issued}</td><td>{v.redeemed}</td><td>{pct(v.redeemed, v.issued)}%</td><td>{money(v.budgetUsed)}</td></tr>
                 ))}
               </tbody>
@@ -919,7 +1129,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <TablePagination
-              totalItems={reportVoucherRows.length}
+              totalItems={reportVoucherTotal}
               currentPage={reportVoucherPage}
               pageSize={reportVoucherPageSize}
               onPageChange={setReportVoucherPage}
@@ -933,7 +1143,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
             <table className="admin-table">
               <thead><tr><th>ID sử dụng</th><th>Voucher</th><th>Khách hàng</th><th>Giảm giá</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
               <tbody>
-                {topDiscountRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : pagedReportRedemptions.map((r) => (
+                {reportLoading ? <tr><td colSpan={6}>Đang tải dữ liệu voucher...</td></tr> : reportRedemptions.length === 0 ? <tr><td colSpan={6}><EmptyState message="Không có dữ liệu lịch sử sử dụng" /></td></tr> : reportRedemptions.map((r) => (
                   <tr key={r.id}><td>#{r.id}</td><td>{r.voucherCode || `#${r.voucherId}`}</td><td>{r.customerId || "-"}</td><td>{money(r.discountAmount)}</td><td>{statusText(r.redemptionStatus)}</td><td>{dt(r.createdAt || r.redeemedAt)}</td></tr>
                 ))}
               </tbody>
@@ -941,7 +1151,7 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <TablePagination
-              totalItems={topDiscountRedemptions.length}
+              totalItems={reportRedemptionTotal}
               currentPage={reportRedemptionPage}
               pageSize={reportRedemptionPageSize}
               onPageChange={setReportRedemptionPage}
@@ -1046,10 +1256,14 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
                 <h3>Voucher được phép áp dụng trong chiến dịch</h3>
                 <span>{campaignForm.voucherIds.length} voucher đã chọn</span>
               </div>
+              <input className="search-input" value={campaignVoucherQuery} onChange={(e) => { setCampaignVoucherQuery(e.target.value); setCampaignVoucherPage(1); }} placeholder="Tìm voucher..." />
+              {campaignVoucherError ? <div className="alert alert-error">{campaignVoucherError}</div> : null}
               <div className="voucher-campaign-voucher-list">
-                {campaignSelectableVouchers.length === 0 ? (
+                {campaignVoucherLoading ? (
+                  <div className="voucher-subtext">Đang tải dữ liệu voucher...</div>
+                ) : campaignVoucherRows.length === 0 ? (
                   <div className="voucher-subtext">Chưa có voucher để gán.</div>
-                ) : campaignSelectableVouchers.map((voucher) => (
+                ) : campaignVoucherRows.map((voucher) => (
                   <label key={voucher.id} className="voucher-campaign-voucher-item">
                     <input
                       type="checkbox"
@@ -1063,9 +1277,10 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
               </div>
             </div>
 
+            <TablePagination totalItems={campaignVoucherTotal} currentPage={campaignVoucherPage} pageSize={campaignVoucherPageSize} onPageChange={setCampaignVoucherPage} onPageSizeChange={(size) => { setCampaignVoucherPageSize(size); setCampaignVoucherPage(1); }} />
             <div className="form-actions">
               <button type="button" className="btn-ghost" onClick={() => setCampaignModalOpen(false)}>Hủy</button>
-              <button type="submit" className="btn-primary" disabled={campaignSaving}>{campaignSaving ? "Đang lưu..." : "Lưu chiến dịch"}</button>
+              <button type="submit" className="btn-primary" disabled={campaignSaving || campaignVoucherLoading || Boolean(campaignVoucherError)}>{campaignSaving ? "Đang lưu..." : "Lưu chiến dịch"}</button>
             </div>
           </form>
         </Modal>
@@ -1087,15 +1302,17 @@ export default function VoucherManagementPage({ section = "dashboard" }) {
           </div>
           <div className="voucher-campaign-detail-vouchers">
             <strong>Danh sách voucher:</strong>
-            {(Array.isArray(selectedCampaign.vouchers) && selectedCampaign.vouchers.length > 0) ? (
+            {campaignDetailPageError ? <div className="alert alert-error">{campaignDetailPageError}</div> : null}
+            {campaignDetailPageLoading ? <p className="voucher-subtext">Đang tải dữ liệu voucher...</p> : campaignDetailPageError ? null : campaignDetailVouchers.length > 0 ? (
               <div className="voucher-campaign-tags">
-                {selectedCampaign.vouchers.map((v) => (
+                {campaignDetailVouchers.map((v) => (
                   <span className="voucher-campaign-tag" key={v.id}>{v.code || `#${v.id}`} - {v.voucherName || "Chưa đặt tên"}</span>
                 ))}
               </div>
             ) : (
               <p className="voucher-subtext">Chưa có voucher nào gắn vào chiến dịch này.</p>
             )}
+            <TablePagination totalItems={campaignDetailTotal} currentPage={campaignDetailPage} pageSize={campaignDetailPageSize} onPageChange={setCampaignDetailPage} onPageSizeChange={(size) => { setCampaignDetailPageSize(size); setCampaignDetailPage(1); }} />
           </div>
         </Modal>
       ) : null}

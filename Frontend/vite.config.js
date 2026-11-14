@@ -34,6 +34,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false // accept self-signed dev certificate
       },
+      "/odata": {
+        target: "https://localhost:7009",
+        changeOrigin: true,
+        secure: false // accept self-signed dev certificate
+      },
       "/uploads": {
         target: "https://localhost:7009",
         changeOrigin: true,
@@ -48,6 +53,22 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 2000
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-chakra": [
+            "@chakra-ui/react",
+            "@chakra-ui/system",
+            "@chakra-ui/theme-tools",
+            "@emotion/react",
+            "@emotion/styled"
+          ],
+          "vendor-charts": ["apexcharts", "react-apexcharts"],
+          "vendor-icons": ["react-icons", "lucide-react", "@chakra-ui/icons"]
+        }
+      }
+    }
   }
 });

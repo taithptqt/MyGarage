@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getAllAppointments,
-  getBranchAppointments,
+  getReceptionAppointmentPage,
   getAppointmentDetail,
   confirmAppointment,
   checkInAppointment,
@@ -65,18 +64,6 @@ function toDateText(dateObj) {
   const m = String(dateObj.getMonth() + 1).padStart(2, "0");
   const d = String(dateObj.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-function toStartOfDay(dateText) {
-  if (!dateText) return null;
-  const d = new Date(`${dateText}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function toEndOfDay(dateText) {
-  if (!dateText) return null;
-  const d = new Date(`${dateText}T23:59:59.999`);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function normalizeAppointmentItem(item) {
@@ -175,17 +162,6 @@ function formatApptTime(value) {
     : d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-function getAppointmentFilterTimestamp(appt) {
-  // Date filter for Appointments must follow scheduled appointment time, not createdAt.
-  const start = new Date(appt?.startTime || appt?.StartTime || 0).getTime();
-  if (Number.isFinite(start) && start > 0) {
-    return start;
-  }
-
-  const end = new Date(appt?.endTime || appt?.EndTime || 0).getTime();
-  return Number.isFinite(end) ? end : 0;
-}
-
 function getAppointmentCreatedTimestamp(appt) {
   const created = new Date(appt?.createdAt || appt?.CreatedAt || 0).getTime();
   if (Number.isFinite(created) && created > 0) {
@@ -222,6 +198,14 @@ export default function ReceptionAppointmentsPage() {
   const [dateTo, setDateTo] = useState(() => toDateText(new Date()));
   const [apptsPage, setApptsPage] = useState(1);
   const [apptsPageSize, setApptsPageSize] = useState(10);
+  const [counts, setCounts] = useState({ singleCount: 0, groupCount: 0 });
+  const [apptStatusOptions, setApptStatusOptions] = useState([]);
+  const requestVersion = useRef(0);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const userBranchId = parseBranchId(user?.branchId ?? user?.BranchId);
   const contextBranchId = parseBranchId(selectedBranchId);
@@ -250,98 +234,46 @@ export default function ReceptionAppointmentsPage() {
       });
   }, [canViewAllBranches, effectiveBranchId]);
 
-  const fetchAppointments = useCallback(async () => {
+  const fetchPage = useCallback(async (silent = false) => {
+    const version = ++requestVersion.current;
     if (!effectiveBranchId && !canViewAllBranches) {
       setAppointments([]);
-      return;
-    }
-    setApptLoading(true);
-    setError("");
-    try {
-      const data = effectiveBranchId
-        ? await getBranchAppointments(effectiveBranchId)
-        : await getAllAppointments();
-      setAppointments(normalizeAppointments(data));
-    } catch (err) {
-      setError(toDisplayErrorText(err?.message, "Không thể tải dữ liệu lịch hẹn."));
-    } finally {
+      setCounts({ singleCount: 0, groupCount: 0 });
       setApptLoading(false);
-    }
-  }, [canViewAllBranches, effectiveBranchId, normalizeAppointments]);
-
-  const fetchAppointmentsSilent = useCallback(async () => {
-    if (!effectiveBranchId && !canViewAllBranches) {
-      setAppointments([]);
       return;
     }
+    if (!silent) setApptLoading(true);
     try {
-      const data = effectiveBranchId
-        ? await getBranchAppointments(effectiveBranchId)
-        : await getAllAppointments();
-      setAppointments(normalizeAppointments(data));
+      const data = await getReceptionAppointmentPage({ branchId: effectiveBranchId || undefined,
+        search: debouncedSearch || undefined, status: apptStatusFilter, sort: apptSortBy,
+        mode: apptViewMode, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined,
+        page: apptsPage, pageSize: apptsPageSize });
+      if (version !== requestVersion.current) return;
+      setAppointments(normalizeAppointments(data.items));
+      setCounts({ singleCount: data.singleCount, groupCount: data.groupCount });
+      setApptStatusOptions(data.statuses || []);
+      setError("");
+      const total = apptViewMode === "GROUP" ? data.groupCount : data.singleCount;
+      const lastPage = Math.max(1, Math.ceil(total / apptsPageSize));
+      if (apptsPage > lastPage) setApptsPage(lastPage);
     } catch (err) {
-      setError(toDisplayErrorText(err?.message, "Không thể tải dữ liệu lịch hẹn."));
+      if (version === requestVersion.current) setError(toDisplayErrorText(err?.message, "Không thể tải dữ liệu lịch hẹn."));
+    } finally {
+      if (version === requestVersion.current) setApptLoading(false);
     }
-  }, [canViewAllBranches, effectiveBranchId, normalizeAppointments]);
+  }, [effectiveBranchId, canViewAllBranches, debouncedSearch, apptStatusFilter, apptSortBy,
+    apptViewMode, dateFrom, dateTo, apptsPage, apptsPageSize, normalizeAppointments]);
 
+  const fetchAppointments = useCallback(() => fetchPage(false), [fetchPage]);
+  const fetchAppointmentsSilent = useCallback(() => fetchPage(true), [fetchPage]);
+  useEffect(() => { fetchAppointments(); return () => { requestVersion.current += 1; }; }, [fetchAppointments]);
   useEffect(() => {
-    fetchAppointments();
-  }, [fetchAppointments]);
-
-  useEffect(() => {
-    if (!effectiveBranchId && !canViewAllBranches) return undefined;
-    const timer = setInterval(() => {
-      fetchAppointmentsSilent();
-    }, 15000);
+    const timer = setInterval(fetchAppointmentsSilent, 15000);
     return () => clearInterval(timer);
-  }, [canViewAllBranches, effectiveBranchId, fetchAppointmentsSilent]);
+  }, [fetchAppointmentsSilent]);
+  useEffect(() => { setApptsPage(1); }, [debouncedSearch, apptStatusFilter, apptSortBy, dateFrom, dateTo, apptViewMode, effectiveBranchId]);
 
-  const apptStatusOptions = useMemo(() => {
-    const statuses = Array.from(
-      new Set((appointments || []).map((item) => normalizeStatus(item.status)).filter(Boolean)),
-    );
-    return statuses.sort((a, b) => a.localeCompare(b));
-  }, [appointments]);
-
-  const filteredAppts = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase();
-    const queryCompact = query.replace(/[\s.-]/g, "");
-    const startDate = toStartOfDay(dateFrom);
-    const endDate = toEndOfDay(dateTo);
-
-    const list = (appointments || []).filter((appt) => {
-      const byStatus = apptStatusFilter === "ALL" || normalizeStatus(appt.status) === apptStatusFilter;
-      const scheduledTime = getAppointmentFilterTimestamp(appt);
-      const byDate =
-        (!startDate || scheduledTime >= startDate.getTime()) &&
-        (!endDate || scheduledTime <= endDate.getTime());
-
-      const plate = String(appt.vehicleLicensePlate || "").toLowerCase();
-      const plateCompact = plate.replace(/[\s.-]/g, "");
-      const byQuery =
-        !query ||
-        String(appt.customerName || "").toLowerCase().includes(query) ||
-        String(appt.customerPhone || "").toLowerCase().includes(query) ||
-        String(appt.GroupSessionCode || "").toLowerCase().includes(query) ||
-        plate.includes(query) ||
-        (queryCompact && plateCompact.includes(queryCompact));
-
-      return byStatus && byDate && byQuery;
-    });
-
-    return list.sort((a, b) => {
-      const aTime = getAppointmentCreatedTimestamp(a);
-      const bTime = getAppointmentCreatedTimestamp(b);
-      const aName = String(a.customerName || "");
-      const bName = String(b.customerName || "");
-
-      if (apptSortBy === "OLDEST") return aTime - bTime;
-      if (apptSortBy === "NAME_ASC") return aName.localeCompare(bName, "vi");
-      if (apptSortBy === "NAME_DESC") return bName.localeCompare(aName, "vi");
-      return bTime - aTime;
-    });
-  }, [appointments, searchQuery, apptStatusFilter, apptSortBy, dateFrom, dateTo]);
-
+  const filteredAppts = appointments;
   const groupedAppts = useMemo(() => {
     const grouped = new Map();
     filteredAppts.forEach((appt) => {
@@ -401,29 +333,8 @@ export default function ReceptionAppointmentsPage() {
     [filteredAppts],
   );
 
-  const pagedSingleAppts = useMemo(() => {
-    const start = (apptsPage - 1) * apptsPageSize;
-    return filteredSingleAppts.slice(start, start + apptsPageSize);
-  }, [filteredSingleAppts, apptsPage, apptsPageSize]);
-
-  const pagedGroupedAppts = useMemo(() => {
-    const start = (apptsPage - 1) * apptsPageSize;
-    return groupedAppts.slice(start, start + apptsPageSize);
-  }, [groupedAppts, apptsPage, apptsPageSize]);
-
-  useEffect(() => {
-    setApptsPage(1);
-  }, [
-    searchQuery,
-    apptStatusFilter,
-    apptSortBy,
-    dateFrom,
-    dateTo,
-    appointments.length,
-    apptViewMode,
-    groupedAppts.length,
-    filteredSingleAppts.length,
-  ]);
+  const pagedSingleAppts = filteredSingleAppts;
+  const pagedGroupedAppts = groupedAppts;
 
   const handleApptAction = useCallback(async (appt, action) => {
     const appointment = normalizeAppointmentItem(appt);
@@ -610,8 +521,8 @@ export default function ReceptionAppointmentsPage() {
         onResetToolbarFilters={resetToolbarFilters}
         apptViewMode={apptViewMode}
         setApptViewMode={setApptViewMode}
-        filteredSingleAppts={filteredSingleAppts}
-        groupedAppts={groupedAppts}
+        totalSingle={counts.singleCount}
+        totalGroups={counts.groupCount}
         apptLoading={apptLoading}
         pagedSingleAppts={pagedSingleAppts}
         pagedGroupedAppts={pagedGroupedAppts}
@@ -625,7 +536,7 @@ export default function ReceptionAppointmentsPage() {
         onAppointmentClick={handleOpenApptDetail}
         apptsPage={apptsPage}
         apptsPageSize={apptsPageSize}
-        apptsTotalItems={apptViewMode === "GROUP" ? groupedAppts.length : filteredSingleAppts.length}
+        apptsTotalItems={apptViewMode === "GROUP" ? counts.groupCount : counts.singleCount}
         setApptsPage={setApptsPage}
         setApptsPageSize={setApptsPageSize}
       />

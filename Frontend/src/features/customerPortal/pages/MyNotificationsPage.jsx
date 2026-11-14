@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from "@shared/components/Footer";
 import Header from "@shared/components/Header";
@@ -19,6 +19,9 @@ import {
 import "./CustomerPortalShell.css";
 import "./MyNotificationsPage.css";
 
+const PAGE_SIZE = 25;
+const PAGINATION_LABELS = { previous: "Trước", next: "Sau", page: "Trang" };
+
 function fmtDt(v) {
   if (!v) return "—";
   try {
@@ -38,13 +41,25 @@ export default function MyNotificationsPage() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [page, setPage] = useState(1);
+  const [matchingCount, setMatchingCount] = useState(0);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
-      const res = await getCustomerNotifications({ unreadOnly: filterUnread });
+      const res = await getCustomerNotifications({ unreadOnly: filterUnread, page, pageSize: PAGE_SIZE });
+      if (sequence !== loadSequence.current) return;
+      const total = Number(res?.totalCount) || 0;
+      const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       const nextItems = Array.isArray(res?.items) ? res.items : [];
+      setMatchingCount(total);
       setUnreadCount(Number(res?.unreadCount) || 0);
       setItems(nextItems);
 
@@ -70,18 +85,20 @@ export default function MyNotificationsPage() {
         })
       );
 
+      if (sequence !== loadSequence.current) return;
       setResolvedLinks(
         Object.fromEntries(entries.filter(([, path]) => typeof path === "string" && path.length > 0))
       );
     } catch (e) {
-      setError(e?.message || "Không t?i ??c th�ng b�o.");
+      if (sequence === loadSequence.current) setError(e?.message || "Không tải được thông báo.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [filterUnread]);
+  }, [filterUnread, page]);
 
   useEffect(() => {
     load();
+    return () => { loadSequence.current += 1; };
   }, [load]);
 
   const totalCount = items.length;
@@ -131,7 +148,7 @@ export default function MyNotificationsPage() {
           <section className="cp-card cp-card--highlight cp-notif-hero">
             <div className="cp-notif-hero-copy">
               <p className="cp-eyebrow">Garage của tôi</p>
-              <h1 className="cp-title">Th�ng b�o</h1>
+              <h1 className="cp-title">Thông báo</h1>
               <p className="cp-desc">
                 Nhắc bảo dưỡng, khảo sát sau dịch vụ, bảo hiểm và cập nhật tiến độ từ xưởng
                 đều được gom về một inbox dễ theo dõi.
@@ -160,14 +177,14 @@ export default function MyNotificationsPage() {
                 <button
                   type="button"
                   className={`cp-tab ${!filterUnread ? "cp-tab--active" : ""}`}
-                  onClick={() => setFilterUnread(false)}
+                  onClick={() => { setPage(1); setFilterUnread(false); }}
                 >
                   Tất cả
                 </button>
                 <button
                   type="button"
                   className={`cp-tab ${filterUnread ? "cp-tab--active" : ""}`}
-                  onClick={() => setFilterUnread(true)}
+                  onClick={() => { setPage(1); setFilterUnread(true); }}
                 >
                   Chưa đọc
                 </button>
@@ -178,7 +195,7 @@ export default function MyNotificationsPage() {
                 onClick={onMarkAll}
                 disabled={markingAll || unreadCount === 0}
               >
-                {markingAll ? "Đang x? lĐã" : "Đánh d?u d� d?c t?t c?"}
+            {markingAll ? "Đang xử lý..." : "Đánh dấu đã đọc tất cả"}
               </button>
             </div>
           </section>
@@ -245,7 +262,7 @@ export default function MyNotificationsPage() {
                           disabled={busyId === item.id}
                           onClick={() => onMarkOne(item.id)}
                         >
-                          {busyId === item.id ? "Đang c?p nh?t�" : "Đánh d?u d� d?c"}
+                        {busyId === item.id ? "Đang cập nhật..." : "Đánh dấu đã đọc"}
                         </button>
                       ) : (
                         <span className="cp-notif-read-pill">Đã đọc</span>
@@ -255,6 +272,15 @@ export default function MyNotificationsPage() {
                 );
               })}
           </ul>
+          {matchingCount > PAGE_SIZE && (
+            <nav className="cp-notif-toolbar" aria-label={PAGINATION_LABELS.page}>
+              <button type="button" className="cp-btn cp-btn-ghost" disabled={loading || page <= 1}
+                onClick={() => setPage((value) => value - 1)}>{PAGINATION_LABELS.previous}</button>
+              <span>{PAGINATION_LABELS.page} {page} / {Math.ceil(matchingCount / PAGE_SIZE)}</span>
+              <button type="button" className="cp-btn cp-btn-ghost" disabled={loading || page * PAGE_SIZE >= matchingCount}
+                onClick={() => setPage((value) => value + 1)}>{PAGINATION_LABELS.next}</button>
+            </nav>
+          )}
         </div>
       </div>
       <Footer />

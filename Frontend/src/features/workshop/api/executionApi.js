@@ -10,6 +10,8 @@ export const executionApi = {
 
   createConsumableReturnBundle: (data) =>
     request({ url: "/api/consumable-returns", method: "POST", data }),
+  getConsumablesForOrder: (serviceOrderId) =>
+    request({ url: `/api/consumable-returns/service-orders/${serviceOrderId}`, method: "GET" }).catch(() => []),
 
   checkInTimesheet: (data) =>
     request({ url: "/api/timesheets/check-in", method: "POST", data }),

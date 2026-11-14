@@ -1,11 +1,11 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { servicesApi } from "@features/services/api/servicesApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { generateAcronym } from "@shared/core/utils/stringUtils";
 import { useSearch } from "@shared/core/context/SearchContext";
 import TablePagination from "@shared/components/TablePagination";
 import {
-  filterPackageManagedStandardServices,
+
   getPackageManagedStandardServiceMessage,
   isPackageManagedStandardServiceCode,
   normalizeStandardServiceCode,
@@ -117,7 +117,7 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${formPrefix}-price`}>Đơn gi� (VN�) *</label>
+          <label htmlFor={`${formPrefix}-price`}>Đơn giá (VNĐ) *</label>
           <input
             id={`${formPrefix}-price`}
             name="basePrice"
@@ -192,6 +192,10 @@ function ServiceForm({ initial, categories, onSubmit, onCancel, loading }) {
 
 export default function ServicesPage() {
   const [services, setServices] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [categoryNames, setCategoryNames] = useState({});
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -204,44 +208,62 @@ export default function ServicesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const [search, setSearch] = useState("");
+  const loadSequence = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(String(searchQuery || "").trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchData = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
-      const [serviceResponse, categoryResponse] = await Promise.all([
-        servicesApi.getStandardServices(),
-        servicesApi.getServiceCategories(),
-      ]);
-      setServices(filterPackageManagedStandardServices(serviceResponse || []));
-      setCategories(categoryResponse || []);
+      const result = await servicesApi.getStandardServicePage({ search: search || undefined, page, pageSize, nameCodeOnly: true });
+      if (sequence !== loadSequence.current) return;
+      setServices(Array.isArray(result?.items) ? result.items : []);
+      setTotal(Number(result?.total) || 0);
+      setCategoryNames(result?.categoryNames || {});
     } catch {
-      setError("Không thể tải danh mục dịch vụ.");
+      if (sequence === loadSequence.current) setError("Không thể tải danh mục dịch vụ.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, []);
+  }, [search, page, pageSize]);
 
   useEffect(() => {
     fetchData();
+    return () => { loadSequence.current += 1; };
   }, [fetchData]);
 
-  const query = String(searchQuery || "").trim().toLowerCase();
-  const filtered = (services || []).filter(
-    (service) => (service.name || "").toLowerCase().includes(query) || (service.code || "").toLowerCase().includes(query)
-  );
-  const pagedServices = filtered.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => {
+    if (modal !== "create" && modal !== "edit") return undefined;
+    let cancelled = false;
+    setCategoriesLoading(true);
+    setCategoriesError(false);
+    servicesApi.getServiceCategories().then((result) => {
+      if (!cancelled) setCategories(result || []);
+    }).catch(() => {
+      if (!cancelled) { setCategoriesError(true); setFormError("Không thể tải danh mục."); }
+    }).finally(() => {
+      if (!cancelled) setCategoriesLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [modal]);
 
   useEffect(() => {
     setPage(1);
-  }, [query, pageSize]);
+  }, [searchQuery, pageSize]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     if (page > totalPages) setPage(totalPages);
-  }, [filtered.length, page, pageSize]);
-
+  }, [total, page, pageSize]);
   const closeModal = () => {
     setModal(null);
+    setCategoriesLoading(true);
     setSelected(null);
     setFormError("");
   };
@@ -294,7 +316,7 @@ export default function ServicesPage() {
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} dịch vụ</span>
+        <span className="result-count">{total} dịch vụ</span>
       </div>
 
       {error ? <div className="error service-page-error">{error}</div> : null}
@@ -311,23 +333,23 @@ export default function ServicesPage() {
               <tr>
                 <th>Code</th>
                 <th>Tên dịch vụ</th>
-                <th>Đơn gi�</th>
+                <th>Đơn giá</th>
                 <th>Thời gian</th>
                 <th className="th-center">Danh mục</th>
                 <th className="th-center">Trạng thái</th>
-                <th className="th-center">Thao t�c</th>
+                <th className="th-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {services.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="td-center">
                     Không có dịch vụ phù hợp.
                   </td>
                 </tr>
               ) : (
-                pagedServices.map((service) => {
-                  const category = categories.find((item) => Number(item.id) === Number(service.categoryId));
+                services.map((service) => {
+                  const category = categoryNames[service.categoryId] ? { name: categoryNames[service.categoryId] } : null;
                   return (
                     <tr key={service.id}>
                       <td className="td-id">{service.code}</td>
@@ -373,7 +395,7 @@ export default function ServicesPage() {
 
       <div style={{ display: "flex", justifyContent: "center" }}>
         <TablePagination
-          totalItems={filtered.length}
+          totalItems={total}
           currentPage={page}
           pageSize={pageSize}
           onPageChange={setPage}
@@ -387,19 +409,19 @@ export default function ServicesPage() {
       {modal === "create" && (
         <Modal title="Thêm dịch vụ mới" onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
-          <ServiceForm initial={EMPTY_SERVICE} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />
+          {!categoriesLoading && !categoriesError && <ServiceForm initial={EMPTY_SERVICE} categories={categories} onSubmit={handleCreate} onCancel={closeModal} loading={saving} />}
         </Modal>
       )}
 
       {modal === "edit" && selected ? (
         <Modal title={`Sửa dịch vụ • ${selected.name}`} onClose={closeModal} className="service-modal">
           {formError ? <div className="error">{formError}</div> : null}
-          <ServiceForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />
+          {!categoriesLoading && !categoriesError && <ServiceForm initial={selected} categories={categories} onSubmit={handleEdit} onCancel={closeModal} loading={saving} />}
         </Modal>
       ) : null}
 
       {modal === "delete" && selected ? (
-        <Modal title="Xác nhận x�a" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           <ConfirmDialog
             message={`Xóa dịch vụ "${selected.name}"?`}
             onConfirm={handleDelete}

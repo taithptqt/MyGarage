@@ -576,11 +576,11 @@ export default function CustomerChatbotWidget() {
             type="button"
             className="chatbot-ai-welcome-close"
             onClick={() => setShowWelcomeHint(false)}
-            aria-label="Dong goi y chatbot"
+            aria-label="Đóng gợi ý chatbot"
           >
             ×
           </button>
-          <div className="chatbot-ai-welcome-eyebrow">Tro ly AI MyGarage</div>
+          <div className="chatbot-ai-welcome-eyebrow">Trợ lý AI MyGarage</div>
           <p>{WELCOME_HINT_TEXT}</p>
         </div>
       ) : null}

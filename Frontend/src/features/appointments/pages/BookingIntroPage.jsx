@@ -28,7 +28,7 @@ const highlights = [
   { number: "15+", label: "Năm kinh nghiệm vận hành chuỗi gara" },
   { number: "24/7", label: "Hệ thống nhắc lịch và theo dõi tiến độ" },
   { number: "10K+", label: "Lượt xe phục vụ mỗi năm" },
-  { number: "98%", label: "Khách hàng h�i l�ng sau dịch vụ" },
+  { number: "98%", label: "Khách hàng hài lòng sau dịch vụ" },
 ];
 
 const processSteps = [
@@ -37,7 +37,7 @@ const processSteps = [
     desc: "Tư vấn viên ghi nhận tình trạng và nhu cầu chi tiết của khách hàng.",
   },
   {
-    title: "Xác nhận g�i dịch vụ",
+    title: "Xác nhận gói dịch vụ",
     desc: "Đề xuất hạng mục phù hợp, báo giá rõ ràng trước khi xử lý.",
   },
   {
@@ -95,7 +95,7 @@ const genericPresets = [
   {
     desc: "Danh mục dịch vụ chuyên biệt theo từng nhu cầu bảo dưỡng và sửa chữa xe.",
     promo: "Quy trình minh bạch, kỹ thuật viên theo dõi sát để đảm bảo chất lượng đầu ra.",
-    cta: "Kh�m ph� g�i",
+    cta: "Khám phá gói",
   },
   {
     desc: "Giải pháp chăm xe được tối ưu theo tình trạng thực tế và mục tiêu vận hành.",

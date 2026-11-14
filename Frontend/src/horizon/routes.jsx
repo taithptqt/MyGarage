@@ -35,6 +35,7 @@ import AdminChangeLogPage from "@features/admin/pages/AdminChangeLogPage";
 import AdminSalaryPage from "@features/admin/pages/AdminSalaryPage";
 import SafeVoucherManagementPage from "@features/voucher/pages/SafeVoucherManagementPage";
 import BayManagementPage from "@features/storage/pages/BayManagementPage";
+import VehicleManagementPage from "@features/cars/pages/VehicleManagementPage";
 import TechnicianProductivityDashboard from "@features/workshop/components/TechnicianProductivityDashboard";
 import MaintenanceReminderManager from "@features/workshop/components/MaintenanceReminderManager";
 import ConsumableBulkReturn from "@features/workshop/components/ConsumableBulkReturn";
@@ -120,6 +121,13 @@ const inventoryItems = [
 ];
 
 const vehicleItems = [
+  {
+    name: 'Quản lý xe',
+    layout: '/admin',
+    icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
+    path: '/vehicles',
+    component: <VehicleManagementPage />,
+  },
   {
     name: 'Hãng xe',
     layout: '/admin',

@@ -349,7 +349,7 @@ export default function DateRangePickerModal({
             30 ngày gần nhất
           </button>
           <button type="button" className="date-quick-btn" onClick={handleQuickSetCurrentMonth}>
-            Th�ng n�y
+            Tháng này
           </button>
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -21,12 +21,10 @@ import {
 import Card from "components/card/Card";
 import MiniStatistics from "components/card/MiniStatistics";
 import { MdCheckCircle, MdReceipt, MdRequestQuote } from "react-icons/md";
-import { getInvoiceDetails, getInvoices, getPayments } from "../api/accountingApi";
+import { getInvoiceListPage, getInvoiceViewDetail } from "../api/invoicePagingApi";
 import {
   formatCurrency,
-  formatDateTime,
-  normalizeText,
-  toNumber
+  formatDateTime
 } from "../utils/accountingHelpers";
 
 function fieldOf(item, ...candidates) {
@@ -60,7 +58,8 @@ function readOutstandingAmount(invoice) {
     "RemainingAmount"
   );
   if (explicitOutstanding !== undefined && explicitOutstanding !== null) {
-    return toNumber(explicitOutstanding);
+    const amount = Number(explicitOutstanding);
+    return Number.isFinite(amount) ? amount : null;
   }
   return null;
 }
@@ -71,6 +70,42 @@ function statusColor(status) {
   if (status === "REFUNDED") return "purple";
   if (status === "UNKNOWN") return "gray";
   return "red";
+}
+
+function moneyOrMissing(value) {
+  return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? "--" : formatCurrency(value);
+}
+
+function Pagination({ total, page, pageSize, onPageChange, onPageSizeChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <Flex align='center' justify='center' gap='8px' mt='12px' wrap='wrap'>
+      {onPageSizeChange ? <Select aria-label='Số dòng mỗi trang' value={pageSize} maxW='90px' onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+        {[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+      </Select> : null}
+      <Button size='sm' onClick={() => onPageChange(page - 1)} isDisabled={page <= 1}>Trước</Button>
+      <Text fontSize='sm'>{page} / {totalPages} ({total})</Text>
+      <Button size='sm' onClick={() => onPageChange(page + 1)} isDisabled={page >= totalPages}>Sau</Button>
+    </Flex>
+  );
+}
+
+function normalizeInvoice(item) {
+  return {
+    raw: item,
+    id: fieldOf(item, "id", "Id"),
+    source: resolveSource(item),
+    status: paymentStatusLabel(item),
+    totalAmount: fieldOf(item, "totalAmount", "TotalAmount"),
+    taxAmount: fieldOf(item, "taxAmount", "TaxAmount"),
+    paidAmount: fieldOf(item, "paidAmount", "PaidAmount"),
+    outstandingAmount: readOutstandingAmount(item),
+    issuedAt: fieldOf(item, "issuedAt", "IssuedAt"),
+    companyName: fieldOf(item, "companyName", "CompanyName"),
+    receiveEmail: fieldOf(item, "receiveEmail", "ReceiveEmail"),
+    serviceOrderId: fieldOf(item, "serviceOrderId", "ServiceOrderId"),
+    retailOrderId: fieldOf(item, "retailOrderId", "RetailOrderId")
+  };
 }
 
 function ReadonlyField({ label, value, borderColor, textColorSecondary }) {
@@ -94,118 +129,96 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const searchRef = useRef("");
+  const searchChanged = useRef(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchRevision, setSearchRevision] = useState(0);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState("ALL");
-
-  const [invoices, setInvoices] = useState([]);
-  const [invoiceDetails, setInvoiceDetails] = useState([]);
-  const [payments, setPayments] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [listData, setListData] = useState(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
-
-  async function loadData() {
-    setLoading(true);
-    setError("");
-    try {
-      const [invoiceData, detailData, paymentData] = await Promise.all([
-        getInvoices(),
-        getInvoiceDetails(),
-        getPayments()
-      ]);
-      setInvoices(invoiceData || []);
-      setInvoiceDetails(detailData || []);
-      setPayments(paymentData || []);
-      if ((invoiceData || []).length) {
-        setSelectedInvoiceId(fieldOf(invoiceData[0], "id", "Id"));
-      }
-    } catch (err) {
-      setError(err?.message || "Không tải được danh sách hóa đơn.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [detailData, setDetailData] = useState(null);
+  const [detailError, setDetailError] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailsPage, setDetailsPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const detailPageSize = 10;
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!searchChanged.current) return undefined;
+    const timer = setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(search);
+      setSearchRevision((value) => value + 1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const normalizedRows = useMemo(
-    () =>
-      (invoices || [])
-        .map((item) => {
-          const id = fieldOf(item, "id", "Id");
-          return {
-            raw: item,
-            id,
-            source: resolveSource(item),
-            status: paymentStatusLabel(item),
-            totalAmount: toNumber(fieldOf(item, "totalAmount", "TotalAmount")),
-            taxAmount: toNumber(fieldOf(item, "taxAmount", "TaxAmount")),
-            paidAmount: toNumber(fieldOf(item, "paidAmount", "PaidAmount")),
-            outstandingAmount: readOutstandingAmount(item),
-            issuedAt: fieldOf(item, "issuedAt", "IssuedAt"),
-            companyName: fieldOf(item, "companyName", "CompanyName"),
-            receiveEmail: fieldOf(item, "receiveEmail", "ReceiveEmail"),
-            serviceOrderId: fieldOf(item, "serviceOrderId", "ServiceOrderId"),
-            retailOrderId: fieldOf(item, "retailOrderId", "RetailOrderId")
-          };
-        })
-        .sort((a, b) => Number(b.id || 0) - Number(a.id || 0)),
-    [invoices]
-  );
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setError("");
+    setListData(null);
+    getInvoiceListPage({ search: debouncedSearch || undefined, status: statusFilter, source: sourceFilter, page, pageSize })
+      .then((result) => {
+        if (!current || searchRef.current !== debouncedSearch) return;
+        const lastPage = Math.max(1, Math.ceil(result.total / result.pageSize));
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        setListData(result);
+        setSelectedInvoiceId((previous) => result.items.some((item) => String(fieldOf(item, "id", "Id")) === String(previous))
+          ? previous : (fieldOf(result.items[0], "id", "Id") ?? null));
+      })
+      .catch((err) => {
+        if (!current || searchRef.current !== debouncedSearch) return;
+        setListData(null);
+        setSelectedInvoiceId(null);
+        setError(err?.message || "Không tải được danh sách hóa đơn.");
+      })
+      .finally(() => { if (current && searchRef.current === debouncedSearch) setLoading(false); });
+    return () => { current = false; };
+  }, [debouncedSearch, searchRevision, statusFilter, sourceFilter, page, pageSize]);
 
-  const filteredRows = useMemo(() => {
-    return normalizedRows.filter((item) => {
-      const searchTarget = normalizeText(
-        [
-          item.id,
-          item.source,
-          item.companyName,
-          item.receiveEmail,
-          item.serviceOrderId,
-          item.retailOrderId
-        ].join(" ")
-      );
-      const searchPass = !search || searchTarget.includes(normalizeText(search));
-      const statusPass = statusFilter === "ALL" || item.status === statusFilter;
-      const sourcePass =
-        sourceFilter === "ALL" ||
-        (sourceFilter === "SERVICE" && item.serviceOrderId) ||
-        (sourceFilter === "RETAIL" && item.retailOrderId);
-      return searchPass && statusPass && sourcePass;
-    });
-  }, [normalizedRows, search, statusFilter, sourceFilter]);
+  useEffect(() => {
+    setDetailsPage(1);
+    setPaymentsPage(1);
+    setDetailData(null);
+    setDetailError("");
+  }, [selectedInvoiceId]);
 
-  const selectedInvoice = useMemo(
-    () => normalizedRows.find((item) => String(item.id) === String(selectedInvoiceId)),
-    [normalizedRows, selectedInvoiceId]
-  );
+  useEffect(() => {
+    if (selectedInvoiceId == null) { setDetailLoading(false); return undefined; }
+    let current = true;
+    setDetailLoading(true);
+    setDetailData(null);
+    setDetailError("");
+    getInvoiceViewDetail(selectedInvoiceId, { detailsPage, paymentsPage, pageSize: detailPageSize })
+      .then((result) => {
+        if (!current) return;
+        const lastDetailsPage = Math.max(1, Math.ceil(result.detailsTotal / result.pageSize));
+        const lastPaymentsPage = Math.max(1, Math.ceil(result.paymentsTotal / result.pageSize));
+        if (detailsPage > lastDetailsPage || paymentsPage > lastPaymentsPage) {
+          setDetailsPage(Math.min(detailsPage, lastDetailsPage));
+          setPaymentsPage(Math.min(paymentsPage, lastPaymentsPage));
+          return;
+        }
+        setDetailData({ ...result, requestedId: selectedInvoiceId });
+      })
+      .catch((err) => { if (current) setDetailError(err?.message || "Không tải được chi tiết hóa đơn."); })
+      .finally(() => { if (current) setDetailLoading(false); });
+    return () => { current = false; };
+  }, [selectedInvoiceId, detailsPage, paymentsPage]);
 
-  const selectedDetails = useMemo(
-    () =>
-      (invoiceDetails || []).filter(
-        (item) => String(fieldOf(item, "invoiceId", "InvoiceId")) === String(selectedInvoiceId)
-      ),
-    [invoiceDetails, selectedInvoiceId]
-  );
-
-  const selectedPayments = useMemo(
-    () =>
-      (payments || []).filter(
-        (item) => String(fieldOf(item, "invoiceId", "InvoiceId")) === String(selectedInvoiceId)
-      ),
-    [payments, selectedInvoiceId]
-  );
-
-  const summary = useMemo(
-    () => ({
-      totalInvoice: filteredRows.length,
-      issuedCount: filteredRows.filter((item) => item.issuedAt).length,
-      paidCount: filteredRows.filter((item) => item.status === "PAID").length,
-      unknownStatusCount: filteredRows.filter((item) => item.status === "UNKNOWN").length
-    }),
-    [filteredRows]
-  );
-
+  const filteredRows = useMemo(() => (listData?.items || []).map(normalizeInvoice), [listData]);
+  const selectedInvoice = useMemo(() => detailData && String(detailData.requestedId) === String(selectedInvoiceId)
+    ? normalizeInvoice(detailData.invoice) : null, [detailData, selectedInvoiceId]);
+  const selectedDetails = selectedInvoice ? detailData.details : [];
+  const selectedPayments = selectedInvoice ? detailData.payments : [];
+  const summary = listData?.summary;
   function handleResend(invoiceRow) {
     const email = invoiceRow?.receiveEmail;
     const invoiceUrl = fieldOf(invoiceRow?.raw, "invoiceUrl", "InvoiceUrl");
@@ -227,15 +240,6 @@ export default function InvoicesPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <Flex minH='280px' align='center' justify='center' direction='column' gap='12px'>
-        <Spinner size='lg' color='brand.500' />
-        <Text color={textColorSecondary}>Đang tải dữ liệu hóa đơn...</Text>
-      </Flex>
-    );
-  }
-
   return (
     <Box>
       {error ? (
@@ -247,10 +251,10 @@ export default function InvoicesPage() {
       ) : null}
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap='20px' mb='20px'>
-        <MiniStatistics startContent={<MdReceipt size='24px' />} name='Tổng hóa đơn' value={String(summary.totalInvoice)} />
-        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã thanh toán' value={String(summary.paidCount)} />
-        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã phát hành' value={String(summary.issuedCount)} />
-        <MiniStatistics startContent={<MdRequestQuote size='24px' />} name='Thiếu trạng thái thanh toán' value={String(summary.unknownStatusCount)} />
+        <MiniStatistics startContent={<MdReceipt size='24px' />} name='Tổng hóa đơn' value={summary ? String(summary.totalInvoice) : "--"} />
+        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã thanh toán' value={summary ? String(summary.paidCount) : "--"} />
+        <MiniStatistics startContent={<MdCheckCircle size='24px' />} name='Đã phát hành' value={summary ? String(summary.issuedCount) : "--"} />
+        <MiniStatistics startContent={<MdRequestQuote size='24px' />} name='Thiếu trạng thái thanh toán' value={summary ? String(summary.unknownStatusCount) : "--"} />
       </SimpleGrid>
 
       <Card p='20px' mb='20px'>
@@ -258,10 +262,10 @@ export default function InvoicesPage() {
           <Input
             placeholder='Tìm theo mã invoice / SO / RO / email / công ty'
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { searchChanged.current = true; searchRef.current = e.target.value; setSearch(e.target.value); setLoading(true); setListData(null); setSelectedInvoiceId(null); setError(""); }}
             maxW='360px'
           />
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} maxW='220px'>
+          <Select value={statusFilter} onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }} maxW='220px'>
             <option value='ALL'>Tất cả trạng thái</option>
             <option value='UNPAID'>UNPAID</option>
             <option value='PARTIAL'>PARTIAL</option>
@@ -269,7 +273,7 @@ export default function InvoicesPage() {
             <option value='REFUNDED'>REFUNDED</option>
             <option value='UNKNOWN'>UNKNOWN</option>
           </Select>
-          <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} maxW='220px'>
+          <Select value={sourceFilter} onChange={(e) => { setPage(1); setSourceFilter(e.target.value); }} maxW='220px'>
             <option value='ALL'>Tất cả nguồn</option>
             <option value='SERVICE'>Service Order</option>
             <option value='RETAIL'>Retail Order</option>
@@ -306,10 +310,10 @@ export default function InvoicesPage() {
                   </Td>
                   <Td color={textColorSecondary}>{row.source}</Td>
                   <Td color={textColor} isNumeric>
-                    {formatCurrency(row.totalAmount)}
+                    {moneyOrMissing(row.totalAmount)}
                   </Td>
                   <Td color={textColor} isNumeric>
-                    {formatCurrency(row.paidAmount)}
+                    {moneyOrMissing(row.paidAmount)}
                   </Td>
                   <Td>
                     <Badge colorScheme={statusColor(row.status)}>{row.status}</Badge>
@@ -333,10 +337,12 @@ export default function InvoicesPage() {
               ))}
             </Tbody>
           </Table>
+          {loading ? <Flex align='center' gap='8px' mt='12px'><Spinner size='sm' /><Text>Đang tải dữ liệu hóa đơn...</Text></Flex> : null}
+          {listData ? <Pagination total={listData.total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPage(1); setPageSize(size); }} /> : null}
         </Card>
 
         <Card p='20px' gridColumn={{ base: "span 1", xl: "span 2" }}>
-          {selectedInvoice ? (
+          {detailLoading ? <Flex align='center' gap='8px'><Spinner size='sm' /><Text>Đang tải dữ liệu hóa đơn...</Text></Flex> : detailError ? <Text color='red.400'>{detailError}</Text> : selectedInvoice ? (
             <>
               <Text color={textColor} fontWeight='700' mb='14px'>
                 Chi tiết invoice #{selectedInvoice.id}
@@ -345,19 +351,19 @@ export default function InvoicesPage() {
               <SimpleGrid columns={2} gap='10px' mb='14px'>
                 <ReadonlyField
                   label='Total'
-                  value={formatCurrency(selectedInvoice.totalAmount)}
+                  value={moneyOrMissing(selectedInvoice.totalAmount)}
                   borderColor={borderColor}
                   textColorSecondary={textColorSecondary}
                 />
                 <ReadonlyField
                   label='VAT'
-                  value={formatCurrency(selectedInvoice.taxAmount)}
+                  value={moneyOrMissing(selectedInvoice.taxAmount)}
                   borderColor={borderColor}
                   textColorSecondary={textColorSecondary}
                 />
                 <ReadonlyField
                   label='Paid (backend)'
-                  value={formatCurrency(selectedInvoice.paidAmount)}
+                  value={moneyOrMissing(selectedInvoice.paidAmount)}
                   borderColor={borderColor}
                   textColorSecondary={textColorSecondary}
                 />
@@ -387,7 +393,7 @@ export default function InvoicesPage() {
                   selectedDetails.map((detail) => {
                     const detailId = fieldOf(detail, "id", "Id");
                     const itemName = fieldOf(detail, "itemName", "ItemName") || `Item #${detailId}`;
-                    const finalAmount = toNumber(fieldOf(detail, "finalAmount", "FinalAmount"));
+                    const finalAmount = fieldOf(detail, "finalAmount", "FinalAmount");
                     return (
                       <Flex
                         key={detailId}
@@ -397,7 +403,7 @@ export default function InvoicesPage() {
                         borderColor={borderColor}>
                         <Text fontSize='sm'>{itemName}</Text>
                         <Text fontSize='sm' fontWeight='600'>
-                          {formatCurrency(finalAmount)}
+                          {moneyOrMissing(finalAmount)}
                         </Text>
                       </Flex>
                     );
@@ -408,6 +414,7 @@ export default function InvoicesPage() {
                   </Text>
                 )}
               </Box>
+              <Pagination total={detailData.detailsTotal} page={detailsPage} pageSize={detailPageSize} onPageChange={setDetailsPage} />
 
               <Text color={textColor} fontWeight='600' mb='8px'>
                 Payment liên quan
@@ -417,7 +424,7 @@ export default function InvoicesPage() {
                   selectedPayments.map((payment) => {
                     const paymentId = fieldOf(payment, "id", "Id");
                     const type = fieldOf(payment, "type", "Type");
-                    const amount = toNumber(fieldOf(payment, "amount", "Amount"));
+                    const amount = fieldOf(payment, "amount", "Amount");
                     const status = fieldOf(payment, "status", "Status");
                     return (
                       <Flex
@@ -430,7 +437,7 @@ export default function InvoicesPage() {
                           #{paymentId} • {type || "--"}
                         </Text>
                         <Text fontSize='sm' fontWeight='600'>
-                          {formatCurrency(amount)} • {status || "--"}
+                          {moneyOrMissing(amount)} • {status || "--"}
                         </Text>
                       </Flex>
                     );
@@ -441,6 +448,7 @@ export default function InvoicesPage() {
                   </Text>
                 )}
               </Box>
+              <Pagination total={detailData.paymentsTotal} page={paymentsPage} pageSize={detailPageSize} onPageChange={setPaymentsPage} />
 
               <Text color={textColor} fontWeight='600' mb='8px'>
                 Thông tin invoice
@@ -480,7 +488,7 @@ export default function InvoicesPage() {
                 </SimpleGrid>
                 <ReadonlyField
                   label='Số tiền đã thu (backend)'
-                  value={formatCurrency(selectedInvoice.paidAmount)}
+                  value={moneyOrMissing(selectedInvoice.paidAmount)}
                   borderColor={borderColor}
                   textColorSecondary={textColorSecondary}
                 />

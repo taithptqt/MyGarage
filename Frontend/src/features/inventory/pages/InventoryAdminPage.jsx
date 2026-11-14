@@ -1,5 +1,5 @@
 ﻿
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { inventoryApi } from "@features/inventory/api/inventoryApi";
 import { Modal } from "@features/admin/components/AdminModals";
 import TablePagination from "@shared/components/TablePagination";
@@ -249,6 +249,20 @@ function resolveStatusMeta(status, mapping) {
   return { label: status || "Chưa rõ", className: "badge-inactive" };
 }
 
+function paginateItems(items, currentPage, pageSize) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const safePageSize = Math.max(1, Number(pageSize) || 10);
+  const totalPages = Math.max(1, Math.ceil(items.length / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(currentPage) || 1), totalPages);
+  const startIndex = (safePage - 1) * safePageSize;
+  const endIndex = Math.min(startIndex + safePageSize, items.length);
+  const result = [];
+  for (let i = startIndex; i < endIndex; i++) {
+    result.push(items[i]);
+  }
+  return result;
+}
+
 function SectionHeader({ section }) {
   const meta = SECTION_META[section] || {
     title: "Quản trị kho",
@@ -313,6 +327,10 @@ export default function InventoryAdminPage({ section }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [categoryOptionsReady, setCategoryOptionsReady] = useState(false);
+  const [catalogSummary, setCatalogSummary] = useState({ productCount: 0, classified: 0, unclassified: 0, categoryCount: 0, supplierCount: 0 });
+  const catalogRequestSequence = useRef(0);
 
   const [audits, setAudits] = useState([]);
   const [approvals, setApprovals] = useState([]);
@@ -382,52 +400,47 @@ export default function InventoryAdminPage({ section }) {
   };
 
   const fetchData = useCallback(async () => {
+    const sequence = ++catalogRequestSequence.current;
     setLoading(true);
     setError("");
     try {
       if (section === "warehouseStructure") {
         const [structure, branchData, cfg] = await Promise.all([
-          inventoryApi.getWarehouseStructure(),
+          inventoryApi.getWarehouseStructure({ page: warehousePage, pageSize: warehousePageSize }),
           inventoryApi.getBranches(),
           inventoryApi.getSettings()
         ]);
         setWarehouseStructure({
           warehouses: structure?.warehouses || [],
           bins: structure?.bins || [],
-          branches: branchData || []
+          branches: branchData || [],
+          total: structure?.total ?? (structure?.warehouses || []).length
         });
         setSettings(cfg);
       }
 
       if (isCatalogSection) {
-        const [prods, cats, sups, cfg, structure, branchData, allProductImages] = await Promise.all([
-          inventoryApi.getProducts(),
-          inventoryApi.getPartCategories(),
-          inventoryApi.getSuppliers(),
-          inventoryApi.getSettings(),
-          inventoryApi.getWarehouseStructure(),
-          inventoryApi.getBranches(),
-          inventoryApi.getProductImages()
-        ]);
-        setProducts(prods || []);
-        setCategories(cats || []);
-        setSuppliers(sups || []);
-        setSettings(cfg);
-        setWarehouseStructure({
-          warehouses: structure?.warehouses || [],
-          bins: structure?.bins || [],
-          branches: branchData || []
-        });
-        const thumbs = {};
-        (allProductImages || []).forEach((img) => {
-          const pid = img?.productId;
-          const url = img?.imageUrl;
-          if (pid == null || !url) return;
-          const prefer = img?.isMain === true;
-          const prevUrl = thumbs[pid];
-          if (!prevUrl || prefer) thumbs[pid] = url;
-        });
-        setProductThumbById(thumbs);
+        const kind = isCatalogProductsSection ? "products" : isCatalogCategoriesSection ? "categories" : "suppliers";
+        const page = kind === "products" ? productPage : kind === "categories" ? categoryPage : supplierPage;
+        const size = kind === "products" ? productPageSize : kind === "categories" ? categoryPageSize : supplierPageSize;
+        const result = await inventoryApi.getCatalogPage(kind, page, size);
+        if (sequence !== catalogRequestSequence.current) return;
+        const lastPage = Math.max(1, Math.ceil((result?.total || 0) / size));
+        if (page > lastPage) {
+          if (kind === "products") setProductPage(lastPage);
+          else if (kind === "categories") setCategoryPage(lastPage);
+          else setSupplierPage(lastPage);
+          return;
+        }
+        setCatalogSummary(result?.summary || {});
+        if (kind === "products") {
+          setProducts((result?.items || []).map((row) => ({ ...row.item, _categoryName: row.categoryName })));
+          setProductThumbById(Object.fromEntries((result?.items || []).filter((row) => row.thumbnail).map((row) => [row.item.id, row.thumbnail])));
+        } else if (kind === "categories") {
+          setCategories((result?.items || []).map((row) => ({ ...row.item, _parentName: row.parentName, _productCount: row.productCount })));
+        } else {
+          setSuppliers(result?.items || []);
+        }
       }
 
       if (section === "policy") {
@@ -512,15 +525,26 @@ export default function InventoryAdminPage({ section }) {
         setReports({ ...(rep || {}), auditLogs: logs || [] });
       }
     } catch (err) {
-      setError(err?.message || "Không tải được dữ liệu quản trị kho.");
+      if (sequence === catalogRequestSequence.current) setError(err?.message || "Không tải được dữ liệu quản trị kho.");
     } finally {
-      setLoading(false);
+      if (sequence === catalogRequestSequence.current) setLoading(false);
     }
-  }, [section, txParams, isCatalogSection]);
+  }, [section, txParams, isCatalogSection, isCatalogProductsSection, isCatalogCategoriesSection, productPage, productPageSize, categoryPage, categoryPageSize, supplierPage, supplierPageSize, warehousePage, warehousePageSize]);
 
   useEffect(() => {
     fetchData();
+    return () => { catalogRequestSequence.current += 1; };
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!showCreateProductModal && !showCategoryModal) return undefined;
+    let cancelled = false;
+    setCategoryOptionsReady(false);
+    setCategoryOptions([]);
+    inventoryApi.getPartCategories().then((rows) => { if (!cancelled) { setCategoryOptions(rows || []); setCategoryOptionsReady(true); } })
+      .catch((err) => { if (!cancelled) setError(err?.message || "Không tải được dữ liệu quản trị kho."); });
+    return () => { cancelled = true; };
+  }, [showCreateProductModal, showCategoryModal]);
 
   const clearMainImagePick = useCallback(() => {
     setProductMainImagePreview((prev) => {
@@ -565,17 +589,6 @@ export default function InventoryAdminPage({ section }) {
     return map;
   }, [categories]);
 
-  const productCountByCategory = useMemo(() => {
-    const counts = new Map();
-    (products || []).forEach((product) => {
-      const categoryId = product?.categoryId;
-      if (!categoryId) return;
-      const key = String(categoryId);
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return counts;
-  }, [products]);
-
   const policyOverview = useMemo(() => {
     const branchCount = branchSummary.length;
     const activeBranchCount = branchSummary.filter((b) => normalizeBranchStatusClass(b.branchStatus) === "is-active").length;
@@ -599,53 +612,46 @@ export default function InventoryAdminPage({ section }) {
     const size = toNumber(transactions.pageSize || txParams.pageSize, 30);
     return Math.max(1, Math.ceil(total / Math.max(1, size)));
   }, [transactions, txParams.pageSize]);
-  const pagedWarehouses = useMemo(
-    () =>
-      (warehouseStructure.warehouses || []).slice(
-        (warehousePage - 1) * warehousePageSize,
-        warehousePage * warehousePageSize
-      ),
-    [warehouseStructure.warehouses, warehousePage, warehousePageSize]
-  );
-  const pagedProducts = useMemo(
-    () => products.slice((productPage - 1) * productPageSize, productPage * productPageSize),
-    [products, productPage, productPageSize]
-  );
-  const pagedCategories = useMemo(
-    () => categories.slice((categoryPage - 1) * categoryPageSize, categoryPage * categoryPageSize),
-    [categories, categoryPage, categoryPageSize]
-  );
-  const pagedSuppliers = useMemo(
-    () => suppliers.slice((supplierPage - 1) * supplierPageSize, supplierPage * supplierPageSize),
-    [suppliers, supplierPage, supplierPageSize]
-  );
+  const pagedWarehouses = warehouseStructure.warehouses || [];
+  const pagedProducts = products;
+  const pagedCategories = categories;
+  const pagedSuppliers = suppliers;
   const reportStockByBranchRows = reports?.stockByBranch || [];
   const pagedReportStockByBranch = useMemo(
-    () =>
-      reportStockByBranchRows.slice(
-        (reportBranchPage - 1) * reportBranchPageSize,
-        reportBranchPage * reportBranchPageSize
-      ),
+    () => paginateItems(reportStockByBranchRows, reportBranchPage, reportBranchPageSize),
     [reportStockByBranchRows, reportBranchPage, reportBranchPageSize]
   );
   const reportTopOutboundRows = reports?.topOutbound || [];
   const pagedReportTopOutbound = useMemo(
-    () =>
-      reportTopOutboundRows.slice(
-        (reportTopOutboundPage - 1) * reportTopOutboundPageSize,
-        reportTopOutboundPage * reportTopOutboundPageSize
-      ),
+    () => paginateItems(reportTopOutboundRows, reportTopOutboundPage, reportTopOutboundPageSize),
     [reportTopOutboundRows, reportTopOutboundPage, reportTopOutboundPageSize]
   );
   const reportAuditLogRows = reports?.auditLogs || [];
   const pagedReportAuditLogs = useMemo(
-    () =>
-      reportAuditLogRows.slice(
-        (reportAuditLogPage - 1) * reportAuditLogPageSize,
-        reportAuditLogPage * reportAuditLogPageSize
-      ),
+    () => paginateItems(reportAuditLogRows, reportAuditLogPage, reportAuditLogPageSize),
     [reportAuditLogRows, reportAuditLogPage, reportAuditLogPageSize]
   );
+
+  useEffect(() => {
+    const total = warehouseStructure.total ?? (warehouseStructure.warehouses || []).length;
+    const maxPage = Math.max(1, Math.ceil(total / (warehousePageSize || 10)));
+    if (warehousePage > maxPage) setWarehousePage(maxPage);
+  }, [warehouseStructure.total, warehouseStructure.warehouses, warehousePage, warehousePageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(reportStockByBranchRows.length / (reportBranchPageSize || 10)));
+    if (reportBranchPage > maxPage) setReportBranchPage(maxPage);
+  }, [reportStockByBranchRows.length, reportBranchPage, reportBranchPageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(reportTopOutboundRows.length / (reportTopOutboundPageSize || 10)));
+    if (reportTopOutboundPage > maxPage) setReportTopOutboundPage(maxPage);
+  }, [reportTopOutboundRows.length, reportTopOutboundPage, reportTopOutboundPageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(reportAuditLogRows.length / (reportAuditLogPageSize || 10)));
+    if (reportAuditLogPage > maxPage) setReportAuditLogPage(maxPage);
+  }, [reportAuditLogRows.length, reportAuditLogPage, reportAuditLogPageSize]);
 
   useEffect(() => {
     setWarehousePage(1);
@@ -828,7 +834,7 @@ export default function InventoryAdminPage({ section }) {
       if (!Number.isFinite(parsedParentId) || !Number.isInteger(parsedParentId)) {
         throw new Error("Danh mục cha không hợp lệ.");
       }
-      const exists = (categories || []).some((item) => Number(item.id) === parsedParentId);
+      const exists = categoryOptions.some((item) => Number(item.id) === parsedParentId);
       if (!exists) throw new Error("Danh mục cha không tồn tại.");
       if (editingCategory?.id && Number(editingCategory.id) === parsedParentId) {
         throw new Error("Danh mục cha không thể là chính danh mục hiện tại.");
@@ -910,7 +916,7 @@ export default function InventoryAdminPage({ section }) {
     };
 
     const categoryId = productForm.categoryId ? Number(productForm.categoryId) : null;
-    if (categoryId != null && !(categories || []).some((item) => Number(item.id) === categoryId)) {
+    if (categoryId != null && !categoryOptions.some((item) => Number(item.id) === categoryId)) {
       throw new Error("Danh mục không hợp lệ.");
     }
 
@@ -1015,15 +1021,12 @@ export default function InventoryAdminPage({ section }) {
     await fetchData();
   };
 
-  const exportProductsCsv = () => {
-    const header = ["id", "sku", "name", "unit", "category", "isActive"];
-    const rows = (products || []).map((p) => [p.id, p.sku, p.name, p.unit, categoryMap.get(p.categoryId) || "", p.isActive]);
-    const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const exportProductsCsv = async () => {
+    const blob = await inventoryApi.exportCatalogProducts();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `danh-muc-kho-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `danh-muc-kho-${new Date().toISOString().substring(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1276,7 +1279,7 @@ export default function InventoryAdminPage({ section }) {
                 </table>
               </div>
               <TablePagination
-                totalItems={(warehouseStructure.warehouses || []).length}
+                totalItems={warehouseStructure.total ?? (warehouseStructure.warehouses || []).length}
                 currentPage={warehousePage}
                 pageSize={warehousePageSize}
                 onPageChange={setWarehousePage}
@@ -1292,9 +1295,9 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng sản phẩm", value: products.length },
-                  { label: "Danh mục", value: categories.length },
-                  { label: "Nhà cung cấp", value: suppliers.length }
+                  { label: "Tổng sản phẩm", value: catalogSummary.productCount },
+                  { label: "Danh mục", value: catalogSummary.categoryCount },
+                  { label: "Nhà cung cấp", value: catalogSummary.supplierCount }
                 ]}
               />
 
@@ -1308,7 +1311,7 @@ export default function InventoryAdminPage({ section }) {
                   </button>
                 </div>
                 <div className="table-toolbar inventory-form-actions">
-                  <button className="btn-ghost" onClick={exportProductsCsv}>Xuất CSV danh mục</button>
+                  <button className="btn-ghost" onClick={() => runAction(exportProductsCsv)}>Xuất CSV danh mục</button>
                   <label className="btn-ghost file-label">
                     Nhập CSV danh mục
                     <input
@@ -1371,7 +1374,7 @@ export default function InventoryAdminPage({ section }) {
                             onChange={(e) => updateProductForm("categoryId", e.target.value)}
                           >
                             <option value="">-- Chưa gán --</option>
-                            {categories.map((category) => (
+                            {categoryOptions.map((category) => (
                               <option key={category.id} value={category.id}>
                                 {category.categoryName}
                               </option>
@@ -1552,7 +1555,7 @@ export default function InventoryAdminPage({ section }) {
                         type="button"
                         className="btn-primary"
                         onClick={() => runAction(productModalMode === "edit" ? handleUpdateProduct : handleCreateProduct)}
-                        disabled={savingProduct}
+                        disabled={savingProduct || !categoryOptionsReady}
                       >
                         {savingProduct ? "Đang lưu..." : (productModalMode === "edit" ? "Cập nhật sản phẩm" : "Lưu sản phẩm")}
                       </button>
@@ -1603,7 +1606,7 @@ export default function InventoryAdminPage({ section }) {
                           <td>{p.sku}</td>
                           <td>{p.name}</td>
                           <td>{p.unit}</td>
-                          <td>{categoryMap.get(p.categoryId) || "-"}</td>
+                          <td>{p._categoryName || "-"}</td>
                           <td>{toNumber(p.costPrice, 0).toLocaleString()}</td>
                           <td>{toNumber(p.retailPrice, 0).toLocaleString()}</td>
                           <td>{toNumber(p.servicePrice, 0).toLocaleString()}</td>
@@ -1639,7 +1642,7 @@ export default function InventoryAdminPage({ section }) {
                 </table>
               </div>
               <TablePagination
-                totalItems={(products || []).length}
+                totalItems={catalogSummary.productCount || 0}
                 currentPage={productPage}
                 pageSize={productPageSize}
                 onPageChange={setProductPage}
@@ -1655,9 +1658,9 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng danh mục", value: categories.length },
-                  { label: "Sản phẩm đã phân loại", value: products.filter((p) => !!p.categoryId).length },
-                  { label: "Sản phẩm chưa gán danh mục", value: products.filter((p) => !p.categoryId).length }
+                  { label: "Tổng danh mục", value: catalogSummary.categoryCount },
+                  { label: "Sản phẩm đã phân loại", value: catalogSummary.classified },
+                  { label: "Sản phẩm chưa gán danh mục", value: catalogSummary.unclassified }
                 ]}
               />
 
@@ -1699,7 +1702,7 @@ export default function InventoryAdminPage({ section }) {
                             onChange={(e) => updateCategoryForm("parentId", e.target.value)}
                           >
                             <option value="">-- Không có --</option>
-                            {categories
+                            {categoryOptions
                               .filter((item) => !editingCategory || Number(item.id) !== Number(editingCategory.id))
                               .map((item) => (
                                 <option key={item.id} value={item.id}>
@@ -1738,7 +1741,7 @@ export default function InventoryAdminPage({ section }) {
                       <button
                         className="btn-primary"
                         onClick={() => runAction(categoryModalMode === "edit" ? handleUpdateCategory : handleCreateCategory)}
-                        disabled={savingCategory}
+                        disabled={savingCategory || !categoryOptionsReady}
                       >
                         {savingCategory ? "Đang lưu..." : (categoryModalMode === "edit" ? "Cập nhật danh mục" : "Lưu danh mục")}
                       </button>
@@ -1768,10 +1771,10 @@ export default function InventoryAdminPage({ section }) {
                         <tr key={category.id}>
                           <td className="td-id">#{category.id}</td>
                           <td>{category.categoryName || "-"}</td>
-                          <td>{category.parentId ? (categoryMap.get(category.parentId) || `#${category.parentId}`) : "-"}</td>
+                          <td>{category.parentId ? (category._parentName || `#${category.parentId}`) : "-"}</td>
                           <td>{category.description || "-"}</td>
                           <td>{category.isDepositRequired ? "Có" : "Không"}</td>
-                          <td>{toNumber(productCountByCategory.get(String(category.id)), 0)}</td>
+                          <td>{toNumber(category._productCount, 0)}</td>
                           <td>
                             <div className="row-actions">
                               <button className="btn-icon" onClick={() => openEditCategoryModal(category)}>
@@ -1789,7 +1792,7 @@ export default function InventoryAdminPage({ section }) {
                 </table>
               </div>
               <TablePagination
-                totalItems={(categories || []).length}
+                totalItems={catalogSummary.categoryCount || 0}
                 currentPage={categoryPage}
                 pageSize={categoryPageSize}
                 onPageChange={setCategoryPage}
@@ -1805,9 +1808,9 @@ export default function InventoryAdminPage({ section }) {
             <>
               <StatCards
                 items={[
-                  { label: "Tổng nhà cung cấp", value: suppliers.length },
-                  { label: "Sản phẩm hiện có", value: products.length },
-                  { label: "Danh mục hiện có", value: categories.length }
+                  { label: "Tổng nhà cung cấp", value: catalogSummary.supplierCount },
+                  { label: "Sản phẩm hiện có", value: catalogSummary.productCount },
+                  { label: "Danh mục hiện có", value: catalogSummary.categoryCount }
                 ]}
               />
 
@@ -1867,7 +1870,7 @@ export default function InventoryAdminPage({ section }) {
                 </table>
               </div>
               <TablePagination
-                totalItems={(suppliers || []).length}
+                totalItems={catalogSummary.supplierCount || 0}
                 currentPage={supplierPage}
                 pageSize={supplierPageSize}
                 onPageChange={setSupplierPage}

@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRef } from "react";
 import { getAdminChangeLogs } from "../api/auditLogApi";
 import TablePagination from "@shared/components/TablePagination";
 import "./AdminPage.css";
@@ -8,19 +9,19 @@ const ACTION_OPTIONS = [
   { value: "", label: "Tất cả hành động" },
   { value: "CREATE", label: "Thêm mới" },
   { value: "UPDATE", label: "Cập nhật" },
-  { value: "DELETE", label: "X�a" },
+  { value: "DELETE", label: "Xóa" },
 ];
 
 const TABLE_LABELS = {
   Branches: "Chi nhánh",
   Staffs: "Nhân sự",
   Customers: "Khách hàng",
-  Roles: "Vai tr�",
-  VehicleBrands: "H�ng xe",
-  VehicleModels: "D�ng xe",
+  Roles: "Vai trò",
+  VehicleBrands: "Hãng xe",
+  VehicleModels: "Dòng xe",
   Services: "Dịch vụ",
   SalaryCoefficients: "Hệ số lương",
-  SalaryRequests: "Yêu cầu luong",
+  SalaryRequests: "Yêu cầu lương",
   SalaryProfiles: "Hồ sơ lương",
   Warehouses: "Kho",
   InventoryItems: "Vật tư",
@@ -29,21 +30,21 @@ const TABLE_LABELS = {
 
 const FIELD_LABELS = {
   fullName: "Họ tên",
-  name: "T�n",
-  code: "M�",
+  name: "Tên",
+  code: "Mã",
   status: "Trạng thái",
   isActive: "Kích hoạt",
   email: "Email",
   phoneNumber: "Số điện thoại",
   address: "Địa chỉ",
-  roleId: "Vai tr�",
-  roleName: "T�n vai tr�",
+  roleId: "Vai trò",
+  roleName: "Tên vai trò",
   branchId: "Chi nhánh",
   branchName: "Tên chi nhánh",
   baseSalary: "Lương cơ bản",
   salaryCoefficient: "Hệ số lương",
   allowance: "Phụ cấp",
-  note: "Ghi ch�",
+  note: "Ghi chú",
 };
 
 const IGNORED_FIELDS = new Set([
@@ -64,7 +65,7 @@ function actionLabel(action) {
   const normalized = String(action || "").toUpperCase();
   if (normalized === "CREATE") return "Thêm mới";
   if (normalized === "UPDATE") return "Cập nhật";
-  if (normalized === "DELETE") return "X�a";
+  if (normalized === "DELETE") return "Xóa";
   return normalized || "Khác";
 }
 
@@ -183,7 +184,7 @@ function buildSummary(log) {
   const oldRecord = normalizeRecord(safeParseJson(log.oldValue));
   const newRecord = normalizeRecord(safeParseJson(log.newValue));
   if (action === "CREATE") return `Đã thêm mới: ${summarizeRecord(newRecord)}`;
-  if (action === "DELETE") return `Đã x�a: ${summarizeRecord(oldRecord)}`;
+  if (action === "DELETE") return `Đã xóa: ${summarizeRecord(oldRecord)}`;
   return summarizeUpdate(oldRecord, newRecord);
 }
 
@@ -192,6 +193,7 @@ export default function AdminChangeLogPage() {
   const [error, setError] = useState("");
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
+  const requestSequence = useRef(0);
   const [filters, setFilters] = useState({
     page: 1,
     pageSize: 30,
@@ -223,21 +225,24 @@ export default function AdminChangeLogPage() {
   );
 
   const fetchLogs = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError("");
     try {
       const res = await getAdminChangeLogs(filters);
+      if (sequence !== requestSequence.current) return;
       setLogs(res?.items || []);
       setTotal(Number(res?.total || 0));
     } catch (err) {
-      setError(err.message || "Không tải được nhật ký thay đổi.");
+      if (sequence === requestSequence.current) setError(err.message || "Không tải được nhật ký thay đổi.");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   }, [filters]);
 
   useEffect(() => {
     fetchLogs();
+    return () => { requestSequence.current += 1; };
   }, [fetchLogs]);
 
   const totalPages = useMemo(
@@ -322,7 +327,7 @@ export default function AdminChangeLogPage() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>M� log</th>
+                <th>Mã log</th>
                 <th>Thời gian</th>
                 <th>Hành động</th>
                 <th>Danh mục</th>

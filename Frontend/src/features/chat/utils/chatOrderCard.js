@@ -124,7 +124,7 @@ export function buildOrderCardMessagePayload(orderCard) {
 export function formatOrderAmount(value) {
   const amount = toNumber(value);
   if (amount === null) return "";
-  return `${moneyFormatter.format(Math.round(amount))}d`;
+  return `${moneyFormatter.format(Math.round(amount))}₫`;
 }
 
 export function getOrderTypeLabel(orderType) {

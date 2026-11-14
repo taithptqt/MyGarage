@@ -1,16 +1,5 @@
-const ADMIN_FALLBACK_EMAIL = "hieuvo.23102004@gmail.com";
-
 function normalizeRoleCode(user) {
   return String(user?.roleCode || "").toUpperCase();
-}
-
-function normalizeRoleName(user) {
-  return String(user?.role || "").toLowerCase();
-}
-
-function hasAdminFallback(user) {
-  const roleName = normalizeRoleName(user);
-  return roleName === "admin" || String(user?.email || "").toLowerCase() === ADMIN_FALLBACK_EMAIL;
 }
 
 export function isRouteAllowed(user, allowedRoles) {
@@ -18,15 +7,7 @@ export function isRouteAllowed(user, allowedRoles) {
   if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return true;
 
   const roleCode = normalizeRoleCode(user);
-  if (allowedRoles.includes(roleCode)) {
-    return true;
-  }
-
-  if (allowedRoles.includes("ADMIN") && hasAdminFallback(user)) {
-    return true;
-  }
-
-  return false;
+  return allowedRoles.includes(roleCode);
 }
 
 export function getUnauthorizedRedirectPath(user) {

@@ -14,7 +14,7 @@ function pickNullable(source, keys) {
   return null;
 }
 
-export function mapAuthUserPayload(data, tokenOverride = null) {
+export function mapAuthUserPayload(data) {
   if (!data) return null;
 
   const role = pickText(data, ["role", "Role"]).trim();
@@ -33,7 +33,6 @@ export function mapAuthUserPayload(data, tokenOverride = null) {
     branchName: pickText(data, ["branchName", "BranchName"]),
     citizenId: isStaff ? pickText(data, ["citizenId", "CitizenId"]) : "",
     dateOfBirth: isStaff ? pickText(data, ["dateOfBirth", "DateOfBirth"]) : "",
-    token: tokenOverride || pickText(data, ["token", "Token"]),
   };
 }
 

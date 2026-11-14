@@ -28,7 +28,7 @@ const TABS = [
   { id: "vehicles", label: "Xe trong khoang" },
   { id: "usage", label: "Theo dõi sử dụng" },
   { id: "layout", label: "Sơ đồ & điều phối" },
-  { id: "alerts", label: "Cầnh b�o" },
+  { id: "alerts", label: "Cảnh báo" },
   { id: "stats", label: "Thống kê" },
 ];
 
@@ -152,6 +152,20 @@ function formatHours(value) {
   return `${toNumber(value, 0).toFixed(2)}h`;
 }
 
+function paginateItems(items, currentPage, pageSize) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const safePageSize = Math.max(1, Number(pageSize) || 10);
+  const totalPages = Math.max(1, Math.ceil(items.length / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(currentPage) || 1), totalPages);
+  const startIndex = (safePage - 1) * safePageSize;
+  const endIndex = Math.min(startIndex + safePageSize, items.length);
+  const result = [];
+  for (let i = startIndex; i < endIndex; i++) {
+    result.push(items[i]);
+  }
+  return result;
+}
+
 function getFriendlyErrorMessage(err, fallbackMessage) {
   const statusCode = err?.response?.status;
   const apiMessage = err?.response?.data?.message;
@@ -233,9 +247,9 @@ function BayForm({ initial, branches, onSubmit, onCancel, saving }) {
 
       <FormRow>
         <div className="form-group">
-          <label>Chi nh�nh *</label>
+          <label>Chi nhánh *</label>
           <select name="branchId" value={form.branchId} onChange={handleChange} required>
-            <option value="">Chọn chi nh�nh</option>
+            <option value="">Chọn chi nhánh</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name}
@@ -387,7 +401,7 @@ export default function BayManagementPage({ section }) {
   const [suggestions, setSuggestions] = useState([]);
 
   const refreshLookups = useCallback(async () => {
-    const response = await bayApi.getLookups({ takeVehicles: 1500 });
+    const response = await bayApi.getLookups({ takeVehicles: 200 });
     setLookups({
       branches: dedupeBranches(response?.branches || []),
       vehicles: response?.vehicles || [],
@@ -514,7 +528,7 @@ export default function BayManagementPage({ section }) {
     try {
       const [vehicleRes, historyRes] = await Promise.all([
         bayApi.getBayVehicles(bayId),
-        bayApi.getBayHistory(bayId, { take: 200 }),
+        bayApi.getBayHistory(bayId, { take: 50 }),
       ]);
       setSelectedBayVehicles(vehicleRes || { vehicles: [] });
       setSelectedBayHistory(historyRes || { items: [] });
@@ -543,21 +557,41 @@ export default function BayManagementPage({ section }) {
   const activeVehicles = selectedBayVehicles?.vehicles || [];
   const visibleRows = rows || [];
   const pagedVisibleRows = useMemo(
-    () => visibleRows.slice((listPage - 1) * listPageSize, listPage * listPageSize),
+    () => paginateItems(visibleRows, listPage, listPageSize),
     [visibleRows, listPage, listPageSize]
   );
   const pagedUsageRows = useMemo(
-    () => (usage.byBay || []).slice((usagePage - 1) * usagePageSize, usagePage * usagePageSize),
+    () => paginateItems(usage.byBay || [], usagePage, usagePageSize),
     [usage.byBay, usagePage, usagePageSize]
   );
   const pagedHistoryRows = useMemo(
-    () => (selectedBayHistory.items || []).slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize),
+    () => paginateItems(selectedBayHistory.items || [], historyPage, historyPageSize),
     [selectedBayHistory.items, historyPage, historyPageSize]
   );
   const pagedAlertRows = useMemo(
-    () => (alerts.items || []).slice((alertPage - 1) * alertPageSize, alertPage * alertPageSize),
+    () => paginateItems(alerts.items || [], alertPage, alertPageSize),
     [alerts.items, alertPage, alertPageSize]
   );
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(visibleRows.length / (listPageSize || 10)));
+    if (listPage > maxPage) setListPage(maxPage);
+  }, [visibleRows.length, listPage, listPageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((usage.byBay || []).length / (usagePageSize || 10)));
+    if (usagePage > maxPage) setUsagePage(maxPage);
+  }, [usage.byBay, usagePage, usagePageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((selectedBayHistory.items || []).length / (historyPageSize || 10)));
+    if (historyPage > maxPage) setHistoryPage(maxPage);
+  }, [selectedBayHistory.items, historyPage, historyPageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((alerts.items || []).length / (alertPageSize || 10)));
+    if (alertPage > maxPage) setAlertPage(maxPage);
+  }, [alerts.items, alertPage, alertPageSize]);
 
   useEffect(() => {
     setListPage(1);
@@ -574,7 +608,7 @@ export default function BayManagementPage({ section }) {
 
     try {
       await task();
-      setFeedback(successMessage || "Thao t�c th�nh c�ng.");
+      setFeedback(successMessage || "Thao tác thành công.");
       await refreshDashboard();
       if (options.reloadBayId || selectedBayId) {
         await loadSelectedBayDetails(options.reloadBayId || selectedBayId);
@@ -667,7 +701,7 @@ export default function BayManagementPage({ section }) {
         serviceStatus: assignForm.serviceStatus || null,
         note: assignForm.note || null,
       }),
-      "Đã g�n xe v�o khoang.",
+      "Đã gán xe vào khoang.",
       { reloadBayId: bayId }
     ).then(() => {
       setAssignForm((prev) => ({ ...prev, vehicleId: "", note: "" }));
@@ -843,13 +877,13 @@ export default function BayManagementPage({ section }) {
                       <th>STT</th>
                       <th>Mã</th>
                       <th>Tên khoang</th>
-                      <th>Chi nh�nh</th>
+                      <th>Chi nhánh</th>
                       <th>Khu vực</th>
                       <th>Trạng thái</th>
                       <th>Sức chứa</th>
                       <th>Đang chứa</th>
                       <th>Mức sử dụng</th>
-                      <th className="th-center">Thao t�c</th>
+                      <th className="th-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -946,9 +980,9 @@ export default function BayManagementPage({ section }) {
                       <tr>
                         <th>Biển số</th>
                         <th>Dòng xe</th>
-                        <th>Ph�n kh�c</th>
+                        <th>Phân khúc</th>
                         <th>Thời gian trong khoang</th>
-                        <th className="th-center">Thao t�c</th>
+                        <th className="th-center">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -987,7 +1021,7 @@ export default function BayManagementPage({ section }) {
                 <div className="bay-panel-head"><h3>Gán / điều phối xe</h3></div>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleAssignVehicle}>
-                  <label>G�n xe v�o khoang</label>
+                  <label>Gán xe vào khoang</label>
                   <select className="search-input" value={assignForm.vehicleId} onChange={(event) => setAssignForm((prev) => ({ ...prev, vehicleId: event.target.value }))}>
                     <option value="">Chọn xe</option>
                     {(lookups.vehicles || []).map((vehicle) => (
@@ -998,7 +1032,7 @@ export default function BayManagementPage({ section }) {
                   </select>
                   <input className="search-input" placeholder="Trạng thái sửa chữa (tùy chọn)" value={assignForm.serviceStatus} onChange={(event) => setAssignForm((prev) => ({ ...prev, serviceStatus: event.target.value }))} />
                   <input className="search-input" placeholder="Ghi chú (tùy chọn)" value={assignForm.note} onChange={(event) => setAssignForm((prev) => ({ ...prev, note: event.target.value }))} />
-                  <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>G�n xe</button>
+                  <button className="btn-primary" type="submit" disabled={saving || !selectedBayId}>Gán xe</button>
                 </form>
 
                 <form className="admin-form bay-mini-form" onSubmit={handleMoveVehicle}>
@@ -1247,11 +1281,11 @@ export default function BayManagementPage({ section }) {
                   </thead>
                   <tbody>
                     {(alerts.items || []).length === 0 ? (
-                      <tr><td colSpan={5}><div className="empty-state"><p>Không c� cầnh b�o.</p></div></td></tr>
+                  <tr><td colSpan={5}><div className="empty-state"><p>Không có cảnh báo.</p></div></td></tr>
                     ) : (
                       pagedAlertRows.map((item, idx) => (
                         <tr key={`${item.type}-${item.bayId}-${idx}`}>
-                          <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-?anger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
+                          <td><span className={`badge ${item.severity === "CRITICAL" ? "badge-danger" : item.severity === "HIGH" ? "badge-warning" : "badge-inactive"}`}>{item.severity}</span></td>
                           <td>{item.type}</td>
                           <td>{item.code} - {item.name}</td>
                           <td>{item.message}</td>
@@ -1307,7 +1341,7 @@ export default function BayManagementPage({ section }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Chi nh�nh</th>
+                      <th>Chi nhánh</th>
                       <th>Số khoang</th>
                       <th>Sức chứa</th>
                       <th>Đang chứa</th>

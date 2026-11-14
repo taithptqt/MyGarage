@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "check:encoding": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-encoding.ps1",
+    "test": "node --test src/app/collectPages.test.js src/features/retail/api/stockBatches.test.js src/features/payment/api/paymentHistoryPage.test.js src/horizon/views/admin/accounting/api/invoiceTaxSummary.test.js src/features/cars/api/vehiclePaging.test.js src/features/admin/api/salaryProfilePage.test.js src/features/admin/api/salaryRequestPage.test.js tests/module8DualRouteAndPaging.test.js tests/module9DualRouteAndPaging.test.js tests/module10DualRouteAndPaging.test.js tests/module11DualRouteAndPaging.test.js tests/module12DualRouteAndPaging.test.js tests/pagedEnvelopeAndV1Standard.test.js",
     "build": "vite build",
-    "verify": "npm run check:encoding && npm run build",
+    "verify": "npm run check:encoding && npm test && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

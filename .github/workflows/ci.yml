@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   backend-build:
-    name: Backend Build (.NET 8)
+    name: Backend Build (.NET 10 LTS)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -33,7 +33,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Check transaction policy matrix (MustTx)
         run: pwsh ../scripts/check-transaction-policy.ps1
@@ -75,7 +75,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npm run verify
 
   docker-build:
     name: Docker Build

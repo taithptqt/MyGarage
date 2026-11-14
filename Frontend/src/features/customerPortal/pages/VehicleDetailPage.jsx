@@ -317,7 +317,7 @@ export default function VehicleDetailPage() {
                               </strong>
                             </div>
                             <span className="cp-chip cp-chip--soft">
-                              Thanh to�n: {row.paymentStatus || "�"}
+                              Thanh toán: {row.paymentStatus || "—"}
                             </span>
                             {row.invoiceUrl ? (
                               <a
@@ -369,7 +369,7 @@ export default function VehicleDetailPage() {
                                       ) : null}
                                       {sanitizeConditionWarnings(log.dashboardWarningLights) ? (
                                         <span className="cp-chip cp-chip--soft">
-                                          Đãn cầnh b�o: {sanitizeConditionWarnings(log.dashboardWarningLights)}
+                                          Đèn cảnh báo: {sanitizeConditionWarnings(log.dashboardWarningLights)}
                                         </span>
                                       ) : null}
                                     </div>
@@ -417,7 +417,7 @@ export default function VehicleDetailPage() {
                         </div>
                         <div className="cp-history-finance">
                           <span className="cp-chip cp-chip--soft">
-                            Thanh to�n: {row.paymentStatus || "�"}
+                            Thanh toán: {row.paymentStatus || "—"}
                           </span>
                           {row.totalAmount != null ? (
                             <strong className="cp-history-invoice-amount">

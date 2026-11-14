@@ -1,4 +1,31 @@
 import { request, requestSafe } from "../../../../../app/apiClient";
+import { parseInvoiceTaxSummary } from "./invoiceTaxSummary";
+
+/**
+ * Executes a request targeting the modern /api/v1 route first,
+ * falling back to the legacy /api route if 404 is encountered.
+ */
+export async function requestWithDualRoute(v1Url, legacyUrl, options = {}) {
+  try {
+    return await request({ ...options, url: v1Url });
+  } catch (err) {
+    if ((err?.status === 404 || err?.response?.status === 404) && legacyUrl) {
+      return await request({ ...options, url: legacyUrl });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Safe version of requestWithDualRoute using requestSafe.
+ */
+export async function requestSafeWithDualRoute(v1Url, legacyUrl, options = {}) {
+  const result = await requestSafe({ ...options, url: v1Url });
+  if (!result.ok && (result.status === 404 || result.response?.status === 404) && legacyUrl) {
+    return await requestSafe({ ...options, url: legacyUrl });
+  }
+  return result;
+}
 
 function normalizeListResponse(data) {
   if (Array.isArray(data)) return data;
@@ -14,62 +41,77 @@ function normalizeFinanceRequestType(requestType) {
 }
 
 export async function getInvoices() {
-  const data = await request({ url: "/api/invoices", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/invoices", "/api/invoices", { method: "GET" });
   return normalizeListResponse(data);
 }
 
+export async function getInvoiceTaxSummary() {
+  const data = await requestWithDualRoute(
+    "/api/v1/invoices/tax-summary",
+    "/api/invoices/tax-summary",
+    { method: "GET" }
+  );
+  return parseInvoiceTaxSummary(data);
+}
+
 export async function getInvoiceDetails() {
-  const data = await request({ url: "/api/invoice-details", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/invoice-details", "/api/invoice-details", { method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getPayments() {
-  const data = await request({ url: "/api/payments", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/payments", "/api/payments", { method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function updatePayment(id, payload) {
-  return request({
-    url: `/api/payments/${id}`,
+  return requestWithDualRoute(`/api/v1/payments/${id}`, `/api/payments/${id}`, {
     method: "PUT",
     data: payload
   });
 }
 
 export async function transitionPaymentStatus(id, payload) {
-  return request({
-    url: `/api/payments/${id}/transition-status`,
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/payments/${id}/transition-status`,
+    `/api/payments/${id}/transition-status`,
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function getPaymentMethods() {
-  const data = await request({ url: "/api/payment-methods", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/payment-methods", "/api/payment-methods", { method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getRevenueSnapshots() {
-  const data = await request({ url: "/api/revenue-snapshots", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/revenue-snapshots", "/api/revenue-snapshots", { method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getBranches() {
-  const data = await request({ url: "/api/branches", method: "GET" });
+  const data = await requestWithDualRoute("/api/v1/branches", "/api/branches", { method: "GET" });
   return normalizeListResponse(data);
 }
 
 export async function getAuditLogs(params = {}) {
-  const data = await request({
-    url: "/api/audit-logs/admin-changes",
-    method: "GET",
-    params
-  });
+  const data = await requestWithDualRoute(
+    "/api/v1/audit-logs/admin-changes",
+    "/api/audit-logs/admin-changes",
+    {
+      method: "GET",
+      params
+    }
+  );
   return normalizeListResponse(data);
 }
 
-export async function fetchOptionalCollection(url) {
-  const result = await requestSafe({ url, method: "GET" });
+export async function fetchOptionalCollection(url, params) {
+  const v1Url = url.startsWith("/api/") ? `/api/v1/${url.slice(5)}` : url;
+  const result = await requestSafeWithDualRoute(v1Url, url, { method: "GET", params });
   if (result.ok) {
     return { available: true, items: normalizeListResponse(result.data), raw: result.data };
   }
@@ -77,71 +119,80 @@ export async function fetchOptionalCollection(url) {
 }
 
 export async function createAccountingTableRow(tableKey, payload) {
-  return request({
-    url: `/api/accounting/table/${tableKey}`,
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/table/${tableKey}`,
+    `/api/accounting/table/${tableKey}`,
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function updateAccountingTableRow(tableKey, id, payload) {
-  return request({
-    url: `/api/accounting/table/${tableKey}/${id}`,
-    method: "PUT",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/table/${tableKey}/${id}`,
+    `/api/accounting/table/${tableKey}/${id}`,
+    {
+      method: "PUT",
+      data: payload
+    }
+  );
 }
 
-export async function getAccountsPayable() {
-  return fetchOptionalCollection("/api/accounting/table/accounts-payable");
+export async function getAccountsPayable(params) {
+  return fetchOptionalCollection("/api/accounting/table/accounts-payable", params);
 }
 
-export async function getSupplierInvoices() {
-  return fetchOptionalCollection("/api/accounting/table/supplier-invoices");
+export async function getSupplierInvoices(params) {
+  return fetchOptionalCollection("/api/accounting/table/supplier-invoices", params);
 }
 
-export async function getSupplierPayments() {
-  return fetchOptionalCollection("/api/accounting/table/supplier-payments");
+export async function getSupplierPayments(params) {
+  return fetchOptionalCollection("/api/accounting/table/supplier-payments", params);
 }
 
-export async function getAccountingPeriods() {
-  return fetchOptionalCollection("/api/accounting/table/accounting-periods");
+export async function getAccountingPeriods(params) {
+  return fetchOptionalCollection("/api/accounting/table/accounting-periods", params);
 }
 
-export async function getChartOfAccounts() {
-  return fetchOptionalCollection("/api/accounting/table/chart-of-accounts");
+export async function getChartOfAccounts(params) {
+  return fetchOptionalCollection("/api/accounting/table/chart-of-accounts", params);
 }
 
-export async function getJournalEntries() {
-  return fetchOptionalCollection("/api/accounting/table/journal-entries");
+export async function getJournalEntries(params) {
+  return fetchOptionalCollection("/api/accounting/table/journal-entries", params);
 }
 
-export async function getJournalEntryLines() {
-  return fetchOptionalCollection("/api/accounting/table/journal-entry-lines");
+export async function getJournalEntryLines(params) {
+  return fetchOptionalCollection("/api/accounting/table/journal-entry-lines", params);
 }
 
-export async function getPayrollRuns() {
-  return fetchOptionalCollection("/api/accounting/table/payroll-runs");
+export async function getPayrollRuns(params) {
+  return fetchOptionalCollection("/api/accounting/table/payroll-runs", params);
 }
 
-export async function getPayrollPeriods() {
-  return fetchOptionalCollection("/api/accounting/table/payroll-periods");
+export async function getPayrollPeriods(params) {
+  return fetchOptionalCollection("/api/accounting/table/payroll-periods", params);
 }
 
-export async function getPayrollItems() {
-  return fetchOptionalCollection("/api/accounting/table/payroll-items");
+export async function getPayrollItems(params) {
+  return fetchOptionalCollection("/api/accounting/table/payroll-items", params);
 }
 
-export async function getPayslips() {
-  return fetchOptionalCollection("/api/accounting/table/payslips");
+export async function getPayslips(params) {
+  return fetchOptionalCollection("/api/accounting/table/payslips", params);
 }
 
 export async function createPayrollPeriod(payload) {
-  return request({
-    url: "/api/accounting/payroll-periods",
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    "/api/v1/accounting/payroll-periods",
+    "/api/accounting/payroll-periods",
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function createPayrollRun(payload) {
@@ -153,39 +204,38 @@ export async function createPayrollItem(payload) {
 }
 
 export async function createPayslip(payload) {
-  return request({
-    url: "/api/accounting/payslips",
+  return requestWithDualRoute("/api/v1/accounting/payslips", "/api/accounting/payslips", {
     method: "POST",
     data: payload
   });
 }
 
-export async function getTaxFilings() {
-  return fetchOptionalCollection("/api/accounting/table/tax-filings");
+export async function getTaxFilings(params) {
+  return fetchOptionalCollection("/api/accounting/table/tax-filings", params);
 }
 
-export async function getLegalDocuments() {
-  return fetchOptionalCollection("/api/accounting/table/legal-documents");
+export async function getLegalDocuments(params) {
+  return fetchOptionalCollection("/api/accounting/table/legal-documents", params);
 }
 
-export async function getDocumentAttachments() {
-  return fetchOptionalCollection("/api/accounting/table/document-attachments");
+export async function getDocumentAttachments(params) {
+  return fetchOptionalCollection("/api/accounting/table/document-attachments", params);
 }
 
-export async function getTrialBalanceReport() {
-  return fetchOptionalCollection("/api/accounting/reports/trial-balance");
+export async function getTrialBalanceReport(params) {
+  return fetchOptionalCollection("/api/accounting/reports/trial-balance", params);
 }
 
-export async function getSupplierPayableSummaryReport() {
-  return fetchOptionalCollection("/api/accounting/reports/supplier-payable-summary");
+export async function getSupplierPayableSummaryReport(params) {
+  return fetchOptionalCollection("/api/accounting/reports/supplier-payable-summary", params);
 }
 
-export async function getPayrollRunSummaryReport() {
-  return fetchOptionalCollection("/api/accounting/reports/payroll-run-summary");
+export async function getPayrollRunSummaryReport(params) {
+  return fetchOptionalCollection("/api/accounting/reports/payroll-run-summary", params);
 }
 
-export async function getFinanceApprovalRequests() {
-  const primary = await fetchOptionalCollection("/api/accounting/table/finance-approval-requests");
+export async function getFinanceApprovalRequests(params) {
+  const primary = await fetchOptionalCollection("/api/accounting/table/finance-approval-requests", params);
   return { ...primary, source: "finance_approval_requests" };
 }
 
@@ -195,11 +245,14 @@ export async function createFinanceApprovalRequest(payload) {
     requestType: normalizeFinanceRequestType(payload?.requestType)
   };
 
-  const primary = await requestSafe({
-    url: "/api/accounting/table/finance-approval-requests",
-    method: "POST",
-    data: normalizedPayload
-  });
+  const primary = await requestSafeWithDualRoute(
+    "/api/v1/accounting/table/finance-approval-requests",
+    "/api/accounting/table/finance-approval-requests",
+    {
+      method: "POST",
+      data: normalizedPayload
+    }
+  );
   return {
     ok: primary.ok,
     data: primary.data,
@@ -208,11 +261,14 @@ export async function createFinanceApprovalRequest(payload) {
 }
 
 export async function updateFinanceApprovalRequest(id, payload) {
-  const primary = await requestSafe({
-    url: `/api/accounting/table/finance-approval-requests/${id}`,
-    method: "PUT",
-    data: payload
-  });
+  const primary = await requestSafeWithDualRoute(
+    `/api/v1/accounting/table/finance-approval-requests/${id}`,
+    `/api/accounting/table/finance-approval-requests/${id}`,
+    {
+      method: "PUT",
+      data: payload
+    }
+  );
   return {
     ok: primary.ok,
     data: primary.data,
@@ -221,53 +277,71 @@ export async function updateFinanceApprovalRequest(id, payload) {
 }
 
 export async function decideFinanceApproval(id, payload) {
-  return request({
-    url: `/api/accounting/finance-approvals/${id}/decision`,
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/finance-approvals/${id}/decision`,
+    `/api/accounting/finance-approvals/${id}/decision`,
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function postJournalEntry(id, postedBy) {
-  return request({
-    url: `/api/accounting/journal-entries/${id}/post`,
-    method: "POST",
-    data: { postedBy }
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/journal-entries/${id}/post`,
+    `/api/accounting/journal-entries/${id}/post`,
+    {
+      method: "POST",
+      data: { postedBy }
+    }
+  );
 }
 
 export async function approvePayrollRun(id, approvedBy) {
-  return request({
-    url: `/api/accounting/payroll-runs/${id}/approve`,
-    method: "POST",
-    data: { approvedBy }
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/payroll-runs/${id}/approve`,
+    `/api/accounting/payroll-runs/${id}/approve`,
+    {
+      method: "POST",
+      data: { approvedBy }
+    }
+  );
 }
 
 export async function markPayrollRunPaid(id, paidBy) {
-  return request({
-    url: `/api/accounting/payroll-runs/${id}/mark-paid`,
-    method: "POST",
-    data: { paidBy }
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/payroll-runs/${id}/mark-paid`,
+    `/api/accounting/payroll-runs/${id}/mark-paid`,
+    {
+      method: "POST",
+      data: { paidBy }
+    }
+  );
 }
 
 export async function cancelPayrollRun(id, payload = {}) {
-  return request({
-    url: `/api/accounting/payroll-runs/${id}/cancel`,
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/payroll-runs/${id}/cancel`,
+    `/api/accounting/payroll-runs/${id}/cancel`,
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function getStaffSalaryCoefficient(staffId, asOfDate) {
   const params = {};
   if (asOfDate) params.asOfDate = asOfDate;
-  return request({
-    url: `/api/accounting/staff-salary/${staffId}/coefficient`,
-    method: "GET",
-    params
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/staff-salary/${staffId}/coefficient`,
+    `/api/accounting/staff-salary/${staffId}/coefficient`,
+    {
+      method: "GET",
+      params
+    }
+  );
 }
 
 export async function getStaffBaseSalary(staffId, asOfDate, options = {}) {
@@ -276,43 +350,57 @@ export async function getStaffBaseSalary(staffId, asOfDate, options = {}) {
   if (typeof options.includeTierFallback === "boolean") {
     params.includeTierFallback = options.includeTierFallback;
   }
-  return request({
-    url: `/api/accounting/staff-salary/${staffId}/base`,
-    method: "GET",
-    params
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/staff-salary/${staffId}/base`,
+    `/api/accounting/staff-salary/${staffId}/base`,
+    {
+      method: "GET",
+      params
+    }
+  );
 }
 
 export async function createInitialSalaryRequest(staffId, payload) {
-  return request({
-    url: `/api/accounting/staff-salary/${staffId}/request-initial`,
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    `/api/v1/accounting/staff-salary/${staffId}/request-initial`,
+    `/api/accounting/staff-salary/${staffId}/request-initial`,
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function calculatePayrollForAllStaff(payload = {}) {
-  return request({
-    url: "/api/accounting/payroll-runs/calculate-all",
-    method: "POST",
-    data: payload
-  });
+  return requestWithDualRoute(
+    "/api/v1/accounting/payroll-runs/calculate-all",
+    "/api/accounting/payroll-runs/calculate-all",
+    {
+      method: "POST",
+      data: payload
+    }
+  );
 }
 
 export async function getAccountingDashboardV2(params = {}) {
-  return request({
-    url: "/api/accounting/dashboard-v2",
-    method: "GET",
-    params
-  });
+  return requestWithDualRoute(
+    "/api/v1/accounting/dashboard-v2",
+    "/api/accounting/dashboard-v2",
+    {
+      method: "GET",
+      params
+    }
+  );
 }
 
 export async function exportAccountingDashboardV2Csv(params = {}) {
-  return request({
-    url: "/api/accounting/dashboard-v2/export",
-    method: "GET",
-    params,
-    responseType: "blob"
-  });
+  return requestWithDualRoute(
+    "/api/v1/accounting/dashboard-v2/export",
+    "/api/accounting/dashboard-v2/export",
+    {
+      method: "GET",
+      params,
+      responseType: "blob"
+    }
+  );
 }
-

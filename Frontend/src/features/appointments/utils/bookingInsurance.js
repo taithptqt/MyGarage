@@ -61,7 +61,7 @@ function normalizeInsuranceFormMode(options) {
 
 function buildInsuranceIntakeNote(mode) {
   return mode === INSURANCE_FORM_MODE.BOOKING
-    ? "M?c mi?n th??ng v� h�nh th?c x? l� s? ??c c? v?n x�c nh?n khi ti?p nh?n xe."
+    ? "Mức miễn thường và hình thức xử lý sẽ được cố vấn xác nhận khi tiếp nhận xe."
     : "Thông tin bảo hiểm đã đủ để lễ tân chốt tiếp nhận và tư vấn.";
 }
 

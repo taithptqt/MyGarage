@@ -85,7 +85,7 @@ export function useMyAppointments() {
     setCancelling(cancelTarget.id);
     setError("");
     try {
-      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng t? h?y");
+      await cancelAppointment(cancelTarget.id, cancelReason || "Khách hàng tự hủy");
       closeCancelPopup();
       await loadAppointments();
     } catch (err) {

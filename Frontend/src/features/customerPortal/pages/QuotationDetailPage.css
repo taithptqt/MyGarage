@@ -231,7 +231,7 @@
   flex-wrap: wrap;
 }
 
-.cp-btn-?anger {
+.cp-btn-danger {
   border: 1px solid rgba(214, 67, 67, 0.4);
   background: #fff0f0;
   color: #c93f3f;

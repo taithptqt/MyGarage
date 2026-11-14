@@ -1,0 +1,659 @@
+using System.Globalization;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using MyGarage.Data;
+using MyGarage.Enums;
+using MyGarage.Interfaces;
+using MyGarage.Services;
+using Microsoft.EntityFrameworkCore.Storage;
+using MyGarage.Application.Common.Pagination;
+using MyGarage.Extensions;
+using MyGarage.Application.Payroll;
+
+namespace MyGarage.Controllers;
+
+[Route("api/salary-admin")]
+[Route("api/v1/salary-admin")]
+[ApiController]
+[Authorize(Roles = "Staff")]
+public class SalaryAdminController : ControllerBase
+{
+    private const string FinanceApprovalStatusPending = nameof(FinanceApprovalRequestStatusCode.PENDING);
+    private const string FinanceApprovalStatusApproved = nameof(FinanceApprovalRequestStatusCode.APPROVED);
+    private const string FinanceApprovalStatusRejected = nameof(FinanceApprovalRequestStatusCode.REJECTED);
+    private const string StaffSalaryStatusActive = nameof(StaffSalaryProfileStatusCode.ACTIVE);
+
+    private readonly IAccountingCrudService _crud;
+    private readonly IGarageContext _db;
+    private readonly SalaryProfileListQuery _salaryProfiles;
+
+    public SalaryAdminController(IAccountingCrudService crud, IGarageContext db, SalaryProfileListQuery salaryProfiles)
+    {
+        _crud = crud;
+        _db = db;
+        _salaryProfiles = salaryProfiles;
+    }
+
+    [HttpGet("profiles")]
+    public async Task<IActionResult> GetSalaryProfiles([FromQuery] long? branchId = null, [FromQuery] int? page = null, [FromQuery] int? pageSize = null)
+    {
+        if (!CanViewSalaryModule()) return Forbid();
+        if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
+
+        var (currentPage, size) = PaginationExtensions.NormalizePagination(page, pageSize);
+        var result = await _salaryProfiles.ExecuteAsync(branchId, currentPage, size, HttpContext.RequestAborted);
+        return Ok(PagedEnvelope<Dictionary<string, object?>>.Create(result.Items, result.Total ?? result.Items.Count, currentPage, size));
+    }
+
+    [HttpPost("profiles")]
+    public async Task<IActionResult> CreateSalaryProfile([FromBody] SalaryProfileUpsertDto request)
+    {
+        if (!IsAdminStaff()) return Forbid();
+        if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
+
+        var validation = ValidateSalaryProfileRequest(request);
+        if (!string.IsNullOrWhiteSpace(validation))
+        {
+            return BadRequest(new { message = validation });
+        }
+
+        var staff = await _db.Staffs.AsNoTracking().FirstOrDefaultAsync(s => s.Id == request.StaffId && s.IsDeleted != true);
+        if (staff is null) return NotFound(new { message = $"Staff #{request.StaffId} not found." });
+
+        var branchId = request.BranchId ?? staff.BranchId;
+        var effectiveFrom = DateOnly.FromDateTime(request.EffectiveFrom!.Value.Date);
+        var effectiveTo = request.EffectiveTo.HasValue ? DateOnly.FromDateTime(request.EffectiveTo.Value.Date) : (DateOnly?)null;
+        var status = NormalizeSalaryProfileStatus(request.Status);
+        var currentUserId = ResolveCurrentUserId();
+
+        var createdId = await _crud.ScalarAsync<long?>(
+            """
+            DECLARE @inserted TABLE (id bigint);
+            INSERT INTO dbo.staff_salary_profiles
+            (
+                staff_id,
+                branch_id,
+                base_salary,
+                effective_from,
+                effective_to,
+                status,
+                note,
+                updated_by,
+                created_at,
+                updated_at
+            )
+            OUTPUT INSERTED.id INTO @inserted(id)
+            VALUES
+            (
+                @staffId,
+                @branchId,
+                @baseSalary,
+                @effectiveFrom,
+                @effectiveTo,
+                @status,
+                @note,
+                @updatedBy,
+                SYSDATETIME(),
+                SYSDATETIME()
+            );
+            SELECT TOP 1 id FROM @inserted;
+            """,
+            [
+                new SqlParameter("@staffId", request.StaffId),
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
+                new SqlParameter("@baseSalary", request.BaseSalary!.Value),
+                new SqlParameter("@effectiveFrom", effectiveFrom.ToDateTime(TimeOnly.MinValue)),
+                new SqlParameter("@effectiveTo", effectiveTo.HasValue ? effectiveTo.Value.ToDateTime(TimeOnly.MinValue) : DBNull.Value),
+                new SqlParameter("@status", status),
+                new SqlParameter("@note", (object?)request.Note?.Trim() ?? DBNull.Value),
+                new SqlParameter("@updatedBy", (object?)currentUserId ?? DBNull.Value)
+            ]);
+
+        if (!createdId.HasValue)
+        {
+            return BadRequest(new { message = "Failed to create salary profile." });
+        }
+
+        var profile = await GetSalaryProfileByIdAsync(createdId.Value);
+        return Ok(profile);
+    }
+
+    [HttpPut("profiles/{id:long}")]
+    public async Task<IActionResult> UpdateSalaryProfile(long id, [FromBody] SalaryProfileUpsertDto request)
+    {
+        if (!IsAdminStaff()) return Forbid();
+        if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
+
+        var existing = await GetSalaryProfileByIdAsync(id);
+        if (existing is null) return NotFound();
+
+        var validation = ValidateSalaryProfileRequest(request);
+        if (!string.IsNullOrWhiteSpace(validation))
+        {
+            return BadRequest(new { message = validation });
+        }
+
+        var staff = await _db.Staffs.AsNoTracking().FirstOrDefaultAsync(s => s.Id == request.StaffId && s.IsDeleted != true);
+        if (staff is null) return NotFound(new { message = $"Staff #{request.StaffId} not found." });
+
+        var branchId = request.BranchId ?? staff.BranchId;
+        var effectiveFrom = DateOnly.FromDateTime(request.EffectiveFrom!.Value.Date);
+        var effectiveTo = request.EffectiveTo.HasValue ? DateOnly.FromDateTime(request.EffectiveTo.Value.Date) : (DateOnly?)null;
+        var status = NormalizeSalaryProfileStatus(request.Status);
+        var currentUserId = ResolveCurrentUserId();
+
+        await _crud.ExecuteAsync(
+            """
+            UPDATE dbo.staff_salary_profiles
+            SET
+                staff_id = @staffId,
+                branch_id = @branchId,
+                base_salary = @baseSalary,
+                effective_from = @effectiveFrom,
+                effective_to = @effectiveTo,
+                status = @status,
+                note = @note,
+                updated_by = @updatedBy,
+                updated_at = SYSDATETIME()
+            WHERE id = @id;
+            """,
+            [
+                new SqlParameter("@id", id),
+                new SqlParameter("@staffId", request.StaffId),
+                new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value),
+                new SqlParameter("@baseSalary", request.BaseSalary!.Value),
+                new SqlParameter("@effectiveFrom", effectiveFrom.ToDateTime(TimeOnly.MinValue)),
+                new SqlParameter("@effectiveTo", effectiveTo.HasValue ? effectiveTo.Value.ToDateTime(TimeOnly.MinValue) : DBNull.Value),
+                new SqlParameter("@status", status),
+                new SqlParameter("@note", (object?)request.Note?.Trim() ?? DBNull.Value),
+                new SqlParameter("@updatedBy", (object?)currentUserId ?? DBNull.Value)
+            ]);
+
+        var profile = await GetSalaryProfileByIdAsync(id);
+        return Ok(profile);
+    }
+
+    [HttpDelete("profiles/{id:long}")]
+    public async Task<IActionResult> DeleteSalaryProfile(long id)
+    {
+        if (!IsAdminStaff()) return Forbid();
+        if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
+
+        var affected = await _crud.ExecuteAsync(
+            "DELETE FROM dbo.staff_salary_profiles WHERE id = @id;",
+            [new SqlParameter("@id", id)]);
+        if (affected <= 0) return NotFound();
+
+        return Ok(new { message = "Salary profile deleted." });
+    }
+
+    [HttpGet("requests")]
+    public async Task<IActionResult> GetInitialSalaryRequests([FromQuery] string? status = null, [FromQuery] long? branchId = null,
+        [FromQuery] int? page = null, [FromQuery] int? pageSize = null)
+    {
+        if (!CanViewSalaryModule()) return Forbid();
+        if (!await EnsureTableAsync("finance-approval-requests", "finance_approval_requests")) return NotFound();
+
+        var normalizedStatus = string.IsNullOrWhiteSpace(status) || string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : status.Trim().ToUpperInvariant();
+
+        var (currentPage, size) = PaginationExtensions.NormalizePagination(page, pageSize);
+        var offset = ((long)currentPage - 1) * size;
+        var where = """
+            WHERE r.request_type = 'PAYROLL_ADJUSTMENT'
+              AND JSON_VALUE(r.request_payload, '$.requestSubtype') = 'STAFF_INITIAL_SALARY'
+              AND (@status IS NULL OR UPPER(r.status) = @status)
+              AND (@branchId IS NULL OR TRY_CONVERT(bigint, JSON_VALUE(r.request_payload, '$.branchId')) = @branchId)
+            """;
+        List<SqlParameter> FilterParameters() =>
+        [
+            new SqlParameter("@status", (object?)normalizedStatus ?? DBNull.Value),
+            new SqlParameter("@branchId", (object?)branchId ?? DBNull.Value)
+        ];
+        var totals = await _crud.QueryAsync("""
+            SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN UPPER(r.status) + '|' = 'PENDING|' THEN 1 ELSE 0 END), 0) AS pending_count,
+                COALESCE(SUM(CASE WHEN UPPER(r.status) + '|' = 'APPROVED|' THEN 1 ELSE 0 END), 0) AS approved_count
+            FROM dbo.finance_approval_requests r
+            """ + " " + where, FilterParameters());
+        var summary = totals.Single();
+        var total = Convert.ToInt32(summary["total"]);
+
+        IReadOnlyList<Dictionary<string, object?>> rows;
+        if (offset >= total)
+        {
+            rows = [];
+        }
+        else
+        {
+            var sql = """
+                SELECT
+                    r.id,
+                    r.request_type,
+                    JSON_VALUE(r.request_payload, '$.requestSubtype') AS request_subtype,
+                    r.status,
+                    r.amount,
+                    r.reason,
+                    r.reject_reason,
+                    r.request_payload,
+                    r.created_at,
+                    r.updated_at,
+                    r.requested_by,
+                    req.FullName AS requested_by_name,
+                    r.approver_id,
+                    app.FullName AS approver_name,
+                    TRY_CONVERT(bigint, JSON_VALUE(r.request_payload, '$.staffId')) AS staff_id,
+                    JSON_VALUE(r.request_payload, '$.staffName') AS staff_name,
+                    TRY_CONVERT(bigint, JSON_VALUE(r.request_payload, '$.branchId')) AS branch_id,
+                    br.Name AS branch_name,
+                    TRY_CONVERT(decimal(18,2), JSON_VALUE(r.request_payload, '$.baseSalary')) AS proposed_base_salary,
+                    TRY_CONVERT(date, JSON_VALUE(r.request_payload, '$.effectiveFrom')) AS effective_from,
+                    JSON_VALUE(r.request_payload, '$.note') AS note
+                FROM dbo.finance_approval_requests r
+                LEFT JOIN dbo.Staffs req ON req.Id = r.requested_by
+                LEFT JOIN dbo.Staffs app ON app.Id = r.approver_id
+                LEFT JOIN dbo.Branches br ON br.Id = TRY_CONVERT(bigint, JSON_VALUE(r.request_payload, '$.branchId'))
+                """ + " " + where + " ORDER BY r.created_at DESC, r.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY";
+            var parameters = FilterParameters();
+            parameters.Add(new SqlParameter("@offset", offset));
+            parameters.Add(new SqlParameter("@size", size));
+            rows = await _crud.QueryAsync(sql, parameters);
+        }
+
+        var envelope = PagedEnvelope<Dictionary<string, object?>>.Create(rows, total, currentPage, size);
+        return Ok(new
+        {
+            items = envelope.Items,
+            total = envelope.Total,
+            totalCount = envelope.TotalCount,
+            page = envelope.Page,
+            pageSize = envelope.PageSize,
+            totalPages = envelope.TotalPages,
+            hasPreviousPage = envelope.HasPreviousPage,
+            hasNextPage = envelope.HasNextPage,
+            pendingCount = Convert.ToInt32(summary["pendingCount"]),
+            approvedCount = Convert.ToInt32(summary["approvedCount"])
+        });
+    }
+
+    [HttpPost("requests/{id:long}/approve")]
+    public async Task<IActionResult> ApproveInitialSalaryRequest(long id, [FromBody] SalaryApprovalDecisionDto request)
+    {
+        if (!IsAdminStaff()) return Forbid();
+        if (!await EnsureTableAsync("finance-approval-requests", "finance_approval_requests")) return NotFound();
+        if (!await EnsureTableAsync("staff-salary-profiles", "staff_salary_profiles")) return NotFound();
+
+        var row = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1
+                id,
+                request_type,
+                status,
+                request_payload,
+                TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.staffId')) AS staff_id,
+                TRY_CONVERT(bigint, JSON_VALUE(request_payload, '$.branchId')) AS branch_id,
+                TRY_CONVERT(decimal(18,2), JSON_VALUE(request_payload, '$.baseSalary')) AS proposed_base_salary,
+                TRY_CONVERT(date, JSON_VALUE(request_payload, '$.effectiveFrom')) AS effective_from,
+                JSON_VALUE(request_payload, '$.note') AS note
+            FROM dbo.finance_approval_requests
+            WHERE id = @id
+              AND request_type = 'PAYROLL_ADJUSTMENT'
+              AND JSON_VALUE(request_payload, '$.requestSubtype') = 'STAFF_INITIAL_SALARY';
+            """,
+            [new SqlParameter("@id", id)])).FirstOrDefault();
+        if (row is null) return NotFound();
+
+        var status = Convert.ToString(row.GetValueOrDefault("status")) ?? "";
+        if (!string.Equals(status, FinanceApprovalStatusPending, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Only pending salary requests can be approved." });
+        }
+
+        var payloadStaffId = ToNullableLong(row.GetValueOrDefault("staffId"));
+        var payloadBranchId = ToNullableLong(row.GetValueOrDefault("branchId"));
+        var payloadBaseSalary = ToNullableDecimal(row.GetValueOrDefault("proposedBaseSalary"));
+        var payloadEffectiveFrom = ToNullableDateOnly(row.GetValueOrDefault("effectiveFrom"));
+        var payloadNote = Convert.ToString(row.GetValueOrDefault("note"));
+
+        var staffId = request.StaffId ?? payloadStaffId;
+        var baseSalary = request.BaseSalary ?? payloadBaseSalary;
+        var effectiveFrom = request.EffectiveFrom.HasValue
+            ? DateOnly.FromDateTime(request.EffectiveFrom.Value.Date)
+            : payloadEffectiveFrom;
+        var note = string.IsNullOrWhiteSpace(request.Note) ? payloadNote : request.Note!.Trim();
+        var approverId = ResolveCurrentUserId();
+
+        if (!staffId.HasValue || staffId.Value <= 0)
+        {
+            return BadRequest(new { message = "staffId is missing in approval request payload." });
+        }
+        if (!baseSalary.HasValue || baseSalary.Value <= 0m)
+        {
+            return BadRequest(new { message = "baseSalary is missing in approval request payload." });
+        }
+        if (!effectiveFrom.HasValue)
+        {
+            return BadRequest(new { message = "effectiveFrom is missing in approval request payload." });
+        }
+
+        var staff = await _db.Staffs.AsNoTracking().FirstOrDefaultAsync(s => s.Id == staffId.Value && s.IsDeleted != true);
+        if (staff is null)
+        {
+            return NotFound(new { message = $"Staff #{staffId.Value} not found." });
+        }
+
+        var profileBranchId = payloadBranchId ?? staff.BranchId;
+        var overlapping = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1 id
+            FROM dbo.staff_salary_profiles
+            WHERE staff_id = @staffId
+              AND effective_from <= @effectiveFrom
+              AND (effective_to IS NULL OR effective_to >= @effectiveFrom)
+              AND UPPER(ISNULL(status, @staffSalaryStatusActive)) = @staffSalaryStatusActive
+              AND (@branchId IS NULL OR branch_id = @branchId OR branch_id IS NULL)
+            ORDER BY effective_from DESC, id DESC;
+            """,
+            [
+                new SqlParameter("@staffId", staffId.Value),
+                new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
+                new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
+                new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive)
+            ])).FirstOrDefault();
+        if (overlapping is not null)
+        {
+            return Conflict(new { message = "Staff already has an active salary profile for the selected effective date." });
+        }
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
+        {
+            await using var tx = await TryBeginTransactionAsync();
+            try
+            {
+                await _crud.ExecuteAsync(
+                    """
+                    INSERT INTO dbo.staff_salary_profiles
+                    (
+                        staff_id,
+                        branch_id,
+                        base_salary,
+                        effective_from,
+                        effective_to,
+                        status,
+                        note,
+                        updated_by,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES
+                    (
+                        @staffId,
+                        @branchId,
+                        @baseSalary,
+                        @effectiveFrom,
+                        NULL,
+                        @staffSalaryStatusActive,
+                        @note,
+                        @updatedBy,
+                        SYSDATETIME(),
+                        SYSDATETIME()
+                    );
+                    """,
+                    [
+                        new SqlParameter("@staffId", staffId.Value),
+                        new SqlParameter("@branchId", (object?)profileBranchId ?? DBNull.Value),
+                        new SqlParameter("@baseSalary", baseSalary.Value),
+                        new SqlParameter("@effectiveFrom", effectiveFrom.Value.ToDateTime(TimeOnly.MinValue)),
+                        new SqlParameter("@staffSalaryStatusActive", StaffSalaryStatusActive),
+                        new SqlParameter("@note", (object?)note ?? DBNull.Value),
+                        new SqlParameter("@updatedBy", (object?)approverId ?? DBNull.Value),
+                        new SqlParameter("@activeStatus", nameof(AccountingStatus.ACTIVE))
+                    ]);
+
+                await _crud.ExecuteAsync(
+                    """
+                    UPDATE dbo.finance_approval_requests
+                    SET
+                        status = @financeApprovalStatusApproved,
+                        approver_id = @approverId,
+                        reject_reason = NULL,
+                        updated_at = SYSDATETIME()
+                    WHERE id = @id;
+                    """,
+                    [
+                        new SqlParameter("@id", id),
+                        new SqlParameter("@financeApprovalStatusApproved", FinanceApprovalStatusApproved),
+                        new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value)
+                    ]);
+
+                if (tx != null) await tx.CommitAsync();
+            }
+            catch
+            {
+                if (tx != null) await tx.RollbackAsync();
+                throw;
+            }
+
+            return Ok(new
+            {
+                message = "Initial salary request approved and salary profile created.",
+                requestId = id,
+                staffId = staffId.Value,
+                baseSalary = baseSalary.Value,
+                effectiveFrom = effectiveFrom.Value.ToString("yyyy-MM-dd")
+            });
+        });
+    }
+
+    [HttpPost("requests/{id:long}/reject")]
+    public async Task<IActionResult> RejectInitialSalaryRequest(long id, [FromBody] SalaryApprovalDecisionDto request)
+    {
+        if (!IsAdminStaff()) return Forbid();
+        if (!await EnsureTableAsync("finance-approval-requests", "finance_approval_requests")) return NotFound();
+
+        var row = (await _crud.QueryAsync(
+            """
+            SELECT TOP 1 id, status
+            FROM dbo.finance_approval_requests
+            WHERE id = @id
+              AND request_type = 'PAYROLL_ADJUSTMENT'
+              AND JSON_VALUE(request_payload, '$.requestSubtype') = 'STAFF_INITIAL_SALARY';
+            """,
+            [new SqlParameter("@id", id)])).FirstOrDefault();
+        if (row is null) return NotFound();
+
+        var status = Convert.ToString(row.GetValueOrDefault("status")) ?? "";
+        if (!string.Equals(status, FinanceApprovalStatusPending, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Only pending salary requests can be rejected." });
+        }
+
+        var approverId = ResolveCurrentUserId();
+        var rejectReason = string.IsNullOrWhiteSpace(request.RejectReason)
+            ? (string.IsNullOrWhiteSpace(request.Note) ? "Rejected by admin." : request.Note!.Trim())
+            : request.RejectReason!.Trim();
+
+        await _crud.ExecuteAsync(
+            """
+            UPDATE dbo.finance_approval_requests
+            SET
+                status = @financeApprovalStatusRejected,
+                approver_id = @approverId,
+                reject_reason = @rejectReason,
+                updated_at = SYSDATETIME()
+            WHERE id = @id;
+            """,
+            [
+                new SqlParameter("@id", id),
+                new SqlParameter("@financeApprovalStatusRejected", FinanceApprovalStatusRejected),
+                new SqlParameter("@approverId", (object?)approverId ?? DBNull.Value),
+                new SqlParameter("@rejectReason", rejectReason),
+                new SqlParameter("@rejectedStatus", nameof(AccountingStatus.REJECTED))
+            ]);
+
+        return Ok(new { message = "Initial salary request rejected.", requestId = id });
+    }
+
+    private async Task<Dictionary<string, object?>?> GetSalaryProfileByIdAsync(long id)
+    {
+        return (await _crud.QueryAsync(
+            """
+            SELECT TOP 1
+                p.id,
+                p.staff_id,
+                s.FullName AS staff_name,
+                p.branch_id,
+                b.Name AS branch_name,
+                p.base_salary,
+                p.effective_from,
+                p.effective_to,
+                p.status,
+                p.note,
+                p.updated_by,
+                p.created_at,
+                p.updated_at
+            FROM dbo.staff_salary_profiles p
+            LEFT JOIN dbo.Staffs s ON s.Id = p.staff_id
+            LEFT JOIN dbo.Branches b ON b.Id = p.branch_id
+            WHERE p.id = @id;
+            """,
+            [new SqlParameter("@id", id)])).FirstOrDefault();
+    }
+
+    private async Task<bool> EnsureTableAsync(string configKey, string tableName)
+    {
+        if (!_crud.TryGetConfig(configKey, out var cfg)) return false;
+        return await _crud.TableExistsAsync(cfg);
+    }
+
+    private bool IsAdminStaff()
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (!string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var roleCode = User.FindFirstValue("role_code");
+        var roleName = User.FindFirstValue("role_name");
+        return string.Equals(roleCode, "ADMIN", StringComparison.OrdinalIgnoreCase)
+               || (roleName?.Contains("admin", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private bool IsAccountingStaff()
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (!string.Equals(role, "Staff", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var roleCode = User.FindFirstValue("role_code");
+        var roleName = User.FindFirstValue("role_name");
+        var roleNameUpper = (roleName ?? string.Empty).Trim().ToUpperInvariant();
+
+        return string.Equals(roleCode, "ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
+               || roleNameUpper.Contains("ACCOUNTANT", StringComparison.OrdinalIgnoreCase)
+               || roleNameUpper.Contains("KE TOAN", StringComparison.OrdinalIgnoreCase)
+               || roleNameUpper.Contains("KẾ TOÁN", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool CanViewSalaryModule()
+    {
+        return IsAdminStaff() || IsAccountingStaff();
+    }
+
+    private long? ResolveCurrentUserId()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId) ? userId : null;
+    }
+
+    private static string? ValidateSalaryProfileRequest(SalaryProfileUpsertDto request)
+    {
+        if (request.StaffId <= 0) return "staffId is required.";
+        if (!request.BaseSalary.HasValue || request.BaseSalary.Value <= 0m) return "baseSalary must be greater than 0.";
+        if (!request.EffectiveFrom.HasValue) return "effectiveFrom is required.";
+        if (request.EffectiveTo.HasValue && request.EffectiveTo.Value.Date < request.EffectiveFrom.Value.Date)
+        {
+            return "effectiveTo must be greater than or equal to effectiveFrom.";
+        }
+        return null;
+    }
+
+    private static string NormalizeSalaryProfileStatus(string? status)
+    {
+        var normalized = (status ?? "").Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalized)) return StaffSalaryStatusActive;
+        return Enum.TryParse<StaffSalaryProfileStatusCode>(normalized, true, out var parsed)
+            ? parsed.ToString()
+            : StaffSalaryStatusActive;
+    }
+
+    private static long? ToNullableLong(object? value)
+    {
+        if (value is null || value == DBNull.Value) return null;
+        if (value is long x) return x;
+        if (value is int i) return i;
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+        return long.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+    }
+
+    private static decimal? ToNullableDecimal(object? value)
+    {
+        if (value is null || value == DBNull.Value) return null;
+        if (value is decimal d) return d;
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+        return decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+    }
+
+    private static DateOnly? ToNullableDateOnly(object? value)
+    {
+        if (value is null || value == DBNull.Value) return null;
+        if (value is DateOnly dateOnly) return dateOnly;
+        if (value is DateTime dateTime) return DateOnly.FromDateTime(dateTime);
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+        if (DateOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateOnly))
+        {
+            return parsedDateOnly;
+        }
+        return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateTime)
+            ? DateOnly.FromDateTime(parsedDateTime)
+            : null;
+    }
+
+    public sealed class SalaryProfileUpsertDto
+    {
+        public long StaffId { get; set; }
+        public long? BranchId { get; set; }
+        public decimal? BaseSalary { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
+        public DateTime? EffectiveTo { get; set; }
+        public string? Status { get; set; }
+        public string? Note { get; set; }
+    }
+
+    public sealed class SalaryApprovalDecisionDto
+    {
+        public long? StaffId { get; set; }
+        public decimal? BaseSalary { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
+        public string? Note { get; set; }
+        public string? RejectReason { get; set; }
+    }
+
+    private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+    {
+        if (_db.Database.CurrentTransaction != null)
+        {
+            return null;
+        }
+
+        return await _db.Database.BeginTransactionAsync();
+    }
+}

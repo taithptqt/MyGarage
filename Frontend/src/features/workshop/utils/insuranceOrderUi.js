@@ -181,7 +181,7 @@ export function formatDetailPayerLabel(detail) {
   const payerType = String(detail?.payerType || detail?.PayerType || "").trim().toUpperCase();
   if (payerType === "INSURANCE") return "Bảo hiểm";
   if (payerType === "CUSTOMER") return "Khách hàng";
-  return "Chưa phân lo?i";
+  return "Chưa phân loại";
 }
 
 

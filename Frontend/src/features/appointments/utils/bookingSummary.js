@@ -87,7 +87,7 @@ export function buildSummaryItems({
     });
   }
   if (step3Done && selectedBranch) {
-    items.push({ key: "branch", label: "Chi nh�nh", value: extractField(selectedBranch, ["name", "Name"], "") });
+    items.push({ key: "branch", label: "Chi nhánh", value: extractField(selectedBranch, ["name", "Name"], "") });
   }
   if (step4Done && customerName) {
     items.push({ key: "customer", label: "Khách hàng", value: customerName });

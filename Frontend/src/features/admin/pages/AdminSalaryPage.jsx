@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -30,8 +30,8 @@ import {
   approveInitialSalaryRequest,
   createSalaryProfile,
   deleteSalaryProfile,
-  getInitialSalaryRequests,
-  getSalaryProfiles,
+  getInitialSalaryRequestPage,
+  getSalaryProfilePage,
   rejectInitialSalaryRequest,
   updateSalaryProfile,
 } from "../api/salaryAdminApi";
@@ -108,7 +108,12 @@ export default function AdminSalaryPage() {
   const [processingRequestId, setProcessingRequestId] = useState(null);
 
   const [profiles, setProfiles] = useState([]);
+  const [profileTotal, setProfileTotal] = useState(null);
+  const loadSequence = useRef(0);
   const [requests, setRequests] = useState([]);
+  const [requestCounts, setRequestCounts] = useState(null);
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestPageSize, setRequestPageSize] = useState(10);
   const [staffs, setStaffs] = useState([]);
   const [requestStatusFilter, setRequestStatusFilter] = useState("PENDING");
   const [profilePage, setProfilePage] = useState(1);
@@ -137,37 +142,34 @@ export default function AdminSalaryPage() {
   }, [scopedStaffs]);
 
   const summary = useMemo(() => {
-    const pendingRequests = requests.filter((item) => String(pick(item, "status", "Status") || "").toUpperCase() === "PENDING").length;
-    const approvedRequests = requests.filter((item) => String(pick(item, "status", "Status") || "").toUpperCase() === "APPROVED").length;
     return {
-      profileCount: profiles.length,
-      pendingRequests,
-      approvedRequests,
+      profileCount: profileTotal,
+      pendingRequests: requestCounts?.pendingCount ?? requestCounts?.pending,
+      approvedRequests: requestCounts?.approvedCount ?? requestCounts?.approved,
     };
-  }, [profiles, requests]);
-
-  const paginatedProfiles = useMemo(() => {
-    const start = (profilePage - 1) * profilePageSize;
-    return profiles.slice(start, start + profilePageSize);
-  }, [profiles, profilePage, profilePageSize]);
+  }, [profileTotal, requestCounts]);
 
   async function loadData() {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
       const [profilesResult, requestsResult, staffsResult] = await Promise.allSettled([
-        getSalaryProfiles(branchId),
-        getInitialSalaryRequests({ status: requestStatusFilter, branchId }),
+        getSalaryProfilePage(branchId, profilePage, profilePageSize),
+        getInitialSalaryRequestPage({ status: requestStatusFilter, branchId, page: requestPage, pageSize: requestPageSize }),
         getAllStaff(branchId),
       ]);
 
-      const profileData = profilesResult.status === "fulfilled" ? profilesResult.value : [];
-      const requestData = requestsResult.status === "fulfilled" ? requestsResult.value : [];
+      if (sequence !== loadSequence.current) return;
+      const profileData = profilesResult.status === "fulfilled" ? profilesResult.value : null;
+      const requestData = requestsResult.status === "fulfilled" ? requestsResult.value : null;
       const staffData = staffsResult.status === "fulfilled" ? staffsResult.value : [];
 
-      setProfiles(Array.isArray(profileData) ? profileData : []);
-      setRequests(Array.isArray(requestData) ? requestData : []);
-      setStaffs(Array.isArray(staffData) ? staffData : []);
+      setProfiles(profileData?.items || []);
+      setProfileTotal(profileData?.totalCount ?? profileData?.total ?? null);
+      setRequests(requestData?.items || []);
+      setRequestCounts(requestData);
+      setStaffs(Array.isArray(staffData) ? staffData : Array.isArray(staffData?.items) ? staffData.items : []);
 
       const rejected = [profilesResult, requestsResult, staffsResult].find((result) => result.status === "rejected");
       if (rejected?.status === "rejected") {
@@ -179,22 +181,30 @@ export default function AdminSalaryPage() {
         }
       }
     } catch (err) {
-      setError(err?.message || "Không tải được dữ liệu lương.");
+      if (sequence === loadSequence.current) setError(err?.message || "Không tải được dữ liệu lương.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     loadData();
-  }, [branchId, requestStatusFilter]);
+    return () => { loadSequence.current += 1; };
+  }, [branchId, requestStatusFilter, profilePage, profilePageSize, requestPage, requestPageSize]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(profiles.length / profilePageSize));
+    if (!requestCounts) return;
+    const last = Math.max(1, Math.ceil(requestCounts.total / requestPageSize));
+    if (requestPage > last) setRequestPage(last);
+  }, [requestCounts, requestPage, requestPageSize]);
+
+  useEffect(() => {
+    if (profileTotal == null) return;
+    const totalPages = Math.max(1, Math.ceil(profileTotal / profilePageSize));
     if (profilePage > totalPages) {
       setProfilePage(totalPages);
     }
-  }, [profiles.length, profilePage, profilePageSize]);
+  }, [profileTotal, profilePage, profilePageSize]);
 
   function resetProfileForm() {
     setEditingProfileId(null);
@@ -351,15 +361,15 @@ export default function AdminSalaryPage() {
       ) : null}
 
       <SimpleGrid columns={{ base: 1, md: 3 }} gap="20px" mb="20px">
-        <MiniStatistics name="Bảng luong nhân viên" value={String(summary.profileCount)} />
-        <MiniStatistics name="Yêu cầu chờ duyệt" value={String(summary.pendingRequests)} />
-        <MiniStatistics name="Yêu cầu đã duyệt" value={String(summary.approvedRequests)} />
+        <MiniStatistics name="Bảng lương nhân viên" value={summary.profileCount == null ? "--" : String(summary.profileCount)} />
+        <MiniStatistics name="Yêu cầu chờ duyệt" value={summary.pendingRequests == null ? "--" : String(summary.pendingRequests)} />
+        <MiniStatistics name="Yêu cầu đã duyệt" value={summary.approvedRequests == null ? "--" : String(summary.approvedRequests)} />
       </SimpleGrid>
 
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap="20px" mb="20px">
         <Card p="16px">
           <Text color={textColor} fontWeight="700" mb="10px">
-            {editingProfileId ? "C?p nh?t bảng luong" : "T?o bảng luong nhân viên"}
+            {editingProfileId ? "Cập nhật bảng lương" : "Tạo bảng lương nhân viên"}
           </Text>
           {!isAdminStaff ? (
             <Text color="orange.500" fontSize="xs" mb="10px">
@@ -457,20 +467,20 @@ export default function AdminSalaryPage() {
         </Card>
 
         <Card p="16px" gridColumn={{ base: "span 1", xl: "span 2" }}>
-          <Text color={textColor} fontWeight="700" mb="10px">Bảng luong nhân viên</Text>
+          <Text color={textColor} fontWeight="700" mb="10px">Bảng lương nhân viên</Text>
           <Table size="sm">
             <Thead>
               <Tr>
                 <Th>ID</Th>
-                <Th>Nh�n s?</Th>
+                <Th>Nhân sự</Th>
                 <Th>Lương cơ bản</Th>
                 <Th>Hiệu lực</Th>
                 <Th>Trạng thái</Th>
-                <Th textAlign="right">Thao t�c</Th>
+                <Th textAlign="right">Thao tác</Th>
               </Tr>
             </Thead>
             <Tbody>
-              {paginatedProfiles.map((profile, idx) => {
+              {profiles.map((profile, idx) => {
                 const id = toId(pick(profile, "id", "Id"));
                 const staffId = toId(pick(profile, "staffId", "StaffId"));
                 const staffName =
@@ -508,7 +518,7 @@ export default function AdminSalaryPage() {
           </Table>
           <Box display="flex" justifyContent="center">
             <TablePagination
-              totalItems={profiles.length}
+              totalItems={profileTotal ?? 0}
               currentPage={profilePage}
               pageSize={profilePageSize}
               onPageChange={setProfilePage}
@@ -524,7 +534,7 @@ export default function AdminSalaryPage() {
       <Card p="20px">
         <Flex justify="space-between" align="center" mb="10px" wrap="wrap" gap="10px">
           <Text color={textColor} fontWeight="700">Yêu cầu tạo lương từ kế toán</Text>
-          <Select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} maxW="200px">
+          <Select value={requestStatusFilter} onChange={(e) => { setRequestPage(1); setRequestStatusFilter(e.target.value); }} maxW="200px">
             <option value="PENDING">PENDING</option>
             <option value="APPROVED">APPROVED</option>
             <option value="REJECTED">REJECTED</option>
@@ -536,13 +546,13 @@ export default function AdminSalaryPage() {
           <Thead>
             <Tr>
               <Th>Request</Th>
-              <Th>Nh�n s?</Th>
+              <Th>Nhân sự</Th>
               <Th>Lương đề xuất</Th>
               <Th>Hiệu lực từ</Th>
               <Th>Người yêu cầu</Th>
               <Th>Trạng thái</Th>
               <Th>Lý do</Th>
-              <Th textAlign="right">Thao t�c</Th>
+              <Th textAlign="right">Thao tác</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -609,6 +619,10 @@ export default function AdminSalaryPage() {
             })}
           </Tbody>
         </Table>
+        {requestCounts ? <Box display="flex" justifyContent="center">
+          <TablePagination totalItems={requestCounts.total} currentPage={requestPage} pageSize={requestPageSize}
+            onPageChange={setRequestPage} onPageSizeChange={(size) => { setRequestPageSize(size); setRequestPage(1); }} />
+        </Box> : null}
       </Card>
     </Box>
   );

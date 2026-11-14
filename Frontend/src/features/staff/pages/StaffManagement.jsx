@@ -236,10 +236,10 @@ export default function StaffManagement() {
       <header className="admin-header">
         <div>
           <h1>Quản lý nhân viên</h1>
-          <p className="header-sub">Quản lý t�i kho?n nhân viên tr�n to�n hệ thống</p>
+          <p className="header-sub">Quản lý tài khoản nhân viên trên toàn hệ thống</p>
         </div>
         <button className="btn-primary" onClick={openCreate}>
-          + Th�m nhân viên
+          + Thêm nhân viên
         </button>
       </header>
 
@@ -285,7 +285,7 @@ export default function StaffManagement() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">{"\u{1F464}"}</div>
-            <p>Không t�m th?y nhân viên n�o.</p>
+            <p>Không tìm thấy nhân viên nào.</p>
           </div>
         ) : (
           <table className="admin-table">
@@ -297,7 +297,7 @@ export default function StaffManagement() {
                 <th>Email</th>
                 <th>Trạng thái</th>
                 <th>Ngày tạo</th>
-                <th>Thao t�c</th>
+                <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -351,7 +351,7 @@ export default function StaffManagement() {
 
       {/* Modals */}
       {modal === "create" && (
-        <Modal title="Th�m nhân viên m?i" onClose={closeModal}>
+        <Modal title="Thêm nhân viên mới" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
           <StaffForm
             initial={EMPTY_FORM}
@@ -381,10 +381,10 @@ export default function StaffManagement() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận x�a" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           {formError && <div className="alert alert-error">{formError}</div>}
           <ConfirmDialog
-            message={`B?n c� ch?c chọn mudn x�a "${selected.fullName}"? H�nh d?ng n�y không th? ho�n t�c.`}
+          message={`Bạn có chắc chắn muốn xóa "${selected.fullName}"? Hành động này không thể hoàn tác.`}
             onConfirm={handleDelete}
             onCancel={closeModal}
             loading={saving}

@@ -1,8 +1,42 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPayosOrder, getPayments } from "@features/payment/api/payosApi";
+import { parsePaymentHistoryPage } from "@features/payment/api/paymentHistoryPage";
 import { getRetailOrderById } from "@features/retail/api/retailApi";
 import { useAuth } from "@shared/core/context/AuthContext";
+
+const DEFAULT_DESCRIPTION = "Thanh toán MyGarage";
+
+const UI_TEXT = {
+  pageTitle: "Thanh toán PayOS",
+  retailHeader: "Thanh toán đơn phụ tùng",
+  manualHeader: "Tạo link thanh toán",
+  retailGuide: (orderId) => `Bạn đang thanh toán cho đơn phụ tùng #${orderId}. Số tiền được khóa theo tổng tiền đơn.`,
+  manualGuide: "Bạn có thể tạo link PayOS thủ công cho giao dịch khách hàng.",
+  amountLabel: "Số tiền (VNĐ)",
+  amountSyncNote: "Số tiền phụ tùng được đồng bộ từ backend để tránh sai lệch.",
+  descriptionLabel: "Nội dung",
+  descriptionLimitNote: (len) => `Tối đa 25 ký tự theo giới hạn PayOS (${len}/25)`,
+  totalPaymentLabel: "Tổng thanh toán:",
+  retailDetailHeader: (code) => `Chi tiết đơn phụ tùng: ${code}`,
+  subTotalLabel: "Tạm tính",
+  vatLabel: "Thuế VAT",
+  creatingLink: "Đang tạo link...",
+  payViaPayos: "Thanh toán qua PayOS",
+  viewRetailOrder: "Xem đơn phụ tùng",
+  historyTitle: "Lịch sử giao dịch PayOS",
+  historyReload: "Tải lại",
+  historyLoading: "Đang tải...",
+  noTransactions: "Chưa có giao dịch nào.",
+  colTxnCode: "Mã GD",
+  colAmount: "Số tiền",
+  colStatus: "Trạng thái",
+  colType: "Loại",
+  colTime: "Thời gian",
+  prevPage: "Trang trước",
+  nextPage: "Trang sau",
+  pageIndicator: (page, total) => `Trang ${page} / ${total}`
+};
 
 function normalizeAmount(value) {
   if (typeof value === "number") {
@@ -57,7 +91,7 @@ function normalizeAmount(value) {
 }
 
 function formatVnd(amount) {
-  return `${new Intl.NumberFormat("vi-VN").format(Math.max(0, Math.floor(Number(amount || 0))))}d`;
+  return `${new Intl.NumberFormat("vi-VN").format(Math.max(0, Math.floor(Number(amount || 0))))}đ`;
 }
 
 function buildFrontendUrl(pathname) {
@@ -68,7 +102,7 @@ function buildFrontendUrl(pathname) {
 function buildRetrySearch({ amount, description, retailOrderId }) {
   const params = new URLSearchParams({
     amount: String(normalizeAmount(amount)),
-    description: String(description || "Thanh toan MyGarage").slice(0, 25),
+    description: String(description || DEFAULT_DESCRIPTION).slice(0, 25),
   });
 
   if (Number.isFinite(retailOrderId) && retailOrderId > 0) {
@@ -82,28 +116,34 @@ export default function PayosCheckoutPage() {
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [amount, setAmount] = useState(0);
-  const [description, setDescription] = useState("Thanh toan MyGarage");
+  const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyError, setHistoryError] = useState("");
+  const historySequence = useRef(0);
+  const historyPageSize = 20;
   const [autoPaid, setAutoPaid] = useState(false);
   const [retailAmountLoading, setRetailAmountLoading] = useState(false);
   const [retailAmountReady, setRetailAmountReady] = useState(false);
   const [retailSummary, setRetailSummary] = useState(null);
 
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const retailOrderId = useMemo(() => {
-    const query = new URLSearchParams(location.search);
-    const raw = normalizeAmount(query.get("retailOrderId"));
-    return raw > 0 ? raw : null;
-  }, [location.search]);
-
-  const isRetailCheckout = Number.isFinite(retailOrderId);
+    const raw = queryParams.get("retailOrderId");
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [queryParams]);
+  const isRetailCheckout = Boolean(retailOrderId);
 
   useEffect(() => {
     loadHistory();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { historySequence.current += 1; };
+  }, [historyPage, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -129,39 +169,34 @@ export default function PayosCheckoutPage() {
     async function resolveRetailAmount() {
       if (!isRetailCheckout || !retailOrderId) {
         setRetailSummary(null);
+        setRetailAmountReady(false);
+        setRetailAmountLoading(false);
         return;
       }
 
-      setRetailAmountReady(false);
       setRetailAmountLoading(true);
+      setRetailAmountReady(false);
 
       try {
         const order = await getRetailOrderById(retailOrderId);
         if (ignore) return;
 
-        const subTotal = normalizeAmount(order?.subTotal);
-        const taxAmount = normalizeAmount(order?.taxAmount);
-        const orderAmount = normalizeAmount(order?.finalAmount);
+        const candidate = [
+          order?.finalAmount,
+          order?.totalAmount,
+          order?.grandTotal,
+          order?.amount,
+        ].find((val) => val !== undefined && val !== null);
 
-        setRetailSummary({
-          orderCode: order?.orderCode || `RO-${retailOrderId}`,
-          subTotal,
-          taxAmount,
-          finalAmount: orderAmount,
-        });
-
-        if (orderAmount <= 0) {
-          setError("Khong lay duoc tong tien don hang. Vui long quay lai danh sach don de thanh toan lai.");
-          return;
-        }
-
-        setAmount(orderAmount);
-        setRetailAmountReady(true);
-      } catch {
-        if (!ignore) {
-          setRetailSummary(null);
-          setError("Không lấy được thông tin đơn retail. Vui lòng thử lại từ trang đơn hàng.");
-        }
+        const parsedAmount = normalizeAmount(candidate);
+        setRetailSummary(order);
+        setAmount(parsedAmount);
+        setRetailAmountReady(parsedAmount > 0);
+      } catch (loadError) {
+        if (ignore) return;
+        setRetailSummary(null);
+        setRetailAmountReady(false);
+        setError(loadError?.message || "Không thể đồng bộ số tiền đơn retail từ backend.");
       } finally {
         if (!ignore) {
           setRetailAmountLoading(false);
@@ -179,27 +214,27 @@ export default function PayosCheckoutPage() {
   const validAmount = useMemo(() => normalizeAmount(amount), [amount]);
 
   async function loadHistory() {
+    const sequence = ++historySequence.current;
     setHistoryLoading(true);
+    setHistoryError("");
+    setHistory([]);
 
     try {
-      const result = await getPayments();
-      if (!result.ok) {
+      const result = await getPayments({ page: historyPage, pageSize: historyPageSize });
+      if (sequence !== historySequence.current) return;
+      const { items: rows, total } = parsePaymentHistoryPage(result);
+      const lastPage = Math.max(1, Math.ceil(total / historyPageSize));
+      if (historyPage > lastPage) { setHistoryPage(lastPage); return; }
+      setHistory(rows);
+      setHistoryTotal(total);
+    } catch (error) {
+      if (sequence === historySequence.current) {
         setHistory([]);
-        return;
+        setHistoryTotal(0);
+        setHistoryError(error.message || "Không tải được lịch sử giao dịch.");
       }
-
-      const userId = user?.id;
-      const rows = Array.isArray(result.data) ? result.data : [];
-      const filtered = rows
-        .filter((payment) => payment?.payerType === "CUSTOMER")
-        .filter((payment) => (userId ? Number(payment?.payerId) === Number(userId) : true))
-        .sort((left, right) => new Date(right?.createdAt || 0) - new Date(left?.createdAt || 0));
-
-      setHistory(filtered);
-    } catch {
-      setHistory([]);
     } finally {
-      setHistoryLoading(false);
+      if (sequence === historySequence.current) setHistoryLoading(false);
     }
   }
 
@@ -207,24 +242,24 @@ export default function PayosCheckoutPage() {
     setError("");
 
     if (!isAuthenticated) {
-      setError("Ban can dang nhap truoc khi thanh toan.");
+      setError("Bạn cần đăng nhập trước khi thanh toán.");
       return;
     }
 
     if (isRetailCheckout && retailAmountLoading) {
-      setError("Dang dong bo tong tien don retail, vui long cho trong giay lat.");
+      setError("Đang đồng bộ tổng tiền đơn phụ tùng, vui lòng chờ trong giây lát.");
       return;
     }
 
     if (isRetailCheckout && !retailAmountReady) {
-      setError("Chua xac nhan duoc tong tien don retail. Vui long thu lai tu trang don hang.");
+      setError("Chưa xác nhận được tổng tiền đơn phụ tùng. Vui lòng thử lại từ trang đơn hàng.");
       return;
     }
 
     if (validAmount < 1000) {
       setError(
         isRetailCheckout
-          ? "Không x�c d?nh ??c s? ti?n don retail. Vui l�ng thanh to�n l?i t? trang don h�ng."
+          ? "Không xác định được số tiền đơn phụ tùng. Vui lòng thanh toán lại từ trang đơn hàng."
           : "Số tiền tối thiểu là 1,000đ."
       );
       return;
@@ -244,46 +279,45 @@ export default function PayosCheckoutPage() {
       });
 
       const payload = {
-        totalAmount: validAmount,
+        amount: validAmount,
         description: finalDescription,
-        payerType: "CUSTOMER",
-        payerId: user?.id || null,
-        retailOrderId: isRetailCheckout ? retailOrderId : null,
-        paymentType: "PAYMENT",
         returnUrl: buildFrontendUrl("/payment/success"),
-        cancelUrl: buildFrontendUrl("/payment/cancel"),
-        items: [
-          {
-            name: isRetailCheckout ? "Đơn phụ tùng MyGarage" : "Dịch vụ MyGarage",
-            quantity: 1,
-            price: validAmount,
-          },
-        ],
+        cancelUrl: buildFrontendUrl(`/payment/cancel${retrySearch}`),
       };
 
+      if (isRetailCheckout) {
+        payload.retailOrderId = retailOrderId;
+      }
+
       const result = await createPayosOrder(payload);
+
       if (!result.ok) {
-        throw new Error(result.data?.message || "Không t?o ??c link thanh to�n.");
+        setError(result.data?.message || "Không thể tạo link thanh toán PayOS.");
+        return;
       }
 
       const order = result.data;
       setPreview(order);
-      await loadHistory();
 
       if (!order?.checkoutUrl) {
-        throw new Error("Không nhận được checkoutUrl từ PayOS.");
+        setError("Không nhận được checkoutUrl từ PayOS.");
+        return;
+      }
+
+      if (order.id) {
+        localStorage.setItem("payos_last_payment_id", String(order.id));
+      } else {
+        localStorage.removeItem("payos_last_payment_id");
+      }
+
+      if (order.orderCode || order.orderId) {
+        localStorage.setItem("payos_last_order_id", String(order.orderCode || order.orderId));
+      } else {
+        localStorage.removeItem("payos_last_order_id");
       }
 
       localStorage.setItem("payos_last_payment_search", retrySearch);
-      localStorage.setItem("payos_last_checkout_kind", isRetailCheckout ? "RETAIL" : "SERVICE");
-
-      if (order?.paymentRecordId) {
-        localStorage.setItem("payos_last_payment_id", String(order.paymentRecordId));
-      }
-
-      if (order?.id) {
-        localStorage.setItem("payos_last_order_id", String(order.id));
-      }
+      localStorage.setItem("payos_last_checkout_kind", isRetailCheckout ? "retail" : "manual");
 
       if (isRetailCheckout) {
         localStorage.setItem("payos_last_retail_order_id", String(retailOrderId));
@@ -293,7 +327,7 @@ export default function PayosCheckoutPage() {
 
       window.location.href = order.checkoutUrl;
     } catch (paymentError) {
-      setError(paymentError?.message || "Thanh to�n th?t b?i.");
+      setError(paymentError?.message || "Thanh toán thất bại.");
     } finally {
       setLoading(false);
     }
@@ -318,17 +352,17 @@ export default function PayosCheckoutPage() {
   return (
     <div>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a202c", marginBottom: 16 }}>
-        Thanh toan PayOS
+        {UI_TEXT.pageTitle}
       </h1>
 
       <div className="booking-card" style={{ maxWidth: 760 }}>
         <h3 style={{ marginBottom: 8 }}>
-          {isRetailCheckout ? "Thanh toan don phu tung" : "Tao link thanh toan"}
+          {isRetailCheckout ? UI_TEXT.retailHeader : UI_TEXT.manualHeader}
         </h3>
         <p style={{ marginTop: 0, color: "#4a5568", lineHeight: 1.7 }}>
           {isRetailCheckout
-        ? `B?n ?ang thanh to�n cho don retail #${retailOrderId}. S? ti?n ??c kh�a theo tổng ti?n don.`
-            : "Ban co the tao link PayOS thu cong cho giao dich customer."}
+            ? UI_TEXT.retailGuide(retailOrderId)
+            : UI_TEXT.manualGuide}
         </p>
 
         <div style={{ display: "grid", gap: 12 }}>
@@ -336,7 +370,7 @@ export default function PayosCheckoutPage() {
             <label
               style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "#4a5568" }}
             >
-              So tien (VND)
+              {UI_TEXT.amountLabel}
             </label>
             <input
               type="number"
@@ -349,7 +383,7 @@ export default function PayosCheckoutPage() {
             />
             {isRetailCheckout ? (
               <div style={{ marginTop: 6, fontSize: 12, color: "#718096" }}>
-                So tien retail duoc dong bo tu backend de tranh sai lech.
+                {UI_TEXT.amountSyncNote}
               </div>
             ) : null}
           </div>
@@ -358,7 +392,7 @@ export default function PayosCheckoutPage() {
             <label
               style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "#4a5568" }}
             >
-              Noi dung
+              {UI_TEXT.descriptionLabel}
             </label>
             <input
               type="text"
@@ -368,13 +402,13 @@ export default function PayosCheckoutPage() {
               style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14 }}
             />
             <div style={{ marginTop: 6, fontSize: 12, color: "#718096" }}>
-              Toi da 25 ky tu theo gioi han PayOS ({description.length}/25)
+              {UI_TEXT.descriptionLimitNote(description.length)}
             </div>
           </div>
         </div>
 
         <div style={{ marginTop: 14, color: "#4a5568", fontSize: 14 }}>
-            Tổng thanh to�n: <strong style={{ color: "#422afb" }}>{formatVnd(validAmount)}</strong>
+          {UI_TEXT.totalPaymentLabel} <strong style={{ color: "#422afb" }}>{formatVnd(validAmount)}</strong>
         </div>
 
         {isRetailCheckout && retailSummary ? (
@@ -388,19 +422,19 @@ export default function PayosCheckoutPage() {
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>
-              Chi tiet don retail: {retailSummary.orderCode}
+              {UI_TEXT.retailDetailHeader(retailSummary.orderCode)}
             </div>
             <div style={{ display: "grid", gap: 6, fontSize: 13, color: "#475569" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span>Tam tinh</span>
+                <span>{UI_TEXT.subTotalLabel}</span>
                 <strong>{formatVnd(retailSummary.subTotal)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span>Thue VAT</span>
+                <span>{UI_TEXT.vatLabel}</span>
                 <strong>{formatVnd(retailSummary.taxAmount)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderTop: "1px dashed #cbd5e1", paddingTop: 6 }}>
-              <span>Tổng thanh to�n</span>
+                <span>{UI_TEXT.totalPaymentLabel}</span>
                 <strong style={{ color: "#1d4ed8" }}>{formatVnd(retailSummary.finalAmount)}</strong>
               </div>
             </div>
@@ -416,7 +450,7 @@ export default function PayosCheckoutPage() {
             disabled={loading || retailAmountLoading}
             style={{ marginTop: 0, width: "auto", minWidth: 220 }}
           >
-              {loading ? "Đang t?o link..." : "Thanh to�n qua PayOS"}
+            {loading ? UI_TEXT.creatingLink : UI_TEXT.payViaPayos}
           </button>
           {isRetailCheckout ? (
             <Link
@@ -424,7 +458,7 @@ export default function PayosCheckoutPage() {
               className="btn-popup-secondary"
               style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
             >
-              Xem don phu tung
+              {UI_TEXT.viewRetailOrder}
             </Link>
           ) : null}
         </div>
@@ -438,29 +472,30 @@ export default function PayosCheckoutPage() {
 
       <div className="booking-card" style={{ maxWidth: 980, marginTop: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <h3 style={{ margin: 0 }}>Lich su giao dich PayOS</h3>
+          <h3 style={{ margin: 0 }}>{UI_TEXT.historyTitle}</h3>
           <button
             type="button"
             onClick={loadHistory}
             disabled={historyLoading}
             style={{ border: "1px solid #d7def0", background: "#fff", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}
           >
-                    {historyLoading ? "Đang tải..." : "Tải lại"}
+            {historyLoading ? UI_TEXT.historyLoading : UI_TEXT.historyReload}
           </button>
         </div>
 
-        {history.length === 0 ? (
-          <p style={{ marginTop: 12, color: "#718096" }}>Chưa có giao dịch nào.</p>
-        ) : (
+        {historyError ? <p role="alert" style={{ marginTop: 12, color: "#991b1b" }}>{historyError}</p> : null}
+        {!historyError && history.length === 0 ? (
+          <p style={{ marginTop: 12, color: "#718096" }}>{UI_TEXT.noTransactions}</p>
+        ) : !historyError ? (
           <div style={{ marginTop: 12, overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #edf2f7" }}>
-                  <th style={{ padding: "10px 8px" }}>Ma GD</th>
-                  <th style={{ padding: "10px 8px" }}>So tien</th>
-                      <th style={{ padding: "10px 8px" }}>Trạng thái</th>
-                  <th style={{ padding: "10px 8px" }}>Loai</th>
-                  <th style={{ padding: "10px 8px" }}>Thoi gian</th>
+                  <th style={{ padding: "10px 8px" }}>{UI_TEXT.colTxnCode}</th>
+                  <th style={{ padding: "10px 8px" }}>{UI_TEXT.colAmount}</th>
+                  <th style={{ padding: "10px 8px" }}>{UI_TEXT.colStatus}</th>
+                  <th style={{ padding: "10px 8px" }}>{UI_TEXT.colType}</th>
+                  <th style={{ padding: "10px 8px" }}>{UI_TEXT.colTime}</th>
                 </tr>
               </thead>
               <tbody>
@@ -505,11 +540,13 @@ export default function PayosCheckoutPage() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, marginTop: 12 }}>
+          <button type="button" disabled={historyLoading || historyPage <= 1} onClick={() => setHistoryPage((page) => page - 1)}>{UI_TEXT.prevPage}</button>
+          <span>{UI_TEXT.pageIndicator(historyPage, Math.max(1, Math.ceil(historyTotal / historyPageSize)))}</span>
+          <button type="button" disabled={historyLoading || historyPage * historyPageSize >= historyTotal} onClick={() => setHistoryPage((page) => page + 1)}>{UI_TEXT.nextPage}</button>
+        </div>
       </div>
     </div>
   );
 }
-
-
-

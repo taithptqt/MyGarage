@@ -1,5 +1,6 @@
-﻿import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { servicesApi } from "@features/services/api/servicesApi";
+import { getServiceCategoryPage } from "@features/services/api/serviceCategoryPagingApi";
 import { Modal, ConfirmDialog } from "@features/admin/components/AdminModals";
 import { useSearch } from "@shared/core/context/SearchContext";
 import TablePagination from "@shared/components/TablePagination";
@@ -68,6 +69,7 @@ function CategoryForm({ initial, onSubmit, onCancel, loading }) {
 
 export default function ServiceCategoriesPage() {
   const [categories, setCategories] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { searchQuery } = useSearch();
@@ -79,35 +81,43 @@ export default function ServiceCategoriesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const [search, setSearch] = useState("");
+  const loadSequence = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(String(searchQuery || "").trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchData = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     try {
-      const res = await servicesApi.getServiceCategories();
-      setCategories(res || []);
+      const res = await getServiceCategoryPage({ search: search || undefined, page, pageSize });
+      if (sequence !== loadSequence.current) return;
+      setCategories(Array.isArray(res?.items) ? res.items : []);
+      setTotal(Number(res?.total) || 0);
     } catch {
-      setError("Không thể tải danh mục.");
+      if (sequence === loadSequence.current) setError("Không thể tải danh mục.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, []);
+  }, [search, page, pageSize]);
 
   useEffect(() => {
     fetchData();
+    return () => { loadSequence.current += 1; };
   }, [fetchData]);
-
-  const query = String(searchQuery || "").trim().toLowerCase();
-  const filtered = (categories || []).filter((c) => (c.name || "").toLowerCase().includes(query));
-  const pagedCategories = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [query, pageSize]);
+  }, [searchQuery, pageSize]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     if (page > totalPages) setPage(totalPages);
-  }, [filtered.length, page, pageSize]);
+  }, [total, page, pageSize]);
 
   const closeModal = () => {
     setModal(null);
@@ -161,7 +171,7 @@ export default function ServiceCategoriesPage() {
       </header>
 
       <div className="table-toolbar">
-        <span className="result-count">{filtered.length} danh mục</span>
+        <span className="result-count">{total} danh mục</span>
       </div>
 
       {error ? <div className="error" style={{ margin: "0 28px 12px" }}>{error}</div> : null}
@@ -177,22 +187,22 @@ export default function ServiceCategoriesPage() {
                 <th>Tên danh mục</th>
                 <th>Thứ tự</th>
                 <th>Trạng thái</th>
-                <th>Thao t�c</th>
+                <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {categories.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="td-center">Không có danh mục phù hợp.</td>
                 </tr>
               ) : (
-                pagedCategories.map((c) => (
+                categories.map((c) => (
                   <tr key={c.id}>
                     <td className="td-id">{c.code}</td>
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td>{c.displayOrder}</td>
                     <td>
-                      <span className={`badge ${c.isActive ? "badge-success" : "badge-?anger"}`}>
+                      <span className={`badge ${c.isActive ? "badge-success" : "badge-danger"}`}>
                         {c.isActive ? "Hoạt động" : "Tạm dừng"}
                       </span>
                     </td>
@@ -212,7 +222,7 @@ export default function ServiceCategoriesPage() {
 
       <div style={{ display: "flex", justifyContent: "center" }}>
         <TablePagination
-          totalItems={filtered.length}
+          totalItems={total}
           currentPage={page}
           pageSize={pageSize}
           onPageChange={setPage}
@@ -238,7 +248,7 @@ export default function ServiceCategoriesPage() {
       )}
 
       {modal === "delete" && selected && (
-        <Modal title="Xác nhận x�a" onClose={closeModal}>
+        <Modal title="Xác nhận xóa" onClose={closeModal}>
           <ConfirmDialog
             message={`Xóa danh mục "${selected.name}"? Tất cả dịch vụ thuộc danh mục này sẽ bị ảnh hưởng.`}
             onConfirm={handleDelete}

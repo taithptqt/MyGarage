@@ -257,8 +257,8 @@ export default function ReceptionAppointmentsSection({
   onResetToolbarFilters,
   apptViewMode,
   setApptViewMode,
-  filteredSingleAppts,
-  groupedAppts,
+  totalSingle,
+  totalGroups,
   apptLoading,
   pagedSingleAppts,
   pagedGroupedAppts,
@@ -277,8 +277,6 @@ export default function ReceptionAppointmentsSection({
   setApptsPageSize,
 }) {
   const isGroupMode = apptViewMode === "GROUP";
-  const totalSingle = filteredSingleAppts.length;
-  const totalGroups = groupedAppts.length;
   const apptFilterOptions = [toStatusOptionVi("ALL"), ...apptStatusOptions.map(toStatusOptionVi)];
   const apptSortOptions = [
     { value: "NEWEST", label: "Mới nhất" },

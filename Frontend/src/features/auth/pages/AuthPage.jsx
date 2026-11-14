@@ -7,7 +7,7 @@ import LoginForm from "@features/auth/login/LoginForm";
 import { isLoginFormValid } from "@features/auth/login/loginValidation";
 import RegisterForm from "@features/auth/register/RegisterForm";
 import { isRegisterFormValid } from "@features/auth/register/registerValidation";
-import { clearAuthStorage, readAuthToken } from "@features/auth/utils/authStorage";
+import { clearAuthStorage, readAuthUser } from "@features/auth/utils/authStorage";
 import { useAuth } from "@shared/core/context/AuthContext";
 import { isValidVietnamesePhone } from "@shared/utils/contactValidation";
 import "./AuthPage.css";
@@ -127,7 +127,7 @@ function AuthPage() {
   }, []);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated && readAuthToken()) {
+    if (!authLoading && !isAuthenticated && readAuthUser()) {
       clearAuthStorage();
     }
   }, [authLoading, isAuthenticated]);

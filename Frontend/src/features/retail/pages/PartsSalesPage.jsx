@@ -8,9 +8,7 @@ import RetailImage from "@features/retail/components/RetailImage";
 import {
   getBranches,
   getCategories,
-  getProductImages,
-  getProducts,
-  getProductStockAvailabilitySafe,
+  getRetailCatalog,
 } from "@features/retail/api/retailApi";
 import useRetailCart from "@features/retail/hooks/useRetailCart";
 import {
@@ -22,7 +20,6 @@ import {
   getProductImageAlt,
   getProductName,
   normalizeAvailableQuantity,
-  normalizeText,
   readStoredRetailBranchId,
   resolveProductImage,
   RETAIL_BRANCH_CHANGED_EVENT,
@@ -125,14 +122,19 @@ export default function PartsSalesPage() {
   const [productImages, setProductImages] = useState([]);
   const [categories, setCategories] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [stockByProductId, setStockByProductId] = useState({});
   const [selectedBranchId, setSelectedBranchId] = useState(() => readStoredRetailBranchId());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [referenceError, setReferenceError] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name-asc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [activeProductCount, setActiveProductCount] = useState(0);
   const [draftQty, setDraftQty] = useState({});
   const [bannerMessage, setBannerMessage] = useState("");
   const {
@@ -163,133 +165,63 @@ export default function PartsSalesPage() {
 
   useEffect(() => {
     let ignore = false;
+    Promise.all([getCategories(), getBranches()]).then(([categoryData, branchData]) => {
+      if (ignore) return;
+      setCategories(Array.isArray(categoryData) ? categoryData.filter((item) => item?.isDeleted !== true) : []);
+      setBranches(Array.isArray(branchData) ? branchData.filter((item) => item?.isDeleted !== true && item?.isActive !== false) : []);
+      setBranchesLoaded(true);
+    }).catch((loadError) => {
+      if (!ignore) setReferenceError(loadError?.message || "Không thể tải danh sách phụ tùng lúc này.");
+    });
+    return () => { ignore = true; };
+  }, []);
 
-    async function loadData() {
+  useEffect(() => {
+    if (!branchesLoaded || !selectedBranchId) return;
+    if (branches.some((item) => String(item?.id) === String(selectedBranchId))) return;
+    setSelectedBranchId("");
+    writeStoredRetailBranchId("");
+  }, [branches, branchesLoaded, selectedBranchId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadCatalog() {
       setLoading(true);
       setError("");
-
       try {
-        const [productData, productImageData, categoryData, branchData] = await Promise.all([
-          getProducts(),
-          getProductImages(),
-          getCategories(),
-          getBranches(),
-        ]);
-
+        const result = await getRetailCatalog({
+          page: currentPage, pageSize: PRODUCTS_PER_PAGE,
+          search: debouncedSearch || undefined,
+          categoryId: catFilter === "all" ? undefined : catFilter,
+          branchId: selectedBranchId || undefined,
+          sort: sortBy,
+        });
         if (ignore) return;
-
-        const nextProducts = Array.isArray(productData)
-          ? productData.filter((item) => item?.isActive !== false)
-          : [];
-        const nextProductImages = Array.isArray(productImageData) ? productImageData : [];
-        const nextCategories = Array.isArray(categoryData)
-          ? categoryData.filter((item) => item?.isDeleted !== true)
-          : [];
-        const nextBranches = Array.isArray(branchData)
-          ? branchData.filter(
-              (item) => item?.isDeleted !== true && item?.isActive !== false
-            )
-          : [];
-
-        setProducts(nextProducts);
-        setProductImages(nextProductImages);
-        setCategories(nextCategories);
-        setBranches(nextBranches);
+        setProducts(Array.isArray(result?.items) ? result.items : []);
+        setProductImages(Array.isArray(result?.images) ? result.images : []);
+        setStockByProductId(result?.availability || {});
+        setTotalProducts(Number(result?.total) || 0);
+        setActiveProductCount(Number(result?.activeCount) || 0);
       } catch (loadError) {
         if (!ignore) {
           setError(loadError?.message || "Không thể tải danh sách phụ tùng lúc này.");
           setProducts([]);
           setProductImages([]);
-          setCategories([]);
-          setBranches([]);
           setStockByProductId({});
+          setTotalProducts(0);
         }
       } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
     }
-
-    loadData();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!selectedBranchId) return;
-    const isSelectedBranchValid = branches.some(
-      (item) => String(item?.id) === String(selectedBranchId)
-    );
-    if (isSelectedBranchValid) return;
-
-    setSelectedBranchId("");
-    writeStoredRetailBranchId("");
-  }, [branches, selectedBranchId]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadStock() {
-      if (!products.length) {
-        if (!ignore) {
-          setStockByProductId({});
-        }
-        return;
-      }
-
-      const productIds = products.map((item) => item?.id);
-      let branchId = selectedBranchId || "";
-
-      let result = await getProductStockAvailabilitySafe({
-        productIds,
-        branchId: branchId || undefined,
-      });
-
-      if (
-        !result.ok &&
-        branchId &&
-        result.data?.branchId != null
-      ) {
-        writeStoredRetailBranchId("");
-        setSelectedBranchId("");
-        branchId = "";
-        result = await getProductStockAvailabilitySafe({
-          productIds,
-          branchId: undefined,
-        });
-      }
-
-      if (ignore) return;
-
-      if (!result.ok) {
-        setError(result.data?.message || "Không thể tải tồn kho catalog lúc này.");
-        setStockByProductId({});
-        return;
-      }
-
-      setError("");
-      const nextStockEntries = result.data;
-      const nextStockByProductId = Array.isArray(nextStockEntries)
-        ? Object.fromEntries(
-            nextStockEntries.map((entry) => [
-              String(entry?.productId),
-              normalizeAvailableQuantity(entry?.availableQuantity),
-            ])
-          )
-        : {};
-
-      setStockByProductId(nextStockByProductId);
-    }
-
-    loadStock();
-
-    return () => {
-      ignore = true;
-    };
-  }, [products, selectedBranchId]);
+    loadCatalog();
+    return () => { ignore = true; };
+  }, [currentPage, debouncedSearch, catFilter, sortBy, selectedBranchId]);
 
   useEffect(() => {
     setDraftQty((previous) => {
@@ -297,6 +229,7 @@ export default function PartsSalesPage() {
       let changed = false;
 
       Object.entries(nextState).forEach(([productId, rawQty]) => {
+        if (!Object.prototype.hasOwnProperty.call(stockByProductId, productId)) return;
         const availableQuantity = normalizeAvailableQuantity(stockByProductId[productId]);
         if (availableQuantity <= 0) {
           if (Number(rawQty) !== 0) {
@@ -364,50 +297,6 @@ export default function PartsSalesPage() {
     return groupedImages;
   }, [productImages]);
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = normalizeText(search);
-    const rows = products.filter((product) => {
-      const relatedImages = productImagesByProductId.get(String(product?.id)) || [];
-      const matchesCategory =
-        catFilter === "all" || String(product?.categoryId) === String(catFilter);
-
-      if (!matchesCategory) return false;
-      if (!normalizedQuery) return true;
-
-      const haystack = [
-        product?.name,
-        product?.sku,
-        getProductDescription(product, relatedImages, { fallback: false }),
-        categoriesById.get(String(product?.categoryId))?.categoryName,
-      ]
-        .map(normalizeText)
-        .join(" ");
-
-      return haystack.includes(normalizedQuery);
-    });
-
-    rows.sort((left, right) => {
-      const leftInStock = normalizeAvailableQuantity(stockByProductId[String(left?.id)]) > 0;
-      const rightInStock = normalizeAvailableQuantity(stockByProductId[String(right?.id)]) > 0;
-      if (leftInStock !== rightInStock) {
-        return leftInStock ? -1 : 1;
-      }
-
-      if (sortBy === "price-asc") {
-        return Number(left?.retailPrice || 0) - Number(right?.retailPrice || 0);
-      }
-      if (sortBy === "price-desc") {
-        return Number(right?.retailPrice || 0) - Number(left?.retailPrice || 0);
-      }
-      if (sortBy === "name-desc") {
-        return getProductName(right).localeCompare(getProductName(left), "vi");
-      }
-      return getProductName(left).localeCompare(getProductName(right), "vi");
-    });
-
-    return rows;
-  }, [catFilter, categoriesById, productImagesByProductId, products, search, sortBy, stockByProductId]);
-
   const sortedBranches = useMemo(
     () =>
       [...branches].sort((left, right) =>
@@ -417,8 +306,8 @@ export default function PartsSalesPage() {
   );
 
   const totalPages = useMemo(
-    () => Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE),
-    [filteredProducts.length]
+    () => Math.ceil(totalProducts / PRODUCTS_PER_PAGE),
+    [totalProducts]
   );
   const safeCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages);
 
@@ -453,20 +342,15 @@ export default function PartsSalesPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, [currentPage]);
 
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (safeCurrentPage - 1) * PRODUCTS_PER_PAGE;
-    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
-  }, [filteredProducts, safeCurrentPage]);
-
   const paginationSummary = useMemo(() => {
-    if (!filteredProducts.length) {
+    if (!totalProducts) {
       return "";
     }
 
     const start = (safeCurrentPage - 1) * PRODUCTS_PER_PAGE + 1;
-    const end = Math.min(filteredProducts.length, safeCurrentPage * PRODUCTS_PER_PAGE);
-    return `Hiển thị ${start}-${end} trên ${filteredProducts.length} phụ tùng`;
-  }, [filteredProducts.length, safeCurrentPage]);
+    const end = Math.min(totalProducts, safeCurrentPage * PRODUCTS_PER_PAGE);
+    return `Hiển thị ${start}-${end} trên ${totalProducts} phụ tùng`;
+  }, [totalProducts, safeCurrentPage]);
 
   function handlePageChange(nextPage) {
     const normalizedPage = Math.min(
@@ -484,11 +368,11 @@ export default function PartsSalesPage() {
 
   const summaryStats = useMemo(
     () => [
-      { value: `${products.length}+`, label: "mã phụ tùng đang mở bán" },
+      { value: `${activeProductCount}+`, label: "mã phụ tùng đang mở bán" },
       { value: `${categories.length}`, label: "nhóm danh mục đang hiển thị" },
       { value: `${totalLineItems}`, label: "mặt hàng đang nằm trong giỏ" },
     ],
-    [categories.length, products.length, totalLineItems]
+    [categories.length, activeProductCount, totalLineItems]
   );
 
   function getAvailableQuantity(productId) {
@@ -597,8 +481,8 @@ export default function PartsSalesPage() {
           </div>
         </section>
 
-        {error ? (
-          <div className="parts-shop-card parts-shop-alert parts-shop-alert-error">{error}</div>
+        {(error || referenceError) ? (
+          <div className="parts-shop-card parts-shop-alert parts-shop-alert-error">{error || referenceError}</div>
         ) : null}
         {bannerMessage ? (
           <div className="parts-shop-card parts-shop-alert parts-shop-alert-success">
@@ -642,7 +526,7 @@ export default function PartsSalesPage() {
                 </select>
               </div>
               <div className="parts-shop-results-meta">
-                <strong>{filteredProducts.length}</strong>
+                <strong>{totalProducts}</strong>
                 <span>sản phẩm đang hiển thị</span>
                 {paginationSummary ? (
                   <small className="parts-shop-results-range">{paginationSummary}</small>
@@ -694,14 +578,14 @@ export default function PartsSalesPage() {
 
           {loading ? (
             <div className="parts-shop-empty">Đang tải danh mục phụ tùng...</div>
-          ) : filteredProducts.length === 0 ? (
+          ) : totalProducts === 0 ? (
             <div className="parts-shop-empty">
               Không có phụ tùng nào khớp bộ lọc hiện tại. Hãy thử đổi từ khóa hoặc danh mục.
             </div>
           ) : (
             <>
               <div className="parts-shop-list">
-                {paginatedProducts.map((product) => {
+                {products.map((product) => {
                   const category = categoriesById.get(String(product?.categoryId));
                   const relatedImages = productImagesByProductId.get(String(product?.id)) || [];
                   const availableQuantity = getAvailableQuantity(product.id);
