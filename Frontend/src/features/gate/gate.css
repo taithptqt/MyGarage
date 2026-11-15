@@ -1,0 +1,28 @@
+.gate-page { color: #1b2559; font-family: system-ui, sans-serif; }
+.gate-page h2,.gate-page h3 { margin: 0 0 12px; }
+.gate-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.gate-heading p { color: #52617c; max-width: 700px; }
+.gate-tabs,.gate-toolbar,.gate-pagination { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 20px 0; }
+.gate-tabs a { padding: 12px 18px; border-radius: 12px; background: #fff; color: #334a74; text-decoration: none; }
+.gate-tabs a.active { background: #422afb; color: #fff; }
+.gate-page button { padding: 10px 16px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; color: #253f73; }
+.gate-page button:disabled { opacity: .5; cursor: default; }
+.gate-page input,.gate-page select,.gate-page textarea { border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; background: #fff; color: #172b4d; max-width: 100%; }
+.gate-page label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.gate-page input[type=checkbox] { width: auto; }
+.gate-devices { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 14px; margin: 20px 0; }
+.gate-panel { background: #fff; border: 1px solid #dde5f1; border-radius: 16px; padding: 20px; }
+.gate-panel p { overflow-wrap: anywhere; }
+.gate-online { color: #087b50; }.gate-offline { color: #b83c25; }
+.gate-error { background: #fff1ef; color: #a62d1b; border-radius: 10px; padding: 14px; margin: 16px 0; }
+.gate-secret { padding: 18px; background: #fffbde; border: 1px solid #e4c756; overflow-wrap: anywhere; }
+.gate-form { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; align-items: end; }
+.gate-form label { flex: 1 1 200px; }.gate-form textarea { min-height: 70px; }
+.gate-table-wrap { overflow-x: auto; background: #fff; border-radius: 16px; padding: 16px; }
+.gate-page table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.gate-page td,.gate-page th { padding: 14px 10px; border-bottom: 1px solid #e5eaf2; }
+.gate-page small { display: block; color: #64748b; margin-top: 5px; }
+.gate-pagination { justify-content: flex-end; align-items: center; }
+.gate-review { margin-top: 24px; }.gate-evidence { display: flex; gap: 20px; flex-wrap: wrap; }
+.gate-evidence figure { flex: 1 1 260px; margin: 0; }.gate-evidence img { max-width: 100%; max-height: 360px; object-fit: contain; background: #101c2e; }
+.gate-evidence figcaption { margin: 10px 0; }

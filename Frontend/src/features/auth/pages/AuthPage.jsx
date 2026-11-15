@@ -55,6 +55,7 @@ function resolvePostAuthDestination(data, requestedPath) {
   if (code === "ADMIN" || roleName === "admin") {
     return "/admin";
   }
+  if (code === "GATE_SECURITY") return "/workshop/gate";
   if (code === "ACCOUNTANT") {
     return "/accounting/dashboard";
   }

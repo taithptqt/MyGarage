@@ -80,6 +80,14 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddDataProtection();
+builder.Services.AddScoped<MyGarage.Infrastructure.CameraAccess.CameraGateService>();
+builder.Services.AddScoped<MyGarage.Infrastructure.CameraAccess.CameraVideoService>();
+builder.Services.AddHttpClient("camera-recognition", client => {
+    client.BaseAddress = new Uri(builder.Configuration["CameraAI:RecognitionUrl"] ?? "http://127.0.0.1:7861/");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddHostedService<MyGarage.Infrastructure.CameraAccess.CameraEvidenceRetention>();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddSingleton<ISlotHoldService, SlotHoldService>();
 builder.Services.AddMemoryCache();
@@ -687,6 +695,12 @@ builder.Services.AddKeyedSingleton("OrderClient", (sp, key) =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("camera-tracking", context => RateLimitPartition.GetFixedWindowLimiter(
+        $"tracking:{context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value}:{context.Request.RouteValues["id"]}:{context.Connection.RemoteIpAddress}",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 2400, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+    options.AddPolicy("camera-ingestion", context => RateLimitPartition.GetFixedWindowLimiter(
+        $"camera:{context.Request.RouteValues["id"]}:{context.Connection.RemoteIpAddress}",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 240, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
 
     static string ResolvePartitionKey(HttpContext httpContext, string prefix)
     {
@@ -822,6 +836,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<MyGarage.Infrastructure.CameraAccess.CameraGateHub>("/hubs/gate");
 
 // Liveness & readiness endpoints — used by Docker healthcheck and load balancers.
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", utc = DateTime.UtcNow }))

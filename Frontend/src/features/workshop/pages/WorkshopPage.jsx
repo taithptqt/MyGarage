@@ -12,8 +12,10 @@ import { getApiBaseUrl } from "@features/auth/api/authApi";
 import ProfileDialog from "@features/profile/components/ProfileDialog";
 import { ChakraProvider } from "@chakra-ui/react";
 import initialTheme from "@horizon/theme/theme";
+import { gateLabels } from "@features/gate/gateLabels";
 
 const ROLES_META = {
+  GATE_SECURITY: { path: "gate", label: "Bảo vệ cổng", icon: "🚘", description: "Kiểm soát xe vào và ra" },
   ADMIN: { path: "reception", label: "Admin Workshop", icon: "🛠️", description: "Toàn quyền điều phối xưởng" },
   RECEPTIONIST: { path: "reception", label: "Lễ tân", icon: "📝", description: "Tiếp nhận, Báo giá & Thanh toán" },
   MANAGER: { path: "manager", label: "Workshop Manager", icon: "👨‍🏫", description: "Quản lý chung" },
@@ -318,6 +320,9 @@ export default function WorkshopPage() {
                 </div>
               </div>
             ))}
+            {["ADMIN", "MANAGER", "RECEPTIONIST", "GATE_SECURITY"].includes(userRole) && (
+              <button type="button" className="role-sub-item" onClick={() => navigate("/workshop/gate")}>{gateLabels.title}</button>
+            )}
             {isReceptionDashboard && (
               <div className="role-sub-nav">
                 <button

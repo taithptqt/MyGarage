@@ -262,7 +262,9 @@ namespace MyGarage.Mappings
             CreateMap<ShiftClosingCreateDto, ShiftClosing>();
             CreateMap<ShiftClosingUpdateDto, ShiftClosing>();
             // Staff Mappings
-            CreateMap<Staff, StaffResponseDto>();
+            CreateMap<Staff, StaffResponseDto>()
+                .ForMember(dest => dest.RoleCode, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleCode : null))
+                .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.RoleName : null));
             CreateMap<StaffCreateDto, Staff>()
                 .ForMember(dest => dest.PasswordHash, opt => opt.MapFrom(src => src.Password));
             CreateMap<StaffUpdateDto, Staff>()

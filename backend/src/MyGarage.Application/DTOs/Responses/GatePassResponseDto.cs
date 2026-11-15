@@ -16,5 +16,6 @@ namespace MyGarage.DTOs.Responses
         public long? ScannedBy { get; set; }
         public DateTime? SecurityCheckedAt { get; set; }
         public DateTime? PassedAt { get; set; }
+        public DateTime? ExpiresAtUtc { get; set; }
     }
 }

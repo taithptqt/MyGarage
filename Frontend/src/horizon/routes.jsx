@@ -39,6 +39,8 @@ import VehicleManagementPage from "@features/cars/pages/VehicleManagementPage";
 import TechnicianProductivityDashboard from "@features/workshop/components/TechnicianProductivityDashboard";
 import MaintenanceReminderManager from "@features/workshop/components/MaintenanceReminderManager";
 import ConsumableBulkReturn from "@features/workshop/components/ConsumableBulkReturn";
+import GatePage from "@features/gate/GatePage";
+import { gateLabels } from "@features/gate/gateLabels";
 
 const inventoryItems = [
   {
@@ -286,6 +288,16 @@ const routes = [
     path: '/service-orders',
     icon: <Icon as={MdDirectionsCar} width="20px" height="20px" color="inherit" />,
     component: <ReceptionOrdersSection />,
+  },
+  {
+    name: gateLabels.adminMenu,
+    icon: <Icon as={MdVerifiedUser} width="20px" height="20px" color="inherit" />,
+    collapse: true,
+    items: [
+      { name: gateLabels.dashboard, layout: '/admin', path: '/gate', icon: <Icon as={MdVisibility} width="20px" height="20px" color="inherit" />, component: <GatePage /> },
+      { name: gateLabels.history, layout: '/admin', path: '/gate/history', icon: <Icon as={MdHistory} width="20px" height="20px" color="inherit" />, component: <GatePage /> },
+      { name: gateLabels.cameras, layout: '/admin', path: '/gate/cameras', icon: <Icon as={MdSettings} width="20px" height="20px" color="inherit" />, component: <GatePage /> },
+    ],
   },
   {
     name: 'Chi nhánh',

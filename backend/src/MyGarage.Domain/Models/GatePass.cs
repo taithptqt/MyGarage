@@ -30,6 +30,7 @@ public partial class GatePass
     public DateTime? SecurityCheckedAt { get; set; }
 
     public DateTime? PassedAt { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
 
     public virtual ICollection<ApprovalRequest> ApprovalRequests { get; set; } = new List<ApprovalRequest>();
 

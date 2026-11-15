@@ -56,7 +56,7 @@ namespace MyGarage.Controllers
                 return (ActionResult)denied!;
             }
 
-            var query = _context.Staffs.AsNoTracking().AsQueryable();
+            var query = _context.Staffs.AsNoTracking().Include(s => s.Role).AsQueryable();
             if (scopedBranchId.HasValue)
             {
                 query = query.Where(s => s.BranchId == scopedBranchId.Value);

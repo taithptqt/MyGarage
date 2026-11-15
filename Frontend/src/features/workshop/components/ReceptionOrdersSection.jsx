@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { serviceOrderApi } from "@features/workshop/api/serviceOrderApi";
 import { createChatHubConnection } from "@features/chat/realtime/chatHubConnection";
 import { getAllCustomers, getAllVehicles } from "@features/admin/api/customerApi";
-import { getAllStaff, getAllRoles } from "@features/admin/api/staffApi";
+import { getAllStaff } from "@features/admin/api/staffApi";
 import DateRangePickerModal, { getDateRangeButtonLabel } from "@features/admin/components/DateRangePickerModal";
 import { getStatusBadge } from "@features/admin/utils/adminUtils";
 import { useSearch } from "@shared/core/context/SearchContext";
@@ -248,12 +248,11 @@ export default function ReceptionOrdersSection() {
     setLoading(true);
     setError("");
     try {
-      const [oRes, cRes, vRes, sRes, rRes, diagnosisRes, supplementaryRes] = await Promise.all([
+      const [oRes, cRes, vRes, sRes, diagnosisRes, supplementaryRes] = await Promise.all([
         serviceOrderApi.getAll(),
         getAllCustomers(),
         getAllVehicles(),
         getAllStaff(),
-        getAllRoles(),
         serviceOrderApi.getDiagnoses().catch(() => []),
         serviceOrderApi.getPendingSupplementaryProposals(
           effectiveBranchId ? { branchId: effectiveBranchId } : undefined
@@ -343,8 +342,8 @@ export default function ReceptionOrdersSection() {
       setVehicles(Array.isArray(vRes) ? vRes : []);
 
       const filteredStaff = (Array.isArray(sRes) ? sRes : []).filter((item) => {
-        const role = (Array.isArray(rRes) ? rRes : []).find((r) => r.id === item.roleId);
-        const isReceptionist = role && role.roleCode === "RECEPTIONIST";
+        const roleCode = String(item.roleCode ?? item.RoleCode ?? "").trim().toUpperCase();
+        const isReceptionist = roleCode === "RECEPTIONIST";
         const staffBranchId = Number(item.branchId ?? item.BranchId ?? 0);
         const branchMatched = !effectiveBranchId || staffBranchId === effectiveBranchId;
         return isReceptionist && branchMatched;

@@ -1101,6 +1101,77 @@ namespace MyGarage.Migrations
                     b.ToTable("BranchQuotationApprovalPolicies");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.CameraDevice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CredentialHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("EncryptedStreamUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Health")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Lane")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("LastHeartbeatAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double>("MinConfidence")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("Version")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.ToTable("CameraDevices");
+                });
+
             modelBuilder.Entity("MyGarage.Models.CapacityConfig", b =>
                 {
                     b.Property<long>("Id")
@@ -2916,6 +2987,9 @@ namespace MyGarage.Migrations
                         .HasMaxLength(50)
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool?>("IsOldPartsChecked")
                         .ValueGeneratedOnAdd()
@@ -8667,6 +8741,158 @@ namespace MyGarage.Migrations
                     b.ToTable("Vehicles");
                 });
 
+            modelBuilder.Entity("MyGarage.Models.VehicleAccessAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<long?>("ActorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("After")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Before")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("CameraId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("EventId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId", "At");
+
+                    b.ToTable("VehicleAccessAudits");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.VehicleAccessEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CameraId")
+                        .HasColumnType("bigint");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("EventKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("GatePassId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("ObservedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Plate")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<byte[]>("PlateCrop")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("RawPlate")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ReviewedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ServiceOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("Snapshot")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<long?>("VehicleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("Version")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("WorkerInstance")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GatePassId")
+                        .IsUnique()
+                        .HasFilter("[GatePassId] IS NOT NULL AND [Status] = 'CONFIRMED'");
+
+                    b.HasIndex("VehicleId");
+
+                    b.HasIndex("BranchId", "ReceivedAt");
+
+                    b.HasIndex("CameraId", "EventKey")
+                        .IsUnique();
+
+                    b.ToTable("VehicleAccessEvents");
+                });
+
             modelBuilder.Entity("MyGarage.Models.VehicleBrand", b =>
                 {
                     b.Property<long>("Id")
@@ -10287,6 +10513,15 @@ namespace MyGarage.Migrations
                         .HasConstraintName("FK_BranchQuotationApprovalPolicies_Branches");
 
                     b.Navigation("Branch");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.CameraDevice", b =>
+                {
+                    b.HasOne("MyGarage.Models.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MyGarage.Models.CapacityConfig", b =>
@@ -13157,6 +13392,25 @@ namespace MyGarage.Migrations
                     b.Navigation("Model");
 
                     b.Navigation("UpdatedByNavigation");
+                });
+
+            modelBuilder.Entity("MyGarage.Models.VehicleAccessEvent", b =>
+                {
+                    b.HasOne("MyGarage.Models.CameraDevice", null)
+                        .WithMany()
+                        .HasForeignKey("CameraId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MyGarage.Models.GatePass", null)
+                        .WithMany()
+                        .HasForeignKey("GatePassId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyGarage.Models.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("MyGarage.Models.VehicleBrand", b =>

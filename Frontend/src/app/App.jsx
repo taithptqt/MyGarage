@@ -15,6 +15,7 @@ const HomePage = lazy(() => import("@features/home/pages/HomePage"));
 const AdminPage = lazy(() => import("@features/admin/pages/AdminPage"));
 const DispatchCenterPage = lazy(() => import("@features/admin/pages/DispatchCenterPage"));
 const WorkshopPage = lazy(() => import("@features/workshop/pages/WorkshopPage"));
+const GatePage = lazy(() => import("@features/gate/GatePage"));
 const ReceptionOrdersSection = lazy(() => import("@features/workshop/components/ReceptionOrdersSection"));
 const ManagerDashboard = lazy(() => import("@features/workshop/components/ManagerDashboard"));
 const ForemanDashboard = lazy(() => import("@features/workshop/components/ForemanDashboard"));
@@ -325,11 +326,14 @@ function App() {
             <Route
               path="/workshop"
               element={
-                <ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER", "ACCOUNTANT"]}>
+                <ProtectedRoute allowedRoles={["ADMIN", "RECEPTIONIST", "TECH", "MANAGER", "QUALITY_CONTROL", "FOREMAN", "TEAM_LEADER", "STORE_KEEPER", "ACCOUNTANT", "GATE_SECURITY"]}>
                   <WorkshopPage />
                 </ProtectedRoute>
               }
             >
+              <Route path="gate" element={<WorkshopChildRoute allowedRoles={["ADMIN", "MANAGER", "RECEPTIONIST", "GATE_SECURITY"]}><GatePage /></WorkshopChildRoute>} />
+              <Route path="gate/history" element={<WorkshopChildRoute allowedRoles={["ADMIN", "MANAGER", "RECEPTIONIST", "GATE_SECURITY"]}><GatePage /></WorkshopChildRoute>} />
+              <Route path="gate/cameras" element={<WorkshopChildRoute allowedRoles={["ADMIN", "MANAGER"]}><GatePage /></WorkshopChildRoute>} />
               <Route path="reception" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionOrdersSection /></WorkshopChildRoute>} />
               <Route path="reception/create" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><CreateServiceOrderPage /></WorkshopChildRoute>} />
               <Route path="reception/appointments" element={<WorkshopChildRoute allowedRoles={["ADMIN", "RECEPTIONIST"]}><ReceptionAppointmentsPage /></WorkshopChildRoute>} />

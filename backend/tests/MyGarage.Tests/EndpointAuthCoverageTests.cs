@@ -10,6 +10,10 @@ public class EndpointAuthCoverageTests
 {
     private static readonly HashSet<string> ReviewedAnonymousActions = new(StringComparer.Ordinal)
     {
+        // Device routes enforce per-camera hashed credentials instead of staff JWTs.
+        "CameraIngestionController.Configuration",
+        "CameraIngestionController.Heartbeat",
+        "CameraIngestionController.Observe",
         "AppointmentsController.CreateGuest",
         "AppointmentsController.GetAvailability",
         "AuthController.ForgotPassword",

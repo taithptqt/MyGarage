@@ -348,5 +348,6 @@ public partial class GarageContext
         ConfigureAuthModule(modelBuilder);
         ConfigureExecutionModule(modelBuilder);
         ConfigureCustomerLifecycleModule(modelBuilder);
+        ConfigureCameraAccess(modelBuilder);
     }
 }

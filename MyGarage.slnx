@@ -1,3 +1,7 @@
 <Solution>
-  <Project Path="backend/MyGarage.csproj" />
+  <Project Path="backend/src/MyGarage.Api/MyGarage.Api.csproj" />
+  <Project Path="backend/src/MyGarage.Application/MyGarage.Application.csproj" />
+  <Project Path="backend/src/MyGarage.Domain/MyGarage.Domain.csproj" />
+  <Project Path="backend/src/MyGarage.Infrastructure/MyGarage.Infrastructure.csproj" />
+  <Project Path="backend/tests/MyGarage.Tests/MyGarage.Tests.csproj" />
 </Solution>

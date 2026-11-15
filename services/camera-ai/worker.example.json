@@ -1,0 +1,6 @@
+{
+  "myGarageUrl": "http://127.0.0.1:5062",
+  "cameras": [
+    { "cameraId": 1, "keyEnvironmentVariable": "MYGARAGE_CAMERA_1_KEY" }
+  ]
+}

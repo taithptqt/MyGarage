@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Camera AI</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#10151b;color:#eaf0f6;font:15px system-ui,sans-serif}
+    main{max-width:1440px;margin:32px auto;padding:0 24px}h1{font-size:32px;margin:5px 0 8px}p{color:#aebbc9;line-height:1.6}
+    nav,.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:22px 0}
+    button,.upload,select{border:1px solid #384858;border-radius:8px;background:#223345;color:white;padding:11px 16px;font:inherit;cursor:pointer}
+    button:hover,.upload:hover{background:#314b62}button:disabled{opacity:.45;cursor:default}.primary{background:#16684d}input[type=file]{display:none}
+    .grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px}.viewer,aside,.history{background:#19232d;border:1px solid #2a3948;border-radius:12px;padding:18px}
+    .images{display:grid;grid-template-columns:1fr 1fr;gap:14px}.screen{min-width:0}.screen h2,aside h2,.history h2{font-size:13px;color:#aebbc9;font-weight:600;margin:0 0 12px}
+    .media{position:relative;background:#0b1015;border-radius:8px;min-height:260px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    video,img{width:100%;max-height:65vh;object-fit:contain}[hidden]{display:none!important}#placeholder{padding:30px;text-align:center;color:#8c9eaf}
+    #plates{font-size:24px;font-weight:700;overflow-wrap:anywhere}.stat{font-size:28px;margin:18px 0 0}.small{font-size:12px;color:#91a4b7}
+    .controls{margin:16px 0 0}.controls label{font-size:13px;color:#aebbc9}select{padding:8px}#status{min-height:24px}#status.error{color:#ffb7a5}
+    details{margin-top:18px;border-top:1px solid #2a3948;padding-top:14px}summary{cursor:pointer;color:#aebbc9;font-size:13px}
+    .history{margin-top:18px}table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}td,th{padding:9px 12px;border-bottom:1px solid #2a3948}th{color:#96aabe}td button{padding:4px 10px;font-size:12px}
+    #filename{overflow-wrap:anywhere}canvas{display:none}#live{display:block;width:100%;max-height:65vh;object-fit:contain}#overlay{position:absolute;pointer-events:none;z-index:2}
+    .video-mode .images{grid-template-columns:1fr}.video-mode .screen:nth-child(2){display:none}
+    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+    @media(max-width:650px){main{padding:0 14px}.images{grid-template-columns:1fr}.media{min-height:180px}h1{font-size:27px}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Camera AI</h1>
+  <nav>
+    <label class="upload primary" for="videoFile">Chọn video<input type="file" id="videoFile" accept="video/*,.mkv,.avi,.mov,.mp4,.webm"></label>
+    <label class="upload" for="imageFile">Chọn ảnh<input type="file" id="imageFile" accept="image/*"></label>
+    <button id="camera">Bật webcam</button>
+    <button id="demo">Video mẫu</button>
+    <button id="sample">Ảnh mẫu</button>
+  </nav>
+  <p id="status" role="status" aria-live="polite">Sẵn sàng.</p>
+  <div class="grid">
+    <section class="viewer">
+      <div class="images">
+        <div class="screen">
+          <h2>VIDEO</h2>
+          <div class="media">
+            <svg id="overlay" hidden></svg>
+            <video id="video" controls muted playsinline hidden></video>
+            <span id="placeholder">Chưa chọn video</span>
+          </div>
+          <p id="filename" class="small">—</p>
+        </div>
+        <div class="screen">
+          <h2>KẾT QUẢ</h2>
+          <div class="media">
+            <canvas id="live" hidden></canvas>
+            <img id="result" alt="Ảnh nhận diện biển số" hidden>
+            <span id="emptyResult" class="small">Chưa có kết quả</span>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="play" class="primary" disabled>Phát & quét</button>
+        <button id="pause" disabled>Tạm dừng</button>
+        <button id="scan" disabled>Quét khung hình</button>
+        <button id="deep" disabled>Quét kỹ</button>
+        <button id="stop" disabled>Dừng</button>
+        <label>Tốc độ <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+      </div>
+      <details>
+        <summary>Tùy chọn nhận diện</summary>
+        <div class="controls">
+          <label>Chế độ <select id="detectionMode"><option value="balanced" selected>Cân bằng</option><option value="accurate">Chi tiết</option><option value="fast">Nhanh</option></select></label>
+          <label>Lấy mẫu <select id="samplingFps"><option value="15">15 FPS</option><option value="30" selected>30 FPS</option><option value="60">60 FPS</option></select></label>
+          <label>Độ phân giải <select id="resolution"><option value="0">Gốc</option><option value="1920" selected>1920 px</option><option value="1280">1280 px</option></select></label>
+        </div>
+      </details>
+    </section>
+    <aside>
+      <h2>BIỂN SỐ</h2>
+      <div id="plates">—</div>
+      <p id="partial" class="small"></p>
+      <p class="small">Kết quả AI cần được xác nhận.</p>
+      <details>
+        <summary>Thông số xử lý</summary>
+        <p id="frameTime" class="small">—</p>
+        <p id="trackingInfo" class="small"></p>
+        <p id="pipeline" class="small"></p>
+        <p id="samplingInfo" class="small"></p>
+        <div class="stat" id="fps">— FPS</div>
+        <p class="small">Tốc độ AI</p>
+        <div id="latency">— ms</div>
+        <div class="stat" id="actual">— FPS</div>
+        <p class="small">Khung hình xử lý / giây</p>
+      </details>
+    </aside>
+  </div>
+  <section class="history">
+    <h2>LỊCH SỬ NHẬN DIỆN <span id="count">· 0 kết quả</span></h2>
+    <p id="historyEmpty" class="small">Chưa đọc được biển số.</p>
+    <div style="overflow:auto;max-height:320px">
+      <table id="table" hidden>
+        <thead><tr><th>Thời điểm</th><th>Biển số</th><th>Xem lại</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+  <canvas id="canvas"></canvas>
+</main>
+<script src="/tracking.js"></script><script src="/web.js"></script>
+</body>
+</html>

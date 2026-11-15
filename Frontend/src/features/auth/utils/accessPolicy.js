@@ -12,6 +12,7 @@ export function isRouteAllowed(user, allowedRoles) {
 
 export function getUnauthorizedRedirectPath(user) {
   const roleCode = normalizeRoleCode(user);
+  if (roleCode === "GATE_SECURITY") return "/workshop/gate";
   if (roleCode === "ACCOUNTANT") {
     return "/accounting/dashboard";
   }

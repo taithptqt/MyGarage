@@ -58,6 +58,7 @@ public sealed class WriteRequestSpamGuardMiddleware
 
     private static bool ShouldGuard(HttpRequest request)
     {
+        if (request.HttpContext.GetEndpoint()?.Metadata.GetMetadata<IdempotentCameraFrameAttribute>() != null) return false;
         if (!UnsafeMethods.Contains(request.Method))
         {
             return false;
@@ -67,6 +68,10 @@ public sealed class WriteRequestSpamGuardMiddleware
         {
             return false;
         }
+
+        // Device deliveries are idempotent by (CameraId, EventKey) and have their
+        // own rate limiter. Retries must receive the original acknowledgement.
+        if (request.Path.StartsWithSegments("/api/v1/camera-ai")) return false;
 
         return true;
     }
@@ -131,3 +136,8 @@ public sealed class WriteRequestSpamGuardMiddleware
         await context.Response.WriteAsync($"{{\"message\":\"{message}\"}}");
     }
 }
+
+// Frame analysis can revisit the same timestamp on pause/seek; recording is
+// idempotent per video/plate. Its endpoint has a separate authenticated rate limit.
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class IdempotentCameraFrameAttribute : Attribute;
