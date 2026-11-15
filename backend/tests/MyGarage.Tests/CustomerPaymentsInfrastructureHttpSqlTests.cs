@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MyGarage.Application.Payments;
+using MyGarage.Data;
 using MyGarage.Infrastructure.Payments;
 using Xunit;
 
@@ -51,17 +52,14 @@ public sealed class CustomerPaymentsInfrastructureHttpSqlTests
             using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<ICustomerPaymentsReader>();
-                services.AddScoped<ICustomerPaymentsReader, CustomerPaymentsReader>();
-                services.RemoveAll<DbContextOptions<PaymentReadDbContext>>();
-                services.RemoveAll<IDbContextOptionsConfiguration<PaymentReadDbContext>>();
-                services.RemoveAll<PaymentReadDbContext>();
-                services.AddDbContext<PaymentReadDbContext>(options => options.UseSqlServer(target.ConnectionString));
+                services.AddScoped(_ => new SqlPaymentsContext(target.ConnectionString));
+                services.AddScoped<ICustomerPaymentsReader>(sp => new CustomerPaymentsReader(sp.GetRequiredService<SqlPaymentsContext>().Db));
             }));
             using var client = app.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-            using var response = await client.GetAsync("/api/payments/mine?page=2&pageSize=1");
+            using var response = await client.GetAsync("/api/v1/payments/mine?page=2&pageSize=1");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.False(response.Headers.Contains("X-Total-Count"));
+            Assert.True(response.Headers.Contains("X-Total-Count"));
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.Equal(2, json.RootElement.GetProperty("totalCount").GetInt32());
             var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
@@ -74,5 +72,11 @@ public sealed class CustomerPaymentsInfrastructureHttpSqlTests
             drop.CommandText = $"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]";
             await drop.ExecuteNonQueryAsync();
         }
+    }
+
+    private sealed class SqlPaymentsContext(string connectionString) : IDisposable
+    {
+        public GarageContext Db { get; } = new(new DbContextOptionsBuilder<GarageContext>().UseSqlServer(connectionString).Options);
+        public void Dispose() => Db.Dispose();
     }
 }

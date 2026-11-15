@@ -33,7 +33,7 @@ public class StandardServiceAdministrationPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/standard-services/admin-list?search=maintenance&page=3&pageSize=10&branchId=1");
+        var response = await client.GetAsync("/api/v1/standard-services/admin-list?search=maintenance&page=3&pageSize=10&branchId=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(23, json.RootElement.GetProperty("total").GetInt32());
@@ -57,19 +57,19 @@ public class StandardServiceAdministrationPaginationTests
         Assert.Equal(HttpStatusCode.OK, versioned.StatusCode);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(await response.Content.ReadAsStringAsync()), JsonNode.Parse(await versioned.Content.ReadAsStringAsync())));
 
-        var nameOnly = await client.GetAsync("/api/standard-services/admin-list?search=maintenance&nameCodeOnly=true");
+        var nameOnly = await client.GetAsync("/api/v1/standard-services/admin-list?search=maintenance&nameCodeOnly=true");
         using var nameOnlyJson = JsonDocument.Parse(await nameOnly.Content.ReadAsStringAsync());
         Assert.Equal(0, nameOnlyJson.RootElement.GetProperty("total").GetInt32());
 
-        var inactive = await client.GetAsync("/api/standard-services/admin-list?search=inactive");
+        var inactive = await client.GetAsync("/api/v1/standard-services/admin-list?search=inactive");
         using var inactiveJson = JsonDocument.Parse(await inactive.Content.ReadAsStringAsync());
         Assert.Equal(1, inactiveJson.RootElement.GetProperty("total").GetInt32());
-        var empty = await client.GetAsync("/api/standard-services/admin-list?page=2147483647&pageSize=100");
+        var empty = await client.GetAsync("/api/v1/standard-services/admin-list?page=2147483647&pageSize=100");
         using var emptyJson = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
         Assert.Empty(emptyJson.RootElement.GetProperty("items").EnumerateArray());
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/standard-services/admin-list")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/standard-services/admin-list")).StatusCode);
     }
 }

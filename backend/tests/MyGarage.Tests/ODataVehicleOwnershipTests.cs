@@ -20,12 +20,14 @@ public sealed class ODataVehicleOwnershipTests
                 new Vehicle { Id = 301, ModelId = 301, LicensePlate = "CURRENT" },
                 new Vehicle { Id = 302, ModelId = 301, LicensePlate = "DELETED" },
                 new Vehicle { Id = 303, ModelId = 301, LicensePlate = "FORMER" },
-                new Vehicle { Id = 304, ModelId = 301, LicensePlate = "LEGACY" });
+                new Vehicle { Id = 304, ModelId = 301, LicensePlate = "LEGACY" },
+                new Vehicle { Id = 305, ModelId = 301, LicensePlate = "REMOVED", IsDeleted = true });
             db.CustomerVehicles.AddRange(
                 new CustomerVehicle { Id = 1, CustomerId = 100, VehicleId = 301, IsCurrentOwner = true },
                 new CustomerVehicle { Id = 2, CustomerId = 100, VehicleId = 302, IsDeleted = true, IsCurrentOwner = true },
                 new CustomerVehicle { Id = 3, CustomerId = 100, VehicleId = 303, IsCurrentOwner = false },
-                new CustomerVehicle { Id = 4, CustomerId = 100, VehicleId = 304, IsCurrentOwner = null });
+                new CustomerVehicle { Id = 4, CustomerId = 100, VehicleId = 304, IsCurrentOwner = null },
+                new CustomerVehicle { Id = 5, CustomerId = 100, VehicleId = 305, IsCurrentOwner = true });
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();

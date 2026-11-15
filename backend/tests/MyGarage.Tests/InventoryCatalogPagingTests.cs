@@ -27,7 +27,7 @@ public class InventoryCatalogPagingTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var result = await client.GetAsync("/api/inventory-management/catalog/products?page=2&pageSize=10");
+        var result = await client.GetAsync("/api/v1/inventory-management/catalog/products?page=2&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         using var json = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         Assert.Equal(25, json.RootElement.GetProperty("total").GetInt32());
@@ -36,14 +36,14 @@ public class InventoryCatalogPagingTests
         Assert.Equal(11, first.GetProperty("item").GetProperty("id").GetInt64());
         Assert.Equal("Child", first.GetProperty("categoryName").GetString());
         Assert.Equal("/image.jpg", first.GetProperty("thumbnail").GetString());
-        var categories = await client.GetAsync("/api/inventory-management/catalog/categories?page=1&pageSize=10");
+        var categories = await client.GetAsync("/api/v1/inventory-management/catalog/categories?page=1&pageSize=10");
         using var catJson = JsonDocument.Parse(await categories.Content.ReadAsStringAsync());
         var child = catJson.RootElement.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("item").GetProperty("id").GetInt64() == 102);
         Assert.Equal("Parent", child.GetProperty("parentName").GetString());
         Assert.Equal(15, child.GetProperty("productCount").GetInt32());
-        var csv = await client.GetStringAsync("/api/inventory-management/catalog/products/export");
+        var csv = await client.GetStringAsync("/api/v1/inventory-management/catalog/products/export");
         Assert.Contains("\"SKU25\"", csv);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/inventory-management/catalog/products")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/inventory-management/catalog/products")).StatusCode);
     }
 }

@@ -237,7 +237,7 @@ public class ServiceOrderTests
         var staffBranch1Token = TestWebApplicationFactory.CreateJwtToken(userId: 200, role: "Staff", roleCode: "STAFF", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffBranch1Token);
 
-        var response = await client.GetAsync("/api/service-orders");
+        var response = await client.GetAsync("/api/v1/service-orders");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -249,14 +249,14 @@ public class ServiceOrderTests
         Assert.DoesNotContain(list, o => o.Id == 9102);
 
         // 2. Staff at Branch 1 accessing Branch 2 order directly via GetById receives 403 Forbidden
-        var singleForbidden = await client.GetAsync("/api/service-orders/9102");
+        var singleForbidden = await client.GetAsync("/api/v1/service-orders/9102");
         Assert.Equal(HttpStatusCode.Forbidden, singleForbidden.StatusCode);
 
         // 3. Admin can access Branch 2 order
         var adminToken = TestWebApplicationFactory.CreateJwtToken(userId: 201, role: "Staff", roleCode: "ADMIN", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
-        var adminResponse = await client.GetAsync("/api/service-orders/9102");
+        var adminResponse = await client.GetAsync("/api/v1/service-orders/9102");
         Assert.Equal(HttpStatusCode.OK, adminResponse.StatusCode);
     }
 
@@ -359,7 +359,7 @@ public class ServiceOrderTests
             StaffId = 205,
             ReceiverName = "Nguyen Van A"
         };
-        var failResponse = await client.PostAsJsonAsync("/api/service-orders/9201/handover", failPayload);
+        var failResponse = await client.PostAsJsonAsync("/api/v1/service-orders/9201/handovers", failPayload);
         Assert.Equal(HttpStatusCode.BadRequest, failResponse.StatusCode);
 
         // 2. Handover on 9202 succeeds and closes order
@@ -369,7 +369,7 @@ public class ServiceOrderTests
             ReceiverName = "Nguyen Van A",
             ReceiverPhone = "0901234567"
         };
-        var passResponse = await client.PostAsJsonAsync("/api/service-orders/9202/handover", passPayload);
+        var passResponse = await client.PostAsJsonAsync("/api/v1/service-orders/9202/handovers", passPayload);
         Assert.Equal(HttpStatusCode.OK, passResponse.StatusCode);
 
         // Verify order status changed to CLOSED in database
@@ -465,7 +465,7 @@ public class ServiceOrderTests
         var tech21Token = TestWebApplicationFactory.CreateJwtToken(userId: 21, role: "Staff", roleCode: "QC_INSPECTOR", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tech21Token);
 
-        var selfInspectResponse = await client.PutAsJsonAsync("/api/qc-inspections/9351/pass", new QcPassRequestDto
+        var selfInspectResponse = await client.PostAsJsonAsync("/api/v1/qc-inspections/9351/passes", new QcPassRequestDto
         {
             InspectorId = 21,
             Notes = "Self-inspection attempt"
@@ -476,7 +476,7 @@ public class ServiceOrderTests
         var inspector22Token = TestWebApplicationFactory.CreateJwtToken(userId: 22, role: "Staff", roleCode: "QC_INSPECTOR", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", inspector22Token);
 
-        var validInspectResponse = await client.PutAsJsonAsync("/api/qc-inspections/9351/pass", new QcPassRequestDto
+        var validInspectResponse = await client.PostAsJsonAsync("/api/v1/qc-inspections/9351/passes", new QcPassRequestDto
         {
             InspectorId = 22,
             Notes = "Inspection verified by independent QC"

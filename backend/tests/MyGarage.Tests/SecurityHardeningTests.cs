@@ -29,7 +29,7 @@ public class SecurityHardeningTests
         await using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/audit-logs");
+        var response = await client.GetAsync("/api/v1/audit-logs");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 
         var odataResponse = await client.GetAsync("/odata/ServiceOrders");
@@ -50,10 +50,10 @@ public class SecurityHardeningTests
         var customerToken = TestWebApplicationFactory.CreateJwtToken(100, "Customer");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customerToken);
 
-        var auditResponse = await client.GetAsync("/api/audit-logs");
+        var auditResponse = await client.GetAsync("/api/v1/audit-logs");
         Assert.Equal(HttpStatusCode.Forbidden, auditResponse.StatusCode);
 
-        var rolesResponse = await client.GetAsync("/api/roles");
+        var rolesResponse = await client.GetAsync("/api/v1/roles");
         Assert.Equal(HttpStatusCode.Forbidden, rolesResponse.StatusCode);
     }
 
@@ -71,7 +71,7 @@ public class SecurityHardeningTests
         var adminToken = TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
-        var response = await client.GetAsync("/api/diagnostics/email-config");
+        var response = await client.GetAsync("/api/v1/diagnostics/email-config");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -91,30 +91,30 @@ public class SecurityHardeningTests
         });
         var staffToken = TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1);
 
-        using var preLogoutProfileReq = new HttpRequestMessage(HttpMethod.Get, "/api/auth/profile");
+        using var preLogoutProfileReq = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/profile");
         preLogoutProfileReq.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
         var preLogoutProfileRes = await client.SendAsync(preLogoutProfileReq);
         Assert.Equal(HttpStatusCode.OK, preLogoutProfileRes.StatusCode);
 
-        using var noOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        using var noOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/session-revocations");
         noOriginReq.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
         var noOriginRes = await client.SendAsync(noOriginReq);
         Assert.Equal(HttpStatusCode.Forbidden, noOriginRes.StatusCode);
 
-        using var evilOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        using var evilOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/session-revocations");
         evilOriginReq.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
         evilOriginReq.Headers.Add("Origin", "https://evil.attacker.example");
         var evilOriginRes = await client.SendAsync(evilOriginReq);
         Assert.Equal(HttpStatusCode.Forbidden, evilOriginRes.StatusCode);
 
-        using var trustedOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        using var trustedOriginReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/session-revocations");
         trustedOriginReq.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
         trustedOriginReq.Headers.Add("Origin", "https://localhost:5173");
         var trustedOriginRes = await client.SendAsync(trustedOriginReq);
         Assert.Equal(HttpStatusCode.OK, trustedOriginRes.StatusCode);
 
         // Token revoked by logout must immediately be rejected on subsequent requests
-        using var reusedReq = new HttpRequestMessage(HttpMethod.Get, "/api/auth/profile");
+        using var reusedReq = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/profile");
         reusedReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
         var reusedRes = await client.SendAsync(reusedReq);
         Assert.Equal(HttpStatusCode.Unauthorized, reusedRes.StatusCode);

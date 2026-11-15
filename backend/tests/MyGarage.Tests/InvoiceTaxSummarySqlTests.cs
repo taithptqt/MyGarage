@@ -24,7 +24,7 @@ public sealed class InvoiceTaxSummarySqlTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var db = new GarageContext(options, new HttpContextAccessor());
+            await using var db = new GarageContext(options);
             var script = db.Database.GenerateCreateScript();
             script = Regex.Replace(script, @"CREATE UNIQUE INDEX \[UQ_ServiceOrder_DiscountCategory\][\s\S]*?;", "", RegexOptions.IgnoreCase);
             script = script.Replace("ON DELETE CASCADE", "ON DELETE NO ACTION", StringComparison.OrdinalIgnoreCase);

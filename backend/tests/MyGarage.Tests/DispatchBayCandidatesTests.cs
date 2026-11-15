@@ -1,8 +1,7 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Data;
+using MyGarage.Infrastructure.Ai;
 using MyGarage.Models;
-using MyGarage.Services;
 using Xunit;
 
 namespace MyGarage.Tests;
@@ -13,7 +12,7 @@ public sealed class DispatchBayCandidatesTests
     public async Task Candidates_AreScopedOrderedAndBounded()
     {
         var options = new DbContextOptionsBuilder<GarageContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         Bay BayRow(long id, long branch, int sequence, string status = "AVAILABLE", bool active = true, bool deleted = false)
             => new() { Id = id, BranchId = branch, Code = $"B{id}", Name = $"Bay {id}", BayType = "GENERAL", ServiceArea = "WORKSHOP",
                 SequenceOrder = sequence, OperationalStatus = status, IsActive = active, IsDeleted = deleted };

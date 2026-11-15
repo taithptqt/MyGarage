@@ -16,6 +16,7 @@ using MyGarage.Application.GatePasses;
 using MyGarage.Common;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.Persistence.Stores.Common;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -169,7 +170,7 @@ public class SharedOperationsAndAuditModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Staffs.AddRange(
             new Staff { Id = 200, FullName = "Quản lý CN1", Phone = "0901000200", Email = "m1@example.com", PasswordHash = "hash", BranchId = 1, Status = "ACTIVE" },
             new Staff { Id = 202, FullName = "Quản lý CN2", Phone = "0901000202", Email = "m2@example.com", PasswordHash = "hash", BranchId = 2, Status = "ACTIVE" },
@@ -204,7 +205,7 @@ public class SharedOperationsAndAuditModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new SharedOperationsAuthorizationService(db);
+        var auth = new SharedOperationsAuthorizationService(new EfSharedOperationsAuthorizationStore(db));
 
         var adminActor = new UserActorContext(201, "Staff", "ADMIN", BranchId: 1, IsAdmin: true);
         var managerBranch1 = new UserActorContext(200, "Staff", "MANAGER", BranchId: 1, IsAdmin: false);
@@ -248,7 +249,7 @@ public class SharedOperationsAndAuditModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.AddRange(
             new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" },
             new Branch { Id = 2, Name = "Chi nhánh 2", Status = "ACTIVE" }
@@ -282,8 +283,8 @@ public class SharedOperationsAndAuditModuleTests
         );
         await db.SaveChangesAsync();
 
-        var auth = new SharedOperationsAuthorizationService(db);
-        var service = new GatePassAndApprovalApplicationService(db, auth);
+        var auth = new SharedOperationsAuthorizationService(new EfSharedOperationsAuthorizationStore(db));
+        var service = new GatePassAndApprovalApplicationService(new MyGarage.Infrastructure.GatePasses.EfGatePassAndApprovalStore(db), auth);
 
         var advisorBranch1 = new UserActorContext(205, "Staff", "SERVICE_ADVISOR", BranchId: 1, IsAdmin: false);
         var managerBranch1 = new UserActorContext(200, "Staff", "MANAGER", BranchId: 1, IsAdmin: false);
@@ -385,64 +386,44 @@ public class SharedOperationsAndAuditModuleTests
         var adminToken = TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1);
         adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
-        // 1. GatePassController (/api/gate-passes vs /api/v1/gate-passes)
-        var gpRes1 = await adminClient.GetAsync("/api/gate-passes");
-        var gpRes2 = await adminClient.GetAsync("/api/v1/gate-passes");
-        Assert.Equal(HttpStatusCode.OK, gpRes1.StatusCode);
-        Assert.Equal(gpRes1.StatusCode, gpRes2.StatusCode);
+        // 1. GatePassController (/api/v1/gate-passes)
+        var gpRes = await adminClient.GetAsync("/api/v1/gate-passes");
+        Assert.Equal(HttpStatusCode.OK, gpRes.StatusCode);
 
-        // 2. ApprovalRequestController (/api/approval-requests vs /api/v1/approval-requests)
-        var arRes1 = await adminClient.GetAsync("/api/approval-requests");
-        var arRes2 = await adminClient.GetAsync("/api/v1/approval-requests");
-        Assert.Equal(HttpStatusCode.OK, arRes1.StatusCode);
-        Assert.Equal(arRes1.StatusCode, arRes2.StatusCode);
+        // 2. ApprovalRequestController (/api/v1/approval-requests)
+        var arRes = await adminClient.GetAsync("/api/v1/approval-requests");
+        Assert.Equal(HttpStatusCode.OK, arRes.StatusCode);
 
-        // 3. AuditLogController (/api/audit-logs vs /api/v1/audit-logs)
-        var alRes1 = await adminClient.GetAsync("/api/audit-logs");
-        var alRes2 = await adminClient.GetAsync("/api/v1/audit-logs");
-        Assert.Equal(HttpStatusCode.OK, alRes1.StatusCode);
-        Assert.Equal(alRes1.StatusCode, alRes2.StatusCode);
+        // 3. AuditLogController (/api/v1/audit-logs)
+        var alRes = await adminClient.GetAsync("/api/v1/audit-logs");
+        Assert.Equal(HttpStatusCode.OK, alRes.StatusCode);
 
-        var aleRes1 = await adminClient.GetAsync("/api/audit-logs/entries");
-        var aleRes2 = await adminClient.GetAsync("/api/v1/audit-logs/entries");
-        Assert.Equal(HttpStatusCode.OK, aleRes1.StatusCode);
-        Assert.Equal(aleRes1.StatusCode, aleRes2.StatusCode);
+        var aleRes = await adminClient.GetAsync("/api/v1/audit-logs/entries");
+        Assert.Equal(HttpStatusCode.OK, aleRes.StatusCode);
 
-        // 4. BranchesController (/api/branches vs /api/v1/branches)
-        var brRes1 = await adminClient.GetAsync("/api/branches");
-        var brRes2 = await adminClient.GetAsync("/api/v1/branches");
-        Assert.Equal(HttpStatusCode.OK, brRes1.StatusCode);
-        Assert.Equal(brRes1.StatusCode, brRes2.StatusCode);
+        // 4. BranchesController (/api/v1/branches)
+        var brRes = await adminClient.GetAsync("/api/v1/branches");
+        Assert.Equal(HttpStatusCode.OK, brRes.StatusCode);
 
-        // 5. BranchAdministrationController (/api/branches/admin-list vs /api/v1/branches/admin-list)
-        var baRes1 = await adminClient.GetAsync("/api/branches/admin-list");
-        var baRes2 = await adminClient.GetAsync("/api/v1/branches/admin-list");
-        Assert.Equal(HttpStatusCode.OK, baRes1.StatusCode);
-        Assert.Equal(baRes1.StatusCode, baRes2.StatusCode);
+        // 5. BranchAdministrationController (/api/v1/branches/admin-list)
+        var baRes = await adminClient.GetAsync("/api/v1/branches/admin-list");
+        Assert.Equal(HttpStatusCode.OK, baRes.StatusCode);
 
-        // 6. BranchExceptionsController (/api/branch-exceptions vs /api/v1/branch-exceptions)
-        var beRes1 = await adminClient.GetAsync("/api/branch-exceptions");
-        var beRes2 = await adminClient.GetAsync("/api/v1/branch-exceptions");
-        Assert.Equal(HttpStatusCode.OK, beRes1.StatusCode);
-        Assert.Equal(beRes1.StatusCode, beRes2.StatusCode);
+        // 6. BranchExceptionsController (/api/v1/branch-exceptions)
+        var beRes = await adminClient.GetAsync("/api/v1/branch-exceptions");
+        Assert.Equal(HttpStatusCode.OK, beRes.StatusCode);
 
-        // 7. BranchOperatingHoursController (/api/branch-operating-hours vs /api/v1/branch-operating-hours)
-        var bohRes1 = await adminClient.GetAsync("/api/branch-operating-hours");
-        var bohRes2 = await adminClient.GetAsync("/api/v1/branch-operating-hours");
-        Assert.Equal(HttpStatusCode.OK, bohRes1.StatusCode);
-        Assert.Equal(bohRes1.StatusCode, bohRes2.StatusCode);
+        // 7. BranchOperatingHoursController (/api/v1/branch-operating-hours)
+        var bohRes = await adminClient.GetAsync("/api/v1/branch-operating-hours");
+        Assert.Equal(HttpStatusCode.OK, bohRes.StatusCode);
 
-        // 8. RoleController (/api/roles vs /api/v1/roles)
-        var roleRes1 = await adminClient.GetAsync("/api/roles");
-        var roleRes2 = await adminClient.GetAsync("/api/v1/roles");
-        Assert.Equal(HttpStatusCode.OK, roleRes1.StatusCode);
-        Assert.Equal(roleRes1.StatusCode, roleRes2.StatusCode);
+        // 8. RoleController (/api/v1/roles)
+        var roleRes = await adminClient.GetAsync("/api/v1/roles");
+        Assert.Equal(HttpStatusCode.OK, roleRes.StatusCode);
 
-        // 9. AuthController (/api/auth/session vs /api/v1/auth/session)
-        var authRes1 = await adminClient.GetAsync("/api/auth/session");
-        var authRes2 = await adminClient.GetAsync("/api/v1/auth/session");
-        Assert.Equal(HttpStatusCode.OK, authRes1.StatusCode);
-        Assert.Equal(authRes1.StatusCode, authRes2.StatusCode);
+        // 9. AuthController (/api/v1/auth/session)
+        var authRes = await adminClient.GetAsync("/api/v1/auth/session");
+        Assert.Equal(HttpStatusCode.OK, authRes.StatusCode);
     }
 
     [Fact]

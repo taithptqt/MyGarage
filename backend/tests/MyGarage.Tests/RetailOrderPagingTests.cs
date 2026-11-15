@@ -26,7 +26,7 @@ public class RetailOrderPagingTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var response = await client.GetAsync("/api/retail-orders/customers/current/page?page=1&pageSize=20&anchorId=1");
+        var response = await client.GetAsync("/api/v1/retail-orders/customers/current/page?page=1&pageSize=20&anchorId=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var body = json.RootElement;
@@ -38,21 +38,21 @@ public class RetailOrderPagingTests
         Assert.Equal(5, body.GetProperty("items").GetArrayLength());
         Assert.Equal(1, body.GetProperty("items")[4].GetProperty("id").GetInt64());
 
-        var foreignAnchor = await client.GetAsync("/api/retail-orders/customers/current/page?page=1&pageSize=20&anchorId=100");
+        var foreignAnchor = await client.GetAsync("/api/v1/retail-orders/customers/current/page?page=1&pageSize=20&anchorId=100");
         using var foreignJson = JsonDocument.Parse(await foreignAnchor.Content.ReadAsStringAsync());
         Assert.Equal(1, foreignJson.RootElement.GetProperty("page").GetInt32());
         Assert.Equal(45, foreignJson.RootElement.GetProperty("total").GetInt32());
 
-        var lastPage = await client.GetAsync("/api/retail-orders/customers/current/page?page=2147483647&pageSize=20");
+        var lastPage = await client.GetAsync("/api/v1/retail-orders/customers/current/page?page=2147483647&pageSize=20");
         Assert.Equal(HttpStatusCode.OK, lastPage.StatusCode);
         using var lastPageJson = JsonDocument.Parse(await lastPage.Content.ReadAsStringAsync());
         Assert.Equal(3, lastPageJson.RootElement.GetProperty("page").GetInt32());
         Assert.Equal(5, lastPageJson.RootElement.GetProperty("items").GetArrayLength());
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/retail-orders/100")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/retail-orders/100")).StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/retail-orders/customers/current/page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/retail-orders/customers/current/page")).StatusCode);
     }
 }

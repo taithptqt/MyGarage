@@ -17,6 +17,7 @@ using MyGarage.Application.Vouchers.DTOs;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
 using MyGarage.DTOs.Requests;
+using MyGarage.Infrastructure.Persistence.Stores.Retail;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -272,7 +273,7 @@ public class RetailAndVoucherModuleTests
             .UseInMemoryDatabase($"RetailAuthTests_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.RetailOrders.AddRange(
             new RetailOrder { Id = 101, BranchId = 1, CustomerId = 100, OrderCode = "RO-101", SubTotal = 100_000m, FinalAmount = 100_000m, Status = "DRAFT" },
             new RetailOrder { Id = 102, BranchId = 2, CustomerId = 105, OrderCode = "RO-102", SubTotal = 200_000m, FinalAmount = 200_000m, Status = "COMPLETED" }
@@ -286,7 +287,7 @@ public class RetailAndVoucherModuleTests
         });
         await db.SaveChangesAsync();
 
-        var authService = new RetailOrderAuthorizationService(db);
+        var authService = new RetailOrderAuthorizationService(new EfRetailOrderAuthorizationStore(db));
 
         var customer100 = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var customer105 = new UserActorContext(105, "Customer", "CUSTOMER", null, false);
@@ -329,8 +330,8 @@ public class RetailAndVoucherModuleTests
             .UseInMemoryDatabase($"VoucherAuthTests_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var authService = new VoucherAuthorizationService(db);
+        await using var db = new GarageContext(options);
+        var authService = new VoucherAuthorizationService();
 
         var customer = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var staff = new UserActorContext(201, "Staff", "STAFF", 1, false);
@@ -373,15 +374,15 @@ public class RetailAndVoucherModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         db.Warehouses.Add(new Warehouse { Id = 10, BranchId = 1, Code = "WH-R1", Name = "Kho Bán Lẻ", Type = "RETAIL", IsActive = true });
         db.Products.Add(new Product { Id = 1001, Sku = "SKU-OIL-01", Unit = "Chai", Name = "Nhớt Motul 300V", RetailPrice = 350_000m, CostPrice = 280_000m, TaxRate = 10m, IsActive = true });
         db.Inventories.Add(new Inventory { WarehouseId = 10, ProductId = 1001, Quantity = 50m, ReservedQuantity = 0m });
         await db.SaveChangesAsync();
 
-        var authService = new RetailOrderAuthorizationService(db);
-        var appService = new RetailOrderApplicationService(db, authService);
+        var authService = new RetailOrderAuthorizationService(new EfRetailOrderAuthorizationStore(db));
+        var appService = new RetailOrderApplicationService(new MyGarage.Infrastructure.Retail.EfRetailOrderStore(db), authService);
 
         var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var input = new RetailCheckoutInput(
@@ -416,7 +417,7 @@ public class RetailAndVoucherModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         db.Warehouses.Add(new Warehouse { Id = 10, BranchId = 1, Code = "WH-R1", Name = "Kho Bán Lẻ", Type = "SELLABLE", IsActive = true });
         db.Products.Add(new Product { Id = 1001, Sku = "SKU-BUG-01", Unit = "Cái", Name = "Buggy Iridium", RetailPrice = 200_000m, CostPrice = 140_000m, TaxRate = 8m, IsActive = true });
@@ -446,8 +447,8 @@ public class RetailAndVoucherModuleTests
         });
         await db.SaveChangesAsync();
 
-        var authService = new RetailOrderAuthorizationService(db);
-        var appService = new RetailOrderApplicationService(db, authService);
+        var authService = new RetailOrderAuthorizationService(new EfRetailOrderAuthorizationStore(db));
+        var appService = new RetailOrderApplicationService(new MyGarage.Infrastructure.Retail.EfRetailOrderStore(db), authService);
 
         var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var input = new RetailCheckoutInput(
@@ -500,7 +501,7 @@ public class RetailAndVoucherModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         db.Warehouses.Add(new Warehouse { Id = 10, BranchId = 1, Code = "WH-R1", Name = "Kho Bán Lẻ", Type = "SELLABLE", IsActive = true });
         db.Products.Add(new Product { Id = 1001, Sku = "SKU-WIP-01", Unit = "Cái", Name = "Cần gạt mưa", RetailPrice = 100_000m, TaxRate = 10m, IsActive = true });
@@ -524,8 +525,8 @@ public class RetailAndVoucherModuleTests
         });
         await db.SaveChangesAsync();
 
-        var authService = new RetailOrderAuthorizationService(db);
-        var appService = new RetailOrderApplicationService(db, authService);
+        var authService = new RetailOrderAuthorizationService(new EfRetailOrderAuthorizationStore(db));
+        var appService = new RetailOrderApplicationService(new MyGarage.Infrastructure.Retail.EfRetailOrderStore(db), authService);
 
         var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var input = new RetailCheckoutInput(
@@ -593,64 +594,44 @@ public class RetailAndVoucherModuleTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "ADMIN", 1));
 
-        // 1. Retail Orders dual route
-        var resRo1 = await client.GetAsync("/api/retail-orders");
-        var resRo2 = await client.GetAsync("/api/v1/retail-orders");
-        Assert.Equal(HttpStatusCode.OK, resRo1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRo2.StatusCode);
+        // 1. Retail Orders
+        var resRo = await client.GetAsync("/api/v1/retail-orders");
+        Assert.Equal(HttpStatusCode.OK, resRo.StatusCode);
 
-        // 2. Retail Order Items dual route
-        var resRoi1 = await client.GetAsync("/api/retail-order-items");
-        var resRoi2 = await client.GetAsync("/api/v1/retail-order-items");
-        Assert.Equal(HttpStatusCode.OK, resRoi1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRoi2.StatusCode);
+        // 2. Retail Order Items
+        var resRoi = await client.GetAsync("/api/v1/retail-order-items");
+        Assert.Equal(HttpStatusCode.OK, resRoi.StatusCode);
 
-        // 3. Retail Returns dual route
-        var resRet1 = await client.GetAsync("/api/retail-returns");
-        var resRet2 = await client.GetAsync("/api/v1/retail-returns");
-        Assert.Equal(HttpStatusCode.OK, resRet1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRet2.StatusCode);
+        // 3. Retail Returns
+        var resRet = await client.GetAsync("/api/v1/retail-returns");
+        Assert.Equal(HttpStatusCode.OK, resRet.StatusCode);
 
-        // 4. Vouchers dual route
-        var resVch1 = await client.GetAsync("/api/vouchers");
-        var resVch2 = await client.GetAsync("/api/v1/vouchers");
-        Assert.Equal(HttpStatusCode.OK, resVch1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resVch2.StatusCode);
+        // 4. Vouchers
+        var resVch = await client.GetAsync("/api/v1/vouchers");
+        Assert.Equal(HttpStatusCode.OK, resVch.StatusCode);
 
-        // 5. Voucher Admin List dual route
-        var resAdm1 = await client.GetAsync("/api/vouchers/admin-list");
-        var resAdm2 = await client.GetAsync("/api/v1/vouchers/admin-list");
-        Assert.Equal(HttpStatusCode.OK, resAdm1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resAdm2.StatusCode);
+        // 5. Voucher Admin List
+        var resAdm = await client.GetAsync("/api/v1/vouchers/admin-list");
+        Assert.Equal(HttpStatusCode.OK, resAdm.StatusCode);
 
-        // 6. Voucher Redemptions dual route
-        var resRed1 = await client.GetAsync("/api/voucher-redemptions");
-        var resRed2 = await client.GetAsync("/api/v1/voucher-redemptions");
-        Assert.Equal(HttpStatusCode.OK, resRed1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRed2.StatusCode);
+        // 6. Voucher Redemptions
+        var resRed = await client.GetAsync("/api/v1/voucher-redemptions");
+        Assert.Equal(HttpStatusCode.OK, resRed.StatusCode);
 
-        // 7. Voucher Campaigns dual route
-        var resCam1 = await client.GetAsync("/api/voucher-campaigns");
-        var resCam2 = await client.GetAsync("/api/v1/voucher-campaigns");
-        Assert.Equal(HttpStatusCode.OK, resCam1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resCam2.StatusCode);
+        // 7. Voucher Campaigns
+        var resCam = await client.GetAsync("/api/v1/voucher-campaigns");
+        Assert.Equal(HttpStatusCode.OK, resCam.StatusCode);
 
-        // 8. Voucher Approval Requests dual route
-        var resApp1 = await client.GetAsync("/api/voucher-approval-requests");
-        var resApp2 = await client.GetAsync("/api/v1/voucher-approval-requests");
-        Assert.Equal(HttpStatusCode.OK, resApp1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resApp2.StatusCode);
+        // 8. Voucher Approval Requests
+        var resApp = await client.GetAsync("/api/v1/voucher-approval-requests");
+        Assert.Equal(HttpStatusCode.OK, resApp.StatusCode);
 
-        // 9. Customer Vouchers dual route
-        var resCv1 = await client.GetAsync("/api/customer-vouchers");
-        var resCv2 = await client.GetAsync("/api/v1/customer-vouchers");
-        Assert.Equal(HttpStatusCode.OK, resCv1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resCv2.StatusCode);
+        // 9. Customer Vouchers
+        var resCv = await client.GetAsync("/api/v1/customer-vouchers");
+        Assert.Equal(HttpStatusCode.OK, resCv.StatusCode);
 
         // 10. Direct POST / PUT on Retail Orders returns 405 Method Not Allowed
-        var directPost1 = await client.PostAsJsonAsync("/api/retail-orders", new { branchId = 1 });
-        var directPost2 = await client.PostAsJsonAsync("/api/v1/retail-orders", new { branchId = 1 });
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, directPost1.StatusCode);
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, directPost2.StatusCode);
+        var directPost = await client.PostAsJsonAsync("/api/v1/retail-orders", new { branchId = 1 });
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, directPost.StatusCode);
     }
 }

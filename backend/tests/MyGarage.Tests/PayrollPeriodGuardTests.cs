@@ -24,7 +24,7 @@ public sealed class PayrollPeriodGuardTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var result = await client.PostAsJsonAsync("/api/payroll-runs", new { branchId = 1, period = "2026-01", details = new[] { new { staffId = 200, baseSalary = 100m } } });
+        var result = await client.PostAsJsonAsync("/api/v1/payroll-runs", new { branchId = 1, period = "2026-01", details = new[] { new { staffId = 200, baseSalary = 100m } } });
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();

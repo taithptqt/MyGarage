@@ -9,7 +9,7 @@ namespace MyGarage.Tests;
 public sealed class InvoiceTaxSummaryTests
 {
     [Fact]
-    public async Task Summary_MatchesLegacyStaffScopeTotalsAndTopThirty()
+    public async Task Summary_ScopesStaffAndMatchesAdminTotalsAndTopThirty()
     {
         await using var factory = new TestWebApplicationFactory();
         await factory.SeedAsync(db =>
@@ -26,11 +26,17 @@ public sealed class InvoiceTaxSummaryTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/invoices/tax-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/invoices/tax-summary")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/invoices/tax-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/invoices/tax-summary")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/invoices/tax-summary");
+        var scopedResponse = await client.GetAsync("/api/v1/invoices/tax-summary");
+        Assert.Equal(HttpStatusCode.OK, scopedResponse.StatusCode);
+        using var scopedJson = JsonDocument.Parse(await scopedResponse.Content.ReadAsStringAsync());
+        Assert.Equal(16m, scopedJson.RootElement.GetProperty("totalTax").GetDecimal());
+        Assert.Equal(16, scopedJson.RootElement.GetProperty("taxedCount").GetInt32());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
+        var response = await client.GetAsync("/api/v1/invoices/tax-summary");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(29m, json.RootElement.GetProperty("totalTax").GetDecimal());

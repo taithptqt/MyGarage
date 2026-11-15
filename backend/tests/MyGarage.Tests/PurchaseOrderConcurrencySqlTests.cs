@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
 using MyGarage.Application.Purchasing.DTOs;
 using MyGarage.Data;
+using MyGarage.Infrastructure.Inventory;
+using MyGarage.Infrastructure.Persistence.Stores.Purchasing;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -26,7 +28,7 @@ public class PurchaseOrderConcurrencySqlTests
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString, sql => sql.EnableRetryOnFailure()).Options;
             long orderId, productId, warehouseId, itemId, actorId;
-            await using (var seed = new GarageContext(options, new HttpContextAccessor()))
+            await using (var seed = new GarageContext(options))
             {
                 // Existing full generated schema has unrelated SQL Server incompatibilities.
                 // This isolated test checks transaction behavior, not migration completeness.
@@ -53,11 +55,22 @@ public class PurchaseOrderConcurrencySqlTests
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var participants = 0;
+            static PurchaseOrderApplicationService CreatePurchaseOrderService(GarageContext context)
+            {
+                var store = new MyGarage.Infrastructure.Purchasing.EfPurchaseOrderStore(context);
+                var authService = new PurchaseOrderAuthorizationService(new EfPurchaseOrderAuthorizationStore(context));
+                var inventoryStore = new EfInventoryStore(context);
+                var stockAlertSyncService = new InventoryAdminService(inventoryStore);
+                var grnSnapshotService = new GrnSnapshotService(inventoryStore);
+                var goodsReceiptService = new PurchaseOrderGoodsReceiptService(store, authService, stockAlertSyncService);
+                var analyticsService = new PurchaseOrderAnalyticsService(store, authService, grnSnapshotService);
+                return new PurchaseOrderApplicationService(store, authService, stockAlertSyncService, goodsReceiptService, analyticsService);
+            }
+
             async Task<PurchaseOrderReceiveResultDto> Receive()
             {
-                await using var db = new GarageContext(options, new HttpContextAccessor());
-                var service = new PurchaseOrderApplicationService(db, new PurchaseOrderAuthorizationService(db),
-                    new InventoryAdminService(db), new GrnSnapshotService(db));
+                await using var db = new GarageContext(options);
+                var service = CreatePurchaseOrderService(db);
                 if (Interlocked.Increment(ref participants) == 2) ready.TrySetResult();
                 await start.Task;
                 return await service.ReceivePurchaseOrderAsync(orderId,
@@ -68,7 +81,7 @@ public class PurchaseOrderConcurrencySqlTests
             start.SetResult();
             var results = await Task.WhenAll(first, second);
             Assert.Equal(10m, results.Sum(result => result.Lines.Sum(line => line.AcceptedQuantity)));
-            await using var verify = new GarageContext(options, new HttpContextAccessor());
+            await using var verify = new GarageContext(options);
             var storedItem = await verify.PurchaseOrderItems.SingleAsync(x => x.Id == itemId);
             var stock = await verify.Inventories.SingleAsync(x => x.ProductId == productId && x.WarehouseId == warehouseId);
             Assert.Equal(10m, storedItem.ReceivedQuantity);
@@ -85,8 +98,7 @@ public class PurchaseOrderConcurrencySqlTests
                 OrderedQuantity = 10m, ReceivedQuantity = 0m, CostPrice = 100m };
             verify.AddRange(secondOrder, secondItem);
             await verify.SaveChangesAsync();
-            var secondService = new PurchaseOrderApplicationService(verify, new PurchaseOrderAuthorizationService(verify),
-                new InventoryAdminService(verify), new GrnSnapshotService(verify));
+            var secondService = CreatePurchaseOrderService(verify);
             await secondService.ReceivePurchaseOrderAsync(secondOrder.Id,
                 new PurchaseOrderReceiveInput(null, null, actorId, new[] {
                     new PurchaseOrderReceiveItemInput(secondItem.Id, productId, 2m, 100m),

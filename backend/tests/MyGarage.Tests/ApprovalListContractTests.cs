@@ -22,13 +22,13 @@ public sealed class ApprovalListContractTests
             services.AddScoped<IApprovalListReader, FakeReader>();
         }));
         using var client = app.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/approval-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/approval-requests")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/approval-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/approval-requests")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/approval-requests?page=2&pageSize=1");
+        var response = await client.GetAsync("/api/v1/approval-requests?page=2&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, json.RootElement.GetProperty("totalCount").GetInt32());
         var row = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());

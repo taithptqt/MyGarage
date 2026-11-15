@@ -88,7 +88,7 @@ public class AppointmentModuleTests
         // Logged in as Customer 101
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(101, "Customer"));
 
-        var response = await client.PatchAsync("/api/appointments/8101", JsonContent.Create(new
+        var response = await client.PatchAsync("/api/v1/appointments/8101", JsonContent.Create(new
         {
             status = "CANCELED",
             reason = "Need to cancel"
@@ -122,7 +122,7 @@ public class AppointmentModuleTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(103, "Customer"));
 
         // Customer attempts to self-confirm
-        var response = await client.PatchAsync("/api/appointments/8102", JsonContent.Create(new
+        var response = await client.PatchAsync("/api/v1/appointments/8102", JsonContent.Create(new
         {
             status = "CONFIRMED"
         }));
@@ -166,7 +166,7 @@ public class AppointmentModuleTests
         // Staff belongs to Branch 2
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(202, "Staff", "RECEPTIONIST", 2));
 
-        var response = await client.PatchAsync("/api/appointments/8103", JsonContent.Create(new
+        var response = await client.PatchAsync("/api/v1/appointments/8103", JsonContent.Create(new
         {
             status = "CONFIRMED"
         }));
@@ -188,7 +188,7 @@ public class AppointmentModuleTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(105, "Customer"));
 
-        var response = await client.PostAsync("/api/appointments/reception-bookings", JsonContent.Create(new
+        var response = await client.PostAsync("/api/v1/appointments/reception-bookings", JsonContent.Create(new
         {
             branchId = 1,
             customerPhone = "0905555555"
@@ -223,7 +223,7 @@ public class AppointmentModuleTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(202, "Staff", "RECEPTIONIST", 2));
 
         // Attempt booking for Branch 1
-        var response = await client.PostAsync("/api/appointments/reception-bookings", JsonContent.Create(new
+        var response = await client.PostAsync("/api/v1/appointments/reception-bookings", JsonContent.Create(new
         {
             branchId = 1,
             customerPhone = "0909999999"
@@ -285,7 +285,7 @@ public class AppointmentModuleTests
         // Staff at Branch 2
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(202, "Staff", "MANAGER", 2));
 
-        var response = await client.PatchAsync("/api/appointments/8106/edit-requests/9901", JsonContent.Create(new
+        var response = await client.PatchAsync("/api/v1/appointments/8106/edit-requests/9901", JsonContent.Create(new
         {
             decision = "APPROVE"
         }));

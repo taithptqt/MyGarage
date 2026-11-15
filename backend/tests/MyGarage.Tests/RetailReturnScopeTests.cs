@@ -30,7 +30,7 @@ public class RetailReturnScopeTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var result = await client.PostAsync("/api/retail-returns/31/finalize", null);
+        var result = await client.PostAsync("/api/v1/retail-returns/31/finalizations", null);
         Assert.True(result.StatusCode == HttpStatusCode.OK, await result.Content.ReadAsStringAsync());
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
@@ -53,7 +53,7 @@ public class RetailReturnScopeTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var created = await client.PostAsJsonAsync("/api/retail-returns", new { retailOrderId = 10, returnCode = "RET-1", createdBy = 999, updatedBy = 999, approvedBy = 999 });
+        var created = await client.PostAsJsonAsync("/api/v1/retail-returns", new { retailOrderId = 10, returnCode = "RET-1", createdBy = 999, updatedBy = 999, approvedBy = 999 });
         Assert.True(created.StatusCode == HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
@@ -61,7 +61,7 @@ public class RetailReturnScopeTests
         Assert.Equal(200, ticket.CreatedBy);
         Assert.Null(ticket.UpdatedBy);
         Assert.Null(ticket.ApprovedBy);
-        var item = await client.PostAsJsonAsync("/api/retail-return-items", new { retailReturnId = ticket.Id, retailOrderItemId = 20, warehouseId = 1, returnedQuantity = 1, refundAmount = 10, itemCondition = "GOOD", createdBy = 999, updatedBy = 999 });
+        var item = await client.PostAsJsonAsync("/api/v1/retail-return-items", new { retailReturnId = ticket.Id, retailOrderItemId = 20, warehouseId = 1, returnedQuantity = 1, refundAmount = 10, itemCondition = "GOOD", createdBy = 999, updatedBy = 999 });
         Assert.True(item.StatusCode == HttpStatusCode.Created, await item.Content.ReadAsStringAsync());
         var savedLine = await db.RetailReturnItems.AsNoTracking().SingleAsync();
         Assert.Equal(200, savedLine.CreatedBy);
@@ -104,20 +104,20 @@ public class RetailReturnScopeTests
         }
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/purchase-orders?branchId=2")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/retail-returns/30")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/retail-returns", new { retailOrderId = 11, status = "PENDING" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/retail-returns", new { retailOrderId = 10, status = "COMPLETED" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/retail-returns/31", new { retailOrderId = 10, status = "COMPLETED" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/retail-return-items/41")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/retail-return-items/41")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/retail-return-items", new { retailReturnId = 30, retailOrderItemId = 21, warehouseId = 2 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 21, warehouseId = 1 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 20, warehouseId = 2 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 20, warehouseId = 1, status = "COMPLETED" })).StatusCode);
-        var foreign = await client.PostAsync("/api/retail-returns/30/finalize", null);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/purchase-orders?branchId=2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/retail-returns/30")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/v1/retail-returns", new { retailOrderId = 11, status = "PENDING" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/retail-returns", new { retailOrderId = 10, status = "COMPLETED" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/v1/retail-returns/31", new { retailOrderId = 10, status = "COMPLETED" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/retail-return-items/41")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync("/api/v1/retail-return-items/41")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/v1/retail-return-items", new { retailReturnId = 30, retailOrderItemId = 21, warehouseId = 2 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 21, warehouseId = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 20, warehouseId = 2 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/retail-return-items", new { retailReturnId = 31, retailOrderItemId = 20, warehouseId = 1, status = "COMPLETED" })).StatusCode);
+        var foreign = await client.PostAsync("/api/v1/retail-returns/30/finalizations", null);
         Assert.True(foreign.StatusCode == HttpStatusCode.NotFound, await foreign.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/retail-returns/31/finalize", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/v1/retail-returns/31/finalizations", null)).StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
         Assert.Equal("PENDING", (await db.RetailReturns.SingleAsync(x => x.Id == 31)).Status);
@@ -143,7 +143,7 @@ public class RetailReturnScopeTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/retail-returns/31/finalize", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/v1/retail-returns/31/finalizations", null)).StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
         Assert.Equal("PENDING", (await db.RetailReturns.SingleAsync(x => x.Id == 31)).Status);

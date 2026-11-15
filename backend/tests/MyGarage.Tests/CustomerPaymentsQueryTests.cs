@@ -26,12 +26,12 @@ public sealed class CustomerPaymentsQueryTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/payments/2/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/payments/2/status")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/payments/1/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/payments/1/status")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/payments/1/status")).StatusCode);
-        var response = await client.GetAsync("/api/payments/2/status");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/payments/1/status")).StatusCode);
+        var response = await client.GetAsync("/api/v1/payments/2/status");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, json.RootElement.GetProperty("id").GetInt64());
@@ -52,7 +52,7 @@ public sealed class CustomerPaymentsQueryTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/payments/mine");
+        var response = await client.GetAsync("/api/v1/payments/mine");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -78,7 +78,7 @@ public sealed class CustomerPaymentsQueryTests
         }
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var response = await client.GetAsync("/api/payments/mine");
+        var response = await client.GetAsync("/api/v1/payments/mine");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var items = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["items"]!.AsArray();
         Assert.Single(items);
@@ -100,18 +100,18 @@ public sealed class CustomerPaymentsQueryTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/payments/mine")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/payments/mine")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(101, "Customer"));
-        var response = await client.GetAsync("/api/payments/mine?page=0&pageSize=0");
+        var response = await client.GetAsync("/api/v1/payments/mine?page=0&pageSize=0");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(1, json.RootElement.GetProperty("totalCount").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("page").GetInt32());
         Assert.Equal(50, json.RootElement.GetProperty("pageSize").GetInt32());
         var row = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
         Assert.Equal(2, row.GetProperty("id").GetInt64());
-        var capped = await client.GetAsync("/api/payments/mine?pageSize=500");
+        var capped = await client.GetAsync("/api/v1/payments/mine?pageSize=500");
         using var cappedJson = JsonDocument.Parse(await capped.Content.ReadAsStringAsync());
         Assert.Equal(100, cappedJson.RootElement.GetProperty("pageSize").GetInt32());
     }
@@ -133,9 +133,9 @@ public sealed class CustomerPaymentsQueryTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var response = await client.GetAsync("/api/payments/mine?page=2&pageSize=1");
+        var response = await client.GetAsync("/api/v1/payments/mine?page=2&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, json.RootElement.GetProperty("totalCount").GetInt32());
         Assert.Equal(2, json.RootElement.GetProperty("page").GetInt32());
@@ -146,7 +146,7 @@ public sealed class CustomerPaymentsQueryTests
         Assert.Equal(11, row.GetProperty("amount").GetDecimal());
         Assert.True(row.TryGetProperty("updatedBy", out _));
         Assert.False(row.TryGetProperty("direction", out _));
-        var beyond = await client.GetAsync("/api/payments/mine?page=2147483647&pageSize=100");
+        var beyond = await client.GetAsync("/api/v1/payments/mine?page=2147483647&pageSize=100");
         Assert.Equal(HttpStatusCode.OK, beyond.StatusCode);
         using var beyondJson = JsonDocument.Parse(await beyond.Content.ReadAsStringAsync());
         Assert.Empty(beyondJson.RootElement.GetProperty("items").EnumerateArray());

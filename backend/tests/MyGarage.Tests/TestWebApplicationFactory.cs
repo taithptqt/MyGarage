@@ -67,17 +67,6 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<GarageContext>();
             services.RemoveAll<IHostedService>();
             services.RemoveAll<IEmailService>();
-            // GarageContext's InMemory model differs from the SQL read model; preserve seeded HTTP fixtures.
-            services.RemoveAll<MyGarage.Application.Payments.ICustomerPaymentsReader>();
-            services.AddScoped<MyGarage.Application.Payments.ICustomerPaymentsReader, MyGarage.Services.CustomerPaymentsReader>();
-            services.RemoveAll<MyGarage.Application.Forecasts.IForecastListReader>();
-            services.AddScoped<MyGarage.Application.Forecasts.IForecastListReader, MyGarage.Services.ForecastListReader>();
-            services.RemoveAll<MyGarage.Application.Audit.IAdminAuditReader>();
-            services.AddScoped<MyGarage.Application.Audit.IAdminAuditReader, MyGarage.Services.AdminAuditReader>();
-            services.RemoveAll<MyGarage.Application.Ai.IDispatchBayCandidates>();
-            services.AddScoped<MyGarage.Application.Ai.IDispatchBayCandidates, MyGarage.Services.DispatchBayCandidates>();
-            services.RemoveAll<MyGarage.Application.Approvals.IApprovalListReader>();
-            services.AddScoped<MyGarage.Application.Approvals.IApprovalListReader, MyGarage.Tests.ApprovalListFixtureReader>();
 
             services.AddSingleton<IEmailService, NoOpEmailService>();
 

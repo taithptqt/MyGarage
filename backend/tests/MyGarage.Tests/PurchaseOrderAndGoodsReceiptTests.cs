@@ -13,6 +13,7 @@ using MyGarage.Application.Authorization;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
 using MyGarage.DTOs.Requests;
+using MyGarage.Infrastructure.Persistence.Stores.Purchasing;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -193,7 +194,7 @@ public class PurchaseOrderAndGoodsReceiptTests
             .UseInMemoryDatabase($"PoAuthTests_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.PurchaseOrders.Add(new PurchaseOrder
         {
             Id = 501,
@@ -213,7 +214,7 @@ public class PurchaseOrderAndGoodsReceiptTests
         });
         await db.SaveChangesAsync();
 
-        var authService = new PurchaseOrderAuthorizationService(db);
+        var authService = new PurchaseOrderAuthorizationService(new EfPurchaseOrderAuthorizationStore(db));
 
         var customerActor = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var staffBranch1 = new UserActorContext(201, "Staff", "STAFF", 1, false);
@@ -259,6 +260,60 @@ public class PurchaseOrderAndGoodsReceiptTests
     // =========================================================================
 
     [Fact]
+    public async Task PurchaseOrder_SupplierChangesRequireExistingSupplierAndNoReceipt()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        await factory.SeedAsync(db =>
+        {
+            TestWebApplicationFactory.SeedBasicBranchAndUsers(db);
+            db.Suppliers.AddRange(new Supplier { Id = 10, SupplierName = "A" }, new Supplier { Id = 11, SupplierName = "B" });
+            db.Warehouses.Add(new Warehouse { Id = 101, BranchId = 1, Code = "W1", Name = "Warehouse", Type = "GENERAL" });
+            db.PurchaseOrders.AddRange(
+                new PurchaseOrder { Id = 501, BranchId = 1, DestinationWarehouseId = 101, SupplierId = 10, Status = "PENDING" },
+                new PurchaseOrder { Id = 502, BranchId = 1, DestinationWarehouseId = 101, SupplierId = 10, Status = "PARTIAL_RECEIVED" });
+            db.GoodsReceiptNotes.Add(new GoodsReceiptNote { Id = 901, PurchaseOrderId = 502, WarehouseId = 101, GrnCode = "GRN-901", Status = "POSTED", ReceivedAt = new DateTime(2026, 1, 1) });
+            return Task.CompletedTask;
+        });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, supplierId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/v1/purchase-orders/502", new { branchId = 1, supplierId = 11 })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, supplierId = 11 })).StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
+        Assert.Equal(11, (await db.PurchaseOrders.SingleAsync(x => x.Id == 501)).SupplierId);
+        Assert.Equal(10, (await db.PurchaseOrders.SingleAsync(x => x.Id == 502)).SupplierId);
+    }
+
+    [Fact]
+    public async Task PurchaseOrder_RejectsInvalidLineAndNegativeAmountsWithoutSaving()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        await factory.SeedAsync(db =>
+        {
+            TestWebApplicationFactory.SeedBasicBranchAndUsers(db);
+            db.Suppliers.Add(new Supplier { Id = 10, SupplierName = "Supplier" });
+            db.Warehouses.Add(new Warehouse { Id = 101, BranchId = 1, Code = "W1", Name = "Warehouse", Type = "GENERAL", IsActive = true });
+            db.Products.Add(new Product { Id = 201, Sku = "P", Name = "Part", Unit = "unit" });
+            db.PurchaseOrders.Add(new PurchaseOrder { Id = 501, BranchId = 1, DestinationWarehouseId = 101, SupplierId = 10, Status = "PENDING", TotalAmount = 100 });
+            return Task.CompletedTask;
+        });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
+        foreach (var (quantity, price, total) in new[] { (0m, 10m, 0m), (1m, -1m, 0m), (1m, 10m, -1m) })
+        {
+            using var response = await client.PostAsJsonAsync("/api/v1/purchase-orders", new { branchId = 1, destinationWarehouseId = 101, supplierId = 10, totalAmount = total, items = new[] { new { productId = 201, orderedQuantity = quantity, costPrice = price } } });
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        using var update = await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, totalAmount = -1m });
+        Assert.Equal(HttpStatusCode.BadRequest, update.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
+        Assert.Equal(1, await db.PurchaseOrders.CountAsync());
+        Assert.Equal(100m, (await db.PurchaseOrders.SingleAsync(x => x.Id == 501)).TotalAmount);
+    }
+
+    [Fact]
     public async Task PurchaseOrders_RejectApprovalBypassAndWarehouseFromAnotherBranch()
     {
         await using var factory = new TestWebApplicationFactory();
@@ -276,15 +331,15 @@ public class PurchaseOrderAndGoodsReceiptTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "STAFF", 1));
 
-        var create = await client.PostAsJsonAsync("/api/purchase-orders", new {
+        var create = await client.PostAsJsonAsync("/api/v1/purchase-orders", new {
             branchId = 1, destinationWarehouseId = 101, supplierId = 10, status = "APPROVED", approvedByStaffId = 200
         });
         Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
-        var approve = await client.PutAsJsonAsync("/api/purchase-orders/501", new { branchId = 1, status = "APPROVED" });
+        var approve = await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, status = "APPROVED" });
         Assert.Equal(HttpStatusCode.BadRequest, approve.StatusCode);
-        var cancel = await client.PutAsJsonAsync("/api/purchase-orders/501", new { branchId = 1, status = "CANCELED" });
+        var cancel = await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, status = "CANCELED" });
         Assert.Equal(HttpStatusCode.BadRequest, cancel.StatusCode);
-        var warehouse = await client.PutAsJsonAsync("/api/purchase-orders/501", new { branchId = 1, destinationWarehouseId = 102 });
+        var warehouse = await client.PutAsJsonAsync("/api/v1/purchase-orders/501", new { branchId = 1, destinationWarehouseId = 102 });
         Assert.Equal(HttpStatusCode.BadRequest, warehouse.StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
@@ -332,7 +387,7 @@ public class PurchaseOrderAndGoodsReceiptTests
         Assert.Equal("PENDING", createBody.RootElement.GetProperty("status").GetString());
         Assert.Equal("Nhà cung cấp Bosch", createBody.RootElement.GetProperty("supplierName").GetString());
 
-        // 2. Read PO via legacy /api/purchase-orders/{id} and dual /api/v1/purchase-orders/{id}
+        // 2. Read PO via /api/v1/purchase-orders/{id}
         var getV1 = await client.GetAsync($"/api/v1/purchase-orders/{poId}");
         Assert.Equal(HttpStatusCode.OK, getV1.StatusCode);
         using var v1Body = JsonDocument.Parse(await getV1.Content.ReadAsStringAsync());
@@ -341,14 +396,37 @@ public class PurchaseOrderAndGoodsReceiptTests
         Assert.Equal(20m, v1Body.RootElement.GetProperty("items")[0].GetProperty("remainingQuantity").GetDecimal());
         Assert.Equal(0m, v1Body.RootElement.GetProperty("items")[0].GetProperty("receivedQuantity").GetDecimal());
 
-        var getLegacy = await client.GetAsync($"/api/purchase-orders/{poId}");
-        Assert.Equal(HttpStatusCode.OK, getLegacy.StatusCode);
-
-        // 3. Approve PO via /api/v1/purchase-orders/{id}/approve
-        var approveResponse = await client.PutAsJsonAsync($"/api/v1/purchase-orders/{poId}/approve", new { note = "Đồng ý nhập hàng" });
+        // 3. Approve PO via /api/v1/purchase-orders/{id}/approvals
+        var approveResponse = await client.PostAsJsonAsync($"/api/v1/purchase-orders/{poId}/approvals", new { note = "Đồng ý nhập hàng" });
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
         using var approveBody = JsonDocument.Parse(await approveResponse.Content.ReadAsStringAsync());
         Assert.Equal("APPROVED", approveBody.RootElement.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Receipt_ByProductIdRejectsAmbiguousPurchaseOrderLines()
+    {
+        await using var factory = new TestWebApplicationFactory();
+        await factory.SeedAsync(db =>
+        {
+            TestWebApplicationFactory.SeedBasicBranchAndUsers(db);
+            db.Suppliers.Add(new Supplier { Id = 20, SupplierName = "Supplier" });
+            db.Warehouses.Add(new Warehouse { Id = 102, BranchId = 1, Code = "W", Name = "W", Type = "GENERAL" });
+            db.Products.Add(new Product { Id = 202, Sku = "P", Name = "Part", Unit = "unit" });
+            db.PurchaseOrders.Add(new PurchaseOrder { Id = 88, BranchId = 1, DestinationWarehouseId = 102, SupplierId = 20, Status = "APPROVED", PurchaseOrderItems = new List<PurchaseOrderItem> {
+                new() { Id = 881, ProductId = 202, OrderedQuantity = 5, CostPrice = 10 },
+                new() { Id = 882, ProductId = 202, OrderedQuantity = 5, CostPrice = 20 }
+            } });
+            return Task.CompletedTask;
+        });
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "STOREKEEPER", 1));
+        using var response = await client.PostAsJsonAsync("/api/v1/goods-receipts", new { purchaseOrderId = 88, items = new[] { new { productId = 202, receivedQuantity = 1m } } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
+        Assert.False(await db.GoodsReceiptNotes.AnyAsync(x => x.PurchaseOrderId == 88));
+        Assert.False(await db.Inventories.AnyAsync(x => x.ProductId == 202));
     }
 
     [Fact]
@@ -404,6 +482,27 @@ public class PurchaseOrderAndGoodsReceiptTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "STOREKEEPER", 1));
 
+        // A line ID must not silently override a conflicting product ID.
+        var mismatch = await client.PostAsJsonAsync("/api/v1/goods-receipts", new
+        {
+            purchaseOrderId = 88,
+            items = new[] { new { purchaseOrderItemId = 881, productId = 999, receivedQuantity = 1m, costPrice = 160_000m } }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, mismatch.StatusCode);
+        var negativePrice = await client.PostAsJsonAsync("/api/v1/goods-receipts", new
+        {
+            purchaseOrderId = 88,
+            items = new[] { new { purchaseOrderItemId = 881, productId = 202, receivedQuantity = 1m, costPrice = -1m } }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, negativePrice.StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
+            Assert.False(await db.GoodsReceiptNotes.AnyAsync(x => x.PurchaseOrderId == 88));
+            Assert.Equal(0m, (await db.PurchaseOrderItems.SingleAsync(x => x.Id == 881)).ReceivedQuantity);
+            Assert.Equal(10m, (await db.Inventories.SingleAsync(x => x.WarehouseId == 102 && x.ProductId == 202)).Quantity);
+        }
+
         // 1. Partial Receipt of 10 units via /api/v1/goods-receipts
         var grnPayload1 = new
         {
@@ -446,7 +545,7 @@ public class PurchaseOrderAndGoodsReceiptTests
         var items = groupBody.RootElement.GetProperty("items").EnumerateArray().ToList();
         Assert.Contains(items, x => x.GetProperty("id").GetInt64() == 88 && x.GetProperty("status").GetString() == "PARTIAL_RECEIVED");
 
-        // 3. Second Receipt of remaining 10 units (with attempted over-receipt of 15 units) via /api/purchase-orders/88/receive
+        // 3. Second Receipt of remaining 10 units (with attempted over-receipt of 15 units) via /api/v1/purchase-orders/88/goods-receipts
         var grnPayload2 = new PurchaseOrderReceiveRequestDto
         {
             Note = "Đợt 2 nhận nốt",
@@ -456,7 +555,7 @@ public class PurchaseOrderAndGoodsReceiptTests
             }
         };
 
-        var grnResponse2 = await client.PostAsJsonAsync("/api/purchase-orders/88/receive", grnPayload2);
+        var grnResponse2 = await client.PostAsJsonAsync("/api/v1/purchase-orders/88/goods-receipts", grnPayload2);
         Assert.Equal(HttpStatusCode.OK, grnResponse2.StatusCode);
         using var grnBody2 = JsonDocument.Parse(await grnResponse2.Content.ReadAsStringAsync());
         Assert.Equal("COMPLETED", grnBody2.RootElement.GetProperty("status").GetString());
@@ -488,7 +587,7 @@ public class PurchaseOrderAndGoodsReceiptTests
         Assert.Equal(2, grnListBody.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(2, grnListBody.RootElement.GetProperty("totalCount").GetInt32());
         Assert.Equal(2, grnListBody.RootElement.GetProperty("items").GetArrayLength());
-        Assert.False(grnList.Headers.Contains("X-Total-Count"));
+        Assert.True(grnList.Headers.Contains("X-Total-Count"));
 
         // 5. Query GRN detail via /api/v1/goods-receipts/{id}
         var grnDetail = await client.GetAsync($"/api/v1/goods-receipts/{grnId1}");
@@ -514,9 +613,9 @@ public class PurchaseOrderAndGoodsReceiptTests
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/purchase-orders")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/purchase-orders")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/purchase-orders")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/goods-receipts")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/goods-receipts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/goods-receipts")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/purchase-orders", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/goods-receipts", new { })).StatusCode);
     }

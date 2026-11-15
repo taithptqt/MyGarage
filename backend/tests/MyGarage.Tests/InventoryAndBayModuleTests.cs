@@ -17,6 +17,8 @@ using MyGarage.Domain.Enums;
 using MyGarage.Domain.Rules;
 using MyGarage.DTOs.Requests.Execution;
 using MyGarage.DTOs.Responses;
+using MyGarage.Infrastructure.Inventory;
+using MyGarage.Infrastructure.Persistence.Stores.StaffAndBranches;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Services;
@@ -358,12 +360,12 @@ public class InventoryAndBayModuleTests
             .UseInMemoryDatabase($"AuthTestDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Warehouses.Add(new Warehouse { Id = 101, BranchId = 1, Code = "WH-B1", Name = "Kho B1", Type = "MAIN", IsActive = true, IsDeleted = false });
         db.Warehouses.Add(new Warehouse { Id = 102, BranchId = 2, Code = "WH-B2", Name = "Kho B2", Type = "MAIN", IsActive = true, IsDeleted = false });
         await db.SaveChangesAsync();
 
-        var authService = new InventoryAuthorizationService(db);
+        var authService = new InventoryAuthorizationService(new EfInventoryStore(db));
 
         var staffBranch1 = new UserActorContext(UserId: 200, Role: "Staff", RoleCode: "STAFF", BranchId: 1, IsAdmin: false);
         var admin = new UserActorContext(UserId: 1, Role: "Staff", RoleCode: "ADMIN", BranchId: 1, IsAdmin: true);
@@ -390,12 +392,12 @@ public class InventoryAndBayModuleTests
             .UseInMemoryDatabase($"BayAuthTestDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Bays.Add(new Bay { Id = 501, BranchId = 1, Code = "BAY-01", Name = "Khoang 1", ServiceArea = "General", BayType = "Standard", OperationalStatus = "ACTIVE", IsDeleted = false });
         db.Bays.Add(new Bay { Id = 502, BranchId = 2, Code = "BAY-02", Name = "Khoang 2", ServiceArea = "General", BayType = "Standard", OperationalStatus = "ACTIVE", IsDeleted = false });
         await db.SaveChangesAsync();
 
-        var authService = new BayAuthorizationService(db);
+        var authService = new BayAuthorizationService(new EfBayAuthorizationStore(db));
 
         var staffBranch1 = new UserActorContext(UserId: 200, Role: "Staff", RoleCode: "STAFF", BranchId: 1, IsAdmin: false);
         var admin = new UserActorContext(UserId: 1, Role: "Staff", RoleCode: "ADMIN", BranchId: null, IsAdmin: true);
@@ -435,7 +437,7 @@ public class InventoryAndBayModuleTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "STAFF"));
-        var response = await client.PostAsJsonAsync("/api/bay-management/501/allocate", new { BayId = 501, ServiceOrderId = 123, VehicleId = 1 });
+        var response = await client.PostAsJsonAsync("/api/v1/bay-management/501/allocations", new { BayId = 501, ServiceOrderId = 123, VehicleId = 1 });
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         using var scope = factory.Services.CreateScope();
@@ -465,11 +467,7 @@ public class InventoryAndBayModuleTests
         var staffToken = TestWebApplicationFactory.CreateJwtToken(userId: 200, role: "Staff", roleCode: "STAFF", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
-        // Primary Route
-        var resPrimary = await client.GetAsync("/api/inventory-management/catalog/products?page=1&pageSize=10");
-        Assert.Equal(HttpStatusCode.OK, resPrimary.StatusCode);
-
-        // Dual Route (/api/v1/...)
+        // Canonical Route (/api/v1/...)
         var resDual = await client.GetAsync("/api/v1/inventory-management/catalog/products?page=1&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, resDual.StatusCode);
     }
@@ -489,11 +487,7 @@ public class InventoryAndBayModuleTests
         var staffToken = TestWebApplicationFactory.CreateJwtToken(userId: 200, role: "Staff", roleCode: "STAFF", branchId: 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
-        // Primary Route
-        var resPrimary = await client.GetAsync("/api/inventory/parts-page?search=Bosch&page=1&pageSize=10");
-        Assert.Equal(HttpStatusCode.OK, resPrimary.StatusCode);
-
-        // Dual Route (/api/v1/...)
+        // Canonical Route (/api/v1/...)
         var resDual = await client.GetAsync("/api/v1/inventory/parts-page?search=Bosch&page=1&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, resDual.StatusCode);
     }
@@ -567,7 +561,7 @@ public class InventoryAndBayModuleTests
             VehicleId = 10,
             PlannedDuration = 60
         };
-        var resForbid = await client.PostAsJsonAsync("/api/bay-management/702/allocate", allocPayloadBranch2);
+        var resForbid = await client.PostAsJsonAsync("/api/v1/bay-management/702/allocations", allocPayloadBranch2);
         Assert.Equal(HttpStatusCode.Forbidden, resForbid.StatusCode);
 
         // 2. Staff Branch 1 allocating Bay 701 on Primary Route succeeds
@@ -578,29 +572,26 @@ public class InventoryAndBayModuleTests
             VehicleId = 10,
             PlannedDuration = 60
         };
-        var resAlloc = await client.PostAsJsonAsync("/api/bay-management/701/allocate", allocPayloadBranch1);
+        var resAlloc = await client.PostAsJsonAsync("/api/v1/bay-management/701/allocations", allocPayloadBranch1);
         Assert.Equal(HttpStatusCode.OK, resAlloc.StatusCode);
 
         var allocResult = await resAlloc.Content.ReadFromJsonAsync<BayAllocationResultDto>();
         Assert.NotNull(allocResult);
         Assert.Equal(701, allocResult.BayId);
 
-        // 3. Timeline query on dual routes succeeds
-        var timelinePrimary = await client.GetAsync("/api/bay-management/timeline?branchId=1");
+        // 3. Timeline query on canonical v1 routes succeeds
+        var timelinePrimary = await client.GetAsync("/api/v1/bay-management/timeline?branchId=1");
         Assert.Equal(HttpStatusCode.OK, timelinePrimary.StatusCode);
-
-        var timelineDual = await client.GetAsync("/api/bays/timeline?branchId=1");
-        Assert.Equal(HttpStatusCode.OK, timelineDual.StatusCode);
 
         var timelineV1 = await client.GetAsync("/api/v1/bays/timeline?branchId=1");
         Assert.Equal(HttpStatusCode.OK, timelineV1.StatusCode);
 
         // 4. Release Bay on Dual Route succeeds
-        var resRelease = await client.DeleteAsync("/api/bays/701/release?notes=Finished");
+        var resRelease = await client.DeleteAsync("/api/v1/bays/701/allocations?notes=Finished");
         Assert.Equal(HttpStatusCode.OK, resRelease.StatusCode);
 
         // 5. Subsequent release fails with BadRequest because bay has no active allocation
-        var resReleaseAgain = await client.DeleteAsync("/api/bays/701/release");
+        var resReleaseAgain = await client.DeleteAsync("/api/v1/bays/701/allocations");
         Assert.Equal(HttpStatusCode.BadRequest, resReleaseAgain.StatusCode);
     }
 }

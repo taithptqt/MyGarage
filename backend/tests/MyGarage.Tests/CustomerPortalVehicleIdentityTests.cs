@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using MyGarage.Application.Authorization;
 using MyGarage.Application.CustomerPortal.DTOs;
 using MyGarage.Data;
+using MyGarage.Infrastructure.CustomerPortal;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -18,7 +19,7 @@ public sealed class CustomerPortalVehicleIdentityTests
         var options = new DbContextOptionsBuilder<GarageContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options;
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         var brand = new VehicleBrand { Id = 1, Name = "Brand", Code = "B" };
         var model = new VehicleModel { Id = 1, Brand = brand, ModelName = "Model" };
         var customer = new Customer { Id = 100, FullName = "Customer", Type = "INDIVIDUAL" };
@@ -26,7 +27,7 @@ public sealed class CustomerPortalVehicleIdentityTests
         var vehicle = new Vehicle { Id = 1, Model = model, LicensePlate = "51K-12345", Vin = "1HGCR2F83HA123456", ManufactureYear = 2020, Color = "Blue", Odo = 100, OdoLastUpdatedAt = oldOdoTime };
         db.AddRange(customer, vehicle, new CustomerVehicle { Customer = customer, Vehicle = vehicle, IsCurrentOwner = true });
         await db.SaveChangesAsync();
-        var service = new CustomerPortalApplicationService(db, new CustomerPortalAuthorizationService(db));
+        var service = new CustomerPortalApplicationService(new MyGarage.Infrastructure.CustomerPortal.EfCustomerPortalStore(db), new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db)));
         var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
         CustomerPortalVehicleUpsertCommand Command(int? odo) => new("51K-12345", 1, null, null, null, null, null, odo);
 
@@ -65,7 +66,7 @@ public sealed class CustomerPortalVehicleIdentityTests
         var options = new DbContextOptionsBuilder<GarageContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options;
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         var brand = new VehicleBrand { Id = 1, Name = "Brand", Code = "B" };
         var model = new VehicleModel { Id = 1, Brand = brand, ModelName = "Model" };
         var customer = new Customer { Id = 100, FullName = "Customer", Type = "INDIVIDUAL" };
@@ -75,7 +76,7 @@ public sealed class CustomerPortalVehicleIdentityTests
             new CustomerVehicle { Customer = customer, Vehicle = first, IsCurrentOwner = true },
             new CustomerVehicle { Customer = customer, Vehicle = other, IsCurrentOwner = true });
         await db.SaveChangesAsync();
-        var service = new CustomerPortalApplicationService(db, new CustomerPortalAuthorizationService(db));
+        var service = new CustomerPortalApplicationService(new MyGarage.Infrastructure.CustomerPortal.EfCustomerPortalStore(db), new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db)));
         var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
         CustomerPortalVehicleUpsertCommand Command(string plate, string? vin) =>
             new(plate, 1, null, null, null, null, vin, null);

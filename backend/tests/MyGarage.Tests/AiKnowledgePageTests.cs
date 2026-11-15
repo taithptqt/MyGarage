@@ -22,11 +22,11 @@ public sealed class AiKnowledgePageTests
             services.AddScoped<IAiKnowledgePageReader, FakeReader>();
         }));
         using var client = configured.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/ai-knowledge-bases/page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/ai-knowledge-bases/page")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/ai-knowledge-bases/page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/ai-knowledge-bases/page")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
-        var response = await client.GetAsync("/api/ai-knowledge-bases/page?page=0&pageSize=999");
+        var response = await client.GetAsync("/api/v1/ai-knowledge-bases/page?page=0&pageSize=999");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(1, json.RootElement.GetProperty("page").GetInt32());

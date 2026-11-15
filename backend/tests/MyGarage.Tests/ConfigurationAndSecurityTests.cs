@@ -135,7 +135,7 @@ public class ConfigurationAndSecurityTests
         });
         var staffToken = TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/profile");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/profile");
         request.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
 
         var response = await client.SendAsync(request);
@@ -152,7 +152,7 @@ public class ConfigurationAndSecurityTests
             HandleCookies = false
         });
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/profile");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/profile");
         request.Headers.Add("Cookie", $"{AuthCookie.Name}=completely-invalid-jwt-token");
 
         var response = await client.SendAsync(request);
@@ -177,7 +177,7 @@ public class ConfigurationAndSecurityTests
         var staffToken = TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1);
 
         // Safe GET with cookie, NO Origin or Referer header
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/profile");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/profile");
         request.Headers.Add("Cookie", $"{AuthCookie.Name}={staffToken}");
 
         var response = await client.SendAsync(request);
@@ -200,7 +200,7 @@ public class ConfigurationAndSecurityTests
         var staffToken = TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1);
 
         // POST request authenticated purely via Bearer token (no cookie) and NO Origin header
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/session-revocations");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
         var response = await client.SendAsync(request);
@@ -245,10 +245,10 @@ public class ConfigurationAndSecurityTests
         using var client = factory.CreateClient();
         var token = TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/api/auth/logout", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/api/v1/auth/session-revocations", null)).StatusCode);
         var independentInstance = new TokenBlacklistService(factory.Services.GetRequiredService<IServiceScopeFactory>());
         Assert.True(await independentInstance.IsTokenRevokedAsync(token));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/vehicles")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/vehicles")).StatusCode);
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public class ConfigurationAndSecurityTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/vehicles")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/vehicles")).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
@@ -271,6 +271,6 @@ public class ConfigurationAndSecurityTests
             staff!.Status = "TERMINATED";
             await db.SaveChangesAsync();
         }
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/vehicles")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/vehicles")).StatusCode);
     }
 }

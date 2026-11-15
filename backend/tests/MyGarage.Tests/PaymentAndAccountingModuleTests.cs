@@ -7,17 +7,19 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Accounting;
 using MyGarage.Application.Accounting.DTOs;
 using MyGarage.Application.Authorization;
+using MyGarage.Application.Common;
 using MyGarage.Application.Invoices;
 using MyGarage.Application.Invoices.DTOs;
 using MyGarage.Application.Payments;
 using MyGarage.Application.Payments.DTOs;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.Invoices;
+using MyGarage.Infrastructure.Payments;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Services;
@@ -365,7 +367,7 @@ public class PaymentAndAccountingModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.AddRange(
             new Branch { Id = 1, Name = "Branch 1", Status = "ACTIVE" },
             new Branch { Id = 2, Name = "Branch 2", Status = "ACTIVE" }
@@ -401,7 +403,7 @@ public class PaymentAndAccountingModuleTests
 
         await db.SaveChangesAsync();
 
-        var authService = new PaymentAuthorizationService(db);
+        var authService = new PaymentAuthorizationService(new EfPaymentStore(db));
 
         var customerA = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var customerB = new UserActorContext(200, "Customer", "CUSTOMER", null, false);
@@ -441,7 +443,7 @@ public class PaymentAndAccountingModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Branch 1", Status = "ACTIVE" });
         db.ServiceOrders.Add(new ServiceOrder
         {
@@ -465,8 +467,8 @@ public class PaymentAndAccountingModuleTests
 
         await db.SaveChangesAsync();
 
-        var invoiceAuth = new InvoiceAuthorizationService(db);
-        var accountingAuth = new AccountingAuthorizationService(db);
+        var invoiceAuth = new InvoiceAuthorizationService(new EfInvoiceStore(db));
+        var accountingAuth = new AccountingAuthorizationService();
 
         var customer = new UserActorContext(100, "Customer", "CUSTOMER", null, false);
         var otherCustomer = new UserActorContext(101, "Customer", "CUSTOMER", null, false);
@@ -510,17 +512,21 @@ public class PaymentAndAccountingModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         db.PaymentMethods.Add(new PaymentMethod { Id = 1, MethodCode = "CASH", MethodName = "Tiền mặt", IsActive = true });
         db.Products.Add(new Product { Id = 10, Sku = "OIL-5W30", Unit = "Chai", Name = "Dầu nhớt", RetailPrice = 300_000m, TaxRate = 10m, IsActive = true });
         await db.SaveChangesAsync();
 
-        var paymentAuth = new PaymentAuthorizationService(db);
-        var paymentApp = new PaymentApplicationService(db, paymentAuth);
+        var paymentAuth = new PaymentAuthorizationService(new EfPaymentStore(db));
+        var paymentApp = new MyGarage.Application.Payments.PaymentApplicationService(
+            new MyGarage.Infrastructure.Payments.EfPaymentStore(db),
+            paymentAuth);
 
-        var invoiceAuth = new InvoiceAuthorizationService(db);
-        var invoiceApp = new InvoiceApplicationService(db, invoiceAuth);
+        var invoiceAuth = new InvoiceAuthorizationService(new EfInvoiceStore(db));
+        var invoiceApp = new MyGarage.Application.Invoices.InvoiceApplicationService(
+            new MyGarage.Infrastructure.Invoices.EfInvoiceStore(db),
+            invoiceAuth);
 
         var staffActor = new UserActorContext(300, "Staff", "ACCOUNTANT", 1, false);
 
@@ -620,10 +626,10 @@ public class PaymentAndAccountingModuleTests
 
         public Task<bool> DeleteAsync(string tableKey, long id, long? branchId = null) => Task.FromResult(true);
 
-        public Task<IReadOnlyList<Dictionary<string, object?>>> QueryAsync(string sql, IEnumerable<SqlParameter>? parameters = null)
+        public Task<IReadOnlyList<Dictionary<string, object?>>> QueryAsync(string sql, IEnumerable<QueryParam>? parameters = null)
         {
-            var pList = parameters?.ToList() ?? new List<SqlParameter>();
-            var idParam = pList.FirstOrDefault(p => p.ParameterName == "@id");
+            var pList = parameters?.ToList() ?? new List<QueryParam>();
+            var idParam = pList.FirstOrDefault(p => p.Name == "@id");
             long id = idParam?.Value != null ? Convert.ToInt64(idParam.Value) : 0;
 
             var matchingLines = JournalLines
@@ -647,12 +653,12 @@ public class PaymentAndAccountingModuleTests
             return Task.FromResult<IReadOnlyList<Dictionary<string, object?>>>(new List<Dictionary<string, object?>> { result });
         }
 
-        public Task<int> ExecuteAsync(string sql, IEnumerable<SqlParameter>? parameters = null)
+        public Task<int> ExecuteAsync(string sql, IEnumerable<QueryParam>? parameters = null)
         {
-            var pList = parameters?.ToList() ?? new List<SqlParameter>();
-            var idParam = pList.FirstOrDefault(p => p.ParameterName == "@id");
-            var statusParam = pList.FirstOrDefault(p => p.ParameterName == "@status");
-            var userParam = pList.FirstOrDefault(p => p.ParameterName == "@u");
+            var pList = parameters?.ToList() ?? new List<QueryParam>();
+            var idParam = pList.FirstOrDefault(p => p.Name == "@id");
+            var statusParam = pList.FirstOrDefault(p => p.Name == "@status");
+            var userParam = pList.FirstOrDefault(p => p.Name == "@u");
 
             if (idParam?.Value != null)
             {
@@ -668,7 +674,7 @@ public class PaymentAndAccountingModuleTests
             return Task.FromResult(0);
         }
 
-        public Task<T?> ScalarAsync<T>(string sql, IEnumerable<SqlParameter>? parameters = null) => Task.FromResult<T?>(default);
+        public Task<T?> ScalarAsync<T>(string sql, IEnumerable<QueryParam>? parameters = null) => Task.FromResult<T?>(default);
     }
 
     [Fact]
@@ -679,7 +685,7 @@ public class PaymentAndAccountingModuleTests
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         await db.SaveChangesAsync();
 
@@ -707,8 +713,10 @@ public class PaymentAndAccountingModuleTests
             ["credit_amount"] = 500_000m
         });
 
-        var authService = new AccountingAuthorizationService(db);
-        var appService = new AccountingApplicationService(db, authService, fakeCrud);
+        var authService = new AccountingAuthorizationService();
+        var appService = new MyGarage.Application.Accounting.AccountingApplicationService(
+            new MyGarage.Infrastructure.Accounting.EfAccountingStore(fakeCrud, fakeCrud, fakeCrud),
+            authService);
         var actor = new UserActorContext(300, "Staff", "ACCOUNTANT", 1, false);
 
         // 1. Validate equilibrium
@@ -822,13 +830,11 @@ public class PaymentAndAccountingModuleTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "ADMIN", 1));
 
-        // 1. OrderController dual routes (/api/orders & /api/v1/orders)
-        var resOrder1 = await client.GetAsync("/api/orders/999");
-        var resOrder2 = await client.GetAsync("/api/v1/orders/999");
-        Assert.Equal(resOrder1.StatusCode, resOrder2.StatusCode);
+        // 1. OrderController (/api/v1/orders)
+        var resOrder = await client.GetAsync("/api/v1/orders/999");
+        Assert.Equal(HttpStatusCode.NotFound, resOrder.StatusCode);
 
-        // 2. WebhookController dual routes (/api/webhooks/payment & /api/v1/webhooks/payment)
-        // OrderCode 123 is a built-in test bypass returning 200 OK
+        // 2. WebhookController (/api/v1/webhooks/payment)
         var webhookPayload = new
         {
             code = "00",
@@ -845,81 +851,56 @@ public class PaymentAndAccountingModuleTests
             },
             signature = "any"
         };
-        var resWh1 = await client.PostAsJsonAsync("/api/webhooks/payment", webhookPayload);
-        var resWh2 = await client.PostAsJsonAsync("/api/v1/webhooks/payment", webhookPayload);
-        Assert.Equal(resWh1.StatusCode, resWh2.StatusCode);
+        var resWh = await client.PostAsJsonAsync("/api/v1/webhooks/payment", webhookPayload);
+        Assert.NotEqual(HttpStatusCode.NotFound, resWh.StatusCode);
 
-        // 3. InvoiceController dual routes (/api/invoices & /api/v1/invoices)
-        var resInv1 = await client.GetAsync("/api/invoices");
-        var resInv2 = await client.GetAsync("/api/v1/invoices");
-        Assert.Equal(HttpStatusCode.OK, resInv1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resInv2.StatusCode);
+        // 3. InvoiceController (/api/v1/invoices)
+        var resInv = await client.GetAsync("/api/v1/invoices");
+        Assert.Equal(HttpStatusCode.OK, resInv.StatusCode);
 
-        // Immutability invariant on both routes: PUT & DELETE return 405 Method Not Allowed
-        var resInvPut1 = await client.PutAsJsonAsync("/api/invoices/1", new { });
-        var resInvPut2 = await client.PutAsJsonAsync("/api/v1/invoices/1", new { });
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, resInvPut1.StatusCode);
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, resInvPut2.StatusCode);
+        // Immutability invariant: PUT & DELETE return 405 Method Not Allowed
+        var resInvPut = await client.PutAsJsonAsync("/api/v1/invoices/1", new { });
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, resInvPut.StatusCode);
 
-        // 4. InvoiceListPageController dual routes (/api/invoices/list-page & /api/v1/invoices/list-page)
-        var resInvList1 = await client.GetAsync("/api/invoices/list-page");
-        var resInvList2 = await client.GetAsync("/api/v1/invoices/list-page");
-        Assert.Equal(HttpStatusCode.OK, resInvList1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resInvList2.StatusCode);
+        // 4. InvoiceListPageController (/api/v1/invoices/list-page)
+        var resInvList = await client.GetAsync("/api/v1/invoices/list-page");
+        Assert.Equal(HttpStatusCode.OK, resInvList.StatusCode);
 
-        // 5. InvoiceTaxSummaryController dual routes (/api/invoices/tax-summary & /api/v1/invoices/tax-summary)
-        var resTax1 = await client.GetAsync("/api/invoices/tax-summary");
-        var resTax2 = await client.GetAsync("/api/v1/invoices/tax-summary");
-        Assert.Equal(HttpStatusCode.OK, resTax1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resTax2.StatusCode);
+        // 5. InvoiceTaxSummaryController (/api/v1/invoices/tax-summary)
+        var resTax = await client.GetAsync("/api/v1/invoices/tax-summary");
+        Assert.Equal(HttpStatusCode.OK, resTax.StatusCode);
 
-        // 6. InvoiceViewDetailController dual routes (/api/invoices/1/view-detail & /api/v1/invoices/1/view-detail)
-        var resInvView1 = await client.GetAsync("/api/invoices/1/view-detail");
-        var resInvView2 = await client.GetAsync("/api/v1/invoices/1/view-detail");
-        Assert.Equal(HttpStatusCode.OK, resInvView1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resInvView2.StatusCode);
+        // 6. InvoiceViewDetailController (/api/v1/invoices/1/view-detail)
+        var resInvView = await client.GetAsync("/api/v1/invoices/1/view-detail");
+        Assert.Equal(HttpStatusCode.OK, resInvView.StatusCode);
 
-        // 7. InvoiceDetailController dual routes (/api/invoice-details & /api/v1/invoice-details)
-        var resInvDet1 = await client.GetAsync("/api/invoice-details");
-        var resInvDet2 = await client.GetAsync("/api/v1/invoice-details");
-        Assert.Equal(HttpStatusCode.OK, resInvDet1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resInvDet2.StatusCode);
+        // 7. InvoiceDetailController (/api/v1/invoice-details)
+        var resInvDet = await client.GetAsync("/api/v1/invoice-details");
+        Assert.Equal(HttpStatusCode.OK, resInvDet.StatusCode);
 
-        // 8. PaymentController dual routes (/api/payments & /api/v1/payments)
-        var resPay1 = await client.GetAsync("/api/payments");
-        var resPay2 = await client.GetAsync("/api/v1/payments");
-        Assert.Equal(HttpStatusCode.OK, resPay1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resPay2.StatusCode);
+        // 8. PaymentController (/api/v1/payments)
+        var resPay = await client.GetAsync("/api/v1/payments");
+        Assert.Equal(HttpStatusCode.OK, resPay.StatusCode);
 
-        // 9. PaymentMethodController dual routes (/api/payment-methods & /api/v1/payment-methods)
-        var resPm1 = await client.GetAsync("/api/payment-methods");
-        var resPm2 = await client.GetAsync("/api/v1/payment-methods");
-        Assert.Equal(HttpStatusCode.OK, resPm1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resPm2.StatusCode);
+        // 9. PaymentMethodController (/api/v1/payment-methods)
+        var resPm = await client.GetAsync("/api/v1/payment-methods");
+        Assert.Equal(HttpStatusCode.OK, resPm.StatusCode);
 
-        // 10. AccountingController dual routes (/api/accounting & /api/v1/accounting)
-        // Generic write to restricted table returns 405 Method Not Allowed on both routes
-        var resAcc1 = await client.PostAsJsonAsync("/api/accounting/table/journal-entries", new { });
-        var resAcc2 = await client.PostAsJsonAsync("/api/v1/accounting/table/journal-entries", new { });
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, resAcc1.StatusCode);
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, resAcc2.StatusCode);
+        // 10. AccountingController (/api/v1/accounting)
+        // Generic write to restricted table returns 405 Method Not Allowed
+        var resAcc = await client.PostAsJsonAsync("/api/v1/accounting/table/journal-entries", new { });
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, resAcc.StatusCode);
 
-        // 11. ExpenseLogController dual routes (/api/expense-logs & /api/v1/expense-logs)
-        var resExp1 = await client.GetAsync("/api/expense-logs");
-        var resExp2 = await client.GetAsync("/api/v1/expense-logs");
-        Assert.Equal(HttpStatusCode.OK, resExp1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resExp2.StatusCode);
+        // 11. ExpenseLogController (/api/v1/expense-logs)
+        var resExp = await client.GetAsync("/api/v1/expense-logs");
+        Assert.Equal(HttpStatusCode.OK, resExp.StatusCode);
 
-        // 12. RevenueSnapshotController dual routes (/api/revenue-snapshots & /api/v1/revenue-snapshots)
-        var resRev1 = await client.GetAsync("/api/revenue-snapshots");
-        var resRev2 = await client.GetAsync("/api/v1/revenue-snapshots");
-        Assert.Equal(HttpStatusCode.OK, resRev1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRev2.StatusCode);
+        // 12. RevenueSnapshotController (/api/v1/revenue-snapshots)
+        var resRev = await client.GetAsync("/api/v1/revenue-snapshots");
+        Assert.Equal(HttpStatusCode.OK, resRev.StatusCode);
 
-        // 13. ServiceRefundController dual routes (/api/service-refunds & /api/v1/service-refunds)
-        var resRef1 = await client.GetAsync("/api/service-refunds");
-        var resRef2 = await client.GetAsync("/api/v1/service-refunds");
-        Assert.Equal(HttpStatusCode.OK, resRef1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, resRef2.StatusCode);
+        // 13. ServiceRefundController (/api/v1/service-refunds)
+        var resRef = await client.GetAsync("/api/v1/service-refunds");
+        Assert.Equal(HttpStatusCode.OK, resRef.StatusCode);
     }
 }

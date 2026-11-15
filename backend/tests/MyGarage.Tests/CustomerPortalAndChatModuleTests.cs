@@ -14,6 +14,7 @@ using MyGarage.Application.Notifications.DTOs;
 using MyGarage.Common;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.CustomerPortal;
 using MyGarage.Models;
 using MyGarage.Services;
 using MyGarage.Support;
@@ -340,7 +341,7 @@ public class CustomerPortalAndChatModuleTests
             .UseInMemoryDatabase($"PortalAuthDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.Add(new Customer { Id = 100, FullName = "Khách Hàng 100", Type = "INDIVIDUAL", Note = CustomerDomainRules.SetPreferredBranchTag(null, 1) });
         db.Customers.Add(new Customer { Id = 200, FullName = "Khách Hàng 200", Type = "INDIVIDUAL" });
         db.Vehicles.Add(new Vehicle { Id = 10, LicensePlate = "51A-11111" });
@@ -349,7 +350,7 @@ public class CustomerPortalAndChatModuleTests
         db.Notifications.Add(new Notification { Id = 50, CustomerId = 100, Title = "Thông báo 1", Content = "Nội dung" });
         await db.SaveChangesAsync();
 
-        var auth = new CustomerPortalAuthorizationService(db);
+        var auth = new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db));
 
         var cust100Actor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
         var cust200Actor = new UserActorContext(200, "Customer", "CUSTOMER", null, IsAdmin: false);
@@ -404,7 +405,7 @@ public class CustomerPortalAndChatModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.Add(new Customer { Id = 100, FullName = "Nguyễn Văn Portal", Type = "INDIVIDUAL" });
         db.VehicleBrands.Add(new VehicleBrand { Id = 1, Code = "TOYOTA", Name = "Toyota" });
         db.VehicleModels.AddRange(
@@ -413,8 +414,8 @@ public class CustomerPortalAndChatModuleTests
             new VehicleModel { Id = 3, BrandId = 1, ModelName = "Deleted", IsDeleted = true });
         await db.SaveChangesAsync();
 
-        var auth = new CustomerPortalAuthorizationService(db);
-        var appService = new CustomerPortalApplicationService(db, auth);
+        var auth = new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db));
+        var appService = new CustomerPortalApplicationService(new MyGarage.Infrastructure.CustomerPortal.EfCustomerPortalStore(db), auth);
         var custActor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
 
         // 1. Register vehicle
@@ -473,7 +474,7 @@ public class CustomerPortalAndChatModuleTests
             .UseInMemoryDatabase($"PortalContextDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.Add(new Customer { Id = 100, FullName = "Chủ Đơn Hàng", Type = "INDIVIDUAL" });
         db.ServiceOrders.Add(new ServiceOrder
         {
@@ -486,8 +487,8 @@ public class CustomerPortalAndChatModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new CustomerPortalAuthorizationService(db);
-        var appService = new CustomerPortalApplicationService(db, auth);
+        var auth = new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db));
+        var appService = new CustomerPortalApplicationService(new MyGarage.Infrastructure.CustomerPortal.EfCustomerPortalStore(db), auth);
         var custActor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
 
         var context = await appService.GetServiceOrderLinkContextAsync(100, 10, custActor);
@@ -507,13 +508,13 @@ public class CustomerPortalAndChatModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.Add(new Customer { Id = 100, FullName = "Khách Nhận Thông Báo", Type = "INDIVIDUAL" });
         db.Vehicles.Add(new Vehicle { Id = 1, LicensePlate = "51H-12345" });
         await db.SaveChangesAsync();
 
-        var auth = new CustomerPortalAuthorizationService(db);
-        var notifService = new NotificationApplicationService(db, auth);
+        var auth = new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db));
+        var notifService = new NotificationApplicationService(new MyGarage.Infrastructure.Notifications.EfNotificationStore(db), auth);
         var staffActor = new UserActorContext(500, "Staff", "STAFF", BranchId: 1, IsAdmin: false);
         var custActor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
 
@@ -584,47 +585,33 @@ public class CustomerPortalAndChatModuleTests
         var custToken = TestWebApplicationFactory.CreateJwtToken(100, "Customer", "CUSTOMER", null);
         custClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", custToken);
 
-        // 1. CustomerChatController dual routes (/api/chat vs /api/v1/chat)
-        var chatRes1 = await custClient.GetAsync("/api/chat/my-conversations");
-        var chatRes2 = await custClient.GetAsync("/api/v1/chat/my-conversations");
-        Assert.Equal(chatRes1.StatusCode, chatRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, chatRes2.StatusCode);
+        // 1. CustomerChatController (/api/v1/chat)
+        var chatRes = await custClient.GetAsync("/api/v1/chat/my-conversations");
+        Assert.Equal(HttpStatusCode.OK, chatRes.StatusCode);
 
-        // 2. ReceptionChatController dual routes (/api/reception/chat vs /api/v1/reception/chat)
-        var repRes1 = await receptionClient.GetAsync("/api/reception/chat/conversations");
-        var repRes2 = await receptionClient.GetAsync("/api/v1/reception/chat/conversations");
-        Assert.Equal(repRes1.StatusCode, repRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, repRes2.StatusCode);
+        // 2. ReceptionChatController (/api/v1/reception/chat)
+        var repRes = await receptionClient.GetAsync("/api/v1/reception/chat/conversations");
+        Assert.Equal(HttpStatusCode.OK, repRes.StatusCode);
 
-        // 3. ChatMessageController dual routes (/api/chat-messages vs /api/v1/chat-messages)
-        var msgRes1 = await client.GetAsync("/api/chat-messages");
-        var msgRes2 = await client.GetAsync("/api/v1/chat-messages");
-        Assert.Equal(msgRes1.StatusCode, msgRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, msgRes2.StatusCode);
+        // 3. ChatMessageController (/api/v1/chat-messages)
+        var msgRes = await client.GetAsync("/api/v1/chat-messages");
+        Assert.Equal(HttpStatusCode.OK, msgRes.StatusCode);
 
-        // 4. ConversationController dual routes (/api/conversations vs /api/v1/conversations)
-        var convRes1 = await client.GetAsync("/api/conversations");
-        var convRes2 = await client.GetAsync("/api/v1/conversations");
-        Assert.Equal(convRes1.StatusCode, convRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, convRes2.StatusCode);
+        // 4. ConversationController (/api/v1/conversations)
+        var convRes = await client.GetAsync("/api/v1/conversations");
+        Assert.Equal(HttpStatusCode.OK, convRes.StatusCode);
 
-        // 5. NotificationController dual routes (/api/notifications vs /api/v1/notifications)
-        var notifRes1 = await client.GetAsync("/api/notifications");
-        var notifRes2 = await client.GetAsync("/api/v1/notifications");
-        Assert.Equal(notifRes1.StatusCode, notifRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, notifRes2.StatusCode);
+        // 5. NotificationController (/api/v1/notifications)
+        var notifRes = await client.GetAsync("/api/v1/notifications");
+        Assert.Equal(HttpStatusCode.OK, notifRes.StatusCode);
 
-        // 6. NotificationTemplateController dual routes (/api/notification-templates vs /api/v1/notification-templates)
-        var tmplRes1 = await client.GetAsync("/api/notification-templates");
-        var tmplRes2 = await client.GetAsync("/api/v1/notification-templates");
-        Assert.Equal(tmplRes1.StatusCode, tmplRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, tmplRes2.StatusCode);
+        // 6. NotificationTemplateController (/api/v1/notification-templates)
+        var tmplRes = await client.GetAsync("/api/v1/notification-templates");
+        Assert.Equal(HttpStatusCode.OK, tmplRes.StatusCode);
 
-        // 7. MaintenanceRemindersController dual routes (/api/maintenance-reminders vs /api/v1/maintenance-reminders)
-        var remRes1 = await client.PostAsync("/api/maintenance-reminders/process-due", null);
-        var remRes2 = await client.PostAsync("/api/v1/maintenance-reminders/process-due", null);
-        Assert.Equal(remRes1.StatusCode, remRes2.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, remRes2.StatusCode);
+        // 7. MaintenanceRemindersController (/api/v1/maintenance-reminders)
+        var remRes = await client.PostAsync("/api/v1/maintenance-reminders/due-dispatches", null);
+        Assert.Equal(HttpStatusCode.OK, remRes.StatusCode);
     }
 
     [Fact]
@@ -642,7 +629,7 @@ public class CustomerPortalAndChatModuleTests
         var resNotif = await anonClient.GetAsync("/api/v1/notifications");
         Assert.Equal(HttpStatusCode.Unauthorized, resNotif.StatusCode);
 
-        var resRem = await anonClient.PostAsync("/api/v1/maintenance-reminders/process-due", null);
+        var resRem = await anonClient.PostAsync("/api/v1/maintenance-reminders/due-dispatches", null);
         Assert.Equal(HttpStatusCode.Unauthorized, resRem.StatusCode);
     }
 }

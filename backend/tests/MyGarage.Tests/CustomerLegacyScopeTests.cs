@@ -20,14 +20,14 @@ public sealed class CustomerLegacyScopeTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var created = await client.PostAsJsonAsync("/api/customers", new { fullName = "New customer", note = "Initial [PreferredBranchId:2]" });
+        var created = await client.PostAsJsonAsync("/api/v1/customers", new { fullName = "New customer", note = "Initial [PreferredBranchId:2]" });
         Assert.True(created.StatusCode == HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         using var payload = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = payload.RootElement.GetProperty("id").GetInt64();
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/customers/{id}")).StatusCode);
-        var updated = await client.PutAsJsonAsync($"/api/customers/{id}", new { fullName = "Updated", note = "Updated [PreferredBranchId:2]" });
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/customers/{id}")).StatusCode);
+        var updated = await client.PutAsJsonAsync($"/api/v1/customers/{id}", new { fullName = "Updated", note = "Updated [PreferredBranchId:2]" });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/customers/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/customers/{id}")).StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
         var customer = await db.Customers.AsNoTracking().SingleAsync(x => x.Id == id);
@@ -51,17 +51,17 @@ public sealed class CustomerLegacyScopeTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
 
-        var explicitBranch = await client.GetAsync("/api/customers?branchId=2");
+        var explicitBranch = await client.GetAsync("/api/v1/customers?branchId=2");
         Assert.Equal(HttpStatusCode.Forbidden, explicitBranch.StatusCode);
-        var list = await client.GetAsync("/api/customers?pageSize=100");
+        var list = await client.GetAsync("/api/v1/customers?pageSize=100");
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         using var listJson = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
         Assert.DoesNotContain(listJson.RootElement.GetProperty("items").EnumerateArray(), x => x.GetProperty("id").GetInt64() == 502);
-        var read = await client.GetAsync("/api/customers/502");
+        var read = await client.GetAsync("/api/v1/customers/502");
         Assert.True(read.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
-        var update = await client.PutAsJsonAsync("/api/customers/502", new { fullName = "Changed" });
+        var update = await client.PutAsJsonAsync("/api/v1/customers/502", new { fullName = "Changed" });
         Assert.True(update.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
-        var delete = await client.DeleteAsync("/api/customers/502");
+        var delete = await client.DeleteAsync("/api/v1/customers/502");
         Assert.True(delete.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
         using var scope = factory.Services.CreateScope();
         var customer = await scope.ServiceProvider.GetRequiredService<GarageContext>().Customers.AsNoTracking().SingleAsync(x => x.Id == 502);

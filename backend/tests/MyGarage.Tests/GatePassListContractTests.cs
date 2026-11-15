@@ -22,13 +22,13 @@ public sealed class GatePassListContractTests
             services.AddScoped<IGatePassListReader, FakeReader>();
         }));
         using var client = app.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/gate-passes")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/gate-passes")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/gate-passes")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/gate-passes")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/gate-passes?page=2&pageSize=1");
+        var response = await client.GetAsync("/api/v1/gate-passes?page=2&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, json.RootElement.GetProperty("totalCount").GetInt32());
         Assert.Equal(2, json.RootElement.GetProperty("page").GetInt32());

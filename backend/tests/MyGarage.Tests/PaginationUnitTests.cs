@@ -66,8 +66,7 @@ public class PaginationUnitTests
             new[] { "A", "B" },
             totalCount: 105,
             page: 2,
-            pageSize: 20,
-            response: response);
+            pageSize: 20);
 
         Assert.Equal(105, envelope.TotalCount);
         Assert.Equal(105, envelope.Total);
@@ -93,8 +92,7 @@ public class PaginationUnitTests
             Array.Empty<string>(),
             totalCount: 0,
             page: 1,
-            pageSize: 50,
-            response: response);
+            pageSize: 50);
 
         Assert.Equal(0, envelope.TotalCount);
         Assert.Equal(1, envelope.Page);
@@ -106,10 +104,10 @@ public class PaginationUnitTests
     }
 
     [Fact]
-    public void CreatePagedEnvelope_NullResponse_DoesNotThrow()
+    public void CreatePagedEnvelope_NullItems_DoesNotThrow()
     {
-        HttpResponse? nullResponse = null;
-        var exception = Record.Exception(() => PaginationExtensions.CreatePagedEnvelope(new[] { 1 }, 100, 1, 50, nullResponse));
+        IEnumerable<int>? nullItems = null;
+        var exception = Record.Exception(() => PaginationExtensions.CreatePagedEnvelope(nullItems, 100, 1, 50));
         Assert.Null(exception);
     }
 

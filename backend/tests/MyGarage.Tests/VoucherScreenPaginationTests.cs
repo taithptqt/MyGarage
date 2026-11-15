@@ -24,15 +24,15 @@ public class VoucherScreenPaginationTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        using var summary = JsonDocument.Parse(await client.GetStringAsync("/api/voucher-campaigns/1/summary"));
+        using var summary = JsonDocument.Parse(await client.GetStringAsync("/api/v1/voucher-campaigns/1/summary"));
         Assert.Equal(11, summary.RootElement.GetProperty("voucherCount").GetInt32());
         Assert.Empty(summary.RootElement.GetProperty("vouchers").EnumerateArray());
-        using var page = JsonDocument.Parse(await client.GetStringAsync("/api/voucher-campaigns/1/voucher-page?page=2&pageSize=5"));
+        using var page = JsonDocument.Parse(await client.GetStringAsync("/api/v1/voucher-campaigns/1/voucher-page?page=2&pageSize=5"));
         Assert.Equal(11, page.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(6, page.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/voucher-campaigns/999/voucher-page")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/voucher-campaigns/999/voucher-page")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/voucher-campaigns/1/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/voucher-campaigns/1/summary")).StatusCode);
     }
 
     [Fact]
@@ -57,10 +57,10 @@ public class VoucherScreenPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/vouchers/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/vouchers/dashboard")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
-        var response = await client.GetAsync("/api/vouchers/dashboard");
+        var response = await client.GetAsync("/api/v1/vouchers/dashboard");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(10, json.RootElement.GetProperty("activeCount").GetInt32());
@@ -97,7 +97,7 @@ public class VoucherScreenPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/voucher-campaigns/admin-page?search=Campaign&status=ACTIVE&page=2&pageSize=5");
+        var response = await client.GetAsync("/api/v1/voucher-campaigns/admin-page?search=Campaign&status=ACTIVE&page=2&pageSize=5");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(11, json.RootElement.GetProperty("total").GetInt32());
@@ -108,7 +108,7 @@ public class VoucherScreenPaginationTests
         Assert.Equal(78, stats.GetProperty("totalRedeemed").GetInt64());
         Assert.Equal(1, stats.GetProperty("budgetWarningCount").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("budgetWarnings")[0].GetProperty("id").GetInt64());
-        var deletedCampaignVoucher = await client.GetAsync("/api/voucher-campaigns/admin-page?search=Campaign%20C1%20Description%20Objective");
+        var deletedCampaignVoucher = await client.GetAsync("/api/v1/voucher-campaigns/admin-page?search=Campaign%20C1%20Description%20Objective");
         using var filtered = JsonDocument.Parse(await deletedCampaignVoucher.Content.ReadAsStringAsync());
         Assert.Equal(1, filtered.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(0, filtered.RootElement.GetProperty("items")[0].GetProperty("voucherCount").GetInt32());
@@ -131,7 +131,7 @@ public class VoucherScreenPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/vouchers/report-page?page=2&pageSize=5");
+        var response = await client.GetAsync("/api/v1/vouchers/report-page?page=2&pageSize=5");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(12, json.RootElement.GetProperty("total").GetInt32());
@@ -159,22 +159,22 @@ public class VoucherScreenPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/voucher-redemptions/admin-page?search=SALE&page=2&pageSize=5&sort=discountDesc");
+        var response = await client.GetAsync("/api/v1/voucher-redemptions/admin-page?search=SALE&page=2&pageSize=5&sort=discountDesc");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(12, json.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(7, json.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
-        var crossField = await client.GetAsync("/api/voucher-redemptions/admin-page?search=SALE%201%20123");
+        var crossField = await client.GetAsync("/api/v1/voucher-redemptions/admin-page?search=SALE%201%20123");
         using var crossJson = JsonDocument.Parse(await crossField.Content.ReadAsStringAsync());
         Assert.Equal(1, crossJson.RootElement.GetProperty("total").GetInt32());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
-        var admin = await client.GetAsync("/api/voucher-redemptions/admin-page?pageSize=20");
+        var admin = await client.GetAsync("/api/v1/voucher-redemptions/admin-page?pageSize=20");
         using var adminJson = JsonDocument.Parse(await admin.Content.ReadAsStringAsync());
         Assert.Equal(14, adminJson.RootElement.GetProperty("total").GetInt32());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/voucher-redemptions/admin-page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/voucher-redemptions/admin-page")).StatusCode);
     }
 
     [Fact]
@@ -193,16 +193,16 @@ public class VoucherScreenPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
-        var response = await client.GetAsync("/api/voucher-approval-requests/admin-page?search=EXCEPTION&page=2&pageSize=5");
+        var response = await client.GetAsync("/api/v1/voucher-approval-requests/admin-page?search=EXCEPTION&page=2&pageSize=5");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(12, json.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(7, json.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
-        var crossField = await client.GetAsync("/api/voucher-approval-requests/admin-page?search=reason%201%209");
+        var crossField = await client.GetAsync("/api/v1/voucher-approval-requests/admin-page?search=reason%201%209");
         using var crossJson = JsonDocument.Parse(await crossField.Content.ReadAsStringAsync());
         Assert.Equal(1, crossJson.RootElement.GetProperty("total").GetInt32());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/voucher-approval-requests/admin-page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/voucher-approval-requests/admin-page")).StatusCode);
     }
 }

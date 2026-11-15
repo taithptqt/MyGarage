@@ -24,7 +24,7 @@ public class StaffAdministrationPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/staffs/admin-list?search=technician&page=2&pageSize=10");
+        var response = await client.GetAsync("/api/v1/staffs/admin-list?search=technician&page=2&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(60, json.RootElement.GetProperty("total").GetInt32());
@@ -34,6 +34,6 @@ public class StaffAdministrationPaginationTests
         var items = json.RootElement.GetProperty("items");
         Assert.Equal(10, items.GetArrayLength());
         Assert.Equal(1011, items[0].GetProperty("id").GetInt64());
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/staffs/admin-list?branchId=2")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/staffs/admin-list?branchId=2")).StatusCode);
     }
 }

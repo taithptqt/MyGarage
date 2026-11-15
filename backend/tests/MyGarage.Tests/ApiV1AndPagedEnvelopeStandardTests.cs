@@ -105,8 +105,7 @@ public class ApiV1AndPagedEnvelopeStandardTests
             new[] { 1, 2, 3 },
             totalCount: 15,
             page: 1,
-            pageSize: 5,
-            response: httpContext.Response);
+            pageSize: 5);
 
         Assert.Equal(new[] { 1, 2, 3 }, envelope.Items);
         Assert.Equal(15, envelope.TotalCount);
@@ -238,11 +237,11 @@ public class ApiV1AndPagedEnvelopeStandardTests
         var response = await client.GetAsync(url);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // Verify X-* pagination headers are retired on REST endpoints
-        Assert.False(response.Headers.Contains("X-Total-Count"), $"Unexpected header X-Total-Count on {url}");
-        Assert.False(response.Headers.Contains("X-Page"), $"Unexpected header X-Page on {url}");
-        Assert.False(response.Headers.Contains("X-Page-Size"), $"Unexpected header X-Page-Size on {url}");
-        Assert.False(response.Headers.Contains("X-Total-Pages"), $"Unexpected header X-Total-Pages on {url}");
+        // Verify RESTful pagination headers are emitted alongside unified PagedEnvelope
+        Assert.True(response.Headers.Contains("X-Total-Count"), $"Missing header X-Total-Count on {url}");
+        Assert.True(response.Headers.Contains("X-Page"), $"Missing header X-Page on {url}");
+        Assert.True(response.Headers.Contains("X-Page-Size"), $"Missing header X-Page-Size on {url}");
+        Assert.True(response.Headers.Contains("X-Total-Pages"), $"Missing header X-Total-Pages on {url}");
 
         var content = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(content);
@@ -261,6 +260,10 @@ public class ApiV1AndPagedEnvelopeStandardTests
         Assert.Equal(10, pageSizeProp.GetInt32());
 
         Assert.True(root.TryGetProperty("totalPages", out var totalPagesProp) && totalPagesProp.ValueKind == JsonValueKind.Number, $"Missing 'totalPages' in {url}");
+        if (totalPagesProp.GetInt32() > 0)
+        {
+            Assert.True(response.Headers.Contains("Link"), $"Missing header Link on {url}");
+        }
         Assert.True(root.TryGetProperty("hasPreviousPage", out var hasPrevProp) && (hasPrevProp.ValueKind == JsonValueKind.True || hasPrevProp.ValueKind == JsonValueKind.False), $"Missing 'hasPreviousPage' in {url}");
         Assert.True(root.TryGetProperty("hasNextPage", out var hasNextProp) && (hasNextProp.ValueKind == JsonValueKind.True || hasNextProp.ValueKind == JsonValueKind.False), $"Missing 'hasNextPage' in {url}");
 

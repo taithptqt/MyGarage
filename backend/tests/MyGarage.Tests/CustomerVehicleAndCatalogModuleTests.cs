@@ -14,6 +14,8 @@ using MyGarage.Application.Customers.DTOs;
 using MyGarage.Application.Vehicles.DTOs;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.Customers;
+using MyGarage.Infrastructure.Persistence.Stores.Vehicles;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -247,7 +249,7 @@ public class CustomerVehicleAndCatalogModuleTests
             .UseInMemoryDatabase($"CustAuthDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.Add(new Customer
         {
             Id = 1,
@@ -266,7 +268,7 @@ public class CustomerVehicleAndCatalogModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new CustomerAuthorizationService(db);
+        var auth = new CustomerAuthorizationService(new EfCustomerStore(db));
 
         // Admin can access anyone
         var adminActor = new UserActorContext(999, "Admin", "ADMIN", null, IsAdmin: true);
@@ -291,7 +293,7 @@ public class CustomerVehicleAndCatalogModuleTests
             .UseInMemoryDatabase($"VehAuthDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Vehicles.Add(new Vehicle { Id = 1, LicensePlate = "30A-11111", ModelId = 1, IsDeleted = false });
         db.CustomerVehicles.Add(new CustomerVehicle
         {
@@ -303,7 +305,7 @@ public class CustomerVehicleAndCatalogModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new VehicleAuthorizationService(db);
+        var auth = new VehicleAuthorizationService(new EfVehicleAuthorizationStore(db));
 
         var customer10 = new UserActorContext(10, "Customer", "CUSTOMER", null, IsAdmin: false);
         var customer20 = new UserActorContext(20, "Customer", "CUSTOMER", null, IsAdmin: false);
@@ -329,8 +331,8 @@ public class CustomerVehicleAndCatalogModuleTests
             .UseInMemoryDatabase($"CatAuthDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var auth = new CatalogAuthorizationService(db);
+        await using var db = new GarageContext(options);
+        var auth = new CatalogAuthorizationService();
 
         var anon = new UserActorContext(null, null, null, null, false);
         var staffGeneral = new UserActorContext(10, "Staff", "MECHANIC", 1, false);
@@ -361,9 +363,9 @@ public class CustomerVehicleAndCatalogModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var auth = new CustomerAuthorizationService(db);
-        var service = new CustomerApplicationService(db, auth);
+        await using var db = new GarageContext(options);
+        var auth = new CustomerAuthorizationService(new EfCustomerStore(db));
+        var service = new CustomerApplicationService(new MyGarage.Infrastructure.Customers.EfCustomerStore(db), auth);
         var staffActor = new UserActorContext(1, "Staff", "ADMIN", 1, true);
 
         var cmd = new CustomerCreateCommand(
@@ -393,13 +395,13 @@ public class CustomerVehicleAndCatalogModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.VehicleBrands.Add(new VehicleBrand { Id = 1, Code = "TOYOTA", Name = "Toyota", IsActive = true });
         db.VehicleModels.Add(new VehicleModel { Id = 1, BrandId = 1, ModelName = "Camry" });
         await db.SaveChangesAsync();
 
-        var auth = new VehicleAuthorizationService(db);
-        var service = new VehicleApplicationService(db, auth);
+        var auth = new VehicleAuthorizationService(new EfVehicleAuthorizationStore(db));
+        var service = new VehicleApplicationService(new MyGarage.Infrastructure.Vehicles.EfVehicleStore(db), auth);
         var staffActor = new UserActorContext(1, "Staff", "ADMIN", 1, true);
 
         var cmd = new VehicleUpsertCommand(
@@ -426,12 +428,12 @@ public class CustomerVehicleAndCatalogModuleTests
             .UseInMemoryDatabase($"CatAppDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.ServiceCategories.Add(new ServiceCategory { Id = 1, Code = "MAINT", Name = "Bảo dưỡng", IsActive = true });
         await db.SaveChangesAsync();
 
-        var auth = new CatalogAuthorizationService(db);
-        var service = new CatalogApplicationService(db, auth);
+        var auth = new CatalogAuthorizationService();
+        var service = new CatalogApplicationService(new MyGarage.Infrastructure.Catalog.EfCatalogStore(db), auth);
         var adminActor = new UserActorContext(1, "Admin", "ADMIN", null, true);
 
         var pkgCmd = new StandardServiceCreateCommand(
@@ -526,127 +528,87 @@ public class CustomerVehicleAndCatalogModuleTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "ADMIN", 1));
 
-        // 1. CustomerAdministrationController dual routes
-        var res1a = await client.GetAsync("/api/customers/admin-list");
-        var res1b = await client.GetAsync("/api/v1/customers/admin-list");
-        Assert.Equal(res1a.StatusCode, res1b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res1b.StatusCode);
+        // 1. CustomerAdministrationController
+        var res1 = await client.GetAsync("/api/v1/customers/admin-list");
+        Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
 
-        // 2. CustomersController dual routes
-        var res2a = await client.GetAsync("/api/customers");
-        var res2b = await client.GetAsync("/api/v1/customers");
-        Assert.Equal(res2a.StatusCode, res2b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res2b.StatusCode);
+        // 2. CustomersController
+        var res2 = await client.GetAsync("/api/v1/customers");
+        Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
 
-        // 3. CustomerVehiclesController dual routes
-        var res3a = await client.GetAsync("/api/customer-vehicles");
-        var res3b = await client.GetAsync("/api/v1/customer-vehicles");
-        Assert.Equal(res3a.StatusCode, res3b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res3b.StatusCode);
+        // 3. CustomerVehiclesController
+        var res3 = await client.GetAsync("/api/v1/customer-vehicles");
+        Assert.Equal(HttpStatusCode.OK, res3.StatusCode);
 
-        // 4. CustomerTierController dual routes
-        var res4a = await client.GetAsync("/api/customer-tiers");
-        var res4b = await client.GetAsync("/api/v1/customer-tiers");
-        Assert.Equal(res4a.StatusCode, res4b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res4b.StatusCode);
+        // 4. CustomerTierController
+        var res4 = await client.GetAsync("/api/v1/customer-tiers");
+        Assert.Equal(HttpStatusCode.OK, res4.StatusCode);
 
-        // 5. VehiclesController dual routes
-        var res5a = await client.GetAsync("/api/vehicles");
-        var res5b = await client.GetAsync("/api/v1/vehicles");
-        Assert.Equal(res5a.StatusCode, res5b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res5b.StatusCode);
+        // 5. VehiclesController
+        var res5 = await client.GetAsync("/api/v1/vehicles");
+        Assert.Equal(HttpStatusCode.OK, res5.StatusCode);
 
-        // 6. VehicleAdminController dual routes
-        var res6a = await client.GetAsync("/api/vehicle-admin/lookups");
-        var res6b = await client.GetAsync("/api/v1/vehicle-admin/lookups");
-        Assert.Equal(res6a.StatusCode, res6b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res6b.StatusCode);
+        // 6. VehicleAdminController
+        var res6 = await client.GetAsync("/api/v1/vehicle-admin/lookups");
+        Assert.Equal(HttpStatusCode.OK, res6.StatusCode);
 
-        // 7. VehicleBrandsController dual routes
-        var res7a = await client.GetAsync("/api/vehicle-brands");
-        var res7b = await client.GetAsync("/api/v1/vehicle-brands");
-        Assert.Equal(res7a.StatusCode, res7b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res7b.StatusCode);
+        // 7. VehicleBrandsController
+        var res7 = await client.GetAsync("/api/v1/vehicle-brands");
+        Assert.Equal(HttpStatusCode.OK, res7.StatusCode);
 
-        // 8. VehicleBrandAdministrationController dual routes
-        var res8a = await client.GetAsync("/api/vehicle-brands/admin-list");
-        var res8b = await client.GetAsync("/api/v1/vehicle-brands/admin-list");
-        Assert.Equal(res8a.StatusCode, res8b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res8b.StatusCode);
+        // 8. VehicleBrandAdministrationController
+        var res8 = await client.GetAsync("/api/v1/vehicle-brands/admin-list");
+        Assert.Equal(HttpStatusCode.OK, res8.StatusCode);
 
-        // 9. VehicleModelsController dual routes
-        var res9a = await client.GetAsync("/api/vehicle-models");
-        var res9b = await client.GetAsync("/api/v1/vehicle-models");
-        Assert.Equal(res9a.StatusCode, res9b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res9b.StatusCode);
+        // 9. VehicleModelsController
+        var res9 = await client.GetAsync("/api/v1/vehicle-models");
+        Assert.Equal(HttpStatusCode.OK, res9.StatusCode);
 
-        // 10. VehicleModelAdministrationController dual routes
-        var res10a = await client.GetAsync("/api/vehicle-models/admin-list");
-        var res10b = await client.GetAsync("/api/v1/vehicle-models/admin-list");
-        Assert.Equal(res10a.StatusCode, res10b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res10b.StatusCode);
+        // 10. VehicleModelAdministrationController
+        var res10 = await client.GetAsync("/api/v1/vehicle-models/admin-list");
+        Assert.Equal(HttpStatusCode.OK, res10.StatusCode);
 
-        // 11. StandardServicesController dual routes
-        var res11a = await client.GetAsync("/api/standard-services");
-        var res11b = await client.GetAsync("/api/v1/standard-services");
-        Assert.Equal(res11a.StatusCode, res11b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res11b.StatusCode);
+        // 11. StandardServicesController
+        var res11 = await client.GetAsync("/api/v1/standard-services");
+        Assert.Equal(HttpStatusCode.OK, res11.StatusCode);
 
-        // 12. StandardServiceAdministrationController dual routes
-        var res12a = await client.GetAsync("/api/standard-services/admin-list");
-        var res12b = await client.GetAsync("/api/v1/standard-services/admin-list");
-        Assert.Equal(res12a.StatusCode, res12b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res12b.StatusCode);
+        // 12. StandardServiceAdministrationController
+        var res12 = await client.GetAsync("/api/v1/standard-services/admin-list");
+        Assert.Equal(HttpStatusCode.OK, res12.StatusCode);
 
-        // 13. ServiceCategoriesController dual routes
-        var res13a = await client.GetAsync("/api/service-categories");
-        var res13b = await client.GetAsync("/api/v1/service-categories");
-        Assert.Equal(res13a.StatusCode, res13b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res13b.StatusCode);
+        // 13. ServiceCategoriesController
+        var res13 = await client.GetAsync("/api/v1/service-categories");
+        Assert.Equal(HttpStatusCode.OK, res13.StatusCode);
 
-        // 14. ServiceCategoryAdministrationController dual routes
-        var res14a = await client.GetAsync("/api/service-categories/admin-list");
-        var res14b = await client.GetAsync("/api/v1/service-categories/admin-list");
-        Assert.Equal(res14a.StatusCode, res14b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res14b.StatusCode);
+        // 14. ServiceCategoryAdministrationController
+        var res14 = await client.GetAsync("/api/v1/service-categories/admin-list");
+        Assert.Equal(HttpStatusCode.OK, res14.StatusCode);
 
-        // 15. ServiceBomsController dual routes
-        var res15a = await client.GetAsync("/api/service-boms?serviceId=1&vehicleModelId=1");
-        var res15b = await client.GetAsync("/api/v1/service-boms?serviceId=1&vehicleModelId=1");
-        Assert.Equal(res15a.StatusCode, res15b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res15b.StatusCode);
+        // 15. ServiceBomsController
+        var res15 = await client.GetAsync("/api/v1/service-boms?serviceId=1&vehicleModelId=1");
+        Assert.Equal(HttpStatusCode.OK, res15.StatusCode);
 
-        // 16. ModelSpecificRuleController dual routes
-        var res16a = await client.GetAsync("/api/model-specific-rules");
-        var res16b = await client.GetAsync("/api/v1/model-specific-rules");
-        Assert.Equal(res16a.StatusCode, res16b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res16b.StatusCode);
+        // 16. ModelSpecificRuleController
+        var res16 = await client.GetAsync("/api/v1/model-specific-rules");
+        Assert.Equal(HttpStatusCode.OK, res16.StatusCode);
 
-        // 17. CustomersMeController dual routes (as Customer)
+        // 17. CustomersMeController (as Customer)
         using var custClient = factory.CreateClient();
         custClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer", "CUSTOMER", null));
-        var res17a = await custClient.GetAsync("/api/customers/me/vehicles");
-        var res17b = await custClient.GetAsync("/api/v1/customers/me/vehicles");
-        Assert.Equal(res17a.StatusCode, res17b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res17b.StatusCode);
+        var res17 = await custClient.GetAsync("/api/v1/customers/me/vehicles");
+        Assert.Equal(HttpStatusCode.OK, res17.StatusCode);
 
-        // 18. CustomerFeedbackController dual routes
-        var res18a = await client.GetAsync("/api/customer-feedbacks");
-        var res18b = await client.GetAsync("/api/v1/customer-feedbacks");
-        Assert.Equal(res18a.StatusCode, res18b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res18b.StatusCode);
+        // 18. CustomerFeedbackController
+        var res18 = await client.GetAsync("/api/v1/customer-feedbacks");
+        Assert.Equal(HttpStatusCode.OK, res18.StatusCode);
 
-        // 19. VehicleInsuranceController dual routes
-        var res19a = await client.GetAsync("/api/vehicle-insurances");
-        var res19b = await client.GetAsync("/api/v1/vehicle-insurances");
-        Assert.Equal(res19a.StatusCode, res19b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res19b.StatusCode);
+        // 19. VehicleInsuranceController
+        var res19 = await client.GetAsync("/api/v1/vehicle-insurances");
+        Assert.Equal(HttpStatusCode.OK, res19.StatusCode);
 
-        // 20. VehicleConditionLogController dual routes
-        var res20a = await client.GetAsync("/api/vehicle-condition-logs");
-        var res20b = await client.GetAsync("/api/v1/vehicle-condition-logs");
-        Assert.Equal(res20a.StatusCode, res20b.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, res20b.StatusCode);
+        // 20. VehicleConditionLogController
+        var res20 = await client.GetAsync("/api/v1/vehicle-condition-logs");
+        Assert.Equal(HttpStatusCode.OK, res20.StatusCode);
     }
 }

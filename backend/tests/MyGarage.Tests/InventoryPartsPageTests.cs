@@ -26,17 +26,17 @@ public class InventoryPartsPageTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/inventory/parts-page?search=sku-3&page=2&pageSize=5");
+        var response = await client.GetAsync("/api/v1/inventory/parts-page?search=sku-3&page=2&pageSize=5");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(10, body.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(35, body.RootElement.GetProperty("items")[0].GetProperty("item").GetProperty("id").GetInt64());
-        var first = await client.GetAsync("/api/inventory/parts-page?search=sku-31&page=1&pageSize=5");
+        var first = await client.GetAsync("/api/v1/inventory/parts-page?search=sku-31&page=1&pageSize=5");
         using var firstBody = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
         var item = firstBody.RootElement.GetProperty("items")[0];
         Assert.Equal("Parts", item.GetProperty("categoryName").GetString());
         Assert.Equal("primary", item.GetProperty("imageUrl").GetString());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/inventory/parts-page")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/inventory/parts-page")).StatusCode);
     }
 }

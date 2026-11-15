@@ -12,6 +12,7 @@ using MyGarage.Application.Authorization;
 using MyGarage.Application.Payroll.DTOs;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.Payroll;
 using MyGarage.Interfaces;
 using MyGarage.Models;
 using MyGarage.Services;
@@ -361,8 +362,8 @@ public class PayrollAndHrModuleTests
             .UseInMemoryDatabase($"PayrollAuthAdmin_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var auth = new PayrollAuthorizationService(db);
+        await using var db = new GarageContext(options);
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
 
         var adminActor = new UserActorContext(1, "Staff", "ADMIN", BranchId: null, IsAdmin: true);
 
@@ -383,7 +384,7 @@ public class PayrollAndHrModuleTests
             .UseInMemoryDatabase($"PayrollAuthBranch_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
 
         // Add a payroll run belonging to branch 1
         db.PayrollRuns.Add(new PayrollRun
@@ -396,7 +397,7 @@ public class PayrollAndHrModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new PayrollAuthorizationService(db);
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
 
         // Branch 1 accountant
         var branch1Actor = new UserActorContext(10, "Staff", "ACCOUNTANT", BranchId: 1, IsAdmin: false);
@@ -421,8 +422,8 @@ public class PayrollAndHrModuleTests
             .UseInMemoryDatabase($"PayrollAuthRoles_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var auth = new PayrollAuthorizationService(db);
+        await using var db = new GarageContext(options);
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
 
         var hrActor = new UserActorContext(2, "Staff", "HR_MANAGER", BranchId: 1, IsAdmin: false);
         var accountantActor = new UserActorContext(3, "Staff", "KE_TOAN", BranchId: 1, IsAdmin: false);
@@ -450,8 +451,8 @@ public class PayrollAndHrModuleTests
             .UseInMemoryDatabase($"PayrollAuthPayslip_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
-        var auth = new PayrollAuthorizationService(db);
+        await using var db = new GarageContext(options);
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
 
         var staff10Actor = new UserActorContext(10, "Staff", "TECHNICIAN", BranchId: 1, IsAdmin: false);
         var staff20Actor = new UserActorContext(20, "Staff", "TECHNICIAN", BranchId: 1, IsAdmin: false);
@@ -492,7 +493,7 @@ public class PayrollAndHrModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
 
         db.Staffs.Add(new Staff
         {
@@ -503,8 +504,8 @@ public class PayrollAndHrModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new PayrollAuthorizationService(db);
-        var service = new PayrollApplicationService(db, auth, new FakePayrollBatchCalculationService());
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
+        var service = new PayrollApplicationService(new MyGarage.Infrastructure.Payroll.EfPayrollStore(db), auth, new FakePayrollBatchCalculationService());
         var adminActor = new UserActorContext(1, "Staff", "ADMIN", 1, IsAdmin: true);
 
         // 1. Create initial profile
@@ -561,7 +562,7 @@ public class PayrollAndHrModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
 
         db.Staffs.Add(new Staff
         {
@@ -595,8 +596,8 @@ public class PayrollAndHrModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new PayrollAuthorizationService(db);
-        var service = new PayrollApplicationService(db, auth, new FakePayrollBatchCalculationService());
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
+        var service = new PayrollApplicationService(new MyGarage.Infrastructure.Payroll.EfPayrollStore(db), auth, new FakePayrollBatchCalculationService());
         var adminActor = new UserActorContext(1, "Staff", "ADMIN", 1, IsAdmin: true);
 
         var preview = await service.PreviewPayrollRunAsync(new PayrollRunPreviewQuery(1, "2026-05"), adminActor);
@@ -621,7 +622,7 @@ public class PayrollAndHrModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
 
         db.Staffs.Add(new Staff
         {
@@ -632,8 +633,8 @@ public class PayrollAndHrModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new PayrollAuthorizationService(db);
-        var service = new PayrollApplicationService(db, auth, new FakePayrollBatchCalculationService());
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
+        var service = new PayrollApplicationService(new MyGarage.Infrastructure.Payroll.EfPayrollStore(db), auth, new FakePayrollBatchCalculationService());
         var adminActor = new UserActorContext(1, "Staff", "ADMIN", 1, IsAdmin: true);
 
         // 1. Create payroll run with 1 item
@@ -681,7 +682,7 @@ public class PayrollAndHrModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
 
         var period1 = new PayrollPeriod { Id = 1, PeriodCode = "2026-07", Status = "OPEN", StartDate = new DateOnly(2026, 7, 1), EndDate = new DateOnly(2026, 7, 31), PayrollDate = new DateOnly(2026, 7, 31) };
         var period2 = new PayrollPeriod { Id = 2, PeriodCode = "2026-08", Status = "OPEN", StartDate = new DateOnly(2026, 8, 1), EndDate = new DateOnly(2026, 8, 31), PayrollDate = new DateOnly(2026, 8, 31) };
@@ -702,8 +703,8 @@ public class PayrollAndHrModuleTests
         db.Payslips.Add(new Payslip { Id = 2, PayrollItemId = 2, SlipNo = "PS-2026-08-001", IssuedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
 
-        var auth = new PayrollAuthorizationService(db);
-        var service = new PayrollApplicationService(db, auth, new FakePayrollBatchCalculationService());
+        var auth = new PayrollAuthorizationService(new EfPayrollStore(db));
+        var service = new PayrollApplicationService(new MyGarage.Infrastructure.Payroll.EfPayrollStore(db), auth, new FakePayrollBatchCalculationService());
         var staffActor = new UserActorContext(401, "Staff", "TECHNICIAN", 1, IsAdmin: false);
 
         // Fetch all payslips for staff 401
@@ -730,91 +731,63 @@ public class PayrollAndHrModuleTests
         var token = TestWebApplicationFactory.CreateJwtToken(1, "Staff", "ADMIN", 1);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        // 1. SalaryAdminController dual routes (/api/salary-admin vs /api/v1/salary-admin)
-        var res1a = await client.GetAsync("/api/salary-admin/profiles");
-        var res1b = await client.GetAsync("/api/v1/salary-admin/profiles");
-        Assert.Equal(res1a.StatusCode, res1b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res1a.StatusCode);
+        // 1. SalaryAdminController (/api/v1/salary-admin)
+        var res1 = await client.GetAsync("/api/v1/salary-admin/profiles");
+        Assert.NotEqual(HttpStatusCode.NotFound, res1.StatusCode);
 
-        // 2. PayrollRunsController dual routes (/api/payroll-runs vs /api/v1/payroll-runs)
-        var res2a = await client.GetAsync("/api/payroll-runs");
-        var res2b = await client.GetAsync("/api/v1/payroll-runs");
-        Assert.Equal(res2a.StatusCode, res2b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res2a.StatusCode);
+        // 2. PayrollRunsController (/api/v1/payroll-runs)
+        var res2 = await client.GetAsync("/api/v1/payroll-runs");
+        Assert.NotEqual(HttpStatusCode.NotFound, res2.StatusCode);
 
-        // 3. PayslipsController dual routes (/api/payslips vs /api/v1/payslips)
-        var res3a = await client.GetAsync("/api/payslips/my");
-        var res3b = await client.GetAsync("/api/v1/payslips/my");
-        Assert.Equal(res3a.StatusCode, res3b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res3a.StatusCode);
+        // 3. PayslipsController (/api/v1/payslips)
+        var res3 = await client.GetAsync("/api/v1/payslips/my");
+        Assert.NotEqual(HttpStatusCode.NotFound, res3.StatusCode);
 
-        // 4. SalaryCoefficientController dual routes (/api/salary-coefficients vs /api/v1/salary-coefficients)
-        var res4a = await client.GetAsync("/api/salary-coefficients");
-        var res4b = await client.GetAsync("/api/v1/salary-coefficients");
-        Assert.Equal(res4a.StatusCode, res4b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res4a.StatusCode);
+        // 4. SalaryCoefficientController (/api/v1/salary-coefficients)
+        var res4 = await client.GetAsync("/api/v1/salary-coefficients");
+        Assert.NotEqual(HttpStatusCode.NotFound, res4.StatusCode);
 
-        // 5. CommissionRuleController dual routes (/api/commission-rules vs /api/v1/commission-rules)
-        var res5a = await client.GetAsync("/api/commission-rules");
-        var res5b = await client.GetAsync("/api/v1/commission-rules");
-        Assert.Equal(res5a.StatusCode, res5b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res5a.StatusCode);
+        // 5. CommissionRuleController (/api/v1/commission-rules)
+        var res5 = await client.GetAsync("/api/v1/commission-rules");
+        Assert.NotEqual(HttpStatusCode.NotFound, res5.StatusCode);
 
-        // 6. CommissionTransactionController dual routes
+        // 6. CommissionTransactionController
         // 6a. Main controller route
-        var res6a = await client.GetAsync("/api/commission-transactions");
-        var res6b = await client.GetAsync("/api/v1/commission-transactions");
-        Assert.Equal(res6a.StatusCode, res6b.StatusCode);
+        var res6a = await client.GetAsync("/api/v1/commission-transactions");
         Assert.NotEqual(HttpStatusCode.NotFound, res6a.StatusCode);
 
         // 6b. Commissions alias route
-        var res6c = await client.GetAsync("/api/commissions");
-        var res6d = await client.GetAsync("/api/v1/commissions");
-        Assert.Equal(res6c.StatusCode, res6d.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res6c.StatusCode);
+        var res6b = await client.GetAsync("/api/v1/commissions");
+        Assert.NotEqual(HttpStatusCode.NotFound, res6b.StatusCode);
 
-        // 7. StaffController dual routes
-        // 7a. Main controller route /api/staffs vs /api/v1/staffs
-        var res7a = await client.GetAsync("/api/staffs");
-        var res7b = await client.GetAsync("/api/v1/staffs");
-        Assert.Equal(res7a.StatusCode, res7b.StatusCode);
+        // 7. StaffController
+        // 7a. Main controller route /api/v1/staffs
+        var res7a = await client.GetAsync("/api/v1/staffs");
         Assert.NotEqual(HttpStatusCode.NotFound, res7a.StatusCode);
 
-        // 7b. Singular alias route /api/staff vs /api/v1/staff
-        var res7c = await client.GetAsync("/api/staff");
-        var res7d = await client.GetAsync("/api/v1/staff");
-        Assert.Equal(res7c.StatusCode, res7d.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res7c.StatusCode);
+        // 7b. Singular alias route /api/v1/staff
+        var res7b = await client.GetAsync("/api/v1/staff");
+        Assert.NotEqual(HttpStatusCode.NotFound, res7b.StatusCode);
 
-        // 8. StaffScheduleController dual routes (/api/staff-schedules vs /api/v1/staff-schedules)
-        var res8a = await client.GetAsync("/api/staff-schedules");
-        var res8b = await client.GetAsync("/api/v1/staff-schedules");
-        Assert.Equal(res8a.StatusCode, res8b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res8a.StatusCode);
+        // 8. StaffScheduleController (/api/v1/staff-schedules)
+        var res8 = await client.GetAsync("/api/v1/staff-schedules");
+        Assert.NotEqual(HttpStatusCode.NotFound, res8.StatusCode);
 
-        // 9. StaffSpecialtyController dual routes
-        // /api/staff/available vs /api/v1/staff/available
-        var res9a = await client.GetAsync("/api/staff/available");
-        var res9b = await client.GetAsync("/api/v1/staff/available");
-        Assert.Equal(res9a.StatusCode, res9b.StatusCode);
+        // 9. StaffSpecialtyController
+        // /api/v1/staff/available
+        var res9a = await client.GetAsync("/api/v1/staff/available");
         Assert.NotEqual(HttpStatusCode.NotFound, res9a.StatusCode);
 
-        // /api/staffs/available vs /api/v1/staffs/available
-        var res9c = await client.GetAsync("/api/staffs/available");
-        var res9d = await client.GetAsync("/api/v1/staffs/available");
-        Assert.Equal(res9c.StatusCode, res9d.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res9c.StatusCode);
+        // /api/v1/staffs/available
+        var res9b = await client.GetAsync("/api/v1/staffs/available");
+        Assert.NotEqual(HttpStatusCode.NotFound, res9b.StatusCode);
 
-        // 10. StaffTierController dual routes (/api/staff-tiers vs /api/v1/staff-tiers)
-        var res10a = await client.GetAsync("/api/staff-tiers");
-        var res10b = await client.GetAsync("/api/v1/staff-tiers");
-        Assert.Equal(res10a.StatusCode, res10b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res10a.StatusCode);
+        // 10. StaffTierController (/api/v1/staff-tiers)
+        var res10 = await client.GetAsync("/api/v1/staff-tiers");
+        Assert.NotEqual(HttpStatusCode.NotFound, res10.StatusCode);
 
-        // 11. TimesheetsController dual routes (/api/timesheets vs /api/v1/timesheets)
-        var res11a = await client.GetAsync("/api/timesheets/today");
-        var res11b = await client.GetAsync("/api/v1/timesheets/today");
-        Assert.Equal(res11a.StatusCode, res11b.StatusCode);
-        Assert.NotEqual(HttpStatusCode.NotFound, res11a.StatusCode);
+        // 11. TimesheetsController (/api/v1/timesheets)
+        var res11 = await client.GetAsync("/api/v1/timesheets/today");
+        Assert.NotEqual(HttpStatusCode.NotFound, res11.StatusCode);
     }
 }

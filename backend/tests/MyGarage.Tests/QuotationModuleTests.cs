@@ -110,11 +110,11 @@ public class QuotationModuleTests
     }
 
     [Theory]
-    [InlineData("/api/quotations/public/0123456789abcdef", "/api/quotations/public/[REDACTED]")]
-    [InlineData("/api/quotations/public/secret-token-xyz/decision", "/api/quotations/public/[REDACTED]/decision")]
-    [InlineData("/api/quotations/public/secret-token-xyz/otp/send", "/api/quotations/public/[REDACTED]/otp/send")]
-    [InlineData("/api/quotations/123", "/api/quotations/123")]
-    [InlineData("/api/service-orders/500/quotations", "/api/service-orders/500/quotations")]
+    [InlineData("/api/v1/quotations/public/0123456789abcdef", "/api/v1/quotations/public/[REDACTED]")]
+    [InlineData("/api/v1/quotations/public/secret-token-xyz/decisions", "/api/v1/quotations/public/[REDACTED]/decisions")]
+    [InlineData("/api/v1/quotations/public/secret-token-xyz/otp-requests", "/api/v1/quotations/public/[REDACTED]/otp-requests")]
+    [InlineData("/api/v1/quotations/123", "/api/v1/quotations/123")]
+    [InlineData("/api/v1/service-orders/500/quotations", "/api/v1/service-orders/500/quotations")]
     public void GlobalExceptionHandler_SanitizesPublicQuotationTokenPath(string rawPath, string expectedSanitized)
     {
         var sanitized = GlobalExceptionHandler.SanitizePathForLogging(rawPath);
@@ -214,42 +214,42 @@ public class QuotationModuleTests
         using var client = factory.CreateClient();
 
         // 1. Anonymous request -> 401
-        var anonRes = await client.GetAsync("/api/quotations/500/discounts");
+        var anonRes = await client.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.Unauthorized, anonRes.StatusCode);
 
         // 2. Customer 100 (Owner) -> 200 OK
         var customer100Token = TestWebApplicationFactory.CreateJwtToken(100, "Customer");
         using var clientCust100 = factory.CreateClient();
         clientCust100.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customer100Token);
-        var cust100Res = await clientCust100.GetAsync("/api/quotations/500/discounts");
+        var cust100Res = await clientCust100.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.OK, cust100Res.StatusCode);
 
         // 3. Customer 101 (Non-owner) -> 403 Forbidden
         var customer101Token = TestWebApplicationFactory.CreateJwtToken(101, "Customer");
         using var clientCust101 = factory.CreateClient();
         clientCust101.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customer101Token);
-        var cust101Res = await clientCust101.GetAsync("/api/quotations/500/discounts");
+        var cust101Res = await clientCust101.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.Forbidden, cust101Res.StatusCode);
 
         // 4. Staff at Branch 1 (Same branch) -> 200 OK
         var staffBranch1Token = TestWebApplicationFactory.CreateJwtToken(205, "Staff", "SERVICE_ADVISOR", branchId: 1);
         using var clientStaffB1 = factory.CreateClient();
         clientStaffB1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffBranch1Token);
-        var staffB1Res = await clientStaffB1.GetAsync("/api/quotations/500/discounts");
+        var staffB1Res = await clientStaffB1.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.OK, staffB1Res.StatusCode);
 
         // 5. Staff at Branch 2 (Different branch) -> 403 Forbidden
         var staffBranch2Token = TestWebApplicationFactory.CreateJwtToken(206, "Staff", "SERVICE_ADVISOR", branchId: 2);
         using var clientStaffB2 = factory.CreateClient();
         clientStaffB2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffBranch2Token);
-        var staffB2Res = await clientStaffB2.GetAsync("/api/quotations/500/discounts");
+        var staffB2Res = await clientStaffB2.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.Forbidden, staffB2Res.StatusCode);
 
         // 6. Admin Staff -> 200 OK
         var adminToken = TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", branchId: 1);
         using var clientAdmin = factory.CreateClient();
         clientAdmin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
-        var adminRes = await clientAdmin.GetAsync("/api/quotations/500/discounts");
+        var adminRes = await clientAdmin.GetAsync("/api/v1/quotations/500/discounts");
         Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
     }
 
@@ -317,25 +317,25 @@ public class QuotationModuleTests
         // 1. Owner customer (100) -> 200 OK
         using var clientCust100 = factory.CreateClient();
         clientCust100.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var res1 = await clientCust100.GetAsync("/api/quotations/600");
+        var res1 = await clientCust100.GetAsync("/api/v1/quotations/600");
         Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
 
         // 2. Non-owner customer (101) -> 403 Forbidden
         using var clientCust101 = factory.CreateClient();
         clientCust101.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(101, "Customer"));
-        var res2 = await clientCust101.GetAsync("/api/quotations/600");
+        var res2 = await clientCust101.GetAsync("/api/v1/quotations/600");
         Assert.Equal(HttpStatusCode.Forbidden, res2.StatusCode);
 
         // 3. Staff at Branch 1 -> 200 OK
         using var clientStaffB1 = factory.CreateClient();
         clientStaffB1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "SERVICE_ADVISOR", branchId: 1));
-        var res3 = await clientStaffB1.GetAsync("/api/quotations/600");
+        var res3 = await clientStaffB1.GetAsync("/api/v1/quotations/600");
         Assert.Equal(HttpStatusCode.OK, res3.StatusCode);
 
         // 4. Staff at Branch 2 -> 403 Forbidden
         using var clientStaffB2 = factory.CreateClient();
         clientStaffB2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(207, "Staff", "SERVICE_ADVISOR", branchId: 2));
-        var res4 = await clientStaffB2.GetAsync("/api/quotations/600");
+        var res4 = await clientStaffB2.GetAsync("/api/v1/quotations/600");
         Assert.Equal(HttpStatusCode.Forbidden, res4.StatusCode);
     }
 
@@ -403,7 +403,7 @@ public class QuotationModuleTests
         // 1. Customer attempting discount update -> 403 Forbidden
         using var clientCust = factory.CreateClient();
         clientCust.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var custRes = await clientCust.PutAsJsonAsync("/api/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
+        var custRes = await clientCust.PutAsJsonAsync("/api/v1/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
         {
             ActorStaffId = 100,
             Items = new List<QuotationDiscountUpsertItemDto>()
@@ -413,7 +413,7 @@ public class QuotationModuleTests
         // 2. Staff from Branch 2 attempting discount update for Branch 1 -> 403 Forbidden
         using var clientStaffB2 = factory.CreateClient();
         clientStaffB2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(209, "Staff", "SERVICE_ADVISOR", branchId: 2));
-        var staffB2Res = await clientStaffB2.PutAsJsonAsync("/api/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
+        var staffB2Res = await clientStaffB2.PutAsJsonAsync("/api/v1/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
         {
             ActorStaffId = 209,
             Items = new List<QuotationDiscountUpsertItemDto>()
@@ -423,7 +423,7 @@ public class QuotationModuleTests
         // 3. Staff 208 from Branch 1 attempting to spoof ActorStaffId = 999 -> 403 Forbidden
         using var clientSpoof = factory.CreateClient();
         clientSpoof.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(208, "Staff", "SERVICE_ADVISOR", branchId: 1));
-        var spoofRes = await clientSpoof.PutAsJsonAsync("/api/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
+        var spoofRes = await clientSpoof.PutAsJsonAsync("/api/v1/quotations/700/discounts", new QuotationDiscountUpsertRequestDto
         {
             ActorStaffId = 999, // Mismatched staff ID!
             Items = new List<QuotationDiscountUpsertItemDto>()

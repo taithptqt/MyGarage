@@ -26,21 +26,18 @@ public class ServiceCategoryPaginationTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/service-categories/admin-list")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/service-categories/admin-list")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var legacy = await client.GetAsync("/api/service-categories/admin-list?search=%20B%E1%BA%A2O%20&page=0&pageSize=0");
         var versioned = await client.GetAsync("/api/v1/service-categories/admin-list?search=%20B%E1%BA%A2O%20&page=0&pageSize=0");
-        Assert.Equal(HttpStatusCode.OK, legacy.StatusCode);
         Assert.Equal(HttpStatusCode.OK, versioned.StatusCode);
-        var legacyJson = JsonNode.Parse(await legacy.Content.ReadAsStringAsync())!;
-        Assert.True(JsonNode.DeepEquals(legacyJson, JsonNode.Parse(await versioned.Content.ReadAsStringAsync())));
-        Assert.Equal(1, (int)legacyJson["total"]!);
+        var versionedJson = JsonNode.Parse(await versioned.Content.ReadAsStringAsync())!;
+        Assert.Equal(1, (int)versionedJson["total"]!);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GarageContext>();
         var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
         var expected = JsonSerializer.SerializeToNode(mapper.Map<ServiceCategoryResponseDto>(db.ServiceCategories.Single()), new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.True(JsonNode.DeepEquals(expected, legacyJson["items"]![0]));
+        Assert.True(JsonNode.DeepEquals(expected, versionedJson["items"]![0]));
     }
 
     [Fact]
@@ -58,7 +55,7 @@ public class ServiceCategoryPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/service-categories/admin-list?search=ENGINE&page=3&pageSize=10");
+        var response = await client.GetAsync("/api/v1/service-categories/admin-list?search=ENGINE&page=3&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(23, json.RootElement.GetProperty("total").GetInt32());
@@ -66,13 +63,13 @@ public class ServiceCategoryPaginationTests
         Assert.Equal(21, json.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.True(json.RootElement.GetProperty("items")[2].GetProperty("isDeleted").GetBoolean());
 
-        var empty = await client.GetAsync("/api/service-categories/admin-list?page=2147483647&pageSize=100");
+        var empty = await client.GetAsync("/api/v1/service-categories/admin-list?page=2147483647&pageSize=100");
         Assert.Equal(HttpStatusCode.OK, empty.StatusCode);
         using var emptyJson = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
         Assert.Empty(emptyJson.RootElement.GetProperty("items").EnumerateArray());
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/service-categories/admin-list")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/service-categories/admin-list")).StatusCode);
     }
 }

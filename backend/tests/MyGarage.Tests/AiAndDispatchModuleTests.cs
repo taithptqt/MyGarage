@@ -17,6 +17,7 @@ using MyGarage.Application.Authorization;
 using MyGarage.Common;
 using MyGarage.Data;
 using MyGarage.Domain.Rules;
+using MyGarage.Infrastructure.Ai;
 using MyGarage.Models;
 using MyGarage.Services;
 using Xunit;
@@ -173,7 +174,7 @@ public class AiAndDispatchModuleTests
             .UseInMemoryDatabase($"AiAuthDb_{Guid.NewGuid():N}")
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Customers.AddRange(
             new Customer { Id = 100, FullName = "Khách 100", Type = "INDIVIDUAL" },
             new Customer { Id = 200, FullName = "Khách 200", Type = "INDIVIDUAL" }
@@ -190,7 +191,7 @@ public class AiAndDispatchModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new AiAuthorizationService(db);
+        var auth = new AiAuthorizationService(new EfAiStore(db));
 
         var adminActor = new UserActorContext(201, "Staff", "ADMIN", BranchId: 1, IsAdmin: true);
         var staffBranch1 = new UserActorContext(200, "Staff", "MANAGER", BranchId: 1, IsAdmin: false);
@@ -239,7 +240,7 @@ public class AiAndDispatchModuleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        await using var db = new GarageContext(options, new HttpContextAccessor());
+        await using var db = new GarageContext(options);
         db.Branches.Add(new Branch { Id = 1, Name = "Chi nhánh 1", Status = "ACTIVE" });
         db.Vehicles.Add(new Vehicle { Id = 10, LicensePlate = "51A-88888", IsDeleted = false });
         db.AiSmartDispatchings.Add(new AiSmartDispatching
@@ -254,8 +255,8 @@ public class AiAndDispatchModuleTests
         });
         await db.SaveChangesAsync();
 
-        var auth = new AiAuthorizationService(db);
-        var service = new AiApplicationService(db, auth);
+        var auth = new AiAuthorizationService(new EfAiStore(db));
+        var service = new AiApplicationService(new MyGarage.Infrastructure.Ai.EfAiStore(db), auth);
 
         var adminActor = new UserActorContext(201, "Staff", "ADMIN", BranchId: 1, IsAdmin: true);
         var staffBranch1 = new UserActorContext(200, "Staff", "MANAGER", BranchId: 1, IsAdmin: false);
@@ -381,47 +382,33 @@ public class AiAndDispatchModuleTests
         var customerToken = TestWebApplicationFactory.CreateJwtToken(100, "Customer", "CUSTOMER", null);
         customerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", customerToken);
 
-        // 1. AiForecastController (/api/ai-forecasts vs /api/v1/ai-forecasts)
-        var fcRes1 = await adminClient.GetAsync("/api/ai-forecasts");
-        var fcRes2 = await adminClient.GetAsync("/api/v1/ai-forecasts");
-        Assert.Equal(HttpStatusCode.OK, fcRes1.StatusCode);
-        Assert.Equal(fcRes1.StatusCode, fcRes2.StatusCode);
+        // 1. AiForecastController (/api/v1/ai-forecasts)
+        var fcRes = await adminClient.GetAsync("/api/v1/ai-forecasts");
+        Assert.Equal(HttpStatusCode.OK, fcRes.StatusCode);
 
-        // 2. AiKnowledgeBaseController (/api/ai-knowledge-bases vs /api/v1/ai-knowledge-bases)
-        var kbRes1 = await adminClient.GetAsync("/api/ai-knowledge-bases");
-        var kbRes2 = await adminClient.GetAsync("/api/v1/ai-knowledge-bases");
-        Assert.Equal(HttpStatusCode.OK, kbRes1.StatusCode);
-        Assert.Equal(kbRes1.StatusCode, kbRes2.StatusCode);
+        // 2. AiKnowledgeBaseController (/api/v1/ai-knowledge-bases)
+        var kbRes = await adminClient.GetAsync("/api/v1/ai-knowledge-bases");
+        Assert.Equal(HttpStatusCode.OK, kbRes.StatusCode);
 
-        // 3. AiKnowledgePageController (/api/ai-knowledge-bases/page vs /api/v1/ai-knowledge-bases/page)
-        var kbpRes1 = await adminClient.GetAsync("/api/ai-knowledge-bases/page");
-        var kbpRes2 = await adminClient.GetAsync("/api/v1/ai-knowledge-bases/page");
-        Assert.Equal(HttpStatusCode.OK, kbpRes1.StatusCode);
-        Assert.Equal(kbpRes1.StatusCode, kbpRes2.StatusCode);
+        // 3. AiKnowledgePageController (/api/v1/ai-knowledge-bases/page)
+        var kbpRes = await adminClient.GetAsync("/api/v1/ai-knowledge-bases/page");
+        Assert.Equal(HttpStatusCode.OK, kbpRes.StatusCode);
 
-        // 4. AiModelConfigController (/api/ai-model-configs vs /api/v1/ai-model-configs)
-        var mcRes1 = await adminClient.GetAsync("/api/ai-model-configs");
-        var mcRes2 = await adminClient.GetAsync("/api/v1/ai-model-configs");
-        Assert.Equal(HttpStatusCode.OK, mcRes1.StatusCode);
-        Assert.Equal(mcRes1.StatusCode, mcRes2.StatusCode);
+        // 4. AiModelConfigController (/api/v1/ai-model-configs)
+        var mcRes = await adminClient.GetAsync("/api/v1/ai-model-configs");
+        Assert.Equal(HttpStatusCode.OK, mcRes.StatusCode);
 
-        // 5. AiModelConfigPageController (/api/ai-model-configs/page vs /api/v1/ai-model-configs/page)
-        var mcpRes1 = await adminClient.GetAsync("/api/ai-model-configs/page");
-        var mcpRes2 = await adminClient.GetAsync("/api/v1/ai-model-configs/page");
-        Assert.Equal(HttpStatusCode.OK, mcpRes1.StatusCode);
-        Assert.Equal(mcpRes1.StatusCode, mcpRes2.StatusCode);
+        // 5. AiModelConfigPageController (/api/v1/ai-model-configs/page)
+        var mcpRes = await adminClient.GetAsync("/api/v1/ai-model-configs/page");
+        Assert.Equal(HttpStatusCode.OK, mcpRes.StatusCode);
 
-        // 6. AiSmartDispatchingController (/api/ai-smart-dispatchings vs /api/v1/ai-smart-dispatchings)
-        var sdRes1 = await adminClient.GetAsync("/api/ai-smart-dispatchings");
-        var sdRes2 = await adminClient.GetAsync("/api/v1/ai-smart-dispatchings");
-        Assert.Equal(HttpStatusCode.OK, sdRes1.StatusCode);
-        Assert.Equal(sdRes1.StatusCode, sdRes2.StatusCode);
+        // 6. AiSmartDispatchingController (/api/v1/ai-smart-dispatchings)
+        var sdRes = await adminClient.GetAsync("/api/v1/ai-smart-dispatchings");
+        Assert.Equal(HttpStatusCode.OK, sdRes.StatusCode);
 
-        // 7. ChatbotController (/api/chatbot/sessions vs /api/v1/chatbot/sessions)
-        var cbRes1 = await customerClient.PostAsJsonAsync("/api/chatbot/sessions", new { });
-        var cbRes2 = await customerClient.PostAsJsonAsync("/api/v1/chatbot/sessions", new { });
-        Assert.Equal(HttpStatusCode.Created, cbRes1.StatusCode);
-        Assert.Equal(cbRes1.StatusCode, cbRes2.StatusCode);
+        // 7. ChatbotController (/api/v1/chatbot/sessions)
+        var cbRes = await customerClient.PostAsJsonAsync("/api/v1/chatbot/sessions", new { });
+        Assert.Equal(HttpStatusCode.Created, cbRes.StatusCode);
     }
 
     [Fact]

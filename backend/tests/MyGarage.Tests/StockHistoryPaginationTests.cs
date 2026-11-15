@@ -28,13 +28,13 @@ public class StockHistoryPaginationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/inventory/history?search=TEST-SKU&page=2&pageSize=50");
+        var response = await client.GetAsync("/api/v1/inventory/history?search=TEST-SKU&page=2&pageSize=50");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(60, doc.RootElement.GetProperty("total").GetInt32());
         Assert.Equal(10, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.Equal(10, doc.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
-        var extreme = await client.GetAsync("/api/inventory/history?page=2147483647&pageSize=50");
+        var extreme = await client.GetAsync("/api/v1/inventory/history?page=2147483647&pageSize=50");
         Assert.Equal(HttpStatusCode.OK, extreme.StatusCode);
         using var empty = JsonDocument.Parse(await extreme.Content.ReadAsStringAsync());
         Assert.Equal(0, empty.RootElement.GetProperty("items").GetArrayLength());

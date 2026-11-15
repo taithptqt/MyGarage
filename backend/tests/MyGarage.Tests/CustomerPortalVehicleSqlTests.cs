@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MyGarage.Application.Authorization;
 using MyGarage.Application.CustomerPortal.DTOs;
 using MyGarage.Data;
+using MyGarage.Infrastructure.CustomerPortal;
 using MyGarage.Services;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class CustomerPortalVehicleSqlTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(target.ConnectionString).Options;
-            await using var db = new GarageContext(options, new HttpContextAccessor());
+            await using var db = new GarageContext(options);
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE TABLE dbo.Staffs (Id bigint PRIMARY KEY);
                 CREATE TABLE dbo.Customers (Id bigint PRIMARY KEY);
@@ -48,7 +49,7 @@ public sealed class CustomerPortalVehicleSqlTests
                 INSERT dbo.VehicleModels VALUES (1, 1, N'Camry', 0);
                 """);
             var actor = new UserActorContext(100, "Customer", "CUSTOMER", null, IsAdmin: false);
-            var service = new CustomerPortalApplicationService(db, new CustomerPortalAuthorizationService(db));
+            var service = new CustomerPortalApplicationService(new MyGarage.Infrastructure.CustomerPortal.EfCustomerPortalStore(db), new CustomerPortalAuthorizationService(new EfCustomerPortalStore(db)));
             var command = new CustomerPortalVehicleUpsertCommand("51K-99999", 1, "ignored", "ignored", 2022, "White", null, 500);
             var created = await service.RegisterVehicleAsync(100, command, actor);
             var vehicle = await db.Vehicles.SingleAsync(v => v.Id == created.Id);

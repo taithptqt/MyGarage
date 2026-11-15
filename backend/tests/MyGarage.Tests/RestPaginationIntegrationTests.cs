@@ -29,7 +29,7 @@ public class RestPaginationIntegrationTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        var page = await client.GetAsync("/api/products/retail-catalog?branchId=1&page=1&pageSize=12&sort=name-asc");
+        var page = await client.GetAsync("/api/v1/products/retail-catalog?branchId=1&page=1&pageSize=12&sort=name-asc");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         using var document = JsonDocument.Parse(await page.Content.ReadAsStringAsync());
         Assert.Equal(15, document.RootElement.GetProperty("total").GetInt32());
@@ -37,13 +37,13 @@ public class RestPaginationIntegrationTests
         Assert.Equal(12, items.GetArrayLength());
         Assert.Equal(14, items[0].GetProperty("id").GetInt64());
         Assert.False(items[0].TryGetProperty("costPrice", out _));
-        var secondPage = await client.GetAsync("/api/products/retail-catalog?branchId=1&page=2&pageSize=12&sort=name-asc");
+        var secondPage = await client.GetAsync("/api/v1/products/retail-catalog?branchId=1&page=2&pageSize=12&sort=name-asc");
         Assert.Equal(HttpStatusCode.OK, secondPage.StatusCode);
         using var secondJson = JsonDocument.Parse(await secondPage.Content.ReadAsStringAsync());
         Assert.Equal(3, secondJson.RootElement.GetProperty("items").GetArrayLength());
         var firstIds = items.EnumerateArray().Select(x => x.GetProperty("id").GetInt64()).ToHashSet();
         Assert.DoesNotContain(secondJson.RootElement.GetProperty("items").EnumerateArray(), x => firstIds.Contains(x.GetProperty("id").GetInt64()));
-        var filtered = await client.GetAsync("/api/products/retail-catalog?search=special&categoryId=10&page=1&pageSize=12");
+        var filtered = await client.GetAsync("/api/v1/products/retail-catalog?search=special&categoryId=10&page=1&pageSize=12");
         Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
         using var filteredJson = JsonDocument.Parse(await filtered.Content.ReadAsStringAsync());
         Assert.Equal(15, filteredJson.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
@@ -65,7 +65,7 @@ public class RestPaginationIntegrationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        var result = await client.GetAsync("/api/customers/me/notifications?unreadOnly=true&page=2&pageSize=10");
+        var result = await client.GetAsync("/api/v1/customers/me/notifications?unreadOnly=true&page=2&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         using var json = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         Assert.Equal(28, json.RootElement.GetProperty("totalCount").GetInt32());
@@ -73,7 +73,7 @@ public class RestPaginationIntegrationTests
         var items = json.RootElement.GetProperty("items");
         Assert.Equal(10, items.GetArrayLength());
         Assert.Equal(35, items[0].GetProperty("id").GetInt64());
-        var outOfRange = await client.GetAsync("/api/customers/me/notifications?page=2147483647&pageSize=200");
+        var outOfRange = await client.GetAsync("/api/v1/customers/me/notifications?page=2147483647&pageSize=200");
         Assert.Equal(HttpStatusCode.OK, outOfRange.StatusCode);
         using var empty = JsonDocument.Parse(await outOfRange.Content.ReadAsStringAsync());
         Assert.Equal(55, empty.RootElement.GetProperty("totalCount").GetInt32());
@@ -94,9 +94,9 @@ public class RestPaginationIntegrationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var result = await client.GetAsync("/api/approval-requests?page=2&pageSize=50");
+        var result = await client.GetAsync("/api/v1/approval-requests?page=2&pageSize=50");
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        Assert.False(result.Headers.Contains("X-Total-Count"));
+        Assert.True(result.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         Assert.Equal(65, json.RootElement.GetProperty("totalCount").GetInt32());
         var items = json.RootElement.GetProperty("items");
@@ -122,9 +122,9 @@ public class RestPaginationIntegrationTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var result = await client.GetAsync("/api/appointments?status=PENDING&page=2&pageSize=50");
+        var result = await client.GetAsync("/api/v1/appointments?status=PENDING&page=2&pageSize=50");
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        Assert.False(result.Headers.Contains("X-Total-Count"));
+        Assert.True(result.Headers.Contains("X-Total-Count"));
         using var json = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         Assert.Equal(60, json.RootElement.GetProperty("totalCount").GetInt32());
         Assert.Equal(10, json.RootElement.GetProperty("items").GetArrayLength());
@@ -141,11 +141,11 @@ public class RestPaginationIntegrationTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        var first = await client.GetAsync("/api/products");
-        var second = await client.GetAsync("/api/products?page=2&pageSize=50");
-        var limited = await client.GetAsync("/api/products?page=1&pageSize=500");
+        var first = await client.GetAsync("/api/v1/products");
+        var second = await client.GetAsync("/api/v1/products?page=2&pageSize=50");
+        var limited = await client.GetAsync("/api/v1/products?page=1&pageSize=500");
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.False(limited.Headers.Contains("X-Page-Size"));
+        Assert.True(limited.Headers.Contains("X-Page-Size"));
         using var limitedJson = JsonDocument.Parse(await limited.Content.ReadAsStringAsync());
         Assert.Equal(100, limitedJson.RootElement.GetProperty("pageSize").GetInt32());
         using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
@@ -184,14 +184,15 @@ public class RestPaginationIntegrationTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
         // Act: GET page 1 with pageSize 10
-        var response = await client.GetAsync("/api/vehicles?page=1&pageSize=10");
+        var response = await client.GetAsync("/api/v1/vehicles?page=1&pageSize=10");
 
-        // Assert HTTP Status & No X-Total-Count Headers
+        // Assert HTTP Status & RESTful Pagination Headers
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
-        Assert.False(response.Headers.Contains("X-Page"));
-        Assert.False(response.Headers.Contains("X-Page-Size"));
-        Assert.False(response.Headers.Contains("X-Total-Pages"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Page"));
+        Assert.True(response.Headers.Contains("X-Page-Size"));
+        Assert.True(response.Headers.Contains("X-Total-Pages"));
+        Assert.True(response.Headers.Contains("Link"));
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
@@ -235,10 +236,10 @@ public class RestPaginationIntegrationTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
         // Act: GET page 3 with pageSize 10 (25 items => page 3 has 5 items)
-        var response = await client.GetAsync("/api/vehicles?page=3&pageSize=10");
+        var response = await client.GetAsync("/api/v1/vehicles?page=3&pageSize=10");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
@@ -278,10 +279,10 @@ public class RestPaginationIntegrationTests
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
 
         // Request without page/pageSize query params -> should default to page=1, pageSize=50
-        var response = await client.GetAsync("/api/vehicles");
+        var response = await client.GetAsync("/api/v1/vehicles");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);

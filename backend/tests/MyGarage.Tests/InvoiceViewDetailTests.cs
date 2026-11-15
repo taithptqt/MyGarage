@@ -14,7 +14,7 @@ namespace MyGarage.Tests;
 public sealed class InvoiceViewDetailTests
 {
     [Fact]
-    public async Task ViewDetail_RequiresStaffAndMatchesLegacyScopeAndShape()
+    public async Task ViewDetail_RequiresStaffScopesBranchAndMatchesAdminShape()
     {
         await using var factory = new TestWebApplicationFactory();
         await factory.SeedAsync(db =>
@@ -35,12 +35,14 @@ public sealed class InvoiceViewDetailTests
             return Task.CompletedTask;
         });
         using var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/invoices/30/view-detail")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/invoices/30/view-detail")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/invoices/30/view-detail")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/invoices/30/view-detail")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/invoices/999/view-detail")).StatusCode);
-        var result = await client.GetAsync("/api/invoices/30/view-detail?detailsPage=2&paymentsPage=1&pageSize=1");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/invoices/30/view-detail")).StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/invoices/999/view-detail")).StatusCode);
+        var result = await client.GetAsync("/api/v1/invoices/30/view-detail?detailsPage=2&paymentsPage=1&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         var payload = JsonNode.Parse(await result.Content.ReadAsStringAsync())!;
         Assert.Equal(2, (int)payload["detailsTotal"]!);
@@ -55,7 +57,7 @@ public sealed class InvoiceViewDetailTests
         Assert.True(JsonNode.DeepEquals(JsonSerializer.SerializeToNode(mapper.Map<InvoiceResponseDto>(db.Invoices.Single(x => x.Id == 30)), jsonOptions), payload["invoice"]));
         Assert.True(JsonNode.DeepEquals(JsonSerializer.SerializeToNode(mapper.Map<InvoiceDetailResponseDto>(db.InvoiceDetails.Single(x => x.Id == 41)), jsonOptions), payload["details"]![0]));
         Assert.True(JsonNode.DeepEquals(JsonSerializer.SerializeToNode(mapper.Map<PaymentResponseDto>(db.Payments.Single(x => x.Id == 50)), jsonOptions), payload["payments"]![0]));
-        var outOfRange = await client.GetAsync("/api/invoices/30/view-detail?detailsPage=2147483647&paymentsPage=2147483647&pageSize=1000");
+        var outOfRange = await client.GetAsync("/api/v1/invoices/30/view-detail?detailsPage=2147483647&paymentsPage=2147483647&pageSize=1000");
         var empty = JsonNode.Parse(await outOfRange.Content.ReadAsStringAsync())!;
         Assert.Empty(empty["details"]!.AsArray());
         Assert.Empty(empty["payments"]!.AsArray());

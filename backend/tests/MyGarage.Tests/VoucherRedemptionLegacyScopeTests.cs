@@ -25,7 +25,7 @@ public sealed class VoucherRedemptionLegacyScopeTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.PostAsJsonAsync("/api/voucher-redemptions/validations", new { VoucherId = 9, InvoiceId = 91, EligibleAmount = 1000 });
+        var response = await client.PostAsJsonAsync("/api/v1/voucher-redemptions/validations", new { VoucherId = 9, InvoiceId = 91, EligibleAmount = 1000 });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("VCH_MIN_ORDER_NOT_MET", json.RootElement.GetProperty("reasonCode").GetString());
@@ -50,20 +50,20 @@ public sealed class VoucherRedemptionLegacyScopeTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/voucher-redemptions/validations", new { BranchId = 2 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/voucher-redemptions/transactions", new { RetailOrderId = 80 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/voucher-redemptions/transactions", new { InvoiceId = 90 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/voucher-redemptions/validations", new { RetailOrderId = 81, CustomerId = 999 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/voucher-redemptions/validations", new { InvoiceId = 91, CustomerId = 999 })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/voucher-redemptions/transactions/2/reversals", new { Reason = "test" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/voucher-redemptions/transactions/1/reversals", new { ApprovalRequestId = 10, Reason = "test" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/voucher-redemptions/transactions", new { VoucherId = 1, CustomerId = 999, IdempotencyKey = "same-key", AppliedBy = 999 })).StatusCode);
-        var replay = await client.PostAsJsonAsync("/api/voucher-redemptions/transactions", new { VoucherId = 1, CustomerId = 100, IdempotencyKey = "same-key", AppliedBy = 999 });
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/validations", new { BranchId = 2 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions", new { RetailOrderId = 80 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions", new { InvoiceId = 90 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/validations", new { RetailOrderId = 81, CustomerId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/validations", new { InvoiceId = 91, CustomerId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions/2/reversals", new { Reason = "test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions/1/reversals", new { ApprovalRequestId = 10, Reason = "test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions", new { VoucherId = 1, CustomerId = 999, IdempotencyKey = "same-key", AppliedBy = 999 })).StatusCode);
+        var replay = await client.PostAsJsonAsync("/api/v1/voucher-redemptions/transactions", new { VoucherId = 1, CustomerId = 100, IdempotencyKey = "same-key", AppliedBy = 999 });
         Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
         using var replayJson = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
         Assert.Equal(200, replayJson.RootElement.GetProperty("redemption").GetProperty("appliedBy").GetInt64());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/voucher-redemptions/validations", new { RetailOrderId = 81, InvoiceId = 90 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/voucher-redemptions/validations", new { RetailOrderId = 81, InvoiceId = 90 })).StatusCode);
     }
 
     [Fact]
@@ -82,29 +82,29 @@ public sealed class VoucherRedemptionLegacyScopeTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var list = await client.GetAsync("/api/voucher-redemptions?status=redeemed&page=1&pageSize=1");
+        var list = await client.GetAsync("/api/v1/voucher-redemptions?status=redeemed&page=1&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
-        Assert.False(list.Headers.Contains("X-Total-Count"));
+        Assert.True(list.Headers.Contains("X-Total-Count"));
         using var body = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
         Assert.Equal(1, body.RootElement.GetProperty("totalCount").GetInt32());
         var items = body.RootElement.GetProperty("items");
         Assert.Equal(1, items.GetArrayLength());
         Assert.Equal(1, items[0].GetProperty("id").GetInt64());
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/voucher-redemptions/1")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/voucher-redemptions/2")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/voucher-redemptions/3")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/voucher-redemptions/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/voucher-redemptions/2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/voucher-redemptions/3")).StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/voucher-redemptions")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/voucher-redemptions/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/voucher-redemptions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/voucher-redemptions/1")).StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN"));
-        var adminList = await client.GetAsync("/api/voucher-redemptions?page=1&pageSize=10");
+        var adminList = await client.GetAsync("/api/v1/voucher-redemptions?page=1&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, adminList.StatusCode);
-        Assert.False(adminList.Headers.Contains("X-Total-Count"));
+        Assert.True(adminList.Headers.Contains("X-Total-Count"));
         using var adminBody = JsonDocument.Parse(await adminList.Content.ReadAsStringAsync());
         Assert.Equal(3, adminBody.RootElement.GetProperty("totalCount").GetInt32());
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/voucher-redemptions/2")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/voucher-redemptions/3")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/voucher-redemptions/2")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/voucher-redemptions/3")).StatusCode);
     }
 }

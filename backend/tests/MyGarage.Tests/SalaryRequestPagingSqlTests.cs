@@ -27,7 +27,7 @@ public sealed class SalaryRequestPagingSqlTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var db = new GarageContext(options, new HttpContextAccessor());
+            await using var db = new GarageContext(options);
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE TABLE dbo.Staffs (Id bigint PRIMARY KEY, FullName nvarchar(100));
                 CREATE TABLE dbo.Branches (Id bigint PRIMARY KEY, Name nvarchar(100));
@@ -44,10 +44,15 @@ public sealed class SalaryRequestPagingSqlTests
                 """);
             var http = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] {
                 new Claim(ClaimTypes.Role, "Staff"), new Claim("role_code", "ADMIN") }, "test")) };
-            await using var profileDb = new MyGarage.Infrastructure.Payroll.SalaryProfileReadDbContext(
-                new DbContextOptionsBuilder<MyGarage.Infrastructure.Payroll.SalaryProfileReadDbContext>().UseSqlServer(test.ConnectionString).Options);
-            var profileQuery = new MyGarage.Application.Payroll.SalaryProfileListQuery(new MyGarage.Infrastructure.Payroll.SalaryProfileListReader(profileDb));
-            var controller = new SalaryAdminController(new AccountingCrudService(db), db, profileQuery)
+            var profileQuery = new MyGarage.Application.Payroll.SalaryProfileListQuery(new MyGarage.Infrastructure.Payroll.SalaryProfileListReader(db));
+            var crud = new AccountingCrudService(db);
+            var controller = new SalaryAdminController(
+                new MyGarage.Application.Payroll.SalaryAdminCommandFacade(
+                    crud,
+                    crud,
+                    crud,
+                    new MyGarage.Infrastructure.Queries.EfSalaryAdminDataService(db, crud),
+                    profileQuery))
                 { ControllerContext = new ControllerContext { HttpContext = http } };
             var legacy = Assert.IsType<OkObjectResult>(await controller.GetInitialSalaryRequests("ALL", 1));
             using var legacyDoc = JsonSerializer.SerializeToDocument(legacy.Value, WebJson);

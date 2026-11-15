@@ -30,7 +30,7 @@ public class ReceptionAppointmentPaginationTests
         });
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/appointments/reception-list?dateFrom=2026-11-13&dateTo=2026-11-13&mode=GROUP&pageSize=1&page=2");
+        var response = await client.GetAsync("/api/v1/appointments/reception-list?dateFrom=2026-11-13&dateTo=2026-11-13&mode=GROUP&pageSize=1&page=2");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, json.RootElement.GetProperty("singleCount").GetInt32());
@@ -38,12 +38,12 @@ public class ReceptionAppointmentPaginationTests
         var items = json.RootElement.GetProperty("items");
         Assert.Equal(2, items.GetArrayLength());
         Assert.Equal(items[0].GetProperty("groupSessionId").GetInt64(), items[1].GetProperty("groupSessionId").GetInt64());
-        var filtered = await client.GetAsync("/api/appointments/reception-list?status=CONFIRMED&search=090123&pageSize=1&page=2");
+        var filtered = await client.GetAsync("/api/v1/appointments/reception-list?status=CONFIRMED&search=090123&pageSize=1&page=2");
         Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
         using var filteredJson = JsonDocument.Parse(await filtered.Content.ReadAsStringAsync());
         Assert.Equal(2, filteredJson.RootElement.GetProperty("singleCount").GetInt32());
         Assert.Equal(0, filteredJson.RootElement.GetProperty("groupCount").GetInt32());
         Assert.Single(filteredJson.RootElement.GetProperty("items").EnumerateArray());
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/appointments/reception-list?branchId=2")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/appointments/reception-list?branchId=2")).StatusCode);
     }
 }

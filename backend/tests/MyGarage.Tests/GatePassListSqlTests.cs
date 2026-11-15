@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Data;
 using MyGarage.Infrastructure.GatePasses;
 using Xunit;
 
@@ -33,15 +35,14 @@ public sealed class GatePassListSqlTests
                     """;
                 await command.ExecuteNonQueryAsync();
             }
-            var options = new DbContextOptionsBuilder<GatePassReadDbContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var db = new GatePassReadDbContext(options);
+            var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
+            await using var db = new GarageContext(options);
             var reader = new GatePassListReader(db);
             var result = await reader.ReadAsync(2, 1, default);
             Assert.Equal(2, result.Total);
             Assert.Equal(2, Assert.Single(result.Items).Id);
             Assert.Equal("QR2", result.Items[0].QrCode);
             Assert.Empty((await reader.ReadAsync(int.MaxValue, 100, default)).Items);
-            await Assert.ThrowsAsync<NotSupportedException>(() => db.SaveChangesAsync());
         }
         finally
         {

@@ -22,13 +22,13 @@ public sealed class DispatchListContractTests
             services.AddScoped<IDispatchListReader, FakeReader>();
         }));
         using var client = app.CreateClient();
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/ai-smart-dispatchings")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/ai-smart-dispatchings")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(100, "Customer"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/ai-smart-dispatchings")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/ai-smart-dispatchings")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(200, "Staff", "MANAGER", 1));
-        var response = await client.GetAsync("/api/ai-smart-dispatchings?page=2&pageSize=1");
+        var response = await client.GetAsync("/api/v1/ai-smart-dispatchings?page=2&pageSize=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Total-Count"));
+        Assert.True(response.Headers.Contains("X-Total-Count"));
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(2, body.RootElement.GetProperty("totalCount").GetInt32());
         var row = Assert.Single(body.RootElement.GetProperty("items").EnumerateArray());

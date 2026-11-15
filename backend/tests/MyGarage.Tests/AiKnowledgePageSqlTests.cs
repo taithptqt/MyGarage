@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using MyGarage.Data;
 using MyGarage.Infrastructure.Ai;
 using Xunit;
 
@@ -18,8 +20,8 @@ public sealed class AiKnowledgePageSqlTests
         await using (var create = connection.CreateCommand()) { create.CommandText = $"CREATE DATABASE [{name}]"; await create.ExecuteNonQueryAsync(); }
         try
         {
-            var options = new DbContextOptionsBuilder<AiKnowledgeReadDbContext>().UseSqlServer(target.ConnectionString).Options;
-            await using var db = new AiKnowledgeReadDbContext(options);
+            var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(target.ConnectionString).Options;
+            await using var db = new GarageContext(options);
             await db.Database.ExecuteSqlRawAsync("CREATE TABLE dbo.AI_KnowledgeBase (Id bigint NOT NULL PRIMARY KEY, Topic nvarchar(255) NOT NULL, Content nvarchar(max) NOT NULL, SourceUrl varchar(500) NULL, IsDynamic bit NULL, LastUpdated datetime2 NULL)");
             await db.Database.ExecuteSqlRawAsync("INSERT INTO dbo.AI_KnowledgeBase (Id, Topic, Content, IsDynamic) VALUES (1, N'Bảo dưỡng', N'Nội dung 1', 1), (2, N'Xe', N'Nội dung 2', NULL)");
             var reader = new AiKnowledgePageReader(db);
@@ -32,7 +34,6 @@ public sealed class AiKnowledgePageSqlTests
                 .Where(x => x.IsDynamic == true && x.Topic.Contains("dưỡng"))
                 .OrderBy(x => x.Id).Take(1).ToListAsync();
             Assert.Equal(1, Assert.Single(metadata).Id);
-            await Assert.ThrowsAsync<NotSupportedException>(() => db.SaveChangesAsync());
         }
         finally
         {

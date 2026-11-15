@@ -28,7 +28,7 @@ public class VoucherConcurrentSqlTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var seed = new GarageContext(options, new HttpContextAccessor());
+            await using var seed = new GarageContext(options);
             var script = seed.Database.GenerateCreateScript();
             script = Regex.Replace(script, @"CREATE UNIQUE INDEX \[UQ_ServiceOrder_DiscountCategory\][\s\S]*?;", "", RegexOptions.IgnoreCase);
             script = script.Replace("ON DELETE CASCADE", "ON DELETE NO ACTION", StringComparison.OrdinalIgnoreCase);
@@ -57,8 +57,13 @@ public class VoucherConcurrentSqlTests
             await seed.SaveChangesAsync();
             async Task<MyGarage.DTOs.Responses.VoucherRedeemResultResponseDto> Redeem(long id, string key)
             {
-                await using var db = new GarageContext(options, new HttpContextAccessor());
-                var service = new VoucherRedemptionService(new VoucherRedemptionRepository(db), db);
+                await using var db = new GarageContext(options);
+                var voucherStore = new MyGarage.Infrastructure.Vouchers.EfVoucherStore(db);
+                var service = new VoucherRedemptionService(
+                    new VoucherRedemptionRepository(db),
+                    voucherStore,
+                    new VoucherEligibilityService(voucherStore),
+                    new VoucherReversalService(voucherStore));
                 return await service.RedeemAsync(new VoucherRedemptionRequestDto { VoucherId = id, CustomerId = customer.Id, VehicleId = vehicle.Id,
                     EligibleAmount = 100m, IdempotencyKey = key });
             }

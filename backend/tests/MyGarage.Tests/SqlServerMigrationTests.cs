@@ -40,7 +40,7 @@ public class SqlServerMigrationTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var db = new GarageContext(options, new HttpContextAccessor());
+            await using var db = new GarageContext(options);
             var createScript = db.Database.GenerateCreateScript();
             // Existing legacy filtered index targets a computed column and is not accepted by SQL Server.
             createScript = Regex.Replace(createScript, @"CREATE UNIQUE INDEX \[UQ_ServiceOrder_DiscountCategory\][\s\S]*?;", "", RegexOptions.IgnoreCase);
@@ -70,19 +70,12 @@ public class SqlServerMigrationTests
             var categories = await new MyGarage.Services.ServiceCategoryPageReader(db).ReadAsync("bảo", 1, 1, default);
             Assert.Equal(1, categories.Total);
             Assert.Equal("S1", Assert.Single(categories.Items).Code);
-            var payments = await new MyGarage.Services.CustomerPaymentsReader(db).ReadAsync(100, 1, 1, default);
+            var isolatedReader = new MyGarage.Infrastructure.Payments.CustomerPaymentsReader(db);
+            var payments = await isolatedReader.ReadAsync(100, 1, 1, default);
             Assert.Equal(1, payments.Total);
             Assert.Equal(10m, Assert.Single(payments.Items).Amount);
-            var readOptions = new DbContextOptionsBuilder<MyGarage.Infrastructure.Payments.PaymentReadDbContext>()
-                .UseSqlServer(test.ConnectionString).Options;
-            await using var paymentReadDb = new MyGarage.Infrastructure.Payments.PaymentReadDbContext(readOptions);
-            var isolatedReader = new MyGarage.Infrastructure.Payments.CustomerPaymentsReader(paymentReadDb);
-            var movedPayments = await isolatedReader.ReadAsync(100, 1, 1, default);
-            Assert.Equal(payments.Total, movedPayments.Total);
-            Assert.Equal(payments.Items, movedPayments.Items);
             Assert.Empty((await isolatedReader.ReadAsync(101, 2, 1, default)).Items);
             Assert.Empty((await isolatedReader.ReadAsync(999, 1, 10, default)).Items);
-            await Assert.ThrowsAsync<NotSupportedException>(() => paymentReadDb.SaveChangesAsync());
             var retailOrder = new RetailOrder { BranchId = branch.Id, OrderCode = "SQL-INVOICE" };
             db.RetailOrders.Add(retailOrder);
             db.Invoices.Add(new Invoice { RetailOrder = retailOrder, PayerType = "CUSTOMER", TotalAmount = 100m });
@@ -94,7 +87,9 @@ public class SqlServerMigrationTests
             Assert.Equal(branch.Id, invoices[0].BranchId);
             await using var factory = new TestWebApplicationFactory();
             using var scope = factory.Services.CreateScope();
-            var controller = new ProductsController(scope.ServiceProvider.GetRequiredService<IProductService>(), scope.ServiceProvider.GetRequiredService<IMapper>(), db)
+            var controller = new ProductsController(
+                scope.ServiceProvider.GetRequiredService<IProductService>(),
+                new MyGarage.Infrastructure.Queries.EfProductQueryService(db))
                 { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
             var result = await controller.GetRetailCatalog("ma phanh", null, branch.Id, "name-asc", 1, 12, default);
             var ok = Assert.IsType<OkObjectResult>(result);
@@ -114,7 +109,7 @@ public class SqlServerMigrationTests
             var http = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] {
                 new Claim(ClaimTypes.NameIdentifier, "200"), new Claim(ClaimTypes.Role, "Staff"),
                 new Claim("role_code", "MANAGER"), new Claim("branch_id", branch.Id.ToString()) }, "test")) };
-            var customerController = new CustomerAdministrationController(db, scope.ServiceProvider.GetRequiredService<IMapper>())
+            var customerController = new CustomerAdministrationController(new MyGarage.Infrastructure.Queries.EfCustomerQueryService(db), scope.ServiceProvider.GetRequiredService<ICustomerService>())
                 { ControllerContext = new ControllerContext { HttpContext = http } };
             var customerResult = Assert.IsType<OkObjectResult>(await customerController.GetPage(null, "camry", 1, 10, default));
             using var customerJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(customerResult.Value));
@@ -135,7 +130,7 @@ public class SqlServerMigrationTests
             db.Appointments.Add(new Appointment { Branch = branch, Customer = customer, Vehicle = vehicle, Status = "CONFIRMED",
                 StartTime = new DateTime(2026, 11, 13, 8, 0, 0), EndTime = new DateTime(2026, 11, 13, 9, 0, 0) });
             await db.SaveChangesAsync();
-            var reception = new ReceptionAppointmentListController(db, new MyGarage.Services.AppointmentDetailAssembler(db))
+            var reception = new ReceptionAppointmentListController(new MyGarage.Infrastructure.Queries.EfReceptionAppointmentListQueryService(db), new MyGarage.Services.AppointmentDetailAssembler(new MyGarage.Infrastructure.Persistence.Stores.Appointments.EfAppointmentStore(db, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())))
                 { ControllerContext = new ControllerContext { HttpContext = http } };
             var receptionResult = Assert.IsType<OkObjectResult>(await reception.Get(null, "sql car", null,
                 new DateTime(2026, 11, 13), new DateTime(2026, 11, 13), "NEWEST", "GROUP", 2, 1));
@@ -161,7 +156,10 @@ public class SqlServerMigrationTests
                 DiscountAmount = 25m, AppliedAt = DateTime.UtcNow, CreatedAt = DateTime.UtcNow };
             db.VoucherRedemptions.Add(redemption);
             await db.SaveChangesAsync();
-            var voucherController = new VoucherAdministrationController(db, scope.ServiceProvider.GetRequiredService<IMapper>());
+            var voucherController = new VoucherAdministrationController(
+                new MyGarage.Application.Vouchers.VoucherAdministrationService(
+                    new MyGarage.Infrastructure.Vouchers.EfVoucherStore(db),
+                    scope.ServiceProvider.GetRequiredService<IMapper>()));
             var report = Assert.IsType<OkObjectResult>(await voucherController.GetReportPage(1, 10, default));
             using var reportJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(report.Value));
             Assert.Equal(25m, reportJson.RootElement.GetProperty("budgetUsed").GetDecimal());
@@ -169,7 +167,7 @@ public class SqlServerMigrationTests
             using var dashboardJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(dashboard.Value));
             Assert.Equal(25m, dashboardJson.RootElement.GetProperty("totalDiscount").GetDecimal());
             var redemptionController = new VoucherRedemptionController(scope.ServiceProvider.GetRequiredService<IVoucherRedemptionService>(),
-                scope.ServiceProvider.GetRequiredService<IMapper>(), db) { ControllerContext = new ControllerContext { HttpContext = http } };
+                new MyGarage.Infrastructure.Queries.EfVoucherRedemptionQueryService(db)) { ControllerContext = new ControllerContext { HttpContext = http } };
             var redemptionResult = Assert.IsType<OkObjectResult>(await redemptionController.GetAdminPage(
                 $"SQL-V {redemption.Id} {customer.Id}", "discountDesc", 1, 10, default));
             using var redemptionJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(redemptionResult.Value));
@@ -184,7 +182,7 @@ public class SqlServerMigrationTests
                 CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
             await db.SaveChangesAsync();
             var campaignController = new VoucherCampaignController(scope.ServiceProvider.GetRequiredService<IVoucherCampaignService>(),
-                scope.ServiceProvider.GetRequiredService<IMapper>(), db);
+                new MyGarage.Infrastructure.Queries.EfVoucherCampaignQueryService(db));
             var campaignResult = Assert.IsType<OkObjectResult>(await campaignController.GetAdminPage("SQL campaign", null, 1, 10, default));
             using var campaignJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(campaignResult.Value));
             Assert.Equal(1, campaignJson.RootElement.GetProperty("total").GetInt32());
@@ -214,7 +212,7 @@ public class SqlServerMigrationTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var db = new GarageContext(options, new HttpContextAccessor());
+            await using var db = new GarageContext(options);
             var script = db.GetService<IMigrator>().GenerateScript("20261112150000_SyncDiscountDetailColumns");
             await using var connection = new SqlConnection(test.ConnectionString);
             await connection.OpenAsync();

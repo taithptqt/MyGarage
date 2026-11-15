@@ -24,7 +24,7 @@ public sealed class RetailStockConcurrencySqlTests
         try
         {
             var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var seed = new GarageContext(options, new HttpContextAccessor());
+            await using var seed = new GarageContext(options);
             var script = seed.Database.GenerateCreateScript();
             script = Regex.Replace(script, @"CREATE UNIQUE INDEX \[UQ_ServiceOrder_DiscountCategory\][\s\S]*?;", "", RegexOptions.IgnoreCase);
             script = script.Replace("ON DELETE CASCADE", "ON DELETE NO ACTION", StringComparison.OrdinalIgnoreCase);
@@ -38,8 +38,8 @@ public sealed class RetailStockConcurrencySqlTests
             seed.AddRange(order, warehouse, new Inventory { Warehouse = warehouse, Product = product, Quantity = 2m });
             await seed.SaveChangesAsync();
             var concurrentOptions = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(test.ConnectionString).Options;
-            await using var a = new GarageContext(concurrentOptions, new HttpContextAccessor());
-            await using var b = new GarageContext(concurrentOptions, new HttpContextAccessor());
+            await using var a = new GarageContext(concurrentOptions);
+            await using var b = new GarageContext(concurrentOptions);
             var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             async Task Run(GarageContext db) { await start.Task; await RetailOrderStockCommitter.EnsureStockDeductedAsync(db, order.Id); }
             var first = Run(a); var second = Run(b);
@@ -56,7 +56,7 @@ public sealed class RetailStockConcurrencySqlTests
                 } };
             seed.RetailOrders.Add(shortageOrder);
             await seed.SaveChangesAsync();
-            await using (var attempt = new GarageContext(concurrentOptions, new HttpContextAccessor()))
+            await using (var attempt = new GarageContext(concurrentOptions))
             {
                 await Assert.ThrowsAsync<InvalidOperationException>(() => RetailOrderStockCommitter.EnsureStockDeductedAsync(attempt, shortageOrder.Id));
                 await attempt.SaveChangesAsync();
@@ -72,7 +72,7 @@ public sealed class RetailStockConcurrencySqlTests
             await seed.SaveChangesAsync();
             async Task<bool> TryCommit(long id)
             {
-                await using var db = new GarageContext(concurrentOptions, new HttpContextAccessor());
+                await using var db = new GarageContext(concurrentOptions);
                 try { await RetailOrderStockCommitter.EnsureStockDeductedAsync(db, id); return true; }
                 catch (InvalidOperationException) { return false; }
             }

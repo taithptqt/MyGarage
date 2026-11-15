@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MyGarage.Application.Ai;
+using MyGarage.Data;
 using MyGarage.Infrastructure.Ai;
 using Xunit;
 
@@ -42,6 +44,8 @@ public sealed class AiKnowledgeCatalogODataTests
         Assert.False(row.TryGetProperty("SourceUrl", out _));
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/odata/AiKnowledgeCatalog?$top=101")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/odata/AiKnowledgeCatalog?$expand=Content")).StatusCode);
+        var versioned = await client.GetAsync("/api/v1/odata/AiKnowledgeCatalog?$filter=IsDynamic%20eq%20true&$orderby=Id%20desc&$top=1&$count=true");
+        Assert.True(versioned.StatusCode == HttpStatusCode.OK, await versioned.Content.ReadAsStringAsync());
     }
 
     [LocalSqlFact]
@@ -55,8 +59,8 @@ public sealed class AiKnowledgeCatalogODataTests
         await using (var create = connection.CreateCommand()) { create.CommandText = $"CREATE DATABASE [{name}]"; await create.ExecuteNonQueryAsync(); }
         try
         {
-            var options = new DbContextOptionsBuilder<AiKnowledgeReadDbContext>().UseSqlServer(target.ConnectionString).Options;
-            await using (var db = new AiKnowledgeReadDbContext(options))
+            var options = new DbContextOptionsBuilder<GarageContext>().UseSqlServer(target.ConnectionString).Options;
+            await using (var db = new GarageContext(options))
             {
                 await db.Database.ExecuteSqlRawAsync("CREATE TABLE dbo.AI_KnowledgeBase (Id bigint NOT NULL PRIMARY KEY, Topic nvarchar(255) NOT NULL, Content nvarchar(max) NOT NULL, SourceUrl varchar(500) NULL, IsDynamic bit NULL, LastUpdated datetime2 NULL)");
                 await db.Database.ExecuteSqlRawAsync("INSERT INTO dbo.AI_KnowledgeBase (Id, Topic, Content, SourceUrl, IsDynamic) VALUES (1, N'First', N'secret', 'private', 0), (2, N'Second', N'secret', 'private', 1), (3, N'Third', N'secret', 'private', 1)");
@@ -65,10 +69,9 @@ public sealed class AiKnowledgeCatalogODataTests
             await factory.SeedAsync(db => { TestWebApplicationFactory.SeedBasicBranchAndUsers(db); return Task.CompletedTask; });
             using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<DbContextOptions<AiKnowledgeReadDbContext>>();
-                services.RemoveAll<IDbContextOptionsConfiguration<AiKnowledgeReadDbContext>>();
-                services.RemoveAll<AiKnowledgeReadDbContext>();
-                services.AddDbContext<AiKnowledgeReadDbContext>(options => options.UseSqlServer(target.ConnectionString));
+                services.RemoveAll<IAiKnowledgeCatalogReader>();
+                services.AddScoped(_ => new SqlCatalogContext(target.ConnectionString));
+                services.AddScoped<IAiKnowledgeCatalogReader>(sp => new AiKnowledgeCatalogReader(sp.GetRequiredService<SqlCatalogContext>().Db));
             }));
             using var client = app.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestWebApplicationFactory.CreateJwtToken(201, "Staff", "ADMIN", 1));
@@ -87,6 +90,12 @@ public sealed class AiKnowledgeCatalogODataTests
             drop.CommandText = $"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]";
             await drop.ExecuteNonQueryAsync();
         }
+    }
+
+    private sealed class SqlCatalogContext(string connectionString) : IDisposable
+    {
+        public GarageContext Db { get; } = new(new DbContextOptionsBuilder<GarageContext>().UseSqlServer(connectionString).Options);
+        public void Dispose() => Db.Dispose();
     }
 
     private sealed class FakeReader : IAiKnowledgeCatalogReader
